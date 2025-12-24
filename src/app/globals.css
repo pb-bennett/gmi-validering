@@ -8,25 +8,25 @@
   --color-text: #222222;
 }
 
-/* Dev-only helper: ensure test utility is available for visual verification */
-.tw-test {
-  background-color: #2563eb; /* Tailwind blue-600 */
-  color: #ffffff;
-}
-
 :root {
   --background: var(--color-page-bg);
   --foreground: var(--color-text);
   --card: var(--color-card);
   --primary: var(--color-primary);
   --primary-foreground: #ffffff;
-  --color-bg: #faf3e1; /* page */
 }
 
 @layer base {
-  /* Font stack: Roboto for body/UI, Roboto Serif for headings */
+  html,
   body {
-    @apply bg-page-bg text-text font-sans;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-page-bg text-text;
   }
 
   h1,
@@ -45,9 +45,5 @@
 
   h3 {
     @apply text-xl;
-  }
-
-  button {
-    @apply font-sans font-semibold;
   }
 }

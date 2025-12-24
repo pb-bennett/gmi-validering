@@ -24,20 +24,11 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body
-        className={`${roboto.variable} ${robotoSerif.variable} antialiased bg-page-bg text-text font-sans`}
-      >
-        <header className="w-full border-b border-transparent bg-card">
-          <div className="mx-auto max-w-6xl px-6 py-4">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-serif font-bold text-text">
-                GMI Validator
-              </h1>
-            </div>
-          </div>
+      <body className={`${roboto.variable} ${robotoSerif.variable}`}>
+        <header className="bg-card p-4">
+          <h1 className="text-text">GMI Validator</h1>
         </header>
-
-        <main className="min-h-[calc(100vh-56px)]">{children}</main>
+        {children}
       </body>
     </html>
   );
