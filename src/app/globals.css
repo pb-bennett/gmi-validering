@@ -1,6 +1,12 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme {
+  --color-page-bg: #faf3e1;
+  --color-card: #f5e7c6;
+  --color-primary: #cc4a09;
+  --color-primary-dark: #a63e08;
+  --color-text: #222222;
+}
 
 /* Dev-only helper: ensure test utility is available for visual verification */
 .tw-test {
@@ -9,31 +15,39 @@
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-/* Theme variables — use a data attribute or utility class instead of unsupported `@theme` */
-[data-theme='inline'],
-.theme-inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: var(--color-page-bg);
+  --foreground: var(--color-text);
+  --card: var(--color-card);
+  --primary: var(--color-primary);
+  --primary-foreground: #ffffff;
+  --color-bg: #faf3e1; /* page */
 }
 
 @layer base {
-  /* Base element styles integrate cleanly with Tailwind's preflight */
+  /* Font stack: Roboto for body/UI, Roboto Serif for headings */
   body {
-    background: var(--background);
-    color: var(--foreground);
-    font-family: var(--font-sans, Arial, Helvetica, sans-serif);
+    @apply bg-page-bg text-text font-sans;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-serif font-bold;
+  }
+
+  h1 {
+    @apply text-3xl;
+  }
+
+  h2 {
+    @apply text-2xl;
+  }
+
+  h3 {
+    @apply text-xl;
+  }
+
+  button {
+    @apply font-sans font-semibold;
   }
 }

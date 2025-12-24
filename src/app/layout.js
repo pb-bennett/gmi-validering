@@ -1,14 +1,18 @@
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Roboto, Roboto_Serif } from 'next/font/google';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const roboto = Roboto({
+  variable: '--font-roboto',
+  weight: ['400', '600'],
   subsets: ['latin'],
+  display: 'swap',
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const robotoSerif = Roboto_Serif({
+  variable: '--font-roboto-serif',
+  weight: ['600', '700'],
   subsets: ['latin'],
+  display: 'swap',
 });
 
 export const metadata = {
@@ -21,21 +25,14 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-black dark:bg-black dark:text-white`}
+        className={`${roboto.variable} ${robotoSerif.variable} antialiased bg-page-bg text-text font-sans`}
       >
-        <header className="w-full border-b border-gray-200 dark:border-gray-800 bg-white/60 backdrop-blur-sm">
+        <header className="w-full border-b border-transparent bg-card">
           <div className="mx-auto max-w-6xl px-6 py-4">
-            <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-semibold">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-serif font-bold text-text">
                 GMI Validator
               </h1>
-              {/* Tailwind visual test: should render a blue pill if Tailwind is working */}
-              <span
-                className="ml-4 inline-block rounded-full tw-test px-3 py-1 text-sm"
-                id="tw-test"
-              >
-                Tailwind OK
-              </span>
             </div>
           </div>
         </header>
