@@ -140,6 +140,222 @@ When the app loads, the user must see a **clear, centered onboarding card** prom
 
 ---
 
+## State Management — Zustand Architecture
+
+This application uses **Zustand** for global state management. Zustand provides a lightweight, performant store with selective subscriptions and minimal boilerplate.
+
+### Why Zustand?
+
+- **Small bundle** — minimal overhead compared to Redux or Context.
+- **Selective subscriptions** — components only re-render when their slice changes.
+- **Simple API** — easy to read, test, and extend.
+- **DevTools integration** — full Redux DevTools support for debugging.
+- **Worker-friendly** — easy to update from Web Worker messages (for parsing large files).
+
+### Store Structure
+
+The global store is located at `src/lib/store.js` and is organized into **logical slices**:
+
+#### 1. **File Slice** — uploaded file metadata
+
+- `file`: `{ name, size, lastModified, type }` or `null`
+- Actions: `setFile(fileMeta)`, `clearFile()`
+- **Important:** Do NOT store raw file binary in the store. Keep files in-memory/ephemeral using refs or worker scope.
+
+#### 2. **Parsing Slice** — parsing progress and status
+
+- `parsing.status`: `'idle' | 'parsing' | 'done' | 'error'`
+- `parsing.progress`: `0-100` (percentage)
+- `parsing.error`: `string | null`
+- `parsing.startedAt`, `parsing.completedAt`: timestamps
+- Actions: `startParsing()`, `setParsingProgress(n)`, `setParsingDone()`, `setParsingError(msg)`, `resetParsing()`
+
+#### 3. **Validation Slice** — validation results
+
+- `validation.records`: Array of parsed GMI records
+- `validation.summary`: `{ totalRecords, errorCount, warningCount, validCount }`
+- `validation.errors`: Array of `{ line, field, message, severity }`
+- `validation.warnings`: Array of warnings
+- `validation.fieldStats`: Optional field presence/quality statistics
+- Actions: `setValidationResults(results)`, `clearValidationResults()`
+
+#### 4. **UI Slice** — UI state and interactions
+
+- `ui.detailsPanelOpen`: boolean
+- `ui.selectedRecordId`: string | null
+- `ui.filterSeverity`: `'all' | 'errors' | 'warnings'`
+- `ui.mapViewOpen`: boolean
+- `ui.sidebarOpen`: boolean
+- Actions: `toggleDetailsPanel()`, `selectRecord(id)`, `setFilterSeverity(severity)`, `toggleMapView()`, `toggleSidebar()`
+
+#### 5. **Settings Slice** — user preferences (can be persisted to localStorage)
+
+- `settings.theme`: `'light' | 'dark'` (future support)
+- `settings.locale`: `'nb-NO'` (Norwegian bokmål)
+- `settings.autoValidateOnUpload`: boolean
+- `settings.showWarnings`: boolean
+- `settings.lastFileName`: string | null
+- Actions: `updateSettings(newSettings)`
+
+#### 6. **Global Actions**
+
+- `resetAll()`: Clears all state except settings (use when starting fresh validation)
+
+#### 7. **Selectors** — computed/derived values
+
+- `getFilteredErrors()`: Returns filtered errors/warnings based on `ui.filterSeverity`
+- `isProcessing()`: Returns `true` if parsing is in progress
+- `hasResults()`: Returns `true` if validation results exist
+
+### Usage in Components
+
+**Import the store:**
+
+```jsx
+import useStore from '@/lib/store';
+```
+
+**Subscribe to specific slices (selective):**
+
+```jsx
+// Only re-renders when file changes
+const file = useStore((state) => state.file);
+const setFile = useStore((state) => state.setFile);
+
+// Only re-renders when parsing status changes
+const parsingStatus = useStore((state) => state.parsing.status);
+
+// Use multiple slices
+const { errors, warnings } = useStore((state) => state.validation);
+```
+
+**Call actions:**
+
+```jsx
+// Set file metadata after user selects file
+const handleFileChange = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    useStore.getState().setFile({
+      name: file.name,
+      size: file.size,
+      lastModified: file.lastModified,
+      type: file.type,
+    });
+    // Start parsing...
+  }
+};
+
+// Clear all state when user wants to upload new file
+const handleReset = () => {
+  useStore.getState().resetAll();
+};
+```
+
+**Use selectors:**
+
+```jsx
+const filteredErrors = useStore((state) => state.getFilteredErrors());
+const isProcessing = useStore((state) => state.isProcessing());
+```
+
+### Best Practices
+
+1. **Never store raw file binary** — keep file contents ephemeral (in refs, worker scope, or temporary variables).
+2. **Use selective subscriptions** — subscribe only to the slice you need to avoid unnecessary re-renders.
+3. **Keep actions simple** — actions should update state; complex logic goes in separate utilities or workers.
+4. **Web Workers for parsing** — offload heavy parsing to a Web Worker; post progress updates that call `setParsingProgress()`.
+5. **Norwegian strings only** — all error messages, status text, and user-facing strings in the store must be Norwegian (bokmål).
+6. **DevTools** — use Redux DevTools browser extension to inspect state changes during development.
+7. **Persistence** — only persist small metadata (settings) to localStorage; never persist file contents or sensitive data.
+
+### Integration with Other Tools
+
+- **TanStack Query / SWR**: Use for server-side validation API calls and caching. Keep server results separate from client parsing results.
+- **Web Workers**: Post messages to update Zustand store (e.g., `postMessage({ type: 'PROGRESS', progress: 50 })` → `setParsingProgress(50)`).
+- **Error Boundaries**: Wrap components with error boundaries; on parsing errors, call `setParsingError()` with Norwegian error message.
+
+### Testing
+
+- **Unit tests**: Test actions and selectors in isolation (e.g., verify `setFile()` updates state correctly).
+- **Integration tests**: Test component interactions with store (e.g., file upload triggers parsing state change).
+- **Mock store**: Use `create()` without devtools middleware for test environments.
+
+---
+
+## Available Resources & Reference Material
+
+We have access to reference implementations and real-world data samples to guide development.
+
+### 1. GMI Parser Implementation
+
+A reference JavaScript parser is available in `REF_FILES/JS/lib/gmiParser.js`.
+
+- **Type:** Class-based ES6 module (`GMIParser`).
+- **Capabilities:**
+  - Parses GMI headers (including coordinate systems).
+  - Extracts feature definitions (`[L_]`, `[P_]`) and field names.
+  - Parses feature data (`[+L_]`, `[+P_]`) including attributes and `/XYZ` coordinates.
+  - Normalizes field values (integers, floats, booleans).
+  - Extracts GUIDs.
+- **Usage:** This script should be adapted or used as a reference for the client-side parsing logic in the Web Worker.
+
+### 2. Validation Rules (Innmålingsinstruks)
+
+We have a complete set of validation rules exported from a previous database in `src/data/fields.json` and the schema definition in `REF_FILES/JS/models/Field.js`.
+
+- **Structure:** The rules define required fields, formats, and allowed values (codelists) for GMI objects.
+- **Key Properties:**
+  - `fieldKey`: The attribute name in the GMI file (e.g., "Høydereferanse").
+  - `objectTypes`: Applies to "punktobjekter" (Points) or "ledninger" (Lines).
+  - `required`: Validation strictness (`always`, `optional`, `conditional`, etc.).
+  - `fieldFormat`: Data type (`Heltall`, `Desimaltall`, `Tekst`, `Kode`, `DD.MM.YYYY`, etc.).
+  - `acceptableValues`: List of allowed values for "Kode" fields.
+
+**Implementation Strategy:**
+
+1.  **Static Config:** Use `src/data/fields.json` as the source of truth for validation rules. Import this JSON directly into the validation logic.
+2.  **Validation Engine:** Create a pure JavaScript utility function (e.g., `validateRecord(record, rules)`) that:
+    - Checks for missing required fields.
+    - Validates data types against `fieldFormat`.
+    - Validates enum values against `acceptableValues` when format is "Kode".
+    - Returns an array of error/warning objects.
+3.  **Integration:** Run this validation logic inside the Web Worker immediately after parsing, or in a separate "validate" step.
+
+**Critical Constraint: Point vs. Line Separation**
+
+- **Strict Separation:** Validation rules for **Points** (`punktobjekter`) and **Lines** (`ledninger`) must be kept completely separate.
+- **Name Collision:** Fields often share names (e.g., "Materiale") but may have different allowed values or requirements depending on whether they belong to a Point or a Line.
+- **Implementation:** The application must treat these as distinct schemas. Do not merge them into a generic "Field" definition. When validating, the engine must look up the rule set corresponding to the feature type (Point or Line).
+
+### 3. Real-world GMI Examples
+
+We have a library of actual GMI files from two Norwegian municipalities with different coordinate systems. Use these for testing parsing robustness and validation rules.
+
+#### Færder Kommune (FK)
+
+- **Location:** `REF_FILES/GMI/FK/`
+- **Coordinate System:** EUREF89 UTM Zone 32 (`EPSG:25832`).
+- **Header Example:**
+  ```
+  COSYS EUR89 32
+  COSYS_EPSG 25832
+  ```
+
+#### Hadsel Kommune (HK)
+
+- **Location:** `REF_FILES/GMI/HK/`
+- **Coordinate System:** EUREF89 UTM Zone 33 (`EPSG:25833`).
+- **Header Example:**
+  ```
+  COSYS EUR89 33
+  COSYS_EPSG 25833
+  ```
+
+**Note:** When implementing map visualization, ensure the application correctly handles or transforms these different coordinate zones (e.g., using `proj4` as seen in the reference parser).
+
+---
+
 ## Data Handling, Security & Architecture Constraints
 
 ### Data Handling
