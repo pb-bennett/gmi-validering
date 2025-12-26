@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import FileUpload from '@/components/FileUpload';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import MapView from '@/components/MapView';
@@ -12,8 +12,41 @@ export default function Home() {
   const resetParsing = useStore((state) => state.resetParsing);
   const clearData = useStore((state) => state.clearData);
   const clearFile = useStore((state) => state.clearFile);
+  const updateLastActive = useStore(
+    (state) => state.updateLastActive
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(13);
+
+  // Session heartbeat: update lastActive timestamp
+  useEffect(() => {
+    // Update immediately on mount
+    updateLastActive();
+
+    // Update every minute while active
+    const interval = setInterval(updateLastActive, 60 * 1000);
+
+    // Update on tab focus/visibility
+    const handleActivity = () => {
+      if (document.visibilityState === 'visible') {
+        updateLastActive();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleActivity);
+    window.addEventListener('focus', handleActivity);
+    window.addEventListener('click', handleActivity); // Optional: track clicks too
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener(
+        'visibilitychange',
+        handleActivity
+      );
+      window.removeEventListener('focus', handleActivity);
+      window.removeEventListener('click', handleActivity);
+    };
+  }, [updateLastActive]);
 
   const handleReset = () => {
     clearData();
@@ -46,14 +79,12 @@ export default function Home() {
       {parsingStatus === 'done' && (
         <>
           {/* Sidebar */}
-          <Sidebar 
-            onReset={handleReset} 
-          />
+          <Sidebar onReset={handleReset} />
 
           {/* Map Area */}
           <div className="flex-1 relative h-full">
             <MapView onZoomChange={setZoomLevel} />
-            
+
             {/* Floating Zoom Indicator */}
             <div className="absolute bottom-4 left-4 z-[1000]">
               <div className="bg-white/90 backdrop-blur px-3 py-2 rounded shadow border border-gray-200 text-sm font-mono">

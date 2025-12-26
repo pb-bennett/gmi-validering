@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { devtools, persist } from 'zustand/middleware';
 
 /**
  * GMI Validator — Global State Store (Zustand)
@@ -20,289 +20,371 @@ import { devtools } from 'zustand/middleware';
 
 const useStore = create(
   devtools(
-    (set, get) => ({
-      // ============================================
-      // FILE SLICE — metadata about uploaded file
-      // ============================================
-      file: null, // { name: string, size: number, lastModified: number, type: string } | null
+    persist(
+      (set, get) => ({
+        // ============================================
+        // FILE SLICE — metadata about uploaded file
+        // ============================================
+        file: null, // { name: string, size: number, lastModified: number, type: string } | null
 
-      setFile: (fileMeta) =>
-        set({ file: fileMeta }, false, 'file/set'),
+        setFile: (fileMeta) =>
+          set({ file: fileMeta }, false, 'file/set'),
 
-      clearFile: () => set({ file: null }, false, 'file/clear'),
+        clearFile: () => set({ file: null }, false, 'file/clear'),
 
-      // ============================================
-      // DATA SLICE — raw parsed data
-      // ============================================
-      data: null, // { header: {}, points: [], lines: [] } | null
+        // ============================================
+        // DATA SLICE — raw parsed data
+        // ============================================
+        data: null, // { header: {}, points: [], lines: [] } | null
 
-      setData: (data) => set({ data }, false, 'data/set'),
-      clearData: () => set({ data: null }, false, 'data/clear'),
+        setData: (data) => set({ data }, false, 'data/set'),
+        clearData: () => set({ data: null }, false, 'data/clear'),
 
-      // ============================================
-      // PARSING SLICE — parsing status & progress
-      // ============================================
-      parsing: {
-        status: 'idle', // 'idle' | 'parsing' | 'done' | 'error'
-        progress: 0, // 0-100
-        error: null, // string | null
-        startedAt: null, // timestamp | null
-        completedAt: null, // timestamp | null
-      },
-
-      startParsing: () =>
-        set(
-          (state) => ({
-            parsing: {
-              ...state.parsing,
-              status: 'parsing',
-              progress: 0,
-              error: null,
-              startedAt: Date.now(),
-              completedAt: null,
-            },
-          }),
-          false,
-          'parsing/start'
-        ),
-
-      setParsingProgress: (progress) =>
-        set(
-          (state) => ({
-            parsing: { ...state.parsing, progress },
-          }),
-          false,
-          'parsing/progress'
-        ),
-
-      setParsingDone: () =>
-        set(
-          (state) => ({
-            parsing: {
-              ...state.parsing,
-              status: 'done',
-              progress: 100,
-              completedAt: Date.now(),
-            },
-          }),
-          false,
-          'parsing/done'
-        ),
-
-      setParsingError: (error) =>
-        set(
-          (state) => ({
-            parsing: {
-              ...state.parsing,
-              status: 'error',
-              error,
-              completedAt: Date.now(),
-            },
-          }),
-          false,
-          'parsing/error'
-        ),
-
-      resetParsing: () =>
-        set(
-          {
-            parsing: {
-              status: 'idle',
-              progress: 0,
-              error: null,
-              startedAt: null,
-              completedAt: null,
-            },
-          },
-          false,
-          'parsing/reset'
-        ),
-
-      // ============================================
-      // VALIDATION SLICE — validation results
-      // ============================================
-      validation: {
-        records: [], // Array of parsed GMI records
-        summary: {
-          totalRecords: 0,
-          errorCount: 0,
-          warningCount: 0,
-          validCount: 0,
+        // ============================================
+        // PARSING SLICE — parsing status & progress
+        // ============================================
+        parsing: {
+          status: 'idle', // 'idle' | 'parsing' | 'done' | 'error'
+          progress: 0, // 0-100
+          error: null, // string | null
+          startedAt: null, // timestamp | null
+          completedAt: null, // timestamp | null
         },
-        errors: [], // Array of { line, field, message, severity }
-        warnings: [],
-        fieldStats: {}, // Optional: field presence/quality stats
-      },
 
-      setValidationResults: (results) =>
-        set({ validation: results }, false, 'validation/setResults'),
-
-      clearValidationResults: () =>
-        set(
-          {
-            validation: {
-              records: [],
-              summary: {
-                totalRecords: 0,
-                errorCount: 0,
-                warningCount: 0,
-                validCount: 0,
+        startParsing: () =>
+          set(
+            (state) => ({
+              parsing: {
+                ...state.parsing,
+                status: 'parsing',
+                progress: 0,
+                error: null,
+                startedAt: Date.now(),
+                completedAt: null,
               },
-              errors: [],
-              warnings: [],
-              fieldStats: {},
-            },
-          },
-          false,
-          'validation/clear'
-        ),
+            }),
+            false,
+            'parsing/start'
+          ),
 
-      // ============================================
-      // UI SLICE — UI state and user interactions
-      // ============================================
-      ui: {
-        detailsPanelOpen: false,
-        selectedRecordId: null,
-        filterSeverity: 'all', // 'all' | 'errors' | 'warnings'
-        mapViewOpen: false,
-        sidebarOpen: true,
-      },
+        setParsingProgress: (progress) =>
+          set(
+            (state) => ({
+              parsing: { ...state.parsing, progress },
+            }),
+            false,
+            'parsing/progress'
+          ),
 
-      toggleDetailsPanel: () =>
-        set(
-          (state) => ({
-            ui: {
-              ...state.ui,
-              detailsPanelOpen: !state.ui.detailsPanelOpen,
-            },
-          }),
-          false,
-          'ui/toggleDetails'
-        ),
-
-      selectRecord: (recordId) =>
-        set(
-          (state) => ({
-            ui: { ...state.ui, selectedRecordId: recordId },
-          }),
-          false,
-          'ui/selectRecord'
-        ),
-
-      setFilterSeverity: (severity) =>
-        set(
-          (state) => ({
-            ui: { ...state.ui, filterSeverity: severity },
-          }),
-          false,
-          'ui/setFilter'
-        ),
-
-      toggleMapView: () =>
-        set(
-          (state) => ({
-            ui: { ...state.ui, mapViewOpen: !state.ui.mapViewOpen },
-          }),
-          false,
-          'ui/toggleMap'
-        ),
-
-      toggleSidebar: () =>
-        set(
-          (state) => ({
-            ui: { ...state.ui, sidebarOpen: !state.ui.sidebarOpen },
-          }),
-          false,
-          'ui/toggleSidebar'
-        ),
-
-      // ============================================
-      // SETTINGS SLICE — user preferences (optional persistence)
-      // ============================================
-      settings: {
-        theme: 'light', // 'light' | 'dark' (future)
-        locale: 'nb-NO', // Norwegian bokmål
-        autoValidateOnUpload: true,
-        showWarnings: true,
-        lastFileName: null,
-      },
-
-      updateSettings: (newSettings) =>
-        set(
-          (state) => ({
-            settings: { ...state.settings, ...newSettings },
-          }),
-          false,
-          'settings/update'
-        ),
-
-      // ============================================
-      // GLOBAL ACTIONS — cross-slice operations
-      // ============================================
-      resetAll: () =>
-        set(
-          {
-            file: null,
-            parsing: {
-              status: 'idle',
-              progress: 0,
-              error: null,
-              startedAt: null,
-              completedAt: null,
-            },
-            validation: {
-              records: [],
-              summary: {
-                totalRecords: 0,
-                errorCount: 0,
-                warningCount: 0,
-                validCount: 0,
+        setParsingDone: () =>
+          set(
+            (state) => ({
+              parsing: {
+                ...state.parsing,
+                status: 'done',
+                progress: 100,
+                completedAt: Date.now(),
               },
-              errors: [],
-              warnings: [],
-              fieldStats: {},
+            }),
+            false,
+            'parsing/done'
+          ),
+
+        setParsingError: (error) =>
+          set(
+            (state) => ({
+              parsing: {
+                ...state.parsing,
+                status: 'error',
+                error,
+                completedAt: Date.now(),
+              },
+            }),
+            false,
+            'parsing/error'
+          ),
+
+        resetParsing: () =>
+          set(
+            {
+              parsing: {
+                status: 'idle',
+                progress: 0,
+                error: null,
+                startedAt: null,
+                completedAt: null,
+              },
             },
-            ui: {
-              detailsPanelOpen: false,
-              selectedRecordId: null,
-              filterSeverity: 'all',
-              mapViewOpen: false,
-              sidebarOpen: true,
-            },
-            // Keep settings
+            false,
+            'parsing/reset'
+          ),
+
+        // ============================================
+        // VALIDATION SLICE — validation results
+        // ============================================
+        validation: {
+          records: [], // Array of parsed GMI records
+          summary: {
+            totalRecords: 0,
+            errorCount: 0,
+            warningCount: 0,
+            validCount: 0,
           },
-          false,
-          'global/resetAll'
-        ),
+          errors: [], // Array of { line, field, message, severity }
+          warnings: [],
+          fieldStats: {}, // Optional: field presence/quality stats
+        },
 
-      // ============================================
-      // SELECTORS (computed/derived values)
-      // ============================================
-      // Access via: const filteredErrors = useStore(state => state.getFilteredErrors())
-      getFilteredErrors: () => {
-        const { validation, ui } = get();
-        if (ui.filterSeverity === 'all') {
-          return [...validation.errors, ...validation.warnings];
-        }
-        if (ui.filterSeverity === 'errors') {
-          return validation.errors;
-        }
-        if (ui.filterSeverity === 'warnings') {
-          return validation.warnings;
-        }
-        return [];
-      },
+        setValidationResults: (results) =>
+          set(
+            { validation: results },
+            false,
+            'validation/setResults'
+          ),
 
-      isProcessing: () => {
-        const { parsing } = get();
-        return parsing.status === 'parsing';
-      },
+        clearValidationResults: () =>
+          set(
+            {
+              validation: {
+                records: [],
+                summary: {
+                  totalRecords: 0,
+                  errorCount: 0,
+                  warningCount: 0,
+                  validCount: 0,
+                },
+                errors: [],
+                warnings: [],
+                fieldStats: {},
+              },
+            },
+            false,
+            'validation/clear'
+          ),
 
-      hasResults: () => {
-        const { validation } = get();
-        return validation.records.length > 0;
-      },
-    }),
+        // ============================================
+        // UI SLICE — UI state and user interactions
+        // ============================================
+        ui: {
+          detailsPanelOpen: false,
+          selectedRecordId: null,
+          filterSeverity: 'all', // 'all' | 'errors' | 'warnings'
+          mapViewOpen: false,
+          sidebarOpen: true,
+          highlightedCode: null,
+          hiddenCodes: [],
+        },
+
+        setHighlightedCode: (code) =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, highlightedCode: code },
+            }),
+            false,
+            'ui/setHighlightedCode'
+          ),
+
+        toggleHiddenCode: (code) =>
+          set(
+            (state) => {
+              const currentHidden = state.ui.hiddenCodes;
+              const newHidden = currentHidden.includes(code)
+                ? currentHidden.filter((c) => c !== code)
+                : [...currentHidden, code];
+              return {
+                ui: { ...state.ui, hiddenCodes: newHidden },
+              };
+            },
+            false,
+            'ui/toggleHiddenCode'
+          ),
+
+        toggleDetailsPanel: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                detailsPanelOpen: !state.ui.detailsPanelOpen,
+              },
+            }),
+            false,
+            'ui/toggleDetails'
+          ),
+
+        selectRecord: (recordId) =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, selectedRecordId: recordId },
+            }),
+            false,
+            'ui/selectRecord'
+          ),
+
+        setFilterSeverity: (severity) =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, filterSeverity: severity },
+            }),
+            false,
+            'ui/setFilter'
+          ),
+
+        toggleMapView: () =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, mapViewOpen: !state.ui.mapViewOpen },
+            }),
+            false,
+            'ui/toggleMap'
+          ),
+
+        toggleSidebar: () =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, sidebarOpen: !state.ui.sidebarOpen },
+            }),
+            false,
+            'ui/toggleSidebar'
+          ),
+
+        // ============================================
+        // SETTINGS SLICE — user preferences (optional persistence)
+        // ============================================
+        settings: {
+          theme: 'light', // 'light' | 'dark' (future)
+          locale: 'nb-NO', // Norwegian bokmål
+          autoValidateOnUpload: true,
+          showWarnings: true,
+          lastFileName: null,
+        },
+
+        updateSettings: (newSettings) =>
+          set(
+            (state) => ({
+              settings: { ...state.settings, ...newSettings },
+            }),
+            false,
+            'settings/update'
+          ),
+
+        // ============================================
+        // GLOBAL ACTIONS — cross-slice operations
+        // ============================================
+        resetAll: () =>
+          set(
+            {
+              file: null,
+              parsing: {
+                status: 'idle',
+                progress: 0,
+                error: null,
+                startedAt: null,
+                completedAt: null,
+              },
+              validation: {
+                records: [],
+                summary: {
+                  totalRecords: 0,
+                  errorCount: 0,
+                  warningCount: 0,
+                  validCount: 0,
+                },
+                errors: [],
+                warnings: [],
+                fieldStats: {},
+              },
+              ui: {
+                detailsPanelOpen: false,
+                selectedRecordId: null,
+                filterSeverity: 'all',
+                mapViewOpen: false,
+                sidebarOpen: true,
+              },
+              // Keep settings
+            },
+            false,
+            'global/resetAll'
+          ),
+
+        // ============================================
+        // SELECTORS (computed/derived values)
+        // ============================================
+        // Access via: const filteredErrors = useStore(state => state.getFilteredErrors())
+        getFilteredErrors: () => {
+          const { validation, ui } = get();
+          if (ui.filterSeverity === 'all') {
+            return [...validation.errors, ...validation.warnings];
+          }
+          if (ui.filterSeverity === 'errors') {
+            return validation.errors;
+          }
+          if (ui.filterSeverity === 'warnings') {
+            return validation.warnings;
+          }
+          return [];
+        },
+
+        isProcessing: () => {
+          const { parsing } = get();
+          return parsing.status === 'parsing';
+        },
+
+        hasResults: () => {
+          const { validation } = get();
+          return validation.records.length > 0;
+        },
+
+        // ============================================
+        // SYSTEM SLICE — session management
+        // ============================================
+        lastActive: Date.now(),
+        updateLastActive: () =>
+          set({ lastActive: Date.now() }, false, 'system/heartbeat'),
+      }),
+      {
+        name: 'gmi-validator-storage',
+        onRehydrateStorage: () => (state) => {
+          if (state) {
+            // Ensure new fields exist (migration for old persisted state)
+            if (!state.ui) {
+              state.ui = {
+                detailsPanelOpen: false,
+                selectedRecordId: null,
+                filterSeverity: 'all',
+                mapViewOpen: false,
+                sidebarOpen: true,
+                highlightedCode: null,
+                hiddenCodes: [],
+              };
+            } else {
+              if (state.ui.highlightedCode === undefined) {
+                state.ui.highlightedCode = null;
+              }
+              if (state.ui.hiddenCodes === undefined) {
+                state.ui.hiddenCodes = [];
+              }
+            }
+
+            const now = Date.now();
+            const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
+
+            if (
+              state.lastActive &&
+              now - state.lastActive > oneHour
+            ) {
+              console.log(
+                'Session expired (1h timeout). Clearing persisted data.'
+              );
+              state.clearFile();
+              state.clearData();
+              state.resetParsing();
+              state.clearValidationResults();
+              state.updateLastActive();
+            }
+          }
+        },
+      }
+    ),
     { name: 'GMI-Validator-Store' }
   )
 );

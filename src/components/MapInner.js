@@ -193,6 +193,10 @@ function ZoomHandler({ onZoomChange }) {
 
 export default function MapInner({ onZoomChange }) {
   const data = useStore((state) => state.data);
+  const highlightedCode = useStore(
+    (state) => state.ui.highlightedCode
+  );
+  const hiddenCodes = useStore((state) => state.ui.hiddenCodes);
 
   const geoJsonData = useMemo(() => {
     if (!data) return null;
@@ -287,33 +291,77 @@ export default function MapInner({ onZoomChange }) {
 
   const lineStyle = (feature) => {
     const fcode = feature.properties?.S_FCODE;
-    const color = getColorByFCode(fcode);
-    const weight = getLineWeight(feature.properties);
+    const isHidden = hiddenCodes.includes(fcode);
+    const isHighlighted = highlightedCode === fcode;
+
+    if (isHidden) {
+      return {
+        opacity: 0,
+        weight: 0,
+        fillOpacity: 0,
+        interactive: false,
+      };
+    }
+
+    const color = isHighlighted ? '#00FFFF' : getColorByFCode(fcode);
+    const baseWeight = getLineWeight(feature.properties);
+    const weight = isHighlighted ? baseWeight + 4 : baseWeight;
+    const opacity = isHighlighted ? 1 : 0.9;
 
     return {
       color: color,
       weight: weight,
-      opacity: 0.9,
+      opacity: opacity,
       dashArray: fcode && fcode.includes('DR') ? '5, 5' : null,
+      shadowBlur: isHighlighted ? 10 : 0, // Note: Leaflet doesn't support shadowBlur natively in simple path options, but we can simulate "glow" with color/weight
     };
   };
 
   const pointToLayer = (feature, latlng) => {
     const fcode = feature.properties?.S_FCODE;
+    const isHidden = hiddenCodes.includes(fcode);
+    const isHighlighted = highlightedCode === fcode;
+
+    if (isHidden) {
+      // Return a dummy marker that is invisible
+      return L.circleMarker(latlng, {
+        radius: 0,
+        opacity: 0,
+        fillOpacity: 0,
+        interactive: false,
+      });
+    }
+
     const color = getColorByFCode(fcode);
     const isManhole = fcode && fcode.includes('KUM');
 
+    const radius = isHighlighted
+      ? isManhole
+        ? 9
+        : 8
+      : isManhole
+      ? 6
+      : 5;
+
+    const weight = isHighlighted ? 4 : isManhole ? 2 : 1;
+    const borderColor = isHighlighted ? '#00FFFF' : '#000';
+
     return L.circleMarker(latlng, {
-      radius: isManhole ? 6 : 5,
+      radius: radius,
       fillColor: color,
-      color: '#000',
-      weight: isManhole ? 2 : 1,
+      color: borderColor,
+      weight: weight,
       opacity: 1,
       fillOpacity: 0.8,
     });
   };
 
   const onEachFeature = (feature, layer) => {
+    // If hidden, don't bind popup or do anything
+    if (hiddenCodes.includes(feature.properties?.S_FCODE)) {
+      return;
+    }
+
     if (feature.properties) {
       const props = feature.properties;
       const fcode = props.S_FCODE;
@@ -376,6 +424,9 @@ export default function MapInner({ onZoomChange }) {
 
         <LayersControl.Overlay checked name="Data">
           <GeoJSON
+            key={`${
+              data?.header?.filename || 'data'
+            }-${hiddenCodes.join(',')}-${highlightedCode || 'none'}`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}
