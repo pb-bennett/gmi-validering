@@ -32,6 +32,14 @@ const useStore = create(
       clearFile: () => set({ file: null }, false, 'file/clear'),
 
       // ============================================
+      // DATA SLICE — raw parsed data
+      // ============================================
+      data: null, // { header: {}, points: [], lines: [] } | null
+
+      setData: (data) => set({ data }, false, 'data/set'),
+      clearData: () => set({ data: null }, false, 'data/clear'),
+
+      // ============================================
       // PARSING SLICE — parsing status & progress
       // ============================================
       parsing: {
