@@ -31,10 +31,17 @@ export default function Sidebar({ onReset }) {
   const setHighlightedCode = useStore(
     (state) => state.setHighlightedCode
   );
+  const setHighlightedType = useStore(
+    (state) => state.setHighlightedType
+  );
   const toggleHiddenCode = useStore(
     (state) => state.toggleHiddenCode
   );
+  const toggleHiddenType = useStore(
+    (state) => state.toggleHiddenType
+  );
   const hiddenCodes = useStore((state) => state.ui.hiddenCodes);
+  const hiddenTypes = useStore((state) => state.ui.hiddenTypes);
 
   // State for sidebar width and resizing
   const [width, setWidth] = useState(320);
@@ -370,26 +377,48 @@ export default function Sidebar({ onReset }) {
                                       {Object.entries(data.types)
                                         .sort(([, a], [, b]) => b - a)
                                         .map(
-                                          ([typeVal, typeCount]) => (
+                                          ([typeVal, typeCount]) => {
+                                            const isTypeHidden = hiddenTypes.includes(typeVal);
+                                            return (
                                             <div
                                               key={typeVal}
-                                              className="flex justify-between text-gray-500"
+                                              className={`flex justify-between items-center text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors ${
+                                                isTypeHidden ? 'opacity-50' : ''
+                                              }`}
+                                              onMouseEnter={() =>
+                                                setHighlightedType(typeVal)
+                                              }
+                                              onMouseLeave={() =>
+                                                setHighlightedType(null)
+                                              }
                                             >
-                                              <span
-                                                className={
-                                                  typeVal ===
-                                                  '(Mangler Type)'
-                                                    ? 'italic text-red-400'
-                                                    : ''
-                                                }
-                                              >
-                                                {typeVal}
-                                              </span>
+                                              <div className="flex items-center gap-1">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={!isTypeHidden}
+                                                  onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleHiddenType(typeVal);
+                                                  }}
+                                                  className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <span
+                                                  className={
+                                                    typeVal ===
+                                                    '(Mangler Type)'
+                                                      ? 'italic text-red-400'
+                                                      : ''
+                                                  }
+                                                >
+                                                  {typeVal}
+                                                </span>
+                                              </div>
                                               <span className="font-mono text-gray-400">
                                                 {typeCount}
                                               </span>
                                             </div>
-                                          )
+                                          );
+                                        }
                                         )}
                                     </div>
                                   </td>
@@ -408,7 +437,7 @@ export default function Sidebar({ onReset }) {
               )}
             </div>
 
-            {/* Lines Table */}
+            {/* Lines Table - LEDNINGER SECTION */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -536,26 +565,48 @@ export default function Sidebar({ onReset }) {
                                       {Object.entries(data.types)
                                         .sort(([, a], [, b]) => b - a)
                                         .map(
-                                          ([typeVal, typeCount]) => (
+                                          ([typeVal, typeCount]) => {
+                                            const isTypeHidden = hiddenTypes.includes(typeVal);
+                                            return (
                                             <div
                                               key={typeVal}
-                                              className="flex justify-between text-gray-500"
+                                              className={`flex justify-between items-center text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors ${
+                                                isTypeHidden ? 'opacity-50' : ''
+                                              }`}
+                                              onMouseEnter={() =>
+                                                setHighlightedType(typeVal)
+                                              }
+                                              onMouseLeave={() =>
+                                                setHighlightedType(null)
+                                              }
                                             >
-                                              <span
-                                                className={
-                                                  typeVal ===
-                                                  '(Mangler Type)'
-                                                    ? 'italic text-red-400'
-                                                    : ''
-                                                }
-                                              >
-                                                {typeVal}
-                                              </span>
+                                              <div className="flex items-center gap-1">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={!isTypeHidden}
+                                                  onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleHiddenType(typeVal);
+                                                  }}
+                                                  className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <span
+                                                  className={
+                                                    typeVal ===
+                                                    '(Mangler Type)'
+                                                      ? 'italic text-red-400'
+                                                      : ''
+                                                  }
+                                                >
+                                                  {typeVal}
+                                                </span>
+                                              </div>
                                               <span className="font-mono text-gray-400">
                                                 {typeCount}
                                               </span>
                                             </div>
-                                          )
+                                          );
+                                        }
                                         )}
                                     </div>
                                   </td>

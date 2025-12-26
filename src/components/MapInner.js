@@ -197,6 +197,10 @@ export default function MapInner({ onZoomChange }) {
     (state) => state.ui.highlightedCode
   );
   const hiddenCodes = useStore((state) => state.ui.hiddenCodes);
+  const highlightedType = useStore(
+    (state) => state.ui.highlightedType
+  );
+  const hiddenTypes = useStore((state) => state.ui.hiddenTypes);
 
   const geoJsonData = useMemo(() => {
     if (!data) return null;
@@ -291,8 +295,13 @@ export default function MapInner({ onZoomChange }) {
 
   const lineStyle = (feature) => {
     const fcode = feature.properties?.S_FCODE;
-    const isHidden = hiddenCodes.includes(fcode);
-    const isHighlighted = highlightedCode === fcode;
+    const typeVal = feature.properties?.Type || '(Mangler Type)';
+    const isHiddenByCode = hiddenCodes.includes(fcode);
+    const isHiddenByType = hiddenTypes.includes(typeVal);
+    const isHidden = isHiddenByCode || isHiddenByType;
+    const isHighlightedByCode = highlightedCode === fcode;
+    const isHighlightedByType = highlightedType === typeVal;
+    const isHighlighted = isHighlightedByCode || isHighlightedByType;
 
     if (isHidden) {
       return {
@@ -319,8 +328,13 @@ export default function MapInner({ onZoomChange }) {
 
   const pointToLayer = (feature, latlng) => {
     const fcode = feature.properties?.S_FCODE;
-    const isHidden = hiddenCodes.includes(fcode);
-    const isHighlighted = highlightedCode === fcode;
+    const typeVal = feature.properties?.Type || '(Mangler Type)';
+    const isHiddenByCode = hiddenCodes.includes(fcode);
+    const isHiddenByType = hiddenTypes.includes(typeVal);
+    const isHidden = isHiddenByCode || isHiddenByType;
+    const isHighlightedByCode = highlightedCode === fcode;
+    const isHighlightedByType = highlightedType === typeVal;
+    const isHighlighted = isHighlightedByCode || isHighlightedByType;
 
     if (isHidden) {
       // Return a dummy marker that is invisible
@@ -337,34 +351,36 @@ export default function MapInner({ onZoomChange }) {
 
     const radius = isHighlighted
       ? isManhole
-        ? 9
-        : 8
+        ? 10
+        : 9
       : isManhole
-      ? 6
-      : 5;
+      ? 7
+      : 6;
 
-    const weight = isHighlighted ? 4 : isManhole ? 2 : 1;
-    const borderColor = isHighlighted ? '#00FFFF' : '#000';
+    const strokeWeight = isHighlighted ? 4 : 3;
+    const strokeColor = isHighlighted ? '#00FFFF' : color;
 
+    // White fill with colored stroke for better visibility
     return L.circleMarker(latlng, {
       radius: radius,
-      fillColor: color,
-      color: borderColor,
-      weight: weight,
+      fillColor: '#FFFFFF',
+      color: strokeColor,
+      weight: strokeWeight,
       opacity: 1,
-      fillOpacity: 0.8,
+      fillOpacity: 0.95,
     });
   };
 
   const onEachFeature = (feature, layer) => {
-    // If hidden, don't bind popup or do anything
-    if (hiddenCodes.includes(feature.properties?.S_FCODE)) {
+    // If hidden by code or type, don't bind popup or do anything
+    const fcode = feature.properties?.S_FCODE;
+    const typeVal = feature.properties?.Type || '(Mangler Type)';
+    if (hiddenCodes.includes(fcode) || hiddenTypes.includes(typeVal)) {
       return;
     }
 
     if (feature.properties) {
       const props = feature.properties;
-      const fcode = props.S_FCODE;
       const color = getColorByFCode(fcode);
 
       let content = `<div class="text-sm max-h-60 overflow-auto">`;
@@ -426,7 +442,7 @@ export default function MapInner({ onZoomChange }) {
           <GeoJSON
             key={`${
               data?.header?.filename || 'data'
-            }-${hiddenCodes.join(',')}-${highlightedCode || 'none'}`}
+            }-${hiddenCodes.join(',')}-${highlightedCode || 'none'}-${hiddenTypes.join(',')}-${highlightedType || 'none'}`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}

@@ -173,6 +173,8 @@ const useStore = create(
           sidebarOpen: true,
           highlightedCode: null,
           hiddenCodes: [],
+          highlightedType: null,
+          hiddenTypes: [],
         },
 
         setHighlightedCode: (code) =>
@@ -182,6 +184,15 @@ const useStore = create(
             }),
             false,
             'ui/setHighlightedCode'
+          ),
+
+        setHighlightedType: (typeVal) =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, highlightedType: typeVal },
+            }),
+            false,
+            'ui/setHighlightedType'
           ),
 
         toggleHiddenCode: (code) =>
@@ -197,6 +208,21 @@ const useStore = create(
             },
             false,
             'ui/toggleHiddenCode'
+          ),
+
+        toggleHiddenType: (typeVal) =>
+          set(
+            (state) => {
+              const currentHidden = state.ui.hiddenTypes;
+              const newHidden = currentHidden.includes(typeVal)
+                ? currentHidden.filter((t) => t !== typeVal)
+                : [...currentHidden, typeVal];
+              return {
+                ui: { ...state.ui, hiddenTypes: newHidden },
+              };
+            },
+            false,
+            'ui/toggleHiddenType'
           ),
 
         toggleDetailsPanel: () =>
@@ -355,6 +381,8 @@ const useStore = create(
                 sidebarOpen: true,
                 highlightedCode: null,
                 hiddenCodes: [],
+                highlightedType: null,
+                hiddenTypes: [],
               };
             } else {
               if (state.ui.highlightedCode === undefined) {
@@ -362,6 +390,12 @@ const useStore = create(
               }
               if (state.ui.hiddenCodes === undefined) {
                 state.ui.hiddenCodes = [];
+              }
+              if (state.ui.highlightedType === undefined) {
+                state.ui.highlightedType = null;
+              }
+              if (state.ui.hiddenTypes === undefined) {
+                state.ui.hiddenTypes = [];
               }
             }
 
