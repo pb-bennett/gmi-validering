@@ -17,4 +17,3 @@ const MapInner = dynamic(() => import('./MapInner'), {
 export default function MapView(props) {
   return <MapInner {...props} />;
 }
-

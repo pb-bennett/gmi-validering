@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, GeoJSON, LayersControl, useMap, useMapEvents } from 'react-leaflet';
+import {
+  MapContainer,
+  TileLayer,
+  GeoJSON,
+  LayersControl,
+  useMap,
+  useMapEvents,
+} from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import useStore from '@/lib/store';
@@ -10,17 +17,32 @@ import proj4 from 'proj4';
 // Fix for default Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconRetinaUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
 // Define common projections
-proj4.defs("EPSG:25832", "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
-proj4.defs("EPSG:25833", "+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
-proj4.defs("EPSG:32632", "+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs");
-proj4.defs("EPSG:32633", "+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs");
-proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
+proj4.defs(
+  'EPSG:25832',
+  '+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'
+);
+proj4.defs(
+  'EPSG:25833',
+  '+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'
+);
+proj4.defs(
+  'EPSG:32632',
+  '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs'
+);
+proj4.defs(
+  'EPSG:32633',
+  '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
+);
+proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs');
 
 // --- Styling Functions ---
 
@@ -72,14 +94,20 @@ const getColorByFCode = (fcode) => {
   }
 
   // Try partial matches for complex codes
-  if (fcode.includes('VL') || fcode.includes('VANN')) return '#0066cc';
-  if (fcode.includes('SP') || fcode.includes('SPILLVANN')) return '#228B22';
-  if (fcode.includes('OV') || fcode.includes('OVERVANN')) return '#000000';
-  if (fcode.includes('DR') || fcode.includes('DREN')) return '#8B4513';
+  if (fcode.includes('VL') || fcode.includes('VANN'))
+    return '#0066cc';
+  if (fcode.includes('SP') || fcode.includes('SPILLVANN'))
+    return '#228B22';
+  if (fcode.includes('OV') || fcode.includes('OVERVANN'))
+    return '#000000';
+  if (fcode.includes('DR') || fcode.includes('DREN'))
+    return '#8B4513';
   if (fcode.includes('KUM')) return '#cc3300';
   if (fcode.includes('GAS')) return '#ffd700';
-  if (fcode.includes('EL') || fcode.includes('ELEKTR')) return '#ff6600';
-  if (fcode.includes('TELE') || fcode.includes('TEL')) return '#ff8c00';
+  if (fcode.includes('EL') || fcode.includes('ELEKTR'))
+    return '#ff6600';
+  if (fcode.includes('TELE') || fcode.includes('TEL'))
+    return '#ff8c00';
   if (fcode.includes('FJERN')) return '#ff00ff';
 
   // Everything else - purple
@@ -89,16 +117,31 @@ const getColorByFCode = (fcode) => {
 const getLineWeight = (properties) => {
   // Common dimension field names in Norwegian infrastructure data
   const dimensionFields = [
-    'Dimensjon', 'DIMENSJON', 'DIMENSION', 'DIM', 'DIAMETER',
-    'BREDDE', 'WIDTH', 'ROER_DIM', 'NOMINAL_DIM', 'SIZE', 'DN'
+    'Dimensjon',
+    'DIMENSJON',
+    'DIMENSION',
+    'DIM',
+    'DIAMETER',
+    'BREDDE',
+    'WIDTH',
+    'ROER_DIM',
+    'NOMINAL_DIM',
+    'SIZE',
+    'DN',
   ];
 
   let dimension = null;
 
   // Try to find dimension value from any of the common field names
   for (const field of dimensionFields) {
-    if (properties[field] !== undefined && properties[field] !== null && properties[field] !== '') {
-      const value = parseFloat(String(properties[field]).replace(/[^\d.]/g, ''));
+    if (
+      properties[field] !== undefined &&
+      properties[field] !== null &&
+      properties[field] !== ''
+    ) {
+      const value = parseFloat(
+        String(properties[field]).replace(/[^\d.]/g, '')
+      );
       if (!isNaN(value) && value > 0) {
         dimension = value;
         break;
@@ -132,7 +175,7 @@ function BoundsController({ geoJsonData }) {
         map.fitBounds(bounds, { padding: [50, 50] });
       }
     } catch (e) {
-      console.warn("Could not fit bounds", e);
+      console.warn('Could not fit bounds', e);
     }
   }, [map, geoJsonData]);
 
@@ -164,15 +207,23 @@ export default function MapInner({ onZoomChange }) {
       if (proj4.defs(epsg)) {
         sourceProj = epsg;
       } else {
-        console.warn(`Unknown EPSG code: ${header.COSYS_EPSG}, assuming raw coordinates are compatible or WGS84`);
+        console.warn(
+          `Unknown EPSG code: ${header.COSYS_EPSG}, assuming raw coordinates are compatible or WGS84`
+        );
       }
     } else if (header?.COSYS) {
-        // Simple heuristic for COSYS string
-        if (header.COSYS.includes('UTM') && header.COSYS.includes('32')) {
-            sourceProj = 'EPSG:25832';
-        } else if (header.COSYS.includes('UTM') && header.COSYS.includes('33')) {
-            sourceProj = 'EPSG:25833';
-        }
+      // Simple heuristic for COSYS string
+      if (
+        header.COSYS.includes('UTM') &&
+        header.COSYS.includes('32')
+      ) {
+        sourceProj = 'EPSG:25832';
+      } else if (
+        header.COSYS.includes('UTM') &&
+        header.COSYS.includes('33')
+      ) {
+        sourceProj = 'EPSG:25833';
+      }
     }
 
     // Helper to transform coordinate
@@ -188,13 +239,19 @@ export default function MapInner({ onZoomChange }) {
     // Process Lines
     lines.forEach((line, idx) => {
       if (line.coordinates && line.coordinates.length > 0) {
-        const coords = line.coordinates.map(c => transform(c.x, c.y));
+        const coords = line.coordinates.map((c) =>
+          transform(c.x, c.y)
+        );
         features.push({
           type: 'Feature',
-          properties: { ...line.attributes, id: idx, featureType: 'Line' },
+          properties: {
+            ...line.attributes,
+            id: idx,
+            featureType: 'Line',
+          },
           geometry: {
             type: 'LineString',
-            coordinates: coords
+            coordinates: coords,
           },
         });
       }
@@ -207,10 +264,14 @@ export default function MapInner({ onZoomChange }) {
         const coords = transform(c.x, c.y);
         features.push({
           type: 'Feature',
-          properties: { ...point.attributes, id: idx, featureType: 'Point' },
+          properties: {
+            ...point.attributes,
+            id: idx,
+            featureType: 'Point',
+          },
           geometry: {
             type: 'Point',
-            coordinates: coords
+            coordinates: coords,
           },
         });
       }
@@ -218,7 +279,7 @@ export default function MapInner({ onZoomChange }) {
 
     return {
       type: 'FeatureCollection',
-      features
+      features,
     };
   }, [data]);
 
@@ -228,7 +289,7 @@ export default function MapInner({ onZoomChange }) {
     const fcode = feature.properties?.S_FCODE;
     const color = getColorByFCode(fcode);
     const weight = getLineWeight(feature.properties);
-    
+
     return {
       color: color,
       weight: weight,
@@ -257,16 +318,22 @@ export default function MapInner({ onZoomChange }) {
       const props = feature.properties;
       const fcode = props.S_FCODE;
       const color = getColorByFCode(fcode);
-      
+
       let content = `<div class="text-sm max-h-60 overflow-auto">`;
       content += `<strong>Type:</strong> ${props.featureType}<br/>`;
       if (fcode) {
         content += `<strong>Code:</strong> <span style="color: ${color}; font-weight: bold;">${fcode}</span><br/>`;
       }
-      
+
       content += '<div class="mt-2 border-t pt-1">';
       Object.entries(props).forEach(([key, value]) => {
-        if (key !== 'featureType' && key !== 'id' && key !== 'S_FCODE' && value !== null && value !== '') {
+        if (
+          key !== 'featureType' &&
+          key !== 'id' &&
+          key !== 'S_FCODE' &&
+          value !== null &&
+          value !== ''
+        ) {
           content += `<strong>${key}:</strong> ${value}<br/>`;
         }
       });
@@ -308,9 +375,9 @@ export default function MapInner({ onZoomChange }) {
         </LayersControl.BaseLayer>
 
         <LayersControl.Overlay checked name="Data">
-          <GeoJSON 
-            data={geoJsonData} 
-            style={lineStyle} 
+          <GeoJSON
+            data={geoJsonData}
+            style={lineStyle}
             pointToLayer={pointToLayer}
             onEachFeature={onEachFeature}
           />
@@ -322,4 +389,3 @@ export default function MapInner({ onZoomChange }) {
     </MapContainer>
   );
 }
-

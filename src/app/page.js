@@ -27,8 +27,12 @@ export default function Home() {
         <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
           <div className="max-w-xl w-full px-4">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-gray-900">GMI Validering</h1>
-              <p className="mt-2 text-gray-600">Last opp og valider GMI-filer</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                GMI Validering
+              </h1>
+              <p className="mt-2 text-gray-600">
+                Last opp og valider GMI-filer
+              </p>
             </div>
             <div className="bg-white shadow rounded-lg p-6">
               <FileUpload />
@@ -64,13 +68,12 @@ export default function Home() {
           </div>
 
           {/* Data Inspector Modal */}
-          <DataDisplayModal 
-            isOpen={isModalOpen} 
-            onClose={() => setIsModalOpen(false)} 
+          <DataDisplayModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
           />
         </>
       )}
     </div>
   );
 }
-
