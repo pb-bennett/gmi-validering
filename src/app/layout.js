@@ -25,9 +25,6 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={`${roboto.variable} ${robotoSerif.variable}`}>
-        <header className="bg-card p-4">
-          <h1 className="text-text">GMI Validator</h1>
-        </header>
         {children}
       </body>
     </html>
