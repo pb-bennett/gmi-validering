@@ -40,6 +40,17 @@ Planning stage — scope and requirements still being defined.
 
 ---
 
+## Design — Layout & Sidebar
+
+- **Sidebar-first approach:** The main application interface (after upload) consists of a **sidebar on the left** and a **map on the right**.
+- **Sidebar content:**
+  - Displays analysis and validation results.
+  - **Overview section:** Filename, number of points, number of lines (ledninger), total distance of lines (in meters).
+  - **Scrollable:** The sidebar should scroll independently of the map/page.
+  - **Header:** App name at the top, taking minimal space.
+- **Language:** All text in the sidebar must be **Norwegian Bokmål**.
+- **Style:** Modern, clean, concise. Use the defined color scheme and fonts. Avoid clutter.
+
 ## Design — Colour scheme
 
 We will use the following palette consistently across the UI (except in the map section where local map standards apply):
