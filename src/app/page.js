@@ -93,10 +93,17 @@ export default function Home() {
             </div>
 
             {/* Floating Inspect Button */}
-            <div className="absolute bottom-4 right-4 z-[1000]">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000]">
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="bg-white text-gray-800 px-4 py-2 rounded shadow hover:bg-gray-50 font-medium border border-gray-200"
+                className="px-4 py-2 rounded shadow font-medium border transition-colors"
+                style={{
+                  backgroundColor: 'var(--color-card)',
+                  color: 'var(--color-text)',
+                  borderColor: 'var(--color-border)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-page-bg)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-card)'}
               >
                 🔍 Inspiser data
               </button>

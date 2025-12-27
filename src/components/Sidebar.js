@@ -6,21 +6,27 @@ import fieldsData from '@/data/fields.json';
 
 function SidebarSection({ title, children, isOpen, onToggle }) {
   return (
-    <div className="border-b border-gray-200 last:border-0">
+    <div className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 bg-white/50 hover:bg-white/80 transition-colors text-left"
+        className="w-full flex items-center justify-between p-4 transition-colors text-left"
+        style={{ 
+          backgroundColor: 'var(--color-sidebar-bg)',
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-sidebar-hover)'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-sidebar-bg)'}
       >
-        <span className="font-semibold text-gray-800">{title}</span>
+        <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{title}</span>
         <span
-          className={`transform transition-transform duration-200 text-gray-400 ${
+          className={`transform transition-transform duration-200 ${
             isOpen ? 'rotate-180' : ''
           }`}
+          style={{ color: 'var(--color-text-secondary)' }}
         >
           ▼
         </span>
       </button>
-      {isOpen && <div className="p-4 bg-white/30">{children}</div>}
+      {isOpen && <div className="p-4" style={{ backgroundColor: 'var(--color-card)' }}>{children}</div>}
     </div>
   );
 }
@@ -165,18 +171,31 @@ export default function Sidebar({ onReset }) {
   return (
     <div
       ref={sidebarRef}
-      style={{ width: `${width}px` }}
-      className="h-full bg-card border-r border-gray-200 flex flex-col shadow-xl z-20 relative flex-shrink-0"
+      style={{ 
+        width: `${width}px`,
+        backgroundColor: 'var(--color-card)',
+        borderRightColor: 'var(--color-border)'
+      }}
+      className="h-full border-r flex flex-col shadow-xl z-20 relative flex-shrink-0"
     >
       {/* Resize Handle */}
       <div
-        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-30"
+        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors z-30"
+        style={{ backgroundColor: 'transparent' }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primary-light)'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         onMouseDown={() => setIsResizing(true)}
       />
 
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 bg-white/50">
-        <h1 className="text-lg font-bold text-primary">
+      <div 
+        className="p-4 border-b" 
+        style={{
+          borderColor: 'var(--color-border)',
+          backgroundColor: 'var(--color-sidebar-bg)'
+        }}
+      >
+        <h1 className="text-lg font-bold" style={{ color: 'var(--color-primary)' }}>
           GMI Validering
         </h1>
       </div>
@@ -380,7 +399,10 @@ export default function Sidebar({ onReset }) {
                                           ([typeVal, typeCount]) => {
                                             const isTypeHidden =
                                               hiddenTypes.some(
-                                                (ht) => ht.type === typeVal && ht.code === code
+                                                (ht) =>
+                                                  ht.type ===
+                                                    typeVal &&
+                                                  ht.code === code
                                               );
                                             return (
                                               <div
@@ -584,7 +606,10 @@ export default function Sidebar({ onReset }) {
                                           ([typeVal, typeCount]) => {
                                             const isTypeHidden =
                                               hiddenTypes.some(
-                                                (ht) => ht.type === typeVal && ht.code === code
+                                                (ht) =>
+                                                  ht.type ===
+                                                    typeVal &&
+                                                  ht.code === code
                                               );
                                             return (
                                               <div
@@ -683,10 +708,17 @@ export default function Sidebar({ onReset }) {
       </div>
 
       {/* Footer Actions */}
-      <div className="p-4 border-t border-gray-200 bg-white/50">
+      <div className="p-4 border-t" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-sidebar-bg)' }}>
         <button
           onClick={onReset}
-          className="w-full py-2 px-4 bg-white border border-red-200 rounded-md shadow-sm text-sm font-medium text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+          className="w-full py-2 px-4 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors"
+          style={{
+            backgroundColor: 'var(--color-card)',
+            borderColor: 'var(--color-primary-light)',
+            color: 'var(--color-primary-dark)'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-page-bg)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-card)'}
         >
           Nullstill og last opp ny
         </button>

@@ -1,20 +1,80 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
-@theme {
-  --color-page-bg: #faf3e1;
-  --color-card: #f5e7c6;
-  --color-primary: #cc4a09;
-  --color-primary-dark: #a63e08;
-  --color-text: #222222;
+/* Theme: Modern Blue (Default) */
+:root,
+[data-theme="blue"] {
+  --color-page-bg: #f8fafc;
+  --color-card: #ffffff;
+  --color-primary: #3b82f6;
+  --color-primary-dark: #2563eb;
+  --color-primary-light: #60a5fa;
+  --color-text: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-border: #e2e8f0;
+  --color-accent: #06b6d4;
+  --color-sidebar-bg: #ffffff;
+  --color-sidebar-hover: #f8fafc;
 }
 
-:root {
-  --background: var(--color-page-bg);
-  --foreground: var(--color-text);
-  --card: var(--color-card);
-  --primary: var(--color-primary);
-  --primary-foreground: #ffffff;
+/* Theme: Elegant Gray */
+[data-theme="gray"] {
+  --color-page-bg: #f9fafb;
+  --color-card: #ffffff;
+  --color-primary: #6b7280;
+  --color-primary-dark: #4b5563;
+  --color-primary-light: #9ca3af;
+  --color-text: #111827;
+  --color-text-secondary: #6b7280;
+  --color-border: #e5e7eb;
+  --color-accent: #8b5cf6;
+  --color-sidebar-bg: #ffffff;
+  --color-sidebar-hover: #f9fafb;
+}
+
+/* Theme: Fresh Green */
+[data-theme="green"] {
+  --color-page-bg: #f0fdf4;
+  --color-card: #ffffff;
+  --color-primary: #10b981;
+  --color-primary-dark: #059669;
+  --color-primary-light: #34d399;
+  --color-text: #064e3b;
+  --color-text-secondary: #6b7280;
+  --color-border: #d1fae5;
+  --color-accent: #14b8a6;
+  --color-sidebar-bg: #ffffff;
+  --color-sidebar-hover: #f0fdf4;
+}
+
+/* Theme: Vibrant Purple */
+[data-theme="purple"] {
+  --color-page-bg: #faf5ff;
+  --color-card: #ffffff;
+  --color-primary: #8b5cf6;
+  --color-primary-dark: #7c3aed;
+  --color-primary-light: #a78bfa;
+  --color-text: #4c1d95;
+  --color-text-secondary: #6b7280;
+  --color-border: #e9d5ff;
+  --color-accent: #ec4899;
+  --color-sidebar-bg: #ffffff;
+  --color-sidebar-hover: #faf5ff;
+}
+
+/* Theme: Warm Orange */
+[data-theme="orange"] {
+  --color-page-bg: #fffbeb;
+  --color-card: #ffffff;
+  --color-primary: #f59e0b;
+  --color-primary-dark: #d97706;
+  --color-primary-light: #fbbf24;
+  --color-text: #78350f;
+  --color-text-secondary: #6b7280;
+  --color-border: #fde68a;
+  --color-accent: #ef4444;
+  --color-sidebar-bg: #ffffff;
+  --color-sidebar-hover: #fffbeb;
 }
 
 @layer base {
@@ -27,13 +87,16 @@
   }
 
   body {
-    @apply bg-page-bg text-text;
+    background-color: var(--color-page-bg);
+    color: var(--color-text);
+    font-family: var(--font-roboto), system-ui, -apple-system, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   h1,
   h2,
   h3 {
-    @apply font-serif font-bold;
+    @apply font-bold;
   }
 
   h1 {

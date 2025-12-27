@@ -48,46 +48,49 @@ proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs');
 
 // Infrastructure type categories for symbols
 const INFRA_CATEGORIES = {
-  WATER: 'water',      // Vannledninger - circle
+  WATER: 'water', // Vannledninger - circle
   WASTEWATER: 'wastewater', // Spillvann - square
   STORMWATER: 'stormwater', // Overvann - triangle
   DRAINAGE: 'drainage', // Drensering - diamond
-  MANHOLE: 'manhole',   // Kum - hexagon
-  GAS: 'gas',          // Gass - pentagon
+  MANHOLE: 'manhole', // Kum - hexagon
+  GAS: 'gas', // Gass - pentagon
   ELECTRIC: 'electric', // Elektrisk - star
-  TELECOM: 'telecom',   // Tele - cross
-  HEATING: 'heating',   // Fjernvarme - flame
-  SLS_SLU: 'sls_slu',  // SLS/SLU - black square with vertical cross
-  DIV: 'div',          // DIV - small circle (less intrusive)
+  TELECOM: 'telecom', // Tele - cross
+  HEATING: 'heating', // Fjernvarme - flame
+  SLS_SLU: 'sls_slu', // SLS/SLU - black square with vertical cross
+  DIV: 'div', // DIV - small circle (less intrusive)
   GROKONSTR: 'grokonstr', // GRØKONSTR - large rectangle with hashes
-  KRN: 'krn',          // KRN - blue square with diagonal cross (smaller)
+  KRN: 'krn', // KRN - blue square with diagonal cross (smaller)
   ANBORING: 'anboring', // ANBORING - small blue circle like DIV
-  GRN: 'grn',          // GRN - small green circle like DIV
-  SAN: 'san',          // SAN - black square with circle inside
-  OTHER: 'other',      // Annet - circle
+  GRN: 'grn', // GRN - small green circle like DIV
+  SAN: 'san', // SAN - black square with circle inside
+  LOK: 'lok', // LOK - small centered dot (kumlokk)
+  OTHER: 'other', // Annet - circle
 };
 
 const getCategoryByFCode = (fcode) => {
   if (!fcode) return INFRA_CATEGORIES.OTHER;
-  
+
   // Check specific codes first
   if (fcode === 'SLS' || fcode === 'SLU')
     return INFRA_CATEGORIES.SLS_SLU;
-  if (fcode === 'DIV')
-    return INFRA_CATEGORIES.DIV;
-  if (fcode === 'GRØKONSTR')
-    return INFRA_CATEGORIES.GROKONSTR;
-  if (fcode === 'KRN')
-    return INFRA_CATEGORIES.KRN;
-  if (fcode.includes('ANBORING'))
-    return INFRA_CATEGORIES.ANBORING;
+  if (fcode === 'DIV') return INFRA_CATEGORIES.DIV;
+  if (fcode === 'GRØKONSTR') return INFRA_CATEGORIES.GROKONSTR;
+  if (fcode === 'KRN') return INFRA_CATEGORIES.KRN;
+  if (fcode.includes('ANBORING')) return INFRA_CATEGORIES.ANBORING;
   if (fcode === 'GRN' || fcode.includes('GRN'))
     return INFRA_CATEGORIES.GRN;
   if (fcode === 'SAN' || fcode.includes('SAN'))
     return INFRA_CATEGORIES.SAN;
-  
+  if (fcode === 'LOK')
+    return INFRA_CATEGORIES.LOK;
+
   // Then check partial matches
-  if (fcode.includes('VL') || fcode.includes('VANN') || fcode.includes('VF'))
+  if (
+    fcode.includes('VL') ||
+    fcode.includes('VANN') ||
+    fcode.includes('VF')
+  )
     return INFRA_CATEGORIES.WATER;
   if (fcode.includes('SP') || fcode.includes('SPILLVANN'))
     return INFRA_CATEGORIES.WASTEWATER;
@@ -95,17 +98,14 @@ const getCategoryByFCode = (fcode) => {
     return INFRA_CATEGORIES.STORMWATER;
   if (fcode.includes('DR') || fcode.includes('DREN'))
     return INFRA_CATEGORIES.DRAINAGE;
-  if (fcode.includes('KUM'))
-    return INFRA_CATEGORIES.MANHOLE;
-  if (fcode.includes('GAS'))
-    return INFRA_CATEGORIES.GAS;
+  if (fcode.includes('KUM')) return INFRA_CATEGORIES.MANHOLE;
+  if (fcode.includes('GAS')) return INFRA_CATEGORIES.GAS;
   if (fcode.includes('EL') || fcode.includes('ELEKTR'))
     return INFRA_CATEGORIES.ELECTRIC;
   if (fcode.includes('TELE') || fcode.includes('TEL'))
     return INFRA_CATEGORIES.TELECOM;
-  if (fcode.includes('FJERN'))
-    return INFRA_CATEGORIES.HEATING;
-  
+  if (fcode.includes('FJERN')) return INFRA_CATEGORIES.HEATING;
+
   return INFRA_CATEGORIES.OTHER;
 };
 
@@ -157,6 +157,7 @@ const getColorByFCode = (fcode) => {
     ANBORING: '#0066cc', // ANBORING - blue like KRN
     GRN: '#00cc00', // GRN - green
     SAN: '#000000', // SAN - black like SLS/SLU
+    LOK: '#cc3300', // LOK - red (to be visible on top of KUM)
 
     // Other/Unknown - PURPLE (default)
     ANNET: '#800080',
@@ -192,7 +193,13 @@ const getColorByFCode = (fcode) => {
 const createSvgMarker = (category, color, isHighlighted = false) => {
   // Adjust base sizes per category
   let baseSize;
-  if (category === INFRA_CATEGORIES.DIV || category === INFRA_CATEGORIES.ANBORING || category === INFRA_CATEGORIES.GRN) {
+  if (category === INFRA_CATEGORIES.LOK) {
+    baseSize = 8; // Very small dot for LOK so it doesn't hide KUM
+  } else if (
+    category === INFRA_CATEGORIES.DIV ||
+    category === INFRA_CATEGORIES.ANBORING ||
+    category === INFRA_CATEGORIES.GRN
+  ) {
     baseSize = 12; // Even smaller for DIV, ANBORING, and GRN
   } else if (category === INFRA_CATEGORIES.KRN) {
     baseSize = 14; // Smaller for KRN
@@ -201,14 +208,14 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
   } else {
     baseSize = 18; // Standard size
   }
-  
+
   const size = isHighlighted ? baseSize + 6 : baseSize;
   const strokeWidth = isHighlighted ? 3 : 2;
   const highlightColor = '#00FFFF';
   const stroke = isHighlighted ? highlightColor : color;
   const fill = '#FFFFFF';
   const half = size / 2;
-  
+
   // Special handling for GRØKONSTR - make it larger and rectangular
   if (category === INFRA_CATEGORIES.GROKONSTR) {
     const rectWidth = isHighlighted ? 28 : 22;
@@ -219,14 +226,26 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
     const svgPath = `
       <rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
       <g stroke="${stroke}" stroke-width="1" opacity="0.6">
-        <line x1="${rectX + 3}" y1="${rectY}" x2="${rectX}" y2="${rectY + 3}"/>
-        <line x1="${rectX + 8}" y1="${rectY}" x2="${rectX}" y2="${rectY + 8}"/>
-        <line x1="${rectX + 13}" y1="${rectY}" x2="${rectX}" y2="${rectY + 13}"/>
-        <line x1="${rectX + 18}" y1="${rectY}" x2="${rectX + 5}" y2="${rectY + 13}"/>
-        <line x1="${rectX + 22}" y1="${rectY + 2}" x2="${rectX + 10}" y2="${rectY + 14}"/>
-        <line x1="${rectX + 22}" y1="${rectY + 7}" x2="${rectX + 15}" y2="${rectY + 14}"/>
+        <line x1="${rectX + 3}" y1="${rectY}" x2="${rectX}" y2="${
+      rectY + 3
+    }"/>
+        <line x1="${rectX + 8}" y1="${rectY}" x2="${rectX}" y2="${
+      rectY + 8
+    }"/>
+        <line x1="${rectX + 13}" y1="${rectY}" x2="${rectX}" y2="${
+      rectY + 13
+    }"/>
+        <line x1="${rectX + 18}" y1="${rectY}" x2="${
+      rectX + 5
+    }" y2="${rectY + 13}"/>
+        <line x1="${rectX + 22}" y1="${rectY + 2}" x2="${
+      rectX + 10
+    }" y2="${rectY + 14}"/>
+        <line x1="${rectX + 22}" y1="${rectY + 7}" x2="${
+      rectX + 15
+    }" y2="${rectY + 14}"/>
       </g>`;
-    
+
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
     return L.divIcon({
       html: svg,
@@ -236,21 +255,27 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       popupAnchor: [0, -half],
     });
   }
-  
+
   let svgPath;
-  
+
   switch (category) {
     case INFRA_CATEGORIES.WATER:
       // Circle (standard for water)
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.WASTEWATER:
       // Square (spillvann)
       const sqInset = strokeWidth;
-      svgPath = `<rect x="${sqInset}" y="${sqInset}" width="${size - sqInset * 2}" height="${size - sqInset * 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<rect x="${sqInset}" y="${sqInset}" width="${
+        size - sqInset * 2
+      }" height="${
+        size - sqInset * 2
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.STORMWATER:
       // Triangle pointing up (overvann)
       const triTop = strokeWidth;
@@ -259,12 +284,16 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       const triRight = size - strokeWidth;
       svgPath = `<polygon points="${half},${triTop} ${triRight},${triBottom} ${triLeft},${triBottom}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.DRAINAGE:
       // Diamond (drenering)
-      svgPath = `<polygon points="${half},${strokeWidth} ${size - strokeWidth},${half} ${half},${size - strokeWidth} ${strokeWidth},${half}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<polygon points="${half},${strokeWidth} ${
+        size - strokeWidth
+      },${half} ${half},${
+        size - strokeWidth
+      } ${strokeWidth},${half}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.MANHOLE:
       // Hexagon (kum)
       const h = size / 4;
@@ -275,21 +304,30 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
         [half, size - strokeWidth],
         [strokeWidth, size - h - strokeWidth],
         [strokeWidth, h + strokeWidth],
-      ].map(p => p.join(',')).join(' ');
+      ]
+        .map((p) => p.join(','))
+        .join(' ');
       svgPath = `<polygon points="${hexPoints}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.GAS:
       // Pentagon (gas)
       const pR = half - strokeWidth;
       const pentPoints = [];
       for (let i = 0; i < 5; i++) {
-        const angle = (i * 72 - 90) * Math.PI / 180;
-        pentPoints.push([half + pR * Math.cos(angle), half + pR * Math.sin(angle)]);
+        const angle = ((i * 72 - 90) * Math.PI) / 180;
+        pentPoints.push([
+          half + pR * Math.cos(angle),
+          half + pR * Math.sin(angle),
+        ]);
       }
-      svgPath = `<polygon points="${pentPoints.map(p => p.join(',')).join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<polygon points="${pentPoints
+        .map((p) => p.join(','))
+        .join(
+          ' '
+        )}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.ELECTRIC:
       // Star/bolt shape (elektrisk)
       const starR = half - strokeWidth;
@@ -297,75 +335,137 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       const starPoints = [];
       for (let i = 0; i < 10; i++) {
         const r = i % 2 === 0 ? starR : innerR;
-        const angle = (i * 36 - 90) * Math.PI / 180;
-        starPoints.push([half + r * Math.cos(angle), half + r * Math.sin(angle)]);
+        const angle = ((i * 36 - 90) * Math.PI) / 180;
+        starPoints.push([
+          half + r * Math.cos(angle),
+          half + r * Math.sin(angle),
+        ]);
       }
-      svgPath = `<polygon points="${starPoints.map(p => p.join(',')).join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<polygon points="${starPoints
+        .map((p) => p.join(','))
+        .join(
+          ' '
+        )}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.TELECOM:
       // Cross/plus (tele)
       const cw = size * 0.3;
       const co = (size - cw) / 2;
-      svgPath = `<path d="M${co},${strokeWidth} h${cw} v${co - strokeWidth} h${co - strokeWidth} v${cw} h-${co - strokeWidth} v${co - strokeWidth} h-${cw} v-${co - strokeWidth} h-${co - strokeWidth} v-${cw} h${co - strokeWidth} z" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth * 0.7}"/>`;
+      svgPath = `<path d="M${co},${strokeWidth} h${cw} v${
+        co - strokeWidth
+      } h${co - strokeWidth} v${cw} h-${co - strokeWidth} v${
+        co - strokeWidth
+      } h-${cw} v-${co - strokeWidth} h-${
+        co - strokeWidth
+      } v-${cw} h${
+        co - strokeWidth
+      } z" fill="${fill}" stroke="${stroke}" stroke-width="${
+        strokeWidth * 0.7
+      }"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.HEATING:
       // Flame/teardrop shape (fjernvarme)
-      svgPath = `<path d="M${half},${strokeWidth} C${size - strokeWidth},${half} ${size - strokeWidth},${size - strokeWidth} ${half},${size - strokeWidth} C${strokeWidth},${size - strokeWidth} ${strokeWidth},${half} ${half},${strokeWidth} Z" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<path d="M${half},${strokeWidth} C${
+        size - strokeWidth
+      },${half} ${size - strokeWidth},${size - strokeWidth} ${half},${
+        size - strokeWidth
+      } C${strokeWidth},${
+        size - strokeWidth
+      } ${strokeWidth},${half} ${half},${strokeWidth} Z" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.SLS_SLU:
       // Black square with vertical cross
       const slsInset = strokeWidth;
       const crossW = 2;
       svgPath = `
-        <rect x="${slsInset}" y="${slsInset}" width="${size - slsInset * 2}" height="${size - slsInset * 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
-        <line x1="${half}" y1="${slsInset + 2}" x2="${half}" y2="${size - slsInset - 2}" stroke="${stroke}" stroke-width="${crossW}"/>
-        <line x1="${slsInset + 2}" y1="${half}" x2="${size - slsInset - 2}" y2="${half}" stroke="${stroke}" stroke-width="${crossW}"/>`;
+        <rect x="${slsInset}" y="${slsInset}" width="${
+        size - slsInset * 2
+      }" height="${
+        size - slsInset * 2
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+        <line x1="${half}" y1="${slsInset + 2}" x2="${half}" y2="${
+        size - slsInset - 2
+      }" stroke="${stroke}" stroke-width="${crossW}"/>
+        <line x1="${slsInset + 2}" y1="${half}" x2="${
+        size - slsInset - 2
+      }" y2="${half}" stroke="${stroke}" stroke-width="${crossW}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.DIV:
       // Small circle (less intrusive)
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.ANBORING:
       // Small blue circle like DIV
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.KRN:
       // Blue square with diagonal cross
       const krnInset = strokeWidth;
       const diagCrossW = 2;
       svgPath = `
-        <rect x="${krnInset}" y="${krnInset}" width="${size - krnInset * 2}" height="${size - krnInset * 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
-        <line x1="${krnInset + 2}" y1="${krnInset + 2}" x2="${size - krnInset - 2}" y2="${size - krnInset - 2}" stroke="${stroke}" stroke-width="${diagCrossW}"/>
-        <line x1="${size - krnInset - 2}" y1="${krnInset + 2}" x2="${krnInset + 2}" y2="${size - krnInset - 2}" stroke="${stroke}" stroke-width="${diagCrossW}"/>`;
+        <rect x="${krnInset}" y="${krnInset}" width="${
+        size - krnInset * 2
+      }" height="${
+        size - krnInset * 2
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+        <line x1="${krnInset + 2}" y1="${krnInset + 2}" x2="${
+        size - krnInset - 2
+      }" y2="${
+        size - krnInset - 2
+      }" stroke="${stroke}" stroke-width="${diagCrossW}"/>
+        <line x1="${size - krnInset - 2}" y1="${krnInset + 2}" x2="${
+        krnInset + 2
+      }" y2="${
+        size - krnInset - 2
+      }" stroke="${stroke}" stroke-width="${diagCrossW}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.GRN:
       // Small green circle like DIV
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
     case INFRA_CATEGORIES.SAN:
       // Black square with circle inside (same size as SLU)
       const sanInset = strokeWidth;
       const innerCircleR = (size - sanInset * 4) / 2;
       svgPath = `
-        <rect x="${sanInset}" y="${sanInset}" width="${size - sanInset * 2}" height="${size - sanInset * 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+        <rect x="${sanInset}" y="${sanInset}" width="${
+        size - sanInset * 2
+      }" height="${
+        size - sanInset * 2
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
         <circle cx="${half}" cy="${half}" r="${innerCircleR}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
-      
+
+    case INFRA_CATEGORIES.LOK:
+      // Very small filled circle (kumlokk) - will appear on top of KUM without hiding it
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${stroke}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      break;
+
     default:
       // Default circle
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
   }
-  
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
-  
+
   return L.divIcon({
     html: svg,
     className: 'custom-div-icon',
@@ -377,23 +477,76 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
 
 // Export legend data for the Legend component
 export const LEGEND_ITEMS = [
-  { category: INFRA_CATEGORIES.WATER, label: 'Vannledning (VL)', color: '#0066cc' },
-  { category: INFRA_CATEGORIES.WASTEWATER, label: 'Spillvann (SP)', color: '#228B22' },
-  { category: INFRA_CATEGORIES.STORMWATER, label: 'Overvann (OV)', color: '#2a2a2a' },
-  { category: INFRA_CATEGORIES.DRAINAGE, label: 'Drenering (DR)', color: '#8B4513' },
-  { category: INFRA_CATEGORIES.MANHOLE, label: 'Kum (KUM)', color: '#cc3300' },
-  { category: INFRA_CATEGORIES.GAS, label: 'Gass', color: '#ffd700' },
-  { category: INFRA_CATEGORIES.ELECTRIC, label: 'Elektrisk (EL)', color: '#ff6600' },
-  { category: INFRA_CATEGORIES.TELECOM, label: 'Telekom (TELE)', color: '#ff8c00' },
-  { category: INFRA_CATEGORIES.HEATING, label: 'Fjernvarme', color: '#ff00ff' },
-  { category: INFRA_CATEGORIES.SLS_SLU, label: 'SLS/SLU', color: '#000000' },
-  { category: INFRA_CATEGORIES.DIV, label: 'DIV (diverse)', color: '#666666' },
-  { category: INFRA_CATEGORIES.ANBORING, label: 'Anboring', color: '#0066cc' },
-  { category: INFRA_CATEGORIES.GROKONSTR, label: 'Grøntkonstr.', color: '#cccccc' },
-  { category: INFRA_CATEGORIES.KRN, label: 'KRN', color: '#0066cc' },
-  { category: INFRA_CATEGORIES.GRN, label: 'GRN', color: '#00cc00' },
-  { category: INFRA_CATEGORIES.SAN, label: 'SAN', color: '#000000' },
-  { category: INFRA_CATEGORIES.OTHER, label: 'Annet', color: '#800080' },
+  {
+    category: INFRA_CATEGORIES.WATER,
+    label: 'Vannledning (VL)',
+    color: '#0066cc',
+  },
+  {
+    category: INFRA_CATEGORIES.WASTEWATER,
+    label: 'Spillvann (SP)',
+    color: '#228B22',
+  },
+  {
+    category: INFRA_CATEGORIES.STORMWATER,
+    label: 'Overvann (OV)',
+    color: '#2a2a2a',
+  },
+  {
+    category: INFRA_CATEGORIES.DRAINAGE,
+    label: 'Drenering (DR)',
+    color: '#8B4513',
+  },
+  {
+    category: INFRA_CATEGORIES.MANHOLE,
+    label: 'Kum (KUM)',
+    color: '#cc3300',
+  },
+  {
+    category: INFRA_CATEGORIES.SLS_SLU,
+    label: 'SLS/SLU',
+    color: '#000000',
+  },
+  {
+    category: INFRA_CATEGORIES.SAN,
+    label: 'SAN',
+    color: '#000000',
+  },
+  {
+    category: INFRA_CATEGORIES.DIV,
+    label: 'DIV (diverse)',
+    color: '#666666',
+  },
+  {
+    category: INFRA_CATEGORIES.ANBORING,
+    label: 'Anboring (ANB)',
+    color: '#0066cc',
+  },
+  {
+    category: INFRA_CATEGORIES.GROKONSTR,
+    label: 'Grøftekonstruksjon',
+    color: '#cccccc',
+  },
+  {
+    category: INFRA_CATEGORIES.KRN,
+    label: 'Kran (KRN)',
+    color: '#0066cc',
+  },
+  {
+    category: INFRA_CATEGORIES.GRN,
+    label: 'Grenpunkt (GRN)',
+    color: '#00cc00',
+  },
+  {
+    category: INFRA_CATEGORIES.LOK,
+    label: 'Kumlokk (LOK)',
+    color: '#cc3300',
+  },
+  {
+    category: INFRA_CATEGORIES.OTHER,
+    label: 'Annet',
+    color: '#800080',
+  },
 ];
 
 // Generate SVG for legend (exported for Legend component)
@@ -402,7 +555,7 @@ export const getLegendSvg = (category, color, size = 20) => {
   const fill = '#FFFFFF';
   const stroke = color;
   const half = size / 2;
-  
+
   // Special handling for GRØKONSTR - make it rectangular
   if (category === INFRA_CATEGORIES.GROKONSTR) {
     const rectWidth = size * 1.2;
@@ -412,24 +565,40 @@ export const getLegendSvg = (category, color, size = 20) => {
     const svgPath = `
       <rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
       <g stroke="${stroke}" stroke-width="0.8" opacity="0.6">
-        <line x1="${rectX + 2}" y1="${rectY}" x2="${rectX}" y2="${rectY + 2}"/>
-        <line x1="${rectX + 6}" y1="${rectY}" x2="${rectX}" y2="${rectY + 6}"/>
-        <line x1="${rectX + 10}" y1="${rectY}" x2="${rectX}" y2="${rectY + 10}"/>
-        <line x1="${rectX + 14}" y1="${rectY}" x2="${rectX + 4}" y2="${rectY + 10}"/>
-        <line x1="${rectX + 18}" y1="${rectY + 2}" x2="${rectX + 8}" y2="${rectY + 12}"/>
+        <line x1="${rectX + 2}" y1="${rectY}" x2="${rectX}" y2="${
+      rectY + 2
+    }"/>
+        <line x1="${rectX + 6}" y1="${rectY}" x2="${rectX}" y2="${
+      rectY + 6
+    }"/>
+        <line x1="${rectX + 10}" y1="${rectY}" x2="${rectX}" y2="${
+      rectY + 10
+    }"/>
+        <line x1="${rectX + 14}" y1="${rectY}" x2="${
+      rectX + 4
+    }" y2="${rectY + 10}"/>
+        <line x1="${rectX + 18}" y1="${rectY + 2}" x2="${
+      rectX + 8
+    }" y2="${rectY + 12}"/>
       </g>`;
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
   }
-  
+
   let svgPath;
-  
+
   switch (category) {
     case INFRA_CATEGORIES.WATER:
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.WASTEWATER:
       const sqInset = strokeWidth;
-      svgPath = `<rect x="${sqInset}" y="${sqInset}" width="${size - sqInset * 2}" height="${size - sqInset * 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<rect x="${sqInset}" y="${sqInset}" width="${
+        size - sqInset * 2
+      }" height="${
+        size - sqInset * 2
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.STORMWATER:
       const triTop = strokeWidth;
@@ -439,7 +608,11 @@ export const getLegendSvg = (category, color, size = 20) => {
       svgPath = `<polygon points="${half},${triTop} ${triRight},${triBottom} ${triLeft},${triBottom}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.DRAINAGE:
-      svgPath = `<polygon points="${half},${strokeWidth} ${size - strokeWidth},${half} ${half},${size - strokeWidth} ${strokeWidth},${half}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<polygon points="${half},${strokeWidth} ${
+        size - strokeWidth
+      },${half} ${half},${
+        size - strokeWidth
+      } ${strokeWidth},${half}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.MANHOLE:
       const h = size / 4;
@@ -450,17 +623,26 @@ export const getLegendSvg = (category, color, size = 20) => {
         [half, size - strokeWidth],
         [strokeWidth, size - h - strokeWidth],
         [strokeWidth, h + strokeWidth],
-      ].map(p => p.join(',')).join(' ');
+      ]
+        .map((p) => p.join(','))
+        .join(' ');
       svgPath = `<polygon points="${hexPoints}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.GAS:
       const pR = half - strokeWidth;
       const pentPoints = [];
       for (let i = 0; i < 5; i++) {
-        const angle = (i * 72 - 90) * Math.PI / 180;
-        pentPoints.push([half + pR * Math.cos(angle), half + pR * Math.sin(angle)]);
+        const angle = ((i * 72 - 90) * Math.PI) / 180;
+        pentPoints.push([
+          half + pR * Math.cos(angle),
+          half + pR * Math.sin(angle),
+        ]);
       }
-      svgPath = `<polygon points="${pentPoints.map(p => p.join(',')).join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<polygon points="${pentPoints
+        .map((p) => p.join(','))
+        .join(
+          ' '
+        )}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.ELECTRIC:
       const starR = half - strokeWidth;
@@ -468,55 +650,116 @@ export const getLegendSvg = (category, color, size = 20) => {
       const starPoints = [];
       for (let i = 0; i < 10; i++) {
         const r = i % 2 === 0 ? starR : innerR;
-        const angle = (i * 36 - 90) * Math.PI / 180;
-        starPoints.push([half + r * Math.cos(angle), half + r * Math.sin(angle)]);
+        const angle = ((i * 36 - 90) * Math.PI) / 180;
+        starPoints.push([
+          half + r * Math.cos(angle),
+          half + r * Math.sin(angle),
+        ]);
       }
-      svgPath = `<polygon points="${starPoints.map(p => p.join(',')).join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<polygon points="${starPoints
+        .map((p) => p.join(','))
+        .join(
+          ' '
+        )}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.TELECOM:
       const cw = size * 0.3;
       const co = (size - cw) / 2;
-      svgPath = `<path d="M${co},${strokeWidth} h${cw} v${co - strokeWidth} h${co - strokeWidth} v${cw} h-${co - strokeWidth} v${co - strokeWidth} h-${cw} v-${co - strokeWidth} h-${co - strokeWidth} v-${cw} h${co - strokeWidth} z" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth * 0.7}"/>`;
+      svgPath = `<path d="M${co},${strokeWidth} h${cw} v${
+        co - strokeWidth
+      } h${co - strokeWidth} v${cw} h-${co - strokeWidth} v${
+        co - strokeWidth
+      } h-${cw} v-${co - strokeWidth} h-${
+        co - strokeWidth
+      } v-${cw} h${
+        co - strokeWidth
+      } z" fill="${fill}" stroke="${stroke}" stroke-width="${
+        strokeWidth * 0.7
+      }"/>`;
       break;
     case INFRA_CATEGORIES.HEATING:
-      svgPath = `<path d="M${half},${strokeWidth} C${size - strokeWidth},${half} ${size - strokeWidth},${size - strokeWidth} ${half},${size - strokeWidth} C${strokeWidth},${size - strokeWidth} ${strokeWidth},${half} ${half},${strokeWidth} Z" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<path d="M${half},${strokeWidth} C${
+        size - strokeWidth
+      },${half} ${size - strokeWidth},${size - strokeWidth} ${half},${
+        size - strokeWidth
+      } C${strokeWidth},${
+        size - strokeWidth
+      } ${strokeWidth},${half} ${half},${strokeWidth} Z" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.SLS_SLU:
       const slsInset = strokeWidth;
       const crossW = 1.5;
       svgPath = `
-        <rect x="${slsInset}" y="${slsInset}" width="${size - slsInset * 2}" height="${size - slsInset * 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
-        <line x1="${half}" y1="${slsInset + 1}" x2="${half}" y2="${size - slsInset - 1}" stroke="${stroke}" stroke-width="${crossW}"/>
-        <line x1="${slsInset + 1}" y1="${half}" x2="${size - slsInset - 1}" y2="${half}" stroke="${stroke}" stroke-width="${crossW}"/>`;
+        <rect x="${slsInset}" y="${slsInset}" width="${
+        size - slsInset * 2
+      }" height="${
+        size - slsInset * 2
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+        <line x1="${half}" y1="${slsInset + 1}" x2="${half}" y2="${
+        size - slsInset - 1
+      }" stroke="${stroke}" stroke-width="${crossW}"/>
+        <line x1="${slsInset + 1}" y1="${half}" x2="${
+        size - slsInset - 1
+      }" y2="${half}" stroke="${stroke}" stroke-width="${crossW}"/>`;
       break;
     case INFRA_CATEGORIES.DIV:
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.ANBORING:
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.KRN:
       const krnInset = strokeWidth;
       const diagCrossW = 1.5;
       svgPath = `
-        <rect x="${krnInset}" y="${krnInset}" width="${size - krnInset * 2}" height="${size - krnInset * 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
-        <line x1="${krnInset + 1}" y1="${krnInset + 1}" x2="${size - krnInset - 1}" y2="${size - krnInset - 1}" stroke="${stroke}" stroke-width="${diagCrossW}"/>
-        <line x1="${size - krnInset - 1}" y1="${krnInset + 1}" x2="${krnInset + 1}" y2="${size - krnInset - 1}" stroke="${stroke}" stroke-width="${diagCrossW}"/>`;
+        <rect x="${krnInset}" y="${krnInset}" width="${
+        size - krnInset * 2
+      }" height="${
+        size - krnInset * 2
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+        <line x1="${krnInset + 1}" y1="${krnInset + 1}" x2="${
+        size - krnInset - 1
+      }" y2="${
+        size - krnInset - 1
+      }" stroke="${stroke}" stroke-width="${diagCrossW}"/>
+        <line x1="${size - krnInset - 1}" y1="${krnInset + 1}" x2="${
+        krnInset + 1
+      }" y2="${
+        size - krnInset - 1
+      }" stroke="${stroke}" stroke-width="${diagCrossW}"/>`;
       break;
     case INFRA_CATEGORIES.GRN:
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.SAN:
       const sanInset = strokeWidth;
       const innerCircleR = (size - sanInset * 4) / 2;
       svgPath = `
-        <rect x="${sanInset}" y="${sanInset}" width="${size - sanInset * 2}" height="${size - sanInset * 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+        <rect x="${sanInset}" y="${sanInset}" width="${
+        size - sanInset * 2
+      }" height="${
+        size - sanInset * 2
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
         <circle cx="${half}" cy="${half}" r="${innerCircleR}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
+    case INFRA_CATEGORIES.LOK:
+      // Small filled circle for legend
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${stroke}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      break;
     default:
-      svgPath = `<circle cx="${half}" cy="${half}" r="${half - strokeWidth}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
+      svgPath = `<circle cx="${half}" cy="${half}" r="${
+        half - strokeWidth
+      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
   }
-  
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
 };
 
@@ -708,13 +951,16 @@ export default function MapInner({ onZoomChange }) {
     const isHiddenByCode = hiddenCodes.includes(fcode);
     // Check if this specific type+code combination is hidden
     const isHiddenByType = hiddenTypes.some(
-      (ht) => ht.type === typeVal && (ht.code === null || ht.code === fcode)
+      (ht) =>
+        ht.type === typeVal && (ht.code === null || ht.code === fcode)
     );
     const isHidden = isHiddenByCode || isHiddenByType;
     const isHighlightedByCode = highlightedCode === fcode;
     // Type highlighting should respect the code context if one is set
-    const isHighlightedByType = highlightedType === typeVal && 
-      (highlightedTypeContext === null || highlightedTypeContext === fcode);
+    const isHighlightedByType =
+      highlightedType === typeVal &&
+      (highlightedTypeContext === null ||
+        highlightedTypeContext === fcode);
     const isHighlighted = isHighlightedByCode || isHighlightedByType;
 
     if (isHidden) {
@@ -746,13 +992,16 @@ export default function MapInner({ onZoomChange }) {
     const isHiddenByCode = hiddenCodes.includes(fcode);
     // Check if this specific type+code combination is hidden
     const isHiddenByType = hiddenTypes.some(
-      (ht) => ht.type === typeVal && (ht.code === null || ht.code === fcode)
+      (ht) =>
+        ht.type === typeVal && (ht.code === null || ht.code === fcode)
     );
     const isHidden = isHiddenByCode || isHiddenByType;
     const isHighlightedByCode = highlightedCode === fcode;
     // Type highlighting should respect the code context if one is set
-    const isHighlightedByType = highlightedType === typeVal && 
-      (highlightedTypeContext === null || highlightedTypeContext === fcode);
+    const isHighlightedByType =
+      highlightedType === typeVal &&
+      (highlightedTypeContext === null ||
+        highlightedTypeContext === fcode);
     const isHighlighted = isHighlightedByCode || isHighlightedByType;
 
     if (isHidden) {
@@ -766,7 +1015,7 @@ export default function MapInner({ onZoomChange }) {
     const color = getColorByFCode(fcode);
     const category = getCategoryByFCode(fcode);
     const icon = createSvgMarker(category, color, isHighlighted);
-    
+
     return L.marker(latlng, { icon });
   };
 
@@ -775,12 +1024,10 @@ export default function MapInner({ onZoomChange }) {
     const fcode = feature.properties?.S_FCODE;
     const typeVal = feature.properties?.Type || '(Mangler Type)';
     const isHiddenByType = hiddenTypes.some(
-      (ht) => ht.type === typeVal && (ht.code === null || ht.code === fcode)
+      (ht) =>
+        ht.type === typeVal && (ht.code === null || ht.code === fcode)
     );
-    if (
-      hiddenCodes.includes(fcode) ||
-      isHiddenByType
-    ) {
+    if (hiddenCodes.includes(fcode) || isHiddenByType) {
       return;
     }
 
@@ -849,7 +1096,9 @@ export default function MapInner({ onZoomChange }) {
               data?.header?.filename || 'data'
             }-${hiddenCodes.join(',')}-${
               highlightedCode || 'none'
-            }-${hiddenTypes.join(',')}-${highlightedType || 'none'}-${highlightedTypeContext || 'none'}`}
+            }-${hiddenTypes.join(',')}-${highlightedType || 'none'}-${
+              highlightedTypeContext || 'none'
+            }`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}

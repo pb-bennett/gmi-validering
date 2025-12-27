@@ -37,18 +37,23 @@ const useStore = create(
         // ============================================
         data: null, // { header: {}, points: [], lines: [] } | null
 
-        setData: (data) => set((state) => ({ 
-          data,
-          // Reset all UI filters when new data is loaded
-          ui: {
-            ...state.ui,
-            highlightedCode: null,
-            hiddenCodes: [],
-            highlightedType: null,
-            highlightedTypeContext: null,
-            hiddenTypes: [],
-          }
-        }), false, 'data/set'),
+        setData: (data) =>
+          set(
+            (state) => ({
+              data,
+              // Reset all UI filters when new data is loaded
+              ui: {
+                ...state.ui,
+                highlightedCode: null,
+                hiddenCodes: [],
+                highlightedType: null,
+                highlightedTypeContext: null,
+                hiddenTypes: [],
+              },
+            }),
+            false,
+            'data/set'
+          ),
         clearData: () => set({ data: null }, false, 'data/clear'),
 
         // ============================================
@@ -201,10 +206,10 @@ const useStore = create(
         setHighlightedType: (typeVal, codeContext = null) =>
           set(
             (state) => ({
-              ui: { 
-                ...state.ui, 
+              ui: {
+                ...state.ui,
                 highlightedType: typeVal,
-                highlightedTypeContext: codeContext 
+                highlightedTypeContext: codeContext,
               },
             }),
             false,
@@ -234,9 +239,15 @@ const useStore = create(
               const existingIndex = currentHidden.findIndex(
                 (ht) => ht.type === typeVal && ht.code === codeContext
               );
-              const newHidden = existingIndex >= 0
-                ? currentHidden.filter((_, i) => i !== existingIndex)
-                : [...currentHidden, { type: typeVal, code: codeContext }];
+              const newHidden =
+                existingIndex >= 0
+                  ? currentHidden.filter(
+                      (_, i) => i !== existingIndex
+                    )
+                  : [
+                      ...currentHidden,
+                      { type: typeVal, code: codeContext },
+                    ];
               return {
                 ui: { ...state.ui, hiddenTypes: newHidden },
               };

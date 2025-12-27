@@ -18,11 +18,16 @@ const MapLegend = dynamic(() => import('./MapLegend'), {
   ssr: false,
 });
 
+const ThemeSwitcher = dynamic(() => import('./ThemeSwitcher'), {
+  ssr: false,
+});
+
 export default function MapView(props) {
   return (
     <div className="relative h-full w-full">
       <MapInner {...props} />
       <MapLegend />
+      <ThemeSwitcher />
     </div>
   );
 }
