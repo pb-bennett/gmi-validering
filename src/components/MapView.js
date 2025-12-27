@@ -14,6 +14,15 @@ const MapInner = dynamic(() => import('./MapInner'), {
   ),
 });
 
+const MapLegend = dynamic(() => import('./MapLegend'), {
+  ssr: false,
+});
+
 export default function MapView(props) {
-  return <MapInner {...props} />;
+  return (
+    <div className="relative h-full w-full">
+      <MapInner {...props} />
+      <MapLegend />
+    </div>
+  );
 }

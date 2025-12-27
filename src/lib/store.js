@@ -37,7 +37,18 @@ const useStore = create(
         // ============================================
         data: null, // { header: {}, points: [], lines: [] } | null
 
-        setData: (data) => set({ data }, false, 'data/set'),
+        setData: (data) => set((state) => ({ 
+          data,
+          // Reset all UI filters when new data is loaded
+          ui: {
+            ...state.ui,
+            highlightedCode: null,
+            hiddenCodes: [],
+            highlightedType: null,
+            highlightedTypeContext: null,
+            hiddenTypes: [],
+          }
+        }), false, 'data/set'),
         clearData: () => set({ data: null }, false, 'data/clear'),
 
         // ============================================
@@ -174,7 +185,8 @@ const useStore = create(
           highlightedCode: null,
           hiddenCodes: [],
           highlightedType: null,
-          hiddenTypes: [],
+          highlightedTypeContext: null, // Track which code the type is under
+          hiddenTypes: [], // Array of {type, code} objects for context-aware hiding
         },
 
         setHighlightedCode: (code) =>
@@ -186,10 +198,14 @@ const useStore = create(
             'ui/setHighlightedCode'
           ),
 
-        setHighlightedType: (typeVal) =>
+        setHighlightedType: (typeVal, codeContext = null) =>
           set(
             (state) => ({
-              ui: { ...state.ui, highlightedType: typeVal },
+              ui: { 
+                ...state.ui, 
+                highlightedType: typeVal,
+                highlightedTypeContext: codeContext 
+              },
             }),
             false,
             'ui/setHighlightedType'
@@ -210,13 +226,17 @@ const useStore = create(
             'ui/toggleHiddenCode'
           ),
 
-        toggleHiddenType: (typeVal) =>
+        toggleHiddenType: (typeVal, codeContext = null) =>
           set(
             (state) => {
               const currentHidden = state.ui.hiddenTypes;
-              const newHidden = currentHidden.includes(typeVal)
-                ? currentHidden.filter((t) => t !== typeVal)
-                : [...currentHidden, typeVal];
+              // Find if this type+code combination exists
+              const existingIndex = currentHidden.findIndex(
+                (ht) => ht.type === typeVal && ht.code === codeContext
+              );
+              const newHidden = existingIndex >= 0
+                ? currentHidden.filter((_, i) => i !== existingIndex)
+                : [...currentHidden, { type: typeVal, code: codeContext }];
               return {
                 ui: { ...state.ui, hiddenTypes: newHidden },
               };
@@ -382,6 +402,7 @@ const useStore = create(
                 highlightedCode: null,
                 hiddenCodes: [],
                 highlightedType: null,
+                highlightedTypeContext: null,
                 hiddenTypes: [],
               };
             } else {
@@ -393,6 +414,9 @@ const useStore = create(
               }
               if (state.ui.highlightedType === undefined) {
                 state.ui.highlightedType = null;
+              }
+              if (state.ui.highlightedTypeContext === undefined) {
+                state.ui.highlightedTypeContext = null;
               }
               if (state.ui.hiddenTypes === undefined) {
                 state.ui.hiddenTypes = [];

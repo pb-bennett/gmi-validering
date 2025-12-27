@@ -379,8 +379,8 @@ export default function Sidebar({ onReset }) {
                                         .map(
                                           ([typeVal, typeCount]) => {
                                             const isTypeHidden =
-                                              hiddenTypes.some(
-                                                (ht) => ht.type === typeVal && ht.code === code
+                                              hiddenTypes.includes(
+                                                typeVal
                                               );
                                             return (
                                               <div
@@ -392,13 +392,11 @@ export default function Sidebar({ onReset }) {
                                                 }`}
                                                 onMouseEnter={() =>
                                                   setHighlightedType(
-                                                    typeVal,
-                                                    code
+                                                    typeVal
                                                   )
                                                 }
                                                 onMouseLeave={() =>
                                                   setHighlightedType(
-                                                    null,
                                                     null
                                                   )
                                                 }
@@ -412,8 +410,7 @@ export default function Sidebar({ onReset }) {
                                                     onChange={(e) => {
                                                       e.stopPropagation();
                                                       toggleHiddenType(
-                                                        typeVal,
-                                                        code
+                                                        typeVal
                                                       );
                                                     }}
                                                     className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -583,8 +580,8 @@ export default function Sidebar({ onReset }) {
                                         .map(
                                           ([typeVal, typeCount]) => {
                                             const isTypeHidden =
-                                              hiddenTypes.some(
-                                                (ht) => ht.type === typeVal && ht.code === code
+                                              hiddenTypes.includes(
+                                                typeVal
                                               );
                                             return (
                                               <div
@@ -596,13 +593,11 @@ export default function Sidebar({ onReset }) {
                                                 }`}
                                                 onMouseEnter={() =>
                                                   setHighlightedType(
-                                                    typeVal,
-                                                    code
+                                                    typeVal
                                                   )
                                                 }
                                                 onMouseLeave={() =>
                                                   setHighlightedType(
-                                                    null,
                                                     null
                                                   )
                                                 }
@@ -616,8 +611,7 @@ export default function Sidebar({ onReset }) {
                                                     onChange={(e) => {
                                                       e.stopPropagation();
                                                       toggleHiddenType(
-                                                        typeVal,
-                                                        code
+                                                        typeVal
                                                       );
                                                     }}
                                                     className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"

@@ -48,3 +48,9 @@
     @apply text-xl;
   }
 }
+
+/* Custom Leaflet div-icon styles - remove default white box */
+.custom-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
