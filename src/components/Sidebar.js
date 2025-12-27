@@ -52,6 +52,86 @@ function SidebarSection({ title, children, isOpen, onToggle }) {
   );
 }
 
+function FieldSubSection({ fieldName, fieldLabel, valueCounts, totalCount }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Sort values by count descending
+  const sortedValues = useMemo(() => {
+    return Object.entries(valueCounts)
+      .sort(([, a], [, b]) => b - a);
+  }, [valueCounts]);
+
+  const hasData = sortedValues.length > 0;
+
+  return (
+    <div className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between p-2 transition-colors text-left hover:bg-gray-50"
+      >
+        <div className="flex-1">
+          <div className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+            {fieldLabel || fieldName}
+          </div>
+          <div className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>
+            {sortedValues.length} {sortedValues.length === 1 ? 'verdi' : 'verdier'}
+          </div>
+        </div>
+        <span
+          className={`transform transition-transform duration-200 text-xs ${
+            isExpanded ? 'rotate-180' : ''
+          }`}
+          style={{ color: 'var(--color-text-secondary)' }}
+        >
+          ▼
+        </span>
+      </button>
+      {isExpanded && hasData && (
+        <div className="bg-gray-50/50">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-600 uppercase">
+                  Verdi
+                </th>
+                <th className="px-2 py-1 text-right text-[10px] font-medium text-gray-600 uppercase">
+                  Antall
+                </th>
+                <th className="px-2 py-1 text-right text-[10px] font-medium text-gray-600 uppercase">
+                  %
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {sortedValues.map(([value, count]) => {
+                const percentage = ((count / totalCount) * 100).toFixed(1);
+                const displayValue = value === '(Mangler)' || value === 'null' || value === '' 
+                  ? '(Mangler verdi)' 
+                  : value;
+                const isMissing = value === '(Mangler)' || value === 'null' || value === '';
+                
+                return (
+                  <tr key={value} className="hover:bg-gray-100">
+                    <td className={`px-2 py-1 ${isMissing ? 'text-red-600 italic' : 'text-gray-700'}`}>
+                      {displayValue}
+                    </td>
+                    <td className="px-2 py-1 text-right text-gray-700 font-medium">
+                      {count}
+                    </td>
+                    <td className="px-2 py-1 text-right text-gray-600">
+                      {percentage}%
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Sidebar({ onReset }) {
   const file = useStore((state) => state.file);
   const data = useStore((state) => state.data);
@@ -179,11 +259,64 @@ export default function Sidebar({ onReset }) {
         (temaStats.lines[code].types[typeVal] || 0) + 1;
     });
 
+    // Analyze all fields - collect all unique field names and their value distributions
+    const fieldAnalysis = {
+      fieldOrder: [], // Track order of appearance
+      fields: {}, // { fieldName: { valueCounts: {}, totalCount: number } }
+    };
+
+    // Collect all fields from both points and lines to get order of appearance
+    const allItems = [...data.points, ...data.lines];
+    const seenFields = new Set();
+
+    // First pass: collect field order (S_FCODE always first)
+    if (allItems.some(item => item.attributes?.S_FCODE !== undefined)) {
+      fieldAnalysis.fieldOrder.push('S_FCODE');
+      seenFields.add('S_FCODE');
+    }
+
+    allItems.forEach((item) => {
+      if (item.attributes) {
+        Object.keys(item.attributes).forEach((fieldName) => {
+          if (!seenFields.has(fieldName)) {
+            fieldAnalysis.fieldOrder.push(fieldName);
+            seenFields.add(fieldName);
+          }
+        });
+      }
+    });
+
+    // Second pass: count value occurrences for each field
+    fieldAnalysis.fieldOrder.forEach((fieldName) => {
+      fieldAnalysis.fields[fieldName] = {
+        valueCounts: {},
+        totalCount: 0,
+      };
+    });
+
+    allItems.forEach((item) => {
+      if (item.attributes) {
+        fieldAnalysis.fieldOrder.forEach((fieldName) => {
+          const value = item.attributes[fieldName];
+          const valueKey = value === null || value === undefined || value === '' 
+            ? '(Mangler)' 
+            : String(value);
+          
+          if (!fieldAnalysis.fields[fieldName].valueCounts[valueKey]) {
+            fieldAnalysis.fields[fieldName].valueCounts[valueKey] = 0;
+          }
+          fieldAnalysis.fields[fieldName].valueCounts[valueKey]++;
+          fieldAnalysis.fields[fieldName].totalCount++;
+        });
+      }
+    });
+
     return {
       pointCount,
       lineCount,
       totalLength: Math.round(totalLength),
       temaStats,
+      fieldAnalysis,
     };
   }, [data]);
 
@@ -753,9 +886,33 @@ export default function Sidebar({ onReset }) {
           isOpen={openSection === 'felt'}
           onToggle={() => toggleSection('felt')}
         >
-          <p className="text-sm text-gray-500 italic">
-            Ingen feltdefinisjoner lastet.
-          </p>
+          {stats?.fieldAnalysis && stats.fieldAnalysis.fieldOrder.length > 0 ? (
+            <div className="space-y-0">
+              {stats.fieldAnalysis.fieldOrder.map((fieldName) => {
+                const fieldInfo = stats.fieldAnalysis.fields[fieldName];
+                
+                // Try to find label from fields.json
+                const fieldDefinition = fieldsData.find(
+                  (f) => f.fieldKey === fieldName
+                );
+                const fieldLabel = fieldDefinition?.label || fieldName;
+
+                return (
+                  <FieldSubSection
+                    key={fieldName}
+                    fieldName={fieldName}
+                    fieldLabel={fieldLabel}
+                    valueCounts={fieldInfo.valueCounts}
+                    totalCount={fieldInfo.totalCount}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 italic">
+              Ingen feltdata tilgjengelig.
+            </p>
+          )}
         </SidebarSection>
 
         {/* Validering */}
