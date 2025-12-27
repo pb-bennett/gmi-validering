@@ -18,9 +18,9 @@ export default function MapLegend() {
   // Get categories that are actually present in the data
   const presentCategories = useMemo(() => {
     if (!data) return new Set();
-    
+
     const categories = new Set();
-    
+
     // Check points
     data.points.forEach((point) => {
       const fcode = point.attributes?.S_FCODE;
@@ -28,33 +28,67 @@ export default function MapLegend() {
         categories.add(fcode);
       }
     });
-    
+
     return categories;
   }, [data]);
 
   // Filter legend items to only show those present in data
   const visibleLegendItems = useMemo(() => {
     if (!data || presentCategories.size === 0) return [];
-    
+
     return LEGEND_ITEMS.filter((item) => {
       // Check if any S_FCODE in the data matches this category
       for (const fcode of presentCategories) {
         const fcodeStr = String(fcode).toUpperCase();
-        
+
         // Check category matches
-        if (item.category === 'water' && (fcodeStr.includes('VL') || fcodeStr.includes('VANN'))) return true;
-        if (item.category === 'wastewater' && (fcodeStr.includes('SP') || fcodeStr.includes('SPILLVANN'))) return true;
-        if (item.category === 'stormwater' && (fcodeStr.includes('OV') || fcodeStr.includes('OVERVANN'))) return true;
-        if (item.category === 'drainage' && (fcodeStr.includes('DR') || fcodeStr.includes('DREN'))) return true;
-        if (item.category === 'manhole' && fcodeStr.includes('KUM')) return true;
-        if (item.category === 'sls_slu' && (fcodeStr === 'SLS' || fcodeStr === 'SLU')) return true;
-        if (item.category === 'san' && (fcodeStr === 'SAN' || fcodeStr.includes('SAN'))) return true;
-        if (item.category === 'div' && fcodeStr === 'DIV') return true;
-        if (item.category === 'anboring' && (fcodeStr === 'ANB' || fcodeStr.includes('ANBORING'))) return true;
-        if (item.category === 'grokonstr' && fcodeStr === 'GRØKONSTR') return true;
-        if (item.category === 'krn' && fcodeStr === 'KRN') return true;
-        if (item.category === 'grn' && fcodeStr === 'GRN') return true;
-        if (item.category === 'lok' && fcodeStr === 'LOK') return true;
+        if (
+          item.category === 'water' &&
+          (fcodeStr.includes('VL') || fcodeStr.includes('VANN'))
+        )
+          return true;
+        if (
+          item.category === 'wastewater' &&
+          (fcodeStr.includes('SP') || fcodeStr.includes('SPILLVANN'))
+        )
+          return true;
+        if (
+          item.category === 'stormwater' &&
+          (fcodeStr.includes('OV') || fcodeStr.includes('OVERVANN'))
+        )
+          return true;
+        if (
+          item.category === 'drainage' &&
+          (fcodeStr.includes('DR') || fcodeStr.includes('DREN'))
+        )
+          return true;
+        if (item.category === 'manhole' && fcodeStr.includes('KUM'))
+          return true;
+        if (
+          item.category === 'sls_slu' &&
+          (fcodeStr === 'SLS' || fcodeStr === 'SLU')
+        )
+          return true;
+        if (
+          item.category === 'san' &&
+          (fcodeStr === 'SAN' || fcodeStr.includes('SAN'))
+        )
+          return true;
+        if (item.category === 'div' && fcodeStr === 'DIV')
+          return true;
+        if (
+          item.category === 'anboring' &&
+          (fcodeStr === 'ANB' || fcodeStr.includes('ANBORING'))
+        )
+          return true;
+        if (item.category === 'grokonstr' && fcodeStr === 'GRØKONSTR')
+          return true;
+        if (item.category === 'krn' && fcodeStr === 'KRN')
+          return true;
+        if (item.category === 'grn' && fcodeStr === 'GRN')
+          return true;
+        if (item.category === 'lok' && fcodeStr === 'LOK')
+          return true;
       }
       return false;
     });
@@ -68,10 +102,10 @@ export default function MapLegend() {
   return (
     <div
       className="absolute bottom-20 right-4 rounded-lg shadow-lg z-1000 border overflow-hidden"
-      style={{ 
+      style={{
         maxWidth: '200px',
         backgroundColor: 'var(--color-card)',
-        borderColor: 'var(--color-border)'
+        borderColor: 'var(--color-border)',
       }}
     >
       {/* Header with collapse toggle */}
@@ -80,12 +114,21 @@ export default function MapLegend() {
         className="w-full flex items-center justify-between px-3 py-2 transition-colors border-b"
         style={{
           backgroundColor: 'var(--color-page-bg)',
-          borderColor: 'var(--color-border)'
+          borderColor: 'var(--color-border)',
         }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-sidebar-hover)'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-page-bg)'}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-sidebar-hover)')
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-page-bg)')
+        }
       >
-        <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+        <span
+          className="text-sm font-semibold"
+          style={{ color: 'var(--color-text)' }}
+        >
           Tegnforklaring
         </span>
         <svg

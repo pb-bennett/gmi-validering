@@ -82,8 +82,7 @@ const getCategoryByFCode = (fcode) => {
     return INFRA_CATEGORIES.GRN;
   if (fcode === 'SAN' || fcode.includes('SAN'))
     return INFRA_CATEGORIES.SAN;
-  if (fcode === 'LOK')
-    return INFRA_CATEGORIES.LOK;
+  if (fcode === 'LOK') return INFRA_CATEGORIES.LOK;
 
   // Then check partial matches
   if (

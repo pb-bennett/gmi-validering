@@ -6,19 +6,33 @@ import fieldsData from '@/data/fields.json';
 
 function SidebarSection({ title, children, isOpen, onToggle }) {
   return (
-    <div className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+    <div
+      className="border-b last:border-0"
+      style={{ borderColor: 'var(--color-border)' }}
+    >
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 transition-colors text-left"
-        style={{ 
+        className="w-full flex items-center justify-between p-3 transition-colors text-left"
+        style={{
           backgroundColor: 'var(--color-sidebar-bg)',
         }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-sidebar-hover)'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-sidebar-bg)'}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-sidebar-hover)')
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-sidebar-bg)')
+        }
       >
-        <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{title}</span>
         <span
-          className={`transform transition-transform duration-200 ${
+          className="font-semibold text-sm"
+          style={{ color: 'var(--color-text)' }}
+        >
+          {title}
+        </span>
+        <span
+          className={`transform transition-transform duration-200 text-xs ${
             isOpen ? 'rotate-180' : ''
           }`}
           style={{ color: 'var(--color-text-secondary)' }}
@@ -26,7 +40,14 @@ function SidebarSection({ title, children, isOpen, onToggle }) {
           ▼
         </span>
       </button>
-      {isOpen && <div className="p-4" style={{ backgroundColor: 'var(--color-card)' }}>{children}</div>}
+      {isOpen && (
+        <div
+          className="p-3"
+          style={{ backgroundColor: 'var(--color-card)' }}
+        >
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -171,10 +192,10 @@ export default function Sidebar({ onReset }) {
   return (
     <div
       ref={sidebarRef}
-      style={{ 
+      style={{
         width: `${width}px`,
         backgroundColor: 'var(--color-card)',
-        borderRightColor: 'var(--color-border)'
+        borderRightColor: 'var(--color-border)',
       }}
       className="h-full border-r flex flex-col shadow-xl z-20 relative flex-shrink-0"
     >
@@ -182,22 +203,63 @@ export default function Sidebar({ onReset }) {
       <div
         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors z-30"
         style={{ backgroundColor: 'transparent' }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primary-light)'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-primary-light)')
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor = 'transparent')
+        }
         onMouseDown={() => setIsResizing(true)}
       />
 
       {/* Header */}
-      <div 
-        className="p-4 border-b" 
+      <div
+        className="px-3 py-3 border-b"
         style={{
           borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-sidebar-bg)'
+          backgroundColor: 'var(--color-sidebar-bg)',
         }}
       >
-        <h1 className="text-lg font-bold" style={{ color: 'var(--color-primary)' }}>
-          GMI Validering
-        </h1>
+        <div className="flex items-center gap-2.5">
+          {/* Logo Icon */}
+          <div
+            className="flex items-center justify-center w-9 h-9 rounded-lg shadow-sm"
+            style={{
+              backgroundColor: 'var(--color-primary)',
+              background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)'
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 11a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+              <path d="M17.657 16.657l-4.243 4.243a2 2 0 0 1 -2.827 0l-4.244 -4.243a8 8 0 1 1 11.314 0z" />
+            </svg>
+          </div>
+          {/* Title */}
+          <div className="flex flex-col">
+            <h1
+              className="text-base font-bold leading-tight tracking-tight"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              GMI Validator
+            </h1>
+            <span
+              className="text-[10px] font-medium leading-tight tracking-wide uppercase"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              Innmålingskontroll
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Content - Scrollable */}
@@ -208,9 +270,9 @@ export default function Sidebar({ onReset }) {
           isOpen={openSection === 'oversikt'}
           onToggle={() => toggleSection('oversikt')}
         >
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* File Info */}
-            <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+            <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100">
               <div className="mb-2">
                 <span className="text-xs text-gray-500 block mb-1">
                   Filnavn
@@ -231,25 +293,25 @@ export default function Sidebar({ onReset }) {
 
             {/* Stats */}
             <div className="grid grid-cols-1 gap-2">
-              <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Punkter</span>
-                <span className="font-bold text-primary">
+              <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
+                <span className="text-gray-600 text-xs">Punkter</span>
+                <span className="font-bold text-primary text-sm">
                   {stats.pointCount}
                 </span>
               </div>
-              <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
-                <span className="text-gray-600 text-sm">
+              <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
+                <span className="text-gray-600 text-xs">
                   Ledninger
                 </span>
-                <span className="font-bold text-primary">
+                <span className="font-bold text-primary text-sm">
                   {stats.lineCount}
                 </span>
               </div>
-              <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
-                <span className="text-gray-600 text-sm block mb-1">
+              <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100">
+                <span className="text-gray-600 text-xs block mb-1">
                   Total lengde
                 </span>
-                <span className="font-bold text-primary">
+                <span className="font-bold text-primary text-sm">
                   {stats.totalLength.toLocaleString('nb-NO')}{' '}
                   <span className="text-xs font-normal text-gray-500">
                     meter
@@ -266,10 +328,10 @@ export default function Sidebar({ onReset }) {
           isOpen={openSection === 'tema'}
           onToggle={() => toggleSection('tema')}
         >
-          <div className="space-y-6">
+          <div className="space-y-3">
             {/* Points Table */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-1.5">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
                   Punkter
                 </h3>
@@ -313,10 +375,10 @@ export default function Sidebar({ onReset }) {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-2.5 py-1.5 text-left text-xs font-medium text-gray-500 uppercase">
                           Kode / Beskrivelse
                         </th>
-                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-2.5 py-1.5 text-right text-xs font-medium text-gray-500 uppercase">
                           Antall
                         </th>
                       </tr>
@@ -708,17 +770,29 @@ export default function Sidebar({ onReset }) {
       </div>
 
       {/* Footer Actions */}
-      <div className="p-4 border-t" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-sidebar-bg)' }}>
+      <div
+        className="p-3 border-t"
+        style={{
+          borderColor: 'var(--color-border)',
+          backgroundColor: 'var(--color-sidebar-bg)',
+        }}
+      >
         <button
           onClick={onReset}
           className="w-full py-2 px-4 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors"
           style={{
             backgroundColor: 'var(--color-card)',
             borderColor: 'var(--color-primary-light)',
-            color: 'var(--color-primary-dark)'
+            color: 'var(--color-primary-dark)',
           }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-page-bg)'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-card)'}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor =
+              'var(--color-page-bg)')
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor =
+              'var(--color-card)')
+          }
         >
           Nullstill og last opp ny
         </button>

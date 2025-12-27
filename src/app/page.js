@@ -100,10 +100,16 @@ export default function Home() {
                 style={{
                   backgroundColor: 'var(--color-card)',
                   color: 'var(--color-text)',
-                  borderColor: 'var(--color-border)'
+                  borderColor: 'var(--color-border)',
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-page-bg)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-card)'}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    'var(--color-page-bg)')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    'var(--color-card)')
+                }
               >
                 🔍 Inspiser data
               </button>

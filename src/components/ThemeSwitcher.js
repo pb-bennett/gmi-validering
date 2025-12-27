@@ -52,14 +52,14 @@ export default function ThemeSwitcher() {
     <div className="absolute bottom-4 right-4 z-[1001] flex flex-col items-end gap-2">
       {/* Expanded theme options */}
       {isExpanded && (
-        <div 
+        <div
           className="flex flex-col gap-2 rounded-lg shadow-lg p-3 border animate-in slide-in-from-bottom-2"
           style={{
             backgroundColor: 'var(--color-card)',
-            borderColor: 'var(--color-border)'
+            borderColor: 'var(--color-border)',
           }}
         >
-          <div 
+          <div
             className="text-xs font-semibold uppercase tracking-wider mb-1"
             style={{ color: 'var(--color-text-secondary)' }}
           >
@@ -70,22 +70,28 @@ export default function ThemeSwitcher() {
               key={theme.id}
               onClick={() => changeTheme(theme.id)}
               className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all ${
-                currentTheme === theme.id
-                  ? 'ring-2'
-                  : ''
+                currentTheme === theme.id ? 'ring-2' : ''
               }`}
               style={{
-                backgroundColor: currentTheme === theme.id ? 'var(--color-page-bg)' : 'transparent',
-                borderColor: currentTheme === theme.id ? 'var(--color-border)' : 'transparent'
+                backgroundColor:
+                  currentTheme === theme.id
+                    ? 'var(--color-page-bg)'
+                    : 'transparent',
+                borderColor:
+                  currentTheme === theme.id
+                    ? 'var(--color-border)'
+                    : 'transparent',
               }}
               onMouseEnter={(e) => {
                 if (currentTheme !== theme.id) {
-                  e.currentTarget.style.backgroundColor = 'var(--color-page-bg)';
+                  e.currentTarget.style.backgroundColor =
+                    'var(--color-page-bg)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (currentTheme !== theme.id) {
-                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.backgroundColor =
+                    'transparent';
                 }
               }}
             >
@@ -93,10 +99,13 @@ export default function ThemeSwitcher() {
                 className="w-6 h-6 rounded-full border-2 shadow-md"
                 style={{
                   background: `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.bg} 100%)`,
-                  borderColor: 'var(--color-card)'
+                  borderColor: 'var(--color-card)',
                 }}
               />
-              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              <span
+                className="text-sm font-medium"
+                style={{ color: 'var(--color-text)' }}
+              >
                 {theme.name}
               </span>
               {currentTheme === theme.id && (
@@ -124,10 +133,16 @@ export default function ThemeSwitcher() {
         className="flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg border transition-colors"
         style={{
           backgroundColor: 'var(--color-card)',
-          borderColor: 'var(--color-border)'
+          borderColor: 'var(--color-border)',
         }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-page-bg)'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-card)'}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-page-bg)')
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-card)')
+        }
         title="Change color theme"
       >
         <svg
@@ -143,7 +158,10 @@ export default function ThemeSwitcher() {
             clipRule="evenodd"
           />
         </svg>
-        <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+        <span
+          className="text-sm font-medium"
+          style={{ color: 'var(--color-text)' }}
+        >
           {isExpanded ? 'Close' : 'Theme'}
         </span>
       </button>

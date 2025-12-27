@@ -3,7 +3,7 @@
 
 /* Theme: Modern Blue (Default) */
 :root,
-[data-theme="blue"] {
+[data-theme='blue'] {
   --color-page-bg: #f8fafc;
   --color-card: #ffffff;
   --color-primary: #3b82f6;
@@ -18,7 +18,7 @@
 }
 
 /* Theme: Elegant Gray */
-[data-theme="gray"] {
+[data-theme='gray'] {
   --color-page-bg: #f9fafb;
   --color-card: #ffffff;
   --color-primary: #6b7280;
@@ -33,7 +33,7 @@
 }
 
 /* Theme: Fresh Green */
-[data-theme="green"] {
+[data-theme='green'] {
   --color-page-bg: #f0fdf4;
   --color-card: #ffffff;
   --color-primary: #10b981;
@@ -48,7 +48,7 @@
 }
 
 /* Theme: Vibrant Purple */
-[data-theme="purple"] {
+[data-theme='purple'] {
   --color-page-bg: #faf5ff;
   --color-card: #ffffff;
   --color-primary: #8b5cf6;
@@ -63,7 +63,7 @@
 }
 
 /* Theme: Warm Orange */
-[data-theme="orange"] {
+[data-theme='orange'] {
   --color-page-bg: #fffbeb;
   --color-card: #ffffff;
   --color-primary: #f59e0b;
@@ -89,7 +89,8 @@
   body {
     background-color: var(--color-page-bg);
     color: var(--color-text);
-    font-family: var(--font-roboto), system-ui, -apple-system, sans-serif;
+    font-family: var(--font-roboto), system-ui, -apple-system,
+      sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;
   }
 
