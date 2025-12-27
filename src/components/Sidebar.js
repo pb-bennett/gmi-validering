@@ -227,7 +227,8 @@ export default function Sidebar({ onReset }) {
             className="flex items-center justify-center w-9 h-9 rounded-lg shadow-sm"
             style={{
               backgroundColor: 'var(--color-primary)',
-              background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)'
+              background:
+                'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)',
             }}
           >
             <svg
