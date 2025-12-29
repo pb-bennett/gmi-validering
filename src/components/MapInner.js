@@ -839,6 +839,140 @@ function ZoomHandler({ onZoomChange }) {
   return null;
 }
 
+// Invalidate map size when layout changes (sidebar/table toggle)
+// Uses multiple mechanisms to ensure proper detection
+function MapSizeInvalidator() {
+  const map = useMap();
+  const dataTableOpen = useStore((state) => state.ui.dataTableOpen);
+
+  // Effect 1: React to dataTableOpen state change
+  useEffect(() => {
+    // When dataTableOpen changes, the map container size changes
+    // Call invalidateSize multiple times to ensure it catches the DOM update
+    const timeouts = [
+      setTimeout(() => map.invalidateSize({ animate: false }), 0),
+      setTimeout(() => map.invalidateSize({ animate: false }), 50),
+      setTimeout(() => map.invalidateSize({ animate: false }), 150),
+      setTimeout(() => map.invalidateSize({ animate: false }), 300),
+    ];
+
+    return () => timeouts.forEach((t) => clearTimeout(t));
+  }, [map, dataTableOpen]);
+
+  // Effect 2: Use ResizeObserver on the map container for reliable detection
+  useEffect(() => {
+    const container = map.getContainer();
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      // Small delay to let the resize settle
+      setTimeout(() => {
+        map.invalidateSize({ animate: false });
+      }, 10);
+    });
+
+    resizeObserver.observe(container);
+
+    return () => resizeObserver.disconnect();
+  }, [map]);
+
+  return null;
+}
+
+function ZoomToFeatureHandler() {
+  const map = useMap();
+  const data = useStore((state) => state.data);
+  const setHighlightedFeature = useStore(
+    (state) => state.setHighlightedFeature
+  );
+
+  useEffect(() => {
+    const handleZoomToFeature = (e) => {
+      const { x, y, featureId } = e.detail;
+
+      if (x !== undefined && y !== undefined) {
+        // Determine source projection from data
+        let sourceProj = 'EPSG:4326';
+        if (data?.header?.COSYS_EPSG) {
+          const epsg = `EPSG:${data.header.COSYS_EPSG}`;
+          if (proj4.defs(epsg)) {
+            sourceProj = epsg;
+          }
+        } else if (data?.header?.COSYS) {
+          if (
+            data.header.COSYS.includes('UTM') &&
+            data.header.COSYS.includes('32')
+          ) {
+            sourceProj = 'EPSG:25832';
+          } else if (
+            data.header.COSYS.includes('UTM') &&
+            data.header.COSYS.includes('33')
+          ) {
+            sourceProj = 'EPSG:25833';
+          }
+        }
+
+        // Transform coordinates to WGS84 if needed
+        let transformedCoords;
+        if (sourceProj === 'EPSG:4326') {
+          transformedCoords = [x, y];
+        } else {
+          try {
+            transformedCoords = proj4(sourceProj, 'EPSG:4326', [
+              x,
+              y,
+            ]);
+          } catch (err) {
+            console.error('Coordinate transformation error:', err);
+            transformedCoords = [x, y];
+          }
+        }
+
+        // Leaflet expects [lat, lng]
+        // proj4 returns [lng, lat] for geographic projections
+        const [lng, lat] = transformedCoords;
+
+        // Force map to recognize its current size before zooming
+        // This is critical when sidebar has just been hidden and map gained width
+        map.invalidateSize({ animate: false, pan: false });
+
+        // Wait for DOM to fully update, then force a complete view recalculation
+        setTimeout(() => {
+          // Invalidate size again
+          map.invalidateSize({ animate: false, pan: false });
+
+          // Use setView instead of flyTo - it forces a complete recalculation of center
+          // First set the view to force center recalculation
+          map.setView([lat, lng], 18, { animate: false });
+
+          // Then optionally animate to it for smooth transition
+          setTimeout(() => {
+            map.setView([lat, lng], 18, {
+              animate: true,
+              duration: 0.5,
+            });
+          }, 50);
+        }, 100);
+
+        if (featureId) {
+          setHighlightedFeature(featureId);
+        }
+      }
+    };
+
+    window.addEventListener('zoomToFeature', handleZoomToFeature);
+
+    return () => {
+      window.removeEventListener(
+        'zoomToFeature',
+        handleZoomToFeature
+      );
+    };
+  }, [map, data, setHighlightedFeature]);
+
+  return null;
+}
+
 export default function MapInner({ onZoomChange }) {
   const data = useStore((state) => state.data);
   const highlightedCode = useStore(
@@ -852,6 +986,9 @@ export default function MapInner({ onZoomChange }) {
     (state) => state.ui.highlightedTypeContext
   );
   const hiddenTypes = useStore((state) => state.ui.hiddenTypes);
+  const highlightedFeatureId = useStore(
+    (state) => state.ui.highlightedFeatureId
+  );
 
   const geoJsonData = useMemo(() => {
     if (!data) return null;
@@ -947,6 +1084,10 @@ export default function MapInner({ onZoomChange }) {
   const lineStyle = (feature) => {
     const fcode = feature.properties?.S_FCODE;
     const typeVal = feature.properties?.Type || '(Mangler Type)';
+    const featureId =
+      feature.properties?.id !== undefined
+        ? `ledninger-${feature.properties.id}`
+        : null;
     const isHiddenByCode = hiddenCodes.includes(fcode);
     // Check if this specific type+code combination is hidden
     const isHiddenByType = hiddenTypes.some(
@@ -960,7 +1101,12 @@ export default function MapInner({ onZoomChange }) {
       highlightedType === typeVal &&
       (highlightedTypeContext === null ||
         highlightedTypeContext === fcode);
-    const isHighlighted = isHighlightedByCode || isHighlightedByType;
+    const isHighlightedByFeature =
+      featureId && highlightedFeatureId === featureId;
+    const isHighlighted =
+      isHighlightedByCode ||
+      isHighlightedByType ||
+      isHighlightedByFeature;
 
     if (isHidden) {
       return {
@@ -988,6 +1134,11 @@ export default function MapInner({ onZoomChange }) {
   const pointToLayer = (feature, latlng) => {
     const fcode = feature.properties?.S_FCODE;
     const typeVal = feature.properties?.Type || '(Mangler Type)';
+    const featureId =
+      feature.properties?.id !== undefined
+        ? `punkter-${feature.properties.id}`
+        : null;
+
     const isHiddenByCode = hiddenCodes.includes(fcode);
     // Check if this specific type+code combination is hidden
     const isHiddenByType = hiddenTypes.some(
@@ -1001,7 +1152,12 @@ export default function MapInner({ onZoomChange }) {
       highlightedType === typeVal &&
       (highlightedTypeContext === null ||
         highlightedTypeContext === fcode);
-    const isHighlighted = isHighlightedByCode || isHighlightedByType;
+    const isHighlightedByFeature =
+      featureId && highlightedFeatureId === featureId;
+    const isHighlighted =
+      isHighlightedByCode ||
+      isHighlightedByType ||
+      isHighlightedByFeature;
 
     if (isHidden) {
       // Return a dummy marker that is invisible
@@ -1097,7 +1253,7 @@ export default function MapInner({ onZoomChange }) {
               highlightedCode || 'none'
             }-${hiddenTypes.join(',')}-${highlightedType || 'none'}-${
               highlightedTypeContext || 'none'
-            }`}
+            }-${highlightedFeatureId || 'none'}`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}
@@ -1108,6 +1264,8 @@ export default function MapInner({ onZoomChange }) {
 
       <BoundsController geoJsonData={geoJsonData} />
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}
+      <MapSizeInvalidator />
+      <ZoomToFeatureHandler />
     </MapContainer>
   );
 }

@@ -192,6 +192,8 @@ const useStore = create(
           highlightedType: null,
           highlightedTypeContext: null, // Track which code the type is under
           hiddenTypes: [], // Array of {type, code} objects for context-aware hiding
+          dataTableOpen: false, // Data table visibility
+          highlightedFeatureId: null, // ID of feature to highlight on map
         },
 
         setHighlightedCode: (code) =>
@@ -254,6 +256,27 @@ const useStore = create(
             },
             false,
             'ui/toggleHiddenType'
+          ),
+
+        toggleDataTable: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                dataTableOpen: !state.ui.dataTableOpen,
+              },
+            }),
+            false,
+            'ui/toggleDataTable'
+          ),
+
+        setHighlightedFeature: (featureId) =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, highlightedFeatureId: featureId },
+            }),
+            false,
+            'ui/setHighlightedFeature'
           ),
 
         toggleDetailsPanel: () =>

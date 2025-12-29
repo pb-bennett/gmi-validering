@@ -43,3 +43,6 @@ next-env.d.ts
 REF_FILES/
 node_modules/
 .next/
+
+# Ignore accidental Windows device files
+/nul

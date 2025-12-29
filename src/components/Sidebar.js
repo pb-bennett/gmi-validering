@@ -52,29 +52,43 @@ function SidebarSection({ title, children, isOpen, onToggle }) {
   );
 }
 
-function FieldSubSection({ fieldName, fieldLabel, valueCounts, totalCount }) {
+function FieldSubSection({
+  fieldName,
+  fieldLabel,
+  valueCounts,
+  totalCount,
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Sort values by count descending
   const sortedValues = useMemo(() => {
-    return Object.entries(valueCounts)
-      .sort(([, a], [, b]) => b - a);
+    return Object.entries(valueCounts).sort(([, a], [, b]) => b - a);
   }, [valueCounts]);
 
   const hasData = sortedValues.length > 0;
 
   return (
-    <div className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+    <div
+      className="border-b last:border-0"
+      style={{ borderColor: 'var(--color-border)' }}
+    >
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center justify-between p-2 transition-colors text-left hover:bg-gray-50"
       >
         <div className="flex-1">
-          <div className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+          <div
+            className="text-xs font-semibold"
+            style={{ color: 'var(--color-text)' }}
+          >
             {fieldLabel || fieldName}
           </div>
-          <div className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>
-            {sortedValues.length} {sortedValues.length === 1 ? 'verdi' : 'verdier'}
+          <div
+            className="text-[10px]"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            {sortedValues.length}{' '}
+            {sortedValues.length === 1 ? 'verdi' : 'verdier'}
           </div>
         </div>
         <span
@@ -104,15 +118,30 @@ function FieldSubSection({ fieldName, fieldLabel, valueCounts, totalCount }) {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {sortedValues.map(([value, count]) => {
-                const percentage = ((count / totalCount) * 100).toFixed(1);
-                const displayValue = value === '(Mangler)' || value === 'null' || value === '' 
-                  ? '(Mangler verdi)' 
-                  : value;
-                const isMissing = value === '(Mangler)' || value === 'null' || value === '';
-                
+                const percentage = (
+                  (count / totalCount) *
+                  100
+                ).toFixed(1);
+                const displayValue =
+                  value === '(Mangler)' ||
+                  value === 'null' ||
+                  value === ''
+                    ? '(Mangler verdi)'
+                    : value;
+                const isMissing =
+                  value === '(Mangler)' ||
+                  value === 'null' ||
+                  value === '';
+
                 return (
                   <tr key={value} className="hover:bg-gray-100">
-                    <td className={`px-2 py-1 ${isMissing ? 'text-red-600 italic' : 'text-gray-700'}`}>
+                    <td
+                      className={`px-2 py-1 ${
+                        isMissing
+                          ? 'text-red-600 italic'
+                          : 'text-gray-700'
+                      }`}
+                    >
                       {displayValue}
                     </td>
                     <td className="px-2 py-1 text-right text-gray-700 font-medium">
@@ -147,6 +176,7 @@ export default function Sidebar({ onReset }) {
   const toggleHiddenType = useStore(
     (state) => state.toggleHiddenType
   );
+  const toggleDataTable = useStore((state) => state.toggleDataTable);
   const hiddenCodes = useStore((state) => state.ui.hiddenCodes);
   const hiddenTypes = useStore((state) => state.ui.hiddenTypes);
 
@@ -157,6 +187,9 @@ export default function Sidebar({ onReset }) {
 
   // State for accordion sections
   const [openSection, setOpenSection] = useState('oversikt');
+
+  // State for Felt section tabs
+  const [feltTab, setFeltTab] = useState('punkter'); // 'punkter' or 'ledninger'
 
   const toggleSection = (section) => {
     setOpenSection(openSection === section ? null : section);
@@ -197,11 +230,21 @@ export default function Sidebar({ onReset }) {
     };
 
     if (isResizing) {
+      // Prevent text selection during resize
+      document.body.style.userSelect = 'none';
+      document.body.style.WebkitUserSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     }
 
     return () => {
+      // Restore text selection
+      document.body.style.userSelect = '';
+      document.body.style.WebkitUserSelect = '';
+      document.body.style.cursor = '';
+
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -259,54 +302,134 @@ export default function Sidebar({ onReset }) {
         (temaStats.lines[code].types[typeVal] || 0) + 1;
     });
 
-    // Analyze all fields - collect all unique field names and their value distributions
+    // Analyze fields separately for points and lines
     const fieldAnalysis = {
-      fieldOrder: [], // Track order of appearance
-      fields: {}, // { fieldName: { valueCounts: {}, totalCount: number } }
+      points: {
+        fieldOrder: [],
+        fields: {},
+      },
+      lines: {
+        fieldOrder: [],
+        fields: {},
+      },
     };
 
-    // Collect all fields from both points and lines to get order of appearance
-    const allItems = [...data.points, ...data.lines];
-    const seenFields = new Set();
+    // Analyze POINTS fields
+    const seenPointFields = new Set();
 
-    // First pass: collect field order (S_FCODE always first)
-    if (allItems.some(item => item.attributes?.S_FCODE !== undefined)) {
-      fieldAnalysis.fieldOrder.push('S_FCODE');
-      seenFields.add('S_FCODE');
+    // S_FCODE always first for points
+    if (
+      data.points.some(
+        (item) => item.attributes?.S_FCODE !== undefined
+      )
+    ) {
+      fieldAnalysis.points.fieldOrder.push('S_FCODE');
+      seenPointFields.add('S_FCODE');
     }
 
-    allItems.forEach((item) => {
+    // Collect field order from points
+    data.points.forEach((item) => {
       if (item.attributes) {
         Object.keys(item.attributes).forEach((fieldName) => {
-          if (!seenFields.has(fieldName)) {
-            fieldAnalysis.fieldOrder.push(fieldName);
-            seenFields.add(fieldName);
+          if (!seenPointFields.has(fieldName)) {
+            fieldAnalysis.points.fieldOrder.push(fieldName);
+            seenPointFields.add(fieldName);
           }
         });
       }
     });
 
-    // Second pass: count value occurrences for each field
-    fieldAnalysis.fieldOrder.forEach((fieldName) => {
-      fieldAnalysis.fields[fieldName] = {
+    // Initialize counters for point fields
+    fieldAnalysis.points.fieldOrder.forEach((fieldName) => {
+      fieldAnalysis.points.fields[fieldName] = {
         valueCounts: {},
         totalCount: 0,
       };
     });
 
-    allItems.forEach((item) => {
+    // Count values for point fields
+    data.points.forEach((item) => {
       if (item.attributes) {
-        fieldAnalysis.fieldOrder.forEach((fieldName) => {
+        fieldAnalysis.points.fieldOrder.forEach((fieldName) => {
           const value = item.attributes[fieldName];
-          const valueKey = value === null || value === undefined || value === '' 
-            ? '(Mangler)' 
-            : String(value);
-          
-          if (!fieldAnalysis.fields[fieldName].valueCounts[valueKey]) {
-            fieldAnalysis.fields[fieldName].valueCounts[valueKey] = 0;
+          const valueKey =
+            value === null || value === undefined || value === ''
+              ? '(Mangler)'
+              : String(value);
+
+          if (
+            !fieldAnalysis.points.fields[fieldName].valueCounts[
+              valueKey
+            ]
+          ) {
+            fieldAnalysis.points.fields[fieldName].valueCounts[
+              valueKey
+            ] = 0;
           }
-          fieldAnalysis.fields[fieldName].valueCounts[valueKey]++;
-          fieldAnalysis.fields[fieldName].totalCount++;
+          fieldAnalysis.points.fields[fieldName].valueCounts[
+            valueKey
+          ]++;
+          fieldAnalysis.points.fields[fieldName].totalCount++;
+        });
+      }
+    });
+
+    // Analyze LINES fields
+    const seenLineFields = new Set();
+
+    // S_FCODE always first for lines
+    if (
+      data.lines.some(
+        (item) => item.attributes?.S_FCODE !== undefined
+      )
+    ) {
+      fieldAnalysis.lines.fieldOrder.push('S_FCODE');
+      seenLineFields.add('S_FCODE');
+    }
+
+    // Collect field order from lines
+    data.lines.forEach((item) => {
+      if (item.attributes) {
+        Object.keys(item.attributes).forEach((fieldName) => {
+          if (!seenLineFields.has(fieldName)) {
+            fieldAnalysis.lines.fieldOrder.push(fieldName);
+            seenLineFields.add(fieldName);
+          }
+        });
+      }
+    });
+
+    // Initialize counters for line fields
+    fieldAnalysis.lines.fieldOrder.forEach((fieldName) => {
+      fieldAnalysis.lines.fields[fieldName] = {
+        valueCounts: {},
+        totalCount: 0,
+      };
+    });
+
+    // Count values for line fields
+    data.lines.forEach((item) => {
+      if (item.attributes) {
+        fieldAnalysis.lines.fieldOrder.forEach((fieldName) => {
+          const value = item.attributes[fieldName];
+          const valueKey =
+            value === null || value === undefined || value === ''
+              ? '(Mangler)'
+              : String(value);
+
+          if (
+            !fieldAnalysis.lines.fields[fieldName].valueCounts[
+              valueKey
+            ]
+          ) {
+            fieldAnalysis.lines.fields[fieldName].valueCounts[
+              valueKey
+            ] = 0;
+          }
+          fieldAnalysis.lines.fields[fieldName].valueCounts[
+            valueKey
+          ]++;
+          fieldAnalysis.lines.fields[fieldName].totalCount++;
         });
       }
     });
@@ -335,7 +458,11 @@ export default function Sidebar({ onReset }) {
       {/* Resize Handle */}
       <div
         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors z-30"
-        style={{ backgroundColor: 'transparent' }}
+        style={{
+          backgroundColor: 'transparent',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+        }}
         onMouseEnter={(e) =>
           (e.currentTarget.style.backgroundColor =
             'var(--color-primary-light)')
@@ -886,27 +1013,138 @@ export default function Sidebar({ onReset }) {
           isOpen={openSection === 'felt'}
           onToggle={() => toggleSection('felt')}
         >
-          {stats?.fieldAnalysis && stats.fieldAnalysis.fieldOrder.length > 0 ? (
-            <div className="space-y-0">
-              {stats.fieldAnalysis.fieldOrder.map((fieldName) => {
-                const fieldInfo = stats.fieldAnalysis.fields[fieldName];
-                
-                // Try to find label from fields.json
-                const fieldDefinition = fieldsData.find(
-                  (f) => f.fieldKey === fieldName
-                );
-                const fieldLabel = fieldDefinition?.label || fieldName;
+          {stats?.fieldAnalysis ? (
+            <div className="space-y-2">
+              {/* Open Data Table Button */}
+              <button
+                onClick={toggleDataTable}
+                className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
+                style={{
+                  backgroundColor: 'var(--color-primary)',
+                  color: 'white',
+                  borderColor: 'var(--color-primary-dark)',
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    'var(--color-primary-dark)')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    'var(--color-primary)')
+                }
+              >
+                📊 Åpne full datatabell
+              </button>
 
-                return (
-                  <FieldSubSection
-                    key={fieldName}
-                    fieldName={fieldName}
-                    fieldLabel={fieldLabel}
-                    valueCounts={fieldInfo.valueCounts}
-                    totalCount={fieldInfo.totalCount}
-                  />
-                );
-              })}
+              {/* Tabs */}
+              <div
+                className="flex border-b"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                <button
+                  onClick={() => setFeltTab('punkter')}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                    feltTab === 'punkter' ? 'border-b-2' : ''
+                  }`}
+                  style={{
+                    color:
+                      feltTab === 'punkter'
+                        ? 'var(--color-primary)'
+                        : 'var(--color-text-secondary)',
+                    borderColor:
+                      feltTab === 'punkter'
+                        ? 'var(--color-primary)'
+                        : 'transparent',
+                  }}
+                >
+                  Punkter (
+                  {stats.fieldAnalysis.points.fieldOrder.length} felt)
+                </button>
+                <button
+                  onClick={() => setFeltTab('ledninger')}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                    feltTab === 'ledninger' ? 'border-b-2' : ''
+                  }`}
+                  style={{
+                    color:
+                      feltTab === 'ledninger'
+                        ? 'var(--color-primary)'
+                        : 'var(--color-text-secondary)',
+                    borderColor:
+                      feltTab === 'ledninger'
+                        ? 'var(--color-primary)'
+                        : 'transparent',
+                  }}
+                >
+                  Ledninger (
+                  {stats.fieldAnalysis.lines.fieldOrder.length} felt)
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              <div className="space-y-0">
+                {feltTab === 'punkter' &&
+                stats.fieldAnalysis.points.fieldOrder.length > 0 ? (
+                  stats.fieldAnalysis.points.fieldOrder.map(
+                    (fieldName) => {
+                      const fieldInfo =
+                        stats.fieldAnalysis.points.fields[fieldName];
+
+                      // Try to find label from fields.json
+                      const fieldDefinition = fieldsData.find(
+                        (f) => f.fieldKey === fieldName
+                      );
+                      const fieldLabel =
+                        fieldDefinition?.label || fieldName;
+
+                      return (
+                        <FieldSubSection
+                          key={fieldName}
+                          fieldName={fieldName}
+                          fieldLabel={fieldLabel}
+                          valueCounts={fieldInfo.valueCounts}
+                          totalCount={fieldInfo.totalCount}
+                        />
+                      );
+                    }
+                  )
+                ) : feltTab === 'punkter' ? (
+                  <p className="text-xs text-gray-500 italic pt-2">
+                    Ingen punktfelt tilgjengelig.
+                  </p>
+                ) : null}
+
+                {feltTab === 'ledninger' &&
+                stats.fieldAnalysis.lines.fieldOrder.length > 0 ? (
+                  stats.fieldAnalysis.lines.fieldOrder.map(
+                    (fieldName) => {
+                      const fieldInfo =
+                        stats.fieldAnalysis.lines.fields[fieldName];
+
+                      // Try to find label from fields.json
+                      const fieldDefinition = fieldsData.find(
+                        (f) => f.fieldKey === fieldName
+                      );
+                      const fieldLabel =
+                        fieldDefinition?.label || fieldName;
+
+                      return (
+                        <FieldSubSection
+                          key={fieldName}
+                          fieldName={fieldName}
+                          fieldLabel={fieldLabel}
+                          valueCounts={fieldInfo.valueCounts}
+                          totalCount={fieldInfo.totalCount}
+                        />
+                      );
+                    }
+                  )
+                ) : feltTab === 'ledninger' ? (
+                  <p className="text-xs text-gray-500 italic pt-2">
+                    Ingen ledningfelt tilgjengelig.
+                  </p>
+                ) : null}
+              </div>
             </div>
           ) : (
             <p className="text-xs text-gray-500 italic">
