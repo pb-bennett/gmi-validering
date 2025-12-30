@@ -187,7 +187,7 @@ export default function MapLegend() {
             <div className="flex items-center gap-2 px-1 py-0.5">
               <div className="w-5 h-0.5 bg-[#ff0000] shrink-0"></div>
               <span className="text-xs text-gray-700">
-                AF (asfalt)
+                Avløp Felles (AF)
               </span>
             </div>
             <div className="flex items-center gap-2 px-1 py-0.5">

@@ -8,6 +8,8 @@ import {
   LayersControl,
   useMap,
   useMapEvents,
+  CircleMarker,
+  Tooltip,
 } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -973,8 +975,39 @@ function ZoomToFeatureHandler() {
   return null;
 }
 
+function FeatureHighlighter({ geoJsonData }) {
+  const map = useMap();
+  const highlightedFeatureId = useStore(
+    (state) => state.ui.highlightedFeatureId
+  );
+
+  useEffect(() => {
+    if (!highlightedFeatureId || !geoJsonData) return;
+
+    // Find feature in GeoJSON
+    // Construct ID to match: ledninger-{id} or punkter-{id}
+    const feature = geoJsonData.features.find((f) => {
+      const type =
+        f.properties.featureType === 'Line' ? 'ledninger' : 'punkter';
+      const id = `${type}-${f.properties.id}`;
+      return id === highlightedFeatureId;
+    });
+
+    if (feature) {
+      const layer = L.geoJSON(feature);
+      const bounds = layer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+      }
+    }
+  }, [map, geoJsonData, highlightedFeatureId]);
+
+  return null;
+}
+
 export default function MapInner({ onZoomChange }) {
   const data = useStore((state) => state.data);
+  const analysis = useStore((state) => state.analysis);
   const highlightedCode = useStore(
     (state) => state.ui.highlightedCode
   );
@@ -1117,6 +1150,30 @@ export default function MapInner({ onZoomChange }) {
       };
     }
 
+    // Analysis Mode Highlighting
+    if (analysis.isOpen && analysis.selectedPipeIndex !== null) {
+      // Match by ID (we added 'id' property in geoJsonData creation which corresponds to index)
+      const isSelected =
+        feature.properties.id === analysis.selectedPipeIndex &&
+        feature.properties.featureType === 'Line';
+
+      if (isSelected) {
+        return {
+          color: getColorByFCode(fcode), // Keep original color
+          weight: 8, // Thicker
+          opacity: 1.0,
+          dashArray: null,
+        };
+      } else {
+        return {
+          color: getColorByFCode(fcode),
+          weight: 2,
+          opacity: 0.3, // Fade out but keep visible
+          dashArray: null,
+        };
+      }
+    }
+
     const color = isHighlighted ? '#00FFFF' : getColorByFCode(fcode);
     const baseWeight = getLineWeight(feature.properties);
     const weight = isHighlighted ? baseWeight + 4 : baseWeight;
@@ -1218,6 +1275,7 @@ export default function MapInner({ onZoomChange }) {
       center={[59.9139, 10.7522]}
       zoom={13}
       style={{ height: '100%', width: '100%' }}
+      maxZoom={22} // Allow higher zoom levels globally
     >
       <LayersControl position="topright">
         <LayersControl.BaseLayer checked name="Kartverket Topo">
@@ -1253,7 +1311,9 @@ export default function MapInner({ onZoomChange }) {
               highlightedCode || 'none'
             }-${hiddenTypes.join(',')}-${highlightedType || 'none'}-${
               highlightedTypeContext || 'none'
-            }-${highlightedFeatureId || 'none'}`}
+            }-${highlightedFeatureId || 'none'}-${
+              analysis.isOpen ? analysis.selectedPipeIndex : 'closed'
+            }`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}
@@ -1263,9 +1323,198 @@ export default function MapInner({ onZoomChange }) {
       </LayersControl>
 
       <BoundsController geoJsonData={geoJsonData} />
+      <FeatureHighlighter geoJsonData={geoJsonData} />
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}
       <MapSizeInvalidator />
       <ZoomToFeatureHandler />
+      <AnalysisPointsLayer />
+      <AnalysisZoomHandler />
     </MapContainer>
   );
+}
+
+function AnalysisPointsLayer() {
+  const analysis = useStore((state) => state.analysis);
+  const data = useStore((state) => state.data);
+
+  const { points, pipeColor } = useMemo(() => {
+    if (
+      !analysis.isOpen ||
+      analysis.selectedPipeIndex === null ||
+      !data ||
+      !data.lines
+    ) {
+      return { points: [], pipeColor: '#3388ff' };
+    }
+
+    const line = data.lines[analysis.selectedPipeIndex];
+    if (!line || !line.coordinates)
+      return { points: [], pipeColor: '#3388ff' };
+
+    const fcode = line.attributes?.Tema || line.attributes?.S_FCODE;
+    const color = getColorByFCode(fcode);
+
+    // Determine source projection
+    let sourceProj = 'EPSG:4326';
+    if (data.header?.COSYS_EPSG) {
+      const epsg = `EPSG:${data.header.COSYS_EPSG}`;
+      if (proj4.defs(epsg)) sourceProj = epsg;
+    } else if (data.header?.COSYS) {
+      if (
+        data.header.COSYS.includes('UTM') &&
+        data.header.COSYS.includes('32')
+      )
+        sourceProj = 'EPSG:25832';
+      else if (
+        data.header.COSYS.includes('UTM') &&
+        data.header.COSYS.includes('33')
+      )
+        sourceProj = 'EPSG:25833';
+    }
+
+    const pts = line.coordinates.map((c, i) => {
+      let lat, lng;
+      if (sourceProj === 'EPSG:4326') {
+        lat = c.y;
+        lng = c.x;
+      } else {
+        try {
+          const [l, t] = proj4(sourceProj, 'EPSG:4326', [c.x, c.y]);
+          lng = l;
+          lat = t;
+        } catch (e) {
+          lat = c.y;
+          lng = c.x;
+        }
+      }
+      return { lat, lng, z: c.z, index: i };
+    });
+
+    return { points: pts, pipeColor: color };
+  }, [analysis.isOpen, analysis.selectedPipeIndex, data]);
+
+  if (points.length === 0) return null;
+
+  return (
+    <>
+      {points.map((p) => {
+        const isHovered = analysis.hoveredPointIndex === p.index;
+        return (
+          <CircleMarker
+            key={p.index}
+            center={[p.lat, p.lng]}
+            radius={isHovered ? 8 : 5}
+            pathOptions={{
+              color: isHovered ? '#ff0000' : pipeColor,
+              fillColor: isHovered ? '#ff0000' : 'white',
+              fillOpacity: 1,
+              weight: 2,
+              zIndexOffset: 1000, // Attempt to force on top, though CircleMarker doesn't support this directly
+            }}
+            pane="markerPane" // Render in markerPane which is above overlayPane (where GeoJSON usually is)
+            eventHandlers={{
+              mouseover: (e) => {
+                e.target.openTooltip();
+              },
+              mouseout: (e) => {
+                if (!isHovered) e.target.closeTooltip();
+              },
+            }}
+          >
+            <Tooltip
+              direction="top"
+              offset={[0, -10]}
+              opacity={1}
+              permanent={isHovered}
+            >
+              <span>
+                P{p.index} (Z: {p.z?.toFixed(2)})
+              </span>
+            </Tooltip>
+          </CircleMarker>
+        );
+      })}
+    </>
+  );
+}
+
+function AnalysisZoomHandler() {
+  const map = useMap();
+  const analysis = useStore((state) => state.analysis);
+  const data = useStore((state) => state.data);
+
+  useEffect(() => {
+    if (
+      analysis.isOpen &&
+      analysis.selectedPipeIndex !== null &&
+      data &&
+      data.lines
+    ) {
+      const line = data.lines[analysis.selectedPipeIndex];
+      if (line && line.coordinates && line.coordinates.length > 0) {
+        // Determine source projection
+        let sourceProj = 'EPSG:4326';
+        if (data.header?.COSYS_EPSG) {
+          const epsg = `EPSG:${data.header.COSYS_EPSG}`;
+          if (proj4.defs(epsg)) sourceProj = epsg;
+        } else if (data.header?.COSYS) {
+          if (
+            data.header.COSYS.includes('UTM') &&
+            data.header.COSYS.includes('32')
+          )
+            sourceProj = 'EPSG:25832';
+          else if (
+            data.header.COSYS.includes('UTM') &&
+            data.header.COSYS.includes('33')
+          )
+            sourceProj = 'EPSG:25833';
+        }
+
+        const latLngs = line.coordinates.map((c) => {
+          if (sourceProj === 'EPSG:4326') return [c.y, c.x];
+          try {
+            const [lng, lat] = proj4(sourceProj, 'EPSG:4326', [
+              c.x,
+              c.y,
+            ]);
+            return [lat, lng];
+          } catch (e) {
+            return [c.y, c.x];
+          }
+        });
+
+        const bounds = L.latLngBounds(latLngs);
+        if (bounds.isValid()) {
+          const southWest = bounds.getSouthWest();
+          const northEast = bounds.getNorthEast();
+          const diagonalMeters = southWest.distanceTo(northEast);
+
+          // Determine maxZoom and padding based on feature size
+          let maxZoom = 19;
+          let padding = [100, 100];
+
+          if (diagonalMeters < 20) {
+            maxZoom = 22;
+            padding = [50, 50];
+          } else if (diagonalMeters < 50) {
+            maxZoom = 21;
+            padding = [50, 50];
+          } else if (diagonalMeters < 100) {
+            maxZoom = 20;
+            padding = [80, 80];
+          } else if (diagonalMeters < 200) {
+            maxZoom = 19;
+            padding = [80, 80];
+          }
+
+          map.fitBounds(bounds, {
+            padding: padding,
+            maxZoom: maxZoom,
+          });
+        }
+      }
+    }
+  }, [analysis.isOpen, analysis.selectedPipeIndex, data, map]);
+
+  return null;
 }
