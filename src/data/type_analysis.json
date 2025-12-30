@@ -3,6 +3,7 @@
   "description": "Analysis of Type and Nett_type usage across 51 GMI files in REF_FILES/GMI/FK",
   "rules": {
     "requireType": ["FORAKONSTR", "GRØKONSTR"],
+
     "shouldHaveType": ["DIV"],
     "commonNettType": ["AF", "SPP", "DR", "OV", "VL", "SP"]
   },
