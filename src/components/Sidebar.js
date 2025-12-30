@@ -55,8 +55,8 @@ function InclineAnalysisControl() {
         }
       >
         {analysisResults.length > 0
-          ? 'Vis resultater'
-          : 'Kjør fallanalyse'}
+          ? 'Åpne profilanalyse'
+          : 'Kjør profilanalyse'}
       </button>
 
       {analysisResults.length > 0 && (
@@ -1260,7 +1260,7 @@ export default function Sidebar({ onReset }) {
                 className="text-xs font-semibold uppercase tracking-wider mb-2"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
-                Fall (Selvfall)
+                Profilanalyse
               </h4>
               <InclineAnalysisControl />
             </div>

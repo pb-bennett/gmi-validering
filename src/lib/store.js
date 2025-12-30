@@ -197,6 +197,8 @@ const useStore = create(
           results: [],
           isOpen: false,
           selectedPipeIndex: null,
+          hoveredPointIndex: null,
+          hoveredSegment: null, // { p1: number, p2: number } | null
         },
 
         setAnalysisResults: (results) =>
@@ -210,15 +212,22 @@ const useStore = create(
 
         toggleAnalysisModal: (isOpen) =>
           set(
-            (state) => ({
-              analysis: {
-                ...state.analysis,
-                isOpen:
-                  isOpen !== undefined
-                    ? isOpen
-                    : !state.analysis.isOpen,
-              },
-            }),
+            (state) => {
+              const newIsOpen =
+                isOpen !== undefined
+                  ? isOpen
+                  : !state.analysis.isOpen;
+              return {
+                analysis: {
+                  ...state.analysis,
+                  isOpen: newIsOpen,
+                },
+                // Clear highlighted feature when closing analysis
+                ui: !newIsOpen
+                  ? { ...state.ui, highlightedFeatureId: null }
+                  : state.ui,
+              };
+            },
             false,
             'analysis/toggleModal'
           ),
@@ -250,6 +259,18 @@ const useStore = create(
             }),
             false,
             'analysis/setHoveredPoint'
+          ),
+
+        setHoveredAnalysisSegment: (segment) =>
+          set(
+            (state) => ({
+              analysis: {
+                ...state.analysis,
+                hoveredSegment: segment,
+              },
+            }),
+            false,
+            'analysis/setHoveredSegment'
           ),
 
         // ============================================

@@ -108,7 +108,7 @@ export default function InclineAnalysisModal() {
       <div className="flex-none p-3 border-b flex justify-between items-center bg-gray-50">
         <div>
           <h2 className="text-base font-semibold flex items-center gap-2">
-            Fallanalyse (Selvfall)
+            Profilanalyse
             <span className="text-xs font-normal text-gray-500">
               ({filteredResults.length} av {results.length} ledninger)
             </span>
@@ -210,34 +210,54 @@ export default function InclineAnalysisModal() {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {filteredResults.map((res) => (
-              <div
-                key={res.lineIndex}
-                onClick={() => selectPipe(res.lineIndex)}
-                className={`p-3 border-b cursor-pointer hover:bg-gray-100 ${
-                  selectedPipeIndex === res.lineIndex
-                    ? 'bg-blue-50 border-l-4 border-l-blue-500'
-                    : ''
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <span className="font-medium text-sm">
-                    {res.attributes.Nett_type || 'Ukjent'} -{' '}
-                    {res.attributes.Dimensjon ||
-                      res.attributes.Dim ||
-                      '?'}
-                    mm
-                  </span>
-                  <StatusBadge status={res.status} />
+            {filteredResults.map((res) => {
+              const fcode =
+                res.attributes.Tema ||
+                res.attributes.S_FCODE ||
+                'Ukjent';
+              const color = getColorByFCode(fcode);
+
+              return (
+                <div
+                  key={res.lineIndex}
+                  onClick={() => selectPipe(res.lineIndex)}
+                  className={`p-3 border-b cursor-pointer hover:bg-gray-100 ${
+                    selectedPipeIndex === res.lineIndex
+                      ? 'bg-blue-50 border-l-4 border-l-blue-500'
+                      : ''
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex flex-col">
+                      <span
+                        className="font-bold text-sm"
+                        style={{ color }}
+                      >
+                        {fcode}
+                      </span>
+                      <span className="text-xs text-gray-700">
+                        {res.attributes.Nett_type
+                          ? `${res.attributes.Nett_type} - `
+                          : ''}
+                        {res.attributes.Dimensjon ||
+                          res.attributes.Dim ||
+                          '?'}
+                        mm
+                      </span>
+                    </div>
+                    <StatusBadge status={res.status} />
+                  </div>
+                  {res.message !== 'OK' && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      {res.message}
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-400 mt-1">
+                    ID: {res.lineIndex}
+                  </div>
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {res.message}
-                </div>
-                <div className="text-xs text-gray-400 mt-1">
-                  ID: {res.lineIndex}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -258,7 +278,7 @@ export default function InclineAnalysisModal() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-3 text-xs flex-none">
+              <div className="grid grid-cols-6 gap-3 text-xs flex-none">
                 <div className="p-2 bg-gray-50 rounded">
                   <span className="block text-gray-500 uppercase text-[10px]">
                     Status
@@ -269,6 +289,41 @@ export default function InclineAnalysisModal() {
                     )}`}
                   >
                     {selectedResult.message}
+                  </span>
+                </div>
+                <div className="p-2 bg-gray-50 rounded">
+                  <span className="block text-gray-500 uppercase text-[10px]">
+                    Dimensjon
+                  </span>
+                  <span className="font-bold text-base">
+                    {selectedResult.attributes.Dimensjon ||
+                      selectedResult.attributes.Dim ||
+                      '?'}{' '}
+                    mm
+                  </span>
+                </div>
+                <div className="p-2 bg-gray-50 rounded">
+                  <span className="block text-gray-500 uppercase text-[10px]">
+                    Materiale
+                  </span>
+                  <span
+                    className="font-bold text-base truncate block"
+                    title={
+                      selectedResult.attributes.Materiale ||
+                      selectedResult.attributes.Mat ||
+                      selectedResult.attributes.MATERIALE ||
+                      selectedResult.attributes.Rørmateriale ||
+                      selectedResult.attributes.Material ||
+                      selectedResult.attributes.MAT
+                    }
+                  >
+                    {selectedResult.attributes.Materiale ||
+                      selectedResult.attributes.Mat ||
+                      selectedResult.attributes.MATERIALE ||
+                      selectedResult.attributes.Rørmateriale ||
+                      selectedResult.attributes.Material ||
+                      selectedResult.attributes.MAT ||
+                      '-'}
                   </span>
                 </div>
                 <div className="p-2 bg-gray-50 rounded">
@@ -352,9 +407,9 @@ function getStatusColor(status) {
 const getColorByFCode = (fcode) => {
   if (!fcode) return '#808080';
   const code = fcode.toUpperCase();
-  if (code.includes('VL') || code.includes('VANN')) return '#0066cc';
+  if (code.includes('VL') || code.includes('VANN')) return '#0101FF';
   if (code.includes('SP') || code.includes('SPILLVANN'))
-    return '#228B22';
+    return '#02D902';
   if (code.includes('OV') || code.includes('OVERVANN'))
     return '#2a2a2a';
   if (code.includes('AF') || code.includes('FELLES'))
@@ -372,12 +427,19 @@ function PipeProfileVisualization({ result }) {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const transformStartRef = useRef({ x: 0, y: 0 });
+  const [tooltip, setTooltip] = useState(null);
 
   const setHoveredAnalysisPoint = useStore(
     (state) => state.setHoveredAnalysisPoint
   );
   const hoveredPointIndex = useStore(
     (state) => state.analysis.hoveredPointIndex
+  );
+  const setHoveredAnalysisSegment = useStore(
+    (state) => state.setHoveredAnalysisSegment
+  );
+  const hoveredSegment = useStore(
+    (state) => state.analysis.hoveredSegment
   );
 
   const {
@@ -532,6 +594,13 @@ function PipeProfileVisualization({ result }) {
     setIsDragging(false);
   };
 
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+    setHoveredAnalysisPoint(null);
+    setHoveredAnalysisSegment(null);
+    setTooltip(null);
+  };
+
   return (
     <div
       ref={containerRef}
@@ -540,7 +609,7 @@ function PipeProfileVisualization({ result }) {
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
     >
       <div className="absolute top-2 right-2 z-10 flex gap-1">
         <button
@@ -590,6 +659,81 @@ function PipeProfileVisualization({ result }) {
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
           />
+
+          {/* Segment Hit Areas and Tooltips */}
+          {plotPoints.map((p, i) => {
+            if (i === plotPoints.length - 1) return null;
+            const pNext = plotPoints[i + 1];
+            const x1 = getX(p.dist);
+            const x2 = getX(pNext.dist);
+            const y1 = getY(p.z);
+            const y2 = getY(pNext.z);
+
+            const segDrop = p.z - pNext.z;
+            const segLen = pNext.dist - p.dist;
+            const segInclinePermille =
+              segLen > 0 ? (segDrop / segLen) * 1000 : 0;
+
+            const isHovered =
+              hoveredSegment &&
+              ((hoveredSegment.p1 === p.originalIndex &&
+                hoveredSegment.p2 === pNext.originalIndex) ||
+                (hoveredSegment.p1 === pNext.originalIndex &&
+                  hoveredSegment.p2 === p.originalIndex));
+
+            return (
+              <g key={`seg-hit-${i}`}>
+                {/* Highlight if hovered */}
+                {isHovered && (
+                  <line
+                    x1={x1}
+                    y1={y1}
+                    x2={x2}
+                    y2={y2}
+                    stroke="yellow"
+                    strokeWidth={12 / transform.k}
+                    strokeOpacity={0.5}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+
+                {/* Invisible Hit Line */}
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="transparent"
+                  strokeWidth={20 / transform.k}
+                  vectorEffect="non-scaling-stroke"
+                  className="cursor-pointer"
+                  onMouseEnter={() => {
+                    setHoveredAnalysisSegment({
+                      p1: p.originalIndex,
+                      p2: pNext.originalIndex,
+                    });
+                  }}
+                  onMouseMove={(e) => {
+                    const rect =
+                      containerRef.current.getBoundingClientRect();
+                    setTooltip({
+                      x: e.clientX - rect.left,
+                      y: e.clientY - rect.top,
+                      data: {
+                        incline: segInclinePermille,
+                        length: segLen,
+                        drop: segDrop,
+                      },
+                    });
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredAnalysisSegment(null);
+                    setTooltip(null);
+                  }}
+                />
+              </g>
+            );
+          })}
 
           {/* Points and Labels */}
           {plotPoints.map((p, i) => {
@@ -666,8 +810,13 @@ function PipeProfileVisualization({ result }) {
               segLen > 0 ? (segDrop / segLen) * 1000 : 0;
 
             let textColor = '#6B7280'; // Default gray
-            if (segInclinePermille < 0) textColor = '#dc2626'; // Red
-            else if (segInclinePermille < 2) textColor = '#d97706'; // Orange (< 2‰)
+
+            // Only color code for gravity pipes
+            if (result.pipeType !== 'pressure') {
+              if (segInclinePermille < 0)
+                textColor = '#dc2626'; // Red
+              else if (segInclinePermille < 2) textColor = '#d97706'; // Orange (< 2‰)
+            }
 
             return (
               <g key={`seg-${i}`}>
@@ -706,6 +855,40 @@ function PipeProfileVisualization({ result }) {
           </text>
         </g>
       </svg>
+
+      {tooltip && (
+        <div
+          className="absolute z-50 bg-gray-900 text-white text-xs p-2 rounded shadow-lg pointer-events-none whitespace-nowrap border border-gray-700"
+          style={{ left: tooltip.x + 15, top: tooltip.y + 15 }}
+        >
+          <div className="font-bold mb-1 border-b border-gray-700 pb-1">
+            Seksjon
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            <span className="text-gray-400">Fall:</span>
+            <span
+              className={`font-mono font-bold ${
+                tooltip.data.incline < 0 &&
+                result.pipeType !== 'pressure'
+                  ? 'text-red-400'
+                  : 'text-green-400'
+              }`}
+            >
+              {formatNumber(tooltip.data.incline, 2)}‰
+            </span>
+
+            <span className="text-gray-400">Lengde:</span>
+            <span className="font-mono">
+              {formatNumber(tooltip.data.length, 2)}m
+            </span>
+
+            <span className="text-gray-400">Høydeforskjell:</span>
+            <span className="font-mono">
+              {formatNumber(tooltip.data.drop, 3)}m
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

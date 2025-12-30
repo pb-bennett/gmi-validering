@@ -10,6 +10,7 @@ import {
   useMapEvents,
   CircleMarker,
   Tooltip,
+  Polyline,
 } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -116,11 +117,11 @@ const getColorByFCode = (fcode) => {
   // Norwegian infrastructure color system
   const colorMap = {
     // Water infrastructure - BLUE shades
-    VL: '#0066cc', // Vannledninger (Water lines)
+    VL: '#0101FF', // Vannledninger (Water lines)
     VF: '#0080ff', // Vannforsyning
 
     // Wastewater - GREEN shades
-    SP: '#228B22', // Spillvannsledning (Wastewater lines)
+    SP: '#02D902', // Spillvannsledning (Wastewater lines)
     SPP: '#32CD32', // Spillvann pumpe
 
     // Surface water - BLACK/DARK shades
@@ -171,7 +172,7 @@ const getColorByFCode = (fcode) => {
 
   // Try partial matches for complex codes
   if (fcode.includes('VL') || fcode.includes('VANN'))
-    return '#0066cc';
+    return '#0101FF';
   if (fcode.includes('SP') || fcode.includes('SPILLVANN'))
     return '#228B22';
   if (fcode.includes('OV') || fcode.includes('OVERVANN'))
@@ -980,9 +981,12 @@ function FeatureHighlighter({ geoJsonData }) {
   const highlightedFeatureId = useStore(
     (state) => state.ui.highlightedFeatureId
   );
+  const isAnalysisOpen = useStore((state) => state.analysis.isOpen);
 
   useEffect(() => {
-    if (!highlightedFeatureId || !geoJsonData) return;
+    // If analysis is open, let AnalysisZoomHandler handle the zooming
+    if (!highlightedFeatureId || !geoJsonData || isAnalysisOpen)
+      return;
 
     // Find feature in GeoJSON
     // Construct ID to match: ledninger-{id} or punkter-{id}
@@ -1275,14 +1279,14 @@ export default function MapInner({ onZoomChange }) {
       center={[59.9139, 10.7522]}
       zoom={13}
       style={{ height: '100%', width: '100%' }}
-      maxZoom={22} // Allow higher zoom levels globally
+      maxZoom={25} // Allow higher zoom levels globally
     >
       <LayersControl position="topright">
         <LayersControl.BaseLayer checked name="Kartverket Topo">
           <TileLayer
             attribution='&copy; <a href="https://www.kartverket.no/">Kartverket</a>'
             url="https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png"
-            maxZoom={22}
+            maxZoom={25}
             maxNativeZoom={18}
           />
         </LayersControl.BaseLayer>
@@ -1290,7 +1294,7 @@ export default function MapInner({ onZoomChange }) {
           <TileLayer
             attribution='&copy; <a href="https://www.kartverket.no/">Kartverket</a>'
             url="https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png"
-            maxZoom={22}
+            maxZoom={25}
             maxNativeZoom={18}
           />
         </LayersControl.BaseLayer>
@@ -1298,7 +1302,7 @@ export default function MapInner({ onZoomChange }) {
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maxZoom={22}
+            maxZoom={25}
             maxNativeZoom={19}
           />
         </LayersControl.BaseLayer>
@@ -1393,10 +1397,33 @@ function AnalysisPointsLayer() {
     return { points: pts, pipeColor: color };
   }, [analysis.isOpen, analysis.selectedPipeIndex, data]);
 
+  const hoveredSegmentPolyline = useMemo(() => {
+    if (!analysis.hoveredSegment || points.length === 0) return null;
+
+    const { p1, p2 } = analysis.hoveredSegment;
+    // Find points with these indices
+    const point1 = points.find((p) => p.index === p1);
+    const point2 = points.find((p) => p.index === p2);
+
+    if (point1 && point2) {
+      return [
+        [point1.lat, point1.lng],
+        [point2.lat, point2.lng],
+      ];
+    }
+    return null;
+  }, [analysis.hoveredSegment, points]);
+
   if (points.length === 0) return null;
 
   return (
     <>
+      {hoveredSegmentPolyline && (
+        <Polyline
+          positions={hoveredSegmentPolyline}
+          pathOptions={{ color: '#ffff00', weight: 10, opacity: 0.6 }}
+        />
+      )}
       {points.map((p) => {
         const isHovered = analysis.hoveredPointIndex === p.index;
         return (

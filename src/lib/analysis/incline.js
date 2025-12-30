@@ -22,12 +22,10 @@ const GRAVITY_TYPES = [
   // or stick to positive list.
 ];
 
-// Helper to check if a pipe is a gravity pipe
-function isGravityPipe(attributes) {
-  if (!attributes) return false;
+// Helper to determine pipe type
+function getPipeType(attributes) {
+  if (!attributes) return 'unknown';
 
-  // User requested to look ONLY at Tema or S_FCODE
-  // and specifically for OV, AF, SP.
   const code = (
     attributes.Tema ||
     attributes.S_FCODE ||
@@ -39,18 +37,23 @@ function isGravityPipe(attributes) {
     code.includes('SP') || code.includes('OV') || code.includes('AF');
 
   if (isGravity) {
-    // Still exclude pressure pipes if they happen to have SP/OV/AF in name (e.g. SP_TRYKK or SPP)
+    // Check for pressure pipes
     if (
       code.includes('TRYKK') ||
       code.includes('PUMP') ||
       code.includes('SPP')
     ) {
-      return false;
+      return 'pressure';
     }
-    return true;
+    return 'gravity';
   }
 
-  return false;
+  // Check for water pipes (usually pressure)
+  if (code.includes('VL') || code.includes('VANN')) {
+    return 'pressure';
+  }
+
+  return 'other';
 }
 
 // Helper to get minimum incline based on dimension (Norwegian VA standards)
@@ -72,14 +75,10 @@ export function analyzeIncline(data) {
   const results = [];
 
   data.lines.forEach((line, index) => {
-    // 1. Filter for gravity pipes
-    // If no attributes, we can't determine type, but maybe we should include everything if it has Z?
-    // No, that would include cables etc.
-    if (!isGravityPipe(line.attributes)) {
-      // Fallback: Check if it has 'Dimensjon' or 'Dim' which usually implies pipe
-      // AND has Z coordinates. If it has Z, it's likely relevant for incline analysis.
-      // But we don't want to analyze cables.
-      // Let's stick to the isGravityPipe check for now, but I've broadened it above.
+    const pipeType = getPipeType(line.attributes);
+
+    // Filter: Only analyze Gravity and Pressure pipes (skip cables etc)
+    if (pipeType === 'unknown' || pipeType === 'other') {
       return;
     }
 
@@ -96,6 +95,7 @@ export function analyzeIncline(data) {
       attributes: line.attributes,
       status: 'ok',
       message: 'OK',
+      pipeType: pipeType, // 'gravity' or 'pressure'
       details: {
         startZ: null,
         endZ: null,
@@ -224,29 +224,22 @@ export function analyzeIncline(data) {
     };
 
     // Determine Status
-    if (hasLocalBackfall) {
-      result.status = 'warning';
-      result.message = 'Advarsel: Motfall oppdaget';
-    } else if (incline < minInclineRule.min) {
-      // Optional: We could flag low incline as warning too, but user asked for "OK if all sections have fall"
-      // However, standard compliance usually implies a warning for low fall.
-      // User said: "OK is if all section have fall, advarsel is if one or more section has motfall."
-      // BUT user also asked to "implement these standards".
-      // Standards say < 10 permille for small pipes is NOT OK.
-      // So I will add a specific message but keep status as OK or Warning based on strict interpretation?
-      // "The pipe should only feil if there is motfall... make 2 statuses OK and Advarsel"
-      // "Advarsel is if one or more section has motfall"
-      // This contradicts "implement these standards".
-      // I will follow the "implement standards" instruction as the latest and most specific regarding thresholds.
-      // So I will flag low fall as a Warning (Advarsel) as well, because a pipe with 1 permille fall is effectively broken/illegal.
-
-      result.status = 'warning';
-      result.message = `Lite fall (${incline
-        .toFixed(2)
-        .replace('.', ',')}‰ < ${minInclineRule.min}‰)`;
-    } else {
+    if (pipeType === 'pressure') {
       result.status = 'ok';
-      result.message = 'OK';
+      result.message = 'Trykkledning (ingen fallkrav)';
+    } else {
+      if (hasLocalBackfall) {
+        result.status = 'warning';
+        result.message = 'Advarsel: Motfall oppdaget';
+      } else if (incline < minInclineRule.min) {
+        result.status = 'warning';
+        result.message = `Lite fall (${incline
+          .toFixed(2)
+          .replace('.', ',')}‰ < ${minInclineRule.min}‰)`;
+      } else {
+        result.status = 'ok';
+        result.message = 'OK';
+      }
     }
 
     results.push(result);
