@@ -85,6 +85,34 @@ function InclineAnalysisControl() {
   );
 }
 
+function FieldValidationControl() {
+  const toggleFieldValidation = useStore((state) => state.toggleFieldValidation);
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={() => toggleFieldValidation(true)}
+        className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
+        style={{
+          backgroundColor: 'var(--color-primary)',
+          color: 'white',
+          borderColor: 'var(--color-primary-dark)',
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-primary-dark)')
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-primary)')
+        }
+      >
+        Åpne feltvalidering
+      </button>
+    </div>
+  );
+}
+
 function SidebarSection({ title, children, isOpen, onToggle }) {
   return (
     <div
@@ -1252,6 +1280,17 @@ export default function Sidebar({ onReset }) {
               <p className="text-sm text-gray-500 italic">
                 Ingen valideringsfeil funnet.
               </p>
+            </div>
+
+            {/* Subsection: Feltvalidering */}
+            <div>
+              <h4
+                className="text-xs font-semibold uppercase tracking-wider mb-2"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                Feltvalidering
+              </h4>
+              <FieldValidationControl />
             </div>
 
             {/* Subsection: Fall */}

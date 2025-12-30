@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import FileUpload from '@/components/FileUpload';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import InclineAnalysisModal from '@/components/InclineAnalysisModal';
+import FieldValidationSidebar from '@/components/FieldValidationSidebar';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import DataTable from '@/components/DataTable';
@@ -20,6 +21,7 @@ export default function Home() {
     (state) => state.updateLastActive
   );
   const analysisOpen = useStore((state) => state.analysis.isOpen);
+  const fieldValidationOpen = useStore((state) => state.ui.fieldValidationOpen);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(13);
 
@@ -116,13 +118,20 @@ export default function Home() {
       {/* Main App Layout (Sidebar + Map) */}
       {parsingStatus === 'done' && (
         <>
-          {/* Sidebar - Hidden when data table is open OR analysis is open */}
-          {!dataTableOpen && !analysisOpen && (
+          {/* Sidebar - Hidden when data table is open OR analysis is open OR field validation is open */}
+          {!dataTableOpen && !analysisOpen && !fieldValidationOpen && (
             <Sidebar onReset={handleReset} />
           )}
 
+          {/* Field Validation Sidebar - 50% width */}
+          {fieldValidationOpen && (
+            <div className="w-1/2 h-full flex-none">
+              <FieldValidationSidebar />
+            </div>
+          )}
+
           {/* Map Area */}
-          <div className="flex-1 relative flex flex-col h-full">
+          <div className={`relative flex flex-col h-full ${fieldValidationOpen ? 'w-1/2 flex-none' : 'flex-1'}`}>
             {/* Map - Full height or 67% when table open, or 55% when analysis open */}
             <div
               className="relative"
@@ -147,8 +156,8 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Floating Inspect Button - Only show when table is closed AND analysis is closed */}
-              {!dataTableOpen && !analysisOpen && (
+              {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
+              {!dataTableOpen && !analysisOpen && !fieldValidationOpen && (
                 <div
                   className="absolute bottom-4 left-1/2 -translate-x-1/2"
                   style={{ zIndex: 1000 }}

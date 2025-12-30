@@ -289,7 +289,23 @@ const useStore = create(
           hiddenTypes: [], // Array of {type, code} objects for context-aware hiding
           dataTableOpen: false, // Data table visibility
           highlightedFeatureId: null, // ID of feature to highlight on map
+          fieldValidationOpen: false, // Field validation sidebar visibility
         },
+
+        toggleFieldValidation: (isOpen) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                fieldValidationOpen:
+                  isOpen !== undefined
+                    ? isOpen
+                    : !state.ui.fieldValidationOpen,
+              },
+            }),
+            false,
+            'ui/toggleFieldValidation'
+          ),
 
         setHighlightedCode: (code) =>
           set(
