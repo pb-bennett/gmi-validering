@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import FileUpload from '@/components/FileUpload';
 import DataDisplayModal from '@/components/DataDisplayModal';
+import InclineAnalysisModal from '@/components/InclineAnalysisModal';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import DataTable from '@/components/DataTable';
@@ -18,6 +19,7 @@ export default function Home() {
   const updateLastActive = useStore(
     (state) => state.updateLastActive
   );
+  const analysisOpen = useStore((state) => state.analysis.isOpen);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(13);
 
@@ -114,16 +116,22 @@ export default function Home() {
       {/* Main App Layout (Sidebar + Map) */}
       {parsingStatus === 'done' && (
         <>
-          {/* Sidebar - Hidden when data table is open */}
-          {!dataTableOpen && <Sidebar onReset={handleReset} />}
+          {/* Sidebar - Hidden when data table is open OR analysis is open */}
+          {!dataTableOpen && !analysisOpen && (
+            <Sidebar onReset={handleReset} />
+          )}
 
           {/* Map Area */}
           <div className="flex-1 relative flex flex-col h-full">
-            {/* Map - Full height or 67% when table open */}
+            {/* Map - Full height or 67% when table open, or 55% when analysis open */}
             <div
               className="relative"
               style={{
-                height: dataTableOpen ? '67%' : '100%',
+                height: dataTableOpen
+                  ? '67%'
+                  : analysisOpen
+                  ? '55%'
+                  : '100%',
                 transition: 'height 0.2s ease',
               }}
             >
@@ -139,8 +147,8 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Floating Inspect Button - Only show when table is closed */}
-              {!dataTableOpen && (
+              {/* Floating Inspect Button - Only show when table is closed AND analysis is closed */}
+              {!dataTableOpen && !analysisOpen && (
                 <div
                   className="absolute bottom-4 left-1/2 -translate-x-1/2"
                   style={{ zIndex: 1000 }}
@@ -216,6 +224,7 @@ export default function Home() {
               isOpen={isModalOpen}
               onClose={() => setIsModalOpen(false)}
             />
+            <InclineAnalysisModal />
           </div>
         </>
       )}

@@ -54,7 +54,19 @@ const useStore = create(
             false,
             'data/set'
           ),
-        clearData: () => set({ data: null }, false, 'data/clear'),
+        clearData: () =>
+          set(
+            {
+              data: null,
+              analysis: {
+                results: [],
+                isOpen: false,
+                selectedPipeIndex: null,
+              },
+            },
+            false,
+            'data/clear'
+          ),
 
         // ============================================
         // PARSING SLICE — parsing status & progress
@@ -176,6 +188,89 @@ const useStore = create(
             },
             false,
             'validation/clear'
+          ),
+
+        // ============================================
+        // ANALYSIS SLICE — pipe incline analysis
+        // ============================================
+        analysis: {
+          results: [],
+          isOpen: false,
+          selectedPipeIndex: null,
+          hoveredPointIndex: null,
+          hoveredSegment: null, // { p1: number, p2: number } | null
+        },
+
+        setAnalysisResults: (results) =>
+          set(
+            (state) => ({
+              analysis: { ...state.analysis, results },
+            }),
+            false,
+            'analysis/setResults'
+          ),
+
+        toggleAnalysisModal: (isOpen) =>
+          set(
+            (state) => {
+              const newIsOpen =
+                isOpen !== undefined
+                  ? isOpen
+                  : !state.analysis.isOpen;
+              return {
+                analysis: {
+                  ...state.analysis,
+                  isOpen: newIsOpen,
+                },
+                // Clear highlighted feature when closing analysis
+                ui: !newIsOpen
+                  ? { ...state.ui, highlightedFeatureId: null }
+                  : state.ui,
+              };
+            },
+            false,
+            'analysis/toggleModal'
+          ),
+
+        selectAnalysisPipe: (index) =>
+          set(
+            (state) => ({
+              analysis: {
+                ...state.analysis,
+                selectedPipeIndex: index,
+              },
+              // Also highlight on map - prefix with 'ledninger-' to match MapInner ID format
+              ui: {
+                ...state.ui,
+                highlightedFeatureId: `ledninger-${index}`,
+              },
+            }),
+            false,
+            'analysis/selectPipe'
+          ),
+
+        setHoveredAnalysisPoint: (pointIndex) =>
+          set(
+            (state) => ({
+              analysis: {
+                ...state.analysis,
+                hoveredPointIndex: pointIndex,
+              },
+            }),
+            false,
+            'analysis/setHoveredPoint'
+          ),
+
+        setHoveredAnalysisSegment: (segment) =>
+          set(
+            (state) => ({
+              analysis: {
+                ...state.analysis,
+                hoveredSegment: segment,
+              },
+            }),
+            false,
+            'analysis/setHoveredSegment'
           ),
 
         // ============================================
