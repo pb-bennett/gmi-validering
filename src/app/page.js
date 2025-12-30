@@ -21,7 +21,9 @@ export default function Home() {
     (state) => state.updateLastActive
   );
   const analysisOpen = useStore((state) => state.analysis.isOpen);
-  const fieldValidationOpen = useStore((state) => state.ui.fieldValidationOpen);
+  const fieldValidationOpen = useStore(
+    (state) => state.ui.fieldValidationOpen
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(13);
 
@@ -119,9 +121,9 @@ export default function Home() {
       {parsingStatus === 'done' && (
         <>
           {/* Sidebar - Hidden when data table is open OR analysis is open OR field validation is open */}
-          {!dataTableOpen && !analysisOpen && !fieldValidationOpen && (
-            <Sidebar onReset={handleReset} />
-          )}
+          {!dataTableOpen &&
+            !analysisOpen &&
+            !fieldValidationOpen && <Sidebar onReset={handleReset} />}
 
           {/* Field Validation Sidebar - 50% width */}
           {fieldValidationOpen && (
@@ -131,7 +133,11 @@ export default function Home() {
           )}
 
           {/* Map Area */}
-          <div className={`relative flex flex-col h-full ${fieldValidationOpen ? 'w-1/2 flex-none' : 'flex-1'}`}>
+          <div
+            className={`relative flex flex-col h-full ${
+              fieldValidationOpen ? 'w-1/2 flex-none' : 'flex-1'
+            }`}
+          >
             {/* Map - Full height or 67% when table open, or 55% when analysis open */}
             <div
               className="relative"
@@ -157,32 +163,34 @@ export default function Home() {
               </div>
 
               {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
-              {!dataTableOpen && !analysisOpen && !fieldValidationOpen && (
-                <div
-                  className="absolute bottom-4 left-1/2 -translate-x-1/2"
-                  style={{ zIndex: 1000 }}
-                >
-                  <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="px-4 py-2 rounded shadow font-medium border transition-colors"
-                    style={{
-                      backgroundColor: 'var(--color-card)',
-                      color: 'var(--color-text)',
-                      borderColor: 'var(--color-border)',
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor =
-                        'var(--color-page-bg)')
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.backgroundColor =
-                        'var(--color-card)')
-                    }
+              {!dataTableOpen &&
+                !analysisOpen &&
+                !fieldValidationOpen && (
+                  <div
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2"
+                    style={{ zIndex: 1000 }}
                   >
-                    🔍 Inspiser data
-                  </button>
-                </div>
-              )}
+                    <button
+                      onClick={() => setIsModalOpen(true)}
+                      className="px-4 py-2 rounded shadow font-medium border transition-colors"
+                      style={{
+                        backgroundColor: 'var(--color-card)',
+                        color: 'var(--color-text)',
+                        borderColor: 'var(--color-border)',
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          'var(--color-page-bg)')
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          'var(--color-card)')
+                      }
+                    >
+                      🔍 Inspiser data
+                    </button>
+                  </div>
+                )}
 
               {/* Close Table Button - Show when table is open, positioned at bottom-right of map */}
               {dataTableOpen && (

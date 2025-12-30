@@ -7,7 +7,9 @@ import FieldDetailModal from './FieldDetailModal';
 
 export default function FieldValidationSidebar() {
   const data = useStore((state) => state.data);
-  const toggleFieldValidation = useStore((state) => state.toggleFieldValidation);
+  const toggleFieldValidation = useStore(
+    (state) => state.toggleFieldValidation
+  );
   const [selectedField, setSelectedField] = useState(null);
   const [filter, setFilter] = useState('OK'); // OK, WARNING, ERROR
   const [activeTab, setActiveTab] = useState('ledninger'); // 'ledninger' | 'punkter'
@@ -18,36 +20,41 @@ export default function FieldValidationSidebar() {
 
   const filteredResults = useMemo(() => {
     // First filter by tab (object type)
-    let results = validationResults.filter(r => {
-      if (activeTab === 'ledninger') return r.objectTypes.includes('ledninger');
-      if (activeTab === 'punkter') return r.objectTypes.includes('punktobjekter');
+    let results = validationResults.filter((r) => {
+      if (activeTab === 'ledninger')
+        return r.objectTypes.includes('ledninger');
+      if (activeTab === 'punkter')
+        return r.objectTypes.includes('punktobjekter');
       return false;
     });
 
     // Then filter by status
-    results = results.filter(r => {
+    results = results.filter((r) => {
       if (filter === 'ERROR') return r.status === 'error';
       if (filter === 'WARNING') return r.status === 'warning';
       if (filter === 'OK') return r.status === 'ok';
       return true;
     });
-    
+
     return results;
   }, [validationResults, filter, activeTab]);
 
   const stats = useMemo(() => {
     // Calculate stats based on current tab only
-    const tabResults = validationResults.filter(r => {
-      if (activeTab === 'ledninger') return r.objectTypes.includes('ledninger');
-      if (activeTab === 'punkter') return r.objectTypes.includes('punktobjekter');
+    const tabResults = validationResults.filter((r) => {
+      if (activeTab === 'ledninger')
+        return r.objectTypes.includes('ledninger');
+      if (activeTab === 'punkter')
+        return r.objectTypes.includes('punktobjekter');
       return false;
     });
 
     return {
       total: tabResults.length,
-      error: tabResults.filter(r => r.status === 'error').length,
-      warning: tabResults.filter(r => r.status === 'warning').length,
-      ok: tabResults.filter(r => r.status === 'ok').length,
+      error: tabResults.filter((r) => r.status === 'error').length,
+      warning: tabResults.filter((r) => r.status === 'warning')
+        .length,
+      ok: tabResults.filter((r) => r.status === 'ok').length,
     };
   }, [validationResults, activeTab]);
 
@@ -56,7 +63,9 @@ export default function FieldValidationSidebar() {
       {/* Header */}
       <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Feltvalidering</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            Feltvalidering
+          </h2>
           <p className="text-sm text-gray-500 mt-1">
             Sjekker {stats.total} felt mot innmålingsinstruks
           </p>
@@ -66,8 +75,18 @@ export default function FieldValidationSidebar() {
           className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
           title="Lukk feltvalidering"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       </div>
@@ -107,7 +126,11 @@ export default function FieldValidationSidebar() {
           }`}
         >
           OK
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filter === 'OK' ? 'bg-green-200' : 'bg-gray-200'}`}>
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+              filter === 'OK' ? 'bg-green-200' : 'bg-gray-200'
+            }`}
+          >
             {stats.ok}
           </span>
         </button>
@@ -120,7 +143,11 @@ export default function FieldValidationSidebar() {
           }`}
         >
           Delvis
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filter === 'WARNING' ? 'bg-yellow-200' : 'bg-gray-200'}`}>
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+              filter === 'WARNING' ? 'bg-yellow-200' : 'bg-gray-200'
+            }`}
+          >
             {stats.warning}
           </span>
         </button>
@@ -133,7 +160,11 @@ export default function FieldValidationSidebar() {
           }`}
         >
           Mangler
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filter === 'ERROR' ? 'bg-red-200' : 'bg-gray-200'}`}>
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+              filter === 'ERROR' ? 'bg-red-200' : 'bg-gray-200'
+            }`}
+          >
             {stats.error}
           </span>
         </button>
@@ -148,48 +179,71 @@ export default function FieldValidationSidebar() {
               onClick={() => setSelectedField(field)}
               className={`
                 bg-white rounded-lg border p-3 cursor-pointer transition-all hover:shadow-md
-                ${field.status === 'error' ? 'border-l-4 border-l-red-500' : 
-                  field.status === 'warning' ? 'border-l-4 border-l-yellow-500' : 
-                  'border-l-4 border-l-green-500'}
+                ${
+                  field.status === 'error'
+                    ? 'border-l-4 border-l-red-500'
+                    : field.status === 'warning'
+                    ? 'border-l-4 border-l-yellow-500'
+                    : 'border-l-4 border-l-green-500'
+                }
               `}
             >
               <div className="flex justify-between items-start mb-1">
-                <h3 className="font-semibold text-gray-900 truncate pr-2 text-sm" title={field.label}>
+                <h3
+                  className="font-semibold text-gray-900 truncate pr-2 text-sm"
+                  title={field.label}
+                >
                   {field.label}
                 </h3>
                 {field.required === 'always' && (
                   <span className="text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-1.5 py-0.5 rounded whitespace-nowrap">
-                    Påkrevd {field.conditionLabel ? `(${field.conditionLabel})` : ''}
+                    Påkrevd{' '}
+                    {field.conditionLabel
+                      ? `(${field.conditionLabel})`
+                      : ''}
                   </span>
                 )}
               </div>
-              
+
               <div className="text-xs text-gray-500 mb-2 font-mono truncate">
                 {field.fieldKey}
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Utfyllingsgrad</span>
-                  <span className="font-medium">{field.stats.completion.toFixed(0)}%</span>
+                  <span className="text-gray-500">
+                    Utfyllingsgrad
+                  </span>
+                  <span className="font-medium">
+                    {field.stats.completion.toFixed(0)}%
+                  </span>
                 </div>
                 <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                  <div 
+                  <div
                     className={`h-full rounded-full ${
-                      field.status === 'error' ? 'bg-red-500' : 
-                      field.status === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
+                      field.status === 'error'
+                        ? 'bg-red-500'
+                        : field.status === 'warning'
+                        ? 'bg-yellow-500'
+                        : 'bg-green-500'
                     }`}
                     style={{ width: `${field.stats.completion}%` }}
                   />
                 </div>
                 <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                  <span>{field.stats.present} / {field.stats.total}</span>
+                  <span>
+                    {field.stats.present} / {field.stats.total}
+                  </span>
                   <div className="flex gap-2">
                     {field.stats.invalid > 0 && (
-                      <span className="text-yellow-600 font-medium">{field.stats.invalid} ugyldige</span>
+                      <span className="text-yellow-600 font-medium">
+                        {field.stats.invalid} ugyldige
+                      </span>
                     )}
                     {field.stats.unexpected > 0 && (
-                      <span className="text-orange-600 font-medium">{field.stats.unexpected} uventet</span>
+                      <span className="text-orange-600 font-medium">
+                        {field.stats.unexpected} uventet
+                      </span>
                     )}
                   </div>
                 </div>
@@ -199,10 +253,10 @@ export default function FieldValidationSidebar() {
         </div>
       </div>
 
-      <FieldDetailModal 
-        field={selectedField} 
-        isOpen={!!selectedField} 
-        onClose={() => setSelectedField(null)} 
+      <FieldDetailModal
+        field={selectedField}
+        isOpen={!!selectedField}
+        onClose={() => setSelectedField(null)}
       />
     </div>
   );

@@ -86,7 +86,9 @@ function InclineAnalysisControl() {
 }
 
 function FieldValidationControl() {
-  const toggleFieldValidation = useStore((state) => state.toggleFieldValidation);
+  const toggleFieldValidation = useStore(
+    (state) => state.toggleFieldValidation
+  );
 
   return (
     <div className="space-y-2">

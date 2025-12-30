@@ -2,18 +2,29 @@ import fieldsData from '@/data/fields.json';
 
 // Define aliases for fields that might have different names in the source data
 const FIELD_ALIASES = {
-  'Tema_punkt': ['S_FCODE', 'Tema', 'TEMA', 'FCODE'],
-  'Tema_led': ['S_FCODE', 'Tema', 'TEMA', 'FCODE'],
-  'Høydereferanse': ['Høydereferanse', 'HOYDEREFERANSE', 'HREF'],
-  'Målemetode': ['Målemetode', 'MALEMETODE', 'METODE'],
-  'Nøyaktighet': ['Nøyaktighet', 'NOYAKTIGHET', 'H_MÅLEMETODE', 'H_NOYAKTIGHET'],
-  'Dato': ['Dato', 'DATO', 'DATOREG', 'REGDATO'],
-  'Trykklasse': ['Trykklasse', 'TRYKKLASSE', 'PN', 'TRYKKKLASSE'],
-  'Ringstivhet': ['Ringstivhet', 'RINGSTIVHET', 'SN'],
-  'SDR': ['SDR'],
-  'Nett_type': ['Nett_type', 'NETT_TYPE', 'NETTTYPE'],
-  'Material': ['Material', 'MATERIALE', 'MATR'],
-  'Bredde (diameter)': ['Bredde', 'BREDDE', 'DIAMETER', 'DIMENSJON', 'DIM']
+  Tema_punkt: ['S_FCODE', 'Tema', 'TEMA', 'FCODE'],
+  Tema_led: ['S_FCODE', 'Tema', 'TEMA', 'FCODE'],
+  Høydereferanse: ['Høydereferanse', 'HOYDEREFERANSE', 'HREF'],
+  Målemetode: ['Målemetode', 'MALEMETODE', 'METODE'],
+  Nøyaktighet: [
+    'Nøyaktighet',
+    'NOYAKTIGHET',
+    'H_MÅLEMETODE',
+    'H_NOYAKTIGHET',
+  ],
+  Dato: ['Dato', 'DATO', 'DATOREG', 'REGDATO'],
+  Trykklasse: ['Trykklasse', 'TRYKKLASSE', 'PN', 'TRYKKKLASSE'],
+  Ringstivhet: ['Ringstivhet', 'RINGSTIVHET', 'SN'],
+  SDR: ['SDR'],
+  Nett_type: ['Nett_type', 'NETT_TYPE', 'NETTTYPE'],
+  Material: ['Material', 'MATERIALE', 'MATR'],
+  'Bredde (diameter)': [
+    'Bredde',
+    'BREDDE',
+    'DIAMETER',
+    'DIMENSJON',
+    'DIM',
+  ],
 };
 
 export function validateFields(data) {
@@ -29,7 +40,7 @@ export function validateFields(data) {
 
     // 1. Try exact match
     if (attrs[fieldKey] !== undefined) return attrs[fieldKey];
-    
+
     // 2. Try aliases
     const aliases = FIELD_ALIASES[fieldKey];
     if (aliases) {
@@ -40,7 +51,9 @@ export function validateFields(data) {
 
     // 3. Try case-insensitive match (generic fallback)
     const lowerKey = fieldKey.toLowerCase();
-    const foundKey = Object.keys(attrs).find(k => k.toLowerCase() === lowerKey);
+    const foundKey = Object.keys(attrs).find(
+      (k) => k.toLowerCase() === lowerKey
+    );
     if (foundKey) return attrs[foundKey];
 
     return undefined;
@@ -49,12 +62,15 @@ export function validateFields(data) {
   // Helper to determine pipe type (gravity vs pressure)
   const getPipeType = (feature) => {
     // Check Tema/S_FCODE
-    const fcode = getValue(feature, 'Tema_led') || getValue(feature, 'Tema_punkt') || '';
+    const fcode =
+      getValue(feature, 'Tema_led') ||
+      getValue(feature, 'Tema_punkt') ||
+      '';
     // Check Nett_type
     const nettType = getValue(feature, 'Nett_type') || '';
     // Check Material
     const material = getValue(feature, 'Material') || '';
-    
+
     const upperFcode = String(fcode).toUpperCase();
     const upperNettType = String(nettType).toUpperCase();
     const upperMaterial = String(material).toUpperCase();
@@ -62,23 +78,34 @@ export function validateFields(data) {
     // Logic for Pressure pipes
     // VL = Vannledning (Water line) - usually pressure
     // Trykk = Pressure
-    if (upperFcode.includes('VL') || upperFcode.includes('VANN')) return 'pressure';
+    if (upperFcode.includes('VL') || upperFcode.includes('VANN'))
+      return 'pressure';
     if (upperNettType.includes('TRYKK')) return 'pressure';
-    
+
     // Check for pressure indicators in FCODE (e.g. SPTR, AFTR)
-    if (upperFcode.includes('TR') && !upperFcode.includes('TRASÉ')) return 'pressure'; // Avoid false positives if any
+    if (upperFcode.includes('TR') && !upperFcode.includes('TRASÉ'))
+      return 'pressure'; // Avoid false positives if any
 
     // Check Material
     // Removed generic PE check as PE is used for both gravity and pressure
-    // if (upperMaterial.startsWith('PE')) return 'pressure'; 
-    if (upperMaterial.includes('STÅL') || upperMaterial.includes('MST') || upperMaterial.includes('SJK')) return 'pressure';
+    // if (upperMaterial.startsWith('PE')) return 'pressure';
+    if (
+      upperMaterial.includes('STÅL') ||
+      upperMaterial.includes('MST') ||
+      upperMaterial.includes('SJK')
+    )
+      return 'pressure';
 
     // Check if SDR or Trykklasse is present (if so, treat as pressure to validate it)
     const sdr = getValue(feature, 'SDR');
     const trykklasse = getValue(feature, 'Trykklasse');
-    
-    const hasSdr = sdr !== undefined && sdr !== null && String(sdr).trim() !== '';
-    const hasTrykklasse = trykklasse !== undefined && trykklasse !== null && String(trykklasse).trim() !== '';
+
+    const hasSdr =
+      sdr !== undefined && sdr !== null && String(sdr).trim() !== '';
+    const hasTrykklasse =
+      trykklasse !== undefined &&
+      trykklasse !== null &&
+      String(trykklasse).trim() !== '';
 
     if (hasSdr || hasTrykklasse) return 'pressure';
 
@@ -89,13 +116,16 @@ export function validateFields(data) {
 
   // Helper to check if a value is valid based on acceptableValues
   const isValidValue = (value, acceptableValues) => {
-    if (!acceptableValues || acceptableValues.length === 0) return true;
+    if (!acceptableValues || acceptableValues.length === 0)
+      return true;
     // Value matches one of the acceptable values (case insensitive?)
     // Usually GMI codes are case sensitive but let's be safe
-    return acceptableValues.some(av => String(av.value) === String(value));
+    return acceptableValues.some(
+      (av) => String(av.value) === String(value)
+    );
   };
 
-  fieldsData.forEach(field => {
+  fieldsData.forEach((field) => {
     let totalApplicable = 0;
     let presentCount = 0;
     let validCount = 0;
@@ -117,7 +147,10 @@ export function validateFields(data) {
         return pipeType === 'gravity';
       }
 
-      if (field.fieldKey === 'SDR' || field.fieldKey === 'Trykklasse') {
+      if (
+        field.fieldKey === 'SDR' ||
+        field.fieldKey === 'Trykklasse'
+      ) {
         // Only valid for Pressure pipes (Trykk)
         return pipeType === 'pressure';
       }
@@ -128,11 +161,12 @@ export function validateFields(data) {
     const checkFeature = (feature) => {
       const applicable = isApplicable(feature);
       const value = getValue(feature, field.fieldKey);
-      const hasValue = value !== undefined && value !== null && value !== '';
+      const hasValue =
+        value !== undefined && value !== null && value !== '';
 
       if (applicable) {
         totalApplicable++;
-        
+
         if (hasValue) {
           presentCount++;
           const strValue = String(value);
@@ -169,7 +203,7 @@ export function validateFields(data) {
 
     // Determine status
     let status = 'ok';
-    
+
     // Status Logic:
     // Error: Missing for ALL applicable features (0% completion)
     // Warning: Missing for SOME applicable features (<100% completion), OR invalid values, OR unexpected values
@@ -194,10 +228,17 @@ export function validateFields(data) {
     // Determine condition label for UI
     let conditionLabel = null;
     if (field.fieldKey === 'Ringstivhet') conditionLabel = 'Selvfall';
-    else if (field.fieldKey === 'SDR' || field.fieldKey === 'Trykklasse') conditionLabel = 'Trykk';
+    else if (
+      field.fieldKey === 'SDR' ||
+      field.fieldKey === 'Trykklasse'
+    )
+      conditionLabel = 'Trykk';
 
     // Calculate completion percentage
-    const completion = totalApplicable > 0 ? (presentCount / totalApplicable) * 100 : 0;
+    const completion =
+      totalApplicable > 0
+        ? (presentCount / totalApplicable) * 100
+        : 0;
 
     results.push({
       ...field,
@@ -210,9 +251,9 @@ export function validateFields(data) {
         invalid: invalidCount,
         unexpected: unexpectedCount,
         completion,
-        valueCounts
+        valueCounts,
       },
-      status
+      status,
     });
   });
 
