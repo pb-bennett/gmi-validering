@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import useStore from '@/lib/store';
 import { validateFields } from '@/lib/validation/fieldValidation';
 import FieldDetailModal from './FieldDetailModal';
+import MissingFieldsReport from './MissingFieldsReport';
 
 export default function FieldValidationSidebar() {
   const data = useStore((state) => state.data);
@@ -13,6 +14,7 @@ export default function FieldValidationSidebar() {
   const [selectedField, setSelectedField] = useState(null);
   const [filter, setFilter] = useState('OK'); // OK, WARNING, ERROR
   const [activeTab, setActiveTab] = useState('ledninger'); // 'ledninger' | 'punkter'
+  const [showReport, setShowReport] = useState(false);
 
   const validationResults = useMemo(() => {
     return validateFields(data);
@@ -58,36 +60,52 @@ export default function FieldValidationSidebar() {
     };
   }, [validationResults, activeTab]);
 
+  if (showReport) {
+    return <MissingFieldsReport onClose={() => setShowReport(false)} />;
+  }
+
   return (
     <div className="h-full flex flex-col bg-white border-r shadow-xl relative z-20">
       {/* Header */}
-      <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">
-            Feltvalidering
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Sjekker {stats.total} felt mot innmålingsinstruks
-          </p>
-        </div>
-        <button
-          onClick={() => toggleFieldValidation(false)}
-          className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
-          title="Lukk feltvalidering"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+      <div className="p-6 border-b bg-gray-50">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              Feltvalidering
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Sjekker {stats.total} felt mot innmålingsinstruks
+            </p>
+          </div>
+          <button
+            onClick={() => toggleFieldValidation(false)}
+            className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
+            title="Lukk feltvalidering"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+        
+        <button
+          onClick={() => setShowReport(true)}
+          className="w-full py-2 px-4 bg-white border border-gray-300 rounded shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center"
+        >
+          <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
+          Vis mangelliste (Rapport)
         </button>
       </div>
 
@@ -171,7 +189,7 @@ export default function FieldValidationSidebar() {
       </div>
 
       {/* Grid Content */}
-      <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+      <div className="flex-1 overflow-y-auto p-6 bg-gray-50 pb-24">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredResults.map((field) => (
             <div

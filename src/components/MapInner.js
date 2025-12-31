@@ -1026,6 +1026,9 @@ export default function MapInner({ onZoomChange }) {
   const highlightedFeatureId = useStore(
     (state) => state.ui.highlightedFeatureId
   );
+  const filteredFeatureIds = useStore(
+    (state) => state.ui.filteredFeatureIds
+  );
 
   const geoJsonData = useMemo(() => {
     if (!data) return null;
@@ -1145,7 +1148,14 @@ export default function MapInner({ onZoomChange }) {
       isHighlightedByType ||
       isHighlightedByFeature;
 
-    if (isHidden) {
+    // Filtered View Logic (Missing Fields Report)
+    const isFilteredOut =
+      filteredFeatureIds &&
+      featureId &&
+      filteredFeatureIds.has &&
+      !filteredFeatureIds.has(featureId);
+
+    if (isHidden || isFilteredOut) {
       return {
         opacity: 0,
         weight: 0,
@@ -1220,7 +1230,14 @@ export default function MapInner({ onZoomChange }) {
       isHighlightedByType ||
       isHighlightedByFeature;
 
-    if (isHidden) {
+    // Filtered View Logic (Missing Fields Report)
+    const isFilteredOut =
+      filteredFeatureIds &&
+      featureId &&
+      filteredFeatureIds.has &&
+      !filteredFeatureIds.has(featureId);
+
+    if (isHidden || isFilteredOut) {
       // Return a dummy marker that is invisible
       return L.marker(latlng, {
         opacity: 0,
@@ -1317,6 +1334,11 @@ export default function MapInner({ onZoomChange }) {
               highlightedTypeContext || 'none'
             }-${highlightedFeatureId || 'none'}-${
               analysis.isOpen ? analysis.selectedPipeIndex : 'closed'
+            }-${
+              filteredFeatureIds
+                ? Array.from(filteredFeatureIds).slice(0, 3).join(',') +
+                  filteredFeatureIds.size
+                : 'none'
             }`}
             data={geoJsonData}
             style={lineStyle}

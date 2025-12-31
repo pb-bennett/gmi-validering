@@ -353,7 +353,7 @@
   "objectTypes": [
     "punktobjekter"
   ],
-  "required": "always",
+  "required": "conditional",
   "fieldFormat": "Kode",
   "acceptableValues": [
     {
@@ -796,7 +796,7 @@
   "objectTypes": [
     "punktobjekter"
   ],
-  "required": "always",
+  "required": "conditional",
   "fieldFormat": "Kode",
   "acceptableValues": [
     {
@@ -906,7 +906,7 @@
   "objectTypes": [
     "punktobjekter"
   ],
-  "required": "always",
+  "required": "conditional",
   "fieldFormat": "Kode",
   "acceptableValues": [
     {
@@ -1195,7 +1195,7 @@
       "description": ""
     },
     {
-      "value": "p",
+      "value": "P",
       "label": "Privat (bygningseier)",
       "description": ""
     },
@@ -1205,7 +1205,7 @@
       "description": ""
     },
     {
-      "value": "s",
+      "value": "S",
       "label": "Statlig",
       "description": ""
     },
@@ -1758,43 +1758,43 @@
     "ledninger"
   ],
   "required": "always",
-  "fieldFormat": "Kode",
+  "fieldFormat": "Desimal",
   "acceptableValues": [
     {
-      "value": "6.0"
+      "value": 6.0
     },
     {
-      "value": "7.4"
+      "value": 7.4
     },
     {
-      "value": "7.5"
+      "value": 7.5
     },
     {
-      "value": "9.0"
+      "value": 9.0
     },
     {
-      "value": "11.0"
+      "value": 11.0
     },
     {
-      "value": "13.6"
+      "value": 13.6
     },
     {
-      "value": "17.0"
+      "value": 17.0
     },
     {
-      "value": "17.6"
+      "value": 17.6
     },
     {
-      "value": "21.0"
+      "value": 21.0
     },
     {
-      "value": "26.0"
+      "value": 26.0
     },
     {
-      "value": "33.0"
+      "value": 33.0
     },
     {
-      "value": "41.0"
+      "value": 41.0
     }
   ],
   "order": 42,

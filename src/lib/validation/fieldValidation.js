@@ -118,11 +118,25 @@ export function validateFields(data) {
   const isValidValue = (value, acceptableValues) => {
     if (!acceptableValues || acceptableValues.length === 0)
       return true;
-    // Value matches one of the acceptable values (case insensitive?)
-    // Usually GMI codes are case sensitive but let's be safe
-    return acceptableValues.some(
-      (av) => String(av.value) === String(value)
-    );
+    
+    // 1. Try exact string match (case-insensitive for robustness)
+    const strValue = String(value).trim();
+    if (acceptableValues.some((av) => String(av.value).trim() === strValue)) {
+      return true;
+    }
+
+    // 2. Special handling for numeric values (e.g. SDR "11" vs "11.0")
+    // If the value is numeric, try comparing it numerically against acceptable values
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue) && isFinite(numValue)) {
+      return acceptableValues.some((av) => {
+        const avNum = parseFloat(av.value);
+        // Check if acceptable value is also a number and they are close enough
+        return !isNaN(avNum) && Math.abs(avNum - numValue) < 0.0001;
+      });
+    }
+
+    return false;
   };
 
   fieldsData.forEach((field) => {
@@ -133,6 +147,7 @@ export function validateFields(data) {
     let invalidCount = 0;
     let unexpectedCount = 0;
     const valueCounts = {};
+    const failingIds = []; // IDs of features that fail validation (missing or invalid)
 
     // Helper to check if field is applicable for a specific feature
     const isApplicable = (feature) => {
@@ -141,6 +156,8 @@ export function validateFields(data) {
 
       // 2. Conditional Logic for specific fields
       const pipeType = getPipeType(feature);
+      const fcode = getValue(feature, 'Tema_punkt') || '';
+      const upperFcode = String(fcode).toUpperCase();
 
       if (field.fieldKey === 'Ringstivhet') {
         // Only valid for Gravity pipes (Selvfall)
@@ -155,10 +172,28 @@ export function validateFields(data) {
         return pipeType === 'pressure';
       }
 
+      if (field.fieldKey === 'Bredde (diameter)' || field.fieldKey === 'Byggemetode') {
+        // Required for KUM, LOK, SAN, SLS, SLU
+        const requiredTypes = ['KUM', 'LOK', 'SAN', 'SLS', 'SLU'];
+        return requiredTypes.some(type => upperFcode === type);
+      }
+
+      if (field.fieldKey === 'Kumform' || field.fieldKey === 'Kjegle') {
+        // Required for KUM, SAN, SLS, SLU
+        const requiredTypes = ['KUM', 'SAN', 'SLS', 'SLU'];
+        return requiredTypes.some(type => upperFcode === type);
+      }
+
+      if (field.fieldKey === 'Type') {
+        // Required for FORAKONSTR, DIV, GRØKONSTR
+        const requiredTypes = ['FORAKONSTR', 'DIV', 'GRØKONSTR'];
+        return requiredTypes.some(type => upperFcode === type);
+      }
+
       return true;
     };
 
-    const checkFeature = (feature) => {
+    const checkFeature = (feature, index, typePrefix) => {
       const applicable = isApplicable(feature);
       const value = getValue(feature, field.fieldKey);
       const hasValue =
@@ -176,9 +211,11 @@ export function validateFields(data) {
             validCount++;
           } else {
             invalidCount++;
+            failingIds.push(`${typePrefix}-${index}`);
           }
         } else {
           missingCount++;
+          failingIds.push(`${typePrefix}-${index}`);
         }
       } else {
         // Not applicable
@@ -187,18 +224,21 @@ export function validateFields(data) {
           // We still track the value for the pivot table
           const strValue = String(value);
           valueCounts[strValue] = (valueCounts[strValue] || 0) + 1;
+          // Unexpected values are also considered "failing" in a sense, but maybe we just want missing/invalid?
+          // Let's include them for now so the user can see them.
+          failingIds.push(`${typePrefix}-${index}`);
         }
       }
     };
 
     // Check points if applicable
     if (field.objectTypes.includes('punktobjekter')) {
-      points.forEach(checkFeature);
+      points.forEach((p, i) => checkFeature(p, i, 'punkter'));
     }
 
     // Check lines if applicable
     if (field.objectTypes.includes('ledninger')) {
-      lines.forEach(checkFeature);
+      lines.forEach((l, i) => checkFeature(l, i, 'ledninger'));
     }
 
     // Determine status
@@ -233,6 +273,9 @@ export function validateFields(data) {
       field.fieldKey === 'Trykklasse'
     )
       conditionLabel = 'Trykk';
+    else if (field.fieldKey === 'Bredde (diameter)' || field.fieldKey === 'Byggemetode') conditionLabel = 'Kum/Lokk/Sluk';
+    else if (field.fieldKey === 'Kumform' || field.fieldKey === 'Kjegle') conditionLabel = 'Kum/Sluk';
+    else if (field.fieldKey === 'Type') conditionLabel = 'Div/Konstr';
 
     // Calculate completion percentage
     const completion =
@@ -253,6 +296,7 @@ export function validateFields(data) {
         completion,
         valueCounts,
       },
+      failingIds,
       status,
     });
   });

@@ -290,7 +290,36 @@ const useStore = create(
           dataTableOpen: false, // Data table visibility
           highlightedFeatureId: null, // ID of feature to highlight on map
           fieldValidationOpen: false, // Field validation sidebar visibility
+          missingReportOpen: false, // Missing fields report modal visibility
+          filteredFeatureIds: null, // Set<string> | null - IDs of features to exclusively show
         },
+
+        setFilteredFeatureIds: (ids) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                filteredFeatureIds: ids,
+              },
+            }),
+            false,
+            'ui/setFilteredFeatureIds'
+          ),
+
+        toggleMissingReport: (isOpen) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                missingReportOpen:
+                  isOpen !== undefined
+                    ? isOpen
+                    : !state.ui.missingReportOpen,
+              },
+            }),
+            false,
+            'ui/toggleMissingReport'
+          ),
 
         toggleFieldValidation: (isOpen) =>
           set(
