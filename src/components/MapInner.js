@@ -1009,6 +1009,87 @@ function FeatureHighlighter({ geoJsonData }) {
   return null;
 }
 
+function MapCenterHandler() {
+  const map = useMap();
+  const data = useStore((state) => state.data);
+  const mapCenterTarget = useStore(
+    (state) => state.ui.mapCenterTarget
+  );
+  const clearMapCenterTarget = useStore(
+    (state) => state.clearMapCenterTarget
+  );
+
+  useEffect(() => {
+    if (!mapCenterTarget || !map) return;
+
+    const { coordinates, zoom } = mapCenterTarget;
+
+    if (
+      coordinates &&
+      Array.isArray(coordinates) &&
+      coordinates.length === 2
+    ) {
+      // coordinates are [y, x] from GMI (northing, easting)
+      // Need to transform from UTM to WGS84
+      let sourceProj = 'EPSG:4326';
+      if (data?.header?.COSYS_EPSG) {
+        const epsg = `EPSG:${data.header.COSYS_EPSG}`;
+        if (proj4.defs(epsg)) {
+          sourceProj = epsg;
+        }
+      } else if (data?.header?.COSYS) {
+        if (
+          data.header.COSYS.includes('UTM') &&
+          data.header.COSYS.includes('32')
+        ) {
+          sourceProj = 'EPSG:25832';
+        } else if (
+          data.header.COSYS.includes('UTM') &&
+          data.header.COSYS.includes('33')
+        ) {
+          sourceProj = 'EPSG:25833';
+        }
+      }
+
+      let lat, lng;
+      if (sourceProj === 'EPSG:4326') {
+        // Already WGS84, coordinates are [lat, lng]
+        [lat, lng] = coordinates;
+      } else {
+        try {
+          // coordinates are [y, x] from GMI, need to transform [x, y] (easting, northing)
+          const [transformedLng, transformedLat] = proj4(
+            sourceProj,
+            'EPSG:4326',
+            [coordinates[1], coordinates[0]]
+          );
+          lat = transformedLat;
+          lng = transformedLng;
+        } catch (e) {
+          console.error('Coordinate transform failed:', e);
+          // Fallback - try interpreting as [lat, lng]
+          [lat, lng] = coordinates;
+        }
+      }
+
+      // Force map size update before moving
+      map.invalidateSize({ animate: false });
+
+      setTimeout(() => {
+        map.setView([lat, lng], zoom || 18, {
+          animate: true,
+          duration: 0.5,
+        });
+
+        // Clear the target after centering
+        setTimeout(() => clearMapCenterTarget(), 500);
+      }, 100);
+    }
+  }, [map, data, mapCenterTarget, clearMapCenterTarget]);
+
+  return null;
+}
+
 export default function MapInner({ onZoomChange }) {
   const data = useStore((state) => state.data);
   const analysis = useStore((state) => state.analysis);
@@ -1336,8 +1417,9 @@ export default function MapInner({ onZoomChange }) {
               analysis.isOpen ? analysis.selectedPipeIndex : 'closed'
             }-${
               filteredFeatureIds
-                ? Array.from(filteredFeatureIds).slice(0, 3).join(',') +
-                  filteredFeatureIds.size
+                ? Array.from(filteredFeatureIds)
+                    .slice(0, 3)
+                    .join(',') + filteredFeatureIds.size
                 : 'none'
             }`}
             data={geoJsonData}
@@ -1353,6 +1435,7 @@ export default function MapInner({ onZoomChange }) {
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}
       <MapSizeInvalidator />
       <ZoomToFeatureHandler />
+      <MapCenterHandler />
       <AnalysisPointsLayer />
       <AnalysisZoomHandler />
     </MapContainer>

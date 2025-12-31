@@ -292,6 +292,10 @@ const useStore = create(
           fieldValidationOpen: false, // Field validation sidebar visibility
           missingReportOpen: false, // Missing fields report modal visibility
           filteredFeatureIds: null, // Set<string> | null - IDs of features to exclusively show
+          viewer3DOpen: false, // 3D visualization viewer visibility
+          activeViewTab: 'map', // 'map' | '3d' - Current active view tab
+          selectedObject3D: null, // Currently selected 3D object { type, index, data }
+          mapCenterTarget: null, // { coordinates, zoom, featureId } - Target for map centering
         },
 
         setFilteredFeatureIds: (ids) =>
@@ -334,6 +338,73 @@ const useStore = create(
             }),
             false,
             'ui/toggleFieldValidation'
+          ),
+
+        toggle3DViewer: (isOpen) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                viewer3DOpen:
+                  isOpen !== undefined
+                    ? isOpen
+                    : !state.ui.viewer3DOpen,
+                // When opening 3D viewer, switch to 3D tab
+                activeViewTab: isOpen ? '3d' : state.ui.activeViewTab,
+              },
+            }),
+            false,
+            'ui/toggle3DViewer'
+          ),
+
+        setActiveViewTab: (tab) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                activeViewTab: tab,
+              },
+            }),
+            false,
+            'ui/setActiveViewTab'
+          ),
+
+        setSelected3DObject: (objectData) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                selectedObject3D: objectData,
+              },
+            }),
+            false,
+            'ui/setSelected3DObject'
+          ),
+
+        viewObjectInMap: (featureId, coordinates, zoom = 18) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                activeViewTab: 'map',
+                highlightedFeatureId: featureId,
+                mapCenterTarget: { coordinates, zoom, featureId },
+              },
+            }),
+            false,
+            'ui/viewObjectInMap'
+          ),
+
+        clearMapCenterTarget: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                mapCenterTarget: null,
+              },
+            }),
+            false,
+            'ui/clearMapCenterTarget'
           ),
 
         setHighlightedCode: (code) =>

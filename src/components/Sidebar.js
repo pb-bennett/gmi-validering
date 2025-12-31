@@ -4,6 +4,7 @@ import useStore from '@/lib/store';
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import fieldsData from '@/data/fields.json';
 import { analyzeIncline } from '@/lib/analysis/incline';
+import { analyzeTopplok } from '@/lib/analysis/topplok';
 
 function InclineAnalysisControl() {
   const data = useStore((state) => state.data);
@@ -111,6 +112,105 @@ function FieldValidationControl() {
       >
         Åpne feltvalidering
       </button>
+    </div>
+  );
+}
+
+function TopplokControl() {
+  const data = useStore((state) => state.data);
+  const setHighlightedFeatureId = useStore(
+    (state) => state.setHighlightedFeatureId
+  );
+  const [results, setResults] = useState(null);
+  const [showResults, setShowResults] = useState(false);
+
+  const runAnalysis = () => {
+    if (!data) return;
+    const analysis = analyzeTopplok(data);
+    setResults(analysis);
+    setShowResults(true);
+  };
+
+  const highlightPoint = (pointIndex) => {
+    setHighlightedFeatureId(`punkter-${pointIndex}`);
+  };
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={
+          results ? () => setShowResults(!showResults) : runAnalysis
+        }
+        className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
+        style={{
+          backgroundColor: 'var(--color-primary)',
+          color: 'white',
+          borderColor: 'var(--color-primary-dark)',
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-primary-dark)')
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-primary)')
+        }
+      >
+        {results
+          ? showResults
+            ? 'Skjul resultater'
+            : 'Vis resultater'
+          : '🔍 Kjør topplok kontroll'}
+      </button>
+
+      {results && (
+        <div className="text-xs text-gray-600 flex justify-between">
+          <span>{results.summary.total} kontrollert</span>
+          <span>
+            <span
+              className={
+                results.summary.missing > 0
+                  ? 'text-red-600 font-bold'
+                  : 'text-green-600'
+              }
+            >
+              {results.summary.missing} mangler LOK
+            </span>
+          </span>
+        </div>
+      )}
+
+      {showResults && results && results.summary.missing > 0 && (
+        <div className="mt-2 max-h-40 overflow-y-auto border rounded p-2 bg-gray-50">
+          <p className="text-xs font-semibold mb-1 text-gray-700">
+            Mangler LOK:
+          </p>
+          {results.results
+            .filter((r) => r.status === 'error')
+            .map((r, i) => (
+              <div
+                key={i}
+                className="text-xs py-1 px-2 hover:bg-gray-100 rounded cursor-pointer flex justify-between"
+                onClick={() => highlightPoint(r.pointIndex)}
+              >
+                <span className="font-medium">{r.fcode}</span>
+                <span className="text-gray-500">
+                  {r.coordinates
+                    ? `${r.coordinates.x.toFixed(
+                        0
+                      )}, ${r.coordinates.y.toFixed(0)}`
+                    : 'Ukjent pos'}
+                </span>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {showResults && results && results.summary.missing === 0 && (
+        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
+          ✓ Alle {results.summary.total} punkter har tilhørende LOK
+        </div>
+      )}
     </div>
   );
 }
@@ -1304,6 +1404,17 @@ export default function Sidebar({ onReset }) {
                 Profilanalyse
               </h4>
               <InclineAnalysisControl />
+            </div>
+
+            {/* Subsection: Topplok */}
+            <div>
+              <h4
+                className="text-xs font-semibold uppercase tracking-wider mb-2"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                Topplok kontroll
+              </h4>
+              <TopplokControl />
             </div>
           </div>
         </SidebarSection>

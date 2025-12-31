@@ -8,6 +8,8 @@ import FieldValidationSidebar from '@/components/FieldValidationSidebar';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import DataTable from '@/components/DataTable';
+import Viewer3D from '@/components/3D/Viewer3D';
+import TabSwitcher from '@/components/TabSwitcher';
 import useStore from '@/lib/store';
 
 export default function Home() {
@@ -24,6 +26,8 @@ export default function Home() {
   const fieldValidationOpen = useStore(
     (state) => state.ui.fieldValidationOpen
   );
+  const viewer3DOpen = useStore((state) => state.ui.viewer3DOpen);
+  const activeViewTab = useStore((state) => state.ui.activeViewTab);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(13);
 
@@ -65,37 +69,33 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
-      {/* Always-visible FIXED Close Button (fallback) */}
+      {/* Global Close DataTable Button - ALWAYS visible when table is open */}
       {parsingStatus === 'done' && dataTableOpen && (
         <button
-          id="fixed-debug-close"
-          onClick={() => {
-            console.log('FIXED DEBUG CLOSE CLICKED');
-            toggleDataTable();
-          }}
-          aria-label="Lukk tabell (debug large)"
+          onClick={toggleDataTable}
+          aria-label="Lukk tabell"
           style={{
             position: 'fixed',
-            top: '8px',
-            left: '8px',
-            width: '160px',
-            height: '64px',
+            bottom: '36%',
+            right: '16px',
+            padding: '8px 16px',
             borderRadius: '8px',
-            background: 'lime',
-            color: '#111',
-            border: '4px solid #000',
+            backgroundColor: '#6b7280',
+            color: 'white',
+            border: 'none',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 2147483647,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-            fontSize: '18px',
-            fontWeight: 700,
+            gap: '6px',
+            zIndex: 10000,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            fontSize: '14px',
+            fontWeight: 600,
           }}
-          title="DEBUG: Lukk tabell (fast)"
+          title="Lukk tabell"
         >
-          DEBUG CLOSE
+          ✕ Lukk tabell
         </button>
       )}
       {/* Initial Upload Screen */}
@@ -138,113 +138,93 @@ export default function Home() {
               fieldValidationOpen ? 'w-1/2 flex-none' : 'flex-1'
             }`}
           >
-            {/* Map - Full height or 67% when table open, or 55% when analysis open */}
-            <div
-              className="relative"
-              style={{
-                height: dataTableOpen
-                  ? '67%'
-                  : analysisOpen
-                  ? '55%'
-                  : '100%',
-                transition: 'height 0.2s ease',
-              }}
-            >
-              <MapView onZoomChange={setZoomLevel} />
+            {/* Show Map view when activeViewTab is 'map' or 3D viewer is not open */}
+            {(!viewer3DOpen || activeViewTab === 'map') && (
+              <>
+                {/* Map - Full height or 67% when table open, or 55% when analysis open */}
+                <div
+                  className="relative"
+                  style={{
+                    height: dataTableOpen
+                      ? '67%'
+                      : analysisOpen
+                      ? '55%'
+                      : '100%',
+                    transition: 'height 0.2s ease',
+                  }}
+                >
+                  <MapView onZoomChange={setZoomLevel} />
 
-              {/* Floating Zoom Indicator */}
-              <div
-                className="absolute bottom-4 left-4"
-                style={{ zIndex: 1000 }}
-              >
-                <div className="bg-white/90 backdrop-blur px-3 py-2 rounded shadow border border-gray-200 text-sm font-mono">
-                  Zoom: {zoomLevel}
-                </div>
-              </div>
-
-              {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
-              {!dataTableOpen &&
-                !analysisOpen &&
-                !fieldValidationOpen && (
+                  {/* Floating Zoom Indicator */}
                   <div
-                    className="absolute bottom-4 left-1/2 -translate-x-1/2"
+                    className="absolute bottom-4 left-4"
                     style={{ zIndex: 1000 }}
                   >
-                    <button
-                      onClick={() => setIsModalOpen(true)}
-                      className="px-4 py-2 rounded shadow font-medium border transition-colors"
-                      style={{
-                        backgroundColor: 'var(--color-card)',
-                        color: 'var(--color-text)',
-                        borderColor: 'var(--color-border)',
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.backgroundColor =
-                          'var(--color-page-bg)')
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.backgroundColor =
-                          'var(--color-card)')
-                      }
-                    >
-                      🔍 Inspiser data
-                    </button>
+                    <div className="bg-white/90 backdrop-blur px-3 py-2 rounded shadow border border-gray-200 text-sm font-mono">
+                      Zoom: {zoomLevel}
+                    </div>
+                  </div>
+
+                  {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
+                  {!dataTableOpen &&
+                    !analysisOpen &&
+                    !fieldValidationOpen && (
+                      <div
+                        className="absolute bottom-4 left-1/2 -translate-x-1/2"
+                        style={{ zIndex: 1000 }}
+                      >
+                        <button
+                          onClick={() => setIsModalOpen(true)}
+                          className="px-4 py-2 rounded shadow font-medium border transition-colors"
+                          style={{
+                            backgroundColor: 'var(--color-card)',
+                            color: 'var(--color-text)',
+                            borderColor: 'var(--color-border)',
+                          }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              'var(--color-page-bg)')
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              'var(--color-card)')
+                          }
+                        >
+                          🔍 Inspiser data
+                        </button>
+                      </div>
+                    )}
+                </div>
+
+                {/* Data Table - Fixed 33% height */}
+                {dataTableOpen && (
+                  <div
+                    style={{
+                      height: '33%',
+                      transition: 'height 0.2s ease',
+                    }}
+                  >
+                    <DataTable />
                   </div>
                 )}
 
-              {/* Close Table Button - Show when table is open, positioned at bottom-right of map */}
-              {dataTableOpen && (
-                <div
-                  className="absolute bottom-4 right-4"
-                  style={{ zIndex: 1000 }}
-                >
-                  <button
-                    onClick={toggleDataTable}
-                    className="px-4 py-2 rounded-lg shadow-lg font-medium border-2 transition-all"
-                    style={{
-                      backgroundColor: '#dc2626',
-                      color: 'white',
-                      borderColor: '#dc2626',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor =
-                        '#b91c1c';
-                      e.currentTarget.style.borderColor = '#b91c1c';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor =
-                        '#dc2626';
-                      e.currentTarget.style.borderColor = '#dc2626';
-                    }}
-                    title="Lukk tabell (tilbake til sidebar)"
-                  >
-                    ✕ Lukk tabell
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Data Table - Fixed 33% height */}
-            {dataTableOpen && (
-              <div
-                style={{
-                  height: '33%',
-                  transition: 'height 0.2s ease',
-                }}
-              >
-                <DataTable />
-              </div>
+                {/* Data Inspector Modal */}
+                <DataDisplayModal
+                  isOpen={isModalOpen}
+                  onClose={() => setIsModalOpen(false)}
+                />
+                <InclineAnalysisModal />
+              </>
             )}
 
-            {/* Data Inspector Modal */}
-            <DataDisplayModal
-              isOpen={isModalOpen}
-              onClose={() => setIsModalOpen(false)}
-            />
-            <InclineAnalysisModal />
+            {/* Show 3D view when viewer is open and activeViewTab is '3d' */}
+            {viewer3DOpen && activeViewTab === '3d' && <Viewer3D />}
           </div>
         </>
       )}
+
+      {/* Tab Switcher - Shows when 3D viewer is open */}
+      <TabSwitcher />
     </div>
   );
 }
