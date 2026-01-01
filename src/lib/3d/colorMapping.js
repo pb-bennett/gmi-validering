@@ -17,6 +17,7 @@ const colorMap = {
   SPA: '#32CD32',
   SPB: '#02D902',
   SPH: '#00CC00',
+  SPP: '#02D902',
   SPILLVANN: '#02D902',
 
   // Stormwater (Overvann) - Dark gray/black shades
