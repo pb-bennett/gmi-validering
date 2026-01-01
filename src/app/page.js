@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import FileUpload from '@/components/FileUpload';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import InclineAnalysisModal from '@/components/InclineAnalysisModal';
@@ -8,9 +9,14 @@ import FieldValidationSidebar from '@/components/FieldValidationSidebar';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import DataTable from '@/components/DataTable';
-import Viewer3D from '@/components/3D/Viewer3D';
 import TabSwitcher from '@/components/TabSwitcher';
 import useStore from '@/lib/store';
+
+// Dynamic import for 3D viewer to prevent SSR issues with Three.js
+const Viewer3D = dynamic(() => import('@/components/3D/Viewer3D'), { 
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full text-gray-500">Loading 3D...</div>
+});
 
 export default function Home() {
   const parsingStatus = useStore((state) => state.parsing.status);
