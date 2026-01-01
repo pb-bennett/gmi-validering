@@ -388,7 +388,6 @@ export default function Sidebar({ onReset }) {
     (state) => state.toggleHiddenType
   );
   const toggleDataTable = useStore((state) => state.toggleDataTable);
-  const toggle3DViewer = useStore((state) => state.toggle3DViewer);
   const hiddenCodes = useStore((state) => state.ui.hiddenCodes);
   const hiddenTypes = useStore((state) => state.ui.hiddenTypes);
 
@@ -1246,27 +1245,6 @@ export default function Sidebar({ onReset }) {
                 }
               >
                 📊 Åpne full datatabell
-              </button>
-
-              {/* 3D Viewer Button */}
-              <button
-                onClick={() => toggle3DViewer(true)}
-                className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border mt-2"
-                style={{
-                  backgroundColor: 'var(--color-primary)',
-                  color: 'white',
-                  borderColor: 'var(--color-primary-dark)',
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    'var(--color-primary-dark)')
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    'var(--color-primary)')
-                }
-              >
-                🎬 Åpne 3D-visning
               </button>
 
               {/* Tabs */}

@@ -292,8 +292,8 @@ const useStore = create(
           fieldValidationOpen: false, // Field validation sidebar visibility
           missingReportOpen: false, // Missing fields report modal visibility
           filteredFeatureIds: null, // Set<string> | null - IDs of features to exclusively show
-          viewer3DOpen: false, // 3D visualization viewer visibility
-          activeViewTab: 'map', // 'map' | '3d' - Current active view tab
+          viewer3DOpen: true, // 3D visualization viewer visibility - always open
+          activeViewTab: '3d', // 'map' | '3d' - Current active view tab
           selectedObject3D: null, // Currently selected 3D object { type, index, data }
           mapCenterTarget: null, // { coordinates, zoom, featureId } - Target for map centering
         },
