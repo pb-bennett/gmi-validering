@@ -16,13 +16,59 @@ export class GMIParser {
     this.points = [];
     this.linesParsed = [];
     this.warnings = [];
+    this.errors = [];
     this.lineFieldNames = [];
     this.pointFieldNames = [];
     this._parsed = false;
 
-    // Parse immediately if content provided
+    // Validate content before parsing
     if (fileContent) {
+      this._validateContent();
       this.parse();
+    }
+  }
+
+  /**
+   * Validate file content before parsing
+   * @private
+   */
+  _validateContent() {
+    if (!this.fileContent || typeof this.fileContent !== 'string') {
+      throw new Error(
+        'Ugyldig filinnhold: Filen er tom eller har feil format.'
+      );
+    }
+
+    if (this.lines.length === 0) {
+      throw new Error(
+        'Ugyldig GMI-fil: Filen inneholder ingen linjer.'
+      );
+    }
+
+    // Check for GMI file signature
+    const firstLine = this.lines[0]?.trim();
+    if (!firstLine || !firstLine.startsWith('[GMIFILE_ASCII]')) {
+      throw new Error(
+        'Ugyldig GMI-fil: Filen starter ikke med [GMIFILE_ASCII]. ' +
+          'Kontroller at filen er en gyldig GMI-fil.'
+      );
+    }
+
+    // Check for minimum required sections
+    const hasLineSection = this.lines.some(
+      (l) =>
+        l.trim().startsWith('[L_]') || l.trim().startsWith('[+L_]')
+    );
+    const hasPointSection = this.lines.some(
+      (l) =>
+        l.trim().startsWith('[P_]') || l.trim().startsWith('[+P_]')
+    );
+
+    if (!hasLineSection && !hasPointSection) {
+      throw new Error(
+        'Ugyldig GMI-fil: Filen mangler datadefinisjoner ([L_] eller [P_] seksjoner). ' +
+          'Filen kan være ødelagt eller ufullstendig.'
+      );
     }
   }
 
@@ -51,6 +97,7 @@ export class GMIParser {
       points: this.points,
       lines: this.linesParsed,
       warnings: this.warnings,
+      errors: this.errors,
       fieldAnalysis: this.analyzeFields(), // Add field analysis to output
     };
   }
@@ -154,6 +201,35 @@ export class GMIParser {
     if (this._parsed) return this.toObject();
     this._parsed = true;
 
+    try {
+      this._parseInternal();
+    } catch (error) {
+      // Add error to errors array but don't throw - allow partial parsing
+      this.errors.push({
+        type: 'PARSE_ERROR',
+        message: `Feil under parsing: ${error.message}`,
+        details: error.stack,
+      });
+      this.warnings.push(
+        `Parsing avbrutt på grunn av feil: ${error.message}`
+      );
+    }
+
+    // Validate we got some data
+    if (this.points.length === 0 && this.linesParsed.length === 0) {
+      this.warnings.push(
+        'Ingen objekter funnet i filen. Filen kan være tom eller ha et ukjent format.'
+      );
+    }
+
+    return this.toObject();
+  }
+
+  /**
+   * Internal parsing logic - separated to enable try-catch wrapper
+   * @private
+   */
+  _parseInternal() {
     let i = 0;
 
     // --- 1. Parse Header Section ---
@@ -352,8 +428,6 @@ export class GMIParser {
         continue;
       }
     }
-
-    return this.toObject();
   }
 
   /**

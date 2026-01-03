@@ -30,18 +30,44 @@ export default function FileUpload() {
       reader.onload = (e) => {
         try {
           const content = e.target.result;
+
+          // Basic validation before parsing
+          if (!content || content.trim().length === 0) {
+            throw new Error('Filen er tom. Velg en gyldig GMI-fil.');
+          }
+
           const parser = new GMIParser(content);
           const parsedData = parser.toObject();
+
+          // Check if parsing yielded any data
+          if (
+            parsedData.points.length === 0 &&
+            parsedData.lines.length === 0
+          ) {
+            throw new Error(
+              'Ingen objekter funnet i filen. Kontroller at filen inneholder gyldige GMI-data.'
+            );
+          }
 
           setData(parsedData);
           setParsingDone();
         } catch (error) {
           console.error('Parsing error:', error);
-          setParsingError(error.message);
+          // Provide user-friendly Norwegian error message
+          const userMessage =
+            error.message.startsWith('Ugyldig') ||
+            error.message.startsWith('Feil') ||
+            error.message.startsWith('Ingen') ||
+            error.message.startsWith('Filen')
+              ? error.message
+              : `Kunne ikke lese filen: ${error.message}`;
+          setParsingError(userMessage);
         }
       };
       reader.onerror = () => {
-        setParsingError('Failed to read file');
+        setParsingError(
+          'Kunne ikke lese filen. Kontroller at filen er tilgjengelig og prøv igjen.'
+        );
       };
 
       // GMI files are typically text/latin1 or utf8, but let's assume text

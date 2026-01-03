@@ -72,7 +72,9 @@ const INFRA_CATEGORIES = {
 };
 
 const getCategoryByFCode = (fcode) => {
-  if (!fcode) return INFRA_CATEGORIES.OTHER;
+  // Defensive: ensure fcode is a string
+  if (!fcode || typeof fcode !== 'string')
+    return INFRA_CATEGORIES.OTHER;
 
   // Check specific codes first
   if (fcode === 'SLS' || fcode === 'SLU')
@@ -112,7 +114,8 @@ const getCategoryByFCode = (fcode) => {
 };
 
 const getColorByFCode = (fcode) => {
-  if (!fcode) return '#808080'; // Default gray for unknown
+  // Defensive: ensure fcode is a string
+  if (!fcode || typeof fcode !== 'string') return '#808080'; // Default gray for unknown
 
   // Norwegian infrastructure color system
   const colorMap = {
@@ -159,7 +162,7 @@ const getColorByFCode = (fcode) => {
     ANBORING: '#0066cc', // ANBORING - blue like KRN
     GRN: '#00cc00', // GRN - green
     SAN: '#000000', // SAN - black like SLS/SLU
-    LOK: '#cc3300', // LOK - red (to be visible on top of KUM)
+    LOK: '#ff00ff', // LOK - magenta (clear contrast with KUM)
 
     // Other/Unknown - PURPLE (default)
     ANNET: '#800080',
@@ -813,14 +816,52 @@ const getLineWeight = (properties) => {
 
 // --- Components ---
 
-function BoundsController({ geoJsonData }) {
+function BoundsController({ geoJsonData, ignoredFeatureIds }) {
   const map = useMap();
 
   useEffect(() => {
     if (!map || !geoJsonData) return;
 
     try {
-      const geoJsonLayer = L.geoJSON(geoJsonData);
+      let boundsData = geoJsonData;
+
+      if (
+        ignoredFeatureIds &&
+        geoJsonData &&
+        Array.isArray(geoJsonData.features)
+      ) {
+        const filteredFeatures = geoJsonData.features.filter(
+          (feature) => {
+            const props = feature?.properties || {};
+            const geometryType = feature?.geometry?.type;
+
+            const featureId =
+              props.featureId ||
+              (props.id !== undefined &&
+              (geometryType === 'Point' ||
+                geometryType === 'MultiPoint')
+                ? `punkter-${props.id}`
+                : props.id !== undefined &&
+                  (geometryType === 'LineString' ||
+                    geometryType === 'MultiLineString')
+                ? `ledninger-${props.id}`
+                : null);
+
+            if (!featureId) return true;
+            return !ignoredFeatureIds.has(featureId);
+          }
+        );
+
+        // Avoid empty bounds (fallback to full data)
+        if (filteredFeatures.length > 0) {
+          boundsData = {
+            ...geoJsonData,
+            features: filteredFeatures,
+          };
+        }
+      }
+
+      const geoJsonLayer = L.geoJSON(boundsData);
       const bounds = geoJsonLayer.getBounds();
       if (bounds.isValid()) {
         map.fitBounds(bounds, { padding: [50, 50] });
@@ -828,7 +869,7 @@ function BoundsController({ geoJsonData }) {
     } catch (e) {
       console.warn('Could not fit bounds', e);
     }
-  }, [map, geoJsonData]);
+  }, [map, geoJsonData, ignoredFeatureIds]);
 
   return null;
 }
@@ -840,6 +881,366 @@ function ZoomHandler({ onZoomChange }) {
     },
   });
   return null;
+}
+
+// Clear highlighted feature when clicking on empty map space
+function MapClickHandler() {
+  const setHighlightedFeature = useStore(
+    (state) => state.setHighlightedFeature
+  );
+  const highlightedFeatureId = useStore(
+    (state) => state.ui.highlightedFeatureId
+  );
+  const measureMode = useStore((state) => state.ui.measureMode);
+
+  useMapEvents({
+    click: (e) => {
+      // Don't handle clicks when measure mode is active
+      if (measureMode) return;
+
+      // Only clear if there's a highlighted feature and click wasn't on a layer
+      if (highlightedFeatureId && !e.originalEvent._featureClicked) {
+        setHighlightedFeature(null);
+      }
+    },
+  });
+  return null;
+}
+
+// Calculate distance between two lat/lng points in meters
+function calculateDistance(p1, p2) {
+  const R = 6371000; // Earth radius in meters
+  const lat1 = (p1.lat * Math.PI) / 180;
+  const lat2 = (p2.lat * Math.PI) / 180;
+  const deltaLat = ((p2.lat - p1.lat) * Math.PI) / 180;
+  const deltaLng = ((p2.lng - p1.lng) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLng / 2) *
+      Math.sin(deltaLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+// Calculate total distance of measure points
+function calculateTotalDistance(points) {
+  if (!points || points.length < 2) return 0;
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += calculateDistance(points[i - 1], points[i]);
+  }
+  return total;
+}
+
+// Format distance for display
+function formatDistance(meters) {
+  if (meters < 1) return `${(meters * 100).toFixed(0)} cm`;
+  if (meters < 1000) return `${meters.toFixed(2)} m`;
+  return `${(meters / 1000).toFixed(2)} km`;
+}
+
+// Measure tool component
+function MeasureTool() {
+  const map = useMap();
+  const measureMode = useStore((state) => state.ui.measureMode);
+  const measurePoints = useStore((state) => state.ui.measurePoints);
+  const addMeasurePoint = useStore((state) => state.addMeasurePoint);
+  const clearMeasurePoints = useStore(
+    (state) => state.clearMeasurePoints
+  );
+  const toggleMeasureMode = useStore(
+    (state) => state.toggleMeasureMode
+  );
+
+  const [hoverPoint, setHoverPoint] = useState(null);
+
+  useMapEvents({
+    click: (e) => {
+      if (!measureMode) return;
+
+      // Prevent propagation to other click handlers
+      e.originalEvent._measureClick = true;
+
+      addMeasurePoint({ lat: e.latlng.lat, lng: e.latlng.lng });
+    },
+
+    mousemove: (e) => {
+      if (!measureMode) return;
+      setHoverPoint({ lat: e.latlng.lat, lng: e.latlng.lng });
+    },
+
+    mouseout: () => {
+      if (!measureMode) return;
+      setHoverPoint(null);
+    },
+  });
+
+  // Change cursor when in measure mode
+  useEffect(() => {
+    const container = map.getContainer();
+    if (measureMode) {
+      // Ensure existing popups don't interfere with measuring
+      map.closePopup();
+      container.style.cursor = 'crosshair';
+      container.classList.add('measure-mode');
+    } else {
+      container.style.cursor = '';
+      container.classList.remove('measure-mode');
+    }
+    return () => {
+      container.style.cursor = '';
+      container.classList.remove('measure-mode');
+    };
+  }, [map, measureMode]);
+
+  if (!measureMode) return null;
+
+  const totalDistance = calculateTotalDistance(measurePoints || []);
+  const lastPoint = measurePoints?.length
+    ? measurePoints[measurePoints.length - 1]
+    : null;
+  const hoverDistance =
+    lastPoint && hoverPoint
+      ? calculateDistance(lastPoint, hoverPoint)
+      : 0;
+
+  return (
+    <>
+      {/* Measure points */}
+      {(measurePoints || []).map((point, i) => (
+        <CircleMarker
+          key={`measure-${i}`}
+          center={[point.lat, point.lng]}
+          radius={6}
+          pathOptions={{
+            fillColor: i === 0 ? '#22c55e' : '#3b82f6',
+            fillOpacity: 1,
+            color: 'white',
+            weight: 2,
+          }}
+        >
+          <Tooltip permanent direction="top" offset={[0, -10]}>
+            <span className="text-xs font-medium">
+              {i === 0 ? 'Start' : `Punkt ${i + 1}`}
+            </span>
+          </Tooltip>
+        </CircleMarker>
+      ))}
+
+      {/* Measure line */}
+      {(measurePoints || []).length >= 2 && (
+        <Polyline
+          positions={(measurePoints || []).map((p) => [p.lat, p.lng])}
+          pathOptions={{
+            color: '#3b82f6',
+            weight: 3,
+            dashArray: '8, 8',
+          }}
+        />
+      )}
+
+      {/* Live preview line from last point to cursor */}
+      {measurePoints.length >= 1 && hoverPoint && (
+        <>
+          <Polyline
+            positions={[
+              [lastPoint.lat, lastPoint.lng],
+              [hoverPoint.lat, hoverPoint.lng],
+            ]}
+            pathOptions={{
+              color: '#3b82f6',
+              weight: 2,
+              dashArray: '4, 6',
+              opacity: 0.8,
+            }}
+          />
+          <CircleMarker
+            center={[hoverPoint.lat, hoverPoint.lng]}
+            radius={0}
+            pathOptions={{ opacity: 0, fillOpacity: 0 }}
+          >
+            <Tooltip permanent direction="right" offset={[12, 0]}>
+              <span className="text-xs font-bold bg-white px-1 rounded">
+                {formatDistance(hoverDistance)}
+              </span>
+            </Tooltip>
+          </CircleMarker>
+        </>
+      )}
+
+      {/* Segment distances */}
+      {measurePoints.length >= 2 &&
+        measurePoints.slice(1).map((point, i) => {
+          const prevPoint = measurePoints[i];
+          const midLat = (point.lat + prevPoint.lat) / 2;
+          const midLng = (point.lng + prevPoint.lng) / 2;
+          const segmentDist = calculateDistance(prevPoint, point);
+
+          return (
+            <CircleMarker
+              key={`segment-${i}`}
+              center={[midLat, midLng]}
+              radius={0}
+              pathOptions={{ opacity: 0, fillOpacity: 0 }}
+            >
+              <Tooltip permanent direction="center">
+                <span className="text-xs font-bold bg-white px-1 rounded">
+                  {formatDistance(segmentDist)}
+                </span>
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
+
+      {/* Control panel */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1000,
+          backgroundColor: 'white',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '16px',
+        }}
+      >
+        <div style={{ minWidth: '280px' }}>
+          <div className="text-sm">
+            <span className="text-gray-600">Total avstand: </span>
+            <span className="font-bold text-blue-600">
+              {formatDistance(totalDistance)}
+            </span>
+            <span className="text-gray-400 ml-2">
+              ({measurePoints.length}{' '}
+              {measurePoints.length === 1 ? 'punkt' : 'punkter'})
+            </span>
+          </div>
+
+          {measurePoints.length >= 2 && (
+            <div
+              className="mt-2 text-xs text-gray-700"
+              style={{ maxHeight: '110px', overflowY: 'auto' }}
+            >
+              {measurePoints.slice(1).map((point, i) => {
+                const prevPoint = measurePoints[i];
+                const segmentDist = calculateDistance(
+                  prevPoint,
+                  point
+                );
+                return (
+                  <div
+                    key={`seg-list-${i}`}
+                    className="flex justify-between gap-4 py-0.5"
+                  >
+                    <span className="text-gray-500">
+                      Linje {i + 1}
+                    </span>
+                    <span className="font-semibold">
+                      {formatDistance(segmentDist)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          <button
+            onClick={() => clearMeasurePoints()}
+            className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+            title="Nullstill måling"
+          >
+            Nullstill
+          </button>
+
+          <button
+            onClick={() => toggleMeasureMode(false)}
+            className="px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors"
+            title="Lukk måleverktøy"
+          >
+            ✕ Lukk
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Button to activate measure tool (positioned on map)
+function MeasureToolButton() {
+  const measureMode = useStore((state) => state.ui.measureMode);
+  const toggleMeasureMode = useStore(
+    (state) => state.toggleMeasureMode
+  );
+
+  if (measureMode) return null;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '80px',
+        left: '10px',
+        zIndex: 1000,
+      }}
+    >
+      <button
+        onClick={() => toggleMeasureMode(true)}
+        title="Måleverktøy - Mål avstander på kartet"
+        style={{
+          width: '34px',
+          height: '34px',
+          backgroundColor: 'white',
+          border: '2px solid rgba(0,0,0,0.2)',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 1px 5px rgba(0,0,0,0.15)',
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor = '#f4f4f4')
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor = 'white')
+        }
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0z" />
+          <path d="m14.5 12.5 2-2" />
+          <path d="m11.5 9.5 2-2" />
+          <path d="m8.5 6.5 2-2" />
+          <path d="m17.5 15.5 2-2" />
+        </svg>
+      </button>
+    </div>
+  );
 }
 
 // Invalidate map size when layout changes (sidebar/table toggle)
@@ -981,12 +1382,19 @@ function FeatureHighlighter({ geoJsonData }) {
   const highlightedFeatureId = useStore(
     (state) => state.ui.highlightedFeatureId
   );
+  const mapCenterTarget = useStore(
+    (state) => state.ui.mapCenterTarget
+  );
   const isAnalysisOpen = useStore((state) => state.analysis.isOpen);
 
   useEffect(() => {
     // If analysis is open, let AnalysisZoomHandler handle the zooming
     if (!highlightedFeatureId || !geoJsonData || isAnalysisOpen)
       return;
+
+    // If we have an explicit center/zoom request for this feature, don't override it
+    // (FeatureHighlighter uses fitBounds with maxZoom 18 which can fight with setView zoom 21).
+    if (mapCenterTarget?.featureId === highlightedFeatureId) return;
 
     // Find feature in GeoJSON
     // Construct ID to match: ledninger-{id} or punkter-{id}
@@ -1004,7 +1412,13 @@ function FeatureHighlighter({ geoJsonData }) {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
       }
     }
-  }, [map, geoJsonData, highlightedFeatureId]);
+  }, [
+    map,
+    geoJsonData,
+    highlightedFeatureId,
+    isAnalysisOpen,
+    mapCenterTarget,
+  ]);
 
   return null;
 }
@@ -1014,9 +1428,6 @@ function MapCenterHandler() {
   const data = useStore((state) => state.data);
   const mapCenterTarget = useStore(
     (state) => state.ui.mapCenterTarget
-  );
-  const clearMapCenterTarget = useStore(
-    (state) => state.clearMapCenterTarget
   );
 
   useEffect(() => {
@@ -1080,12 +1491,9 @@ function MapCenterHandler() {
           animate: true,
           duration: 0.5,
         });
-
-        // Clear the target after centering
-        setTimeout(() => clearMapCenterTarget(), 500);
       }, 100);
     }
-  }, [map, data, mapCenterTarget, clearMapCenterTarget]);
+  }, [map, data, mapCenterTarget]);
 
   return null;
 }
@@ -1093,6 +1501,8 @@ function MapCenterHandler() {
 export default function MapInner({ onZoomChange }) {
   const data = useStore((state) => state.data);
   const analysis = useStore((state) => state.analysis);
+  const measureMode = useStore((state) => state.ui.measureMode);
+  const addMeasurePoint = useStore((state) => state.addMeasurePoint);
   const highlightedCode = useStore(
     (state) => state.ui.highlightedCode
   );
@@ -1110,6 +1520,63 @@ export default function MapInner({ onZoomChange }) {
   const filteredFeatureIds = useStore(
     (state) => state.ui.filteredFeatureIds
   );
+  // Felt filter state
+  const feltFilterActive = useStore(
+    (state) => state.ui.feltFilterActive
+  );
+  const feltHiddenValues = useStore(
+    (state) => state.ui.feltHiddenValues
+  );
+
+  const outlierResults = useStore((state) => state.outliers.results);
+  const hideOutliers = useStore(
+    (state) => state.outliers.hideOutliers
+  );
+  const setActiveViewTab = useStore(
+    (state) => state.setActiveViewTab
+  );
+  const setSelected3DObject = useStore(
+    (state) => state.setSelected3DObject
+  );
+
+  // Handle "Vis i 3D" button clicks in popups
+  useEffect(() => {
+    const handleVisI3D = (e) => {
+      const btn = e.target.closest('.vis-i-3d-btn');
+      if (btn) {
+        const featureType = btn.dataset.featureType;
+        const index = parseInt(btn.dataset.index, 10);
+
+        // Switch to 3D view
+        setActiveViewTab('3d');
+
+        // Set selected object in 3D view
+        if (setSelected3DObject) {
+          setSelected3DObject({
+            type: featureType === 'Point' ? 'point' : 'line',
+            index: index,
+          });
+        }
+      }
+    };
+
+    document.addEventListener('click', handleVisI3D);
+    return () => document.removeEventListener('click', handleVisI3D);
+  }, [setActiveViewTab, setSelected3DObject]);
+
+  // Build set of outlier feature IDs for filtering
+  const outlierFeatureIds = useMemo(() => {
+    if (!outlierResults || !hideOutliers) return null;
+    return new Set(outlierResults.outliers.map((o) => o.featureId));
+  }, [outlierResults, hideOutliers]);
+
+  // Build set of outlier feature IDs for bounds (always ignore for fitBounds)
+  const outlierFeatureIdsForBounds = useMemo(() => {
+    if (!outlierResults || !Array.isArray(outlierResults.outliers))
+      return null;
+    if (outlierResults.outliers.length === 0) return null;
+    return new Set(outlierResults.outliers.map((o) => o.featureId));
+  }, [outlierResults]);
 
   const geoJsonData = useMemo(() => {
     if (!data) return null;
@@ -1202,6 +1669,26 @@ export default function MapInner({ onZoomChange }) {
 
   if (!data || !geoJsonData) return null;
 
+  // Helper to check if feature is hidden by felt filter
+  const isHiddenByFeltFilter = (feature, objectType) => {
+    if (!feltFilterActive || feltHiddenValues.length === 0)
+      return false;
+    const props = feature.properties || {};
+    // Check if any of the feature's attribute values match a hidden field value
+    return feltHiddenValues.some((hidden) => {
+      if (hidden.objectType !== objectType) return false;
+      const featureValue = props[hidden.fieldName];
+      // Handle null/undefined values
+      const normalizedFeatureValue =
+        featureValue === null ||
+        featureValue === undefined ||
+        featureValue === ''
+          ? '(Mangler)'
+          : String(featureValue);
+      return normalizedFeatureValue === hidden.value;
+    });
+  };
+
   const lineStyle = (feature) => {
     const fcode = feature.properties?.S_FCODE;
     const typeVal = feature.properties?.Type || '(Mangler Type)';
@@ -1209,13 +1696,22 @@ export default function MapInner({ onZoomChange }) {
       feature.properties?.id !== undefined
         ? `ledninger-${feature.properties.id}`
         : null;
-    const isHiddenByCode = hiddenCodes.includes(fcode);
-    // Check if this specific type+code combination is hidden
-    const isHiddenByType = hiddenTypes.some(
-      (ht) =>
-        ht.type === typeVal && (ht.code === null || ht.code === fcode)
-    );
-    const isHidden = isHiddenByCode || isHiddenByType;
+
+    // When felt filter is active, use it instead of tema filter
+    let isHidden;
+    if (feltFilterActive) {
+      isHidden = isHiddenByFeltFilter(feature, 'lines');
+    } else {
+      const isHiddenByCode = hiddenCodes.includes(fcode);
+      // Check if this specific type+code combination is hidden
+      const isHiddenByType = hiddenTypes.some(
+        (ht) =>
+          ht.type === typeVal &&
+          (ht.code === null || ht.code === fcode)
+      );
+      isHidden = isHiddenByCode || isHiddenByType;
+    }
+
     const isHighlightedByCode = highlightedCode === fcode;
     // Type highlighting should respect the code context if one is set
     const isHighlightedByType =
@@ -1236,7 +1732,13 @@ export default function MapInner({ onZoomChange }) {
       filteredFeatureIds.has &&
       !filteredFeatureIds.has(featureId);
 
-    if (isHidden || isFilteredOut) {
+    // Outlier filtering
+    const isOutlier =
+      outlierFeatureIds &&
+      featureId &&
+      outlierFeatureIds.has(featureId);
+
+    if (isHidden || isFilteredOut || isOutlier) {
       return {
         opacity: 0,
         weight: 0,
@@ -1291,13 +1793,21 @@ export default function MapInner({ onZoomChange }) {
         ? `punkter-${feature.properties.id}`
         : null;
 
-    const isHiddenByCode = hiddenCodes.includes(fcode);
-    // Check if this specific type+code combination is hidden
-    const isHiddenByType = hiddenTypes.some(
-      (ht) =>
-        ht.type === typeVal && (ht.code === null || ht.code === fcode)
-    );
-    const isHidden = isHiddenByCode || isHiddenByType;
+    // When felt filter is active, use it instead of tema filter
+    let isHidden;
+    if (feltFilterActive) {
+      isHidden = isHiddenByFeltFilter(feature, 'points');
+    } else {
+      const isHiddenByCode = hiddenCodes.includes(fcode);
+      // Check if this specific type+code combination is hidden
+      const isHiddenByType = hiddenTypes.some(
+        (ht) =>
+          ht.type === typeVal &&
+          (ht.code === null || ht.code === fcode)
+      );
+      isHidden = isHiddenByCode || isHiddenByType;
+    }
+
     const isHighlightedByCode = highlightedCode === fcode;
     // Type highlighting should respect the code context if one is set
     const isHighlightedByType =
@@ -1318,7 +1828,13 @@ export default function MapInner({ onZoomChange }) {
       filteredFeatureIds.has &&
       !filteredFeatureIds.has(featureId);
 
-    if (isHidden || isFilteredOut) {
+    // Outlier filtering
+    const isOutlier =
+      outlierFeatureIds &&
+      featureId &&
+      outlierFeatureIds.has(featureId);
+
+    if (isHidden || isFilteredOut || isOutlier) {
       // Return a dummy marker that is invisible
       return L.marker(latlng, {
         opacity: 0,
@@ -1334,28 +1850,80 @@ export default function MapInner({ onZoomChange }) {
   };
 
   const onEachFeature = (feature, layer) => {
-    // If hidden by code or type, don't bind popup or do anything
+    // If hidden by code, type, or felt filter, don't bind popup or do anything
     const fcode = feature.properties?.S_FCODE;
     const typeVal = feature.properties?.Type || '(Mangler Type)';
-    const isHiddenByType = hiddenTypes.some(
-      (ht) =>
-        ht.type === typeVal && (ht.code === null || ht.code === fcode)
-    );
-    if (hiddenCodes.includes(fcode) || isHiddenByType) {
+    const objectType =
+      feature.properties?.featureType === 'Point'
+        ? 'points'
+        : 'lines';
+
+    // Check felt filter or tema filter based on what's active
+    let isHidden;
+    if (feltFilterActive) {
+      isHidden = isHiddenByFeltFilter(feature, objectType);
+    } else {
+      const isHiddenByType = hiddenTypes.some(
+        (ht) =>
+          ht.type === typeVal &&
+          (ht.code === null || ht.code === fcode)
+      );
+      isHidden = hiddenCodes.includes(fcode) || isHiddenByType;
+    }
+
+    if (isHidden) {
       return;
     }
+
+    // When measure tool is active: disable popups and route clicks to measuring
+    if (measureMode) {
+      layer.off('click');
+      layer.on('click', (e) => {
+        if (e.originalEvent) {
+          e.originalEvent._measureClick = true;
+          e.originalEvent._featureClicked = true;
+        }
+
+        addMeasurePoint({
+          lat: e.latlng.lat,
+          lng: e.latlng.lng,
+        });
+
+        // Prevent any default interaction/popup behavior
+        if (e.originalEvent) {
+          L.DomEvent.stopPropagation(e.originalEvent);
+          L.DomEvent.preventDefault(e.originalEvent);
+        }
+      });
+
+      return;
+    }
+
+    // Mark click events on features so MapClickHandler doesn't clear the highlight
+    layer.on('click', (e) => {
+      if (e.originalEvent) {
+        e.originalEvent._featureClicked = true;
+      }
+    });
 
     if (feature.properties) {
       const props = feature.properties;
       const color = getColorByFCode(fcode);
+      const featureId =
+        props.featureType === 'Point'
+          ? `punkter-${props.id}`
+          : `ledninger-${props.id}`;
 
-      let content = `<div class="text-sm max-h-60 overflow-auto">`;
+      let content = `<div class="text-sm max-h-60 flex flex-col">`;
+      content += `<div>`;
       content += `<strong>Type:</strong> ${props.featureType}<br/>`;
       if (fcode) {
         content += `<strong>Code:</strong> <span style="color: ${color}; font-weight: bold;">${fcode}</span><br/>`;
       }
+      content += `</div>`;
 
-      content += '<div class="mt-2 border-t pt-1">';
+      content +=
+        '<div class="mt-2 border-t pt-1 flex-1 overflow-auto">';
       Object.entries(props).forEach(([key, value]) => {
         if (
           key !== 'featureType' &&
@@ -1367,7 +1935,20 @@ export default function MapInner({ onZoomChange }) {
           content += `<strong>${key}:</strong> ${value}<br/>`;
         }
       });
-      content += '</div></div>';
+      content += '</div>';
+
+      // Add "Vis i 3D" button
+      content += `<div class="mt-2 pt-2 border-t">
+        <button 
+          class="vis-i-3d-btn w-full px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+          data-feature-id="${featureId}"
+          data-feature-type="${props.featureType}"
+          data-index="${props.id}"
+        >
+          🎯 Vis i 3D
+        </button>
+      </div>`;
+      content += '</div>';
       layer.bindPopup(content);
     }
   };
@@ -1421,7 +2002,13 @@ export default function MapInner({ onZoomChange }) {
                     .slice(0, 3)
                     .join(',') + filteredFeatureIds.size
                 : 'none'
-            }`}
+            }-${
+              outlierFeatureIds
+                ? `outliers-${outlierFeatureIds.size}`
+                : 'no-outliers'
+            }-feltFilter-${feltFilterActive ? 'on' : 'off'}-${
+              feltHiddenValues.length
+            }-measure-${measureMode ? 'on' : 'off'}`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}
@@ -1430,12 +2017,18 @@ export default function MapInner({ onZoomChange }) {
         </LayersControl.Overlay>
       </LayersControl>
 
-      <BoundsController geoJsonData={geoJsonData} />
+      <BoundsController
+        geoJsonData={geoJsonData}
+        ignoredFeatureIds={outlierFeatureIdsForBounds}
+      />
       <FeatureHighlighter geoJsonData={geoJsonData} />
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}
       <MapSizeInvalidator />
       <ZoomToFeatureHandler />
       <MapCenterHandler />
+      <MapClickHandler />
+      <MeasureTool />
+      <MeasureToolButton />
       <AnalysisPointsLayer />
       <AnalysisZoomHandler />
     </MapContainer>

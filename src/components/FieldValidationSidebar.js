@@ -61,25 +61,19 @@ export default function FieldValidationSidebar() {
   }, [validationResults, activeTab]);
 
   if (showReport) {
-    return <MissingFieldsReport onClose={() => setShowReport(false)} />;
+    return (
+      <MissingFieldsReport onClose={() => setShowReport(false)} />
+    );
   }
 
   return (
     <div className="h-full flex flex-col bg-white border-r shadow-xl relative z-20">
       {/* Header */}
       <div className="p-6 border-b bg-gray-50">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">
-              Feltvalidering
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Sjekker {stats.total} felt mot innmålingsinstruks
-            </p>
-          </div>
+        <div className="flex items-center gap-3 mb-4">
           <button
             onClick={() => toggleFieldValidation(false)}
-            className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
+            className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors flex-shrink-0"
             title="Lukk feltvalidering"
           >
             <svg
@@ -96,14 +90,32 @@ export default function FieldValidationSidebar() {
               />
             </svg>
           </button>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              Feltvalidering
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Sjekker {stats.total} felt mot innmålingsinstruks
+            </p>
+          </div>
         </div>
-        
+
         <button
           onClick={() => setShowReport(true)}
           className="w-full py-2 px-4 bg-white border border-gray-300 rounded shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center"
         >
-          <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <svg
+            className="w-4 h-4 mr-2 text-gray-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
           </svg>
           Vis mangelliste (Rapport)
         </button>

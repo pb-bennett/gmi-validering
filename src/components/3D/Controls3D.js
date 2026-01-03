@@ -6,6 +6,7 @@ import Legend3D from './Legend3D';
 export default function Controls3D() {
   const [showLegend, setShowLegend] = useState(false);
   const [isMinimized, setIsMinimized] = useState(true); // Minimized by default
+  const [gridOn, setGridOn] = useState(true);
 
   return (
     <>
@@ -54,23 +55,16 @@ export default function Controls3D() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                window.dispatchEvent(
-                  new CustomEvent('toggle3DWireframe')
-                );
-              }}
-              className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
-            >
-              📐 Trådramme
-            </button>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
+                setGridOn(!gridOn);
                 window.dispatchEvent(new CustomEvent('toggle3DGrid'));
               }}
-              className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+              className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                gridOn
+                  ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                  : 'bg-gray-300 hover:bg-gray-400 text-gray-600'
+              }`}
             >
-              ⊞ Vis/skjul gitter
+              ⊞ Gitter {gridOn ? '(På)' : '(Av)'}
             </button>
 
             <button

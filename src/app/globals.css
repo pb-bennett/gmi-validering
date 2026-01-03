@@ -118,3 +118,15 @@
   background: transparent !important;
   border: none !important;
 }
+
+/* Measure tool: keep cursor consistent while measuring */
+.leaflet-container.measure-mode,
+.leaflet-container.measure-mode .leaflet-interactive {
+  cursor: crosshair !important;
+}
+
+/* Keep controls usable (don’t show crosshair over buttons) */
+.leaflet-container.measure-mode .leaflet-control-container,
+.leaflet-container.measure-mode .leaflet-control-container * {
+  cursor: default !important;
+}

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import { detectOutliers } from './analysis/outliers';
 
 /**
  * GMI Validator — Global State Store (Zustand)
@@ -22,6 +23,68 @@ const useStore = create(
   devtools(
     persist(
       (set, get) => ({
+        // NOTE: These "initial" objects are used for full resets.
+        // Keep them in sync with the defaults in each slice.
+        _initial: {
+          parsing: {
+            status: 'idle',
+            progress: 0,
+            error: null,
+            startedAt: null,
+            completedAt: null,
+          },
+          validation: {
+            records: [],
+            summary: {
+              totalRecords: 0,
+              errorCount: 0,
+              warningCount: 0,
+              validCount: 0,
+            },
+            errors: [],
+            warnings: [],
+            fieldStats: {},
+          },
+          analysis: {
+            results: [],
+            isOpen: false,
+            selectedPipeIndex: null,
+            hoveredPointIndex: null,
+            hoveredSegment: null,
+          },
+          outliers: {
+            results: null,
+            hideOutliers: false,
+          },
+          ui: {
+            detailsPanelOpen: false,
+            selectedRecordId: null,
+            filterSeverity: 'all',
+            mapViewOpen: false,
+            sidebarOpen: true,
+            highlightedCode: null,
+            hiddenCodes: [],
+            highlightedType: null,
+            highlightedTypeContext: null,
+            hiddenTypes: [],
+            dataTableOpen: false,
+            highlightedFeatureId: null,
+            fieldValidationOpen: false,
+            missingReportOpen: false,
+            filteredFeatureIds: null,
+            viewer3DOpen: true,
+            activeViewTab: 'map',
+            selectedObject3D: null,
+            mapCenterTarget: null,
+            measureMode: false,
+            measurePoints: [],
+            feltFilterActive: false,
+            feltHiddenValues: [],
+            feltSearchText: '',
+            outlierPromptOpen: false,
+          },
+        },
+
         // ============================================
         // FILE SLICE — metadata about uploaded file
         // ============================================
@@ -39,18 +102,31 @@ const useStore = create(
 
         setData: (data) =>
           set(
-            (state) => ({
-              data,
-              // Reset all UI filters when new data is loaded
-              ui: {
-                ...state.ui,
-                highlightedCode: null,
-                hiddenCodes: [],
-                highlightedType: null,
-                highlightedTypeContext: null,
-                hiddenTypes: [],
-              },
-            }),
+            (state) => {
+              const outlierResults = detectOutliers(data, 6);
+              const hasOutliers =
+                !!outlierResults &&
+                Array.isArray(outlierResults.outliers) &&
+                outlierResults.outliers.length > 0;
+
+              const initial = get()._initial;
+
+              return {
+                data,
+                outliers: {
+                  results: outlierResults,
+                  hideOutliers: false,
+                },
+                // Reset transient UI + analysis when new data is loaded
+                analysis: { ...initial.analysis },
+                ui: {
+                  ...initial.ui,
+                  // Keep sidebar open by default
+                  sidebarOpen: true,
+                  outlierPromptOpen: hasOutliers,
+                },
+              };
+            },
             false,
             'data/set'
           ),
@@ -274,6 +350,53 @@ const useStore = create(
           ),
 
         // ============================================
+        // OUTLIER SLICE — outlier detection results
+        // ============================================
+        outliers: {
+          results: null, // { outliers: [], centroid: {}, summary: {} } | null
+          hideOutliers: false, // Whether to filter out outliers from view
+        },
+
+        setOutlierResults: (results) =>
+          set(
+            (state) => ({
+              outliers: {
+                ...state.outliers,
+                results,
+              },
+            }),
+            false,
+            'outliers/setResults'
+          ),
+
+        toggleHideOutliers: (hide) =>
+          set(
+            (state) => ({
+              outliers: {
+                ...state.outliers,
+                hideOutliers:
+                  hide !== undefined
+                    ? hide
+                    : !state.outliers.hideOutliers,
+              },
+            }),
+            false,
+            'outliers/toggleHide'
+          ),
+
+        clearOutliers: () =>
+          set(
+            {
+              outliers: {
+                results: null,
+                hideOutliers: false,
+              },
+            },
+            false,
+            'outliers/clear'
+          ),
+
+        // ============================================
         // UI SLICE — UI state and user interactions
         // ============================================
         ui: {
@@ -293,10 +416,134 @@ const useStore = create(
           missingReportOpen: false, // Missing fields report modal visibility
           filteredFeatureIds: null, // Set<string> | null - IDs of features to exclusively show
           viewer3DOpen: true, // 3D visualization viewer visibility - always open
-          activeViewTab: '3d', // 'map' | '3d' - Current active view tab
+          activeViewTab: 'map', // 'map' | '3d' - Current active view tab (default to 2D map)
           selectedObject3D: null, // Currently selected 3D object { type, index, data }
           mapCenterTarget: null, // { coordinates, zoom, featureId } - Target for map centering
+          measureMode: false, // Whether the measure tool is active
+          measurePoints: [], // Array of {lat, lng} points for measuring
+          feltFilterActive: false, // Whether Felt filtering overrides Tema
+          feltHiddenValues: [], // Array of {fieldName, value, objectType} - 'points' or 'lines'
+          feltSearchText: '', // Search text for Felt filtering
+          outlierPromptOpen: false, // Ask user whether to ignore outliers on load
         },
+
+        setOutlierPromptOpen: (isOpen) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                outlierPromptOpen:
+                  isOpen !== undefined
+                    ? isOpen
+                    : !state.ui.outlierPromptOpen,
+              },
+            }),
+            false,
+            'ui/setOutlierPromptOpen'
+          ),
+
+        // Measure tool actions
+        toggleMeasureMode: (isActive) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                measureMode:
+                  isActive !== undefined
+                    ? isActive
+                    : !state.ui.measureMode,
+                measurePoints:
+                  isActive === false ? [] : state.ui.measurePoints,
+              },
+            }),
+            false,
+            'ui/toggleMeasureMode'
+          ),
+
+        addMeasurePoint: (point) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                measurePoints: [...state.ui.measurePoints, point],
+              },
+            }),
+            false,
+            'ui/addMeasurePoint'
+          ),
+
+        clearMeasurePoints: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                measurePoints: [],
+              },
+            }),
+            false,
+            'ui/clearMeasurePoints'
+          ),
+
+        // Felt filter actions
+        setFeltFilterActive: (active) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                feltFilterActive: active,
+              },
+            }),
+            false,
+            'ui/setFeltFilterActive'
+          ),
+
+        toggleFeltHiddenValue: (fieldName, value, objectType) =>
+          set(
+            (state) => {
+              const current = state.ui.feltHiddenValues;
+              const existingIndex = current.findIndex(
+                (item) =>
+                  item.fieldName === fieldName &&
+                  item.value === value &&
+                  item.objectType === objectType
+              );
+              const newHidden =
+                existingIndex >= 0
+                  ? current.filter((_, i) => i !== existingIndex)
+                  : [...current, { fieldName, value, objectType }];
+              return {
+                ui: { ...state.ui, feltHiddenValues: newHidden },
+              };
+            },
+            false,
+            'ui/toggleFeltHiddenValue'
+          ),
+
+        setFeltSearchText: (text) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                feltSearchText: text,
+              },
+            }),
+            false,
+            'ui/setFeltSearchText'
+          ),
+
+        clearFeltFilter: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                feltFilterActive: false,
+                feltHiddenValues: [],
+                feltSearchText: '',
+              },
+            }),
+            false,
+            'ui/clearFeltFilter'
+          ),
 
         setFilteredFeatureIds: (ids) =>
           set(
@@ -381,16 +628,37 @@ const useStore = create(
             'ui/setSelected3DObject'
           ),
 
-        viewObjectInMap: (featureId, coordinates, zoom = 18) =>
+        viewObjectInMap: (
+          featureId,
+          coordinates,
+          zoom = 18,
+          options = {}
+        ) =>
           set(
-            (state) => ({
-              ui: {
-                ...state.ui,
-                activeViewTab: 'map',
-                highlightedFeatureId: featureId,
-                mapCenterTarget: { coordinates, zoom, featureId },
-              },
-            }),
+            (state) => {
+              const newState = {
+                ui: {
+                  ...state.ui,
+                  activeViewTab: 'map',
+                  highlightedFeatureId: featureId,
+                  mapCenterTarget: { coordinates, zoom, featureId },
+                },
+              };
+
+              // If this is a pipe and profilanalyse is open, also select it in analysis
+              if (
+                options.objectType === 'pipe' &&
+                options.lineIndex !== undefined &&
+                state.analysis.isOpen
+              ) {
+                newState.analysis = {
+                  ...state.analysis,
+                  selectedPipeIndex: options.lineIndex,
+                };
+              }
+
+              return newState;
+            },
             false,
             'ui/viewObjectInMap'
           ),
@@ -563,35 +831,19 @@ const useStore = create(
         // ============================================
         resetAll: () =>
           set(
-            {
-              file: null,
-              parsing: {
-                status: 'idle',
-                progress: 0,
-                error: null,
-                startedAt: null,
-                completedAt: null,
-              },
-              validation: {
-                records: [],
-                summary: {
-                  totalRecords: 0,
-                  errorCount: 0,
-                  warningCount: 0,
-                  validCount: 0,
-                },
-                errors: [],
-                warnings: [],
-                fieldStats: {},
-              },
-              ui: {
-                detailsPanelOpen: false,
-                selectedRecordId: null,
-                filterSeverity: 'all',
-                mapViewOpen: false,
-                sidebarOpen: true,
-              },
-              // Keep settings
+            (state) => {
+              const initial = get()._initial;
+              return {
+                file: null,
+                data: null,
+                parsing: { ...initial.parsing },
+                validation: { ...initial.validation },
+                analysis: { ...initial.analysis },
+                outliers: { ...initial.outliers },
+                ui: { ...initial.ui },
+                // Keep settings as-is
+                settings: state.settings,
+              };
             },
             false,
             'global/resetAll'
@@ -636,6 +888,17 @@ const useStore = create(
         name: 'gmi-validator-storage',
         onRehydrateStorage: () => (state) => {
           if (state) {
+            if (!state.outliers) {
+              state.outliers = { results: null, hideOutliers: false };
+            } else {
+              if (state.outliers.results === undefined) {
+                state.outliers.results = null;
+              }
+              if (state.outliers.hideOutliers === undefined) {
+                state.outliers.hideOutliers = false;
+              }
+            }
+
             // Ensure new fields exist (migration for old persisted state)
             if (!state.ui) {
               state.ui = {
@@ -649,6 +912,10 @@ const useStore = create(
                 highlightedType: null,
                 highlightedTypeContext: null,
                 hiddenTypes: [],
+                feltFilterActive: false,
+                feltHiddenValues: [],
+                feltSearchText: '',
+                outlierPromptOpen: false,
               };
             } else {
               if (state.ui.highlightedCode === undefined) {
@@ -665,6 +932,18 @@ const useStore = create(
               }
               if (state.ui.hiddenTypes === undefined) {
                 state.ui.hiddenTypes = [];
+              }
+              if (state.ui.feltFilterActive === undefined) {
+                state.ui.feltFilterActive = false;
+              }
+              if (state.ui.feltHiddenValues === undefined) {
+                state.ui.feltHiddenValues = [];
+              }
+              if (state.ui.feltSearchText === undefined) {
+                state.ui.feltSearchText = '';
+              }
+              if (state.ui.outlierPromptOpen === undefined) {
+                state.ui.outlierPromptOpen = false;
               }
             }
 

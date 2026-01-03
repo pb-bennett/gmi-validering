@@ -24,11 +24,10 @@ const Viewer3D = dynamic(() => import('@/components/3D/Viewer3D'), {
 
 export default function Home() {
   const parsingStatus = useStore((state) => state.parsing.status);
+  const parsingError = useStore((state) => state.parsing.error);
   const dataTableOpen = useStore((state) => state.ui.dataTableOpen);
   const toggleDataTable = useStore((state) => state.toggleDataTable);
-  const resetParsing = useStore((state) => state.resetParsing);
-  const clearData = useStore((state) => state.clearData);
-  const clearFile = useStore((state) => state.clearFile);
+  const resetAll = useStore((state) => state.resetAll);
   const updateLastActive = useStore(
     (state) => state.updateLastActive
   );
@@ -72,13 +71,64 @@ export default function Home() {
   }, [updateLastActive]);
 
   const handleReset = () => {
-    clearData();
-    clearFile();
-    resetParsing();
+    setIsModalOpen(false);
+    resetAll();
   };
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
+      {/* Floating Reset Button - Always visible when data is loaded */}
+      {parsingStatus === 'done' && (
+        <button
+          onClick={handleReset}
+          aria-label="Last inn ny fil"
+          title="Nullstill appen og last inn en ny GMI-fil"
+          style={{
+            position: 'fixed',
+            top: '16px',
+            right: '80px',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            color: '#374151',
+            border: '1px solid #e5e7eb',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            zIndex: 10002,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            fontSize: '13px',
+            fontWeight: 500,
+            backdropFilter: 'blur(8px)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#f3f4f6';
+            e.currentTarget.style.borderColor = '#d1d5db';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor =
+              'rgba(255, 255, 255, 0.95)';
+            e.currentTarget.style.borderColor = '#e5e7eb';
+          }}
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Ny fil
+        </button>
+      )}
       {/* Global Close DataTable Button - ALWAYS visible when table is open */}
       {parsingStatus === 'done' && dataTableOpen && (
         <button
@@ -120,6 +170,42 @@ export default function Home() {
                 Last opp og valider GMI-filer
               </p>
             </div>
+
+            {/* Error Display */}
+            {parsingStatus === 'error' && parsingError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <svg
+                    className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div>
+                    <h3 className="text-sm font-semibold text-red-800">
+                      Feil ved lasting av fil
+                    </h3>
+                    <p className="mt-1 text-sm text-red-700">
+                      {parsingError}
+                    </p>
+                    <button
+                      onClick={handleReset}
+                      className="mt-3 text-sm font-medium text-red-600 hover:text-red-800 underline"
+                    >
+                      Prøv igjen med en annen fil
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white shadow rounded-lg p-6">
               <FileUpload />
             </div>
@@ -180,8 +266,11 @@ export default function Home() {
                     !analysisOpen &&
                     !fieldValidationOpen && (
                       <div
-                        className="absolute bottom-4 left-1/2 -translate-x-1/2"
-                        style={{ zIndex: 1000 }}
+                        className="absolute bottom-4 -translate-x-1/2"
+                        style={{
+                          zIndex: 1000,
+                          left: 'calc(50% - 320px)',
+                        }}
                       >
                         <button
                           onClick={() => setIsModalOpen(true)}

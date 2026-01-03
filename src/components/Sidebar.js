@@ -5,6 +5,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import fieldsData from '@/data/fields.json';
 import { analyzeIncline } from '@/lib/analysis/incline';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
+import { detectOutliers } from '@/lib/analysis/outliers';
 
 function InclineAnalysisControl() {
   const data = useStore((state) => state.data);
@@ -118,11 +119,13 @@ function FieldValidationControl() {
 
 function TopplokControl() {
   const data = useStore((state) => state.data);
-  const setHighlightedFeatureId = useStore(
-    (state) => state.setHighlightedFeatureId
+  const setHighlightedFeature = useStore(
+    (state) => state.setHighlightedFeature
   );
+  const viewObjectInMap = useStore((state) => state.viewObjectInMap);
   const [results, setResults] = useState(null);
   const [showResults, setShowResults] = useState(false);
+  const [activeTab, setActiveTab] = useState('missing'); // 'missing' | 'orphan'
 
   const runAnalysis = () => {
     if (!data) return;
@@ -132,8 +135,26 @@ function TopplokControl() {
   };
 
   const highlightPoint = (pointIndex) => {
-    setHighlightedFeatureId(`punkter-${pointIndex}`);
+    const featureId = `punkter-${pointIndex}`;
+    const coord = data?.points?.[pointIndex]?.coordinates?.[0];
+
+    if (
+      coord &&
+      Number.isFinite(coord.x) &&
+      Number.isFinite(coord.y)
+    ) {
+      // MapCenterHandler expects [y, x]
+      viewObjectInMap(featureId, [coord.y, coord.x], 21);
+      return;
+    }
+
+    setHighlightedFeature(featureId);
   };
+
+  const hasIssues =
+    results &&
+    (results.summary.missing > 0 ||
+      results.summary.orphanLokCount > 0);
 
   return (
     <div className="space-y-2">
@@ -164,51 +185,264 @@ function TopplokControl() {
       </button>
 
       {results && (
-        <div className="text-xs text-gray-600 flex justify-between">
-          <span>{results.summary.total} kontrollert</span>
-          <span>
-            <span
-              className={
-                results.summary.missing > 0
-                  ? 'text-red-600 font-bold'
-                  : 'text-green-600'
-              }
-            >
-              {results.summary.missing} mangler LOK
+        <div className="text-xs text-gray-600 space-y-1">
+          <div className="flex justify-between">
+            <span>{results.summary.total} kontrollert</span>
+            <span>
+              <span
+                className={
+                  results.summary.missing > 0
+                    ? 'text-red-600 font-bold'
+                    : 'text-green-600'
+                }
+              >
+                {results.summary.missing} mangler LOK
+              </span>
             </span>
+          </div>
+          {results.summary.orphanLokCount > 0 && (
+            <div className="flex justify-between">
+              <span>{results.summary.lokCount} LOK funnet</span>
+              <span className="text-yellow-600 font-bold">
+                {results.summary.orphanLokCount} uten KUM/SLU
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showResults && results && hasIssues && (
+        <div className="mt-2 border rounded bg-gray-50">
+          {/* Tab buttons */}
+          <div className="flex border-b">
+            <button
+              onClick={() => setActiveTab('missing')}
+              className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === 'missing'
+                  ? 'bg-white border-b-2 border-red-500 text-red-700'
+                  : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              Mangler LOK ({results.summary.missing})
+            </button>
+            <button
+              onClick={() => setActiveTab('orphan')}
+              className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === 'orphan'
+                  ? 'bg-white border-b-2 border-yellow-500 text-yellow-700'
+                  : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              LOK uten eier ({results.summary.orphanLokCount})
+            </button>
+          </div>
+
+          {/* Tab content */}
+          <div className="max-h-48 overflow-y-auto p-2">
+            {activeTab === 'missing' &&
+              results.summary.missing > 0 && (
+                <>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Klikk for å markere i kart
+                  </p>
+                  {results.results
+                    .filter((r) => r.status === 'error')
+                    .map((r, i) => (
+                      <div
+                        key={i}
+                        className="text-xs py-1.5 px-2 hover:bg-red-50 rounded cursor-pointer flex justify-between items-center border-b last:border-0"
+                        onClick={() => highlightPoint(r.pointIndex)}
+                      >
+                        <span className="font-medium text-red-700">
+                          {r.fcode}
+                        </span>
+                        <span className="text-gray-500 text-right">
+                          {r.coordinates
+                            ? `${r.coordinates.x.toFixed(
+                                0
+                              )}, ${r.coordinates.y.toFixed(0)}`
+                            : 'Ukjent pos'}
+                        </span>
+                      </div>
+                    ))}
+                </>
+              )}
+
+            {activeTab === 'missing' &&
+              results.summary.missing === 0 && (
+                <p className="text-xs text-green-600 p-2">
+                  ✓ Alle punkter har tilhørende LOK
+                </p>
+              )}
+
+            {activeTab === 'orphan' &&
+              results.orphanLoks.length > 0 && (
+                <>
+                  <p className="text-xs text-gray-500 mb-2">
+                    LOK som ikke ligger over noen KUM/SLU/SLS/SAN
+                  </p>
+                  {results.orphanLoks.map((r, i) => (
+                    <div
+                      key={i}
+                      className="text-xs py-1.5 px-2 hover:bg-yellow-50 rounded cursor-pointer flex justify-between items-center border-b last:border-0"
+                      onClick={() => highlightPoint(r.pointIndex)}
+                    >
+                      <span className="font-medium text-yellow-700">
+                        LOK
+                      </span>
+                      <span className="text-gray-500 text-right">
+                        {r.coordinates
+                          ? `${r.coordinates.x.toFixed(
+                              0
+                            )}, ${r.coordinates.y.toFixed(0)}`
+                          : 'Ukjent pos'}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+
+            {activeTab === 'orphan' &&
+              results.orphanLoks.length === 0 && (
+                <p className="text-xs text-green-600 p-2">
+                  ✓ Alle LOK har tilhørende KUM/SLU
+                </p>
+              )}
+          </div>
+        </div>
+      )}
+
+      {showResults && results && !hasIssues && (
+        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
+          ✓ Alle {results.summary.total} punkter har tilhørende LOK
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OutlierControl() {
+  const data = useStore((state) => state.data);
+  const outlierResults = useStore((state) => state.outliers.results);
+  const hideOutliers = useStore(
+    (state) => state.outliers.hideOutliers
+  );
+  const setOutlierResults = useStore(
+    (state) => state.setOutlierResults
+  );
+  const toggleHideOutliers = useStore(
+    (state) => state.toggleHideOutliers
+  );
+  const setHighlightedFeature = useStore(
+    (state) => state.setHighlightedFeature
+  );
+  const [showResults, setShowResults] = useState(false);
+
+  const runAnalysis = () => {
+    if (!data) return;
+    const results = detectOutliers(data);
+    setOutlierResults(results);
+    setShowResults(true);
+  };
+
+  const highlightOutlier = (featureId) => {
+    setHighlightedFeature(featureId);
+  };
+
+  const hasOutliers =
+    outlierResults && outlierResults.outliers.length > 0;
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={
+          outlierResults
+            ? () => setShowResults(!showResults)
+            : runAnalysis
+        }
+        className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
+        style={{
+          backgroundColor: 'var(--color-primary)',
+          color: 'white',
+          borderColor: 'var(--color-primary-dark)',
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-primary-dark)')
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-primary)')
+        }
+      >
+        {outlierResults
+          ? showResults
+            ? 'Skjul resultater'
+            : 'Vis resultater'
+          : '📍 Finn avvik'}
+      </button>
+
+      {outlierResults && (
+        <div className="text-xs text-gray-600 flex justify-between">
+          <span>{outlierResults.summary.totalObjects} objekter</span>
+          <span
+            className={
+              hasOutliers
+                ? 'text-orange-600 font-bold'
+                : 'text-green-600'
+            }
+          >
+            {outlierResults.summary.outlierCount} avvik funnet
           </span>
         </div>
       )}
 
-      {showResults && results && results.summary.missing > 0 && (
-        <div className="mt-2 max-h-40 overflow-y-auto border rounded p-2 bg-gray-50">
-          <p className="text-xs font-semibold mb-1 text-gray-700">
-            Mangler LOK:
-          </p>
-          {results.results
-            .filter((r) => r.status === 'error')
-            .map((r, i) => (
+      {showResults && outlierResults && hasOutliers && (
+        <div className="mt-2 border rounded bg-gray-50">
+          {/* Hide toggle */}
+          <div className="p-2 border-b flex items-center justify-between">
+            <span className="text-xs text-gray-600">
+              Skjul avvik i kart
+            </span>
+            <button
+              onClick={() => toggleHideOutliers()}
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                hideOutliers
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              {hideOutliers ? 'På' : 'Av'}
+            </button>
+          </div>
+
+          {/* Outlier list */}
+          <div className="max-h-48 overflow-y-auto p-2">
+            <p className="text-xs text-gray-500 mb-2">
+              Objekter langt fra hoveddata. Klikk for å markere.
+            </p>
+            {outlierResults.outliers.map((outlier, i) => (
               <div
                 key={i}
-                className="text-xs py-1 px-2 hover:bg-gray-100 rounded cursor-pointer flex justify-between"
-                onClick={() => highlightPoint(r.pointIndex)}
+                className="text-xs py-1.5 px-2 hover:bg-orange-50 rounded cursor-pointer flex justify-between items-center border-b last:border-0"
+                onClick={() => highlightOutlier(outlier.featureId)}
               >
-                <span className="font-medium">{r.fcode}</span>
-                <span className="text-gray-500">
-                  {r.coordinates
-                    ? `${r.coordinates.x.toFixed(
-                        0
-                      )}, ${r.coordinates.y.toFixed(0)}`
-                    : 'Ukjent pos'}
+                <span className="font-medium text-orange-700">
+                  {outlier.fcode || outlier.type}
+                </span>
+                <span className="text-gray-500 text-right">
+                  {outlier.distance.toFixed(0)}m fra senter
                 </span>
               </div>
             ))}
+          </div>
         </div>
       )}
 
-      {showResults && results && results.summary.missing === 0 && (
+      {showResults && outlierResults && !hasOutliers && (
         <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
-          ✓ Alle {results.summary.total} punkter har tilhørende LOK
+          ✓ Ingen avvik funnet - alle objekter er i nærheten av
+          hverandre
         </div>
       )}
     </div>
@@ -268,6 +502,10 @@ function FieldSubSection({
   fieldLabel,
   valueCounts,
   totalCount,
+  objectType, // 'points' or 'lines'
+  feltHiddenValues,
+  toggleFeltHiddenValue,
+  feltSearchText,
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -276,7 +514,54 @@ function FieldSubSection({
     return Object.entries(valueCounts).sort(([, a], [, b]) => b - a);
   }, [valueCounts]);
 
+  // Filter values by search text
+  const filteredValues = useMemo(() => {
+    if (!feltSearchText) return sortedValues;
+    const searchLower = feltSearchText.toLowerCase();
+    return sortedValues.filter(([value]) =>
+      value.toLowerCase().includes(searchLower)
+    );
+  }, [sortedValues, feltSearchText]);
+
   const hasData = sortedValues.length > 0;
+
+  // Check if a value is hidden
+  const isValueHidden = (value) => {
+    return feltHiddenValues.some(
+      (item) =>
+        item.fieldName === fieldName &&
+        item.value === value &&
+        item.objectType === objectType
+    );
+  };
+
+  // Check if all values in this field are hidden
+  const allHidden = sortedValues.every(([value]) =>
+    isValueHidden(value)
+  );
+  const someHidden = sortedValues.some(([value]) =>
+    isValueHidden(value)
+  );
+
+  // Toggle all values in this field
+  const toggleAllValues = (e) => {
+    e.stopPropagation();
+    if (allHidden) {
+      // Show all - remove all hidden values for this field
+      sortedValues.forEach(([value]) => {
+        if (isValueHidden(value)) {
+          toggleFeltHiddenValue(fieldName, value, objectType);
+        }
+      });
+    } else {
+      // Hide all - add all values to hidden
+      sortedValues.forEach(([value]) => {
+        if (!isValueHidden(value)) {
+          toggleFeltHiddenValue(fieldName, value, objectType);
+        }
+      });
+    }
+  };
 
   return (
     <div
@@ -288,11 +573,24 @@ function FieldSubSection({
         className="w-full flex items-center justify-between p-2 transition-colors text-left hover:bg-gray-50"
       >
         <div className="flex-1">
-          <div
-            className="text-xs font-semibold"
-            style={{ color: 'var(--color-text)' }}
-          >
-            {fieldLabel || fieldName}
+          <div className="flex items-center gap-2">
+            <div
+              className={`text-xs font-semibold ${
+                someHidden ? 'opacity-60' : ''
+              }`}
+              style={{ color: 'var(--color-text)' }}
+            >
+              {fieldLabel || fieldName}
+            </div>
+            {someHidden && (
+              <span className="text-[9px] bg-yellow-100 text-yellow-700 px-1 rounded">
+                {
+                  sortedValues.filter(([v]) => isValueHidden(v))
+                    .length
+                }{' '}
+                skjult
+              </span>
+            )}
           </div>
           <div
             className="text-[10px]"
@@ -313,9 +611,21 @@ function FieldSubSection({
       </button>
       {isExpanded && hasData && (
         <div className="bg-gray-50/50">
+          {/* Toggle all button */}
+          <div className="px-2 py-1 flex justify-end border-b border-gray-200">
+            <button
+              onClick={toggleAllValues}
+              className="text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
+            >
+              {allHidden ? 'Vis alle' : 'Skjul alle'}
+            </button>
+          </div>
           <table className="w-full text-xs">
             <thead className="bg-gray-100">
               <tr>
+                <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-600 uppercase w-6">
+                  Vis
+                </th>
                 <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-600 uppercase">
                   Verdi
                 </th>
@@ -328,7 +638,7 @@ function FieldSubSection({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {sortedValues.map(([value, count]) => {
+              {filteredValues.map(([value, count]) => {
                 const percentage = (
                   (count / totalCount) *
                   100
@@ -343,9 +653,30 @@ function FieldSubSection({
                   value === '(Mangler)' ||
                   value === 'null' ||
                   value === '';
+                const isHidden = isValueHidden(value);
 
                 return (
-                  <tr key={value} className="hover:bg-gray-100">
+                  <tr
+                    key={value}
+                    className={`hover:bg-gray-100 cursor-pointer ${
+                      isHidden ? 'opacity-50' : ''
+                    }`}
+                    onClick={() =>
+                      toggleFeltHiddenValue(
+                        fieldName,
+                        value,
+                        objectType
+                      )
+                    }
+                  >
+                    <td className="px-2 py-1">
+                      <input
+                        type="checkbox"
+                        checked={!isHidden}
+                        onChange={() => {}}
+                        className="h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
                     <td
                       className={`px-2 py-1 ${
                         isMissing
@@ -391,6 +722,25 @@ export default function Sidebar({ onReset }) {
   const hiddenCodes = useStore((state) => state.ui.hiddenCodes);
   const hiddenTypes = useStore((state) => state.ui.hiddenTypes);
 
+  // Felt filter state and actions
+  const feltFilterActive = useStore(
+    (state) => state.ui.feltFilterActive
+  );
+  const feltHiddenValues = useStore(
+    (state) => state.ui.feltHiddenValues
+  );
+  const feltSearchText = useStore((state) => state.ui.feltSearchText);
+  const setFeltFilterActive = useStore(
+    (state) => state.setFeltFilterActive
+  );
+  const toggleFeltHiddenValue = useStore(
+    (state) => state.toggleFeltHiddenValue
+  );
+  const setFeltSearchText = useStore(
+    (state) => state.setFeltSearchText
+  );
+  const clearFeltFilter = useStore((state) => state.clearFeltFilter);
+
   // State for sidebar width and resizing
   const [width, setWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
@@ -403,7 +753,15 @@ export default function Sidebar({ onReset }) {
   const [feltTab, setFeltTab] = useState('punkter'); // 'punkter' or 'ledninger'
 
   const toggleSection = (section) => {
-    setOpenSection(openSection === section ? null : section);
+    const newSection = openSection === section ? null : section;
+    setOpenSection(newSection);
+    // Activate felt filter when Felt section is opened
+    if (section === 'felt') {
+      setFeltFilterActive(newSection === 'felt');
+    } else if (openSection === 'felt') {
+      // If closing Felt by opening another section, deactivate felt filter
+      setFeltFilterActive(false);
+    }
   };
 
   // Prepare code lookups
@@ -1292,6 +1650,37 @@ export default function Sidebar({ onReset }) {
                 </button>
               </div>
 
+              {/* Search and clear filters */}
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Søk i feltverdier..."
+                  value={feltSearchText || ''}
+                  onChange={(e) => setFeltSearchText(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded border focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  style={{
+                    backgroundColor: 'var(--color-bg)',
+                    borderColor: 'var(--color-border)',
+                    color: 'var(--color-text)',
+                  }}
+                />
+                {feltHiddenValues && feltHiddenValues.length > 0 && (
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] text-yellow-600">
+                      {feltHiddenValues.length} verdi
+                      {feltHiddenValues.length !== 1 ? 'er' : ''}{' '}
+                      skjult
+                    </span>
+                    <button
+                      onClick={clearFeltFilter}
+                      className="text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      Tilbakestill filter
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Tab Content */}
               <div className="space-y-0">
                 {feltTab === 'punkter' &&
@@ -1315,6 +1704,12 @@ export default function Sidebar({ onReset }) {
                           fieldLabel={fieldLabel}
                           valueCounts={fieldInfo.valueCounts}
                           totalCount={fieldInfo.totalCount}
+                          objectType="points"
+                          feltHiddenValues={feltHiddenValues}
+                          toggleFeltHiddenValue={
+                            toggleFeltHiddenValue
+                          }
+                          feltSearchText={feltSearchText}
                         />
                       );
                     }
@@ -1346,6 +1741,12 @@ export default function Sidebar({ onReset }) {
                           fieldLabel={fieldLabel}
                           valueCounts={fieldInfo.valueCounts}
                           totalCount={fieldInfo.totalCount}
+                          objectType="lines"
+                          feltHiddenValues={feltHiddenValues}
+                          toggleFeltHiddenValue={
+                            toggleFeltHiddenValue
+                          }
+                          feltSearchText={feltSearchText}
                         />
                       );
                     }
@@ -1415,6 +1816,17 @@ export default function Sidebar({ onReset }) {
                 Topplok kontroll
               </h4>
               <TopplokControl />
+            </div>
+
+            {/* Subsection: Avvik */}
+            <div>
+              <h4
+                className="text-xs font-semibold uppercase tracking-wider mb-2"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                Avviksdeteksjon
+              </h4>
+              <OutlierControl />
             </div>
           </div>
         </SidebarSection>

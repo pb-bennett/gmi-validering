@@ -6,15 +6,11 @@ import { useState } from 'react';
 export default function DataDisplay() {
   const data = useStore((state) => state.data);
   const file = useStore((state) => state.file);
-  const resetParsing = useStore((state) => state.resetParsing);
-  const clearData = useStore((state) => state.clearData);
-  const clearFile = useStore((state) => state.clearFile);
+  const resetAll = useStore((state) => state.resetAll);
   const [activeTab, setActiveTab] = useState('header');
 
   const handleReset = () => {
-    clearData();
-    clearFile();
-    resetParsing();
+    resetAll();
   };
 
   if (!data) return null;

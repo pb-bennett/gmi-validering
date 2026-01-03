@@ -1,11 +1,95 @@
 'use client';
 
 import useStore from '@/lib/store';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+
+// Get a human-readable label for point objects based on S_FCODE
+function getPointTypeLabel(fcode) {
+  if (!fcode) return '⚫ Punkt';
+
+  const code = fcode.toUpperCase();
+
+  // Common point type mappings
+  if (code.includes('KUM')) return '🟤 Kum';
+  if (code.includes('SLU') || code === 'SLU') return '🟤 Sluk';
+  if (code.includes('SLS') || code === 'SLS') return '🟤 Slukkum';
+  if (code.includes('LOK')) return '⚫ Kumlokk';
+  if (code.includes('VF') || code.includes('VANNF'))
+    return '🔵 Vannforsyning';
+  if (code.includes('VL')) return '🔵 Vannpunkt';
+  if (code.includes('SP')) return '🟢 Spillvannspunkt';
+  if (code.includes('OV')) return '⚪ Overvannspunkt';
+  if (code.includes('DR')) return '🟠 Drenpunkt';
+  if (code.includes('KRN')) return '🔵 Kran';
+  if (code.includes('GRN')) return '🟢 Grenpunkt';
+  if (code.includes('ANB')) return '🔵 Anboring';
+  if (code.includes('SAN')) return '⚫ Sandfang';
+  if (code.includes('PUMPE') || code.includes('PUMP'))
+    return '⚙️ Pumpestasjon';
+  if (code.includes('BEND') || code.includes('BEN')) return '📐 Bend';
+  if (code.includes('RED')) return '📐 Reduksjon';
+  if (code.includes('T-RØR') || code.includes('TEE'))
+    return '📐 T-rør';
+  if (code.includes('DIV')) return '⚫ Diverse';
+
+  return '⚫ Punkt';
+}
 
 export default function Tooltip3D({ object, position, onClose }) {
   const viewObjectInMap = useStore((state) => state.viewObjectInMap);
 
+  const tooltipRef = useRef(null);
+  const [clampedPos, setClampedPos] = useState(position);
+  const margin = 12;
+
+  const clamp = useMemo(
+    () => (value, min, max) => {
+      if (!Number.isFinite(value)) return min;
+      if (!Number.isFinite(min) || !Number.isFinite(max))
+        return value;
+      return Math.min(Math.max(value, min), max);
+    },
+    []
+  );
+
   if (!object) return null;
+
+  useLayoutEffect(() => {
+    setClampedPos(position);
+
+    const compute = () => {
+      const el = tooltipRef.current;
+      if (!el) return;
+
+      const rect = el.getBoundingClientRect();
+      const width = rect.width || 0;
+      const height = rect.height || 0;
+
+      const minX = margin + width / 2;
+      const maxX = window.innerWidth - margin - width / 2;
+
+      // Tooltip is rendered above the anchor via translate(-50%, -120%).
+      // Ensure its top edge doesn't go off-screen.
+      const minY = margin + height * 1.2;
+      const maxY = window.innerHeight - margin;
+
+      setClampedPos((prev) => {
+        const nextX = clamp(position.x, minX, maxX);
+        const nextY = clamp(position.y, minY, maxY);
+        if (prev?.x === nextX && prev?.y === nextY) return prev;
+        return { x: nextX, y: nextY };
+      });
+    };
+
+    // Compute after layout/paint so we have correct dimensions.
+    const raf = requestAnimationFrame(compute);
+    window.addEventListener('resize', compute);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', compute);
+    };
+  }, [position, clamp]);
 
   const handleViewInMap = () => {
     // Get coordinates from object
@@ -13,17 +97,22 @@ export default function Tooltip3D({ object, position, onClose }) {
     const featureId = object.featureId;
 
     if (coords && featureId) {
-      viewObjectInMap(featureId, coords, 20); // Zoom level 20 for close-up view
+      // Pass object type and line index for profilanalyse integration
+      viewObjectInMap(featureId, coords, 20, {
+        objectType: object.type,
+        lineIndex: object.lineIndex,
+      });
     }
     onClose();
   };
 
   return (
     <div
+      ref={tooltipRef}
       className="fixed z-10002 bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-200/50 p-4 min-w-75 max-w-100"
       style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
+        left: `${clampedPos?.x ?? position.x}px`,
+        top: `${clampedPos?.y ?? position.y}px`,
         transform: 'translate(-50%, -120%)',
       }}
     >
@@ -51,7 +140,9 @@ export default function Tooltip3D({ object, position, onClose }) {
       {/* Object type header */}
       <div className="mb-3 pb-2 border-b border-gray-100">
         <h3 className="font-semibold text-base text-gray-800">
-          {object.type === 'pipe' ? '🔵 Ledning' : '⚫ Kum/Sluk'}
+          {object.type === 'pipe'
+            ? '🔵 Ledning'
+            : getPointTypeLabel(object.fcode)}
         </h3>
         <p className="text-sm text-gray-500 font-medium">
           {object.fcode}

@@ -1,7 +1,7 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useStore from '@/lib/store';
 import Scene3D from './Scene3D';
 import Controls3D from './Controls3D';
@@ -13,11 +13,31 @@ export default function Viewer3D() {
   const hiddenCodes = useStore(
     (state) => state.ui?.hiddenCodes || []
   );
+  const hiddenTypes = useStore(
+    (state) => state.ui?.hiddenTypes || []
+  );
+  const selectedObject3D = useStore(
+    (state) => state.ui?.selectedObject3D
+  );
+  const setSelected3DObject = useStore(
+    (state) => state.setSelected3DObject
+  );
   const [tooltipData, setTooltipData] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({
     x: 0,
     y: 0,
   });
+
+  // Clear selected object when it's been processed
+  useEffect(() => {
+    if (selectedObject3D) {
+      // Clear the selection after a short delay to allow camera to focus
+      const timer = setTimeout(() => {
+        setSelected3DObject(null);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedObject3D, setSelected3DObject]);
 
   if (!data) return null;
 
@@ -40,6 +60,8 @@ export default function Viewer3D() {
         <Scene3D
           data={data}
           hiddenCodes={hiddenCodes}
+          hiddenTypes={hiddenTypes}
+          selectedObject={selectedObject3D}
           onObjectClick={handleObjectClick}
         />
       </Canvas>
