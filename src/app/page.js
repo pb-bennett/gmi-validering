@@ -13,9 +13,13 @@ import TabSwitcher from '@/components/TabSwitcher';
 import useStore from '@/lib/store';
 
 // Dynamic import for 3D viewer to prevent SSR issues with Three.js
-const Viewer3D = dynamic(() => import('@/components/3D/Viewer3D'), { 
+const Viewer3D = dynamic(() => import('@/components/3D/Viewer3D'), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center h-full text-gray-500">Loading 3D...</div>
+  loading: () => (
+    <div className="flex items-center justify-center h-full text-gray-500">
+      Loading 3D...
+    </div>
+  ),
 });
 
 export default function Home() {
