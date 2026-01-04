@@ -93,11 +93,13 @@ export class GMIParser {
    */
   toObject() {
     return {
+      format: 'GMI',
       header: this.header,
       points: this.points,
       lines: this.linesParsed,
       warnings: this.warnings,
       errors: this.errors,
+
       fieldAnalysis: this.analyzeFields(), // Add field analysis to output
     };
   }

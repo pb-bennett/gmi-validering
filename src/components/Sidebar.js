@@ -749,6 +749,8 @@ export default function Sidebar({ onReset }) {
   // State for accordion sections
   const [openSection, setOpenSection] = useState('oversikt');
 
+  const isKof = data?.format === 'KOF';
+
   // State for Felt section tabs
   const [feltTab, setFeltTab] = useState('punkter'); // 'punkter' or 'ledninger'
 
@@ -1109,6 +1111,14 @@ export default function Sidebar({ onReset }) {
                 </span>
                 <span className="font-medium text-gray-900 break-all block text-sm">
                   {file?.name}
+                </span>
+              </div>
+              <div className="mb-2">
+                <span className="text-xs text-gray-500 block mb-1">
+                  Filtype
+                </span>
+                <span className="font-medium text-gray-900 text-sm">
+                  {data?.format || file?.format || 'Ukjent'}
                 </span>
               </div>
               <div>
@@ -1772,6 +1782,12 @@ export default function Sidebar({ onReset }) {
           onToggle={() => toggleSection('analyse')}
         >
           <div className="space-y-4">
+            {isKof && (
+              <div className="p-2.5 rounded-lg border bg-white text-sm text-gray-600">
+                Analysefunksjoner er begrenset for KOF-filer (lite
+                attributtdata).
+              </div>
+            )}
             {/* Subsection: Attributter */}
             <div>
               <h4
@@ -1793,7 +1809,13 @@ export default function Sidebar({ onReset }) {
               >
                 Feltvalidering
               </h4>
-              <FieldValidationControl />
+              {isKof ? (
+                <p className="text-sm text-gray-500 italic">
+                  Ikke tilgjengelig for KOF.
+                </p>
+              ) : (
+                <FieldValidationControl />
+              )}
             </div>
 
             {/* Subsection: Fall */}
@@ -1804,7 +1826,13 @@ export default function Sidebar({ onReset }) {
               >
                 Profilanalyse
               </h4>
-              <InclineAnalysisControl />
+              {isKof ? (
+                <p className="text-sm text-gray-500 italic">
+                  Ikke tilgjengelig for KOF.
+                </p>
+              ) : (
+                <InclineAnalysisControl />
+              )}
             </div>
 
             {/* Subsection: Topplok */}
@@ -1815,7 +1843,13 @@ export default function Sidebar({ onReset }) {
               >
                 Topplok kontroll
               </h4>
-              <TopplokControl />
+              {isKof ? (
+                <p className="text-sm text-gray-500 italic">
+                  Ikke tilgjengelig for KOF.
+                </p>
+              ) : (
+                <TopplokControl />
+              )}
             </div>
 
             {/* Subsection: Avvik */}
@@ -1826,7 +1860,13 @@ export default function Sidebar({ onReset }) {
               >
                 Avviksdeteksjon
               </h4>
-              <OutlierControl />
+              {isKof ? (
+                <p className="text-sm text-gray-500 italic">
+                  Ikke tilgjengelig for KOF.
+                </p>
+              ) : (
+                <OutlierControl />
+              )}
             </div>
           </div>
         </SidebarSection>

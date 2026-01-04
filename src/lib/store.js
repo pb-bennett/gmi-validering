@@ -82,6 +82,9 @@ const useStore = create(
             feltHiddenValues: [],
             feltSearchText: '',
             outlierPromptOpen: false,
+            missingHeightPromptOpen: false,
+            missingHeightDetailsOpen: false,
+            missingHeightLines: [],
           },
         },
 
@@ -103,11 +106,59 @@ const useStore = create(
         setData: (data) =>
           set(
             (state) => {
-              const outlierResults = detectOutliers(data, 6);
+              const isKof = data?.format === 'KOF';
+              const outlierResults = isKof
+                ? {
+                    outliers: [],
+                    summary: {
+                      totalObjects: 0,
+                      outlierCount: 0,
+                      threshold: 6,
+                    },
+                  }
+                : detectOutliers(data, 6);
               const hasOutliers =
+                !isKof &&
                 !!outlierResults &&
                 Array.isArray(outlierResults.outliers) &&
                 outlierResults.outliers.length > 0;
+
+              // Detect missing height (Z) for any line that has at least one coordinate without a valid z.
+              const missingHeightLines = [];
+              const lines = Array.isArray(data?.lines)
+                ? data.lines
+                : [];
+              lines.forEach((line, index) => {
+                const coords = Array.isArray(line?.coordinates)
+                  ? line.coordinates
+                  : [];
+                if (coords.length === 0) return;
+
+                const hasMissingZ = coords.some((c) => {
+                  const z = c?.z;
+                  if (z === null || z === undefined) return true;
+                  const num = typeof z === 'number' ? z : Number(z);
+                  return !Number.isFinite(num);
+                });
+
+                if (!hasMissingZ) return;
+
+                const attrs = line?.attributes || {};
+                missingHeightLines.push({
+                  index,
+                  fcode:
+                    attrs.S_FCODE ||
+                    attrs.Tema ||
+                    attrs.FCODE ||
+                    null,
+                  type:
+                    attrs.objekttypenavn ||
+                    attrs.OBJEKTTYPENAVN ||
+                    attrs.Type ||
+                    null,
+                });
+              });
+              const hasMissingHeights = missingHeightLines.length > 0;
 
               const initial = get()._initial;
 
@@ -124,6 +175,9 @@ const useStore = create(
                   // Keep sidebar open by default
                   sidebarOpen: true,
                   outlierPromptOpen: hasOutliers,
+                  missingHeightPromptOpen: hasMissingHeights,
+                  missingHeightDetailsOpen: false,
+                  missingHeightLines,
                 },
               };
             },
@@ -425,6 +479,9 @@ const useStore = create(
           feltHiddenValues: [], // Array of {fieldName, value, objectType} - 'points' or 'lines'
           feltSearchText: '', // Search text for Felt filtering
           outlierPromptOpen: false, // Ask user whether to ignore outliers on load
+          missingHeightPromptOpen: false, // Warn if one or more lines are missing Z
+          missingHeightDetailsOpen: false, // Details popup listing lines missing Z
+          missingHeightLines: [], // Array<{index:number, fcode:string|null, type:string|null}>
         },
 
         setOutlierPromptOpen: (isOpen) =>
@@ -440,6 +497,36 @@ const useStore = create(
             }),
             false,
             'ui/setOutlierPromptOpen'
+          ),
+
+        setMissingHeightPromptOpen: (isOpen) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                missingHeightPromptOpen:
+                  isOpen !== undefined
+                    ? isOpen
+                    : !state.ui.missingHeightPromptOpen,
+              },
+            }),
+            false,
+            'ui/setMissingHeightPromptOpen'
+          ),
+
+        setMissingHeightDetailsOpen: (isOpen) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                missingHeightDetailsOpen:
+                  isOpen !== undefined
+                    ? isOpen
+                    : !state.ui.missingHeightDetailsOpen,
+              },
+            }),
+            false,
+            'ui/setMissingHeightDetailsOpen'
           ),
 
         // Measure tool actions
@@ -916,6 +1003,9 @@ const useStore = create(
                 feltHiddenValues: [],
                 feltSearchText: '',
                 outlierPromptOpen: false,
+                missingHeightPromptOpen: false,
+                missingHeightDetailsOpen: false,
+                missingHeightLines: [],
               };
             } else {
               if (state.ui.highlightedCode === undefined) {
@@ -944,6 +1034,15 @@ const useStore = create(
               }
               if (state.ui.outlierPromptOpen === undefined) {
                 state.ui.outlierPromptOpen = false;
+              }
+              if (state.ui.missingHeightPromptOpen === undefined) {
+                state.ui.missingHeightPromptOpen = false;
+              }
+              if (state.ui.missingHeightDetailsOpen === undefined) {
+                state.ui.missingHeightDetailsOpen = false;
+              }
+              if (state.ui.missingHeightLines === undefined) {
+                state.ui.missingHeightLines = [];
               }
             }
 

@@ -3,6 +3,8 @@
 import { useState, useCallback } from 'react';
 import useStore from '@/lib/store';
 import { GMIParser } from '@/lib/parsing/gmiParser';
+import { SOSIParser } from '@/lib/parsing/sosiParser';
+import { KOFParser } from '@/lib/parsing/kofParser';
 
 export default function FileUpload() {
   const [isDragging, setIsDragging] = useState(false);
@@ -11,10 +13,63 @@ export default function FileUpload() {
   const setParsingDone = useStore((state) => state.setParsingDone);
   const setParsingError = useStore((state) => state.setParsingError);
   const setData = useStore((state) => state.setData);
+  const clearData = useStore((state) => state.clearData);
+
+  const isQuotaExceededError = (err) => {
+    const name = err?.name;
+    const msg = String(err?.message || '');
+    return (
+      name === 'QuotaExceededError' ||
+      msg.includes('QuotaExceededError') ||
+      msg.includes('exceeded the quota') ||
+      msg.includes('exceeded')
+    );
+  };
+
+  const decodeSnippet = (arrayBuffer) => {
+    try {
+      const bytes = new Uint8Array(arrayBuffer);
+      const slice = bytes.slice(0, 2000);
+      // Best-effort: for sniffing only.
+      return new TextDecoder('iso-8859-1').decode(slice);
+    } catch {
+      return '';
+    }
+  };
+
+  const decodeAll = (arrayBuffer) => {
+    try {
+      return new TextDecoder('iso-8859-1').decode(
+        new Uint8Array(arrayBuffer)
+      );
+    } catch {
+      return '';
+    }
+  };
+
+  const detectFormat = (fileName, content) => {
+    const ext = (fileName || '').toLowerCase().split('.').pop();
+    if (ext === 'gmi') return 'GMI';
+    if (ext === 'sos' || ext === 'sosi') return 'SOSI';
+    if (ext === 'kof') return 'KOF';
+
+    const head =
+      content instanceof ArrayBuffer
+        ? decodeSnippet(content)
+        : (content || '').slice(0, 2000);
+    if (head.includes('[GMIFILE_ASCII]')) return 'GMI';
+    if (head.includes('HODE') || head.includes('.HODE'))
+      return 'SOSI';
+
+    return 'GMI';
+  };
 
   const handleFile = useCallback(
     (file) => {
       if (!file) return;
+
+      const ext = (file.name || '').toLowerCase().split('.').pop();
+      const preferArrayBuffer = ext === 'sos' || ext === 'sosi';
 
       // Update file metadata in store
       setFile({
@@ -22,6 +77,7 @@ export default function FileUpload() {
         size: file.size,
         lastModified: file.lastModified,
         type: file.type,
+        format: null,
       });
 
       startParsing();
@@ -31,13 +87,54 @@ export default function FileUpload() {
         try {
           const content = e.target.result;
 
-          // Basic validation before parsing
-          if (!content || content.trim().length === 0) {
-            throw new Error('Filen er tom. Velg en gyldig GMI-fil.');
+          if (content instanceof ArrayBuffer) {
+            if (content.byteLength === 0) {
+              throw new Error('Filen er tom. Velg en gyldig fil.');
+            }
+          } else {
+            // Basic validation before parsing
+            if (!content || content.trim().length === 0) {
+              throw new Error('Filen er tom. Velg en gyldig fil.');
+            }
           }
 
-          const parser = new GMIParser(content);
-          const parsedData = parser.toObject();
+          const format = detectFormat(file.name, content);
+
+          // Update file metadata with detected format (shown in Oversikt)
+          setFile({
+            name: file.name,
+            size: file.size,
+            lastModified: file.lastModified,
+            type: file.type,
+            format,
+          });
+
+          let parsedData;
+          if (format === 'SOSI') {
+            // Pass raw bytes so sosijs can detect and decode charset correctly.
+            const parser = new SOSIParser(
+              content instanceof ArrayBuffer ? content : content
+            );
+            parsedData = parser.parse();
+          } else if (format === 'KOF') {
+            const kofText =
+              content instanceof ArrayBuffer
+                ? decodeAll(content)
+                : content;
+            const parser = new KOFParser(kofText);
+            parsedData = parser.parse();
+          } else {
+            const gmiText =
+              content instanceof ArrayBuffer
+                ? decodeAll(content)
+                : content;
+            const parser = new GMIParser(gmiText);
+            parsedData = parser.toObject();
+          }
+
+          if (parsedData?.errors?.length > 0) {
+            throw new Error(parsedData.errors[0]);
+          }
 
           // Check if parsing yielded any data
           if (
@@ -45,7 +142,7 @@ export default function FileUpload() {
             parsedData.lines.length === 0
           ) {
             throw new Error(
-              'Ingen objekter funnet i filen. Kontroller at filen inneholder gyldige GMI-data.'
+              'Ingen objekter funnet i filen. Kontroller at filen inneholder gyldige data.'
             );
           }
 
@@ -53,6 +150,42 @@ export default function FileUpload() {
           setParsingDone();
         } catch (error) {
           console.error('Parsing error:', error);
+
+          // Exceptionally large files can cause Zustand persist/localStorage to exceed quota.
+          // In that case, avoid getting stuck in a loop of failing writes and show a simple message.
+          if (isQuotaExceededError(error)) {
+            const quotaMessage =
+              'Filen er for stor til å lastes inn i appen. Prøv med en annen fil.';
+
+            // Best effort: clear oversized data from state before setting the error.
+            try {
+              clearData();
+            } catch {}
+
+            // Best effort: clear persisted key (may already be too large).
+            try {
+              if (
+                typeof window !== 'undefined' &&
+                window.localStorage
+              ) {
+                window.localStorage.removeItem(
+                  'gmi-validator-storage'
+                );
+              }
+            } catch {}
+
+            try {
+              setParsingError(quotaMessage);
+            } catch {
+              // Last-resort fallback if persistence keeps throwing.
+              if (typeof window !== 'undefined' && window.alert) {
+                window.alert(quotaMessage);
+              }
+            }
+
+            return;
+          }
+
           // Provide user-friendly Norwegian error message
           const userMessage =
             error.message.startsWith('Ugyldig') ||
@@ -71,9 +204,20 @@ export default function FileUpload() {
       };
 
       // GMI files are typically text/latin1 or utf8, but let's assume text
-      reader.readAsText(file, 'ISO-8859-1'); // Common for GMI/SOSI
+      if (preferArrayBuffer) {
+        reader.readAsArrayBuffer(file);
+      } else {
+        reader.readAsText(file, 'ISO-8859-1');
+      }
     },
-    [setFile, startParsing, setData, setParsingDone, setParsingError]
+    [
+      setFile,
+      startParsing,
+      setData,
+      setParsingDone,
+      setParsingError,
+      clearData,
+    ]
   );
 
   const onDragOver = useCallback((e) => {
@@ -139,9 +283,7 @@ export default function FileUpload() {
         </svg>
 
         <div className="text-lg font-medium text-gray-700">
-          {isDragging
-            ? 'Slipp filen her'
-            : 'Dra og slipp GMI-fil her'}
+          {isDragging ? 'Slipp filen her' : 'Dra og slipp fil her'}
         </div>
 
         <div className="text-sm text-gray-500">eller</div>
@@ -151,13 +293,13 @@ export default function FileUpload() {
           <input
             type="file"
             className="hidden"
-            accept=".gmi"
+            accept=".gmi,.sos,.sosi,.kof,.txt"
             onChange={onInputChange}
           />
         </label>
 
         <p className="text-xs text-gray-400 mt-2">
-          Støtter .gmi filer
+          Støtter .gmi, .sos/.sosi og .kof
         </p>
       </div>
     </div>

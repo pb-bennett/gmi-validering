@@ -194,6 +194,12 @@ const getColorByFCode = (fcode) => {
   return '#800080';
 };
 
+const normalizeFcode = (value) => {
+  if (value === null || value === undefined) return null;
+  const str = String(value);
+  return str.trim() === '' ? null : str;
+};
+
 // SVG shape generators for point markers
 const createSvgMarker = (category, color, isHighlighted = false) => {
   // Adjust base sizes per category
@@ -1690,7 +1696,7 @@ export default function MapInner({ onZoomChange }) {
   };
 
   const lineStyle = (feature) => {
-    const fcode = feature.properties?.S_FCODE;
+    const fcode = normalizeFcode(feature.properties?.S_FCODE);
     const typeVal = feature.properties?.Type || '(Mangler Type)';
     const featureId =
       feature.properties?.id !== undefined
@@ -1786,7 +1792,7 @@ export default function MapInner({ onZoomChange }) {
   };
 
   const pointToLayer = (feature, latlng) => {
-    const fcode = feature.properties?.S_FCODE;
+    const fcode = normalizeFcode(feature.properties?.S_FCODE);
     const typeVal = feature.properties?.Type || '(Mangler Type)';
     const featureId =
       feature.properties?.id !== undefined
@@ -1851,7 +1857,7 @@ export default function MapInner({ onZoomChange }) {
 
   const onEachFeature = (feature, layer) => {
     // If hidden by code, type, or felt filter, don't bind popup or do anything
-    const fcode = feature.properties?.S_FCODE;
+    const fcode = normalizeFcode(feature.properties?.S_FCODE);
     const typeVal = feature.properties?.Type || '(Mangler Type)';
     const objectType =
       feature.properties?.featureType === 'Point'
@@ -2053,8 +2059,10 @@ function AnalysisPointsLayer() {
     if (!line || !line.coordinates)
       return { points: [], pipeColor: '#3388ff' };
 
-    const fcode = line.attributes?.Tema || line.attributes?.S_FCODE;
-    const color = getColorByFCode(fcode);
+    const fcode = normalizeFcode(
+      line.attributes?.Tema || line.attributes?.S_FCODE
+    );
+    const color = getColorByFCode(fcode || '');
 
     // Determine source projection
     let sourceProj = 'EPSG:4326';
