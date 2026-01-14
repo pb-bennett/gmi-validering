@@ -215,7 +215,10 @@ export function analyzeIncline(data, fallkravMode = 'fixed') {
       });
     }
 
-    const minInclineRule = getMinIncline(line.attributes, fallkravMode);
+    const minInclineRule = getMinIncline(
+      line.attributes,
+      fallkravMode
+    );
 
     result.details = {
       startZ,

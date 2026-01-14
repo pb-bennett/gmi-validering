@@ -122,7 +122,7 @@ export default function FieldValidationSidebar() {
           </svg>
           Tilbake
         </button>
-        
+
         <div className="mb-3">
           <h2 className="text-lg font-bold text-gray-900">
             Feltvalidering

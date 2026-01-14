@@ -222,19 +222,31 @@ const createSvgMarker = (category, color, highlightLevel = false) => {
   }
 
   // Size adjustment based on highlight level
-  const sizeBonus = highlightLevel === 'selected' ? 8 : highlightLevel === 'hovered' ? 4 : 0;
+  const sizeBonus =
+    highlightLevel === 'selected'
+      ? 8
+      : highlightLevel === 'hovered'
+      ? 4
+      : 0;
   const size = baseSize + sizeBonus;
-  
+
   // Stroke adjustments for glow effect (keep original color)
-  const strokeWidth = highlightLevel === 'selected' ? 4 : highlightLevel === 'hovered' ? 3 : 2;
+  const strokeWidth =
+    highlightLevel === 'selected'
+      ? 4
+      : highlightLevel === 'hovered'
+      ? 3
+      : 2;
   const stroke = color; // Always use original color for glow effect
   const fill = '#FFFFFF';
   const half = size / 2;
-  
+
   // Add glow filter for highlighted states
   const glowFilter = highlightLevel
     ? `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-         <feGaussianBlur stdDeviation="${highlightLevel === 'selected' ? 3 : 2}" result="coloredBlur"/>
+         <feGaussianBlur stdDeviation="${
+           highlightLevel === 'selected' ? 3 : 2
+         }" result="coloredBlur"/>
          <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
        </filter></defs>`
     : '';
@@ -273,7 +285,9 @@ const createSvgMarker = (category, color, highlightLevel = false) => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${glowFilter}<g ${filterAttr}>${svgPath}</g></svg>`;
     return L.divIcon({
       html: svg,
-      className: `custom-div-icon${highlightLevel ? ` marker-${highlightLevel}` : ''}`,
+      className: `custom-div-icon${
+        highlightLevel ? ` marker-${highlightLevel}` : ''
+      }`,
       iconSize: [size, size],
       iconAnchor: [half, half],
       popupAnchor: [0, -half],
@@ -492,7 +506,9 @@ const createSvgMarker = (category, color, highlightLevel = false) => {
 
   return L.divIcon({
     html: svg,
-    className: `custom-div-icon${highlightLevel ? ` marker-${highlightLevel}` : ''}`,
+    className: `custom-div-icon${
+      highlightLevel ? ` marker-${highlightLevel}` : ''
+    }`,
     iconSize: [size, size],
     iconAnchor: [half, half],
     popupAnchor: [0, -half],
@@ -1768,7 +1784,8 @@ export default function MapInner({ onZoomChange }) {
       }
     }
 
-    const isHighlightedByCode = !fieldValidationOpen && highlightedCode === fcode;
+    const isHighlightedByCode =
+      !fieldValidationOpen && highlightedCode === fcode;
     // Type highlighting should respect the code context if one is set
     const isHighlightedByType =
       !fieldValidationOpen &&
@@ -1780,9 +1797,7 @@ export default function MapInner({ onZoomChange }) {
     const isHoveredFeature =
       featureId && hoveredFeatureId === featureId;
     const isHighlighted =
-      isHighlightedByCode ||
-      isHighlightedByType ||
-      isSelectedFeature;
+      isHighlightedByCode || isHighlightedByType || isSelectedFeature;
     const isHovered = isHoveredFeature && !isHighlighted; // Don't double-highlight
 
     // Filtered View Logic (Missing Fields Report)
@@ -1893,7 +1908,8 @@ export default function MapInner({ onZoomChange }) {
       }
     }
 
-    const isHighlightedByCode = !fieldValidationOpen && highlightedCode === fcode;
+    const isHighlightedByCode =
+      !fieldValidationOpen && highlightedCode === fcode;
     // Type highlighting should respect the code context if one is set
     const isHighlightedByType =
       !fieldValidationOpen &&
@@ -1905,9 +1921,7 @@ export default function MapInner({ onZoomChange }) {
     const isHoveredFeature =
       featureId && hoveredFeatureId === featureId;
     const isHighlighted =
-      isHighlightedByCode ||
-      isHighlightedByType ||
-      isSelectedFeature;
+      isHighlightedByCode || isHighlightedByType || isSelectedFeature;
     const isHovered = isHoveredFeature && !isHighlighted; // Don't double-highlight
 
     // Filtered View Logic (Missing Fields Report)
@@ -1934,7 +1948,11 @@ export default function MapInner({ onZoomChange }) {
     const color = getColorByFCode(fcode);
     const category = getCategoryByFCode(fcode);
     // Pass highlight level to marker: 'selected', 'hovered', or false
-    const highlightLevel = isHighlighted ? 'selected' : isHovered ? 'hovered' : false;
+    const highlightLevel = isHighlighted
+      ? 'selected'
+      : isHovered
+      ? 'hovered'
+      : false;
     const icon = createSvgMarker(category, color, highlightLevel);
 
     return L.marker(latlng, { icon });

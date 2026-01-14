@@ -28,8 +28,7 @@ function getPointTypeLabel(fcode) {
     return 'Pumpestasjon';
   if (code.includes('BEND') || code.includes('BEN')) return 'Bend';
   if (code.includes('RED')) return 'Reduksjon';
-  if (code.includes('T-RØR') || code.includes('TEE'))
-    return 'T-rør';
+  if (code.includes('T-RØR') || code.includes('TEE')) return 'T-rør';
   if (code.includes('DIV')) return 'Diverse';
 
   return 'Punkt';

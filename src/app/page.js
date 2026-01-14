@@ -231,7 +231,9 @@ export default function Home() {
           {/* Map Area */}
           <div
             className={`relative flex flex-col h-full ${
-              fieldValidationOpen ? 'w-full md:w-2/3 flex-none' : 'flex-1'
+              fieldValidationOpen
+                ? 'w-full md:w-2/3 flex-none'
+                : 'flex-1'
             }`}
           >
             {/* Show Map view when activeViewTab is 'map' or 3D viewer is not open */}

@@ -3,7 +3,9 @@
 import useStore from '@/lib/store';
 
 export default function StandardsInfoModal({ isOpen, onClose }) {
-  const fallkravMode = useStore((state) => state.analysis.fallkravMode);
+  const fallkravMode = useStore(
+    (state) => state.analysis.fallkravMode
+  );
   const setFallkravMode = useStore((state) => state.setFallkravMode);
 
   if (!isOpen) return null;
@@ -63,8 +65,12 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
                   onChange={() => setFallkravMode('fixed')}
                   className="mr-2"
                 />
-                <span className="font-medium">Fast 10 ‰ for alle dimensjoner</span>
-                <span className="ml-2 text-xs text-gray-500">(standard)</span>
+                <span className="font-medium">
+                  Fast 10 ‰ for alle dimensjoner
+                </span>
+                <span className="ml-2 text-xs text-gray-500">
+                  (standard)
+                </span>
               </label>
               <label className="flex items-center cursor-pointer">
                 <input
@@ -75,7 +81,9 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
                   onChange={() => setFallkravMode('dimension')}
                   className="mr-2"
                 />
-                <span className="font-medium">Fallkrav avhengig av dimensjon</span>
+                <span className="font-medium">
+                  Fallkrav avhengig av dimensjon
+                </span>
               </label>
             </div>
           </div>
@@ -88,7 +96,8 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
             </h3>
             {fallkravMode === 'fixed' ? (
               <p className="ml-2">
-                <span className="font-bold">10 ‰ (1:100)</span> for alle selvfallsledninger
+                <span className="font-bold">10 ‰ (1:100)</span> for
+                alle selvfallsledninger
               </p>
             ) : (
               <ul className="list-disc list-inside space-y-1 ml-2">

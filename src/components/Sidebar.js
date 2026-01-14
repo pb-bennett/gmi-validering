@@ -16,7 +16,9 @@ function InclineAnalysisControl() {
     (state) => state.toggleAnalysisModal
   );
   const analysisResults = useStore((state) => state.analysis.results);
-  const fallkravMode = useStore((state) => state.analysis.fallkravMode);
+  const fallkravMode = useStore(
+    (state) => state.analysis.fallkravMode
+  );
 
   const runAnalysis = () => {
     if (!data) return;
