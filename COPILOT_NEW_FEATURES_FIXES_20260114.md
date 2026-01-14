@@ -529,3 +529,113 @@ Begrensninger / konsekvenser av dagens implementasjon:
 3. **HYD-003 fallkrav-valg i UI:** Skal “10‰ for alle” og “fallkrav avhengig av dimensjon” være gjensidig eksklusive (radio/én kan være aktiv), eller kan begge være på samtidig? `Gjensidig eksklusive (radio).`
 
 `NOTE! ALL COMMUNICATION UNDER DEVELOPMENT SHOULD BE ENGLISH. ALL UI FEATURES MUST BE IN NORWEGIAN BOKMÅL. THIS IS JUST FOR CLARIFICATION PURPOSES.`
+
+---
+
+# Followup points from implementation
+
+- GMNI-002: The point is still highlighted on load. Please have another look at this.
+- HYD-003: The toggle for fall krav mode has no default poistion. Ensure the flat 10 is selected as default
+- When profilanalysis is open it does not override the tema/felt filters. Hovering highlights the section and the line points are showing, but the filtered away lines are not visible. Please adjust so that the profilanalysis view overides the tema/felt filters when open. but returns to previous state when closed.
+- the on hover highlight seems to increase the thickness of the hovered over line. Can we try a glow instead so the line thickness remains the same?
+- When in profilanalysis mode, clicking another line in the map does not switch the profile. Please fix this. Also the other lines are displayed very thinly, can we increase their thickness a bit so they are more visible in the background and easier to select?
+- Profilanalyse does not display in 3D mode as expected. Please fix this. Check that clicking a different ledning in this mode also switches the profile.
+- Seems that sometimes after exiting profilanalysis mode the mouse pointer remains as a pointer hand. Please ensure it returns to normal. A readfresh fixes this but it should not be necessary.
+- Filtering in Felt mode does not affect the 3D mode. Please fix this.
+- Hovering over the fields in feltvalidering does not highlight the objects in 2D or 3d mode. in 2d it seems only 1 object is highlighted. Please fix this.
+- When I have clicked to open tooltip in 2d mode and try to move the mouse to click a button on the tooltip the tooltip closes. It should stay open until I click elsewhere on the map. Please fix this. There is no profilanalyse button in the tooltip in 3D mode. Please add this and check that the feature works in 3D.
+
+---
+
+## Planned fixes (based on observed issues)
+
+- **GMNI-002: point highlighted on load**
+
+  - Likely caused by hover state being set during initial render (e.g., cursor happens to be over a feature while layers mount) and/or re-mounting of the GeoJSON layer on hover.
+  - Plan:
+    - Stop re-mounting map layers on hover changes (do not include hover state in the GeoJSON `key`).
+    - Gate hover activation until the user has actually moved the mouse inside the map (first `mousemove`) to avoid “hover on load”.
+
+- **HYD-003: fallkrav toggle has no default selected**
+
+  - Plan:
+    - Ensure `fallkravMode` is always initialized to `'fixed'` (10‰) even if persisted state is missing/older.
+    - Make the radio group robust by treating `undefined/null` as `'fixed'`.
+
+- **Profilanalyse should override Tema/Felt filters when open**
+
+  - Current: filters can hide the selected pipe/related lines.
+  - Plan:
+    - When `analysis.isOpen === true`, bypass Tema/Felt filtering in **2D** (same idea as Feltvalidering override) while preserving filter state.
+    - Apply the same override in **3D** by passing Felt-filter state into the 3D pipeline and skipping those hides while Profilanalyse is open.
+
+- **Hover highlight changes line thickness**
+
+  - Plan:
+    - Keep the “core” line thickness unchanged.
+    - Implement glow via a separate highlight overlay (draw a wider, low-opacity line behind the original) so the visible core width stays the same.
+
+- **Profilanalyse click-to-switch not working + background lines too thin**
+
+  - Plan:
+    - Ensure that, when Profilanalyse is open, clicking a **ledning** always calls “select pipe” and does not open/close popups.
+    - Slightly increase background line opacity/weight in analysis mode to make them easier to select.
+
+- **Profilanalyse not displaying in 3D mode**
+
+  - Plan:
+    - Ensure the Profilanalyse modal is rendered above the 3D canvas (stacking/z-index + render location), and stays open when switching map ↔ 3D.
+    - Verify click-to-switch behavior works in 3D as well.
+
+- **Mouse cursor remains as pointer after exiting Profilanalyse**
+
+  - Plan:
+    - Remove hover-driven layer re-mounting (main suspect for stuck cursor).
+    - Ensure any temporary cursor changes are properly reset on unmount/state transitions.
+
+- **Felt filtering doesn’t affect 3D**
+
+  - Plan:
+    - Reuse the same Felt-filter hide logic in 3D (shared helper), so 2D/3D behave identically.
+
+- **Feltvalidering hover should highlight all related objects (2D+3D)**
+
+  - Current: only one object highlights.
+  - Plan:
+    - Track “hovered feature IDs” as a set/list (not a single ID) when hovering a Feltvalidering card, and apply hover highlight to all of them.
+    - Mirror the same hover highlight behavior in 3D.
+
+- **2D tooltip/popup closes when moving to click a button**
+
+  - Likely caused by hover-state re-mounting of the GeoJSON layer, which destroys the popup.
+  - Plan:
+    - Stop re-mounting on hover changes.
+    - Confirm popup stays open until an explicit outside-click.
+
+- **3D tooltip missing “Åpne Profilanalyse”**
+
+  - Plan:
+    - Add the button for pipe tooltips in 3D and wire it to open/select Profilanalyse.
+    - Double-check it appears only for ledning and works in 3D.
+
+- **Clean UI: emojis in buttons**
+  - Plan:
+    - Remove remaining emojis from button labels (e.g., “Inspiser data”).
+
+---
+
+## Queries (please answer before implementation)
+
+1. **Profilanalyse overrides filters:** When Profilanalyse is open, should it ignore Tema/Felt filtering for **both** lines and points, or only for the **lines** (and the points strictly needed for the selected profile)? `It sounds reasonable to only ignore for the lines and the points needed for the profile. However if it is easier to do both that is also acceptable.`
+2. **Glow implementation:** OK if I implement glow using a dedicated highlight overlay layer (wider, low-opacity stroke behind the normal line), so the line’s core thickness stays unchanged?
+   `Yes, that is fine. As long as the line thickness remains unchanged.`
+3. **Background visibility in Profilanalyse:** What’s your preferred look for non-selected lines while Profilanalyse is open?
+   - A) slightly thicker (e.g. +1 weight) and ~50% opacity
+   - B) same thickness as normal, but ~50% opacity
+   - C) your preferred weight/opacity numbers `B) same thickness as normal, but ~50% opacity`
+4. **Feltvalidering hover highlight:** When hovering a Feltvalidering card, should it highlight:
+   - A) all failing objects for that field (potentially many) `All failing objects for that field`
+   - B) only the first N (e.g. 50) for performance
+5. **Popup behavior in 2D:** Should a popup remain open until you click empty map space, even if you hover another feature? `Yes. the popup should remain open until you click empty map space. or click anohter feature to open its popup. or click the close button on the popup.`
+   - (Leaflet default is typically: clicking another feature opens its popup.)
+6. **GMNI-002 reproduction detail:** Does the “point highlighted on load” happen only when the mouse cursor starts over a feature (and disappears once you move the mouse), or is it persistently highlighted no matter where the cursor is? `Persistant until something else is highlighted, then it stops being highlisted, until nothing is highlighted again when the point highlights again.`
