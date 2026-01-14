@@ -5,38 +5,44 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 // Get a human-readable label for point objects based on S_FCODE
 function getPointTypeLabel(fcode) {
-  if (!fcode) return '⚫ Punkt';
+  if (!fcode) return 'Punkt';
 
   const code = fcode.toUpperCase();
 
   // Common point type mappings
-  if (code.includes('KUM')) return '🟤 Kum';
-  if (code.includes('SLU') || code === 'SLU') return '🟤 Sluk';
-  if (code.includes('SLS') || code === 'SLS') return '🟤 Slukkum';
-  if (code.includes('LOK')) return '⚫ Kumlokk';
+  if (code.includes('KUM')) return 'Kum';
+  if (code.includes('SLU') || code === 'SLU') return 'Sluk';
+  if (code.includes('SLS') || code === 'SLS') return 'Slukkum';
+  if (code.includes('LOK')) return 'Kumlokk';
   if (code.includes('VF') || code.includes('VANNF'))
-    return '🔵 Vannforsyning';
-  if (code.includes('VL')) return '🔵 Vannpunkt';
-  if (code.includes('SP')) return '🟢 Spillvannspunkt';
-  if (code.includes('OV')) return '⚪ Overvannspunkt';
-  if (code.includes('DR')) return '🟠 Drenpunkt';
-  if (code.includes('KRN')) return '🔵 Kran';
-  if (code.includes('GRN')) return '🟢 Grenpunkt';
-  if (code.includes('ANB')) return '🔵 Anboring';
-  if (code.includes('SAN')) return '⚫ Sandfang';
+    return 'Vannforsyning';
+  if (code.includes('VL')) return 'Vannpunkt';
+  if (code.includes('SP')) return 'Spillvannspunkt';
+  if (code.includes('OV')) return 'Overvannspunkt';
+  if (code.includes('DR')) return 'Drenpunkt';
+  if (code.includes('KRN')) return 'Kran';
+  if (code.includes('GRN')) return 'Grenpunkt';
+  if (code.includes('ANB')) return 'Anboring';
+  if (code.includes('SAN')) return 'Sandfang';
   if (code.includes('PUMPE') || code.includes('PUMP'))
-    return '⚙️ Pumpestasjon';
-  if (code.includes('BEND') || code.includes('BEN')) return '📐 Bend';
-  if (code.includes('RED')) return '📐 Reduksjon';
+    return 'Pumpestasjon';
+  if (code.includes('BEND') || code.includes('BEN')) return 'Bend';
+  if (code.includes('RED')) return 'Reduksjon';
   if (code.includes('T-RØR') || code.includes('TEE'))
-    return '📐 T-rør';
-  if (code.includes('DIV')) return '⚫ Diverse';
+    return 'T-rør';
+  if (code.includes('DIV')) return 'Diverse';
 
-  return '⚫ Punkt';
+  return 'Punkt';
 }
 
 export default function Tooltip3D({ object, position, onClose }) {
   const viewObjectInMap = useStore((state) => state.viewObjectInMap);
+  const toggleAnalysisModal = useStore(
+    (state) => state.toggleAnalysisModal
+  );
+  const selectAnalysisPipe = useStore(
+    (state) => state.selectAnalysisPipe
+  );
 
   const tooltipRef = useRef(null);
   const [clampedPos, setClampedPos] = useState(position);
@@ -141,7 +147,7 @@ export default function Tooltip3D({ object, position, onClose }) {
       <div className="mb-3 pb-2 border-b border-gray-100">
         <h3 className="font-semibold text-base text-gray-800">
           {object.type === 'pipe'
-            ? '🔵 Ledning'
+            ? 'Ledning'
             : getPointTypeLabel(object.fcode)}
         </h3>
         <p className="text-sm text-gray-500 font-medium">
@@ -170,26 +176,56 @@ export default function Tooltip3D({ object, position, onClose }) {
             ))}
       </div>
 
-      {/* View in Map button */}
-      <button
-        onClick={handleViewInMap}
-        className="w-full px-4 py-2.5 bg-gray-700 hover:bg-gray-800 text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
-      >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
+      {/* Button container */}
+      <div className="space-y-2">
+        {/* Åpne Profilanalyse button - only for pipes */}
+        {object.type === 'pipe' && object.lineIndex !== undefined && (
+          <button
+            onClick={() => {
+              toggleAnalysisModal(true);
+              selectAnalysisPipe(object.lineIndex);
+              onClose();
+            }}
+            className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+            Åpne Profilanalyse
+          </button>
+        )}
+
+        {/* View in Map button */}
+        <button
+          onClick={handleViewInMap}
+          className="w-full px-4 py-2.5 bg-gray-700 hover:bg-gray-800 text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-          />
-        </svg>
-        Vis i kart
-      </button>
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+            />
+          </svg>
+          Vis i kart
+        </button>
+      </div>
     </div>
   );
 }

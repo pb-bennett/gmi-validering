@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import useStore from '@/lib/store';
 import { validateFields } from '@/lib/validation/fieldValidation';
 import FieldDetailModal from './FieldDetailModal';
@@ -11,10 +11,17 @@ export default function FieldValidationSidebar() {
   const toggleFieldValidation = useStore(
     (state) => state.toggleFieldValidation
   );
+  const setHoveredFeature = useStore(
+    (state) => state.setHoveredFeature
+  );
+  const setFilteredFeatureIds = useStore(
+    (state) => state.setFilteredFeatureIds
+  );
   const [selectedField, setSelectedField] = useState(null);
   const [filter, setFilter] = useState('OK'); // OK, WARNING, ERROR
   const [activeTab, setActiveTab] = useState('ledninger'); // 'ledninger' | 'punkter'
   const [showReport, setShowReport] = useState(false);
+  const [showOnlyFailing, setShowOnlyFailing] = useState(false);
 
   const validationResults = useMemo(() => {
     return validateFields(data);
@@ -60,6 +67,30 @@ export default function FieldValidationSidebar() {
     };
   }, [validationResults, activeTab]);
 
+  // Effect to filter map features when "show only failing" is enabled
+  useEffect(() => {
+    if (showOnlyFailing) {
+      // Collect all failing feature IDs from all validation results
+      const failingIds = new Set();
+      validationResults.forEach((result) => {
+        if (result.failingIds) {
+          result.failingIds.forEach((id) => failingIds.add(id));
+        }
+      });
+      setFilteredFeatureIds(failingIds);
+    } else {
+      // Clear filter
+      setFilteredFeatureIds(null);
+    }
+  }, [showOnlyFailing, validationResults, setFilteredFeatureIds]);
+
+  // Clear filter when component unmounts
+  useEffect(() => {
+    return () => {
+      setFilteredFeatureIds(null);
+    };
+  }, [setFilteredFeatureIds]);
+
   if (showReport) {
     return (
       <MissingFieldsReport onClose={() => setShowReport(false)} />
@@ -69,36 +100,50 @@ export default function FieldValidationSidebar() {
   return (
     <div className="h-full flex flex-col bg-white border-r shadow-xl relative z-20">
       {/* Header */}
-      <div className="p-6 border-b bg-gray-50">
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => toggleFieldValidation(false)}
-            className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors flex-shrink-0"
-            title="Lukk feltvalidering"
+      <div className="p-4 border-b bg-gray-50">
+        {/* Back/Close button at top-left */}
+        <button
+          onClick={() => toggleFieldValidation(false)}
+          className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-3 transition-colors"
+          title="Lukk feltvalidering"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">
-              Feltvalidering
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Sjekker {stats.total} felt mot innmålingsinstruks
-            </p>
-          </div>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+          Tilbake
+        </button>
+        
+        <div className="mb-3">
+          <h2 className="text-lg font-bold text-gray-900">
+            Feltvalidering
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Sjekker {stats.total} felt mot innmålingsinstruks
+          </p>
         </div>
+
+        {/* Toggle: Show only failing features in map */}
+        <label className="flex items-center gap-2 mb-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showOnlyFailing}
+            onChange={(e) => setShowOnlyFailing(e.target.checked)}
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-xs text-gray-600">
+            Vis kun objekter med feil i kartet
+          </span>
+        </label>
 
         <button
           onClick={() => setShowReport(true)}
@@ -202,11 +247,20 @@ export default function FieldValidationSidebar() {
 
       {/* Grid Content */}
       <div className="flex-1 overflow-y-auto p-6 bg-gray-50 pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-3">
           {filteredResults.map((field) => (
             <div
               key={field.fieldKey}
               onClick={() => setSelectedField(field)}
+              onMouseEnter={() => {
+                // Highlight the first failing feature on hover
+                if (field.failingIds && field.failingIds.length > 0) {
+                  setHoveredFeature(field.failingIds[0]);
+                }
+              }}
+              onMouseLeave={() => {
+                setHoveredFeature(null);
+              }}
               className={`
                 bg-white rounded-lg border p-3 cursor-pointer transition-all hover:shadow-md
                 ${

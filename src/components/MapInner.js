@@ -162,7 +162,7 @@ const getColorByFCode = (fcode) => {
     ANBORING: '#0066cc', // ANBORING - blue like KRN
     GRN: '#00cc00', // GRN - green
     SAN: '#000000', // SAN - black like SLS/SLU
-    LOK: '#ff00ff', // LOK - magenta (clear contrast with KUM)
+    LOK: '#FFD400', // LOK - bright yellow (clear contrast with KUM)
 
     // Other/Unknown - PURPLE (default)
     ANNET: '#800080',
@@ -201,7 +201,8 @@ const normalizeFcode = (value) => {
 };
 
 // SVG shape generators for point markers
-const createSvgMarker = (category, color, isHighlighted = false) => {
+// highlightLevel: false, 'hovered', or 'selected'
+const createSvgMarker = (category, color, highlightLevel = false) => {
   // Adjust base sizes per category
   let baseSize;
   if (category === INFRA_CATEGORIES.LOK) {
@@ -220,17 +221,29 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
     baseSize = 18; // Standard size
   }
 
-  const size = isHighlighted ? baseSize + 6 : baseSize;
-  const strokeWidth = isHighlighted ? 3 : 2;
-  const highlightColor = '#00FFFF';
-  const stroke = isHighlighted ? highlightColor : color;
+  // Size adjustment based on highlight level
+  const sizeBonus = highlightLevel === 'selected' ? 8 : highlightLevel === 'hovered' ? 4 : 0;
+  const size = baseSize + sizeBonus;
+  
+  // Stroke adjustments for glow effect (keep original color)
+  const strokeWidth = highlightLevel === 'selected' ? 4 : highlightLevel === 'hovered' ? 3 : 2;
+  const stroke = color; // Always use original color for glow effect
   const fill = '#FFFFFF';
   const half = size / 2;
+  
+  // Add glow filter for highlighted states
+  const glowFilter = highlightLevel
+    ? `<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+         <feGaussianBlur stdDeviation="${highlightLevel === 'selected' ? 3 : 2}" result="coloredBlur"/>
+         <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+       </filter></defs>`
+    : '';
+  const filterAttr = highlightLevel ? 'filter="url(#glow)"' : '';
 
   // Special handling for GRØKONSTR - make it larger and rectangular
   if (category === INFRA_CATEGORIES.GROKONSTR) {
-    const rectWidth = isHighlighted ? 28 : 22;
-    const rectHeight = isHighlighted ? 18 : 14;
+    const rectWidth = size > 20 ? 28 : 22;
+    const rectHeight = size > 20 ? 18 : 14;
     const rectX = (size - rectWidth) / 2;
     const rectY = (size - rectHeight) / 2;
     // Rectangle with diagonal hash pattern
@@ -257,10 +270,10 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
     }" y2="${rectY + 14}"/>
       </g>`;
 
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${glowFilter}<g ${filterAttr}>${svgPath}</g></svg>`;
     return L.divIcon({
       html: svg,
-      className: 'custom-div-icon',
+      className: `custom-div-icon${highlightLevel ? ` marker-${highlightLevel}` : ''}`,
       iconSize: [size, size],
       iconAnchor: [half, half],
       popupAnchor: [0, -half],
@@ -475,11 +488,11 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${glowFilter}<g ${filterAttr}>${svgPath}</g></svg>`;
 
   return L.divIcon({
     html: svg,
-    className: 'custom-div-icon',
+    className: `custom-div-icon${highlightLevel ? ` marker-${highlightLevel}` : ''}`,
     iconSize: [size, size],
     iconAnchor: [half, half],
     popupAnchor: [0, -half],
@@ -496,7 +509,7 @@ export const LEGEND_ITEMS = [
   {
     category: INFRA_CATEGORIES.WASTEWATER,
     label: 'Spillvann (SP)',
-    color: '#228B22',
+    color: '#02D902',
   },
   {
     category: INFRA_CATEGORIES.STORMWATER,
@@ -551,7 +564,7 @@ export const LEGEND_ITEMS = [
   {
     category: INFRA_CATEGORIES.LOK,
     label: 'Kumlokk (LOK)',
-    color: '#cc3300',
+    color: '#FFD400',
   },
   {
     category: INFRA_CATEGORIES.OTHER,
@@ -1523,6 +1536,12 @@ export default function MapInner({ onZoomChange }) {
   const highlightedFeatureId = useStore(
     (state) => state.ui.highlightedFeatureId
   );
+  const hoveredFeatureId = useStore(
+    (state) => state.ui.hoveredFeatureId
+  );
+  const setHoveredFeature = useStore(
+    (state) => state.setHoveredFeature
+  );
   const filteredFeatureIds = useStore(
     (state) => state.ui.filteredFeatureIds
   );
@@ -1532,6 +1551,10 @@ export default function MapInner({ onZoomChange }) {
   );
   const feltHiddenValues = useStore(
     (state) => state.ui.feltHiddenValues
+  );
+  // Field validation panel state (takes precedence over other filters)
+  const fieldValidationOpen = useStore(
+    (state) => state.ui.fieldValidationOpen
   );
 
   const outlierResults = useStore((state) => state.outliers.results);
@@ -1543,6 +1566,12 @@ export default function MapInner({ onZoomChange }) {
   );
   const setSelected3DObject = useStore(
     (state) => state.setSelected3DObject
+  );
+  const toggleAnalysisModal = useStore(
+    (state) => state.toggleAnalysisModal
+  );
+  const selectAnalysisPipe = useStore(
+    (state) => state.selectAnalysisPipe
   );
 
   // Handle "Vis i 3D" button clicks in popups
@@ -1569,6 +1598,24 @@ export default function MapInner({ onZoomChange }) {
     document.addEventListener('click', handleVisI3D);
     return () => document.removeEventListener('click', handleVisI3D);
   }, [setActiveViewTab, setSelected3DObject]);
+
+  // Handle "Åpne Profilanalyse" button clicks in popups
+  useEffect(() => {
+    const handleApneProfilanalyse = (e) => {
+      const btn = e.target.closest('.apne-profilanalyse-btn');
+      if (btn) {
+        const index = parseInt(btn.dataset.index, 10);
+
+        // Open Profilanalyse modal and select this pipe
+        toggleAnalysisModal(true);
+        selectAnalysisPipe(index);
+      }
+    };
+
+    document.addEventListener('click', handleApneProfilanalyse);
+    return () =>
+      document.removeEventListener('click', handleApneProfilanalyse);
+  }, [toggleAnalysisModal, selectAnalysisPipe]);
 
   // Build set of outlier feature IDs for filtering
   const outlierFeatureIds = useMemo(() => {
@@ -1703,33 +1750,40 @@ export default function MapInner({ onZoomChange }) {
         ? `ledninger-${feature.properties.id}`
         : null;
 
-    // When felt filter is active, use it instead of tema filter
-    let isHidden;
-    if (feltFilterActive) {
-      isHidden = isHiddenByFeltFilter(feature, 'lines');
-    } else {
-      const isHiddenByCode = hiddenCodes.includes(fcode);
-      // Check if this specific type+code combination is hidden
-      const isHiddenByType = hiddenTypes.some(
-        (ht) =>
-          ht.type === typeVal &&
-          (ht.code === null || ht.code === fcode)
-      );
-      isHidden = isHiddenByCode || isHiddenByType;
+    // When field validation is open, skip tema/felt filters (use filteredFeatureIds instead)
+    let isHidden = false;
+    if (!fieldValidationOpen) {
+      // When felt filter is active, use it instead of tema filter
+      if (feltFilterActive) {
+        isHidden = isHiddenByFeltFilter(feature, 'lines');
+      } else {
+        const isHiddenByCode = hiddenCodes.includes(fcode);
+        // Check if this specific type+code combination is hidden
+        const isHiddenByType = hiddenTypes.some(
+          (ht) =>
+            ht.type === typeVal &&
+            (ht.code === null || ht.code === fcode)
+        );
+        isHidden = isHiddenByCode || isHiddenByType;
+      }
     }
 
-    const isHighlightedByCode = highlightedCode === fcode;
+    const isHighlightedByCode = !fieldValidationOpen && highlightedCode === fcode;
     // Type highlighting should respect the code context if one is set
     const isHighlightedByType =
+      !fieldValidationOpen &&
       highlightedType === typeVal &&
       (highlightedTypeContext === null ||
         highlightedTypeContext === fcode);
-    const isHighlightedByFeature =
+    const isSelectedFeature =
       featureId && highlightedFeatureId === featureId;
+    const isHoveredFeature =
+      featureId && hoveredFeatureId === featureId;
     const isHighlighted =
       isHighlightedByCode ||
       isHighlightedByType ||
-      isHighlightedByFeature;
+      isSelectedFeature;
+    const isHovered = isHoveredFeature && !isHighlighted; // Don't double-highlight
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -1777,17 +1831,39 @@ export default function MapInner({ onZoomChange }) {
       }
     }
 
-    const color = isHighlighted ? '#00FFFF' : getColorByFCode(fcode);
+    // Get base styling
+    const baseColor = getColorByFCode(fcode);
     const baseWeight = getLineWeight(feature.properties);
-    const weight = isHighlighted ? baseWeight + 4 : baseWeight;
-    const opacity = isHighlighted ? 1 : 0.9;
+
+    // Two-level highlight system:
+    // - Selected (persistent): thick glow outline, original color
+    // - Hovered (temporary): medium glow outline, original color
+    if (isHighlighted) {
+      return {
+        color: baseColor, // Keep original color
+        weight: baseWeight + 6, // Thicker for selected
+        opacity: 1,
+        dashArray: fcode && fcode.includes('DR') ? '5, 5' : null,
+        // Simulate glow by using className for potential CSS effects
+        className: 'leaflet-line-selected',
+      };
+    }
+
+    if (isHovered) {
+      return {
+        color: baseColor, // Keep original color
+        weight: baseWeight + 3, // Slightly thicker for hover
+        opacity: 1,
+        dashArray: fcode && fcode.includes('DR') ? '5, 5' : null,
+        className: 'leaflet-line-hovered',
+      };
+    }
 
     return {
-      color: color,
-      weight: weight,
-      opacity: opacity,
+      color: baseColor,
+      weight: baseWeight,
+      opacity: 0.9,
       dashArray: fcode && fcode.includes('DR') ? '5, 5' : null,
-      shadowBlur: isHighlighted ? 10 : 0, // Note: Leaflet doesn't support shadowBlur natively in simple path options, but we can simulate "glow" with color/weight
     };
   };
 
@@ -1799,33 +1875,40 @@ export default function MapInner({ onZoomChange }) {
         ? `punkter-${feature.properties.id}`
         : null;
 
-    // When felt filter is active, use it instead of tema filter
-    let isHidden;
-    if (feltFilterActive) {
-      isHidden = isHiddenByFeltFilter(feature, 'points');
-    } else {
-      const isHiddenByCode = hiddenCodes.includes(fcode);
-      // Check if this specific type+code combination is hidden
-      const isHiddenByType = hiddenTypes.some(
-        (ht) =>
-          ht.type === typeVal &&
-          (ht.code === null || ht.code === fcode)
-      );
-      isHidden = isHiddenByCode || isHiddenByType;
+    // When field validation is open, skip tema/felt filters (use filteredFeatureIds instead)
+    let isHidden = false;
+    if (!fieldValidationOpen) {
+      // When felt filter is active, use it instead of tema filter
+      if (feltFilterActive) {
+        isHidden = isHiddenByFeltFilter(feature, 'points');
+      } else {
+        const isHiddenByCode = hiddenCodes.includes(fcode);
+        // Check if this specific type+code combination is hidden
+        const isHiddenByType = hiddenTypes.some(
+          (ht) =>
+            ht.type === typeVal &&
+            (ht.code === null || ht.code === fcode)
+        );
+        isHidden = isHiddenByCode || isHiddenByType;
+      }
     }
 
-    const isHighlightedByCode = highlightedCode === fcode;
+    const isHighlightedByCode = !fieldValidationOpen && highlightedCode === fcode;
     // Type highlighting should respect the code context if one is set
     const isHighlightedByType =
+      !fieldValidationOpen &&
       highlightedType === typeVal &&
       (highlightedTypeContext === null ||
         highlightedTypeContext === fcode);
-    const isHighlightedByFeature =
+    const isSelectedFeature =
       featureId && highlightedFeatureId === featureId;
+    const isHoveredFeature =
+      featureId && hoveredFeatureId === featureId;
     const isHighlighted =
       isHighlightedByCode ||
       isHighlightedByType ||
-      isHighlightedByFeature;
+      isSelectedFeature;
+    const isHovered = isHoveredFeature && !isHighlighted; // Don't double-highlight
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -1850,7 +1933,9 @@ export default function MapInner({ onZoomChange }) {
 
     const color = getColorByFCode(fcode);
     const category = getCategoryByFCode(fcode);
-    const icon = createSvgMarker(category, color, isHighlighted);
+    // Pass highlight level to marker: 'selected', 'hovered', or false
+    const highlightLevel = isHighlighted ? 'selected' : isHovered ? 'hovered' : false;
+    const icon = createSvgMarker(category, color, highlightLevel);
 
     return L.marker(latlng, { icon });
   };
@@ -1864,17 +1949,20 @@ export default function MapInner({ onZoomChange }) {
         ? 'points'
         : 'lines';
 
-    // Check felt filter or tema filter based on what's active
-    let isHidden;
-    if (feltFilterActive) {
-      isHidden = isHiddenByFeltFilter(feature, objectType);
-    } else {
-      const isHiddenByType = hiddenTypes.some(
-        (ht) =>
-          ht.type === typeVal &&
-          (ht.code === null || ht.code === fcode)
-      );
-      isHidden = hiddenCodes.includes(fcode) || isHiddenByType;
+    // When field validation is open, skip tema/felt filters
+    let isHidden = false;
+    if (!fieldValidationOpen) {
+      // Check felt filter or tema filter based on what's active
+      if (feltFilterActive) {
+        isHidden = isHiddenByFeltFilter(feature, objectType);
+      } else {
+        const isHiddenByType = hiddenTypes.some(
+          (ht) =>
+            ht.type === typeVal &&
+            (ht.code === null || ht.code === fcode)
+        );
+        isHidden = hiddenCodes.includes(fcode) || isHiddenByType;
+      }
     }
 
     if (isHidden) {
@@ -1910,15 +1998,44 @@ export default function MapInner({ onZoomChange }) {
       if (e.originalEvent) {
         e.originalEvent._featureClicked = true;
       }
+
+      // When Profilanalyse is open and clicking a Line, switch to that profile
+      if (
+        analysis.isOpen &&
+        feature.properties?.featureType === 'Line'
+      ) {
+        const lineIndex = feature.properties.id;
+        selectAnalysisPipe(lineIndex);
+
+        // Suppress the popup by stopping propagation
+        if (e.originalEvent) {
+          L.DomEvent.stopPropagation(e.originalEvent);
+        }
+        // Close any open popup
+        if (layer.getPopup && layer.getPopup()) {
+          layer.closePopup();
+        }
+        return;
+      }
+    });
+
+    // Add hover handlers for two-level highlight system
+    const featureId =
+      feature.properties?.featureType === 'Point'
+        ? `punkter-${feature.properties.id}`
+        : `ledninger-${feature.properties.id}`;
+
+    layer.on('mouseover', () => {
+      setHoveredFeature(featureId);
+    });
+
+    layer.on('mouseout', () => {
+      setHoveredFeature(null);
     });
 
     if (feature.properties) {
       const props = feature.properties;
       const color = getColorByFCode(fcode);
-      const featureId =
-        props.featureType === 'Point'
-          ? `punkter-${props.id}`
-          : `ledninger-${props.id}`;
 
       let content = `<div class="text-sm max-h-60 flex flex-col">`;
       content += `<div>`;
@@ -1943,15 +2060,30 @@ export default function MapInner({ onZoomChange }) {
       });
       content += '</div>';
 
+      // Add buttons container
+      content += `<div class="mt-2 pt-2 border-t space-y-1">`;
+
+      // Add "Åpne Profilanalyse" button only for Line features
+      if (props.featureType === 'Line') {
+        content += `
+        <button 
+          class="apne-profilanalyse-btn w-full px-2 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded transition-colors"
+          data-feature-id="${featureId}"
+          data-index="${props.id}"
+        >
+          Åpne Profilanalyse
+        </button>`;
+      }
+
       // Add "Vis i 3D" button
-      content += `<div class="mt-2 pt-2 border-t">
+      content += `
         <button 
           class="vis-i-3d-btn w-full px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
           data-feature-id="${featureId}"
           data-feature-type="${props.featureType}"
           data-index="${props.id}"
         >
-          🎯 Vis i 3D
+          Vis i 3D
         </button>
       </div>`;
       content += '</div>';
@@ -1959,12 +2091,23 @@ export default function MapInner({ onZoomChange }) {
     }
   };
 
+  // Create a canvas renderer with willReadFrequently to fix tile seam artifacts on Edge
+  const canvasRenderer = useMemo(
+    () =>
+      L.canvas({
+        willReadFrequently: true,
+      }),
+    []
+  );
+
   return (
     <MapContainer
       center={[59.9139, 10.7522]}
       zoom={13}
       style={{ height: '100%', width: '100%' }}
       maxZoom={25} // Allow higher zoom levels globally
+      preferCanvas={true}
+      renderer={canvasRenderer}
     >
       <LayersControl position="topright">
         <LayersControl.BaseLayer checked name="Kartverket Topo">
@@ -2001,6 +2144,8 @@ export default function MapInner({ onZoomChange }) {
             }-${hiddenTypes.join(',')}-${highlightedType || 'none'}-${
               highlightedTypeContext || 'none'
             }-${highlightedFeatureId || 'none'}-${
+              hoveredFeatureId || 'none'
+            }-${
               analysis.isOpen ? analysis.selectedPipeIndex : 'closed'
             }-${
               filteredFeatureIds
@@ -2014,7 +2159,9 @@ export default function MapInner({ onZoomChange }) {
                 : 'no-outliers'
             }-feltFilter-${feltFilterActive ? 'on' : 'off'}-${
               feltHiddenValues.length
-            }-measure-${measureMode ? 'on' : 'off'}`}
+            }-measure-${measureMode ? 'on' : 'off'}-fieldValidation-${
+              fieldValidationOpen ? 'on' : 'off'
+            }`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}

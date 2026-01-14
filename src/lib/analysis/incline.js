@@ -57,7 +57,14 @@ function getPipeType(attributes) {
 }
 
 // Helper to get minimum incline based on dimension (Norwegian VA standards)
-function getMinIncline(attributes) {
+// mode: 'fixed' = 10‰ for all, 'dimension' = dimension-based
+function getMinIncline(attributes, mode = 'fixed') {
+  // Fixed mode: always 10‰
+  if (mode === 'fixed') {
+    return { min: 10, label: 'Fast 10‰' };
+  }
+
+  // Dimension-based mode
   const dimStr = attributes.Dimensjon || attributes.Dim || '';
   // Extract number from string (e.g. "160mm" -> 160)
   const dim = parseInt(String(dimStr).replace(/\D/g, ''), 10);
@@ -69,7 +76,7 @@ function getMinIncline(attributes) {
   return { min: 2, label: `> 315mm` };
 }
 
-export function analyzeIncline(data) {
+export function analyzeIncline(data, fallkravMode = 'fixed') {
   if (!data || !data.lines) return [];
 
   const results = [];
@@ -208,7 +215,7 @@ export function analyzeIncline(data) {
       });
     }
 
-    const minInclineRule = getMinIncline(line.attributes);
+    const minInclineRule = getMinIncline(line.attributes, fallkravMode);
 
     result.details = {
       startZ,

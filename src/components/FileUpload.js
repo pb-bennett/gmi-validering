@@ -133,7 +133,12 @@ export default function FileUpload() {
           }
 
           if (parsedData?.errors?.length > 0) {
-            throw new Error(parsedData.errors[0]);
+            const firstError = parsedData.errors[0];
+            const errorMessage =
+              typeof firstError === 'string'
+                ? firstError
+                : firstError?.message || 'Ukjent feil under parsing';
+            throw new Error(errorMessage);
           }
 
           // Check if parsing yielded any data

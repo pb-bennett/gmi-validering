@@ -1,4 +1,11 @@
+'use client';
+
+import useStore from '@/lib/store';
+
 export default function StandardsInfoModal({ isOpen, onClose }) {
+  const fallkravMode = useStore((state) => state.analysis.fallkravMode);
+  const setFallkravMode = useStore((state) => state.setFallkravMode);
+
   if (!isOpen) return null;
 
   return (
@@ -41,30 +48,70 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
             basert på rørdimensjon for å sikre selvrensing.
           </p>
 
+          {/* Fallkrav mode selection */}
+          <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+            <h3 className="font-semibold text-gray-800 mb-3">
+              Velg fallkrav for analyse:
+            </h3>
+            <div className="space-y-2">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="fallkravMode"
+                  value="fixed"
+                  checked={fallkravMode === 'fixed'}
+                  onChange={() => setFallkravMode('fixed')}
+                  className="mr-2"
+                />
+                <span className="font-medium">Fast 10 ‰ for alle dimensjoner</span>
+                <span className="ml-2 text-xs text-gray-500">(standard)</span>
+              </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="fallkravMode"
+                  value="dimension"
+                  checked={fallkravMode === 'dimension'}
+                  onChange={() => setFallkravMode('dimension')}
+                  className="mr-2"
+                />
+                <span className="font-medium">Fallkrav avhengig av dimensjon</span>
+              </label>
+            </div>
+          </div>
+
           <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
             <h3 className="font-semibold text-blue-800 mb-2">
-              Minimumskrav til fall:
+              {fallkravMode === 'fixed'
+                ? 'Aktivt krav (fast):'
+                : 'Dimensjonsbaserte krav:'}
             </h3>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>
-                <span className="font-medium">
-                  Dimensjon &lt; 200 mm:
-                </span>
-                <span className="font-bold ml-2">10 ‰ (1:100)</span>
-              </li>
-              <li>
-                <span className="font-medium">
-                  Dimensjon 200 - 315 mm:
-                </span>
-                <span className="font-bold ml-2">4 ‰ (1:250)</span>
-              </li>
-              <li>
-                <span className="font-medium">
-                  Dimensjon &gt; 315 mm:
-                </span>
-                <span className="font-bold ml-2">2 ‰ (1:500)</span>
-              </li>
-            </ul>
+            {fallkravMode === 'fixed' ? (
+              <p className="ml-2">
+                <span className="font-bold">10 ‰ (1:100)</span> for alle selvfallsledninger
+              </p>
+            ) : (
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>
+                  <span className="font-medium">
+                    Dimensjon &lt; 200 mm:
+                  </span>
+                  <span className="font-bold ml-2">10 ‰ (1:100)</span>
+                </li>
+                <li>
+                  <span className="font-medium">
+                    Dimensjon 200 - 315 mm:
+                  </span>
+                  <span className="font-bold ml-2">4 ‰ (1:250)</span>
+                </li>
+                <li>
+                  <span className="font-medium">
+                    Dimensjon &gt; 315 mm:
+                  </span>
+                  <span className="font-bold ml-2">2 ‰ (1:500)</span>
+                </li>
+              </ul>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -100,7 +147,7 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
               Merk: Analysen markerer ledninger med "Advarsel" (Gult)
               dersom fallet er under minimumskravet, men over 0.
               Ledninger med motfall (negativt fall) markeres med
-              "Feil" (Rødt).
+              "Feil" (Rødt). Trykkledninger er unntatt fallkrav.
             </p>
           </div>
         </div>

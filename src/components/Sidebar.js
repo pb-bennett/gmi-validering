@@ -16,10 +16,11 @@ function InclineAnalysisControl() {
     (state) => state.toggleAnalysisModal
   );
   const analysisResults = useStore((state) => state.analysis.results);
+  const fallkravMode = useStore((state) => state.analysis.fallkravMode);
 
   const runAnalysis = () => {
     if (!data) return;
-    const results = analyzeIncline(data);
+    const results = analyzeIncline(data, fallkravMode);
     setAnalysisResults(results);
     toggleAnalysisModal(true);
   };
@@ -1855,10 +1856,12 @@ export default function Sidebar({ onReset }) {
             {/* Subsection: Avvik */}
             <div>
               <h4
-                className="text-xs font-semibold uppercase tracking-wider mb-2"
+                className="text-xs font-semibold uppercase tracking-wider mb-2 flex items-center gap-1"
                 style={{ color: 'var(--color-text-secondary)' }}
+                title="Finner objekter som ligger langt fra resten av datasettet (geometriske avvikere). Bruker z-score på avstanden fra hvert objekt til datasettets sentrum. Objekter med z-score over 3 markeres som avvik."
               >
-                Avviksdeteksjon
+                Geometriske avvik
+                <span className="text-gray-400 cursor-help">ⓘ</span>
               </h4>
               {isKof ? (
                 <p className="text-sm text-gray-500 italic">

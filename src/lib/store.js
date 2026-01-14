@@ -51,6 +51,7 @@ const useStore = create(
             selectedPipeIndex: null,
             hoveredPointIndex: null,
             hoveredSegment: null,
+            fallkravMode: 'fixed',
           },
           outliers: {
             results: null,
@@ -68,7 +69,8 @@ const useStore = create(
             highlightedTypeContext: null,
             hiddenTypes: [],
             dataTableOpen: false,
-            highlightedFeatureId: null,
+            highlightedFeatureId: null, // Selected/persistent highlight
+            hoveredFeatureId: null, // Temporary hover highlight
             fieldValidationOpen: false,
             missingReportOpen: false,
             filteredFeatureIds: null,
@@ -329,6 +331,7 @@ const useStore = create(
           selectedPipeIndex: null,
           hoveredPointIndex: null,
           hoveredSegment: null, // { p1: number, p2: number } | null
+          fallkravMode: 'fixed', // 'fixed' = 10‰ for all, 'dimension' = dimension-based
         },
 
         setAnalysisResults: (results) =>
@@ -338,6 +341,15 @@ const useStore = create(
             }),
             false,
             'analysis/setResults'
+          ),
+
+        setFallkravMode: (mode) =>
+          set(
+            (state) => ({
+              analysis: { ...state.analysis, fallkravMode: mode },
+            }),
+            false,
+            'analysis/setFallkravMode'
           ),
 
         toggleAnalysisModal: (isOpen) =>
@@ -843,6 +855,15 @@ const useStore = create(
             }),
             false,
             'ui/setHighlightedFeature'
+          ),
+
+        setHoveredFeature: (featureId) =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, hoveredFeatureId: featureId },
+            }),
+            false,
+            'ui/setHoveredFeature'
           ),
 
         toggleDetailsPanel: () =>

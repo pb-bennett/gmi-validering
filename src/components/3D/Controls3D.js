@@ -89,10 +89,10 @@ export default function Controls3D() {
           Navigasjon:
         </p>
         <ul className="space-y-1 text-gray-600">
-          <li>🖱️ Venstre: Roter</li>
-          <li>🖱️ Høyre: Panorér</li>
-          <li>🖱️ Rull: Zoom</li>
-          <li>🎯 Klikk: Sentrer på objekt</li>
+          <li>Venstre: Roter</li>
+          <li>Høyre: Panorér</li>
+          <li>Rull: Zoom</li>
+          <li>Klikk: Sentrer på objekt</li>
         </ul>
       </div>
     </>

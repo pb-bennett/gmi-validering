@@ -265,7 +265,7 @@ export function transformPoints(
         position: position,
         radius: Math.max(radius, 0.3), // Min 30cm radius
         thickness: LOK_THICKNESS, // 7cm thick
-        color: '#ec4899', // Distinct pink color for LOK to distinguish from KUM
+        color: '#FFD400', // Bright yellow for LOK to distinguish from KUM
         fcode: fcode,
         pointIndex: pointIndex,
         type: point.attributes?.Type || '(Mangler Type)',
@@ -375,8 +375,8 @@ function getPointColor(fcode) {
     SLU: '#000000',
     SAN: '#1a1a1a',
 
-    // LOK - Magenta
-    LOK: '#ff00ff',
+    // LOK - Bright Yellow
+    LOK: '#FFD400',
 
     // Water related - Blue
     VL: '#0101FF',

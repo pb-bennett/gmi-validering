@@ -119,6 +119,25 @@
   border: none !important;
 }
 
+/* Highlight glow effects for markers */
+.marker-selected svg,
+.marker-hovered svg {
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.marker-selected svg {
+  filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 10px currentColor);
+}
+
+/* Line highlight styles - Leaflet path classes */
+.leaflet-line-selected {
+  filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 0 8px currentColor);
+}
+
+.leaflet-line-hovered {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
 /* Measure tool: keep cursor consistent while measuring */
 .leaflet-container.measure-mode,
 .leaflet-container.measure-mode .leaflet-interactive {

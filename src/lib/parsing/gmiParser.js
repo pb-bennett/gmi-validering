@@ -21,10 +21,20 @@ export class GMIParser {
     this.pointFieldNames = [];
     this._parsed = false;
 
-    // Validate content before parsing
+    // Validate and parse content, catching any errors
     if (fileContent) {
-      this._validateContent();
-      this.parse();
+      try {
+        this._validateContent();
+        this.parse();
+      } catch (error) {
+        // Capture validation/parse errors instead of throwing
+        this.errors.push({
+          type: 'VALIDATION_ERROR',
+          message: error.message,
+          details: error.stack,
+        });
+        this.warnings.push(`Parsing stoppet: ${error.message}`);
+      }
     }
   }
 

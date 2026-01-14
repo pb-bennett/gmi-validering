@@ -22,6 +22,10 @@ export default function Viewer3D() {
   const setSelected3DObject = useStore(
     (state) => state.setSelected3DObject
   );
+  const analysisIsOpen = useStore((state) => state.analysis?.isOpen);
+  const selectAnalysisPipe = useStore(
+    (state) => state.selectAnalysisPipe
+  );
   const [tooltipData, setTooltipData] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({
     x: 0,
@@ -42,6 +46,17 @@ export default function Viewer3D() {
   if (!data) return null;
 
   const handleObjectClick = (objectData, event) => {
+    // When Profilanalyse is open and clicking a pipe, switch to that profile
+    if (
+      analysisIsOpen &&
+      objectData.type === 'pipe' &&
+      objectData.lineIndex !== undefined
+    ) {
+      selectAnalysisPipe(objectData.lineIndex);
+      // Don't show tooltip when in Profilanalyse mode
+      return;
+    }
+
     setTooltipData(objectData);
     setTooltipPosition({ x: event.clientX, y: event.clientY });
   };

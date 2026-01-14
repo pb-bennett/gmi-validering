@@ -12,7 +12,7 @@ export default function Legend3D() {
     { label: 'Kum (KUM)', color: '#cc3300', shape: 'cylinder' },
     { label: 'Sluk (SLU/SLS)', color: '#000000', shape: 'cylinder' },
     { label: 'Sandfang (SAN)', color: '#1a1a1a', shape: 'cylinder' },
-    { label: 'Lokk (LOK)', color: '#cc3300', shape: 'disc' },
+    { label: 'Kumlokk (LOK)', color: '#FFD400', shape: 'disc' },
     { label: 'Kran (KRN)', color: '#0066cc', shape: 'sphere' },
     { label: 'Anboring', color: '#0066cc', shape: 'sphere' },
     { label: 'Grenpunkt (GRN)', color: '#00cc00', shape: 'sphere' },
