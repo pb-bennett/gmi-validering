@@ -1429,6 +1429,59 @@ function FeatureHighlighter({ geoJsonData }) {
   return null;
 }
 
+function FieldValidationZoomHandler({ geoJsonData }) {
+  const map = useMap();
+  const filteredFeatureIds = useStore(
+    (state) => state.ui.filteredFeatureIds
+  );
+  const fieldValidationFilterActive = useStore(
+    (state) => state.ui.fieldValidationFilterActive
+  );
+
+  useEffect(() => {
+    if (
+      !map ||
+      !geoJsonData ||
+      !fieldValidationFilterActive ||
+      !filteredFeatureIds ||
+      !filteredFeatureIds.size
+    ) {
+      return;
+    }
+
+    try {
+      const features = geoJsonData.features.filter((f) => {
+        const type =
+          f.properties?.featureType === 'Line'
+            ? 'ledninger'
+            : 'punkter';
+        const id = `${type}-${f.properties?.id}`;
+        return filteredFeatureIds.has(id);
+      });
+
+      if (features.length === 0) return;
+
+      const layer = L.geoJSON({
+        type: 'FeatureCollection',
+        features,
+      });
+      const bounds = layer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+      }
+    } catch (e) {
+      console.warn('Could not fit bounds for feltvalidering', e);
+    }
+  }, [
+    map,
+    geoJsonData,
+    filteredFeatureIds,
+    fieldValidationFilterActive,
+  ]);
+
+  return null;
+}
+
 function MapCenterHandler() {
   const map = useMap();
   const data = useStore((state) => state.data);
@@ -1523,8 +1576,14 @@ export default function MapInner({ onZoomChange }) {
   const highlightedFeatureId = useStore(
     (state) => state.ui.highlightedFeatureId
   );
+  const highlightedFeatureIds = useStore(
+    (state) => state.ui.highlightedFeatureIds
+  );
   const filteredFeatureIds = useStore(
     (state) => state.ui.filteredFeatureIds
+  );
+  const fieldValidationFilterActive = useStore(
+    (state) => state.ui.fieldValidationFilterActive
   );
   // Felt filter state
   const feltFilterActive = useStore(
@@ -1703,19 +1762,21 @@ export default function MapInner({ onZoomChange }) {
         ? `ledninger-${feature.properties.id}`
         : null;
 
-    // When felt filter is active, use it instead of tema filter
-    let isHidden;
-    if (feltFilterActive) {
-      isHidden = isHiddenByFeltFilter(feature, 'lines');
-    } else {
-      const isHiddenByCode = hiddenCodes.includes(fcode);
-      // Check if this specific type+code combination is hidden
-      const isHiddenByType = hiddenTypes.some(
-        (ht) =>
-          ht.type === typeVal &&
-          (ht.code === null || ht.code === fcode)
-      );
-      isHidden = isHiddenByCode || isHiddenByType;
+    // When field validation filter is active, ignore other filters
+    let isHidden = false;
+    if (!fieldValidationFilterActive) {
+      if (feltFilterActive) {
+        isHidden = isHiddenByFeltFilter(feature, 'lines');
+      } else {
+        const isHiddenByCode = hiddenCodes.includes(fcode);
+        // Check if this specific type+code combination is hidden
+        const isHiddenByType = hiddenTypes.some(
+          (ht) =>
+            ht.type === typeVal &&
+            (ht.code === null || ht.code === fcode)
+        );
+        isHidden = isHiddenByCode || isHiddenByType;
+      }
     }
 
     const isHighlightedByCode = highlightedCode === fcode;
@@ -1726,10 +1787,16 @@ export default function MapInner({ onZoomChange }) {
         highlightedTypeContext === fcode);
     const isHighlightedByFeature =
       featureId && highlightedFeatureId === featureId;
+    const isHighlightedByFeatures =
+      featureId &&
+      highlightedFeatureIds &&
+      highlightedFeatureIds.has &&
+      highlightedFeatureIds.has(featureId);
     const isHighlighted =
       isHighlightedByCode ||
       isHighlightedByType ||
-      isHighlightedByFeature;
+      isHighlightedByFeature ||
+      isHighlightedByFeatures;
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -1740,6 +1807,7 @@ export default function MapInner({ onZoomChange }) {
 
     // Outlier filtering
     const isOutlier =
+      !fieldValidationFilterActive &&
       outlierFeatureIds &&
       featureId &&
       outlierFeatureIds.has(featureId);
@@ -1799,19 +1867,21 @@ export default function MapInner({ onZoomChange }) {
         ? `punkter-${feature.properties.id}`
         : null;
 
-    // When felt filter is active, use it instead of tema filter
-    let isHidden;
-    if (feltFilterActive) {
-      isHidden = isHiddenByFeltFilter(feature, 'points');
-    } else {
-      const isHiddenByCode = hiddenCodes.includes(fcode);
-      // Check if this specific type+code combination is hidden
-      const isHiddenByType = hiddenTypes.some(
-        (ht) =>
-          ht.type === typeVal &&
-          (ht.code === null || ht.code === fcode)
-      );
-      isHidden = isHiddenByCode || isHiddenByType;
+    // When field validation filter is active, ignore other filters
+    let isHidden = false;
+    if (!fieldValidationFilterActive) {
+      if (feltFilterActive) {
+        isHidden = isHiddenByFeltFilter(feature, 'points');
+      } else {
+        const isHiddenByCode = hiddenCodes.includes(fcode);
+        // Check if this specific type+code combination is hidden
+        const isHiddenByType = hiddenTypes.some(
+          (ht) =>
+            ht.type === typeVal &&
+            (ht.code === null || ht.code === fcode)
+        );
+        isHidden = isHiddenByCode || isHiddenByType;
+      }
     }
 
     const isHighlightedByCode = highlightedCode === fcode;
@@ -1822,10 +1892,16 @@ export default function MapInner({ onZoomChange }) {
         highlightedTypeContext === fcode);
     const isHighlightedByFeature =
       featureId && highlightedFeatureId === featureId;
+    const isHighlightedByFeatures =
+      featureId &&
+      highlightedFeatureIds &&
+      highlightedFeatureIds.has &&
+      highlightedFeatureIds.has(featureId);
     const isHighlighted =
       isHighlightedByCode ||
       isHighlightedByType ||
-      isHighlightedByFeature;
+      isHighlightedByFeature ||
+      isHighlightedByFeatures;
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -1836,6 +1912,7 @@ export default function MapInner({ onZoomChange }) {
 
     // Outlier filtering
     const isOutlier =
+      !fieldValidationFilterActive &&
       outlierFeatureIds &&
       featureId &&
       outlierFeatureIds.has(featureId);
@@ -2001,6 +2078,12 @@ export default function MapInner({ onZoomChange }) {
             }-${hiddenTypes.join(',')}-${highlightedType || 'none'}-${
               highlightedTypeContext || 'none'
             }-${highlightedFeatureId || 'none'}-${
+              highlightedFeatureIds
+                ? Array.from(highlightedFeatureIds)
+                    .slice(0, 3)
+                    .join(',') + highlightedFeatureIds.size
+                : 'no-multi-highlight'
+            }-${
               analysis.isOpen ? analysis.selectedPipeIndex : 'closed'
             }-${
               filteredFeatureIds
@@ -2014,6 +2097,8 @@ export default function MapInner({ onZoomChange }) {
                 : 'no-outliers'
             }-feltFilter-${feltFilterActive ? 'on' : 'off'}-${
               feltHiddenValues.length
+            }-fieldValidation-${
+              fieldValidationFilterActive ? 'on' : 'off'
             }-measure-${measureMode ? 'on' : 'off'}`}
             data={geoJsonData}
             style={lineStyle}
@@ -2028,6 +2113,7 @@ export default function MapInner({ onZoomChange }) {
         ignoredFeatureIds={outlierFeatureIdsForBounds}
       />
       <FeatureHighlighter geoJsonData={geoJsonData} />
+      <FieldValidationZoomHandler geoJsonData={geoJsonData} />
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}
       <MapSizeInvalidator />
       <ZoomToFeatureHandler />

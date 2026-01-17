@@ -751,8 +751,12 @@ export default function Sidebar({ onReset }) {
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef(null);
 
-  // State for accordion sections
-  const [openSection, setOpenSection] = useState('oversikt');
+  const openSection = useStore(
+    (state) => state.ui.sidebarOpenSection
+  );
+  const setSidebarOpenSection = useStore(
+    (state) => state.setSidebarOpenSection
+  );
 
   const isKof = data?.format === 'KOF';
 
@@ -761,7 +765,7 @@ export default function Sidebar({ onReset }) {
 
   const toggleSection = (section) => {
     const newSection = openSection === section ? null : section;
-    setOpenSection(newSection);
+    setSidebarOpenSection(newSection);
     // Activate felt filter when Felt section is opened
     if (section === 'felt') {
       setFeltFilterActive(newSection === 'felt');

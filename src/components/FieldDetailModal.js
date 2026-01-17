@@ -26,33 +26,36 @@ export default function FieldDetailModal({ field, isOpen, onClose }) {
   return (
     <div className="absolute inset-0 z-[3000] flex flex-col bg-white animate-in slide-in-from-right duration-300">
       {/* Header */}
-      <div className="p-4 border-b flex justify-between items-start bg-gray-50 flex-none">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">
-            {field.label}
-          </h2>
-          <code className="text-xs text-gray-500 mt-1 block bg-gray-100 px-2 py-1 rounded w-fit">
-            {field.fieldKey}
-          </code>
-        </div>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-200 rounded-full transition-colors"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+      <div className="p-4 border-b bg-gray-50 flex-none">
+        <div className="flex items-start gap-3">
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-gray-200 rounded-full transition-colors text-gray-600"
+            title="Tilbake"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+          </button>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              {field.label}
+            </h2>
+            <code className="text-xs text-gray-500 mt-1 block bg-gray-100 px-2 py-1 rounded w-fit">
+              {field.fieldKey}
+            </code>
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}

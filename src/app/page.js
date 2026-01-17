@@ -221,9 +221,9 @@ export default function Home() {
             !analysisOpen &&
             !fieldValidationOpen && <Sidebar onReset={handleReset} />}
 
-          {/* Field Validation Sidebar - 50% width */}
+          {/* Field Validation Sidebar - 33% width */}
           {fieldValidationOpen && (
-            <div className="w-1/2 h-full flex-none">
+            <div className="w-1/3 h-full flex-none">
               <FieldValidationSidebar />
             </div>
           )}
@@ -231,7 +231,7 @@ export default function Home() {
           {/* Map Area */}
           <div
             className={`relative flex flex-col h-full ${
-              fieldValidationOpen ? 'w-1/2 flex-none' : 'flex-1'
+              fieldValidationOpen ? 'w-2/3 flex-none' : 'flex-1'
             }`}
           >
             {/* Show Map view when activeViewTab is 'map' or 3D viewer is not open */}

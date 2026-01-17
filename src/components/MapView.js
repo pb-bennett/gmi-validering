@@ -30,6 +30,9 @@ export default function MapView(props) {
   const setFilteredFeatureIds = useStore(
     (state) => state.setFilteredFeatureIds
   );
+  const fieldValidationFilterActive = useStore(
+    (state) => state.ui.fieldValidationFilterActive
+  );
 
   const outlierResults = useStore((state) => state.outliers.results);
   const outlierPromptOpen = useStore(
@@ -252,7 +255,7 @@ export default function MapView(props) {
           </div>
         )}
 
-      {filteredFeatureIds && (
+      {filteredFeatureIds && !fieldValidationFilterActive && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-1000 bg-white px-4 py-2 rounded-full shadow-lg border border-blue-200 flex items-center space-x-3">
           <span className="text-sm font-medium text-blue-800">
             Viser {filteredFeatureIds.size} objekter med mangler
