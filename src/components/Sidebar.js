@@ -16,10 +16,15 @@ function InclineAnalysisControl() {
     (state) => state.toggleAnalysisModal
   );
   const analysisResults = useStore((state) => state.analysis.results);
+  const inclineRequirementMode = useStore(
+    (state) => state.settings.inclineRequirementMode
+  );
 
   const runAnalysis = () => {
     if (!data) return;
-    const results = analyzeIncline(data);
+    const results = analyzeIncline(data, {
+      minInclineMode: inclineRequirementMode,
+    });
     setAnalysisResults(results);
     toggleAnalysisModal(true);
   };

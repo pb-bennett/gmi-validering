@@ -1,4 +1,25 @@
+import useStore from '@/lib/store';
+import { analyzeIncline } from '@/lib/analysis/incline';
+
 export default function StandardsInfoModal({ isOpen, onClose }) {
+  const data = useStore((state) => state.data);
+  const setAnalysisResults = useStore(
+    (state) => state.setAnalysisResults
+  );
+  const inclineRequirementMode = useStore(
+    (state) => state.settings.inclineRequirementMode
+  );
+  const updateSettings = useStore((state) => state.updateSettings);
+
+  const handleModeChange = (mode) => {
+    updateSettings({ inclineRequirementMode: mode });
+    if (data) {
+      const results = analyzeIncline(data, {
+        minInclineMode: mode,
+      });
+      setAnalysisResults(results);
+    }
+  };
   if (!isOpen) return null;
 
   return (
@@ -45,6 +66,45 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
             <h3 className="font-semibold text-blue-800 mb-2">
               Minimumskrav til fall:
             </h3>
+            <div className="space-y-3 mb-3">
+              <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                <input
+                  type="radio"
+                  name="inclineRequirement"
+                  value="fixed10"
+                  checked={inclineRequirementMode === 'fixed10'}
+                  onChange={() => handleModeChange('fixed10')}
+                  className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <div className="font-medium">
+                    Fast krav til fall: 10‰ for alle dimensjoner
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    Dette er standard og vil være valgt ved lasting.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                <input
+                  type="radio"
+                  name="inclineRequirement"
+                  value="variable"
+                  checked={inclineRequirementMode === 'variable'}
+                  onChange={() => handleModeChange('variable')}
+                  className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <div className="font-medium">
+                    Variabelt krav til fall basert på dimensjon
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    Dimensjon &lt; 200 mm: 10 ‰ (1:100) · Dimensjon 200 - 315 mm:
+                    4 ‰ (1:250) · Dimensjon &gt; 315 mm: 2 ‰ (1:500)
+                  </div>
+                </div>
+              </label>
+            </div>
             <ul className="list-disc list-inside space-y-1 ml-2">
               <li>
                 <span className="font-medium">

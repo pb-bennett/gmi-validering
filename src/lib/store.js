@@ -902,6 +902,7 @@ const useStore = create(
           autoValidateOnUpload: true,
           showWarnings: true,
           lastFileName: null,
+          inclineRequirementMode: 'fixed10', // 'fixed10' | 'variable'
         },
 
         updateSettings: (newSettings) =>
@@ -1044,6 +1045,19 @@ const useStore = create(
               if (state.ui.missingHeightLines === undefined) {
                 state.ui.missingHeightLines = [];
               }
+            }
+
+            if (!state.settings) {
+              state.settings = {
+                theme: 'light',
+                locale: 'nb-NO',
+                autoValidateOnUpload: true,
+                showWarnings: true,
+                lastFileName: null,
+                inclineRequirementMode: 'fixed10',
+              };
+            } else if (state.settings.inclineRequirementMode === undefined) {
+              state.settings.inclineRequirementMode = 'fixed10';
             }
 
             const now = Date.now();
