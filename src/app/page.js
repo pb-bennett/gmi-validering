@@ -289,7 +289,7 @@ export default function Home() {
                               'var(--color-card)')
                           }
                         >
-                          🔍 Inspiser data
+                          Inspiser data
                         </button>
                       </div>
                     )}

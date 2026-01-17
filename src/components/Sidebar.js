@@ -186,7 +186,7 @@ function TopplokControl() {
           ? showResults
             ? 'Skjul resultater'
             : 'Vis resultater'
-          : '🔍 Kjør topplok kontroll'}
+          : 'Kjør topplok kontroll'}
       </button>
 
       {results && (
@@ -384,7 +384,7 @@ function OutlierControl() {
           ? showResults
             ? 'Skjul resultater'
             : 'Vis resultater'
-          : '📍 Finn avvik'}
+          : 'Finn avvik'}
       </button>
 
       {outlierResults && (
@@ -1621,7 +1621,7 @@ export default function Sidebar({ onReset }) {
                     'var(--color-primary)')
                 }
               >
-                📊 Åpne full datatabell
+                Åpne full datatabell
               </button>
 
               {/* Tabs */}

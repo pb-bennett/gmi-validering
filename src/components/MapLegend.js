@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { LEGEND_ITEMS, getLegendSvg } from './MapInner';
+import { FCODE_COLORS, LEGEND_ITEMS, getLegendSvg } from './MapInner';
 import useStore from '@/lib/store';
 
 /**
@@ -185,23 +185,35 @@ export default function MapLegend() {
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2 px-1 py-0.5">
-              <div className="w-5 h-0.5 bg-[#ff0000] shrink-0"></div>
+              <div
+                className="w-5 h-0.5 shrink-0"
+                style={{ backgroundColor: FCODE_COLORS.AF }}
+              ></div>
               <span className="text-xs text-gray-700">
                 Avløp Felles (AF)
               </span>
             </div>
             <div className="flex items-center gap-2 px-1 py-0.5">
-              <div className="w-5 h-0.5 bg-[#0066cc] shrink-0"></div>
+              <div
+                className="w-5 h-0.5 shrink-0"
+                style={{ backgroundColor: FCODE_COLORS.VL }}
+              ></div>
               <span className="text-xs text-gray-700">
                 Vannledning
               </span>
             </div>
             <div className="flex items-center gap-2 px-1 py-0.5">
-              <div className="w-5 h-0.5 bg-[#228B22] shrink-0"></div>
+              <div
+                className="w-5 h-0.5 shrink-0"
+                style={{ backgroundColor: FCODE_COLORS.SP }}
+              ></div>
               <span className="text-xs text-gray-700">Spillvann</span>
             </div>
             <div className="flex items-center gap-2 px-1 py-0.5">
-              <div className="w-5 h-0.5 bg-[#2a2a2a] shrink-0"></div>
+              <div
+                className="w-5 h-0.5 shrink-0"
+                style={{ backgroundColor: FCODE_COLORS.OV }}
+              ></div>
               <span className="text-xs text-gray-700">Overvann</span>
             </div>
             <div className="flex items-center gap-2 px-1 py-0.5">
@@ -209,7 +221,7 @@ export default function MapLegend() {
                 className="w-5 h-0.5 shrink-0"
                 style={{
                   backgroundImage:
-                    'repeating-linear-gradient(90deg, #8B4513, #8B4513 3px, transparent 3px, transparent 6px)',
+                    `repeating-linear-gradient(90deg, ${FCODE_COLORS.DR}, ${FCODE_COLORS.DR} 3px, transparent 3px, transparent 6px)`,
                   height: '2px',
                 }}
               ></div>
