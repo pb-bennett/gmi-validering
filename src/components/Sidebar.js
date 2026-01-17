@@ -1880,35 +1880,6 @@ export default function Sidebar({ onReset }) {
           </div>
         </SidebarSection>
       </div>
-
-      {/* Footer Actions */}
-      <div
-        className="p-3 border-t"
-        style={{
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-sidebar-bg)',
-        }}
-      >
-        <button
-          onClick={onReset}
-          className="w-full py-2 px-4 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors"
-          style={{
-            backgroundColor: 'var(--color-card)',
-            borderColor: 'var(--color-primary-light)',
-            color: 'var(--color-primary-dark)',
-          }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor =
-              'var(--color-page-bg)')
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.backgroundColor =
-              'var(--color-card)')
-          }
-        >
-          Nullstill og last opp ny
-        </button>
-      </div>
     </div>
   );
 }

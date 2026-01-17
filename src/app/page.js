@@ -85,32 +85,38 @@ export default function Home() {
           title="Nullstill appen og last inn en ny GMI-fil"
           style={{
             position: 'fixed',
-            top: '16px',
+            top: '10px',
             right: '80px',
-            padding: '8px 14px',
+            padding: '8px 12px',
+            width: '220px',
             borderRadius: '8px',
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            color: '#374151',
-            border: '1px solid #e5e7eb',
+            color: '#2563eb',
+            border: '1px solid #2563eb',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '6px',
+            flexDirection: 'row',
+            gap: '8px',
             zIndex: 10002,
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
             fontSize: '13px',
+            lineHeight: 1.2,
             fontWeight: 500,
             backdropFilter: 'blur(8px)',
+            whiteSpace: 'nowrap',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#f3f4f6';
-            e.currentTarget.style.borderColor = '#d1d5db';
+            e.currentTarget.style.backgroundColor = '#eff6ff';
+            e.currentTarget.style.borderColor = '#1d4ed8';
+            e.currentTarget.style.color = '#1d4ed8';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor =
               'rgba(255, 255, 255, 0.95)';
-            e.currentTarget.style.borderColor = '#e5e7eb';
+            e.currentTarget.style.borderColor = '#2563eb';
+            e.currentTarget.style.color = '#2563eb';
           }}
         >
           <svg
@@ -126,7 +132,7 @@ export default function Home() {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Ny fil
+          <span>Nullstill og last opp ny</span>
         </button>
       )}
       {/* Global Close DataTable Button - ALWAYS visible when table is open */}

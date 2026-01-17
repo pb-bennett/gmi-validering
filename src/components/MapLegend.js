@@ -220,8 +220,7 @@ export default function MapLegend() {
               <div
                 className="w-5 h-0.5 shrink-0"
                 style={{
-                  backgroundImage:
-                    `repeating-linear-gradient(90deg, ${FCODE_COLORS.DR}, ${FCODE_COLORS.DR} 3px, transparent 3px, transparent 6px)`,
+                  backgroundImage: `repeating-linear-gradient(90deg, ${FCODE_COLORS.DR}, ${FCODE_COLORS.DR} 3px, transparent 3px, transparent 6px)`,
                   height: '2px',
                 }}
               ></div>
