@@ -49,7 +49,7 @@ export default function Controls3D() {
               }}
               className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              🎯 Nullstill kamera
+              Nullstill kamera
             </button>
 
             <button
@@ -64,7 +64,7 @@ export default function Controls3D() {
                   : 'bg-gray-300 hover:bg-gray-400 text-gray-600'
               }`}
             >
-              ⊞ Gitter {gridOn ? '(På)' : '(Av)'}
+              Gitter {gridOn ? '(På)' : '(Av)'}
             </button>
 
             <button
@@ -74,7 +74,7 @@ export default function Controls3D() {
               }}
               className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
             >
-              📋 {showLegend ? 'Skjul' : 'Vis'} tegnforklaring
+              {showLegend ? 'Skjul' : 'Vis'} tegnforklaring
             </button>
           </div>
         )}

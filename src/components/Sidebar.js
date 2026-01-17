@@ -16,10 +16,15 @@ function InclineAnalysisControl() {
     (state) => state.toggleAnalysisModal
   );
   const analysisResults = useStore((state) => state.analysis.results);
+  const inclineRequirementMode = useStore(
+    (state) => state.settings.inclineRequirementMode
+  );
 
   const runAnalysis = () => {
     if (!data) return;
-    const results = analyzeIncline(data);
+    const results = analyzeIncline(data, {
+      minInclineMode: inclineRequirementMode,
+    });
     setAnalysisResults(results);
     toggleAnalysisModal(true);
   };
@@ -181,7 +186,7 @@ function TopplokControl() {
           ? showResults
             ? 'Skjul resultater'
             : 'Vis resultater'
-          : '🔍 Kjør topplok kontroll'}
+          : 'Kjør topplok kontroll'}
       </button>
 
       {results && (
@@ -379,7 +384,7 @@ function OutlierControl() {
           ? showResults
             ? 'Skjul resultater'
             : 'Vis resultater'
-          : '📍 Finn avvik'}
+          : 'Finn avvik'}
       </button>
 
       {outlierResults && (
@@ -746,8 +751,12 @@ export default function Sidebar({ onReset }) {
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef(null);
 
-  // State for accordion sections
-  const [openSection, setOpenSection] = useState('oversikt');
+  const openSection = useStore(
+    (state) => state.ui.sidebarOpenSection
+  );
+  const setSidebarOpenSection = useStore(
+    (state) => state.setSidebarOpenSection
+  );
 
   const isKof = data?.format === 'KOF';
 
@@ -756,7 +765,7 @@ export default function Sidebar({ onReset }) {
 
   const toggleSection = (section) => {
     const newSection = openSection === section ? null : section;
-    setOpenSection(newSection);
+    setSidebarOpenSection(newSection);
     // Activate felt filter when Felt section is opened
     if (section === 'felt') {
       setFeltFilterActive(newSection === 'felt');
@@ -1612,7 +1621,7 @@ export default function Sidebar({ onReset }) {
                     'var(--color-primary)')
                 }
               >
-                📊 Åpne full datatabell
+                Åpne full datatabell
               </button>
 
               {/* Tabs */}
@@ -1870,35 +1879,6 @@ export default function Sidebar({ onReset }) {
             </div>
           </div>
         </SidebarSection>
-      </div>
-
-      {/* Footer Actions */}
-      <div
-        className="p-3 border-t"
-        style={{
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-sidebar-bg)',
-        }}
-      >
-        <button
-          onClick={onReset}
-          className="w-full py-2 px-4 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors"
-          style={{
-            backgroundColor: 'var(--color-card)',
-            borderColor: 'var(--color-primary-light)',
-            color: 'var(--color-primary-dark)',
-          }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor =
-              'var(--color-page-bg)')
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.backgroundColor =
-              'var(--color-card)')
-          }
-        >
-          Nullstill og last opp ny
-        </button>
       </div>
     </div>
   );

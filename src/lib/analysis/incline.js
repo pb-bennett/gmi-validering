@@ -57,19 +57,26 @@ function getPipeType(attributes) {
 }
 
 // Helper to get minimum incline based on dimension (Norwegian VA standards)
-function getMinIncline(attributes) {
+function getMinIncline(attributes, options = {}) {
+  const mode = options.minInclineMode || 'variable';
+  if (mode === 'fixed10') {
+    return { min: 10, label: 'Fast 10‰' };
+  }
+
   const dimStr = attributes.Dimensjon || attributes.Dim || '';
   // Extract number from string (e.g. "160mm" -> 160)
   const dim = parseInt(String(dimStr).replace(/\D/g, ''), 10);
 
-  if (!dim || isNaN(dim)) return { min: 4, label: 'Ukjent dim' }; // Default safe limit
+  if (!dim || isNaN(dim)) {
+    return { min: 10, label: '< 200mm (standard)' };
+  }
 
   if (dim < 200) return { min: 10, label: `< 200mm` };
   if (dim <= 315) return { min: 4, label: `200-315mm` };
   return { min: 2, label: `> 315mm` };
 }
 
-export function analyzeIncline(data) {
+export function analyzeIncline(data, options = {}) {
   if (!data || !data.lines) return [];
 
   const results = [];
@@ -170,9 +177,12 @@ export function analyzeIncline(data) {
     const incline =
       totalLength2d > 0 ? (totalDrop / totalLength2d) * 1000 : 0;
 
+    const minInclineRule = getMinIncline(line.attributes, options);
+
     // Analyze segments for local backfall against the assumed flow
     const segments = [];
     let hasLocalBackfall = false;
+    let hasLowSegmentIncline = false;
 
     for (let i = 0; i < profilePoints.length - 1; i++) {
       const p1 = profilePoints[i];
@@ -191,9 +201,10 @@ export function analyzeIncline(data) {
 
       const segIncline = segLen > 0 ? (segDrop / segLen) * 1000 : 0;
 
-      if (segDrop < -0.01) {
-        // Allow tiny tolerance (1cm)
+      if (segIncline < 0) {
         hasLocalBackfall = true;
+      } else if (segIncline < minInclineRule.min) {
+        hasLowSegmentIncline = true;
       }
 
       segments.push({
@@ -204,11 +215,9 @@ export function analyzeIncline(data) {
         endZ: p2.z,
         length: segLen,
         incline: segIncline,
-        isBackfall: segDrop < -0.01,
+        isBackfall: segIncline < 0,
       });
     }
-
-    const minInclineRule = getMinIncline(line.attributes);
 
     result.details = {
       startZ,
@@ -220,6 +229,7 @@ export function analyzeIncline(data) {
       segments,
       isDigitizedBackwards,
       hasLocalBackfall,
+      hasLowSegmentIncline,
       minInclineRule,
     };
 
@@ -231,6 +241,9 @@ export function analyzeIncline(data) {
       if (hasLocalBackfall) {
         result.status = 'warning';
         result.message = 'Advarsel: Motfall oppdaget';
+      } else if (hasLowSegmentIncline) {
+        result.status = 'warning';
+        result.message = `Advarsel: Delstrekning under krav (${minInclineRule.min}‰)`;
       } else if (incline < minInclineRule.min) {
         result.status = 'warning';
         result.message = `Lite fall (${incline

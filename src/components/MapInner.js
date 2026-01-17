@@ -71,6 +71,57 @@ const INFRA_CATEGORIES = {
   OTHER: 'other', // Annet - circle
 };
 
+// Norwegian infrastructure color system (single source of truth)
+export const FCODE_COLORS = {
+  // Water infrastructure - BLUE shades
+  VL: '#0101FF', // Vannledninger (Water lines)
+  VF: '#0080ff', // Vannforsyning
+
+  // Wastewater - GREEN shades
+  SP: '#02D902', // Spillvannsledning (Wastewater lines)
+  SPP: '#32CD32', // Spillvann pumpe
+
+  // Surface water - BLACK/DARK shades
+  OV: '#2a2a2a', // Overvannsledning (Surface water lines)
+  OVP: '#333333', // Overvann pumpe
+
+  // Drainage - BROWN shades
+  DR: '#8B4513', // Drenseledning (Drainage lines)
+  DRK: '#A0522D', // Drenering kum
+
+  // Manholes/Infrastructure points - RED shades
+  KUM: '#cc3300', // Kummer (Manholes)
+  KUM_SP: '#dc143c', // Spillvann kum
+  KUM_OV: '#b22222', // Overvann kum
+  KUM_VL: '#cd5c5c', // Vann kum
+
+  // Gas - YELLOW shades
+  GAS: '#ffd700', // Gass ledninger
+  GASL: '#ffff00', // Gass lavtrykk
+
+  // Electric/Telecom - ORANGE shades
+  EL: '#ff6600', // Elektrisk
+  TELE: '#ff8c00', // Telekommunikasjon
+
+  // District heating - MAGENTA
+  FJERNVARME: '#ff00ff',
+
+  // Special infrastructure codes
+  AF: '#ff0000', // AF lines - RED
+  SLS: '#000000', // SLS - black
+  SLU: '#000000', // SLU - black
+  DIV: '#666666', // DIV - dark grey
+  GRØKONSTR: '#cccccc', // GRØKONSTR - light grey
+  KRN: '#0066cc', // KRN - blue
+  ANBORING: '#0066cc', // ANBORING - blue like KRN
+  GRN: '#00cc00', // GRN - green
+  SAN: '#000000', // SAN - black
+  LOK: '#ff00ff', // LOK - magenta
+
+  // Other/Unknown - PURPLE (default)
+  ANNET: '#800080',
+};
+
 const getCategoryByFCode = (fcode) => {
   // Defensive: ensure fcode is a string
   if (!fcode || typeof fcode !== 'string')
@@ -118,55 +169,8 @@ const getColorByFCode = (fcode) => {
   if (!fcode || typeof fcode !== 'string') return '#808080'; // Default gray for unknown
 
   // Norwegian infrastructure color system
-  const colorMap = {
-    // Water infrastructure - BLUE shades
-    VL: '#0101FF', // Vannledninger (Water lines)
-    VF: '#0080ff', // Vannforsyning
-
-    // Wastewater - GREEN shades
-    SP: '#02D902', // Spillvannsledning (Wastewater lines)
-    SPP: '#32CD32', // Spillvann pumpe
-
-    // Surface water - BLACK/DARK shades
-    OV: '#2a2a2a', // Overvannsledning (Surface water lines) - slightly lighter for visibility
-    OVP: '#333333', // Overvann pumpe
-
-    // Drainage - BROWN shades
-    DR: '#8B4513', // Drenseledning (Drainage lines)
-    DRK: '#A0522D', // Drenering kum
-
-    // Manholes/Infrastructure points - RED shades
-    KUM: '#cc3300', // Kummer (Manholes)
-    KUM_SP: '#dc143c', // Spillvann kum
-    KUM_OV: '#b22222', // Overvann kum
-    KUM_VL: '#cd5c5c', // Vann kum
-
-    // Gas - YELLOW shades
-    GAS: '#ffd700', // Gass ledninger
-    GASL: '#ffff00', // Gass lavtrykk
-
-    // Electric/Telecom - ORANGE shades
-    EL: '#ff6600', // Elektrisk
-    TELE: '#ff8c00', // Telekommunikasjon
-
-    // District heating - MAGENTA
-    FJERNVARME: '#ff00ff',
-
-    // Special infrastructure codes
-    AF: '#ff0000', // AF lines - RED
-    SLS: '#000000', // SLS - black
-    SLU: '#000000', // SLU - black
-    DIV: '#666666', // DIV - dark grey (less intrusive)
-    GRØKONSTR: '#cccccc', // GRØKONSTR - light grey
-    KRN: '#0066cc', // KRN - blue
-    ANBORING: '#0066cc', // ANBORING - blue like KRN
-    GRN: '#00cc00', // GRN - green
-    SAN: '#000000', // SAN - black like SLS/SLU
-    LOK: '#ff00ff', // LOK - magenta (clear contrast with KUM)
-
-    // Other/Unknown - PURPLE (default)
-    ANNET: '#800080',
-  };
+  const colorMap = FCODE_COLORS;
+  // (colorMap is defined above as FCODE_COLORS)
 
   // Try exact match first
   if (colorMap[fcode]) {
@@ -177,7 +181,7 @@ const getColorByFCode = (fcode) => {
   if (fcode.includes('VL') || fcode.includes('VANN'))
     return '#0101FF';
   if (fcode.includes('SP') || fcode.includes('SPILLVANN'))
-    return '#228B22';
+    return '#02D902';
   if (fcode.includes('OV') || fcode.includes('OVERVANN'))
     return '#2a2a2a';
   if (fcode.includes('DR') || fcode.includes('DREN'))
@@ -491,72 +495,72 @@ export const LEGEND_ITEMS = [
   {
     category: INFRA_CATEGORIES.WATER,
     label: 'Vannledning (VL)',
-    color: '#0066cc',
+    color: FCODE_COLORS.VL,
   },
   {
     category: INFRA_CATEGORIES.WASTEWATER,
     label: 'Spillvann (SP)',
-    color: '#228B22',
+    color: FCODE_COLORS.SP,
   },
   {
     category: INFRA_CATEGORIES.STORMWATER,
     label: 'Overvann (OV)',
-    color: '#2a2a2a',
+    color: FCODE_COLORS.OV,
   },
   {
     category: INFRA_CATEGORIES.DRAINAGE,
     label: 'Drenering (DR)',
-    color: '#8B4513',
+    color: FCODE_COLORS.DR,
   },
   {
     category: INFRA_CATEGORIES.MANHOLE,
     label: 'Kum (KUM)',
-    color: '#cc3300',
+    color: FCODE_COLORS.KUM,
   },
   {
     category: INFRA_CATEGORIES.SLS_SLU,
     label: 'SLS/SLU',
-    color: '#000000',
+    color: FCODE_COLORS.SLS,
   },
   {
     category: INFRA_CATEGORIES.SAN,
     label: 'SAN',
-    color: '#000000',
+    color: FCODE_COLORS.SAN,
   },
   {
     category: INFRA_CATEGORIES.DIV,
     label: 'DIV (diverse)',
-    color: '#666666',
+    color: FCODE_COLORS.DIV,
   },
   {
     category: INFRA_CATEGORIES.ANBORING,
     label: 'Anboring (ANB)',
-    color: '#0066cc',
+    color: FCODE_COLORS.ANBORING,
   },
   {
     category: INFRA_CATEGORIES.GROKONSTR,
     label: 'Grøftekonstruksjon',
-    color: '#cccccc',
+    color: FCODE_COLORS.GRØKONSTR,
   },
   {
     category: INFRA_CATEGORIES.KRN,
     label: 'Kran (KRN)',
-    color: '#0066cc',
+    color: FCODE_COLORS.KRN,
   },
   {
     category: INFRA_CATEGORIES.GRN,
     label: 'Grenpunkt (GRN)',
-    color: '#00cc00',
+    color: FCODE_COLORS.GRN,
   },
   {
     category: INFRA_CATEGORIES.LOK,
     label: 'Kumlokk (LOK)',
-    color: '#cc3300',
+    color: FCODE_COLORS.LOK,
   },
   {
     category: INFRA_CATEGORIES.OTHER,
     label: 'Annet',
-    color: '#800080',
+    color: FCODE_COLORS.ANNET,
   },
 ];
 
@@ -1429,6 +1433,59 @@ function FeatureHighlighter({ geoJsonData }) {
   return null;
 }
 
+function FieldValidationZoomHandler({ geoJsonData }) {
+  const map = useMap();
+  const filteredFeatureIds = useStore(
+    (state) => state.ui.filteredFeatureIds
+  );
+  const fieldValidationFilterActive = useStore(
+    (state) => state.ui.fieldValidationFilterActive
+  );
+
+  useEffect(() => {
+    if (
+      !map ||
+      !geoJsonData ||
+      !fieldValidationFilterActive ||
+      !filteredFeatureIds ||
+      !filteredFeatureIds.size
+    ) {
+      return;
+    }
+
+    try {
+      const features = geoJsonData.features.filter((f) => {
+        const type =
+          f.properties?.featureType === 'Line'
+            ? 'ledninger'
+            : 'punkter';
+        const id = `${type}-${f.properties?.id}`;
+        return filteredFeatureIds.has(id);
+      });
+
+      if (features.length === 0) return;
+
+      const layer = L.geoJSON({
+        type: 'FeatureCollection',
+        features,
+      });
+      const bounds = layer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+      }
+    } catch (e) {
+      console.warn('Could not fit bounds for feltvalidering', e);
+    }
+  }, [
+    map,
+    geoJsonData,
+    filteredFeatureIds,
+    fieldValidationFilterActive,
+  ]);
+
+  return null;
+}
+
 function MapCenterHandler() {
   const map = useMap();
   const data = useStore((state) => state.data);
@@ -1523,8 +1580,14 @@ export default function MapInner({ onZoomChange }) {
   const highlightedFeatureId = useStore(
     (state) => state.ui.highlightedFeatureId
   );
+  const highlightedFeatureIds = useStore(
+    (state) => state.ui.highlightedFeatureIds
+  );
   const filteredFeatureIds = useStore(
     (state) => state.ui.filteredFeatureIds
+  );
+  const fieldValidationFilterActive = useStore(
+    (state) => state.ui.fieldValidationFilterActive
   );
   // Felt filter state
   const feltFilterActive = useStore(
@@ -1703,19 +1766,21 @@ export default function MapInner({ onZoomChange }) {
         ? `ledninger-${feature.properties.id}`
         : null;
 
-    // When felt filter is active, use it instead of tema filter
-    let isHidden;
-    if (feltFilterActive) {
-      isHidden = isHiddenByFeltFilter(feature, 'lines');
-    } else {
-      const isHiddenByCode = hiddenCodes.includes(fcode);
-      // Check if this specific type+code combination is hidden
-      const isHiddenByType = hiddenTypes.some(
-        (ht) =>
-          ht.type === typeVal &&
-          (ht.code === null || ht.code === fcode)
-      );
-      isHidden = isHiddenByCode || isHiddenByType;
+    // When field validation filter is active, ignore other filters
+    let isHidden = false;
+    if (!fieldValidationFilterActive) {
+      if (feltFilterActive) {
+        isHidden = isHiddenByFeltFilter(feature, 'lines');
+      } else {
+        const isHiddenByCode = hiddenCodes.includes(fcode);
+        // Check if this specific type+code combination is hidden
+        const isHiddenByType = hiddenTypes.some(
+          (ht) =>
+            ht.type === typeVal &&
+            (ht.code === null || ht.code === fcode)
+        );
+        isHidden = isHiddenByCode || isHiddenByType;
+      }
     }
 
     const isHighlightedByCode = highlightedCode === fcode;
@@ -1726,10 +1791,16 @@ export default function MapInner({ onZoomChange }) {
         highlightedTypeContext === fcode);
     const isHighlightedByFeature =
       featureId && highlightedFeatureId === featureId;
+    const isHighlightedByFeatures =
+      featureId &&
+      highlightedFeatureIds &&
+      highlightedFeatureIds.has &&
+      highlightedFeatureIds.has(featureId);
     const isHighlighted =
       isHighlightedByCode ||
       isHighlightedByType ||
-      isHighlightedByFeature;
+      isHighlightedByFeature ||
+      isHighlightedByFeatures;
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -1740,6 +1811,7 @@ export default function MapInner({ onZoomChange }) {
 
     // Outlier filtering
     const isOutlier =
+      !fieldValidationFilterActive &&
       outlierFeatureIds &&
       featureId &&
       outlierFeatureIds.has(featureId);
@@ -1799,19 +1871,21 @@ export default function MapInner({ onZoomChange }) {
         ? `punkter-${feature.properties.id}`
         : null;
 
-    // When felt filter is active, use it instead of tema filter
-    let isHidden;
-    if (feltFilterActive) {
-      isHidden = isHiddenByFeltFilter(feature, 'points');
-    } else {
-      const isHiddenByCode = hiddenCodes.includes(fcode);
-      // Check if this specific type+code combination is hidden
-      const isHiddenByType = hiddenTypes.some(
-        (ht) =>
-          ht.type === typeVal &&
-          (ht.code === null || ht.code === fcode)
-      );
-      isHidden = isHiddenByCode || isHiddenByType;
+    // When field validation filter is active, ignore other filters
+    let isHidden = false;
+    if (!fieldValidationFilterActive) {
+      if (feltFilterActive) {
+        isHidden = isHiddenByFeltFilter(feature, 'points');
+      } else {
+        const isHiddenByCode = hiddenCodes.includes(fcode);
+        // Check if this specific type+code combination is hidden
+        const isHiddenByType = hiddenTypes.some(
+          (ht) =>
+            ht.type === typeVal &&
+            (ht.code === null || ht.code === fcode)
+        );
+        isHidden = isHiddenByCode || isHiddenByType;
+      }
     }
 
     const isHighlightedByCode = highlightedCode === fcode;
@@ -1822,10 +1896,16 @@ export default function MapInner({ onZoomChange }) {
         highlightedTypeContext === fcode);
     const isHighlightedByFeature =
       featureId && highlightedFeatureId === featureId;
+    const isHighlightedByFeatures =
+      featureId &&
+      highlightedFeatureIds &&
+      highlightedFeatureIds.has &&
+      highlightedFeatureIds.has(featureId);
     const isHighlighted =
       isHighlightedByCode ||
       isHighlightedByType ||
-      isHighlightedByFeature;
+      isHighlightedByFeature ||
+      isHighlightedByFeatures;
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -1836,6 +1916,7 @@ export default function MapInner({ onZoomChange }) {
 
     // Outlier filtering
     const isOutlier =
+      !fieldValidationFilterActive &&
       outlierFeatureIds &&
       featureId &&
       outlierFeatureIds.has(featureId);
@@ -1951,7 +2032,7 @@ export default function MapInner({ onZoomChange }) {
           data-feature-type="${props.featureType}"
           data-index="${props.id}"
         >
-          🎯 Vis i 3D
+          Vis i 3D
         </button>
       </div>`;
       content += '</div>';
@@ -2001,6 +2082,12 @@ export default function MapInner({ onZoomChange }) {
             }-${hiddenTypes.join(',')}-${highlightedType || 'none'}-${
               highlightedTypeContext || 'none'
             }-${highlightedFeatureId || 'none'}-${
+              highlightedFeatureIds
+                ? Array.from(highlightedFeatureIds)
+                    .slice(0, 3)
+                    .join(',') + highlightedFeatureIds.size
+                : 'no-multi-highlight'
+            }-${
               analysis.isOpen ? analysis.selectedPipeIndex : 'closed'
             }-${
               filteredFeatureIds
@@ -2014,6 +2101,8 @@ export default function MapInner({ onZoomChange }) {
                 : 'no-outliers'
             }-feltFilter-${feltFilterActive ? 'on' : 'off'}-${
               feltHiddenValues.length
+            }-fieldValidation-${
+              fieldValidationFilterActive ? 'on' : 'off'
             }-measure-${measureMode ? 'on' : 'off'}`}
             data={geoJsonData}
             style={lineStyle}
@@ -2028,6 +2117,7 @@ export default function MapInner({ onZoomChange }) {
         ignoredFeatureIds={outlierFeatureIdsForBounds}
       />
       <FeatureHighlighter geoJsonData={geoJsonData} />
+      <FieldValidationZoomHandler geoJsonData={geoJsonData} />
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}
       <MapSizeInvalidator />
       <ZoomToFeatureHandler />

@@ -14,7 +14,7 @@ export default function TabSwitcher() {
   if (!viewer3DOpen || !data) return null;
 
   return (
-    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-10001 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/50 flex overflow-hidden p-1 gap-1">
+    <div className="fixed top-2.5 left-1/2 transform -translate-x-1/2 z-10001 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/50 flex overflow-hidden p-1 gap-1">
       <button
         onClick={() => setActiveViewTab('map')}
         className={`px-5 py-2.5 font-medium transition-all rounded-lg flex items-center gap-2 ${

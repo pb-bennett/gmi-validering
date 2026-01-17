@@ -62,6 +62,8 @@ const useStore = create(
             filterSeverity: 'all',
             mapViewOpen: false,
             sidebarOpen: true,
+            sidebarOpenSection: 'oversikt',
+            sidebarOpenSectionBeforeFieldValidation: null,
             highlightedCode: null,
             hiddenCodes: [],
             highlightedType: null,
@@ -69,6 +71,7 @@ const useStore = create(
             hiddenTypes: [],
             dataTableOpen: false,
             highlightedFeatureId: null,
+            highlightedFeatureIds: null,
             fieldValidationOpen: false,
             missingReportOpen: false,
             filteredFeatureIds: null,
@@ -85,6 +88,7 @@ const useStore = create(
             missingHeightPromptOpen: false,
             missingHeightDetailsOpen: false,
             missingHeightLines: [],
+            fieldValidationFilterActive: false,
           },
         },
 
@@ -459,6 +463,8 @@ const useStore = create(
           filterSeverity: 'all', // 'all' | 'errors' | 'warnings'
           mapViewOpen: false,
           sidebarOpen: true,
+          sidebarOpenSection: 'oversikt',
+          sidebarOpenSectionBeforeFieldValidation: null,
           highlightedCode: null,
           hiddenCodes: [],
           highlightedType: null,
@@ -466,6 +472,7 @@ const useStore = create(
           hiddenTypes: [], // Array of {type, code} objects for context-aware hiding
           dataTableOpen: false, // Data table visibility
           highlightedFeatureId: null, // ID of feature to highlight on map
+          highlightedFeatureIds: null, // Set<string> | null - multiple feature highlight
           fieldValidationOpen: false, // Field validation sidebar visibility
           missingReportOpen: false, // Missing fields report modal visibility
           filteredFeatureIds: null, // Set<string> | null - IDs of features to exclusively show
@@ -482,6 +489,7 @@ const useStore = create(
           missingHeightPromptOpen: false, // Warn if one or more lines are missing Z
           missingHeightDetailsOpen: false, // Details popup listing lines missing Z
           missingHeightLines: [], // Array<{index:number, fcode:string|null, type:string|null}>
+          fieldValidationFilterActive: false, // Whether field validation is overriding filters
         },
 
         setOutlierPromptOpen: (isOpen) =>
@@ -668,6 +676,17 @@ const useStore = create(
                   isOpen !== undefined
                     ? isOpen
                     : !state.ui.fieldValidationOpen,
+                sidebarOpenSectionBeforeFieldValidation:
+                  isOpen === true
+                    ? state.ui.sidebarOpenSection
+                    : state.ui
+                        .sidebarOpenSectionBeforeFieldValidation,
+                sidebarOpenSection:
+                  isOpen === false
+                    ? state.ui
+                        .sidebarOpenSectionBeforeFieldValidation ||
+                      'analyse'
+                    : state.ui.sidebarOpenSection,
               },
             }),
             false,
@@ -845,6 +864,27 @@ const useStore = create(
             'ui/setHighlightedFeature'
           ),
 
+        setHighlightedFeatureIds: (featureIds) =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, highlightedFeatureIds: featureIds },
+            }),
+            false,
+            'ui/setHighlightedFeatureIds'
+          ),
+
+        setFieldValidationFilterActive: (active) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                fieldValidationFilterActive: active,
+              },
+            }),
+            false,
+            'ui/setFieldValidationFilterActive'
+          ),
+
         toggleDetailsPanel: () =>
           set(
             (state) => ({
@@ -893,6 +933,15 @@ const useStore = create(
             'ui/toggleSidebar'
           ),
 
+        setSidebarOpenSection: (section) =>
+          set(
+            (state) => ({
+              ui: { ...state.ui, sidebarOpenSection: section },
+            }),
+            false,
+            'ui/setSidebarOpenSection'
+          ),
+
         // ============================================
         // SETTINGS SLICE — user preferences (optional persistence)
         // ============================================
@@ -902,6 +951,7 @@ const useStore = create(
           autoValidateOnUpload: true,
           showWarnings: true,
           lastFileName: null,
+          inclineRequirementMode: 'fixed10', // 'fixed10' | 'variable'
         },
 
         updateSettings: (newSettings) =>
@@ -994,6 +1044,8 @@ const useStore = create(
                 filterSeverity: 'all',
                 mapViewOpen: false,
                 sidebarOpen: true,
+                sidebarOpenSection: 'oversikt',
+                sidebarOpenSectionBeforeFieldValidation: null,
                 highlightedCode: null,
                 hiddenCodes: [],
                 highlightedType: null,
@@ -1006,8 +1058,20 @@ const useStore = create(
                 missingHeightPromptOpen: false,
                 missingHeightDetailsOpen: false,
                 missingHeightLines: [],
+                highlightedFeatureIds: null,
+                fieldValidationFilterActive: false,
               };
             } else {
+              if (state.ui.sidebarOpenSection === undefined) {
+                state.ui.sidebarOpenSection = 'oversikt';
+              }
+              if (
+                state.ui.sidebarOpenSectionBeforeFieldValidation ===
+                undefined
+              ) {
+                state.ui.sidebarOpenSectionBeforeFieldValidation =
+                  null;
+              }
               if (state.ui.highlightedCode === undefined) {
                 state.ui.highlightedCode = null;
               }
@@ -1022,6 +1086,9 @@ const useStore = create(
               }
               if (state.ui.hiddenTypes === undefined) {
                 state.ui.hiddenTypes = [];
+              }
+              if (state.ui.highlightedFeatureIds === undefined) {
+                state.ui.highlightedFeatureIds = null;
               }
               if (state.ui.feltFilterActive === undefined) {
                 state.ui.feltFilterActive = false;
@@ -1044,6 +1111,26 @@ const useStore = create(
               if (state.ui.missingHeightLines === undefined) {
                 state.ui.missingHeightLines = [];
               }
+              if (
+                state.ui.fieldValidationFilterActive === undefined
+              ) {
+                state.ui.fieldValidationFilterActive = false;
+              }
+            }
+
+            if (!state.settings) {
+              state.settings = {
+                theme: 'light',
+                locale: 'nb-NO',
+                autoValidateOnUpload: true,
+                showWarnings: true,
+                lastFileName: null,
+                inclineRequirementMode: 'fixed10',
+              };
+            } else if (
+              state.settings.inclineRequirementMode === undefined
+            ) {
+              state.settings.inclineRequirementMode = 'fixed10';
             }
 
             const now = Date.now();

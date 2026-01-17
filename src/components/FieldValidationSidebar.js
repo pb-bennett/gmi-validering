@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import useStore from '@/lib/store';
 import { validateFields } from '@/lib/validation/fieldValidation';
 import FieldDetailModal from './FieldDetailModal';
@@ -11,10 +11,24 @@ export default function FieldValidationSidebar() {
   const toggleFieldValidation = useStore(
     (state) => state.toggleFieldValidation
   );
+  const filteredFeatureIds = useStore(
+    (state) => state.ui.filteredFeatureIds
+  );
+  const setFilteredFeatureIds = useStore(
+    (state) => state.setFilteredFeatureIds
+  );
+  const setHighlightedFeatureIds = useStore(
+    (state) => state.setHighlightedFeatureIds
+  );
+  const setFieldValidationFilterActive = useStore(
+    (state) => state.setFieldValidationFilterActive
+  );
   const [selectedField, setSelectedField] = useState(null);
   const [filter, setFilter] = useState('OK'); // OK, WARNING, ERROR
   const [activeTab, setActiveTab] = useState('ledninger'); // 'ledninger' | 'punkter'
   const [showReport, setShowReport] = useState(false);
+  const [activeFieldKey, setActiveFieldKey] = useState(null);
+  const previousFilteredIdsRef = useRef(null);
 
   const validationResults = useMemo(() => {
     return validateFields(data);
@@ -60,6 +74,42 @@ export default function FieldValidationSidebar() {
     };
   }, [validationResults, activeTab]);
 
+  useEffect(() => {
+    return () => {
+      setHighlightedFeatureIds(null);
+      setFieldValidationFilterActive(false);
+      setFilteredFeatureIds(previousFilteredIdsRef.current || null);
+    };
+  }, [
+    setFieldValidationFilterActive,
+    setFilteredFeatureIds,
+    setHighlightedFeatureIds,
+  ]);
+
+  const handleToggleViewObjects = (field) => {
+    if (!field?.failingIds || field.failingIds.length === 0) return;
+
+    if (activeFieldKey === field.fieldKey) {
+      setFieldValidationFilterActive(false);
+      setFilteredFeatureIds(previousFilteredIdsRef.current || null);
+      setActiveFieldKey(null);
+      return;
+    }
+
+    if (!activeFieldKey) {
+      previousFilteredIdsRef.current = filteredFeatureIds || null;
+    } else if (activeFieldKey !== field.fieldKey) {
+      setFieldValidationFilterActive(false);
+      setFilteredFeatureIds(previousFilteredIdsRef.current || null);
+    }
+
+    setTimeout(() => {
+      setFilteredFeatureIds(new Set(field.failingIds));
+      setFieldValidationFilterActive(true);
+      setActiveFieldKey(field.fieldKey);
+    }, 0);
+  };
+
   if (showReport) {
     return (
       <MissingFieldsReport onClose={() => setShowReport(false)} />
@@ -69,27 +119,27 @@ export default function FieldValidationSidebar() {
   return (
     <div className="h-full flex flex-col bg-white border-r shadow-xl relative z-20">
       {/* Header */}
-      <div className="p-6 border-b bg-gray-50">
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => toggleFieldValidation(false)}
-            className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors flex-shrink-0"
-            title="Lukk feltvalidering"
+      <div className="p-6 border-b bg-gray-50 relative">
+        <button
+          onClick={() => toggleFieldValidation(false)}
+          className="absolute top-4 right-4 p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
+          title="Lukk feltvalidering"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+        <div className="flex items-center gap-3 mb-4">
           <div>
             <h2 className="text-xl font-bold text-gray-900">
               Feltvalidering
@@ -201,14 +251,20 @@ export default function FieldValidationSidebar() {
       </div>
 
       {/* Grid Content */}
-      <div className="flex-1 overflow-y-auto p-6 bg-gray-50 pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="flex-1 overflow-y-auto p-5 bg-gray-50 pb-24">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {filteredResults.map((field) => (
             <div
               key={field.fieldKey}
               onClick={() => setSelectedField(field)}
+              onMouseEnter={() => {
+                if (field.failingIds && field.failingIds.length > 0) {
+                  setHighlightedFeatureIds(new Set(field.failingIds));
+                }
+              }}
+              onMouseLeave={() => setHighlightedFeatureIds(null)}
               className={`
-                bg-white rounded-lg border p-3 cursor-pointer transition-all hover:shadow-md
+                bg-white rounded-lg border p-2 cursor-pointer transition-all hover:shadow-md
                 ${
                   field.status === 'error'
                     ? 'border-l-4 border-l-red-500'
@@ -278,6 +334,22 @@ export default function FieldValidationSidebar() {
                   </div>
                 </div>
               </div>
+
+              {field.failingIds && field.failingIds.length > 0 && (
+                <div className="mt-2 flex justify-end">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleViewObjects(field);
+                    }}
+                    className="text-[11px] px-2 py-1 rounded border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+                  >
+                    {activeFieldKey === field.fieldKey
+                      ? 'Tilbake til full visning'
+                      : 'Vis objekter'}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
