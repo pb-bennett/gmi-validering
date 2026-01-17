@@ -1056,7 +1056,9 @@ const useStore = create(
                 lastFileName: null,
                 inclineRequirementMode: 'fixed10',
               };
-            } else if (state.settings.inclineRequirementMode === undefined) {
+            } else if (
+              state.settings.inclineRequirementMode === undefined
+            ) {
               state.settings.inclineRequirementMode = 'fixed10';
             }
 

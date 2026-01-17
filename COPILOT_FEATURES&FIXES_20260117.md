@@ -25,6 +25,15 @@ Ensure that the selected onption is used in the profile analysis calculations. R
 
 - When running the analysis every section along the pipe should be looked at, together with the total gradeint for the entire pipe. If either of these are outside the requirements a warning should be given. I see that currently only the total gradient is looked at. This should be changed. I found a pipe with negative gradient sections that was not flagged as warning because the total gradient was acceptable.
 
+---
+
+2. Adjustments to the "Feltvalidering" section.
+
+- Reduce the width of Feltvalidering section to 1/3 screen width to give the map more space. Adjust the grid of cards so that they fit nicely in the reduced width. Have 2 per row. Adjust padding inside the cards if needed.
+- Add functionality in Feltvalidering to allow the user to view the objects that caused a warning or error. Each card should have a button "Vis objekter" that hides all other objects in the map view. Also add functionaily that highlights the affected objects on hover with mouse pointer in the same way as the Tema and Felt views. When feltvalidering is open all other filter settings should be overridden to ensure the user can see the affected objects. The map can zoom/pan to the extents of the affected objects when the button is clicked.
+- When the user clicks "Vis objekter" the button text should change to "Tilbake til full visning" which when clicked restores the full map view and all filter settings.
+
 ## Completion status ✅
 
-1. [ ] Krav til fall, change in krav.
+1. [x] Krav til fall, change in krav.
+2. [ ] Adjustments to the "Feltvalidering" section.

@@ -99,8 +99,9 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
                     Variabelt krav til fall basert på dimensjon
                   </div>
                   <div className="text-xs text-gray-600">
-                    Dimensjon &lt; 200 mm: 10 ‰ (1:100) · Dimensjon 200 - 315 mm:
-                    4 ‰ (1:250) · Dimensjon &gt; 315 mm: 2 ‰ (1:500)
+                    Dimensjon &lt; 200 mm: 10 ‰ (1:100) · Dimensjon
+                    200 - 315 mm: 4 ‰ (1:250) · Dimensjon &gt; 315 mm:
+                    2 ‰ (1:500)
                   </div>
                 </div>
               </label>
