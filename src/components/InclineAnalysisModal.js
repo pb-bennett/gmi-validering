@@ -813,9 +813,12 @@ function PipeProfileVisualization({ result }) {
 
             // Only color code for gravity pipes
             if (result.pipeType !== 'pressure') {
+              const minIncline =
+                result.details?.minInclineRule?.min ?? 2;
               if (segInclinePermille < 0)
                 textColor = '#dc2626'; // Red
-              else if (segInclinePermille < 2) textColor = '#d97706'; // Orange (< 2‰)
+              else if (segInclinePermille < minIncline)
+                textColor = '#d97706'; // Orange (under krav)
             }
 
             return (
