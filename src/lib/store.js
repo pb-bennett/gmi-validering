@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { detectOutliers } from './analysis/outliers';
+import { analyzeIncline } from './analysis/incline';
 
 /**
  * GMI Validator — Global State Store (Zustand)
@@ -51,6 +52,14 @@ const useStore = create(
             selectedPipeIndex: null,
             hoveredPointIndex: null,
             hoveredSegment: null,
+          },
+          terrain: {
+            // Per-line terrain data: { [lineIndex]: { points: [], status: 'idle'|'loading'|'done'|'error' } }
+            data: {},
+            // Queue of line indices to fetch
+            fetchQueue: [],
+            // Currently fetching line index
+            currentlyFetching: null,
           },
           outliers: {
             results: null,
@@ -166,14 +175,30 @@ const useStore = create(
 
               const initial = get()._initial;
 
+              // Auto-run incline analysis for all lines
+              const inclineResults = analyzeIncline(data, {
+                minInclineMode: state.settings.inclineRequirementMode,
+              });
+
+              // Build terrain fetch queue from analysis results (all analyzed lines)
+              const terrainFetchQueue = inclineResults.map((r) => r.lineIndex);
+
               return {
                 data,
                 outliers: {
                   results: outlierResults,
                   hideOutliers: false,
                 },
-                // Reset transient UI + analysis when new data is loaded
-                analysis: { ...initial.analysis },
+                // Auto-populate analysis results
+                analysis: {
+                  ...initial.analysis,
+                  results: inclineResults,
+                },
+                // Reset terrain and populate fetch queue
+                terrain: {
+                  ...initial.terrain,
+                  fetchQueue: terrainFetchQueue,
+                },
                 ui: {
                   ...initial.ui,
                   // Keep sidebar open by default
@@ -405,6 +430,219 @@ const useStore = create(
             }),
             false,
             'analysis/setHoveredSegment'
+          ),
+
+        // ============================================
+        // TERRAIN SLICE — terrain profile data
+        // ============================================
+        terrain: {
+          // Per-line terrain data: { [lineIndex]: { points: [], status: 'idle'|'loading'|'done'|'error', error?: string } }
+          data: {},
+          // Queue of line indices to fetch
+          fetchQueue: [],
+          // Currently fetching line index
+          currentlyFetching: null,
+        },
+
+        setTerrainData: (lineIndex, terrainPoints) =>
+          set(
+            (state) => {
+              // Find corresponding analysis result to get pipe profile points
+              const analysisResult = state.analysis.results.find(
+                (r) => r.lineIndex === lineIndex
+              );
+              const pipePoints = analysisResult?.details?.profilePoints || [];
+              const minOvercover = state.settings.minOvercover;
+
+              // Import and run overcover analysis
+              let overcoverAnalysis = null;
+              if (pipePoints.length > 0 && terrainPoints.length > 0) {
+                // Calculate overcover for each pipe point
+                const warnings = [];
+                let minOC = Infinity;
+                let maxOC = -Infinity;
+                let sumOC = 0;
+                let countOC = 0;
+
+                for (const pp of pipePoints) {
+                  let closestTerrain = null;
+                  let minDistDiff = Infinity;
+
+                  for (const tp of terrainPoints) {
+                    if (tp.z === null || tp.z === undefined) continue;
+                    const diff = Math.abs(tp.dist - pp.dist);
+                    if (diff < minDistDiff) {
+                      minDistDiff = diff;
+                      closestTerrain = tp;
+                    }
+                  }
+
+                  if (!closestTerrain) continue;
+
+                  const overcover = closestTerrain.z - pp.z;
+                  
+                  if (overcover < minOC) minOC = overcover;
+                  if (overcover > maxOC) maxOC = overcover;
+                  sumOC += overcover;
+                  countOC++;
+
+                  // Flag warning if overcover is below minimum
+                  if (overcover >= 0 && overcover < minOvercover) {
+                    warnings.push({
+                      pipeZ: pp.z,
+                      terrainZ: closestTerrain.z,
+                      overcover,
+                      dist: pp.dist,
+                      required: minOvercover,
+                    });
+                  }
+                }
+
+                overcoverAnalysis = {
+                  hasData: countOC > 0,
+                  warnings,
+                  minOvercover: countOC > 0 ? minOC : null,
+                  maxOvercover: countOC > 0 ? maxOC : null,
+                  avgOvercover: countOC > 0 ? sumOC / countOC : null,
+                };
+              }
+
+              return {
+                terrain: {
+                  ...state.terrain,
+                  data: {
+                    ...state.terrain.data,
+                    [lineIndex]: {
+                      points: terrainPoints,
+                      status: 'done',
+                      overcover: overcoverAnalysis,
+                    },
+                  },
+                },
+              };
+            },
+            false,
+            'terrain/setData'
+          ),
+
+        setTerrainStatus: (lineIndex, status, error = null) =>
+          set(
+            (state) => ({
+              terrain: {
+                ...state.terrain,
+                data: {
+                  ...state.terrain.data,
+                  [lineIndex]: {
+                    ...state.terrain.data[lineIndex],
+                    status,
+                    error,
+                  },
+                },
+              },
+            }),
+            false,
+            'terrain/setStatus'
+          ),
+
+        setTerrainFetchQueue: (queue) =>
+          set(
+            (state) => ({
+              terrain: {
+                ...state.terrain,
+                fetchQueue: queue,
+              },
+            }),
+            false,
+            'terrain/setFetchQueue'
+          ),
+
+        addToTerrainQueue: (lineIndex) =>
+          set(
+            (state) => {
+              // Don't add if already in queue or already loaded
+              if (
+                state.terrain.fetchQueue.includes(lineIndex) ||
+                state.terrain.data[lineIndex]?.status === 'done' ||
+                state.terrain.data[lineIndex]?.status === 'loading'
+              ) {
+                return state;
+              }
+              return {
+                terrain: {
+                  ...state.terrain,
+                  fetchQueue: [...state.terrain.fetchQueue, lineIndex],
+                },
+              };
+            },
+            false,
+            'terrain/addToQueue'
+          ),
+
+        prioritizeTerrainFetch: (lineIndex) =>
+          set(
+            (state) => {
+              // If already done or loading, no need to prioritize
+              if (
+                state.terrain.data[lineIndex]?.status === 'done' ||
+                state.terrain.data[lineIndex]?.status === 'loading'
+              ) {
+                return state;
+              }
+              // Remove from current position and add to front
+              const newQueue = state.terrain.fetchQueue.filter(
+                (i) => i !== lineIndex
+              );
+              return {
+                terrain: {
+                  ...state.terrain,
+                  fetchQueue: [lineIndex, ...newQueue],
+                },
+              };
+            },
+            false,
+            'terrain/prioritize'
+          ),
+
+        setCurrentlyFetching: (lineIndex) =>
+          set(
+            (state) => ({
+              terrain: {
+                ...state.terrain,
+                currentlyFetching: lineIndex,
+              },
+            }),
+            false,
+            'terrain/setCurrentlyFetching'
+          ),
+
+        popFromTerrainQueue: () => {
+          const state = get();
+          const [next, ...rest] = state.terrain.fetchQueue;
+          set(
+            {
+              terrain: {
+                ...state.terrain,
+                fetchQueue: rest,
+                currentlyFetching: next ?? null,
+              },
+            },
+            false,
+            'terrain/popQueue'
+          );
+          return next;
+        },
+
+        clearTerrainData: () =>
+          set(
+            (state) => ({
+              terrain: {
+                data: {},
+                fetchQueue: [],
+                currentlyFetching: null,
+              },
+            }),
+            false,
+            'terrain/clear'
           ),
 
         // ============================================
@@ -952,6 +1190,7 @@ const useStore = create(
           showWarnings: true,
           lastFileName: null,
           inclineRequirementMode: 'fixed10', // 'fixed10' | 'variable'
+          minOvercover: 2, // Minimum overcover in meters (default 2m)
         },
 
         updateSettings: (newSettings) =>
@@ -976,6 +1215,7 @@ const useStore = create(
                 parsing: { ...initial.parsing },
                 validation: { ...initial.validation },
                 analysis: { ...initial.analysis },
+                terrain: { ...initial.terrain },
                 outliers: { ...initial.outliers },
                 ui: { ...initial.ui },
                 // Keep settings as-is

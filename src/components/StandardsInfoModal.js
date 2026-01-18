@@ -9,6 +9,9 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
   const inclineRequirementMode = useStore(
     (state) => state.settings.inclineRequirementMode
   );
+  const minOvercover = useStore(
+    (state) => state.settings.minOvercover
+  );
   const updateSettings = useStore((state) => state.updateSettings);
 
   const handleModeChange = (mode) => {
@@ -19,6 +22,12 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
       });
       setAnalysisResults(results);
     }
+  };
+
+  const handleOvercoverChange = (value) => {
+    updateSettings({ minOvercover: value });
+    // Note: Overcover warnings will be recalculated when terrain data is next fetched
+    // or we could trigger a recalculation here if needed
   };
   if (!isOpen) return null;
 
@@ -126,6 +135,71 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
                 <span className="font-bold ml-2">2 ‰ (1:500)</span>
               </li>
             </ul>
+          </div>
+
+          <div className="bg-amber-50 p-4 rounded-md border border-amber-100">
+            <h3 className="font-semibold text-amber-800 mb-2">
+              Krav til overdekning:
+            </h3>
+            <p className="text-sm text-gray-700 mb-3">
+              Overdekning er avstanden fra topp rør til terrengoverflaten. 
+              Minimumskrav sikrer at ledninger har tilstrekkelig beskyttelse 
+              mot frost og mekaniske påkjenninger.
+            </p>
+            <div className="space-y-3 mb-3">
+              <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                <input
+                  type="radio"
+                  name="overcoverRequirement"
+                  value="1.5"
+                  checked={minOvercover === 1.5}
+                  onChange={() => handleOvercoverChange(1.5)}
+                  className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                />
+                <div>
+                  <div className="font-medium">1,5 meter (minimum)</div>
+                  <div className="text-xs text-gray-600">
+                    For områder med mildere klima eller spesialtiltak.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                <input
+                  type="radio"
+                  name="overcoverRequirement"
+                  value="2"
+                  checked={minOvercover === 2}
+                  onChange={() => handleOvercoverChange(2)}
+                  className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                />
+                <div>
+                  <div className="font-medium">2 meter (standard)</div>
+                  <div className="text-xs text-gray-600">
+                    Standard frostfri dybde for de fleste områder i Norge.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                <input
+                  type="radio"
+                  name="overcoverRequirement"
+                  value="2.5"
+                  checked={minOvercover === 2.5}
+                  onChange={() => handleOvercoverChange(2.5)}
+                  className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                />
+                <div>
+                  <div className="font-medium">2,5 meter (kaldere områder)</div>
+                  <div className="text-xs text-gray-600">
+                    For innlandsområder og høyereliggende strøk.
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div className="text-xs text-amber-700 bg-amber-100 p-2 rounded">
+              <strong>Merk:</strong> Terrengdata hentes fra Geonorge Høydedata API. 
+              Overdekning beregnes som terreng-høyde minus rør-høyde.
+            </div>
           </div>
 
           <div className="space-y-2">

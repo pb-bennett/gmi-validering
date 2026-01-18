@@ -18,6 +18,9 @@ export default function InclineAnalysisModal() {
   );
   const selectPipe = useStore((state) => state.selectAnalysisPipe);
 
+  // Terrain data for all lines
+  const terrainData = useStore((state) => state.terrain.data);
+
   // Filters
   const [selectedType, setSelectedType] = useState('ALL');
   const [showWarning, setShowWarning] = useState(true);
@@ -216,6 +219,9 @@ export default function InclineAnalysisModal() {
                 res.attributes.S_FCODE ||
                 'Ukjent';
               const color = getColorByFCode(fcode);
+              const terrain = terrainData[res.lineIndex];
+              const terrainStatus = terrain?.status || 'idle';
+              const hasOvercoverWarning = terrain?.overcover?.warnings?.length > 0;
 
               return (
                 <div
@@ -245,7 +251,30 @@ export default function InclineAnalysisModal() {
                         mm
                       </span>
                     </div>
-                    <StatusBadge status={res.status} />
+                    <div className="flex items-center gap-1">
+                      {/* Terrain loading spinner */}
+                      {terrainStatus === 'loading' && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded" title="Henter terrengdata...">
+                          <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        </span>
+                      )}
+                      {/* Terrain done indicator */}
+                      {terrainStatus === 'done' && !hasOvercoverWarning && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] bg-green-50 text-green-700 rounded" title="Terrengdata OK">
+                          ⛰️
+                        </span>
+                      )}
+                      {/* Overcover warning badge */}
+                      {hasOvercoverWarning && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] bg-red-50 text-red-700 rounded font-medium" title={`${terrain.overcover.warnings.length} punkt med lav overdekning`}>
+                          ⛰️ {terrain.overcover.warnings.length}⚠
+                        </span>
+                      )}
+                      <StatusBadge status={res.status} />
+                    </div>
                   </div>
                   {res.message !== 'OK' && (
                     <div className="text-xs text-gray-500 mt-1">
@@ -350,6 +379,46 @@ export default function InclineAnalysisModal() {
                     {formatNumber(selectedResult.details.deltaZ, 3)} m
                   </span>
                 </div>
+                {/* Overcover stat */}
+                {(() => {
+                  const terrain = terrainData[selectedResult.lineIndex];
+                  if (!terrain) return null;
+                  
+                  if (terrain.status === 'loading') {
+                    return (
+                      <div className="p-2 bg-gray-50 rounded">
+                        <span className="block text-gray-500 uppercase text-[10px]">
+                          Overdekning
+                        </span>
+                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                          <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Henter...
+                        </span>
+                      </div>
+                    );
+                  }
+                  
+                  if (terrain.status === 'done' && terrain.overcover?.hasData) {
+                    const oc = terrain.overcover;
+                    const hasWarning = oc.warnings?.length > 0;
+                    return (
+                      <div className={`p-2 rounded ${hasWarning ? 'bg-red-50' : 'bg-green-50'}`}>
+                        <span className="block text-gray-500 uppercase text-[10px]">
+                          Min. overdekning
+                        </span>
+                        <span className={`font-bold text-base ${hasWarning ? 'text-red-700' : 'text-green-700'}`}>
+                          {formatNumber(oc.minOvercover, 2)} m
+                          {hasWarning && ' ⚠'}
+                        </span>
+                      </div>
+                    );
+                  }
+                  
+                  return null;
+                })()}
               </div>
 
               {/* Cross Section Visualization */}
@@ -442,6 +511,14 @@ function PipeProfileVisualization({ result }) {
     (state) => state.analysis.hoveredSegment
   );
 
+  // Get terrain data for this line
+  const terrainData = useStore(
+    (state) => state.terrain.data[result.lineIndex]
+  );
+  const minOvercover = useStore((state) => state.settings.minOvercover);
+  const terrainPoints = terrainData?.points || [];
+  const terrainStatus = terrainData?.status || 'idle';
+
   const {
     startZ,
     endZ,
@@ -520,13 +597,62 @@ function PipeProfileVisualization({ result }) {
   const plotWidth = width - padding * 2;
   const plotHeight = height - padding * 2;
 
-  const minZ = Math.min(...plotPoints.map((p) => p.z));
-  const maxZ = Math.max(...plotPoints.map((p) => p.z));
+  // Prepare terrain plot points (aligned with pipe distance axis)
+  const terrainPlotPoints = useMemo(() => {
+    if (!terrainPoints || terrainPoints.length === 0) return [];
+    // terrainPoints have { x, y, z, dist } where dist is distance along line
+    // If digitized backwards, flip the distances
+    if (isDigitizedBackwards) {
+      return terrainPoints.map(tp => ({
+        ...tp,
+        dist: length - tp.dist
+      })).sort((a, b) => a.dist - b.dist);
+    }
+    return terrainPoints;
+  }, [terrainPoints, isDigitizedBackwards, length]);
+
+  // Calculate min/max Z including terrain if available
+  const pipeZValues = plotPoints.map((p) => p.z);
+  const terrainZValues = terrainPlotPoints.map((p) => p.z).filter(z => z !== null && z !== undefined);
+  const allZValues = [...pipeZValues, ...terrainZValues];
+  
+  const minZ = Math.min(...allZValues);
+  const maxZ = Math.max(...allZValues);
   const zRange = maxZ - minZ || 1;
   const zBuffer = zRange * 0.3;
   const plotMinZ = minZ - zBuffer;
   const plotMaxZ = maxZ + zBuffer;
   const plotZRange = plotMaxZ - plotMinZ;
+
+  // Calculate overcover at each pipe point
+  const overcoverData = useMemo(() => {
+    if (terrainPlotPoints.length === 0) return [];
+    
+    return plotPoints.map(pp => {
+      // Find closest terrain point
+      let closestTerrain = null;
+      let minDistDiff = Infinity;
+      
+      for (const tp of terrainPlotPoints) {
+        const diff = Math.abs(tp.dist - pp.dist);
+        if (diff < minDistDiff) {
+          minDistDiff = diff;
+          closestTerrain = tp;
+        }
+      }
+      
+      if (!closestTerrain || closestTerrain.z === null) {
+        return { overcover: null, terrainZ: null, warning: false };
+      }
+      
+      const overcover = closestTerrain.z - pp.z;
+      return {
+        overcover,
+        terrainZ: closestTerrain.z,
+        warning: overcover < minOvercover && overcover >= 0
+      };
+    });
+  }, [plotPoints, terrainPlotPoints, minOvercover]);
 
   const getX = (dist) => padding + (dist / length) * plotWidth;
   const getY = (z) =>
@@ -621,6 +747,37 @@ function PipeProfileVisualization({ result }) {
         </button>
       </div>
 
+      {/* Legend */}
+      <div className="absolute top-2 left-2 z-10 bg-white/90 border rounded px-2 py-1.5 text-xs shadow flex gap-3 items-center">
+        <div className="flex items-center gap-1">
+          <div className="w-4 h-1 rounded" style={{ backgroundColor: pipeColor }}></div>
+          <span className="text-gray-600">Ledning</span>
+        </div>
+        {terrainPlotPoints.length > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-0.5 rounded" style={{ backgroundColor: '#8B4513', opacity: 0.8 }}></div>
+            <span className="text-gray-600">Terreng</span>
+          </div>
+        )}
+        {overcoverData.some(oc => oc.warning) && (
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-red-100 border border-red-500 flex items-center justify-center">
+              <span className="text-red-500 text-[8px] font-bold">!</span>
+            </div>
+            <span className="text-red-600">Lav overdekning</span>
+          </div>
+        )}
+        {terrainStatus === 'loading' && (
+          <div className="flex items-center gap-1 text-gray-500">
+            <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Henter...</span>
+          </div>
+        )}
+      </div>
+
       <svg
         width={width}
         height={height}
@@ -659,6 +816,121 @@ function PipeProfileVisualization({ result }) {
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
           />
+
+          {/* Terrain Line */}
+          {terrainPlotPoints.length > 0 && (
+            <>
+              {/* Terrain fill area (between terrain and pipe) */}
+              <path
+                d={(() => {
+                  // Create closed polygon: terrain line + reversed pipe line
+                  let terrainPath = `M ${getX(terrainPlotPoints[0].dist)} ${getY(terrainPlotPoints[0].z)}`;
+                  for (let i = 1; i < terrainPlotPoints.length; i++) {
+                    terrainPath += ` L ${getX(terrainPlotPoints[i].dist)} ${getY(terrainPlotPoints[i].z)}`;
+                  }
+                  // Go down to the pipe level at the end
+                  const lastPipePoint = plotPoints[plotPoints.length - 1];
+                  terrainPath += ` L ${getX(lastPipePoint.dist)} ${getY(lastPipePoint.z)}`;
+                  // Follow pipe backwards
+                  for (let i = plotPoints.length - 2; i >= 0; i--) {
+                    terrainPath += ` L ${getX(plotPoints[i].dist)} ${getY(plotPoints[i].z)}`;
+                  }
+                  terrainPath += ' Z';
+                  return terrainPath;
+                })()}
+                fill="#8B4513"
+                fillOpacity="0.15"
+              />
+              {/* Terrain surface line */}
+              <path
+                d={(() => {
+                  let terrainPath = `M ${getX(terrainPlotPoints[0].dist)} ${getY(terrainPlotPoints[0].z)}`;
+                  for (let i = 1; i < terrainPlotPoints.length; i++) {
+                    terrainPath += ` L ${getX(terrainPlotPoints[i].dist)} ${getY(terrainPlotPoints[i].z)}`;
+                  }
+                  return terrainPath;
+                })()}
+                fill="none"
+                stroke="#8B4513"
+                strokeWidth="2"
+                strokeDasharray="6,3"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+                opacity="0.8"
+              />
+            </>
+          )}
+
+          {/* Overcover Warning Zones */}
+          {overcoverData.map((oc, i) => {
+            if (!oc.warning || i >= plotPoints.length) return null;
+            const pp = plotPoints[i];
+            const x = getX(pp.dist);
+            const y1 = getY(pp.z);
+            const y2 = getY(oc.terrainZ);
+            
+            return (
+              <g key={`overcover-warning-${i}`}>
+                {/* Warning highlight */}
+                <line
+                  x1={x}
+                  y1={y1}
+                  x2={x}
+                  y2={y2}
+                  stroke="#ef4444"
+                  strokeWidth={3 / transform.k}
+                  strokeDasharray="4,2"
+                  vectorEffect="non-scaling-stroke"
+                  opacity="0.8"
+                />
+                {/* Warning icon at terrain level */}
+                <circle
+                  cx={x}
+                  cy={y2}
+                  r={6 / transform.k}
+                  fill="#fef2f2"
+                  stroke="#ef4444"
+                  strokeWidth="1.5"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <text
+                  x={x}
+                  y={y2 + 3 / transform.k}
+                  textAnchor="middle"
+                  fill="#ef4444"
+                  style={{ fontSize: `${8 / transform.k}px`, fontWeight: 'bold' }}
+                >
+                  !
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Terrain Loading Indicator */}
+          {terrainStatus === 'loading' && (
+            <g>
+              <rect
+                x={width - padding - 120}
+                y={padding + 5}
+                width={115}
+                height={24}
+                rx="4"
+                fill="white"
+                fillOpacity="0.9"
+                stroke="#e5e7eb"
+              />
+              <text
+                x={width - padding - 60}
+                y={padding + 21}
+                textAnchor="middle"
+                fill="#6b7280"
+                style={{ fontSize: '11px' }}
+              >
+                Henter terreng...
+              </text>
+            </g>
+          )}
 
           {/* Segment Hit Areas and Tooltips */}
           {plotPoints.map((p, i) => {
@@ -719,6 +991,7 @@ function PipeProfileVisualization({ result }) {
                     setTooltip({
                       x: e.clientX - rect.left,
                       y: e.clientY - rect.top,
+                      type: 'segment',
                       data: {
                         incline: segInclinePermille,
                         length: segLen,
@@ -740,6 +1013,7 @@ function PipeProfileVisualization({ result }) {
             const x = getX(p.dist);
             const y = getY(p.z);
             const isHovered = hoveredPointIndex === p.originalIndex;
+            const oc = overcoverData[i] || {};
 
             return (
               <g
@@ -747,7 +1021,27 @@ function PipeProfileVisualization({ result }) {
                 onMouseEnter={() =>
                   setHoveredAnalysisPoint(p.originalIndex)
                 }
-                onMouseLeave={() => setHoveredAnalysisPoint(null)}
+                onMouseMove={(e) => {
+                  if (oc.terrainZ !== null && oc.terrainZ !== undefined) {
+                    const rect = containerRef.current.getBoundingClientRect();
+                    setTooltip({
+                      x: e.clientX - rect.left,
+                      y: e.clientY - rect.top,
+                      type: 'point',
+                      data: {
+                        pipeZ: p.z,
+                        terrainZ: oc.terrainZ,
+                        overcover: oc.overcover,
+                        warning: oc.warning,
+                        dist: p.dist,
+                      },
+                    });
+                  }
+                }}
+                onMouseLeave={() => {
+                  setHoveredAnalysisPoint(null);
+                  setTooltip(null);
+                }}
                 className="cursor-pointer"
               >
                 {/* Invisible larger target for easier hovering */}
@@ -763,8 +1057,8 @@ function PipeProfileVisualization({ result }) {
                   cx={x}
                   cy={y}
                   r={(isHovered ? 8 : 5) / transform.k}
-                  fill={isHovered ? '#ff0000' : 'white'}
-                  stroke={pipeColor}
+                  fill={isHovered ? '#ff0000' : (oc.warning ? '#fef2f2' : 'white')}
+                  stroke={oc.warning ? '#ef4444' : pipeColor}
                   strokeWidth="2"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -864,32 +1158,75 @@ function PipeProfileVisualization({ result }) {
           className="absolute z-50 bg-gray-900 text-white text-xs p-2 rounded shadow-lg pointer-events-none whitespace-nowrap border border-gray-700"
           style={{ left: tooltip.x + 15, top: tooltip.y + 15 }}
         >
-          <div className="font-bold mb-1 border-b border-gray-700 pb-1">
-            Seksjon
-          </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-            <span className="text-gray-400">Fall:</span>
-            <span
-              className={`font-mono font-bold ${
-                tooltip.data.incline < 0 &&
-                result.pipeType !== 'pressure'
-                  ? 'text-red-400'
-                  : 'text-green-400'
-              }`}
-            >
-              {formatNumber(tooltip.data.incline, 2)}‰
-            </span>
+          {tooltip.type === 'point' ? (
+            <>
+              <div className="font-bold mb-1 border-b border-gray-700 pb-1">
+                Punkt
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                <span className="text-gray-400">Avstand:</span>
+                <span className="font-mono">
+                  {formatNumber(tooltip.data.dist, 1)}m
+                </span>
 
-            <span className="text-gray-400">Lengde:</span>
-            <span className="font-mono">
-              {formatNumber(tooltip.data.length, 2)}m
-            </span>
+                <span className="text-gray-400">Ledning Z:</span>
+                <span className="font-mono">
+                  {formatNumber(tooltip.data.pipeZ, 2)}m
+                </span>
 
-            <span className="text-gray-400">Høydeforskjell:</span>
-            <span className="font-mono">
-              {formatNumber(tooltip.data.drop, 3)}m
-            </span>
-          </div>
+                <span className="text-gray-400">Terreng Z:</span>
+                <span className="font-mono">
+                  {formatNumber(tooltip.data.terrainZ, 2)}m
+                </span>
+
+                <span className="text-gray-400">Overdekning:</span>
+                <span
+                  className={`font-mono font-bold ${
+                    tooltip.data.warning
+                      ? 'text-red-400'
+                      : 'text-green-400'
+                  }`}
+                >
+                  {formatNumber(tooltip.data.overcover, 2)}m
+                  {tooltip.data.warning && ' ⚠'}
+                </span>
+              </div>
+              {tooltip.data.warning && (
+                <div className="mt-1 pt-1 border-t border-gray-700 text-red-400 text-[10px]">
+                  Under minstekrav ({formatNumber(minOvercover, 1)}m)
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="font-bold mb-1 border-b border-gray-700 pb-1">
+                Seksjon
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                <span className="text-gray-400">Fall:</span>
+                <span
+                  className={`font-mono font-bold ${
+                    tooltip.data.incline < 0 &&
+                    result.pipeType !== 'pressure'
+                      ? 'text-red-400'
+                      : 'text-green-400'
+                  }`}
+                >
+                  {formatNumber(tooltip.data.incline, 2)}‰
+                </span>
+
+                <span className="text-gray-400">Lengde:</span>
+                <span className="font-mono">
+                  {formatNumber(tooltip.data.length, 2)}m
+                </span>
+
+                <span className="text-gray-400">Høydeforskjell:</span>
+                <span className="font-mono">
+                  {formatNumber(tooltip.data.drop, 3)}m
+                </span>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
