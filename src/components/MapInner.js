@@ -2135,19 +2135,29 @@ function AnalysisPointsLayer() {
   const analysis = useStore((state) => state.analysis);
   const data = useStore((state) => state.data);
 
-  const { points, pipeColor } = useMemo(() => {
+  const { points, pipeColor, lineCoords, sourceProj } = useMemo(() => {
     if (
       !analysis.isOpen ||
       analysis.selectedPipeIndex === null ||
       !data ||
       !data.lines
     ) {
-      return { points: [], pipeColor: '#3388ff' };
+      return {
+        points: [],
+        pipeColor: '#3388ff',
+        lineCoords: [],
+        sourceProj: 'EPSG:4326',
+      };
     }
 
     const line = data.lines[analysis.selectedPipeIndex];
     if (!line || !line.coordinates)
-      return { points: [], pipeColor: '#3388ff' };
+      return {
+        points: [],
+        pipeColor: '#3388ff',
+        lineCoords: [],
+        sourceProj: 'EPSG:4326',
+      };
 
     const fcode = normalizeFcode(
       line.attributes?.Tema || line.attributes?.S_FCODE
@@ -2190,8 +2200,53 @@ function AnalysisPointsLayer() {
       return { lat, lng, z: c.z, index: i };
     });
 
-    return { points: pts, pipeColor: color };
+    return {
+      points: pts,
+      pipeColor: color,
+      lineCoords: line.coordinates,
+      sourceProj,
+    };
   }, [analysis.isOpen, analysis.selectedPipeIndex, data]);
+
+  const hoveredTerrainLatLng = useMemo(() => {
+    const target = analysis.hoveredTerrainPoint;
+    if (!target || !lineCoords || lineCoords.length < 2) return null;
+
+    let distSoFar = 0;
+    for (let i = 0; i < lineCoords.length - 1; i++) {
+      const p1 = lineCoords[i];
+      const p2 = lineCoords[i + 1];
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const segLen = Math.sqrt(dx * dx + dy * dy);
+      if (segLen < 0.0001) continue;
+
+      if (target.dist <= distSoFar + segLen) {
+        const t = (target.dist - distSoFar) / segLen;
+        const x = p1.x + (p2.x - p1.x) * t;
+        const y = p1.y + (p2.y - p1.y) * t;
+        let lat, lng;
+        if (sourceProj === 'EPSG:4326') {
+          lat = y;
+          lng = x;
+        } else {
+          try {
+            const [l, tLat] = proj4(sourceProj, 'EPSG:4326', [x, y]);
+            lng = l;
+            lat = tLat;
+          } catch (e) {
+            lat = y;
+            lng = x;
+          }
+        }
+        return [lat, lng];
+      }
+
+      distSoFar += segLen;
+    }
+
+    return null;
+  }, [analysis.hoveredTerrainPoint, lineCoords, sourceProj]);
 
   const hoveredSegmentPolyline = useMemo(() => {
     if (!analysis.hoveredSegment || points.length === 0) return null;
@@ -2257,6 +2312,19 @@ function AnalysisPointsLayer() {
           </CircleMarker>
         );
       })}
+      {hoveredTerrainLatLng && (
+        <CircleMarker
+          center={hoveredTerrainLatLng}
+          radius={6}
+          pathOptions={{
+            color: '#3b82f6',
+            fillColor: '#dbeafe',
+            fillOpacity: 1,
+            weight: 2,
+          }}
+          pane="markerPane"
+        />
+      )}
     </>
   );
 }

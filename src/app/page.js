@@ -10,6 +10,8 @@ import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import DataTable from '@/components/DataTable';
 import TabSwitcher from '@/components/TabSwitcher';
+import TerrainFetcher from '@/components/TerrainFetcher';
+import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
 import useStore from '@/lib/store';
 
 // Dynamic import for 3D viewer to prevent SSR issues with Three.js
@@ -29,11 +31,11 @@ export default function Home() {
   const toggleDataTable = useStore((state) => state.toggleDataTable);
   const resetAll = useStore((state) => state.resetAll);
   const updateLastActive = useStore(
-    (state) => state.updateLastActive
+    (state) => state.updateLastActive,
   );
   const analysisOpen = useStore((state) => state.analysis.isOpen);
   const fieldValidationOpen = useStore(
-    (state) => state.ui.fieldValidationOpen
+    (state) => state.ui.fieldValidationOpen,
   );
   const viewer3DOpen = useStore((state) => state.ui.viewer3DOpen);
   const activeViewTab = useStore((state) => state.ui.activeViewTab);
@@ -63,7 +65,7 @@ export default function Home() {
       clearInterval(interval);
       document.removeEventListener(
         'visibilitychange',
-        handleActivity
+        handleActivity,
       );
       window.removeEventListener('focus', handleActivity);
       window.removeEventListener('click', handleActivity);
@@ -222,6 +224,12 @@ export default function Home() {
       {/* Main App Layout (Sidebar + Map) */}
       {parsingStatus === 'done' && (
         <>
+          {/* Background terrain fetcher - runs in background */}
+          <TerrainFetcher />
+
+          {/* Dev diagnostics panel - bottom right corner */}
+          <DevDiagnosticsPanel />
+
           {/* Sidebar - Hidden when data table is open OR analysis is open OR field validation is open */}
           {!dataTableOpen &&
             !analysisOpen &&
@@ -250,8 +258,8 @@ export default function Home() {
                     height: dataTableOpen
                       ? '67%'
                       : analysisOpen
-                      ? '55%'
-                      : '100%',
+                        ? '55%'
+                        : '100%',
                     transition: 'height 0.2s ease',
                   }}
                 >
