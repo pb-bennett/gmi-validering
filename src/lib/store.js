@@ -52,6 +52,7 @@ const useStore = create(
             selectedPipeIndex: null,
             hoveredPointIndex: null,
             hoveredSegment: null,
+            hoveredTerrainPoint: null,
           },
           terrain: {
             // Per-line terrain data: { [lineIndex]: { points: [], status: 'idle'|'loading'|'done'|'error' } }
@@ -181,7 +182,9 @@ const useStore = create(
               });
 
               // Build terrain fetch queue from analysis results (all analyzed lines)
-              const terrainFetchQueue = inclineResults.map((r) => r.lineIndex);
+              const terrainFetchQueue = inclineResults.map(
+                (r) => r.lineIndex,
+              );
 
               return {
                 data,
@@ -211,7 +214,7 @@ const useStore = create(
               };
             },
             false,
-            'data/set'
+            'data/set',
           ),
         clearData: () =>
           set(
@@ -224,7 +227,7 @@ const useStore = create(
               },
             },
             false,
-            'data/clear'
+            'data/clear',
           ),
 
         // ============================================
@@ -251,7 +254,7 @@ const useStore = create(
               },
             }),
             false,
-            'parsing/start'
+            'parsing/start',
           ),
 
         setParsingProgress: (progress) =>
@@ -260,7 +263,7 @@ const useStore = create(
               parsing: { ...state.parsing, progress },
             }),
             false,
-            'parsing/progress'
+            'parsing/progress',
           ),
 
         setParsingDone: () =>
@@ -274,7 +277,7 @@ const useStore = create(
               },
             }),
             false,
-            'parsing/done'
+            'parsing/done',
           ),
 
         setParsingError: (error) =>
@@ -288,7 +291,7 @@ const useStore = create(
               },
             }),
             false,
-            'parsing/error'
+            'parsing/error',
           ),
 
         resetParsing: () =>
@@ -303,7 +306,7 @@ const useStore = create(
               },
             },
             false,
-            'parsing/reset'
+            'parsing/reset',
           ),
 
         // ============================================
@@ -326,7 +329,7 @@ const useStore = create(
           set(
             { validation: results },
             false,
-            'validation/setResults'
+            'validation/setResults',
           ),
 
         clearValidationResults: () =>
@@ -346,7 +349,7 @@ const useStore = create(
               },
             },
             false,
-            'validation/clear'
+            'validation/clear',
           ),
 
         // ============================================
@@ -358,6 +361,7 @@ const useStore = create(
           selectedPipeIndex: null,
           hoveredPointIndex: null,
           hoveredSegment: null, // { p1: number, p2: number } | null
+          hoveredTerrainPoint: null, // { dist, terrainZ, pipeZ } | null
         },
 
         setAnalysisResults: (results) =>
@@ -366,7 +370,7 @@ const useStore = create(
               analysis: { ...state.analysis, results },
             }),
             false,
-            'analysis/setResults'
+            'analysis/setResults',
           ),
 
         toggleAnalysisModal: (isOpen) =>
@@ -388,7 +392,7 @@ const useStore = create(
               };
             },
             false,
-            'analysis/toggleModal'
+            'analysis/toggleModal',
           ),
 
         selectAnalysisPipe: (index) =>
@@ -405,7 +409,7 @@ const useStore = create(
               },
             }),
             false,
-            'analysis/selectPipe'
+            'analysis/selectPipe',
           ),
 
         setHoveredAnalysisPoint: (pointIndex) =>
@@ -417,7 +421,7 @@ const useStore = create(
               },
             }),
             false,
-            'analysis/setHoveredPoint'
+            'analysis/setHoveredPoint',
           ),
 
         setHoveredAnalysisSegment: (segment) =>
@@ -429,7 +433,19 @@ const useStore = create(
               },
             }),
             false,
-            'analysis/setHoveredSegment'
+            'analysis/setHoveredSegment',
+          ),
+
+        setHoveredTerrainPoint: (point) =>
+          set(
+            (state) => ({
+              analysis: {
+                ...state.analysis,
+                hoveredTerrainPoint: point,
+              },
+            }),
+            false,
+            'analysis/setHoveredTerrainPoint',
           ),
 
         // ============================================
@@ -449,9 +465,10 @@ const useStore = create(
             (state) => {
               // Find corresponding analysis result to get pipe profile points
               const analysisResult = state.analysis.results.find(
-                (r) => r.lineIndex === lineIndex
+                (r) => r.lineIndex === lineIndex,
               );
-              const pipePoints = analysisResult?.details?.profilePoints || [];
+              const pipePoints =
+                analysisResult?.details?.profilePoints || [];
               const minOvercover = state.settings.minOvercover;
 
               // Import and run overcover analysis
@@ -469,18 +486,19 @@ const useStore = create(
                   let minDistDiff = Infinity;
 
                   for (const tp of terrainPoints) {
-                    if (tp.z === null || tp.z === undefined) continue;
+                    const terrainZ = tp.terrainZ ?? tp.z ?? null;
+                    if (terrainZ === null || terrainZ === undefined) continue;
                     const diff = Math.abs(tp.dist - pp.dist);
                     if (diff < minDistDiff) {
                       minDistDiff = diff;
-                      closestTerrain = tp;
+                      closestTerrain = { ...tp, z: terrainZ };
                     }
                   }
 
                   if (!closestTerrain) continue;
 
                   const overcover = closestTerrain.z - pp.z;
-                  
+
                   if (overcover < minOC) minOC = overcover;
                   if (overcover > maxOC) maxOC = overcover;
                   sumOC += overcover;
@@ -522,7 +540,7 @@ const useStore = create(
               };
             },
             false,
-            'terrain/setData'
+            'terrain/setData',
           ),
 
         setTerrainStatus: (lineIndex, status, error = null) =>
@@ -541,7 +559,7 @@ const useStore = create(
               },
             }),
             false,
-            'terrain/setStatus'
+            'terrain/setStatus',
           ),
 
         setTerrainFetchQueue: (queue) =>
@@ -553,7 +571,7 @@ const useStore = create(
               },
             }),
             false,
-            'terrain/setFetchQueue'
+            'terrain/setFetchQueue',
           ),
 
         addToTerrainQueue: (lineIndex) =>
@@ -570,12 +588,15 @@ const useStore = create(
               return {
                 terrain: {
                   ...state.terrain,
-                  fetchQueue: [...state.terrain.fetchQueue, lineIndex],
+                  fetchQueue: [
+                    ...state.terrain.fetchQueue,
+                    lineIndex,
+                  ],
                 },
               };
             },
             false,
-            'terrain/addToQueue'
+            'terrain/addToQueue',
           ),
 
         prioritizeTerrainFetch: (lineIndex) =>
@@ -590,7 +611,7 @@ const useStore = create(
               }
               // Remove from current position and add to front
               const newQueue = state.terrain.fetchQueue.filter(
-                (i) => i !== lineIndex
+                (i) => i !== lineIndex,
               );
               return {
                 terrain: {
@@ -600,7 +621,7 @@ const useStore = create(
               };
             },
             false,
-            'terrain/prioritize'
+            'terrain/prioritize',
           ),
 
         setCurrentlyFetching: (lineIndex) =>
@@ -612,7 +633,7 @@ const useStore = create(
               },
             }),
             false,
-            'terrain/setCurrentlyFetching'
+            'terrain/setCurrentlyFetching',
           ),
 
         popFromTerrainQueue: () => {
@@ -627,7 +648,7 @@ const useStore = create(
               },
             },
             false,
-            'terrain/popQueue'
+            'terrain/popQueue',
           );
           return next;
         },
@@ -642,7 +663,7 @@ const useStore = create(
               },
             }),
             false,
-            'terrain/clear'
+            'terrain/clear',
           ),
 
         // ============================================
@@ -662,7 +683,7 @@ const useStore = create(
               },
             }),
             false,
-            'outliers/setResults'
+            'outliers/setResults',
           ),
 
         toggleHideOutliers: (hide) =>
@@ -677,7 +698,7 @@ const useStore = create(
               },
             }),
             false,
-            'outliers/toggleHide'
+            'outliers/toggleHide',
           ),
 
         clearOutliers: () =>
@@ -689,7 +710,7 @@ const useStore = create(
               },
             },
             false,
-            'outliers/clear'
+            'outliers/clear',
           ),
 
         // ============================================
@@ -742,7 +763,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setOutlierPromptOpen'
+            'ui/setOutlierPromptOpen',
           ),
 
         setMissingHeightPromptOpen: (isOpen) =>
@@ -757,7 +778,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setMissingHeightPromptOpen'
+            'ui/setMissingHeightPromptOpen',
           ),
 
         setMissingHeightDetailsOpen: (isOpen) =>
@@ -772,7 +793,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setMissingHeightDetailsOpen'
+            'ui/setMissingHeightDetailsOpen',
           ),
 
         // Measure tool actions
@@ -790,7 +811,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/toggleMeasureMode'
+            'ui/toggleMeasureMode',
           ),
 
         addMeasurePoint: (point) =>
@@ -802,7 +823,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/addMeasurePoint'
+            'ui/addMeasurePoint',
           ),
 
         clearMeasurePoints: () =>
@@ -814,7 +835,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/clearMeasurePoints'
+            'ui/clearMeasurePoints',
           ),
 
         // Felt filter actions
@@ -827,7 +848,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setFeltFilterActive'
+            'ui/setFeltFilterActive',
           ),
 
         toggleFeltHiddenValue: (fieldName, value, objectType) =>
@@ -838,7 +859,7 @@ const useStore = create(
                 (item) =>
                   item.fieldName === fieldName &&
                   item.value === value &&
-                  item.objectType === objectType
+                  item.objectType === objectType,
               );
               const newHidden =
                 existingIndex >= 0
@@ -849,7 +870,7 @@ const useStore = create(
               };
             },
             false,
-            'ui/toggleFeltHiddenValue'
+            'ui/toggleFeltHiddenValue',
           ),
 
         setFeltSearchText: (text) =>
@@ -861,7 +882,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setFeltSearchText'
+            'ui/setFeltSearchText',
           ),
 
         clearFeltFilter: () =>
@@ -875,7 +896,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/clearFeltFilter'
+            'ui/clearFeltFilter',
           ),
 
         setFilteredFeatureIds: (ids) =>
@@ -887,7 +908,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setFilteredFeatureIds'
+            'ui/setFilteredFeatureIds',
           ),
 
         toggleMissingReport: (isOpen) =>
@@ -902,7 +923,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/toggleMissingReport'
+            'ui/toggleMissingReport',
           ),
 
         toggleFieldValidation: (isOpen) =>
@@ -928,7 +949,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/toggleFieldValidation'
+            'ui/toggleFieldValidation',
           ),
 
         toggle3DViewer: (isOpen) =>
@@ -945,7 +966,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/toggle3DViewer'
+            'ui/toggle3DViewer',
           ),
 
         setActiveViewTab: (tab) =>
@@ -957,7 +978,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setActiveViewTab'
+            'ui/setActiveViewTab',
           ),
 
         setSelected3DObject: (objectData) =>
@@ -969,14 +990,14 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setSelected3DObject'
+            'ui/setSelected3DObject',
           ),
 
         viewObjectInMap: (
           featureId,
           coordinates,
           zoom = 18,
-          options = {}
+          options = {},
         ) =>
           set(
             (state) => {
@@ -1004,7 +1025,7 @@ const useStore = create(
               return newState;
             },
             false,
-            'ui/viewObjectInMap'
+            'ui/viewObjectInMap',
           ),
 
         clearMapCenterTarget: () =>
@@ -1016,7 +1037,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/clearMapCenterTarget'
+            'ui/clearMapCenterTarget',
           ),
 
         setHighlightedCode: (code) =>
@@ -1025,7 +1046,7 @@ const useStore = create(
               ui: { ...state.ui, highlightedCode: code },
             }),
             false,
-            'ui/setHighlightedCode'
+            'ui/setHighlightedCode',
           ),
 
         setHighlightedType: (typeVal, codeContext = null) =>
@@ -1038,7 +1059,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setHighlightedType'
+            'ui/setHighlightedType',
           ),
 
         toggleHiddenCode: (code) =>
@@ -1053,7 +1074,7 @@ const useStore = create(
               };
             },
             false,
-            'ui/toggleHiddenCode'
+            'ui/toggleHiddenCode',
           ),
 
         toggleHiddenType: (typeVal, codeContext = null) =>
@@ -1062,12 +1083,13 @@ const useStore = create(
               const currentHidden = state.ui.hiddenTypes;
               // Find if this type+code combination exists
               const existingIndex = currentHidden.findIndex(
-                (ht) => ht.type === typeVal && ht.code === codeContext
+                (ht) =>
+                  ht.type === typeVal && ht.code === codeContext,
               );
               const newHidden =
                 existingIndex >= 0
                   ? currentHidden.filter(
-                      (_, i) => i !== existingIndex
+                      (_, i) => i !== existingIndex,
                     )
                   : [
                       ...currentHidden,
@@ -1078,7 +1100,7 @@ const useStore = create(
               };
             },
             false,
-            'ui/toggleHiddenType'
+            'ui/toggleHiddenType',
           ),
 
         toggleDataTable: () =>
@@ -1090,7 +1112,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/toggleDataTable'
+            'ui/toggleDataTable',
           ),
 
         setHighlightedFeature: (featureId) =>
@@ -1099,7 +1121,7 @@ const useStore = create(
               ui: { ...state.ui, highlightedFeatureId: featureId },
             }),
             false,
-            'ui/setHighlightedFeature'
+            'ui/setHighlightedFeature',
           ),
 
         setHighlightedFeatureIds: (featureIds) =>
@@ -1108,7 +1130,7 @@ const useStore = create(
               ui: { ...state.ui, highlightedFeatureIds: featureIds },
             }),
             false,
-            'ui/setHighlightedFeatureIds'
+            'ui/setHighlightedFeatureIds',
           ),
 
         setFieldValidationFilterActive: (active) =>
@@ -1120,7 +1142,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/setFieldValidationFilterActive'
+            'ui/setFieldValidationFilterActive',
           ),
 
         toggleDetailsPanel: () =>
@@ -1132,7 +1154,7 @@ const useStore = create(
               },
             }),
             false,
-            'ui/toggleDetails'
+            'ui/toggleDetails',
           ),
 
         selectRecord: (recordId) =>
@@ -1141,7 +1163,7 @@ const useStore = create(
               ui: { ...state.ui, selectedRecordId: recordId },
             }),
             false,
-            'ui/selectRecord'
+            'ui/selectRecord',
           ),
 
         setFilterSeverity: (severity) =>
@@ -1150,7 +1172,7 @@ const useStore = create(
               ui: { ...state.ui, filterSeverity: severity },
             }),
             false,
-            'ui/setFilter'
+            'ui/setFilter',
           ),
 
         toggleMapView: () =>
@@ -1159,7 +1181,7 @@ const useStore = create(
               ui: { ...state.ui, mapViewOpen: !state.ui.mapViewOpen },
             }),
             false,
-            'ui/toggleMap'
+            'ui/toggleMap',
           ),
 
         toggleSidebar: () =>
@@ -1168,7 +1190,7 @@ const useStore = create(
               ui: { ...state.ui, sidebarOpen: !state.ui.sidebarOpen },
             }),
             false,
-            'ui/toggleSidebar'
+            'ui/toggleSidebar',
           ),
 
         setSidebarOpenSection: (section) =>
@@ -1177,7 +1199,7 @@ const useStore = create(
               ui: { ...state.ui, sidebarOpenSection: section },
             }),
             false,
-            'ui/setSidebarOpenSection'
+            'ui/setSidebarOpenSection',
           ),
 
         // ============================================
@@ -1195,11 +1217,88 @@ const useStore = create(
 
         updateSettings: (newSettings) =>
           set(
-            (state) => ({
-              settings: { ...state.settings, ...newSettings },
-            }),
+            (state) => {
+              const prevMinOvercover = state.settings.minOvercover;
+              const updated = {
+                settings: { ...state.settings, ...newSettings },
+              };
+
+              if (
+                typeof newSettings.minOvercover === 'number' &&
+                newSettings.minOvercover !== prevMinOvercover
+              ) {
+                const nextMinOvercover = newSettings.minOvercover;
+                const newTerrainData = { ...state.terrain.data };
+
+                state.analysis.results.forEach((result) => {
+                  const lineIndex = result.lineIndex;
+                  const terrainEntry = state.terrain.data[lineIndex];
+                  if (!terrainEntry || !terrainEntry.points) return;
+                  const pipePoints = result.details?.profilePoints || [];
+                  if (pipePoints.length === 0) return;
+
+                  const warnings = [];
+                  let minOC = Infinity;
+                  let maxOC = -Infinity;
+                  let sumOC = 0;
+                  let countOC = 0;
+
+                  for (const pp of pipePoints) {
+                    let closestTerrain = null;
+                    let minDistDiff = Infinity;
+
+                    for (const tp of terrainEntry.points) {
+                      const terrainZ = tp.terrainZ ?? tp.z ?? null;
+                      if (terrainZ === null || terrainZ === undefined)
+                        continue;
+                      const diff = Math.abs(tp.dist - pp.dist);
+                      if (diff < minDistDiff) {
+                        minDistDiff = diff;
+                        closestTerrain = { ...tp, z: terrainZ };
+                      }
+                    }
+
+                    if (!closestTerrain) continue;
+
+                    const overcover = closestTerrain.z - pp.z;
+                    if (overcover < minOC) minOC = overcover;
+                    if (overcover > maxOC) maxOC = overcover;
+                    sumOC += overcover;
+                    countOC++;
+
+                    if (overcover >= 0 && overcover < nextMinOvercover) {
+                      warnings.push({
+                        pipeZ: pp.z,
+                        terrainZ: closestTerrain.z,
+                        overcover,
+                        dist: pp.dist,
+                        required: nextMinOvercover,
+                      });
+                    }
+                  }
+
+                  newTerrainData[lineIndex] = {
+                    ...terrainEntry,
+                    overcover: {
+                      hasData: countOC > 0,
+                      warnings,
+                      minOvercover: countOC > 0 ? minOC : null,
+                      maxOvercover: countOC > 0 ? maxOC : null,
+                      avgOvercover: countOC > 0 ? sumOC / countOC : null,
+                    },
+                  };
+                });
+
+                updated.terrain = {
+                  ...state.terrain,
+                  data: newTerrainData,
+                };
+              }
+
+              return updated;
+            },
             false,
-            'settings/update'
+            'settings/update',
           ),
 
         // ============================================
@@ -1223,7 +1322,7 @@ const useStore = create(
               };
             },
             false,
-            'global/resetAll'
+            'global/resetAll',
           ),
 
         // ============================================
@@ -1381,7 +1480,7 @@ const useStore = create(
               now - state.lastActive > oneHour
             ) {
               console.log(
-                'Session expired (1h timeout). Clearing persisted data.'
+                'Session expired (1h timeout). Clearing persisted data.',
               );
               state.clearFile();
               state.clearData();
@@ -1391,10 +1490,10 @@ const useStore = create(
             }
           }
         },
-      }
+      },
     ),
-    { name: 'GMI-Validator-Store' }
-  )
+    { name: 'GMI-Validator-Store' },
+  ),
 );
 
 export default useStore;

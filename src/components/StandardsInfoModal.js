@@ -4,13 +4,13 @@ import { analyzeIncline } from '@/lib/analysis/incline';
 export default function StandardsInfoModal({ isOpen, onClose }) {
   const data = useStore((state) => state.data);
   const setAnalysisResults = useStore(
-    (state) => state.setAnalysisResults
+    (state) => state.setAnalysisResults,
   );
   const inclineRequirementMode = useStore(
-    (state) => state.settings.inclineRequirementMode
+    (state) => state.settings.inclineRequirementMode,
   );
   const minOvercover = useStore(
-    (state) => state.settings.minOvercover
+    (state) => state.settings.minOvercover,
   );
   const updateSettings = useStore((state) => state.updateSettings);
 
@@ -142,9 +142,10 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
               Krav til overdekning:
             </h3>
             <p className="text-sm text-gray-700 mb-3">
-              Overdekning er avstanden fra topp rør til terrengoverflaten. 
-              Minimumskrav sikrer at ledninger har tilstrekkelig beskyttelse 
-              mot frost og mekaniske påkjenninger.
+              Overdekning er avstanden fra topp rør til
+              terrengoverflaten. Minimumskrav sikrer at ledninger har
+              tilstrekkelig beskyttelse mot frost og mekaniske
+              påkjenninger.
             </p>
             <div className="space-y-3 mb-3">
               <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
@@ -157,7 +158,9 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
                   className="mt-0.5 text-amber-600 focus:ring-amber-500"
                 />
                 <div>
-                  <div className="font-medium">1,5 meter (minimum)</div>
+                  <div className="font-medium">
+                    1,5 meter (minimum)
+                  </div>
                   <div className="text-xs text-gray-600">
                     For områder med mildere klima eller spesialtiltak.
                   </div>
@@ -173,9 +176,12 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
                   className="mt-0.5 text-amber-600 focus:ring-amber-500"
                 />
                 <div>
-                  <div className="font-medium">2 meter (standard)</div>
+                  <div className="font-medium">
+                    2 meter (standard)
+                  </div>
                   <div className="text-xs text-gray-600">
-                    Standard frostfri dybde for de fleste områder i Norge.
+                    Standard frostfri dybde for de fleste områder i
+                    Norge.
                   </div>
                 </div>
               </label>
@@ -189,7 +195,9 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
                   className="mt-0.5 text-amber-600 focus:ring-amber-500"
                 />
                 <div>
-                  <div className="font-medium">2,5 meter (kaldere områder)</div>
+                  <div className="font-medium">
+                    2,5 meter (kaldere områder)
+                  </div>
                   <div className="text-xs text-gray-600">
                     For innlandsområder og høyereliggende strøk.
                   </div>
@@ -197,8 +205,9 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
               </label>
             </div>
             <div className="text-xs text-amber-700 bg-amber-100 p-2 rounded">
-              <strong>Merk:</strong> Terrengdata hentes fra Geonorge Høydedata API. 
-              Overdekning beregnes som terreng-høyde minus rør-høyde.
+              <strong>Merk:</strong> Terrengdata hentes fra Geonorge
+              Høydedata API. Overdekning beregnes som terreng-høyde
+              minus rør-høyde.
             </div>
           </div>
 

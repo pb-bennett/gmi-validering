@@ -50,7 +50,7 @@ function interpolatePoint(p1, p2, t) {
  */
 export function samplePointsAlongLine(
   coordinates,
-  interval = DEFAULT_SAMPLE_INTERVAL
+  interval = DEFAULT_SAMPLE_INTERVAL,
 ) {
   if (!coordinates || coordinates.length === 0) {
     return [];
@@ -138,7 +138,8 @@ export function samplePointsAlongLine(
       } else {
         // Mark last sample as vertex if it's essentially at the endpoint
         samples[samples.length - 1].isVertex = true;
-        samples[samples.length - 1].vertexIndex = coordinates.length - 1;
+        samples[samples.length - 1].vertexIndex =
+          coordinates.length - 1;
       }
     }
   }
@@ -163,15 +164,16 @@ export function calculateLineLength(coordinates) {
 
 /**
  * Generate profile points for a line, including all original vertices
- * plus sampled points at regular intervals.
+ * plus sampled points per segment. Spacing is <= interval and aligned
+ * within each original segment (endpoints always included).
  *
  * @param {Array<{x: number, y: number, z?: number}>} coordinates
- * @param {number} interval - Sampling interval in meters
+ * @param {number} interval - Max sampling interval in meters
  * @returns {Array<{x: number, y: number, z?: number, dist: number, isVertex: boolean}>}
  */
 export function generateProfilePoints(
   coordinates,
-  interval = DEFAULT_SAMPLE_INTERVAL
+  interval = DEFAULT_SAMPLE_INTERVAL,
 ) {
   if (!coordinates || coordinates.length < 2) {
     return coordinates?.length === 1
@@ -188,64 +190,57 @@ export function generateProfilePoints(
       : [];
   }
 
-  // For very short lines (shorter than interval), just return endpoints
-  const totalLength = calculateLineLength(coordinates);
-  if (totalLength <= interval) {
-    return [
-      {
-        x: coordinates[0].x,
-        y: coordinates[0].y,
-        z: coordinates[0].z ?? null,
-        dist: 0,
-        isVertex: true,
-        vertexIndex: 0,
-      },
-      {
-        x: coordinates[coordinates.length - 1].x,
-        y: coordinates[coordinates.length - 1].y,
-        z: coordinates[coordinates.length - 1].z ?? null,
-        dist: totalLength,
-        isVertex: true,
-        vertexIndex: coordinates.length - 1,
-      },
-    ];
-  }
-
-  // Generate sampled points
-  const sampledPoints = samplePointsAlongLine(coordinates, interval);
-
-  // Build a combined list including all original vertices
-  // The sampled points already include endpoints due to samplePointsAlongLine logic
-  // We need to ensure all intermediate vertices are also included
-
-  const allPoints = [...sampledPoints];
+  const points = [];
   let cumulativeDistance = 0;
 
-  // Add any intermediate vertices that might have been skipped
-  for (let i = 1; i < coordinates.length - 1; i++) {
-    cumulativeDistance += distance2D(coordinates[i - 1], coordinates[i]);
+  // Always include the first vertex
+  points.push({
+    x: coordinates[0].x,
+    y: coordinates[0].y,
+    z: coordinates[0].z ?? null,
+    dist: 0,
+    isVertex: true,
+    vertexIndex: 0,
+  });
 
-    // Check if this vertex is already in the list (by distance)
-    const existsInSamples = allPoints.some(
-      (p) => Math.abs(p.dist - cumulativeDistance) < 0.01
-    );
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const p1 = coordinates[i];
+    const p2 = coordinates[i + 1];
+    const segLen = distance2D(p1, p2);
 
-    if (!existsInSamples) {
-      allPoints.push({
-        x: coordinates[i].x,
-        y: coordinates[i].y,
-        z: coordinates[i].z ?? null,
-        dist: cumulativeDistance,
-        isVertex: true,
-        vertexIndex: i,
+    if (segLen < 0.0001) {
+      continue;
+    }
+
+    const steps = Math.max(1, Math.ceil(segLen / interval));
+    const stepLen = segLen / steps;
+
+    for (let s = 1; s < steps; s++) {
+      const t = (s * stepLen) / segLen;
+      const p = interpolatePoint(p1, p2, t);
+      points.push({
+        x: p.x,
+        y: p.y,
+        z: p.z,
+        dist: cumulativeDistance + s * stepLen,
+        isVertex: false,
+        vertexIndex: null,
       });
     }
+
+    cumulativeDistance += segLen;
+
+    points.push({
+      x: p2.x,
+      y: p2.y,
+      z: p2.z ?? null,
+      dist: cumulativeDistance,
+      isVertex: true,
+      vertexIndex: i + 1,
+    });
   }
 
-  // Sort by distance
-  allPoints.sort((a, b) => a.dist - b.dist);
-
-  return allPoints;
+  return points;
 }
 
 /**

@@ -63,7 +63,10 @@ function cachePoint(epsg, point) {
 export function getTerrainStats() {
   const cacheHitRate =
     stats.pointsRequested > 0
-      ? ((stats.pointsFromCache / stats.pointsRequested) * 100).toFixed(1)
+      ? (
+          (stats.pointsFromCache / stats.pointsRequested) *
+          100
+        ).toFixed(1)
       : '0.0';
   const avgRequestTime =
     stats.requestCount > 0
@@ -105,7 +108,10 @@ export function clearTerrainCache() {
  * Process request queue with rate limiting
  */
 async function processQueue() {
-  if (activeRequests >= MAX_CONCURRENT_REQUESTS || requestQueue.length === 0) {
+  if (
+    activeRequests >= MAX_CONCURRENT_REQUESTS ||
+    requestQueue.length === 0
+  ) {
     return;
   }
 
@@ -134,7 +140,7 @@ async function executeRequest(points, epsg) {
   // Format points as [[x,y], [x,y], ...]
   const punkter = points.map((p) => [p.x, p.y]);
   const url = `${API_BASE}/punkt?koordsys=${epsg}&punkter=${encodeURIComponent(
-    JSON.stringify(punkter)
+    JSON.stringify(punkter),
   )}`;
 
   try {
@@ -142,7 +148,9 @@ async function executeRequest(points, epsg) {
 
     if (!response.ok) {
       stats.errors++;
-      throw new Error(`Geonorge API error: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Geonorge API error: ${response.status} ${response.statusText}`,
+      );
     }
 
     const data = await response.json();
@@ -166,7 +174,7 @@ async function executeRequest(points, epsg) {
       if (p.terreng) {
         stats.terrainTypes.set(
           p.terreng,
-          (stats.terrainTypes.get(p.terreng) || 0) + 1
+          (stats.terrainTypes.get(p.terreng) || 0) + 1,
         );
       }
 
@@ -237,7 +245,11 @@ export async function fetchTerrainHeights(points, epsg) {
 
   // Batch uncached points into chunks of MAX_POINTS_PER_REQUEST
   const batches = [];
-  for (let i = 0; i < uncachedPoints.length; i += MAX_POINTS_PER_REQUEST) {
+  for (
+    let i = 0;
+    i < uncachedPoints.length;
+    i += MAX_POINTS_PER_REQUEST
+  ) {
     batches.push({
       points: uncachedPoints.slice(i, i + MAX_POINTS_PER_REQUEST),
       indices: uncachedIndices.slice(i, i + MAX_POINTS_PER_REQUEST),
@@ -246,7 +258,7 @@ export async function fetchTerrainHeights(points, epsg) {
 
   // Execute all batches
   const batchResults = await Promise.all(
-    batches.map((batch) => queueRequest(batch.points, epsg))
+    batches.map((batch) => queueRequest(batch.points, epsg)),
   );
 
   // Merge results back into correct positions
@@ -276,7 +288,10 @@ export async function fetchTerrainHeights(points, epsg) {
  * @returns {Promise<Array<ProfilePointWithTerrain>>}
  */
 export async function fetchTerrainForProfile(profilePoints, epsg) {
-  const terrainResults = await fetchTerrainHeights(profilePoints, epsg);
+  const terrainResults = await fetchTerrainHeights(
+    profilePoints,
+    epsg,
+  );
 
   return profilePoints.map((p, i) => ({
     ...p,
@@ -333,7 +348,11 @@ export async function fetchTerrainHeightsPriority(points, epsg) {
 
   // Batch and use priority queue
   const batches = [];
-  for (let i = 0; i < uncachedPoints.length; i += MAX_POINTS_PER_REQUEST) {
+  for (
+    let i = 0;
+    i < uncachedPoints.length;
+    i += MAX_POINTS_PER_REQUEST
+  ) {
     batches.push({
       points: uncachedPoints.slice(i, i + MAX_POINTS_PER_REQUEST),
       indices: uncachedIndices.slice(i, i + MAX_POINTS_PER_REQUEST),
@@ -341,7 +360,7 @@ export async function fetchTerrainHeightsPriority(points, epsg) {
   }
 
   const batchResults = await Promise.all(
-    batches.map((batch) => priorityQueueRequest(batch.points, epsg))
+    batches.map((batch) => priorityQueueRequest(batch.points, epsg)),
   );
 
   batches.forEach((batch, batchIndex) => {
@@ -363,14 +382,23 @@ export async function fetchTerrainHeightsPriority(points, epsg) {
 
 /**
  * Analyze overcover for a pipe given terrain data
- * 
+ *
  * @param {Array} pipePoints - Pipe profile points with { dist, z }
  * @param {Array} terrainPoints - Terrain points with { dist, z }
  * @param {number} minOvercover - Minimum required overcover in meters (default 2)
  * @returns {Object} Overcover analysis result
  */
-export function analyzeOvercover(pipePoints, terrainPoints, minOvercover = 2) {
-  if (!terrainPoints || terrainPoints.length === 0 || !pipePoints || pipePoints.length === 0) {
+export function analyzeOvercover(
+  pipePoints,
+  terrainPoints,
+  minOvercover = 2,
+) {
+  if (
+    !terrainPoints ||
+    terrainPoints.length === 0 ||
+    !pipePoints ||
+    pipePoints.length === 0
+  ) {
     return {
       hasData: false,
       warnings: [],
@@ -403,7 +431,7 @@ export function analyzeOvercover(pipePoints, terrainPoints, minOvercover = 2) {
     if (!closestTerrain) continue;
 
     const overcover = closestTerrain.z - pp.z;
-    
+
     if (overcover < minOC) minOC = overcover;
     if (overcover > maxOC) maxOC = overcover;
     sumOC += overcover;
