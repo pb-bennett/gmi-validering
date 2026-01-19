@@ -385,13 +385,13 @@ export async function fetchTerrainHeightsPriority(points, epsg) {
  *
  * @param {Array} pipePoints - Pipe profile points with { dist, z }
  * @param {Array} terrainPoints - Terrain points with { dist, z }
- * @param {number} minOvercover - Minimum required overcover in meters (default 2)
+ * @param {number} minOvercover - Minimum required overcover in meters (default 1.6)
  * @returns {Object} Overcover analysis result
  */
 export function analyzeOvercover(
   pipePoints,
   terrainPoints,
-  minOvercover = 2,
+  minOvercover = 1.6,
 ) {
   if (
     !terrainPoints ||

@@ -31,19 +31,19 @@ L.Icon.Default.mergeOptions({
 // Define common projections
 proj4.defs(
   'EPSG:25832',
-  '+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'
+  '+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
 );
 proj4.defs(
   'EPSG:25833',
-  '+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'
+  '+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
 );
 proj4.defs(
   'EPSG:32632',
-  '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs'
+  '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs',
 );
 proj4.defs(
   'EPSG:32633',
-  '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
+  '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs',
 );
 proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs');
 
@@ -242,23 +242,23 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       <rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
       <g stroke="${stroke}" stroke-width="1" opacity="0.6">
         <line x1="${rectX + 3}" y1="${rectY}" x2="${rectX}" y2="${
-      rectY + 3
-    }"/>
+          rectY + 3
+        }"/>
         <line x1="${rectX + 8}" y1="${rectY}" x2="${rectX}" y2="${
-      rectY + 8
-    }"/>
+          rectY + 8
+        }"/>
         <line x1="${rectX + 13}" y1="${rectY}" x2="${rectX}" y2="${
-      rectY + 13
-    }"/>
+          rectY + 13
+        }"/>
         <line x1="${rectX + 18}" y1="${rectY}" x2="${
-      rectX + 5
-    }" y2="${rectY + 13}"/>
+          rectX + 5
+        }" y2="${rectY + 13}"/>
         <line x1="${rectX + 22}" y1="${rectY + 2}" x2="${
-      rectX + 10
-    }" y2="${rectY + 14}"/>
+          rectX + 10
+        }" y2="${rectY + 14}"/>
         <line x1="${rectX + 22}" y1="${rectY + 7}" x2="${
-      rectX + 15
-    }" y2="${rectY + 14}"/>
+          rectX + 15
+        }" y2="${rectY + 14}"/>
       </g>`;
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
@@ -339,7 +339,7 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       svgPath = `<polygon points="${pentPoints
         .map((p) => p.join(','))
         .join(
-          ' '
+          ' ',
         )}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
 
@@ -359,7 +359,7 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       svgPath = `<polygon points="${starPoints
         .map((p) => p.join(','))
         .join(
-          ' '
+          ' ',
         )}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
 
@@ -397,16 +397,16 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       const crossW = 2;
       svgPath = `
         <rect x="${slsInset}" y="${slsInset}" width="${
-        size - slsInset * 2
-      }" height="${
-        size - slsInset * 2
-      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+          size - slsInset * 2
+        }" height="${
+          size - slsInset * 2
+        }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
         <line x1="${half}" y1="${slsInset + 2}" x2="${half}" y2="${
-        size - slsInset - 2
-      }" stroke="${stroke}" stroke-width="${crossW}"/>
+          size - slsInset - 2
+        }" stroke="${stroke}" stroke-width="${crossW}"/>
         <line x1="${slsInset + 2}" y1="${half}" x2="${
-        size - slsInset - 2
-      }" y2="${half}" stroke="${stroke}" stroke-width="${crossW}"/>`;
+          size - slsInset - 2
+        }" y2="${half}" stroke="${stroke}" stroke-width="${crossW}"/>`;
       break;
 
     case INFRA_CATEGORIES.DIV:
@@ -429,20 +429,20 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       const diagCrossW = 2;
       svgPath = `
         <rect x="${krnInset}" y="${krnInset}" width="${
-        size - krnInset * 2
-      }" height="${
-        size - krnInset * 2
-      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+          size - krnInset * 2
+        }" height="${
+          size - krnInset * 2
+        }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
         <line x1="${krnInset + 2}" y1="${krnInset + 2}" x2="${
-        size - krnInset - 2
-      }" y2="${
-        size - krnInset - 2
-      }" stroke="${stroke}" stroke-width="${diagCrossW}"/>
+          size - krnInset - 2
+        }" y2="${
+          size - krnInset - 2
+        }" stroke="${stroke}" stroke-width="${diagCrossW}"/>
         <line x1="${size - krnInset - 2}" y1="${krnInset + 2}" x2="${
-        krnInset + 2
-      }" y2="${
-        size - krnInset - 2
-      }" stroke="${stroke}" stroke-width="${diagCrossW}"/>`;
+          krnInset + 2
+        }" y2="${
+          size - krnInset - 2
+        }" stroke="${stroke}" stroke-width="${diagCrossW}"/>`;
       break;
 
     case INFRA_CATEGORIES.GRN:
@@ -458,10 +458,10 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
       const innerCircleR = (size - sanInset * 4) / 2;
       svgPath = `
         <rect x="${sanInset}" y="${sanInset}" width="${
-        size - sanInset * 2
-      }" height="${
-        size - sanInset * 2
-      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+          size - sanInset * 2
+        }" height="${
+          size - sanInset * 2
+        }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
         <circle cx="${half}" cy="${half}" r="${innerCircleR}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
 
@@ -581,20 +581,20 @@ export const getLegendSvg = (category, color, size = 20) => {
       <rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
       <g stroke="${stroke}" stroke-width="0.8" opacity="0.6">
         <line x1="${rectX + 2}" y1="${rectY}" x2="${rectX}" y2="${
-      rectY + 2
-    }"/>
+          rectY + 2
+        }"/>
         <line x1="${rectX + 6}" y1="${rectY}" x2="${rectX}" y2="${
-      rectY + 6
-    }"/>
+          rectY + 6
+        }"/>
         <line x1="${rectX + 10}" y1="${rectY}" x2="${rectX}" y2="${
-      rectY + 10
-    }"/>
+          rectY + 10
+        }"/>
         <line x1="${rectX + 14}" y1="${rectY}" x2="${
-      rectX + 4
-    }" y2="${rectY + 10}"/>
+          rectX + 4
+        }" y2="${rectY + 10}"/>
         <line x1="${rectX + 18}" y1="${rectY + 2}" x2="${
-      rectX + 8
-    }" y2="${rectY + 12}"/>
+          rectX + 8
+        }" y2="${rectY + 12}"/>
       </g>`;
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
   }
@@ -656,7 +656,7 @@ export const getLegendSvg = (category, color, size = 20) => {
       svgPath = `<polygon points="${pentPoints
         .map((p) => p.join(','))
         .join(
-          ' '
+          ' ',
         )}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.ELECTRIC:
@@ -674,7 +674,7 @@ export const getLegendSvg = (category, color, size = 20) => {
       svgPath = `<polygon points="${starPoints
         .map((p) => p.join(','))
         .join(
-          ' '
+          ' ',
         )}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.TELECOM:
@@ -706,16 +706,16 @@ export const getLegendSvg = (category, color, size = 20) => {
       const crossW = 1.5;
       svgPath = `
         <rect x="${slsInset}" y="${slsInset}" width="${
-        size - slsInset * 2
-      }" height="${
-        size - slsInset * 2
-      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+          size - slsInset * 2
+        }" height="${
+          size - slsInset * 2
+        }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
         <line x1="${half}" y1="${slsInset + 1}" x2="${half}" y2="${
-        size - slsInset - 1
-      }" stroke="${stroke}" stroke-width="${crossW}"/>
+          size - slsInset - 1
+        }" stroke="${stroke}" stroke-width="${crossW}"/>
         <line x1="${slsInset + 1}" y1="${half}" x2="${
-        size - slsInset - 1
-      }" y2="${half}" stroke="${stroke}" stroke-width="${crossW}"/>`;
+          size - slsInset - 1
+        }" y2="${half}" stroke="${stroke}" stroke-width="${crossW}"/>`;
       break;
     case INFRA_CATEGORIES.DIV:
       svgPath = `<circle cx="${half}" cy="${half}" r="${
@@ -732,20 +732,20 @@ export const getLegendSvg = (category, color, size = 20) => {
       const diagCrossW = 1.5;
       svgPath = `
         <rect x="${krnInset}" y="${krnInset}" width="${
-        size - krnInset * 2
-      }" height="${
-        size - krnInset * 2
-      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+          size - krnInset * 2
+        }" height="${
+          size - krnInset * 2
+        }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
         <line x1="${krnInset + 1}" y1="${krnInset + 1}" x2="${
-        size - krnInset - 1
-      }" y2="${
-        size - krnInset - 1
-      }" stroke="${stroke}" stroke-width="${diagCrossW}"/>
+          size - krnInset - 1
+        }" y2="${
+          size - krnInset - 1
+        }" stroke="${stroke}" stroke-width="${diagCrossW}"/>
         <line x1="${size - krnInset - 1}" y1="${krnInset + 1}" x2="${
-        krnInset + 1
-      }" y2="${
-        size - krnInset - 1
-      }" stroke="${stroke}" stroke-width="${diagCrossW}"/>`;
+          krnInset + 1
+        }" y2="${
+          size - krnInset - 1
+        }" stroke="${stroke}" stroke-width="${diagCrossW}"/>`;
       break;
     case INFRA_CATEGORIES.GRN:
       svgPath = `<circle cx="${half}" cy="${half}" r="${
@@ -757,10 +757,10 @@ export const getLegendSvg = (category, color, size = 20) => {
       const innerCircleR = (size - sanInset * 4) / 2;
       svgPath = `
         <rect x="${sanInset}" y="${sanInset}" width="${
-        size - sanInset * 2
-      }" height="${
-        size - sanInset * 2
-      }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+          size - sanInset * 2
+        }" height="${
+          size - sanInset * 2
+        }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
         <circle cx="${half}" cy="${half}" r="${innerCircleR}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
       break;
     case INFRA_CATEGORIES.LOK:
@@ -804,7 +804,7 @@ const getLineWeight = (properties) => {
       properties[field] !== ''
     ) {
       const value = parseFloat(
-        String(properties[field]).replace(/[^\d.]/g, '')
+        String(properties[field]).replace(/[^\d.]/g, ''),
       );
       if (!isNaN(value) && value > 0) {
         dimension = value;
@@ -852,14 +852,14 @@ function BoundsController({ geoJsonData, ignoredFeatureIds }) {
                 geometryType === 'MultiPoint')
                 ? `punkter-${props.id}`
                 : props.id !== undefined &&
-                  (geometryType === 'LineString' ||
-                    geometryType === 'MultiLineString')
-                ? `ledninger-${props.id}`
-                : null);
+                    (geometryType === 'LineString' ||
+                      geometryType === 'MultiLineString')
+                  ? `ledninger-${props.id}`
+                  : null);
 
             if (!featureId) return true;
             return !ignoredFeatureIds.has(featureId);
-          }
+          },
         );
 
         // Avoid empty bounds (fallback to full data)
@@ -896,10 +896,10 @@ function ZoomHandler({ onZoomChange }) {
 // Clear highlighted feature when clicking on empty map space
 function MapClickHandler() {
   const setHighlightedFeature = useStore(
-    (state) => state.setHighlightedFeature
+    (state) => state.setHighlightedFeature,
   );
   const highlightedFeatureId = useStore(
-    (state) => state.ui.highlightedFeatureId
+    (state) => state.ui.highlightedFeatureId,
   );
   const measureMode = useStore((state) => state.ui.measureMode);
 
@@ -960,10 +960,10 @@ function MeasureTool() {
   const measurePoints = useStore((state) => state.ui.measurePoints);
   const addMeasurePoint = useStore((state) => state.addMeasurePoint);
   const clearMeasurePoints = useStore(
-    (state) => state.clearMeasurePoints
+    (state) => state.clearMeasurePoints,
   );
   const toggleMeasureMode = useStore(
-    (state) => state.toggleMeasureMode
+    (state) => state.toggleMeasureMode,
   );
 
   const [hoverPoint, setHoverPoint] = useState(null);
@@ -1144,7 +1144,7 @@ function MeasureTool() {
                 const prevPoint = measurePoints[i];
                 const segmentDist = calculateDistance(
                   prevPoint,
-                  point
+                  point,
                 );
                 return (
                   <div
@@ -1196,7 +1196,7 @@ function MeasureTool() {
 function MeasureToolButton() {
   const measureMode = useStore((state) => state.ui.measureMode);
   const toggleMeasureMode = useStore(
-    (state) => state.toggleMeasureMode
+    (state) => state.toggleMeasureMode,
   );
 
   if (measureMode) return null;
@@ -1297,7 +1297,7 @@ function ZoomToFeatureHandler() {
   const map = useMap();
   const data = useStore((state) => state.data);
   const setHighlightedFeature = useStore(
-    (state) => state.setHighlightedFeature
+    (state) => state.setHighlightedFeature,
   );
 
   useEffect(() => {
@@ -1379,7 +1379,7 @@ function ZoomToFeatureHandler() {
     return () => {
       window.removeEventListener(
         'zoomToFeature',
-        handleZoomToFeature
+        handleZoomToFeature,
       );
     };
   }, [map, data, setHighlightedFeature]);
@@ -1390,10 +1390,10 @@ function ZoomToFeatureHandler() {
 function FeatureHighlighter({ geoJsonData }) {
   const map = useMap();
   const highlightedFeatureId = useStore(
-    (state) => state.ui.highlightedFeatureId
+    (state) => state.ui.highlightedFeatureId,
   );
   const mapCenterTarget = useStore(
-    (state) => state.ui.mapCenterTarget
+    (state) => state.ui.mapCenterTarget,
   );
   const isAnalysisOpen = useStore((state) => state.analysis.isOpen);
 
@@ -1436,10 +1436,10 @@ function FeatureHighlighter({ geoJsonData }) {
 function FieldValidationZoomHandler({ geoJsonData }) {
   const map = useMap();
   const filteredFeatureIds = useStore(
-    (state) => state.ui.filteredFeatureIds
+    (state) => state.ui.filteredFeatureIds,
   );
   const fieldValidationFilterActive = useStore(
-    (state) => state.ui.fieldValidationFilterActive
+    (state) => state.ui.fieldValidationFilterActive,
   );
 
   useEffect(() => {
@@ -1490,7 +1490,7 @@ function MapCenterHandler() {
   const map = useMap();
   const data = useStore((state) => state.data);
   const mapCenterTarget = useStore(
-    (state) => state.ui.mapCenterTarget
+    (state) => state.ui.mapCenterTarget,
   );
 
   useEffect(() => {
@@ -1535,7 +1535,7 @@ function MapCenterHandler() {
           const [transformedLng, transformedLat] = proj4(
             sourceProj,
             'EPSG:4326',
-            [coordinates[1], coordinates[0]]
+            [coordinates[1], coordinates[0]],
           );
           lat = transformedLat;
           lng = transformedLng;
@@ -1567,45 +1567,45 @@ export default function MapInner({ onZoomChange }) {
   const measureMode = useStore((state) => state.ui.measureMode);
   const addMeasurePoint = useStore((state) => state.addMeasurePoint);
   const highlightedCode = useStore(
-    (state) => state.ui.highlightedCode
+    (state) => state.ui.highlightedCode,
   );
   const hiddenCodes = useStore((state) => state.ui.hiddenCodes);
   const highlightedType = useStore(
-    (state) => state.ui.highlightedType
+    (state) => state.ui.highlightedType,
   );
   const highlightedTypeContext = useStore(
-    (state) => state.ui.highlightedTypeContext
+    (state) => state.ui.highlightedTypeContext,
   );
   const hiddenTypes = useStore((state) => state.ui.hiddenTypes);
   const highlightedFeatureId = useStore(
-    (state) => state.ui.highlightedFeatureId
+    (state) => state.ui.highlightedFeatureId,
   );
   const highlightedFeatureIds = useStore(
-    (state) => state.ui.highlightedFeatureIds
+    (state) => state.ui.highlightedFeatureIds,
   );
   const filteredFeatureIds = useStore(
-    (state) => state.ui.filteredFeatureIds
+    (state) => state.ui.filteredFeatureIds,
   );
   const fieldValidationFilterActive = useStore(
-    (state) => state.ui.fieldValidationFilterActive
+    (state) => state.ui.fieldValidationFilterActive,
   );
   // Felt filter state
   const feltFilterActive = useStore(
-    (state) => state.ui.feltFilterActive
+    (state) => state.ui.feltFilterActive,
   );
   const feltHiddenValues = useStore(
-    (state) => state.ui.feltHiddenValues
+    (state) => state.ui.feltHiddenValues,
   );
 
   const outlierResults = useStore((state) => state.outliers.results);
   const hideOutliers = useStore(
-    (state) => state.outliers.hideOutliers
+    (state) => state.outliers.hideOutliers,
   );
   const setActiveViewTab = useStore(
-    (state) => state.setActiveViewTab
+    (state) => state.setActiveViewTab,
   );
   const setSelected3DObject = useStore(
-    (state) => state.setSelected3DObject
+    (state) => state.setSelected3DObject,
   );
 
   // Handle "Vis i 3D" button clicks in popups
@@ -1661,7 +1661,7 @@ export default function MapInner({ onZoomChange }) {
         sourceProj = epsg;
       } else {
         console.warn(
-          `Unknown EPSG code: ${header.COSYS_EPSG}, assuming raw coordinates are compatible or WGS84`
+          `Unknown EPSG code: ${header.COSYS_EPSG}, assuming raw coordinates are compatible or WGS84`,
         );
       }
     } else if (header?.COSYS) {
@@ -1693,7 +1693,7 @@ export default function MapInner({ onZoomChange }) {
     lines.forEach((line, idx) => {
       if (line.coordinates && line.coordinates.length > 0) {
         const coords = line.coordinates.map((c) =>
-          transform(c.x, c.y)
+          transform(c.x, c.y),
         );
         features.push({
           type: 'Feature',
@@ -1777,7 +1777,7 @@ export default function MapInner({ onZoomChange }) {
         const isHiddenByType = hiddenTypes.some(
           (ht) =>
             ht.type === typeVal &&
-            (ht.code === null || ht.code === fcode)
+            (ht.code === null || ht.code === fcode),
         );
         isHidden = isHiddenByCode || isHiddenByType;
       }
@@ -1882,7 +1882,7 @@ export default function MapInner({ onZoomChange }) {
         const isHiddenByType = hiddenTypes.some(
           (ht) =>
             ht.type === typeVal &&
-            (ht.code === null || ht.code === fcode)
+            (ht.code === null || ht.code === fcode),
         );
         isHidden = isHiddenByCode || isHiddenByType;
       }
@@ -1953,7 +1953,7 @@ export default function MapInner({ onZoomChange }) {
       const isHiddenByType = hiddenTypes.some(
         (ht) =>
           ht.type === typeVal &&
-          (ht.code === null || ht.code === fcode)
+          (ht.code === null || ht.code === fcode),
       );
       isHidden = hiddenCodes.includes(fcode) || isHiddenByType;
     }
@@ -2135,82 +2135,86 @@ function AnalysisPointsLayer() {
   const analysis = useStore((state) => state.analysis);
   const data = useStore((state) => state.data);
 
-  const { points, pipeColor, lineCoords, sourceProj } = useMemo(() => {
-    if (
-      !analysis.isOpen ||
-      analysis.selectedPipeIndex === null ||
-      !data ||
-      !data.lines
-    ) {
-      return {
-        points: [],
-        pipeColor: '#3388ff',
-        lineCoords: [],
-        sourceProj: 'EPSG:4326',
-      };
-    }
-
-    const line = data.lines[analysis.selectedPipeIndex];
-    if (!line || !line.coordinates)
-      return {
-        points: [],
-        pipeColor: '#3388ff',
-        lineCoords: [],
-        sourceProj: 'EPSG:4326',
-      };
-
-    const fcode = normalizeFcode(
-      line.attributes?.Tema || line.attributes?.S_FCODE
-    );
-    const color = getColorByFCode(fcode || '');
-
-    // Determine source projection
-    let sourceProj = 'EPSG:4326';
-    if (data.header?.COSYS_EPSG) {
-      const epsg = `EPSG:${data.header.COSYS_EPSG}`;
-      if (proj4.defs(epsg)) sourceProj = epsg;
-    } else if (data.header?.COSYS) {
+  const { points, pipeColor, lineCoords, sourceProj } =
+    useMemo(() => {
       if (
-        data.header.COSYS.includes('UTM') &&
-        data.header.COSYS.includes('32')
-      )
-        sourceProj = 'EPSG:25832';
-      else if (
-        data.header.COSYS.includes('UTM') &&
-        data.header.COSYS.includes('33')
-      )
-        sourceProj = 'EPSG:25833';
-    }
+        !analysis.isOpen ||
+        analysis.selectedPipeIndex === null ||
+        !data ||
+        !data.lines
+      ) {
+        return {
+          points: [],
+          pipeColor: '#3388ff',
+          lineCoords: [],
+          sourceProj: 'EPSG:4326',
+        };
+      }
 
-    const pts = line.coordinates.map((c, i) => {
-      let lat, lng;
-      if (sourceProj === 'EPSG:4326') {
-        lat = c.y;
-        lng = c.x;
-      } else {
-        try {
-          const [l, t] = proj4(sourceProj, 'EPSG:4326', [c.x, c.y]);
-          lng = l;
-          lat = t;
-        } catch (e) {
+      const line = data.lines[analysis.selectedPipeIndex];
+      if (!line || !line.coordinates)
+        return {
+          points: [],
+          pipeColor: '#3388ff',
+          lineCoords: [],
+          sourceProj: 'EPSG:4326',
+        };
+
+      const fcode = normalizeFcode(
+        line.attributes?.Tema || line.attributes?.S_FCODE,
+      );
+      const color = getColorByFCode(fcode || '');
+
+      // Determine source projection
+      let sourceProj = 'EPSG:4326';
+      if (data.header?.COSYS_EPSG) {
+        const epsg = `EPSG:${data.header.COSYS_EPSG}`;
+        if (proj4.defs(epsg)) sourceProj = epsg;
+      } else if (data.header?.COSYS) {
+        if (
+          data.header.COSYS.includes('UTM') &&
+          data.header.COSYS.includes('32')
+        )
+          sourceProj = 'EPSG:25832';
+        else if (
+          data.header.COSYS.includes('UTM') &&
+          data.header.COSYS.includes('33')
+        )
+          sourceProj = 'EPSG:25833';
+      }
+
+      const pts = line.coordinates.map((c, i) => {
+        let lat, lng;
+        if (sourceProj === 'EPSG:4326') {
           lat = c.y;
           lng = c.x;
+        } else {
+          try {
+            const [l, t] = proj4(sourceProj, 'EPSG:4326', [c.x, c.y]);
+            lng = l;
+            lat = t;
+          } catch (e) {
+            lat = c.y;
+            lng = c.x;
+          }
         }
-      }
-      return { lat, lng, z: c.z, index: i };
-    });
+        return { lat, lng, z: c.z, index: i };
+      });
 
-    return {
-      points: pts,
-      pipeColor: color,
-      lineCoords: line.coordinates,
-      sourceProj,
-    };
-  }, [analysis.isOpen, analysis.selectedPipeIndex, data]);
+      return {
+        points: pts,
+        pipeColor: color,
+        lineCoords: line.coordinates,
+        sourceProj,
+      };
+    }, [analysis.isOpen, analysis.selectedPipeIndex, data]);
 
   const hoveredTerrainLatLng = useMemo(() => {
     const target = analysis.hoveredTerrainPoint;
     if (!target || !lineCoords || lineCoords.length < 2) return null;
+
+    const targetDist =
+      target.lineDist !== undefined ? target.lineDist : target.dist;
 
     let distSoFar = 0;
     for (let i = 0; i < lineCoords.length - 1; i++) {
@@ -2221,8 +2225,8 @@ function AnalysisPointsLayer() {
       const segLen = Math.sqrt(dx * dx + dy * dy);
       if (segLen < 0.0001) continue;
 
-      if (target.dist <= distSoFar + segLen) {
-        const t = (target.dist - distSoFar) / segLen;
+      if (targetDist <= distSoFar + segLen) {
+        const t = (targetDist - distSoFar) / segLen;
         const x = p1.x + (p2.x - p1.x) * t;
         const y = p1.y + (p2.y - p1.y) * t;
         let lat, lng;

@@ -1,7 +1,13 @@
 'use client';
 
 import useStore from '@/lib/store';
-import { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useLayoutEffect,
+} from 'react';
 import StandardsInfoModal from './StandardsInfoModal';
 
 const formatNumber = (num, decimals = 2) => {
@@ -359,15 +365,18 @@ export default function InclineAnalysisModal() {
                   </span>
                   <span className="text-gray-500">•</span>
                   <span className="text-gray-700">
-                    Fall: {formatNumber(selectedResult.details.incline, 2)}‰
+                    Fall:{' '}
+                    {formatNumber(selectedResult.details.incline, 2)}‰
                   </span>
                   <span className="text-gray-500">•</span>
                   <span className="text-gray-700">
-                    L: {formatNumber(selectedResult.details.length, 2)} m
+                    L:{' '}
+                    {formatNumber(selectedResult.details.length, 2)} m
                   </span>
                   <span className="text-gray-500">•</span>
                   <span className="text-gray-700">
-                    ΔZ: {formatNumber(selectedResult.details.deltaZ, 3)} m
+                    ΔZ:{' '}
+                    {formatNumber(selectedResult.details.deltaZ, 3)} m
                   </span>
                   {(() => {
                     const terrain =
@@ -412,7 +421,8 @@ export default function InclineAnalysisModal() {
                         <span
                           className={`font-semibold ${hasWarning ? 'text-red-700' : 'text-green-700'}`}
                         >
-                          Overdekning: {formatNumber(oc.minOvercover, 2)} m
+                          Overdekning:{' '}
+                          {formatNumber(oc.minOvercover, 2)} m
                           {hasWarning && ' ⚠'}
                         </span>
                       );
@@ -498,7 +508,10 @@ function PipeProfileVisualization({ result }) {
   const transformStartRef = useRef({ x: 0, y: 0 });
   const [tooltip, setTooltip] = useState(null);
   const tooltipRef = useRef(null);
-  const [tooltipSize, setTooltipSize] = useState({ width: 0, height: 0 });
+  const [tooltipSize, setTooltipSize] = useState({
+    width: 0,
+    height: 0,
+  });
 
   const setHoveredAnalysisPoint = useStore(
     (state) => state.setHoveredAnalysisPoint,
@@ -853,8 +866,13 @@ function PipeProfileVisualization({ result }) {
         terreng: tp.terreng || null,
       },
     });
+    const lineDist = isDigitizedBackwards
+      ? length - tp.dist
+      : tp.dist;
+
     setHoveredTerrainPoint({
       dist: tp.dist,
+      lineDist,
       terrainZ: tp.z,
       pipeZ,
     });
@@ -910,7 +928,8 @@ function PipeProfileVisualization({ result }) {
             <span className="text-gray-600">Terreng</span>
           </div>
         )}
-        {(overcoverData.some((oc) => oc.warning) || vertexOvercoverWarnings.length > 0) && (
+        {(overcoverData.some((oc) => oc.warning) ||
+          vertexOvercoverWarnings.length > 0) && (
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-full bg-red-100 border border-red-500 flex items-center justify-center">
               <span className="text-red-500 text-[8px] font-bold">
@@ -1000,27 +1019,44 @@ function PipeProfileVisualization({ result }) {
           {terrainLinePoints.length > 0 && (
             <>
               {/* Terrain fill area (between terrain and pipe) */}
-              <path
-                d={(() => {
-                  // Create closed polygon: terrain line + reversed pipe line
-                  let terrainPath = `M ${getX(terrainLinePoints[0].dist)} ${getY(terrainLinePoints[0].z)}`;
-                  for (let i = 1; i < terrainLinePoints.length; i++) {
-                    terrainPath += ` L ${getX(terrainLinePoints[i].dist)} ${getY(terrainLinePoints[i].z)}`;
-                  }
-                  // Go down to the pipe level at the end
-                  const lastPipePoint =
-                    plotPoints[plotPoints.length - 1];
-                  terrainPath += ` L ${getX(lastPipePoint.dist)} ${getY(lastPipePoint.z)}`;
-                  // Follow pipe backwards
-                  for (let i = plotPoints.length - 2; i >= 0; i--) {
-                    terrainPath += ` L ${getX(plotPoints[i].dist)} ${getY(plotPoints[i].z)}`;
-                  }
-                  terrainPath += ' Z';
-                  return terrainPath;
-                })()}
-                fill="#8B4513"
-                fillOpacity="0.15"
-              />
+              {terrainLinePoints.map((tp, i) => {
+                if (i === terrainLinePoints.length - 1) return null;
+                const next = terrainLinePoints[i + 1];
+                if (
+                  tp.z === null ||
+                  tp.z === undefined ||
+                  next.z === null ||
+                  next.z === undefined
+                ) {
+                  return null;
+                }
+
+                const pipeZ1 = getPipeZAtDist(tp.dist);
+                const pipeZ2 = getPipeZAtDist(next.dist);
+                if (pipeZ1 === null || pipeZ2 === null) return null;
+
+                const midOvercover =
+                  (tp.z - pipeZ1 + (next.z - pipeZ2)) / 2;
+                const isOk = midOvercover >= minOvercover;
+                const fill = isOk
+                  ? 'rgba(34, 197, 94, 0.18)'
+                  : 'rgba(239, 68, 68, 0.18)';
+
+                const x1 = getX(tp.dist);
+                const x2 = getX(next.dist);
+                const yT1 = getY(tp.z);
+                const yT2 = getY(next.z);
+                const yP1 = getY(pipeZ1);
+                const yP2 = getY(pipeZ2);
+
+                return (
+                  <path
+                    key={`terrain-fill-${i}`}
+                    d={`M ${x1} ${yT1} L ${x2} ${yT2} L ${x2} ${yP2} L ${x1} ${yP1} Z`}
+                    fill={fill}
+                  />
+                );
+              })}
               {/* Terrain surface line */}
               <path
                 d={(() => {
@@ -1422,7 +1458,8 @@ function PipeProfileVisualization({ result }) {
               const anchorX =
                 getX(tooltip.data.dist) * transform.k + transform.x;
               const anchorY =
-                getY(tooltip.data.terrainZ) * transform.k + transform.y;
+                getY(tooltip.data.terrainZ) * transform.k +
+                transform.y;
               const gap = 10;
 
               const fitsRight =
@@ -1505,7 +1542,9 @@ function PipeProfileVisualization({ result }) {
                   {formatNumber(tooltip.data.terrainZ, 2)}m
                 </span>
 
-                <span className="text-gray-400">Ledning Z (interp):</span>
+                <span className="text-gray-400">
+                  Ledning Z (interp):
+                </span>
                 <span className="font-mono">
                   {formatNumber(tooltip.data.pipeZ, 2)}m
                 </span>
@@ -1521,7 +1560,8 @@ function PipeProfileVisualization({ result }) {
                 >
                   {formatNumber(tooltip.data.overcover, 2)}m
                   {tooltip.data.overcover !== null &&
-                    tooltip.data.overcover < minOvercover && ' ⚠'}
+                    tooltip.data.overcover < minOvercover &&
+                    ' ⚠'}
                 </span>
 
                 <span className="text-gray-400">Punkt:</span>

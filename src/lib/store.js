@@ -3,6 +3,8 @@ import { devtools, persist } from 'zustand/middleware';
 import { detectOutliers } from './analysis/outliers';
 import { analyzeIncline } from './analysis/incline';
 
+const STORAGE_VERSION = 3;
+
 /**
  * GMI Validator — Global State Store (Zustand)
  *
@@ -361,7 +363,7 @@ const useStore = create(
           selectedPipeIndex: null,
           hoveredPointIndex: null,
           hoveredSegment: null, // { p1: number, p2: number } | null
-          hoveredTerrainPoint: null, // { dist, terrainZ, pipeZ } | null
+          hoveredTerrainPoint: null, // { dist, lineDist?, terrainZ, pipeZ } | null
         },
 
         setAnalysisResults: (results) =>
@@ -487,7 +489,8 @@ const useStore = create(
 
                   for (const tp of terrainPoints) {
                     const terrainZ = tp.terrainZ ?? tp.z ?? null;
-                    if (terrainZ === null || terrainZ === undefined) continue;
+                    if (terrainZ === null || terrainZ === undefined)
+                      continue;
                     const diff = Math.abs(tp.dist - pp.dist);
                     if (diff < minDistDiff) {
                       minDistDiff = diff;
@@ -1212,7 +1215,7 @@ const useStore = create(
           showWarnings: true,
           lastFileName: null,
           inclineRequirementMode: 'fixed10', // 'fixed10' | 'variable'
-          minOvercover: 2, // Minimum overcover in meters (default 2m)
+          minOvercover: 1.6, // Minimum overcover in meters (default 1.6m)
         },
 
         updateSettings: (newSettings) =>
@@ -1234,7 +1237,8 @@ const useStore = create(
                   const lineIndex = result.lineIndex;
                   const terrainEntry = state.terrain.data[lineIndex];
                   if (!terrainEntry || !terrainEntry.points) return;
-                  const pipePoints = result.details?.profilePoints || [];
+                  const pipePoints =
+                    result.details?.profilePoints || [];
                   if (pipePoints.length === 0) return;
 
                   const warnings = [];
@@ -1266,7 +1270,10 @@ const useStore = create(
                     sumOC += overcover;
                     countOC++;
 
-                    if (overcover >= 0 && overcover < nextMinOvercover) {
+                    if (
+                      overcover >= 0 &&
+                      overcover < nextMinOvercover
+                    ) {
                       warnings.push({
                         pipeZ: pp.z,
                         terrainZ: closestTerrain.z,
@@ -1284,7 +1291,8 @@ const useStore = create(
                       warnings,
                       minOvercover: countOC > 0 ? minOC : null,
                       maxOvercover: countOC > 0 ? maxOC : null,
-                      avgOvercover: countOC > 0 ? sumOC / countOC : null,
+                      avgOvercover:
+                        countOC > 0 ? sumOC / countOC : null,
                     },
                   };
                 });
@@ -1362,6 +1370,29 @@ const useStore = create(
       }),
       {
         name: 'gmi-validator-storage',
+        version: STORAGE_VERSION,
+        migrate: (persistedState, version) => {
+          if (!persistedState) return persistedState;
+
+          const fromVersion =
+            typeof version === 'number' ? version : 0;
+          let nextState = persistedState;
+
+          if (fromVersion < 3) {
+            const currentMin = nextState?.settings?.minOvercover;
+            if (currentMin === 2) {
+              nextState = {
+                ...nextState,
+                settings: {
+                  ...nextState.settings,
+                  minOvercover: 1.6,
+                },
+              };
+            }
+          }
+
+          return nextState;
+        },
         onRehydrateStorage: () => (state) => {
           if (state) {
             if (!state.outliers) {
@@ -1465,11 +1496,16 @@ const useStore = create(
                 showWarnings: true,
                 lastFileName: null,
                 inclineRequirementMode: 'fixed10',
+                minOvercover: 1.6,
               };
             } else if (
               state.settings.inclineRequirementMode === undefined
             ) {
               state.settings.inclineRequirementMode = 'fixed10';
+            }
+
+            if (state.settings.minOvercover === undefined) {
+              state.settings.minOvercover = 1.6;
             }
 
             const now = Date.now();
