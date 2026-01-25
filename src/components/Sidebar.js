@@ -4,6 +4,7 @@ import useStore from '@/lib/store';
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import fieldsData from '@/data/fields.json';
 import { analyzeIncline } from '@/lib/analysis/incline';
+import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
 
@@ -85,6 +86,77 @@ function InclineAnalysisControl() {
             >
               {warningCount} advarsler
             </span>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ZValidationControl() {
+  const data = useStore((state) => state.data);
+  const zValidationResults = useStore(
+    (state) => state.zValidation.results
+  );
+  const setZValidationResults = useStore(
+    (state) => state.setZValidationResults
+  );
+  const toggleZValidationModal = useStore(
+    (state) => state.toggleZValidationModal
+  );
+
+  const runAnalysis = () => {
+    if (!data) return;
+    const results = analyzeZValues(data);
+    setZValidationResults(results);
+    toggleZValidationModal(true);
+  };
+
+  const openResults = () => {
+    toggleZValidationModal(true);
+  };
+
+  const summary = zValidationResults?.summary;
+  const missingObjects =
+    (summary?.missingPointObjects || 0) +
+    (summary?.missingLineObjects || 0);
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={zValidationResults ? openResults : runAnalysis}
+        className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
+        style={{
+          backgroundColor: 'var(--color-primary)',
+          color: 'white',
+          borderColor: 'var(--color-primary-dark)',
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-primary-dark)')
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.backgroundColor =
+            'var(--color-primary)')
+        }
+      >
+        {zValidationResults
+          ? 'Åpne høydekontroll'
+          : 'Kjør høydekontroll'}
+      </button>
+
+      {zValidationResults && (
+        <div className="text-xs text-gray-600 flex justify-between">
+          <span>
+            {summary?.totalPoints || 0} punkter,{' '}
+            {summary?.totalLines || 0} linjer
+          </span>
+          <span
+            className={
+              missingObjects > 0 ? 'text-red-600 font-bold' : ''
+            }
+          >
+            {missingObjects} avvik
           </span>
         </div>
       )}
@@ -1825,6 +1897,17 @@ export default function Sidebar({ onReset }) {
               ) : (
                 <FieldValidationControl />
               )}
+            </div>
+
+            {/* Subsection: Høydekontroll */}
+            <div>
+              <h4
+                className="text-xs font-semibold uppercase tracking-wider mb-2"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                Høydekontroll (Z)
+              </h4>
+              <ZValidationControl />
             </div>
 
             {/* Subsection: Fall */}

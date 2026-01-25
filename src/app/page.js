@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import FileUpload from '@/components/FileUpload';
 import DataDisplayModal from '@/components/DataDisplayModal';
+import ZValidationModal from '@/components/ZValidationModal';
 import InclineAnalysisModal from '@/components/InclineAnalysisModal';
 import FieldValidationSidebar from '@/components/FieldValidationSidebar';
 import MapView from '@/components/MapView';
@@ -338,6 +339,7 @@ export default function Home() {
 
       {/* Data Inspector Modal */}
       <DataDisplayModal />
+      <ZValidationModal />
 
       {/* Tab Switcher - Shows when 3D viewer is open */}
       <TabSwitcher />

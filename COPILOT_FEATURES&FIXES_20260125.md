@@ -23,8 +23,26 @@ There will be a new analysis tool in the alalyse section that can be opened to v
 
 When the app first loads the analysis is run and if there are missing Z values a warning pops up with deatails on how many objects are affected. The user is presented with option to run the analysis tool from the popup modal and also have option to run it later from the analysis section.
 
+## 4. Make parsing of KOF files more sturdy.
+
+At present roughly half of the KOF files I have available fail during parsing, and set their pointsfar from Norway. I believe this is an issue with parsing of the files, as KOF files do not follow hard rules and can vary in number of speces between columns/fields.
+
+Also we need to be able to fetch out all of the data. As I understand it the second column is often used to label the points, this data needs to be fetched out. Together with the coordintes and where avilalbe Z values. Also any header data.
+
+I have collected a number of KOF files that fail, together with a number that pass parsing. They can be found here:
+
+`\REF_FILES\KOF2\FEIL` - files that fail parsing
+
+`\REF_FILES\KOF2\RIKTIG` - files that parse correctly
+
+Examine the current parsing methods and compare the files. Develop a more sturdy parsing method that can handle the variety of KOF files available.
+
 # Checklist of completed features and fixes - 25.01.2026
 
 1. [x] New WMS for plot boundaries and property numbers added and enabled by default.
 
 2. [x] Data explorer modal improved with XYZ coordinates for points and lines.
+
+3. [x] Data explorer modal can be opened from profile analysis results and tooltips in both 2D and 3D views.
+
+4. [ ] Review and fix KOF file parsing.

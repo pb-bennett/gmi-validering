@@ -875,7 +875,7 @@ function BoundsController({ geoJsonData, ignoredFeatureIds }) {
       const geoJsonLayer = L.geoJSON(boundsData);
       const bounds = geoJsonLayer.getBounds();
       if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [50, 50] });
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 20 });
       }
     } catch (e) {
       console.warn('Could not fit bounds', e);
