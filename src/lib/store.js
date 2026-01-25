@@ -101,6 +101,8 @@ const useStore = create(
             missingHeightDetailsOpen: false,
             missingHeightLines: [],
             fieldValidationFilterActive: false,
+            dataInspectorOpen: false,
+            dataInspectorTarget: null,
           },
         },
 
@@ -752,6 +754,8 @@ const useStore = create(
           missingHeightDetailsOpen: false, // Details popup listing lines missing Z
           missingHeightLines: [], // Array<{index:number, fcode:string|null, type:string|null}>
           fieldValidationFilterActive: false, // Whether field validation is overriding filters
+          dataInspectorOpen: false, // Data inspector modal visibility
+          dataInspectorTarget: null, // { type: 'point'|'line', index: number } | null
         },
 
         setOutlierPromptOpen: (isOpen) =>
@@ -797,6 +801,44 @@ const useStore = create(
             }),
             false,
             'ui/setMissingHeightDetailsOpen',
+          ),
+
+        openDataInspector: (target = null) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                dataInspectorOpen: true,
+                dataInspectorTarget: target,
+              },
+            }),
+            false,
+            'ui/openDataInspector',
+          ),
+
+        closeDataInspector: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                dataInspectorOpen: false,
+                dataInspectorTarget: null,
+              },
+            }),
+            false,
+            'ui/closeDataInspector',
+          ),
+
+        setDataInspectorTarget: (target) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                dataInspectorTarget: target,
+              },
+            }),
+            false,
+            'ui/setDataInspectorTarget',
           ),
 
         // Measure tool actions

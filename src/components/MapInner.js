@@ -6,6 +6,7 @@ import {
   TileLayer,
   GeoJSON,
   LayersControl,
+  WMSTileLayer,
   useMap,
   useMapEvents,
   CircleMarker,
@@ -1607,6 +1608,9 @@ export default function MapInner({ onZoomChange }) {
   const setSelected3DObject = useStore(
     (state) => state.setSelected3DObject,
   );
+  const openDataInspector = useStore(
+    (state) => state.openDataInspector,
+  );
 
   // Handle "Vis i 3D" button clicks in popups
   useEffect(() => {
@@ -1632,6 +1636,28 @@ export default function MapInner({ onZoomChange }) {
     document.addEventListener('click', handleVisI3D);
     return () => document.removeEventListener('click', handleVisI3D);
   }, [setActiveViewTab, setSelected3DObject]);
+
+  // Handle "Inspiser data" button clicks in popups
+  useEffect(() => {
+    const handleInspectData = (e) => {
+      const btn = e.target.closest('.inspect-data-btn');
+      if (btn) {
+        const featureType = btn.dataset.featureType;
+        const index = parseInt(btn.dataset.index, 10);
+
+        if (!Number.isNaN(index)) {
+          openDataInspector({
+            type: featureType === 'Point' ? 'point' : 'line',
+            index,
+          });
+        }
+      }
+    };
+
+    document.addEventListener('click', handleInspectData);
+    return () =>
+      document.removeEventListener('click', handleInspectData);
+  }, [openDataInspector]);
 
   // Build set of outlier feature IDs for filtering
   const outlierFeatureIds = useMemo(() => {
@@ -2001,16 +2027,16 @@ export default function MapInner({ onZoomChange }) {
           ? `punkter-${props.id}`
           : `ledninger-${props.id}`;
 
-      let content = `<div class="text-sm max-h-60 flex flex-col">`;
-      content += `<div>`;
-      content += `<strong>Type:</strong> ${props.featureType}<br/>`;
+      let content = `<div class="text-[11px] leading-tight max-h-56 flex flex-col gap-1 p-1">`;
+      content += `<div class="font-semibold flex items-center gap-1 whitespace-nowrap">`;
+      content += `<span>Type:</span><span>${props.featureType}</span>`;
       if (fcode) {
-        content += `<strong>Code:</strong> <span style="color: ${color}; font-weight: bold;">${fcode}</span><br/>`;
+        content += `<span class="text-gray-400">•</span><span>Code:</span><span style="color: ${color}; font-weight: 700;">${fcode}</span>`;
       }
       content += `</div>`;
 
       content +=
-        '<div class="mt-2 border-t pt-1 flex-1 overflow-auto">';
+        '<div class="mt-1 border-t pt-1 flex-1 overflow-auto">';
       Object.entries(props).forEach(([key, value]) => {
         if (
           key !== 'featureType' &&
@@ -2025,14 +2051,22 @@ export default function MapInner({ onZoomChange }) {
       content += '</div>';
 
       // Add "Vis i 3D" button
-      content += `<div class="mt-2 pt-2 border-t">
+      content += `<div class="mt-1 pt-2 border-t grid grid-cols-2 gap-2">
         <button 
-          class="vis-i-3d-btn w-full px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+          class="vis-i-3d-btn px-2 py-1 text-[11px] bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
           data-feature-id="${featureId}"
           data-feature-type="${props.featureType}"
           data-index="${props.id}"
         >
           Vis i 3D
+        </button>
+        <button 
+          class="inspect-data-btn px-2 py-1 text-[11px] bg-gray-700 hover:bg-gray-800 text-white rounded transition-colors"
+          data-feature-id="${featureId}"
+          data-feature-type="${props.featureType}"
+          data-index="${props.id}"
+        >
+          Inspiser data
         </button>
       </div>`;
       content += '</div>';
@@ -2072,6 +2106,14 @@ export default function MapInner({ onZoomChange }) {
             maxNativeZoom={19}
           />
         </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer name="Ingen">
+          <TileLayer
+            url="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><rect width='256' height='256' fill='%23f3f4f6'/></svg>"
+            tileSize={256}
+            maxZoom={25}
+            maxNativeZoom={25}
+          />
+        </LayersControl.BaseLayer>
 
         <LayersControl.Overlay checked name="Data">
           <GeoJSON
@@ -2108,6 +2150,18 @@ export default function MapInner({ onZoomChange }) {
             style={lineStyle}
             pointToLayer={pointToLayer}
             onEachFeature={onEachFeature}
+          />
+        </LayersControl.Overlay>
+
+        <LayersControl.Overlay checked name="Eiendomsgrenser">
+          <WMSTileLayer
+            url="https://wms.geonorge.no/skwms1/wms.matrikkel"
+            layers="eiendomsgrense,eiendoms_id"
+            format="image/png"
+            transparent
+            version="1.3.0"
+            maxZoom={25}
+            attribution='&copy; <a href="https://www.kartverket.no/">Kartverket</a>'
           />
         </LayersControl.Overlay>
       </LayersControl>

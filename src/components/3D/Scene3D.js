@@ -336,6 +336,7 @@ export default function Scene3D({
                     attributes: pointObj.attributes || {},
                     coordinates: coordinates,
                     featureId: `punkter-${pointIndex}`,
+                    pointIndex: pointIndex,
                   },
                   event
                 );

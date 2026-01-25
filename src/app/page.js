@@ -39,7 +39,12 @@ export default function Home() {
   );
   const viewer3DOpen = useStore((state) => state.ui.viewer3DOpen);
   const activeViewTab = useStore((state) => state.ui.activeViewTab);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const openDataInspector = useStore(
+    (state) => state.openDataInspector,
+  );
+  const closeDataInspector = useStore(
+    (state) => state.closeDataInspector,
+  );
   const [zoomLevel, setZoomLevel] = useState(13);
 
   // Session heartbeat: update lastActive timestamp
@@ -73,7 +78,7 @@ export default function Home() {
   }, [updateLastActive]);
 
   const handleReset = () => {
-    setIsModalOpen(false);
+    closeDataInspector();
     resetAll();
   };
 
@@ -88,7 +93,7 @@ export default function Home() {
           style={{
             position: 'fixed',
             top: '10px',
-            right: '80px',
+            right: '10px',
             padding: '8px 12px',
             width: '220px',
             borderRadius: '8px',
@@ -287,7 +292,7 @@ export default function Home() {
                         }}
                       >
                         <button
-                          onClick={() => setIsModalOpen(true)}
+                          onClick={() => openDataInspector(null)}
                           className="px-4 py-2 rounded shadow font-medium border transition-colors"
                           style={{
                             backgroundColor: 'var(--color-card)',
@@ -321,11 +326,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Data Inspector Modal */}
-                <DataDisplayModal
-                  isOpen={isModalOpen}
-                  onClose={() => setIsModalOpen(false)}
-                />
                 <InclineAnalysisModal />
               </>
             )}
@@ -335,6 +335,9 @@ export default function Home() {
           </div>
         </>
       )}
+
+      {/* Data Inspector Modal */}
+      <DataDisplayModal />
 
       {/* Tab Switcher - Shows when 3D viewer is open */}
       <TabSwitcher />
