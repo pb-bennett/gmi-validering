@@ -23,6 +23,9 @@ export default function InclineAnalysisModal() {
     (state) => state.analysis.selectedPipeIndex,
   );
   const selectPipe = useStore((state) => state.selectAnalysisPipe);
+  const openDataInspector = useStore(
+    (state) => state.openDataInspector,
+  );
 
   // Terrain data for all lines
   const terrainData = useStore((state) => state.terrain.data);
@@ -431,7 +434,20 @@ export default function InclineAnalysisModal() {
                     return null;
                   })()}
                 </div>
-                <StatusBadge status={selectedResult.status} />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      openDataInspector({
+                        type: 'line',
+                        index: selectedResult.lineIndex,
+                      })
+                    }
+                    className="px-2 py-1 text-[11px] rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  >
+                    Inspiser data
+                  </button>
+                  <StatusBadge status={selectedResult.status} />
+                </div>
               </div>
 
               {/* Cross Section Visualization */}

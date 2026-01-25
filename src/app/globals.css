@@ -130,3 +130,8 @@
 .leaflet-container.measure-mode .leaflet-control-container * {
   cursor: default !important;
 }
+
+/* Keep the background selector below the reset button */
+.leaflet-top.leaflet-right .leaflet-control-layers {
+  margin-top: 58px;
+}

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { detectOutliers } from './analysis/outliers';
 import { analyzeIncline } from './analysis/incline';
+import { analyzeZValues } from './analysis/zValidation';
 
 const STORAGE_VERSION = 3;
 
@@ -56,6 +57,10 @@ const useStore = create(
             hoveredSegment: null,
             hoveredTerrainPoint: null,
           },
+          zValidation: {
+            results: null,
+            isOpen: false,
+          },
           terrain: {
             // Per-line terrain data: { [lineIndex]: { points: [], status: 'idle'|'loading'|'done'|'error' } }
             data: {},
@@ -101,6 +106,9 @@ const useStore = create(
             missingHeightDetailsOpen: false,
             missingHeightLines: [],
             fieldValidationFilterActive: false,
+            dataInspectorOpen: false,
+            dataInspectorTarget: null,
+            zValidationPromptOpen: false,
           },
         },
 
@@ -176,6 +184,13 @@ const useStore = create(
               });
               const hasMissingHeights = missingHeightLines.length > 0;
 
+              const zValidationResults = analyzeZValues(data);
+              const hasMissingZ =
+                (zValidationResults?.summary?.missingPointObjects ||
+                  0) > 0 ||
+                (zValidationResults?.summary?.missingLineObjects ||
+                  0) > 0;
+
               const initial = get()._initial;
 
               // Auto-run incline analysis for all lines
@@ -199,6 +214,10 @@ const useStore = create(
                   ...initial.analysis,
                   results: inclineResults,
                 },
+                zValidation: {
+                  ...initial.zValidation,
+                  results: zValidationResults,
+                },
                 // Reset terrain and populate fetch queue
                 terrain: {
                   ...initial.terrain,
@@ -209,9 +228,10 @@ const useStore = create(
                   // Keep sidebar open by default
                   sidebarOpen: true,
                   outlierPromptOpen: hasOutliers,
-                  missingHeightPromptOpen: hasMissingHeights,
+                  missingHeightPromptOpen: false,
                   missingHeightDetailsOpen: false,
                   missingHeightLines,
+                  zValidationPromptOpen: hasMissingZ,
                 },
               };
             },
@@ -226,6 +246,10 @@ const useStore = create(
                 results: [],
                 isOpen: false,
                 selectedPipeIndex: null,
+              },
+              zValidation: {
+                results: null,
+                isOpen: false,
               },
             },
             false,
@@ -366,6 +390,11 @@ const useStore = create(
           hoveredTerrainPoint: null, // { dist, lineDist?, terrainZ, pipeZ } | null
         },
 
+        zValidation: {
+          results: null,
+          isOpen: false,
+        },
+
         setAnalysisResults: (results) =>
           set(
             (state) => ({
@@ -373,6 +402,15 @@ const useStore = create(
             }),
             false,
             'analysis/setResults',
+          ),
+
+        setZValidationResults: (results) =>
+          set(
+            (state) => ({
+              zValidation: { ...state.zValidation, results },
+            }),
+            false,
+            'zValidation/setResults',
           ),
 
         toggleAnalysisModal: (isOpen) =>
@@ -395,6 +433,24 @@ const useStore = create(
             },
             false,
             'analysis/toggleModal',
+          ),
+
+        toggleZValidationModal: (isOpen) =>
+          set(
+            (state) => {
+              const newIsOpen =
+                isOpen !== undefined
+                  ? isOpen
+                  : !state.zValidation.isOpen;
+              return {
+                zValidation: {
+                  ...state.zValidation,
+                  isOpen: newIsOpen,
+                },
+              };
+            },
+            false,
+            'zValidation/toggleModal',
           ),
 
         selectAnalysisPipe: (index) =>
@@ -752,6 +808,9 @@ const useStore = create(
           missingHeightDetailsOpen: false, // Details popup listing lines missing Z
           missingHeightLines: [], // Array<{index:number, fcode:string|null, type:string|null}>
           fieldValidationFilterActive: false, // Whether field validation is overriding filters
+          dataInspectorOpen: false, // Data inspector modal visibility
+          dataInspectorTarget: null, // { type: 'point'|'line', index: number } | null
+          zValidationPromptOpen: false, // Prompt to review missing Z values
         },
 
         setOutlierPromptOpen: (isOpen) =>
@@ -797,6 +856,59 @@ const useStore = create(
             }),
             false,
             'ui/setMissingHeightDetailsOpen',
+          ),
+
+        setZValidationPromptOpen: (isOpen) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                zValidationPromptOpen:
+                  isOpen !== undefined
+                    ? isOpen
+                    : !state.ui.zValidationPromptOpen,
+              },
+            }),
+            false,
+            'ui/setZValidationPromptOpen',
+          ),
+
+        openDataInspector: (target = null) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                dataInspectorOpen: true,
+                dataInspectorTarget: target,
+              },
+            }),
+            false,
+            'ui/openDataInspector',
+          ),
+
+        closeDataInspector: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                dataInspectorOpen: false,
+                dataInspectorTarget: null,
+              },
+            }),
+            false,
+            'ui/closeDataInspector',
+          ),
+
+        setDataInspectorTarget: (target) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                dataInspectorTarget: target,
+              },
+            }),
+            false,
+            'ui/setDataInspectorTarget',
           ),
 
         // Measure tool actions
