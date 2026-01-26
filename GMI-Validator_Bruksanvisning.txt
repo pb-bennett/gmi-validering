@@ -1,0 +1,68 @@
+GMI-VALIDATOR – BRUKERVEILEDNING OG FUNKSJONSOVERSIKT
+Versjon: 2026.01
+
+INNLEDNING
+GMI-Validator er et spesialisert verktøy designet for kvalitetssikring og visualisering av ledningsdata (VA) og annen infrastruktur. Applikasjonen bygger bro mellom rådata (SOSI, GMI, KOF) og den virkelige verden ved å kombinere presise vektordata med 3D-terrengmodeller. Denne guiden gir en oversikt over hvordan du bruker verktøyet effektivt for å oppdage feil før leveranse.
+
+1. KOMME I GANG: IMPORT AV DATA
+Applikasjonen støtter "Drag & Drop". Du trenger ikke navigere gjennom kompliserte menyvalg for å starte.
+
+- Støttede formater: .sos (SOSI), .gmi, .kof
+- Framgangsmåte: Dra filen direkte inn i nettleservinduet.
+- Automatisk zoom: Kartet vil automatisk sentrere seg rundt objektene dine. (NB: For filer med svært tette punkter stopper den automatiske zoomen på nivå 20 for å unngå desorientering).
+
+[SETT INN BILDE AV START-SKJERM MED "DRA FIL HER"]
+
+2. KARTLAG OG NYTTIG BAKGRUNNSINFORMASJON
+For at du skal kunne se hvor ledningene faktisk ligger, tilbyr vi flere bakgrunnskart. Menyen finner du øverst til høyre i kartet.
+
+Nye funksjoner i kartlag-velgeren:
+- Eiendomsgrenser (Matrikkelkart): Dette laget er nå inkludert og skrudd på som standard under "Data"-seksjonen. Det viser tomtegrenser samt gårds- og bruksnummer direkte i kartet. Uvurderlig for å sjekke om kummer havner på feil tomt.
+- "Ingen" bakgrunn: Velg dette for å få en helt ren, lysegrå bakgrunn. Dette er nyttig når du vil studere geometrien uten forstyrrelser fra topografiske kart.
+
+[SETT INN BILDE AV LAG-VELGEREN ÅPEN]
+
+3. AUTOMATISK KVALITETSKONTROLL (Z-VERDIER)
+En av de vanligste feilene i VA-data er manglende høydeinformasjon. GMI-Validator kjører nå en automatisk sjekk med en gang filen lastes inn.
+
+- Hva sjekkes? At alle punkter og linjer har en gyldig Z-verdi (høyde).
+- Null-toleranse: Verdien "0.0" regnes nå som en ugyldig høyde og vil flagges som feil.
+- Varsling: Hvis feil oppdages, vil en "Analyse"-knapp blinke eller en modal dukke opp.
+- Feilretting: Klikk på varselet for å se en liste over nøyaktig hvilke objekter (kummer/ledninger) som mangler høyde.
+
+[SETT INN BILDE AV Z-VALIDERINGSVARSEL ELLER LISTE OVER FEIL]
+
+4. DYKKE NED I DATAENE: "INSPISER DATA"
+Noen ganger er ikke visuell sjekk nok. Du må se de rå tallene. Vi har oppgradert datainspektøren kraftig.
+
+Slik bruker du det:
+1. Klikk på et objekt i kartet (2D eller 3D).
+2. I infoboksen som dukker opp, velg "Inspiser data".
+
+Dette gir deg full tilgang til "hjernen" bak geometrien:
+- Se nøyaktige X, Y og Z koordinater for hvert eneste knekkpunkt på en ledning.
+- Se terrenghøyde vs. ledningshøyde punkt for punkt.
+- Ekspanderbare lister: For lange ledninger er punktlistene skjult som standard for å spare plass, men kan åpnes med ett klikk.
+
+[SETT INN BILDE AV INSPEKTØR-MODALEN MED KOORDINATER SYNLIG]
+
+5. ARBEID MED KOF-FILER
+KOF-formatet kan være notorisk vanskelig da det varierer fra leverandør til leverandør. Vi har skrevet om tolkeren (parseren) for å håndtere uregelmessigheter bedre.
+
+- Leica-støtte: Håndterer nå Leica-spesifikke formater bedre (09 91 / 09 99 grupper).
+- Seksjoner: Leser seksjonskoder (f.eks. "12 AVG") og knytter dem til riktig objekt.
+- Nøyaktighet: Vi leser nå også nøyaktighets-kolonnen hvis den finnes i filen.
+
+Tips: Hvis en KOF-fil ser rar ut i andre programmer, prøv å dra den inn her. Vår parser prøver å "gjette" seg frem til riktig oppsett selv om kolonnene er rotete.
+
+6. 3D-VISNING OG TERRENGSJEKK
+Ved å trykke på "3D-visning" knappen i toppen, løftes dataene dine inn i en virtuell verden basert på nasjonal terrengmodell.
+
+- Vis i kart: Når du er i 3D og klikker på en kum, kan du trykke "Vis i kart" for å hoppe rett tilbake til 2D-kartet på nøyaktig samme sted.
+- Kompakte etiketter: Navnelapper og infobokser er nå gjort mindre og ryddigere slik at de ikke dekker over sikten din.
+
+[SETT INN BILDE AV EN KUM PLASSERT I 3D-TERRENGET]
+
+TIPS & TRIKS
+- Rotere i 3D: Hold inne høyre museknapp (eller Ctrl + Venstreklikk) for å rotere.
+- Søk: Bruk nettleserens søkefunksjon i datalistene hvis du leter etter et spesifikt kumnummer.
