@@ -1597,6 +1597,16 @@ export default function MapInner({ onZoomChange }) {
   const feltHiddenValues = useStore(
     (state) => state.ui.feltHiddenValues,
   );
+  // Felt highlighting on hover
+  const highlightedFeltField = useStore(
+    (state) => state.ui.highlightedFeltField,
+  );
+  const highlightedFeltValue = useStore(
+    (state) => state.ui.highlightedFeltValue,
+  );
+  const highlightedFeltObjectType = useStore(
+    (state) => state.ui.highlightedFeltObjectType,
+  );
 
   const outlierResults = useStore((state) => state.outliers.results);
   const hideOutliers = useStore(
@@ -1784,6 +1794,22 @@ export default function MapInner({ onZoomChange }) {
     });
   };
 
+  // Helper to check if feature is highlighted by Felt hover
+  const isHighlightedByFeltHover = (feature, objectType) => {
+    if (!highlightedFeltField || !highlightedFeltValue) return false;
+    if (highlightedFeltObjectType !== objectType) return false;
+    const props = feature.properties || {};
+    const featureValue = props[highlightedFeltField];
+    // Handle null/undefined values
+    const normalizedFeatureValue =
+      featureValue === null ||
+      featureValue === undefined ||
+      featureValue === ''
+        ? '(Mangler)'
+        : String(featureValue);
+    return normalizedFeatureValue === highlightedFeltValue;
+  };
+
   const lineStyle = (feature) => {
     const fcode = normalizeFcode(feature.properties?.S_FCODE);
     const typeVal = feature.properties?.Type || '(Mangler Type)';
@@ -1822,11 +1848,17 @@ export default function MapInner({ onZoomChange }) {
       highlightedFeatureIds &&
       highlightedFeatureIds.has &&
       highlightedFeatureIds.has(featureId);
+    // Felt (field value) highlighting on hover
+    const isHighlightedByFelt = isHighlightedByFeltHover(
+      feature,
+      'lines',
+    );
     const isHighlighted =
       isHighlightedByCode ||
       isHighlightedByType ||
       isHighlightedByFeature ||
-      isHighlightedByFeatures;
+      isHighlightedByFeatures ||
+      isHighlightedByFelt;
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -1927,11 +1959,17 @@ export default function MapInner({ onZoomChange }) {
       highlightedFeatureIds &&
       highlightedFeatureIds.has &&
       highlightedFeatureIds.has(featureId);
+    // Felt (field value) highlighting on hover
+    const isHighlightedByFelt = isHighlightedByFeltHover(
+      feature,
+      'points',
+    );
     const isHighlighted =
       isHighlightedByCode ||
       isHighlightedByType ||
       isHighlightedByFeature ||
-      isHighlightedByFeatures;
+      isHighlightedByFeatures ||
+      isHighlightedByFelt;
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -2143,7 +2181,9 @@ export default function MapInner({ onZoomChange }) {
                 : 'no-outliers'
             }-feltFilter-${feltFilterActive ? 'on' : 'off'}-${
               feltHiddenValues.length
-            }-fieldValidation-${
+            }-feltHighlight-${highlightedFeltField || 'none'}-${
+              highlightedFeltValue || 'none'
+            }-${highlightedFeltObjectType || 'none'}-fieldValidation-${
               fieldValidationFilterActive ? 'on' : 'off'
             }-measure-${measureMode ? 'on' : 'off'}`}
             data={geoJsonData}

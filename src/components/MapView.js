@@ -19,30 +19,29 @@ const MapLegend = dynamic(() => import('./MapLegend'), {
   ssr: false,
 });
 
-
 export default function MapView(props) {
   const outlierResults = useStore((state) => state.outliers.results);
   const outlierPromptOpen = useStore(
-    (state) => state.ui.outlierPromptOpen
+    (state) => state.ui.outlierPromptOpen,
   );
   const setOutlierPromptOpen = useStore(
-    (state) => state.setOutlierPromptOpen
+    (state) => state.setOutlierPromptOpen,
   );
   const toggleHideOutliers = useStore(
-    (state) => state.toggleHideOutliers
+    (state) => state.toggleHideOutliers,
   );
 
   const zValidationPromptOpen = useStore(
-    (state) => state.ui.zValidationPromptOpen
+    (state) => state.ui.zValidationPromptOpen,
   );
   const zValidationResults = useStore(
-    (state) => state.zValidation.results
+    (state) => state.zValidation.results,
   );
   const setZValidationPromptOpen = useStore(
-    (state) => state.setZValidationPromptOpen
+    (state) => state.setZValidationPromptOpen,
   );
   const toggleZValidationModal = useStore(
-    (state) => state.toggleZValidationModal
+    (state) => state.toggleZValidationModal,
   );
 
   return (
@@ -66,10 +65,10 @@ export default function MapView(props) {
                       const avgOutlierDist =
                         outlierResults.outliers.reduce(
                           (sum, o) => sum + (o.distance || 0),
-                          0
+                          0,
                         ) / outlierResults.outliers.length;
                       const distKm = (avgOutlierDist / 1000).toFixed(
-                        1
+                        1,
                       );
                       return `Gjennomsnittlig ${distKm} km fra hovedklynggen`;
                     })()
@@ -120,8 +119,10 @@ export default function MapView(props) {
               Fant objekter uten høyde (Z-verdi)
             </div>
             <div className="text-amber-800">
-              {zValidationResults.summary?.missingPointObjects || 0} punkt og{' '}
-              {zValidationResults.summary?.missingLineObjects || 0} linje(r)
+              {zValidationResults.summary?.missingPointObjects || 0}{' '}
+              punkt og{' '}
+              {zValidationResults.summary?.missingLineObjects || 0}{' '}
+              linje(r)
             </div>
           </div>
           <div className="flex items-center gap-2">

@@ -101,6 +101,10 @@ const useStore = create(
             feltFilterActive: false,
             feltHiddenValues: [],
             feltSearchText: '',
+            // Felt highlighting on hover (similar to highlightedCode for Tema)
+            highlightedFeltField: null,
+            highlightedFeltValue: null,
+            highlightedFeltObjectType: null,
             outlierPromptOpen: false,
             missingHeightPromptOpen: false,
             missingHeightDetailsOpen: false,
@@ -1000,6 +1004,21 @@ const useStore = create(
             'ui/setFeltSearchText',
           ),
 
+        // Set Felt highlighting (for hover effect in map/3D)
+        setHighlightedFelt: (fieldName, value, objectType) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                highlightedFeltField: fieldName,
+                highlightedFeltValue: value,
+                highlightedFeltObjectType: objectType,
+              },
+            }),
+            false,
+            'ui/setHighlightedFelt',
+          ),
+
         clearFeltFilter: () =>
           set(
             (state) => ({
@@ -1008,6 +1027,10 @@ const useStore = create(
                 feltFilterActive: false,
                 feltHiddenValues: [],
                 feltSearchText: '',
+                // Also clear highlighting when clearing filter
+                highlightedFeltField: null,
+                highlightedFeltValue: null,
+                highlightedFeltObjectType: null,
               },
             }),
             false,

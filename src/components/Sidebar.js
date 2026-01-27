@@ -11,14 +11,14 @@ import { detectOutliers } from '@/lib/analysis/outliers';
 function InclineAnalysisControl() {
   const data = useStore((state) => state.data);
   const setAnalysisResults = useStore(
-    (state) => state.setAnalysisResults
+    (state) => state.setAnalysisResults,
   );
   const toggleAnalysisModal = useStore(
-    (state) => state.toggleAnalysisModal
+    (state) => state.toggleAnalysisModal,
   );
   const analysisResults = useStore((state) => state.analysis.results);
   const inclineRequirementMode = useStore(
-    (state) => state.settings.inclineRequirementMode
+    (state) => state.settings.inclineRequirementMode,
   );
 
   const runAnalysis = () => {
@@ -35,10 +35,10 @@ function InclineAnalysisControl() {
   };
 
   const errorCount = analysisResults.filter(
-    (r) => r.status === 'error'
+    (r) => r.status === 'error',
   ).length;
   const warningCount = analysisResults.filter(
-    (r) => r.status === 'warning'
+    (r) => r.status === 'warning',
   ).length;
 
   return (
@@ -96,13 +96,13 @@ function InclineAnalysisControl() {
 function ZValidationControl() {
   const data = useStore((state) => state.data);
   const zValidationResults = useStore(
-    (state) => state.zValidation.results
+    (state) => state.zValidation.results,
   );
   const setZValidationResults = useStore(
-    (state) => state.setZValidationResults
+    (state) => state.setZValidationResults,
   );
   const toggleZValidationModal = useStore(
-    (state) => state.toggleZValidationModal
+    (state) => state.toggleZValidationModal,
   );
 
   const runAnalysis = () => {
@@ -166,7 +166,7 @@ function ZValidationControl() {
 
 function FieldValidationControl() {
   const toggleFieldValidation = useStore(
-    (state) => state.toggleFieldValidation
+    (state) => state.toggleFieldValidation,
   );
 
   return (
@@ -197,7 +197,7 @@ function FieldValidationControl() {
 function TopplokControl() {
   const data = useStore((state) => state.data);
   const setHighlightedFeature = useStore(
-    (state) => state.setHighlightedFeature
+    (state) => state.setHighlightedFeature,
   );
   const viewObjectInMap = useStore((state) => state.viewObjectInMap);
   const [results, setResults] = useState(null);
@@ -336,7 +336,7 @@ function TopplokControl() {
                         <span className="text-gray-500 text-right">
                           {r.coordinates
                             ? `${r.coordinates.x.toFixed(
-                                0
+                                0,
                               )}, ${r.coordinates.y.toFixed(0)}`
                             : 'Ukjent pos'}
                         </span>
@@ -370,7 +370,7 @@ function TopplokControl() {
                       <span className="text-gray-500 text-right">
                         {r.coordinates
                           ? `${r.coordinates.x.toFixed(
-                              0
+                              0,
                             )}, ${r.coordinates.y.toFixed(0)}`
                           : 'Ukjent pos'}
                       </span>
@@ -402,16 +402,16 @@ function OutlierControl() {
   const data = useStore((state) => state.data);
   const outlierResults = useStore((state) => state.outliers.results);
   const hideOutliers = useStore(
-    (state) => state.outliers.hideOutliers
+    (state) => state.outliers.hideOutliers,
   );
   const setOutlierResults = useStore(
-    (state) => state.setOutlierResults
+    (state) => state.setOutlierResults,
   );
   const toggleHideOutliers = useStore(
-    (state) => state.toggleHideOutliers
+    (state) => state.toggleHideOutliers,
   );
   const setHighlightedFeature = useStore(
-    (state) => state.setHighlightedFeature
+    (state) => state.setHighlightedFeature,
   );
   const [showResults, setShowResults] = useState(false);
 
@@ -583,6 +583,7 @@ function FieldSubSection({
   feltHiddenValues,
   toggleFeltHiddenValue,
   feltSearchText,
+  setHighlightedFelt, // for hover highlighting on map/3D
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -596,7 +597,7 @@ function FieldSubSection({
     if (!feltSearchText) return sortedValues;
     const searchLower = feltSearchText.toLowerCase();
     return sortedValues.filter(([value]) =>
-      value.toLowerCase().includes(searchLower)
+      value.toLowerCase().includes(searchLower),
     );
   }, [sortedValues, feltSearchText]);
 
@@ -608,16 +609,16 @@ function FieldSubSection({
       (item) =>
         item.fieldName === fieldName &&
         item.value === value &&
-        item.objectType === objectType
+        item.objectType === objectType,
     );
   };
 
   // Check if all values in this field are hidden
   const allHidden = sortedValues.every(([value]) =>
-    isValueHidden(value)
+    isValueHidden(value),
   );
   const someHidden = sortedValues.some(([value]) =>
-    isValueHidden(value)
+    isValueHidden(value),
   );
 
   // Toggle all values in this field
@@ -742,8 +743,16 @@ function FieldSubSection({
                       toggleFeltHiddenValue(
                         fieldName,
                         value,
-                        objectType
+                        objectType,
                       )
+                    }
+                    onMouseEnter={() =>
+                      setHighlightedFelt &&
+                      setHighlightedFelt(fieldName, value, objectType)
+                    }
+                    onMouseLeave={() =>
+                      setHighlightedFelt &&
+                      setHighlightedFelt(null, null, null)
                     }
                   >
                     <td className="px-2 py-1">
@@ -784,16 +793,16 @@ export default function Sidebar({ onReset }) {
   const file = useStore((state) => state.file);
   const data = useStore((state) => state.data);
   const setHighlightedCode = useStore(
-    (state) => state.setHighlightedCode
+    (state) => state.setHighlightedCode,
   );
   const setHighlightedType = useStore(
-    (state) => state.setHighlightedType
+    (state) => state.setHighlightedType,
   );
   const toggleHiddenCode = useStore(
-    (state) => state.toggleHiddenCode
+    (state) => state.toggleHiddenCode,
   );
   const toggleHiddenType = useStore(
-    (state) => state.toggleHiddenType
+    (state) => state.toggleHiddenType,
   );
   const toggleDataTable = useStore((state) => state.toggleDataTable);
   const hiddenCodes = useStore((state) => state.ui.hiddenCodes);
@@ -801,22 +810,25 @@ export default function Sidebar({ onReset }) {
 
   // Felt filter state and actions
   const feltFilterActive = useStore(
-    (state) => state.ui.feltFilterActive
+    (state) => state.ui.feltFilterActive,
   );
   const feltHiddenValues = useStore(
-    (state) => state.ui.feltHiddenValues
+    (state) => state.ui.feltHiddenValues,
   );
   const feltSearchText = useStore((state) => state.ui.feltSearchText);
   const setFeltFilterActive = useStore(
-    (state) => state.setFeltFilterActive
+    (state) => state.setFeltFilterActive,
   );
   const toggleFeltHiddenValue = useStore(
-    (state) => state.toggleFeltHiddenValue
+    (state) => state.toggleFeltHiddenValue,
   );
   const setFeltSearchText = useStore(
-    (state) => state.setFeltSearchText
+    (state) => state.setFeltSearchText,
   );
   const clearFeltFilter = useStore((state) => state.clearFeltFilter);
+  const setHighlightedFelt = useStore(
+    (state) => state.setHighlightedFelt,
+  );
 
   // State for sidebar width and resizing
   const [width, setWidth] = useState(320);
@@ -824,10 +836,10 @@ export default function Sidebar({ onReset }) {
   const sidebarRef = useRef(null);
 
   const openSection = useStore(
-    (state) => state.ui.sidebarOpenSection
+    (state) => state.ui.sidebarOpenSection,
   );
   const setSidebarOpenSection = useStore(
-    (state) => state.setSidebarOpenSection
+    (state) => state.setSidebarOpenSection,
   );
 
   const isKof = data?.format === 'KOF';
@@ -850,18 +862,19 @@ export default function Sidebar({ onReset }) {
   // Prepare code lookups
   const codeLookups = useMemo(() => {
     const punktField = fieldsData.find(
-      (f) => f.fieldKey === 'Tema_punkt'
+      (f) => f.fieldKey === 'Tema_punkt',
     );
     const ledField = fieldsData.find(
-      (f) => f.fieldKey === 'Tema_led'
+      (f) => f.fieldKey === 'Tema_led',
     );
 
     const punktMap = new Map(
       punktField?.acceptableValues?.map((v) => [v.value, v.label]) ||
-        []
+        [],
     );
     const ledMap = new Map(
-      ledField?.acceptableValues?.map((v) => [v.value, v.label]) || []
+      ledField?.acceptableValues?.map((v) => [v.value, v.label]) ||
+        [],
     );
 
     return { punktMap, ledMap };
@@ -915,7 +928,7 @@ export default function Sidebar({ onReset }) {
           const p1 = line.coordinates[i];
           const p2 = line.coordinates[i + 1];
           const dist = Math.sqrt(
-            Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
+            Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2),
           );
           totalLength += dist;
         }
@@ -972,7 +985,7 @@ export default function Sidebar({ onReset }) {
     // S_FCODE always first for points
     if (
       data.points.some(
-        (item) => item.attributes?.S_FCODE !== undefined
+        (item) => item.attributes?.S_FCODE !== undefined,
       )
     ) {
       fieldAnalysis.points.fieldOrder.push('S_FCODE');
@@ -1032,7 +1045,7 @@ export default function Sidebar({ onReset }) {
     // S_FCODE always first for lines
     if (
       data.lines.some(
-        (item) => item.attributes?.S_FCODE !== undefined
+        (item) => item.attributes?.S_FCODE !== undefined,
       )
     ) {
       fieldAnalysis.lines.fieldOrder.push('S_FCODE');
@@ -1260,10 +1273,10 @@ export default function Sidebar({ onReset }) {
                   <button
                     onClick={() => {
                       const pointCodes = Object.keys(
-                        stats.temaStats.points
+                        stats.temaStats.points,
                       );
                       const allHidden = pointCodes.every((code) =>
-                        hiddenCodes.includes(code)
+                        hiddenCodes.includes(code),
                       );
                       if (allHidden) {
                         // Show all: remove all point codes from hiddenCodes
@@ -1284,7 +1297,7 @@ export default function Sidebar({ onReset }) {
                     className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
                   >
                     {Object.keys(stats.temaStats.points).every(
-                      (code) => hiddenCodes.includes(code)
+                      (code) => hiddenCodes.includes(code),
                     )
                       ? 'Vis alle'
                       : 'Skjul alle'}
@@ -1385,7 +1398,7 @@ export default function Sidebar({ onReset }) {
                                                 (ht) =>
                                                   ht.type ===
                                                     typeVal &&
-                                                  ht.code === code
+                                                  ht.code === code,
                                               );
                                             return (
                                               <div
@@ -1398,13 +1411,13 @@ export default function Sidebar({ onReset }) {
                                                 onMouseEnter={() =>
                                                   setHighlightedType(
                                                     typeVal,
-                                                    code
+                                                    code,
                                                   )
                                                 }
                                                 onMouseLeave={() =>
                                                   setHighlightedType(
                                                     null,
-                                                    null
+                                                    null,
                                                   )
                                                 }
                                               >
@@ -1418,7 +1431,7 @@ export default function Sidebar({ onReset }) {
                                                       e.stopPropagation();
                                                       toggleHiddenType(
                                                         typeVal,
-                                                        code
+                                                        code,
                                                       );
                                                     }}
                                                     className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -1439,7 +1452,7 @@ export default function Sidebar({ onReset }) {
                                                 </span>
                                               </div>
                                             );
-                                          }
+                                          },
                                         )}
                                     </div>
                                   </td>
@@ -1468,10 +1481,10 @@ export default function Sidebar({ onReset }) {
                   <button
                     onClick={() => {
                       const lineCodes = Object.keys(
-                        stats.temaStats.lines
+                        stats.temaStats.lines,
                       );
                       const allHidden = lineCodes.every((code) =>
-                        hiddenCodes.includes(code)
+                        hiddenCodes.includes(code),
                       );
                       if (allHidden) {
                         // Show all: remove all line codes from hiddenCodes
@@ -1492,7 +1505,7 @@ export default function Sidebar({ onReset }) {
                     className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
                   >
                     {Object.keys(stats.temaStats.lines).every(
-                      (code) => hiddenCodes.includes(code)
+                      (code) => hiddenCodes.includes(code),
                     )
                       ? 'Vis alle'
                       : 'Skjul alle'}
@@ -1592,7 +1605,7 @@ export default function Sidebar({ onReset }) {
                                                 (ht) =>
                                                   ht.type ===
                                                     typeVal &&
-                                                  ht.code === code
+                                                  ht.code === code,
                                               );
                                             return (
                                               <div
@@ -1605,13 +1618,13 @@ export default function Sidebar({ onReset }) {
                                                 onMouseEnter={() =>
                                                   setHighlightedType(
                                                     typeVal,
-                                                    code
+                                                    code,
                                                   )
                                                 }
                                                 onMouseLeave={() =>
                                                   setHighlightedType(
                                                     null,
-                                                    null
+                                                    null,
                                                   )
                                                 }
                                               >
@@ -1625,7 +1638,7 @@ export default function Sidebar({ onReset }) {
                                                       e.stopPropagation();
                                                       toggleHiddenType(
                                                         typeVal,
-                                                        code
+                                                        code,
                                                       );
                                                     }}
                                                     className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -1646,7 +1659,7 @@ export default function Sidebar({ onReset }) {
                                                 </span>
                                               </div>
                                             );
-                                          }
+                                          },
                                         )}
                                     </div>
                                   </td>
@@ -1783,7 +1796,7 @@ export default function Sidebar({ onReset }) {
 
                       // Try to find label from fields.json
                       const fieldDefinition = fieldsData.find(
-                        (f) => f.fieldKey === fieldName
+                        (f) => f.fieldKey === fieldName,
                       );
                       const fieldLabel =
                         fieldDefinition?.label || fieldName;
@@ -1801,9 +1814,10 @@ export default function Sidebar({ onReset }) {
                             toggleFeltHiddenValue
                           }
                           feltSearchText={feltSearchText}
+                          setHighlightedFelt={setHighlightedFelt}
                         />
                       );
-                    }
+                    },
                   )
                 ) : feltTab === 'punkter' ? (
                   <p className="text-xs text-gray-500 italic pt-2">
@@ -1820,7 +1834,7 @@ export default function Sidebar({ onReset }) {
 
                       // Try to find label from fields.json
                       const fieldDefinition = fieldsData.find(
-                        (f) => f.fieldKey === fieldName
+                        (f) => f.fieldKey === fieldName,
                       );
                       const fieldLabel =
                         fieldDefinition?.label || fieldName;
@@ -1838,9 +1852,10 @@ export default function Sidebar({ onReset }) {
                             toggleFeltHiddenValue
                           }
                           feltSearchText={feltSearchText}
+                          setHighlightedFelt={setHighlightedFelt}
                         />
                       );
-                    }
+                    },
                   )
                 ) : feltTab === 'ledninger' ? (
                   <p className="text-xs text-gray-500 italic pt-2">

@@ -16,6 +16,23 @@ export default function Viewer3D() {
   const hiddenTypes = useStore(
     (state) => state.ui?.hiddenTypes || []
   );
+  // Felt filter state for 3D
+  const feltFilterActive = useStore(
+    (state) => state.ui?.feltFilterActive || false
+  );
+  const feltHiddenValues = useStore(
+    (state) => state.ui?.feltHiddenValues || []
+  );
+  // Felt highlighting on hover
+  const highlightedFeltField = useStore(
+    (state) => state.ui?.highlightedFeltField
+  );
+  const highlightedFeltValue = useStore(
+    (state) => state.ui?.highlightedFeltValue
+  );
+  const highlightedFeltObjectType = useStore(
+    (state) => state.ui?.highlightedFeltObjectType
+  );
   const selectedObject3D = useStore(
     (state) => state.ui?.selectedObject3D
   );
@@ -69,6 +86,11 @@ export default function Viewer3D() {
           data={data}
           hiddenCodes={hiddenCodes}
           hiddenTypes={hiddenTypes}
+          feltFilterActive={feltFilterActive}
+          feltHiddenValues={feltHiddenValues}
+          highlightedFeltField={highlightedFeltField}
+          highlightedFeltValue={highlightedFeltValue}
+          highlightedFeltObjectType={highlightedFeltObjectType}
           selectedObject={selectedObject3D}
           onObjectClick={handleObjectClick}
         />
