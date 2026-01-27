@@ -468,6 +468,10 @@ const useStore = create(
               ui: {
                 ...state.ui,
                 highlightedFeatureId: `ledninger-${index}`,
+                selectedObject3D: {
+                  type: 'line',
+                  index,
+                },
               },
             }),
             false,
