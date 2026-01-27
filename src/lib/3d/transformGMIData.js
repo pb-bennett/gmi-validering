@@ -122,6 +122,7 @@ export function transformPipes(lines, header) {
         fcode: fcode,
         lineIndex: lineIndex, // Track which line this segment belongs to
         hoyderef: hoyderef, // Include height reference for debugging
+        attributes: line.attributes || {},
       });
     }
   });
@@ -269,6 +270,7 @@ export function transformPoints(
         fcode: fcode,
         pointIndex: pointIndex,
         type: point.attributes?.Type || '(Mangler Type)',
+        attributes: point.attributes || {},
       });
     } else if (cylinderTypes.includes(fcode)) {
       // KUM, SLU, SLS, SAN - vertical cylinders
@@ -319,6 +321,7 @@ export function transformPoints(
         surfaceZ: surfaceZ,
         hasMatchingLok: !!matchingLok,
         type: point.attributes?.Type || '(Mangler Type)',
+        attributes: point.attributes || {},
       });
     } else {
       // All other punkter - spheres
@@ -350,6 +353,7 @@ export function transformPoints(
         fcode: fcode,
         pointIndex: pointIndex,
         type: point.attributes?.Type || '(Mangler Type)',
+        attributes: point.attributes || {},
         nearbyPipeDiameter: nearbyPipeDiameter, // Include for debugging
       });
     }
