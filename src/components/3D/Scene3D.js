@@ -21,6 +21,11 @@ export default function Scene3D({
   data,
   hiddenCodes = [],
   hiddenTypes = [],
+  feltFilterActive = false,
+  feltHiddenValues = [],
+  highlightedFeltField = null,
+  highlightedFeltValue = null,
+  highlightedFeltObjectType = null,
   selectedObject = null,
   onObjectClick,
 }) {
@@ -39,6 +44,39 @@ export default function Scene3D({
       (ht) =>
         ht.type === typeVal && (ht.code === null || ht.code === fcode)
     );
+  };
+
+  // Helper function to check if an item is hidden by Felt filter
+  const isHiddenByFeltFilter = (item, objectType) => {
+    if (!feltFilterActive || !feltHiddenValues || feltHiddenValues.length === 0)
+      return false;
+    const attrs = item.attributes || {};
+    return feltHiddenValues.some((hidden) => {
+      if (hidden.objectType !== objectType) return false;
+      const featureValue = attrs[hidden.fieldName];
+      const normalizedValue =
+        featureValue === null ||
+        featureValue === undefined ||
+        featureValue === ''
+          ? '(Mangler)'
+          : String(featureValue);
+      return normalizedValue === hidden.value;
+    });
+  };
+
+  // Helper function to check if an item is highlighted by Felt hover
+  const isHighlightedByFelt = (item, objectType) => {
+    if (!highlightedFeltField || !highlightedFeltValue) return false;
+    if (highlightedFeltObjectType !== objectType) return false;
+    const attrs = item.attributes || {};
+    const featureValue = attrs[highlightedFeltField];
+    const normalizedValue =
+      featureValue === null ||
+      featureValue === undefined ||
+      featureValue === ''
+        ? '(Mangler)'
+        : String(featureValue);
+    return normalizedValue === highlightedFeltValue;
   };
 
   // Transform GMI data to 3D format
@@ -68,24 +106,34 @@ export default function Scene3D({
     );
   }, [data, center]);
 
-  // Filter pipes based on hiddenCodes (Tema filter) and hiddenTypes (Type sub-pivot filter)
+  // Filter pipes based on active filter mode (Tema or Felt)
   const pipes = useMemo(() => {
     return allPipes.filter((pipe) => {
-      // Check hiddenCodes first
-      if (hiddenCodes && hiddenCodes.includes(pipe.fcode))
-        return false;
-      // Check hiddenTypes
-      if (isHiddenByType(pipe)) return false;
-      return true;
+      if (feltFilterActive) {
+        // Use Felt filter when active
+        return !isHiddenByFeltFilter(pipe, 'lines');
+      } else {
+        // Use Tema/Type filter when Felt is not active
+        if (hiddenCodes && hiddenCodes.includes(pipe.fcode))
+          return false;
+        if (isHiddenByType(pipe)) return false;
+        return true;
+      }
     });
-  }, [allPipes, hiddenCodes, hiddenTypes]);
+  }, [allPipes, hiddenCodes, hiddenTypes, feltFilterActive, feltHiddenValues]);
 
-  // Filter point data based on hiddenCodes (Tema filter) and hiddenTypes (Type sub-pivot filter)
+  // Filter point data based on active filter mode (Tema or Felt)
   const pointData = useMemo(() => {
     const filterPoint = (p) => {
-      if (hiddenCodes && hiddenCodes.includes(p.fcode)) return false;
-      if (isHiddenByType(p)) return false;
-      return true;
+      if (feltFilterActive) {
+        // Use Felt filter when active
+        return !isHiddenByFeltFilter(p, 'points');
+      } else {
+        // Use Tema/Type filter when Felt is not active
+        if (hiddenCodes && hiddenCodes.includes(p.fcode)) return false;
+        if (isHiddenByType(p)) return false;
+        return true;
+      }
     };
 
     return {
@@ -93,7 +141,7 @@ export default function Scene3D({
       spheres: allPointData.spheres.filter(filterPoint),
       loks: allPointData.loks.filter(filterPoint),
     };
-  }, [allPointData, hiddenCodes, hiddenTypes]);
+  }, [allPointData, hiddenCodes, hiddenTypes, feltFilterActive, feltHiddenValues]);
 
   // Combine all point types for click detection
   const allPoints = useMemo(() => {
