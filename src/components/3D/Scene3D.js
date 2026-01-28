@@ -16,6 +16,7 @@ import {
   transformPipes,
   transformPoints,
 } from '@/lib/3d/transformGMIData';
+import useStore from '@/lib/store';
 
 export default function Scene3D({
   data,
@@ -32,7 +33,13 @@ export default function Scene3D({
   const [showGrid, setShowGrid] = useState(true);
   const controlsRef = useRef();
   const hoveredPointRef = useRef(null);
-  const { camera, gl, scene } = useThree();
+  const { camera, gl, scene, size } = useThree();
+  const hoveredTerrainPoint = useStore(
+    (state) => state.analysis.hoveredTerrainPoint,
+  );
+  const selectedPipeIndex = useStore(
+    (state) => state.analysis.selectedPipeIndex,
+  );
 
   // Helper function to check if an item is hidden by type filter
   const isHiddenByType = (item) => {
@@ -152,6 +159,75 @@ export default function Scene3D({
     ];
   }, [pointData]);
 
+  // Compute 3D marker position when hovering profile plot
+  const hoveredProfileMarker = useMemo(() => {
+    if (!hoveredTerrainPoint || selectedPipeIndex === null) return null;
+    const line = data?.lines?.[selectedPipeIndex];
+    const coords = line?.coordinates;
+    if (!coords || coords.length < 2) return null;
+
+    const targetDist =
+      hoveredTerrainPoint.lineDist !== undefined
+        ? hoveredTerrainPoint.lineDist
+        : hoveredTerrainPoint.dist;
+
+    let distSoFar = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p1 = coords[i];
+      const p2 = coords[i + 1];
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const segLen = Math.sqrt(dx * dx + dy * dy);
+      if (segLen < 0.0001) continue;
+
+      if (targetDist <= distSoFar + segLen) {
+        const t = (targetDist - distSoFar) / segLen;
+        const x = p1.x + dx * t;
+        const y = p1.y + dy * t;
+
+        const z1 = p1.z ?? 0;
+        const z2 = p2.z ?? 0;
+        const baseZ = Number.isFinite(hoveredTerrainPoint.pipeZ)
+          ? hoveredTerrainPoint.pipeZ
+          : z1 + (z2 - z1) * t;
+
+        // Match pipe centerline offset logic (same as transformPipes)
+        const dimensjon = line?.attributes?.Dimensjon || 200;
+        const radius = dimensjon / 2000; // mm -> m radius
+        const hoyderef = line?.attributes?.Høydereferanse || 'UKJENT';
+        let zOffset = 0;
+        switch (hoyderef) {
+          case 'BUNN_INNVENDIG':
+          case 'UNDERKANT_UTVENDIG':
+            zOffset = radius;
+            break;
+          case 'TOPP_UTVENDIG':
+          case 'TOPP_INNVENDIG':
+            zOffset = -radius;
+            break;
+          case 'PÅ_BAKKEN':
+            zOffset = -radius;
+            break;
+          case 'SENTER':
+          default:
+            zOffset = 0;
+        }
+
+        const z = baseZ + zOffset;
+
+        return [
+          x - center[0],
+          (z || 0) - center[2],
+          -(y - center[1]),
+        ];
+      }
+
+      distSoFar += segLen;
+    }
+
+    return null;
+  }, [hoveredTerrainPoint, selectedPipeIndex, data, center]);
+
   // Focus camera on selected object when it changes
   useEffect(() => {
     if (!selectedObject || !controlsRef.current) return;
@@ -167,12 +243,81 @@ export default function Scene3D({
         targetPosition = point.position;
       }
     } else if (selectedObject.type === 'line') {
-      // Find the first segment of the line
+      // Focus on the full extent of the line and align view with its direction
       const lineSegments = pipes.filter(
         (p) => p.lineIndex === selectedObject.index
       );
       if (lineSegments.length > 0) {
-        targetPosition = lineSegments[0].start;
+        const min = new THREE.Vector3(
+          Infinity,
+          Infinity,
+          Infinity
+        );
+        const max = new THREE.Vector3(
+          -Infinity,
+          -Infinity,
+          -Infinity
+        );
+
+        lineSegments.forEach((seg) => {
+          const s = new THREE.Vector3(
+            seg.start[0],
+            seg.start[1],
+            seg.start[2]
+          );
+          const e = new THREE.Vector3(
+            seg.end[0],
+            seg.end[1],
+            seg.end[2]
+          );
+          min.min(s);
+          min.min(e);
+          max.max(s);
+          max.max(e);
+        });
+
+        const center = new THREE.Vector3()
+          .addVectors(min, max)
+          .multiplyScalar(0.5);
+        targetPosition = [center.x, center.y, center.z];
+
+        // Estimate direction from first to last segment (projected to XZ plane)
+        const first = lineSegments[0];
+        const last = lineSegments[lineSegments.length - 1];
+        const dir = new THREE.Vector3(
+          last.end[0] - first.start[0],
+          0,
+          last.end[2] - first.start[2]
+        );
+        if (dir.lengthSq() < 1e-6) {
+          dir.set(1, 0, 0);
+        }
+        dir.normalize();
+
+        // Perpendicular direction (for side-on view)
+        const perp = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+
+        const extentVec = new THREE.Vector3().subVectors(max, min);
+        const extentXZ = Math.sqrt(
+          extentVec.x * extentVec.x + extentVec.z * extentVec.z
+        );
+        const extentY = Math.max(1, extentVec.y);
+
+        const aspect = size.width / Math.max(1, size.height);
+        const vFov = THREE.MathUtils.degToRad(camera.fov || 60);
+        const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+
+        const distX = (extentXZ / 2) / Math.tan(hFov / 2);
+        const distY = (extentY / 2) / Math.tan(vFov / 2);
+        const distance = Math.max(30, distX, distY) * 1.2;
+        const height = Math.max(20, extentY * 0.6, distance * 0.35);
+
+        // Position camera to show the full line length, aligned to its direction
+        camera.position.set(
+          center.x + perp.x * distance,
+          center.y + height,
+          center.z + perp.z * distance
+        );
       }
     }
 
@@ -184,16 +329,9 @@ export default function Scene3D({
         targetPosition[2]
       );
 
-      // Position camera above and to the side of the target
-      camera.position.set(
-        targetPosition[0] + 30,
-        targetPosition[1] + 40,
-        targetPosition[2] + 30
-      );
-
       controlsRef.current.update();
     }
-  }, [selectedObject, allPoints, pipes, camera]);
+  }, [selectedObject, allPoints, pipes, camera, size]);
 
   // Listen for control events from UI
   useEffect(() => {
@@ -547,6 +685,13 @@ export default function Scene3D({
           geometryType="lok"
           arrayType="lok"
         />
+      )}
+
+      {hoveredProfileMarker && (
+        <mesh position={hoveredProfileMarker}>
+          <sphereGeometry args={[0.35, 16, 16]} />
+          <meshStandardMaterial color="#ffd700" emissive="#ffcc00" />
+        </mesh>
       )}
     </>
   );

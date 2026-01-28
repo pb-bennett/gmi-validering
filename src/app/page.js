@@ -236,9 +236,8 @@ export default function Home() {
           {/* Dev diagnostics panel - bottom right corner */}
           <DevDiagnosticsPanel />
 
-          {/* Sidebar - Hidden when data table is open OR analysis is open OR field validation is open */}
+          {/* Sidebar - Hidden when data table is open OR field validation is open */}
           {!dataTableOpen &&
-            !analysisOpen &&
             !fieldValidationOpen && <Sidebar onReset={handleReset} />}
 
           {/* Field Validation Sidebar - 33% width */}
@@ -327,12 +326,14 @@ export default function Home() {
                   </div>
                 )}
 
-                <InclineAnalysisModal />
               </>
             )}
 
             {/* Show 3D view when viewer is open and activeViewTab is '3d' */}
             {viewer3DOpen && activeViewTab === '3d' && <Viewer3D />}
+
+            {/* Profile analysis modal - overlays both 2D and 3D views */}
+            <InclineAnalysisModal />
           </div>
         </>
       )}
