@@ -1,6 +1,7 @@
 'use client';
 
 import useStore from '@/lib/store';
+import { analyzeIncline } from '@/lib/analysis/incline';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 // Get a human-readable label for point objects based on S_FCODE
@@ -39,6 +40,20 @@ export default function Tooltip3D({ object, position, onClose }) {
   const viewObjectInMap = useStore((state) => state.viewObjectInMap);
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
+  );
+  const data = useStore((state) => state.data);
+  const analysisResults = useStore((state) => state.analysis.results);
+  const setAnalysisResults = useStore(
+    (state) => state.setAnalysisResults,
+  );
+  const toggleAnalysisModal = useStore(
+    (state) => state.toggleAnalysisModal,
+  );
+  const selectAnalysisPipe = useStore(
+    (state) => state.selectAnalysisPipe,
+  );
+  const inclineRequirementMode = useStore(
+    (state) => state.settings.inclineRequirementMode,
   );
 
   const tooltipRef = useRef(null);
@@ -121,10 +136,26 @@ export default function Tooltip3D({ object, position, onClose }) {
     onClose();
   };
 
+  const handleShowProfile = () => {
+    if (object.type !== 'pipe' || object.lineIndex === undefined)
+      return;
+
+    if (analysisResults.length === 0 && data) {
+      const results = analyzeIncline(data, {
+        minInclineMode: inclineRequirementMode,
+      });
+      setAnalysisResults(results);
+    }
+
+    toggleAnalysisModal(true);
+    selectAnalysisPipe(object.lineIndex);
+    onClose();
+  };
+
   return (
     <div
       ref={tooltipRef}
-      className="fixed z-10002 bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-200/50 p-2.5 min-w-60 max-w-80 text-[11px] leading-tight"
+      className="fixed z-10002 bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-200/50 p-2.5 min-w-60 max-w-80 text-[11px] leading-tight max-h-[70vh]"
       style={{
         left: `${clampedPos?.x ?? position.x}px`,
         top: `${clampedPos?.y ?? position.y}px`,
@@ -170,11 +201,11 @@ export default function Tooltip3D({ object, position, onClose }) {
       </div>
 
       {/* Attributes */}
-      <div className="space-y-1 mb-2 max-h-40 overflow-auto">
+      <div className="space-y-1 mb-2 max-h-64 overflow-auto">
         {object.attributes &&
           Object.entries(object.attributes)
             .filter(([key]) => !key.startsWith('_'))
-            .slice(0, 12)
+            .slice(0, 20)
             .map(([key, value]) => (
               <div
                 key={key}
@@ -230,6 +261,28 @@ export default function Tooltip3D({ object, position, onClose }) {
           </svg>
           Inspiser data
         </button>
+
+        {object.type === 'pipe' && object.lineIndex !== undefined && (
+          <button
+            onClick={handleShowProfile}
+            className="col-span-2 px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition-colors font-medium flex items-center justify-center gap-1"
+          >
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h10M4 18h16"
+              />
+            </svg>
+            Vis profilanalyse
+          </button>
+        )}
       </div>
     </div>
   );

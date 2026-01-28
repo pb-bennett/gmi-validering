@@ -142,13 +142,56 @@ export function transformPoints(
   points,
   header,
   center,
-  lines = null
+  lines = null,
 ) {
   if (!points || points.length === 0) {
     return { cylinders: [], spheres: [], loks: [] };
   }
 
-  const [centerX, centerY, centerZ] = center;
+  let resolvedCenter = center;
+
+  if (
+    !Array.isArray(resolvedCenter) ||
+    resolvedCenter.length < 3 ||
+    ((resolvedCenter[0] === 0 &&
+      resolvedCenter[1] === 0 &&
+      resolvedCenter[2] === 0) &&
+      (!lines || lines.length === 0))
+  ) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let minZ = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let maxZ = -Infinity;
+
+    points.forEach((p) => {
+      if (!p.coordinates || p.coordinates.length === 0) return;
+      const c = p.coordinates[0];
+      minX = Math.min(minX, c.x);
+      maxX = Math.max(maxX, c.x);
+      minY = Math.min(minY, c.y);
+      maxY = Math.max(maxY, c.y);
+      minZ = Math.min(minZ, c.z || 0);
+      maxZ = Math.max(maxZ, c.z || 0);
+    });
+
+    if (
+      Number.isFinite(minX) &&
+      Number.isFinite(minY) &&
+      Number.isFinite(minZ)
+    ) {
+      resolvedCenter = [
+        (minX + maxX) / 2,
+        (minY + maxY) / 2,
+        (minZ + maxZ) / 2,
+      ];
+    } else {
+      resolvedCenter = [0, 0, 0];
+    }
+  }
+
+  const [centerX, centerY, centerZ] = resolvedCenter;
 
   const cylinders = []; // KUM, SLU, SLS, SAN - vertical cylinders with depth
   const spheres = []; // Other punkter - spheres
@@ -170,7 +213,7 @@ export function transformPoints(
 
   // First pass: collect all LOKs for matching
   const lokPoints = points.filter(
-    (p) => p.attributes?.S_FCODE === 'LOK'
+    (p) => p.attributes?.S_FCODE === 'LOK',
   );
 
   // Helper function to find matching LOK for a point
@@ -200,7 +243,7 @@ export function transformPoints(
       // Prefer size-aware matching (object radii) but keep a sensible minimum
       const sizeAwareTolerance = Math.max(
         LOK_MATCH_TOLERANCE,
-        (pointRadiusMeters || 0.3) + Math.max(lokRadiusMeters, 0.3)
+        (pointRadiusMeters || 0.3) + Math.max(lokRadiusMeters, 0.3),
       );
 
       if (distance < sizeAwareTolerance && distance < bestDistance) {
@@ -279,7 +322,7 @@ export function transformPoints(
       // Try to find matching LOK to determine surface level
       const matchingLok = findMatchingLok(
         point,
-        Math.max(radius, 0.3)
+        Math.max(radius, 0.3),
       );
       let depth = DEFAULT_DEPTH;
       let surfaceZ = null;

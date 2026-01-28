@@ -16,6 +16,7 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import useStore from '@/lib/store';
+import { analyzeIncline } from '@/lib/analysis/incline';
 import proj4 from 'proj4';
 
 // Fix for default Leaflet icons
@@ -1442,6 +1443,19 @@ function FieldValidationZoomHandler({ geoJsonData }) {
   const fieldValidationFilterActive = useStore(
     (state) => state.ui.fieldValidationFilterActive,
   );
+  const analysisResults = useStore((state) => state.analysis.results);
+  const setAnalysisResults = useStore(
+    (state) => state.setAnalysisResults,
+  );
+  const toggleAnalysisModal = useStore(
+    (state) => state.toggleAnalysisModal,
+  );
+  const selectAnalysisPipe = useStore(
+    (state) => state.selectAnalysisPipe,
+  );
+  const inclineRequirementMode = useStore(
+    (state) => state.settings.inclineRequirementMode,
+  );
 
   useEffect(() => {
     if (
@@ -1621,6 +1635,19 @@ export default function MapInner({ onZoomChange }) {
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
+  const analysisResults = useStore((state) => state.analysis.results);
+  const setAnalysisResults = useStore(
+    (state) => state.setAnalysisResults,
+  );
+  const toggleAnalysisModal = useStore(
+    (state) => state.toggleAnalysisModal,
+  );
+  const selectAnalysisPipe = useStore(
+    (state) => state.selectAnalysisPipe,
+  );
+  const inclineRequirementMode = useStore(
+    (state) => state.settings.inclineRequirementMode,
+  );
 
   // Handle "Vis i 3D" button clicks in popups
   useEffect(() => {
@@ -1668,6 +1695,40 @@ export default function MapInner({ onZoomChange }) {
     return () =>
       document.removeEventListener('click', handleInspectData);
   }, [openDataInspector]);
+
+  // Handle "Vis profilanalyse" button clicks in popups
+  useEffect(() => {
+    const handleShowProfile = (e) => {
+      const btn = e.target.closest('.show-profile-btn');
+      if (btn) {
+        const featureType = btn.dataset.featureType;
+        const index = parseInt(btn.dataset.index, 10);
+
+        if (featureType !== 'Line' || Number.isNaN(index)) return;
+
+        if (analysisResults.length === 0 && data) {
+          const results = analyzeIncline(data, {
+            minInclineMode: inclineRequirementMode,
+          });
+          setAnalysisResults(results);
+        }
+
+        toggleAnalysisModal(true);
+        selectAnalysisPipe(index);
+      }
+    };
+
+    document.addEventListener('click', handleShowProfile);
+    return () =>
+      document.removeEventListener('click', handleShowProfile);
+  }, [
+    analysisResults,
+    data,
+    inclineRequirementMode,
+    setAnalysisResults,
+    toggleAnalysisModal,
+    selectAnalysisPipe,
+  ]);
 
   // Build set of outlier feature IDs for filtering
   const outlierFeatureIds = useMemo(() => {
@@ -2065,7 +2126,7 @@ export default function MapInner({ onZoomChange }) {
           ? `punkter-${props.id}`
           : `ledninger-${props.id}`;
 
-      let content = `<div class="text-[11px] leading-tight max-h-56 flex flex-col gap-1 p-1">`;
+      let content = `<div class="text-[11px] leading-tight max-h-72 flex flex-col gap-1 p-1">`;
       content += `<div class="font-semibold flex items-center gap-1 whitespace-nowrap">`;
       content += `<span>Type:</span><span>${props.featureType}</span>`;
       if (fcode) {
@@ -2106,7 +2167,21 @@ export default function MapInner({ onZoomChange }) {
         >
           Inspiser data
         </button>
-      </div>`;
+      `;
+
+      if (props.featureType === 'Line') {
+        content += `
+        <button 
+          class="show-profile-btn col-span-2 px-2 py-1 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors"
+          data-feature-id="${featureId}"
+          data-feature-type="${props.featureType}"
+          data-index="${props.id}"
+        >
+          Vis profilanalyse
+        </button>`;
+      }
+
+      content += `</div>`;
       content += '</div>';
       layer.bindPopup(content);
     }
