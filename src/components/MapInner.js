@@ -1939,16 +1939,33 @@ export default function MapInner({ onZoomChange }) {
   const hasData = data || layerOrder.length > 0;
   if (!hasData) return null;
 
-  // Helper to check if feature is hidden by felt filter
+  // Helper to check if feature is hidden by felt filter (checks per-layer hidden values first, then global felt filter)
   const isHiddenByFeltFilter = (feature, objectType) => {
-    if (!feltFilterActive || feltHiddenValues.length === 0)
-      return false;
     const props = feature.properties || {};
-    // Check if any of the feature's attribute values match a hidden field value
+
+    // Check per-layer felt hidden values attached to feature properties
+    const layerFeltHidden = props._layerFeltHiddenValues || [];
+    if (Array.isArray(layerFeltHidden) && layerFeltHidden.length > 0) {
+      const match = layerFeltHidden.some((hidden) => {
+        if (hidden.objectType !== objectType) return false;
+        const featureValue = props[hidden.fieldName];
+        const normalizedFeatureValue =
+          featureValue === null ||
+          featureValue === undefined ||
+          featureValue === ''
+            ? '(Mangler)'
+            : String(featureValue);
+        return normalizedFeatureValue === hidden.value;
+      });
+      if (match) return true;
+    }
+
+    // Fall back to global felt filter when active
+    if (!feltFilterActive || feltHiddenValues.length === 0) return false;
+
     return feltHiddenValues.some((hidden) => {
       if (hidden.objectType !== objectType) return false;
       const featureValue = props[hidden.fieldName];
-      // Handle null/undefined values
       const normalizedFeatureValue =
         featureValue === null ||
         featureValue === undefined ||
@@ -2413,7 +2430,7 @@ export default function MapInner({ onZoomChange }) {
               highlightedFeltValue || 'none'
             }-${highlightedFeltObjectType || 'none'}-fieldValidation-${
               fieldValidationFilterActive ? 'on' : 'off'
-            }-measure-${measureMode ? 'on' : 'off'}-layers-${layerOrder.join(',')}-layerVis-${layerOrder.map(id => layers[id]?.visible ? '1' : '0').join('')}-layerHl-${layerOrder.map(id => layers[id]?.highlightAll ? '1' : '0').join('')}`}
+            }-measure-${measureMode ? 'on' : 'off'}-layers-${layerOrder.join(',')}-layerVis-${layerOrder.map(id => layers[id]?.visible ? '1' : '0').join('')}-layerHl-${layerOrder.map(id => layers[id]?.highlightAll ? '1' : '0').join('')}-layerFv-${layerOrder.map(id => (layers[id]?.feltHiddenValues||[]).map(v => v.fieldName + '=' + v.value).join('|')).join(';')}`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}
