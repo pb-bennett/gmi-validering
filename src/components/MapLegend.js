@@ -10,31 +10,76 @@ import useStore from '@/lib/store';
  * Displays infrastructure type symbols with their meanings.
  * Can be collapsed/expanded by the user.
  * Only shows symbols that are present in the current data.
+ * In multi-layer mode, merges categories from all visible layers.
  */
 export default function MapLegend() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const data = useStore((state) => state.data);
+  const layers = useStore((state) => state.layers);
+  const layerOrder = useStore((state) => state.layerOrder);
+  const isMultiLayerMode = layerOrder && layerOrder.length > 0;
 
-  // Get categories that are actually present in the data
+  // Get categories that are actually present in the data (merged from all visible layers)
   const presentCategories = useMemo(() => {
-    if (!data) return new Set();
-
     const categories = new Set();
-
-    // Check points
-    data.points.forEach((point) => {
-      const fcode = point.attributes?.S_FCODE;
-      if (fcode) {
-        categories.add(fcode);
+    
+    if (isMultiLayerMode) {
+      // Collect categories from all visible layers
+      for (const layerId of layerOrder) {
+        const layer = layers[layerId];
+        if (!layer || !layer.visible || !layer.data) continue;
+        
+        // Check points in this layer
+        if (layer.data.points) {
+          layer.data.points.forEach((point) => {
+            const fcode = point.attributes?.S_FCODE;
+            if (fcode) {
+              categories.add(fcode);
+            }
+          });
+        }
+        
+        // Check lines in this layer
+        if (layer.data.lines) {
+          layer.data.lines.forEach((line) => {
+            const fcode = line.attributes?.S_FCODE;
+            if (fcode) {
+              categories.add(fcode);
+            }
+          });
+        }
       }
-    });
+    } else {
+      // Legacy single-data mode
+      if (!data) return categories;
+      
+      // Check points
+      if (data.points) {
+        data.points.forEach((point) => {
+          const fcode = point.attributes?.S_FCODE;
+          if (fcode) {
+            categories.add(fcode);
+          }
+        });
+      }
+      
+      // Check lines
+      if (data.lines) {
+        data.lines.forEach((line) => {
+          const fcode = line.attributes?.S_FCODE;
+          if (fcode) {
+            categories.add(fcode);
+          }
+        });
+      }
+    }
 
     return categories;
-  }, [data]);
+  }, [data, isMultiLayerMode, layers, layerOrder]);
 
   // Filter legend items to only show those present in data
   const visibleLegendItems = useMemo(() => {
-    if (!data || presentCategories.size === 0) return [];
+    if (presentCategories.size === 0) return [];
 
     return LEGEND_ITEMS.filter((item) => {
       // Check if any S_FCODE in the data matches this category
@@ -92,10 +137,11 @@ export default function MapLegend() {
       }
       return false;
     });
-  }, [data, presentCategories]);
+  }, [presentCategories]);
 
   // Don't show legend if no data or no visible items
-  if (!data || visibleLegendItems.length === 0) {
+  const hasData = isMultiLayerMode ? layerOrder.some(id => layers[id]?.visible && layers[id]?.data) : !!data;
+  if (!hasData || visibleLegendItems.length === 0) {
     return null;
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -206,8 +206,26 @@ const normalizeFcode = (value) => {
   return str.trim() === '' ? null : str;
 };
 
+const LAYER_HIGHLIGHT_COLORS = [
+  '#00E5FF',
+  '#FF6B6B',
+  '#51CF66',
+  '#FFD43B',
+  '#845EF7',
+  '#FF922B',
+  '#20C997',
+  '#339AF0',
+  '#F06595',
+  '#ADB5BD',
+];
+
 // SVG shape generators for point markers
-const createSvgMarker = (category, color, isHighlighted = false) => {
+const createSvgMarker = (
+  category,
+  color,
+  isHighlighted = false,
+  highlightColor = '#00FFFF',
+) => {
   // Adjust base sizes per category
   let baseSize;
   if (category === INFRA_CATEGORIES.LOK) {
@@ -228,7 +246,6 @@ const createSvgMarker = (category, color, isHighlighted = false) => {
 
   const size = isHighlighted ? baseSize + 6 : baseSize;
   const strokeWidth = isHighlighted ? 3 : 2;
-  const highlightColor = '#00FFFF';
   const stroke = isHighlighted ? highlightColor : color;
   const fill = '#FFFFFF';
   const half = size / 2;
@@ -828,11 +845,16 @@ const getLineWeight = (properties) => {
 
 // --- Components ---
 
-function BoundsController({ geoJsonData, ignoredFeatureIds }) {
+function BoundsController({ geoJsonData, ignoredFeatureIds, fitBoundsKey }) {
   const map = useMap();
+  const lastFitKeyRef = useRef(null);
 
   useEffect(() => {
     if (!map || !geoJsonData) return;
+
+    if (fitBoundsKey && lastFitKeyRef.current === fitBoundsKey) {
+      return;
+    }
 
     try {
       let boundsData = geoJsonData;
@@ -877,11 +899,14 @@ function BoundsController({ geoJsonData, ignoredFeatureIds }) {
       const bounds = geoJsonLayer.getBounds();
       if (bounds.isValid()) {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 20 });
+        if (fitBoundsKey) {
+          lastFitKeyRef.current = fitBoundsKey;
+        }
       }
     } catch (e) {
       console.warn('Could not fit bounds', e);
     }
-  }, [map, geoJsonData, ignoredFeatureIds]);
+  }, [map, geoJsonData, ignoredFeatureIds, fitBoundsKey]);
 
   return null;
 }
@@ -1578,6 +1603,15 @@ function MapCenterHandler() {
 
 export default function MapInner({ onZoomChange }) {
   const data = useStore((state) => state.data);
+  const layers = useStore((state) => state.layers);
+  const layerOrder = useStore((state) => state.layerOrder);
+  const layerHighlightColors = useMemo(() => {
+    const map = new Map();
+    layerOrder.forEach((id, idx) => {
+      map.set(id, LAYER_HIGHLIGHT_COLORS[idx % LAYER_HIGHLIGHT_COLORS.length]);
+    });
+    return map;
+  }, [layerOrder]);
   const analysis = useStore((state) => state.analysis);
   const measureMode = useStore((state) => state.ui.measureMode);
   const addMeasurePoint = useStore((state) => state.addMeasurePoint);
@@ -1745,95 +1779,165 @@ export default function MapInner({ onZoomChange }) {
   }, [outlierResults]);
 
   const geoJsonData = useMemo(() => {
-    if (!data) return null;
-
-    const { points, lines, header } = data;
-    const features = [];
-
-    // Determine source projection
-    let sourceProj = 'EPSG:4326'; // Default to WGS84
-    if (header?.COSYS_EPSG) {
-      const epsg = `EPSG:${header.COSYS_EPSG}`;
-      if (proj4.defs(epsg)) {
-        sourceProj = epsg;
-      } else {
-        console.warn(
-          `Unknown EPSG code: ${header.COSYS_EPSG}, assuming raw coordinates are compatible or WGS84`,
-        );
+    // Support both legacy single-data mode and multi-layer mode
+    const isMultiLayerMode = layerOrder.length > 0;
+    
+    // Collect data sources: either layers or legacy single data
+    const dataSources = [];
+    
+    if (isMultiLayerMode) {
+      // Multi-layer mode: iterate through visible layers
+      for (const layerId of layerOrder) {
+        const layer = layers[layerId];
+        if (!layer || !layer.visible || !layer.data) continue;
+        dataSources.push({
+          layerId,
+          data: layer.data,
+          hiddenCodes: layer.hiddenCodes || [],
+          hiddenTypes: layer.hiddenTypes || [],
+          feltHiddenValues: layer.feltHiddenValues || [],
+        });
       }
-    } else if (header?.COSYS) {
-      // Simple heuristic for COSYS string
-      if (
-        header.COSYS.includes('UTM') &&
-        header.COSYS.includes('32')
-      ) {
-        sourceProj = 'EPSG:25832';
-      } else if (
-        header.COSYS.includes('UTM') &&
-        header.COSYS.includes('33')
-      ) {
-        sourceProj = 'EPSG:25833';
-      }
+    } else if (data) {
+      // Legacy single-file mode
+      dataSources.push({
+        layerId: null,
+        data,
+        opacity: 1,
+        hiddenCodes: [],
+        hiddenTypes: [],
+        feltHiddenValues: [],
+      });
+    }
+    
+    if (dataSources.length === 0) {
+      // Return empty FeatureCollection instead of null to keep map visible
+      return { type: 'FeatureCollection', features: [] };
     }
 
-    // Helper to transform coordinate
-    const transform = (x, y) => {
-      if (sourceProj === 'EPSG:4326') return [x, y]; // No transform needed if already WGS84
-      try {
-        return proj4(sourceProj, 'EPSG:4326', [x, y]);
-      } catch (e) {
-        return [x, y];
-      }
-    };
+    const features = [];
 
-    // Process Lines
-    lines.forEach((line, idx) => {
-      if (line.coordinates && line.coordinates.length > 0) {
-        const coords = line.coordinates.map((c) =>
-          transform(c.x, c.y),
-        );
-        features.push({
-          type: 'Feature',
-          properties: {
-            ...line.attributes,
-            id: idx,
-            featureType: 'Line',
-          },
-          geometry: {
-            type: 'LineString',
-            coordinates: coords,
-          },
-        });
-      }
-    });
+    // Process each data source
+    for (const source of dataSources) {
+      const { points, lines, header } = source.data;
+      const layerId = source.layerId;
 
-    // Process Points
-    points.forEach((point, idx) => {
-      if (point.coordinates && point.coordinates.length > 0) {
-        const c = point.coordinates[0];
-        const coords = transform(c.x, c.y);
-        features.push({
-          type: 'Feature',
-          properties: {
-            ...point.attributes,
-            id: idx,
-            featureType: 'Point',
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: coords,
-          },
-        });
+      // Determine source projection
+      let sourceProj = 'EPSG:4326'; // Default to WGS84
+      if (header?.COSYS_EPSG) {
+        const epsg = `EPSG:${header.COSYS_EPSG}`;
+        if (proj4.defs(epsg)) {
+          sourceProj = epsg;
+        } else {
+          console.warn(
+            `Unknown EPSG code: ${header.COSYS_EPSG}, assuming raw coordinates are compatible or WGS84`,
+          );
+        }
+      } else if (header?.COSYS) {
+        // Simple heuristic for COSYS string
+        if (
+          header.COSYS.includes('UTM') &&
+          header.COSYS.includes('32')
+        ) {
+          sourceProj = 'EPSG:25832';
+        } else if (
+          header.COSYS.includes('UTM') &&
+          header.COSYS.includes('33')
+        ) {
+          sourceProj = 'EPSG:25833';
+        }
       }
-    });
+
+      // Helper to transform coordinate
+      const transform = (x, y) => {
+        if (sourceProj === 'EPSG:4326') return [x, y]; // No transform needed if already WGS84
+        try {
+          return proj4(sourceProj, 'EPSG:4326', [x, y]);
+        } catch (e) {
+          return [x, y];
+        }
+      };
+
+      // Process Lines
+      lines.forEach((line, idx) => {
+        if (line.coordinates && line.coordinates.length > 0) {
+          const coords = line.coordinates.map((c) =>
+            transform(c.x, c.y),
+          );
+          features.push({
+            type: 'Feature',
+            properties: {
+              ...line.attributes,
+              id: idx,
+              featureType: 'Line',
+              _layerId: layerId,
+              _layerHiddenCodes: source.hiddenCodes,
+              _layerHiddenTypes: source.hiddenTypes,
+              _layerFeltHiddenValues: source.feltHiddenValues,
+            },
+            geometry: {
+              type: 'LineString',
+              coordinates: coords,
+            },
+          });
+        }
+      });
+
+      // Process Points
+      points.forEach((point, idx) => {
+        if (point.coordinates && point.coordinates.length > 0) {
+          const c = point.coordinates[0];
+          const coords = transform(c.x, c.y);
+          features.push({
+            type: 'Feature',
+            properties: {
+              ...point.attributes,
+              id: idx,
+              featureType: 'Point',
+              _layerId: layerId,
+              _layerHiddenCodes: source.hiddenCodes,
+              _layerHiddenTypes: source.hiddenTypes,
+              _layerFeltHiddenValues: source.feltHiddenValues,
+            },
+            geometry: {
+              type: 'Point',
+              coordinates: coords,
+            },
+          });
+        }
+      });
+    }
 
     return {
       type: 'FeatureCollection',
       features,
     };
-  }, [data]);
+  }, [data, layers, layerOrder]);
 
-  if (!data || !geoJsonData) return null;
+  const fitBoundsKey = useMemo(() => {
+    if (layerOrder.length > 0) {
+      return layerOrder
+        .filter((id) => layers[id]?.data)
+        .map((id) => {
+          const layerData = layers[id]?.data;
+          const headerName = layerData?.header?.filename || '';
+          const pointsCount = layerData?.points?.length || 0;
+          const linesCount = layerData?.lines?.length || 0;
+          return `${id}:${headerName}:${pointsCount}:${linesCount}`;
+        })
+        .join('|');
+    }
+
+    if (!data) return '';
+    const headerName = data?.header?.filename || '';
+    const pointsCount = data?.points?.length || 0;
+    const linesCount = data?.lines?.length || 0;
+    return `single:${headerName}:${pointsCount}:${linesCount}`;
+  }, [data, layers, layerOrder]);
+
+  // Check if we have any data to render - show map even with empty features if layers exist
+  const hasData = data || layerOrder.length > 0;
+  if (!hasData) return null;
 
   // Helper to check if feature is hidden by felt filter
   const isHiddenByFeltFilter = (feature, objectType) => {
@@ -1878,6 +1982,15 @@ export default function MapInner({ onZoomChange }) {
       feature.properties?.id !== undefined
         ? `ledninger-${feature.properties.id}`
         : null;
+    const layerId = feature.properties?._layerId;
+    const layerHiddenCodes = feature.properties?._layerHiddenCodes || [];
+    const layerHiddenTypes = feature.properties?._layerHiddenTypes || [];
+    const layerFeltHiddenValues = feature.properties?._layerFeltHiddenValues || [];
+    const layerHighlightActive =
+      layerId && layers[layerId]?.highlightAll === true;
+    const layerHighlightColor = layerHighlightActive
+      ? layerHighlightColors.get(layerId) || '#00FFFF'
+      : null;
 
     // When field validation filter is active, ignore other filters
     let isHidden = false;
@@ -1885,13 +1998,23 @@ export default function MapInner({ onZoomChange }) {
       if (feltFilterActive) {
         isHidden = isHiddenByFeltFilter(feature, 'lines');
       } else {
-        const isHiddenByCode = hiddenCodes.includes(fcode);
-        // Check if this specific type+code combination is hidden
-        const isHiddenByType = hiddenTypes.some(
+        // Check both global and per-layer hidden codes
+        const globalHiddenByCode = hiddenCodes.includes(fcode);
+        const layerHiddenByCode = layerHiddenCodes.includes(fcode);
+        const isHiddenByCode = globalHiddenByCode || layerHiddenByCode;
+        
+        // Check if this specific type+code combination is hidden (global or layer)
+        const globalHiddenByType = hiddenTypes.some(
           (ht) =>
             ht.type === typeVal &&
             (ht.code === null || ht.code === fcode),
         );
+        const layerHiddenByType = layerHiddenTypes.some(
+          (ht) =>
+            ht.type === typeVal &&
+            (ht.code === null || ht.code === fcode),
+        );
+        const isHiddenByType = globalHiddenByType || layerHiddenByType;
         isHidden = isHiddenByCode || isHiddenByType;
       }
     }
@@ -1914,12 +2037,13 @@ export default function MapInner({ onZoomChange }) {
       feature,
       'lines',
     );
-    const isHighlighted =
+    const hasOtherHighlight =
       isHighlightedByCode ||
       isHighlightedByType ||
       isHighlightedByFeature ||
       isHighlightedByFeatures ||
       isHighlightedByFelt;
+    const isHighlighted = hasOtherHighlight || layerHighlightActive;
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -1968,7 +2092,11 @@ export default function MapInner({ onZoomChange }) {
       }
     }
 
-    const color = isHighlighted ? '#00FFFF' : getColorByFCode(fcode);
+    const color = isHighlighted
+      ? (layerHighlightActive && !hasOtherHighlight
+          ? layerHighlightColor
+          : '#00FFFF')
+      : getColorByFCode(fcode);
     const baseWeight = getLineWeight(feature.properties);
     const weight = isHighlighted ? baseWeight + 4 : baseWeight;
     const opacity = isHighlighted ? 1 : 0.9;
@@ -1989,6 +2117,15 @@ export default function MapInner({ onZoomChange }) {
       feature.properties?.id !== undefined
         ? `punkter-${feature.properties.id}`
         : null;
+    const layerId = feature.properties?._layerId;
+    const layerHiddenCodes = feature.properties?._layerHiddenCodes || [];
+    const layerHiddenTypes = feature.properties?._layerHiddenTypes || [];
+    const layerFeltHiddenValues = feature.properties?._layerFeltHiddenValues || [];
+    const layerHighlightActive =
+      layerId && layers[layerId]?.highlightAll === true;
+    const layerHighlightColor = layerHighlightActive
+      ? layerHighlightColors.get(layerId) || '#00FFFF'
+      : null;
 
     // When field validation filter is active, ignore other filters
     let isHidden = false;
@@ -1996,13 +2133,23 @@ export default function MapInner({ onZoomChange }) {
       if (feltFilterActive) {
         isHidden = isHiddenByFeltFilter(feature, 'points');
       } else {
-        const isHiddenByCode = hiddenCodes.includes(fcode);
-        // Check if this specific type+code combination is hidden
-        const isHiddenByType = hiddenTypes.some(
+        // Check both global and per-layer hidden codes
+        const globalHiddenByCode = hiddenCodes.includes(fcode);
+        const layerHiddenByCode = layerHiddenCodes.includes(fcode);
+        const isHiddenByCode = globalHiddenByCode || layerHiddenByCode;
+        
+        // Check if this specific type+code combination is hidden (global or layer)
+        const globalHiddenByType = hiddenTypes.some(
           (ht) =>
             ht.type === typeVal &&
             (ht.code === null || ht.code === fcode),
         );
+        const layerHiddenByType = layerHiddenTypes.some(
+          (ht) =>
+            ht.type === typeVal &&
+            (ht.code === null || ht.code === fcode),
+        );
+        const isHiddenByType = globalHiddenByType || layerHiddenByType;
         isHidden = isHiddenByCode || isHiddenByType;
       }
     }
@@ -2025,12 +2172,13 @@ export default function MapInner({ onZoomChange }) {
       feature,
       'points',
     );
-    const isHighlighted =
+    const hasOtherHighlight =
       isHighlightedByCode ||
       isHighlightedByType ||
       isHighlightedByFeature ||
       isHighlightedByFeatures ||
       isHighlightedByFelt;
+    const isHighlighted = hasOtherHighlight || layerHighlightActive;
 
     // Filtered View Logic (Missing Fields Report)
     const isFilteredOut =
@@ -2056,7 +2204,14 @@ export default function MapInner({ onZoomChange }) {
 
     const color = getColorByFCode(fcode);
     const category = getCategoryByFCode(fcode);
-    const icon = createSvgMarker(category, color, isHighlighted);
+    const icon = createSvgMarker(
+      category,
+      color,
+      isHighlighted,
+      layerHighlightActive && !hasOtherHighlight
+        ? layerHighlightColor
+        : '#00FFFF',
+    );
 
     return L.marker(latlng, { icon });
   };
@@ -2230,9 +2385,7 @@ export default function MapInner({ onZoomChange }) {
 
         <LayersControl.Overlay checked name="Data">
           <GeoJSON
-            key={`${
-              data?.header?.filename || 'data'
-            }-${hiddenCodes.join(',')}-${
+            key={`geojson-${fitBoundsKey}-${hiddenCodes.join(',')}-${
               highlightedCode || 'none'
             }-${hiddenTypes.join(',')}-${highlightedType || 'none'}-${
               highlightedTypeContext || 'none'
@@ -2260,7 +2413,7 @@ export default function MapInner({ onZoomChange }) {
               highlightedFeltValue || 'none'
             }-${highlightedFeltObjectType || 'none'}-fieldValidation-${
               fieldValidationFilterActive ? 'on' : 'off'
-            }-measure-${measureMode ? 'on' : 'off'}`}
+            }-measure-${measureMode ? 'on' : 'off'}-layers-${layerOrder.join(',')}-layerVis-${layerOrder.map(id => layers[id]?.visible ? '1' : '0').join('')}-layerHl-${layerOrder.map(id => layers[id]?.highlightAll ? '1' : '0').join('')}`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}
@@ -2284,6 +2437,7 @@ export default function MapInner({ onZoomChange }) {
       <BoundsController
         geoJsonData={geoJsonData}
         ignoredFeatureIds={outlierFeatureIdsForBounds}
+        fitBoundsKey={fitBoundsKey}
       />
       <FeatureHighlighter geoJsonData={geoJsonData} />
       <FieldValidationZoomHandler geoJsonData={geoJsonData} />

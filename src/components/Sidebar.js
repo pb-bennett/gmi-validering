@@ -7,6 +7,7 @@ import { analyzeIncline } from '@/lib/analysis/incline';
 import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
+import LayerManager from './LayerManager';
 
 function InclineAnalysisControl() {
   const data = useStore((state) => state.data);
@@ -789,9 +790,12 @@ function FieldSubSection({
   );
 }
 
-export default function Sidebar({ onReset }) {
+export default function Sidebar({ onReset, onAddFile }) {
   const file = useStore((state) => state.file);
   const data = useStore((state) => state.data);
+  const layerOrder = useStore((state) => state.layerOrder);
+  const isMultiLayerMode = layerOrder.length > 0;
+  
   const setHighlightedCode = useStore(
     (state) => state.setHighlightedCode,
   );
@@ -1108,7 +1112,8 @@ export default function Sidebar({ onReset }) {
     };
   }, [data]);
 
-  if (!data) return null;
+  // Show sidebar if we have data (legacy mode) OR if we have layers (multi-layer mode)
+  if (!data && !isMultiLayerMode) return null;
 
   return (
     <div
@@ -1189,7 +1194,12 @@ export default function Sidebar({ onReset }) {
       </div>
 
       {/* Content - Scrollable */}
-      <div className="flex-1 overflow-y-auto">
+      {isMultiLayerMode ? (
+        /* Multi-layer mode: show LayerManager */
+        <LayerManager onAddFile={onAddFile} />
+      ) : (
+        /* Legacy single-file mode */
+        <div className="flex-1 overflow-y-auto">
         {/* Oversikt */}
         <SidebarSection
           title="Oversikt"
@@ -1978,6 +1988,7 @@ export default function Sidebar({ onReset }) {
           </div>
         </SidebarSection>
       </div>
+      )}
     </div>
   );
 }

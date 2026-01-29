@@ -44,7 +44,7 @@ export default function Controls3D() {
               onClick={(e) => {
                 e.stopPropagation();
                 window.dispatchEvent(
-                  new CustomEvent('reset3DCamera')
+                  new CustomEvent('reset3DCamera'),
                 );
               }}
               className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"

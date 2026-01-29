@@ -41,21 +41,51 @@ export default function Scene3D({
     (state) => state.analysis.selectedPipeIndex,
   );
 
-  // Helper function to check if an item is hidden by type filter
+  // Helper function to check if an item is hidden by type filter (global or per-layer)
   const isHiddenByType = (item) => {
-    if (!hiddenTypes || hiddenTypes.length === 0) return false;
     const typeVal =
       item.type || item.attributes?.Type || '(Mangler Type)';
     const fcode = item.fcode;
-    return hiddenTypes.some(
+    
+    // Check global hidden types
+    const globalHidden = hiddenTypes && hiddenTypes.length > 0 && hiddenTypes.some(
       (ht) =>
-        ht.type === typeVal && (ht.code === null || ht.code === fcode)
+        ht.type === typeVal &&
+        (ht.code === null || ht.code === fcode),
     );
+    
+    // Check per-layer hidden types
+    const layerHiddenTypes = item._layerHiddenTypes || [];
+    const layerHidden = layerHiddenTypes.length > 0 && layerHiddenTypes.some(
+      (ht) =>
+        ht.type === typeVal &&
+        (ht.code === null || ht.code === fcode),
+    );
+    
+    return globalHidden || layerHidden;
+  };
+
+  // Helper function to check if an item is hidden by code filter (global or per-layer)
+  const isHiddenByCode = (item) => {
+    const fcode = item.fcode;
+    
+    // Check global hidden codes
+    const globalHidden = hiddenCodes && hiddenCodes.includes(fcode);
+    
+    // Check per-layer hidden codes
+    const layerHiddenCodes = item._layerHiddenCodes || [];
+    const layerHidden = layerHiddenCodes.includes(fcode);
+    
+    return globalHidden || layerHidden;
   };
 
   // Helper function to check if an item is hidden by Felt filter
   const isHiddenByFeltFilter = (item, objectType) => {
-    if (!feltFilterActive || !feltHiddenValues || feltHiddenValues.length === 0)
+    if (
+      !feltFilterActive ||
+      !feltHiddenValues ||
+      feltHiddenValues.length === 0
+    )
       return false;
     const attrs = item.attributes || {};
     return feltHiddenValues.some((hidden) => {
@@ -109,7 +139,7 @@ export default function Scene3D({
       data.points,
       data.header,
       center,
-      data.lines
+      data.lines,
     );
   }, [data, center]);
 
@@ -120,14 +150,19 @@ export default function Scene3D({
         // Use Felt filter when active
         return !isHiddenByFeltFilter(pipe, 'lines');
       } else {
-        // Use Tema/Type filter when Felt is not active
-        if (hiddenCodes && hiddenCodes.includes(pipe.fcode))
-          return false;
+        // Use Tema/Type filter when Felt is not active (global + per-layer)
+        if (isHiddenByCode(pipe)) return false;
         if (isHiddenByType(pipe)) return false;
         return true;
       }
     });
-  }, [allPipes, hiddenCodes, hiddenTypes, feltFilterActive, feltHiddenValues]);
+  }, [
+    allPipes,
+    hiddenCodes,
+    hiddenTypes,
+    feltFilterActive,
+    feltHiddenValues,
+  ]);
 
   // Filter point data based on active filter mode (Tema or Felt)
   const pointData = useMemo(() => {
@@ -136,8 +171,8 @@ export default function Scene3D({
         // Use Felt filter when active
         return !isHiddenByFeltFilter(p, 'points');
       } else {
-        // Use Tema/Type filter when Felt is not active
-        if (hiddenCodes && hiddenCodes.includes(p.fcode)) return false;
+        // Use Tema/Type filter when Felt is not active (global + per-layer)
+        if (isHiddenByCode(p)) return false;
         if (isHiddenByType(p)) return false;
         return true;
       }
@@ -148,7 +183,13 @@ export default function Scene3D({
       spheres: allPointData.spheres.filter(filterPoint),
       loks: allPointData.loks.filter(filterPoint),
     };
-  }, [allPointData, hiddenCodes, hiddenTypes, feltFilterActive, feltHiddenValues]);
+  }, [
+    allPointData,
+    hiddenCodes,
+    hiddenTypes,
+    feltFilterActive,
+    feltHiddenValues,
+  ]);
 
   // Combine all point types for click detection
   const allPoints = useMemo(() => {
@@ -161,7 +202,8 @@ export default function Scene3D({
 
   // Compute 3D marker position when hovering profile plot
   const hoveredProfileMarker = useMemo(() => {
-    if (!hoveredTerrainPoint || selectedPipeIndex === null) return null;
+    if (!hoveredTerrainPoint || selectedPipeIndex === null)
+      return null;
     const line = data?.lines?.[selectedPipeIndex];
     const coords = line?.coordinates;
     if (!coords || coords.length < 2) return null;
@@ -237,7 +279,7 @@ export default function Scene3D({
     if (selectedObject.type === 'point') {
       // Find the point in allPoints by pointIndex
       const point = allPoints.find(
-        (p) => p.pointIndex === selectedObject.index
+        (p) => p.pointIndex === selectedObject.index,
       );
       if (point) {
         targetPosition = point.position;
@@ -245,30 +287,26 @@ export default function Scene3D({
     } else if (selectedObject.type === 'line') {
       // Focus on the full extent of the line and align view with its direction
       const lineSegments = pipes.filter(
-        (p) => p.lineIndex === selectedObject.index
+        (p) => p.lineIndex === selectedObject.index,
       );
       if (lineSegments.length > 0) {
-        const min = new THREE.Vector3(
-          Infinity,
-          Infinity,
-          Infinity
-        );
+        const min = new THREE.Vector3(Infinity, Infinity, Infinity);
         const max = new THREE.Vector3(
           -Infinity,
           -Infinity,
-          -Infinity
+          -Infinity,
         );
 
         lineSegments.forEach((seg) => {
           const s = new THREE.Vector3(
             seg.start[0],
             seg.start[1],
-            seg.start[2]
+            seg.start[2],
           );
           const e = new THREE.Vector3(
             seg.end[0],
             seg.end[1],
-            seg.end[2]
+            seg.end[2],
           );
           min.min(s);
           min.min(e);
@@ -287,7 +325,7 @@ export default function Scene3D({
         const dir = new THREE.Vector3(
           last.end[0] - first.start[0],
           0,
-          last.end[2] - first.start[2]
+          last.end[2] - first.start[2],
         );
         if (dir.lengthSq() < 1e-6) {
           dir.set(1, 0, 0);
@@ -299,7 +337,7 @@ export default function Scene3D({
 
         const extentVec = new THREE.Vector3().subVectors(max, min);
         const extentXZ = Math.sqrt(
-          extentVec.x * extentVec.x + extentVec.z * extentVec.z
+          extentVec.x * extentVec.x + extentVec.z * extentVec.z,
         );
         const extentY = Math.max(1, extentVec.y);
 
@@ -307,8 +345,8 @@ export default function Scene3D({
         const vFov = THREE.MathUtils.degToRad(camera.fov || 60);
         const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
 
-        const distX = (extentXZ / 2) / Math.tan(hFov / 2);
-        const distY = (extentY / 2) / Math.tan(vFov / 2);
+        const distX = extentXZ / 2 / Math.tan(hFov / 2);
+        const distY = extentY / 2 / Math.tan(vFov / 2);
         const distance = Math.max(30, distX, distY) * 1.2;
         const height = Math.max(20, extentY * 0.6, distance * 0.35);
 
@@ -316,7 +354,7 @@ export default function Scene3D({
         camera.position.set(
           center.x + perp.x * distance,
           center.y + height,
-          center.z + perp.z * distance
+          center.z + perp.z * distance,
         );
       }
     }
@@ -326,7 +364,7 @@ export default function Scene3D({
       controlsRef.current.target.set(
         targetPosition[0],
         targetPosition[1],
-        targetPosition[2]
+        targetPosition[2],
       );
 
       controlsRef.current.update();
@@ -379,7 +417,7 @@ export default function Scene3D({
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(
         scene.children,
-        true
+        true,
       );
 
       if (
@@ -391,7 +429,7 @@ export default function Scene3D({
         hoveredPointRef.current = null;
       }
     },
-    [gl, camera, raycaster, scene]
+    [gl, camera, raycaster, scene],
   );
 
   // Handle wheel event for hover-to-zoom
@@ -437,7 +475,7 @@ export default function Scene3D({
       // Check intersections with all objects in the scene
       const intersects = raycaster.intersectObjects(
         scene.children,
-        true
+        true,
       );
 
       if (intersects.length > 0) {
@@ -475,7 +513,7 @@ export default function Scene3D({
                   featureId: `ledninger-${lineIndex}`,
                   lineIndex: lineIndex, // Include lineIndex for profilanalyse integration
                 },
-                event
+                event,
               );
             }
           } else if (intersect.object.userData?.type === 'point') {
@@ -524,7 +562,7 @@ export default function Scene3D({
                     featureId: `punkter-${pointIndex}`,
                     pointIndex: pointIndex,
                   },
-                  event
+                  event,
                 );
               }
             }
@@ -545,7 +583,7 @@ export default function Scene3D({
       pipes,
       pointData,
       onObjectClick,
-    ]
+    ],
   );
 
   useEffect(() => {
@@ -618,7 +656,7 @@ export default function Scene3D({
         minDistance={1}
         maxDistance={Math.max(
           2000,
-          Math.max(extent.width, extent.depth) * 2
+          Math.max(extent.width, extent.depth) * 2,
         )}
         maxPolarAngle={Math.PI / 1.5}
         zoomSpeed={2}
@@ -645,7 +683,7 @@ export default function Scene3D({
           sectionColor="#9d4b4b"
           fadeDistance={Math.max(
             1000,
-            Math.max(extent.width, extent.depth) * 0.8
+            Math.max(extent.width, extent.depth) * 0.8,
           )}
           fadeStrength={1}
           followCamera={false}
