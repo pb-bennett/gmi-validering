@@ -116,6 +116,7 @@ const useStore = create(
             // Layer management UI state
             expandedLayerId: null, // Only one layer expanded at a time
             highlightedLayerId: null, // Layer being hovered in sidebar
+            mapUpdateNonce: 0,
           },
           // Initial layer state template for creating new layers
           layerTemplate: {
@@ -1030,7 +1031,7 @@ const useStore = create(
                   ? current.filter((_, i) => i !== existingIndex)
                   : [...current, { fieldName, value, objectType }];
               return {
-                ui: { ...state.ui, feltHiddenValues: newHidden },
+                ui: { ...state.ui, feltHiddenValues: newHidden, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 },
               };
             },
             false,
@@ -1253,7 +1254,7 @@ const useStore = create(
                 ? currentHidden.filter((c) => c !== code)
                 : [...currentHidden, code];
               return {
-                ui: { ...state.ui, hiddenCodes: newHidden },
+                ui: { ...state.ui, hiddenCodes: newHidden, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 },
               };
             },
             false,
@@ -1279,7 +1280,7 @@ const useStore = create(
                       { type: typeVal, code: codeContext },
                     ];
               return {
-                ui: { ...state.ui, hiddenTypes: newHidden },
+                ui: { ...state.ui, hiddenTypes: newHidden, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 },
               };
             },
             false,
@@ -1611,6 +1612,7 @@ const useStore = create(
                   visible: !state.layers[layerId].visible,
                 },
               },
+              ui: { ...state.ui, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 },
             }),
             false,
             'layers/toggleVisibility',
@@ -1629,7 +1631,7 @@ const useStore = create(
               for (const id of state.layerOrder) {
                 updatedLayers[id] = { ...state.layers[id], visible: true };
               }
-              return { layers: { ...state.layers, ...updatedLayers } };
+              return { layers: { ...state.layers, ...updatedLayers }, ui: { ...state.ui, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 } };
             },
             false,
             'layers/showAll',
@@ -1645,7 +1647,7 @@ const useStore = create(
               for (const id of state.layerOrder) {
                 updatedLayers[id] = { ...state.layers[id], visible: false };
               }
-              return { layers: { ...state.layers, ...updatedLayers } };
+              return { layers: { ...state.layers, ...updatedLayers }, ui: { ...state.ui, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 } };
             },
             false,
             'layers/hideAll',
@@ -1697,6 +1699,7 @@ const useStore = create(
                     highlightAll: !layer.highlightAll,
                   },
                 },
+                ui: { ...state.ui, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 },
               };
             },
             false,
@@ -1720,6 +1723,7 @@ const useStore = create(
                   ...state.layers,
                   [layerId]: { ...layer, hiddenCodes: newHidden },
                 },
+                ui: { ...state.ui, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 },
               };
             },
             false,
@@ -1747,6 +1751,7 @@ const useStore = create(
                   ...state.layers,
                   [layerId]: { ...layer, hiddenTypes: newHidden },
                 },
+                ui: { ...state.ui, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 },
               };
             },
             false,
@@ -1777,6 +1782,7 @@ const useStore = create(
                   ...state.layers,
                   [layerId]: { ...layer, feltHiddenValues: newHidden },
                 },
+                ui: { ...state.ui, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 },
               };
             },
             false,

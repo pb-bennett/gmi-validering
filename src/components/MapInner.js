@@ -1935,18 +1935,8 @@ export default function MapInner({ onZoomChange }) {
     return `single:${headerName}:${pointsCount}:${linesCount}`;
   }, [data, layers, layerOrder]);
 
-  // Compact per-layer felt signature used to detect changes in per-layer felt filters
-  const layerFvSignature = useMemo(() => {
-    return layerOrder
-      .map((id) => (layers[id]?.feltHiddenValues || []).map((v) => `${v.fieldName}=${v.value}`).join('|'))
-      .join(';');
-  }, [layers, layerOrder]);
-
-  const [geoJsonNonce, setGeoJsonNonce] = useState(0);
-  useEffect(() => {
-    // Bump the nonce when per-layer felt state or global felt state changes so GeoJSON remounts
-    setGeoJsonNonce((n) => n + 1);
-  }, [layerFvSignature, feltHiddenValues]);
+  // Use store-level map update nonce to trigger GeoJSON remounts when filters/visibility change
+  const mapUpdateNonce = useStore((state) => state.ui.mapUpdateNonce);
 
   // Check if we have any data to render - show map even with empty features if layers exist
   const hasData = data || layerOrder.length > 0;
@@ -2443,7 +2433,7 @@ export default function MapInner({ onZoomChange }) {
               highlightedFeltValue || 'none'
             }-${highlightedFeltObjectType || 'none'}-fieldValidation-${
               fieldValidationFilterActive ? 'on' : 'off'
-            }-measure-${measureMode ? 'on' : 'off'}-layers-${layerOrder.join(',')}-layerVis-${layerOrder.map(id => layers[id]?.visible ? '1' : '0').join('')}-layerHl-${layerOrder.map(id => layers[id]?.highlightAll ? '1' : '0').join('')}-layerFv-${layerFvSignature}-nonce-${geoJsonNonce}`}
+            }-measure-${measureMode ? 'on' : 'off'}-layers-${layerOrder.join(',')}-layerVis-${layerOrder.map(id => layers[id]?.visible ? '1' : '0').join('')}-layerHl-${layerOrder.map(id => layers[id]?.highlightAll ? '1' : '0').join('')}-mapUpdate-${mapUpdateNonce}`}
             data={geoJsonData}
             style={lineStyle}
             pointToLayer={pointToLayer}
