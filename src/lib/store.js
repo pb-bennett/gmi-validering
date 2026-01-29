@@ -1782,7 +1782,11 @@ const useStore = create(
                   ...state.layers,
                   [layerId]: { ...layer, feltHiddenValues: newHidden },
                 },
-                ui: { ...state.ui, mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1 },
+                ui: {
+                  ...state.ui,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                  feltFilterActive: true,
+                },
               };
             },
             false,

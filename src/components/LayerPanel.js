@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import useStore from '@/lib/store';
 import fieldsData from '@/data/fields.json';
 import { analyzeIncline } from '@/lib/analysis/incline';
@@ -118,8 +118,7 @@ function LayerAnalysisButtons({ layerId, layer }) {
 /**
  * Collapsible section for Tema filtering within a layer
  */
-function LayerTemaSection({ layerId, layer, codeLookups }) {
-  const [isOpen, setIsOpen] = useState(false);
+function LayerTemaSection({ layerId, layer, codeLookups, isOpen, onToggle }) {
   const setHighlightedCode = useStore((state) => state.setHighlightedCode);
   const setHighlightedType = useStore((state) => state.setHighlightedType);
   const toggleLayerHiddenCode = useStore((state) => state.toggleLayerHiddenCode);
@@ -161,7 +160,7 @@ function LayerTemaSection({ layerId, layer, codeLookups }) {
   return (
     <div className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={onToggle}
         className="w-full flex items-center justify-between p-2 transition-colors text-left hover:bg-gray-50"
       >
         <div className="flex items-center gap-2">
@@ -464,8 +463,7 @@ function LayerFeltValueSection({
 /**
  * Collapsible section for Felt filtering within a layer
  */
-function LayerFeltSection({ layerId, layer }) {
-  const [isOpen, setIsOpen] = useState(false);
+function LayerFeltSection({ layerId, layer, isOpen, onToggle, setGlobalFeltActive }) {
   const [tab, setTab] = useState('punkter');
   const toggleLayerFeltHiddenValue = useStore((state) => state.toggleLayerFeltHiddenValue);
   const setHighlightedFelt = useStore((state) => state.setHighlightedFelt);
@@ -534,7 +532,10 @@ function LayerFeltSection({ layerId, layer }) {
   return (
     <div className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          onToggle();
+          setGlobalFeltActive(true);
+        }}
         className="w-full flex items-center justify-between p-2 transition-colors text-left hover:bg-gray-50"
       >
         <div className="flex items-center gap-2">
@@ -632,6 +633,8 @@ export default function LayerPanel({ layerId, codeLookups }) {
   const setExpandedLayer = useStore((state) => state.setExpandedLayer);
   const toggleLayerVisibility = useStore((state) => state.toggleLayerVisibility);
   const removeLayer = useStore((state) => state.removeLayer);
+  const feltFilterActive = useStore((state) => state.ui.feltFilterActive);
+  const setFeltFilterActive = useStore((state) => state.setFeltFilterActive);
 
   if (!layer) return null;
 
@@ -639,6 +642,43 @@ export default function LayerPanel({ layerId, codeLookups }) {
   const data = layer.data;
   const pointCount = data?.points?.length || 0;
   const lineCount = data?.lines?.length || 0;
+
+  // Inner section state: 'tema' | 'felt' | null
+  const [innerOpen, setInnerOpen] = useState(() => {
+    if (feltFilterActive || (layer?.feltHiddenValues?.length > 0)) return 'felt';
+    if ((layer?.hiddenCodes?.length > 0) || (layer?.hiddenTypes?.length > 0)) return 'tema';
+    return null;
+  });
+
+  useEffect(() => {
+    if (feltFilterActive || (layer?.feltHiddenValues?.length > 0)) {
+      setInnerOpen('felt');
+    } else if ((layer?.hiddenCodes?.length > 0) || (layer?.hiddenTypes?.length > 0)) {
+      setInnerOpen('tema');
+    } else {
+      setInnerOpen(null);
+    }
+  }, [feltFilterActive, layer?.feltHiddenValues?.length, layer?.hiddenCodes?.length, layer?.hiddenTypes?.length]);
+
+  const toggleTema = () => {
+    if (innerOpen === 'tema') {
+      setInnerOpen(null);
+      setFeltFilterActive(false);
+    } else {
+      setInnerOpen('tema');
+      setFeltFilterActive(false);
+    }
+  };
+
+  const toggleFelt = () => {
+    if (innerOpen === 'felt') {
+      setInnerOpen(null);
+      setFeltFilterActive(false);
+    } else {
+      setInnerOpen('felt');
+      setFeltFilterActive(true);
+    }
+  };
 
   return (
     <div
@@ -707,10 +747,10 @@ export default function LayerPanel({ layerId, codeLookups }) {
           </div>
 
           {/* Tema section */}
-          <LayerTemaSection layerId={layerId} layer={layer} codeLookups={codeLookups} />
+          <LayerTemaSection layerId={layerId} layer={layer} codeLookups={codeLookups} isOpen={innerOpen === 'tema'} onToggle={toggleTema} />
 
           {/* Felt section */}
-          <LayerFeltSection layerId={layerId} layer={layer} />
+          <LayerFeltSection layerId={layerId} layer={layer} isOpen={innerOpen === 'felt'} onToggle={toggleFelt} setGlobalFeltActive={setFeltFilterActive} />
         </div>
       )}
     </div>
