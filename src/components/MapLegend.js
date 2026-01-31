@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { FCODE_COLORS, LEGEND_ITEMS, getLegendSvg } from './MapInner';
 import useStore from '@/lib/store';
+import { useShallow } from 'zustand/react/shallow';
 
 /**
  * MapLegend — Floating legend overlay for the map
@@ -16,19 +17,21 @@ export default function MapLegend() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const data = useStore((state) => state.data);
   const layers = useStore((state) => state.layers);
-  const layerOrder = useStore((state) => state.layerOrder);
+  const layerOrder = useStore(
+    useShallow((state) => state.layerOrder),
+  );
   const isMultiLayerMode = layerOrder && layerOrder.length > 0;
 
   // Get categories that are actually present in the data (merged from all visible layers)
   const presentCategories = useMemo(() => {
     const categories = new Set();
-    
+
     if (isMultiLayerMode) {
       // Collect categories from all visible layers
       for (const layerId of layerOrder) {
         const layer = layers[layerId];
         if (!layer || !layer.visible || !layer.data) continue;
-        
+
         // Check points in this layer
         if (layer.data.points) {
           layer.data.points.forEach((point) => {
@@ -38,7 +41,7 @@ export default function MapLegend() {
             }
           });
         }
-        
+
         // Check lines in this layer
         if (layer.data.lines) {
           layer.data.lines.forEach((line) => {
@@ -52,7 +55,7 @@ export default function MapLegend() {
     } else {
       // Legacy single-data mode
       if (!data) return categories;
-      
+
       // Check points
       if (data.points) {
         data.points.forEach((point) => {
@@ -62,7 +65,7 @@ export default function MapLegend() {
           }
         });
       }
-      
+
       // Check lines
       if (data.lines) {
         data.lines.forEach((line) => {
@@ -140,7 +143,9 @@ export default function MapLegend() {
   }, [presentCategories]);
 
   // Don't show legend if no data or no visible items
-  const hasData = isMultiLayerMode ? layerOrder.some(id => layers[id]?.visible && layers[id]?.data) : !!data;
+  const hasData = isMultiLayerMode
+    ? layerOrder.some((id) => layers[id]?.visible && layers[id]?.data)
+    : !!data;
   if (!hasData || visibleLegendItems.length === 0) {
     return null;
   }
@@ -214,7 +219,7 @@ export default function MapLegend() {
                     __html: getLegendSvg(
                       item.category,
                       item.color,
-                      18
+                      18,
                     ),
                   }}
                 />

@@ -3,6 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { useState, useEffect, useMemo } from 'react';
 import useStore from '@/lib/store';
+import { useShallow } from 'zustand/react/shallow';
 import Scene3D from './Scene3D';
 import Controls3D from './Controls3D';
 import Tooltip3D from './Tooltip3D';
@@ -11,9 +12,11 @@ import Legend3D from './Legend3D';
 export default function Viewer3D() {
   const data = useStore((state) => state.data);
   const layers = useStore((state) => state.layers);
-  const layerOrder = useStore((state) => state.layerOrder);
+  const layerOrder = useStore(
+    useShallow((state) => state.layerOrder),
+  );
   const isMultiLayerMode = layerOrder && layerOrder.length > 0;
-  
+
   const hiddenCodes = useStore(
     (state) => state.ui?.hiddenCodes || [],
   );
@@ -62,23 +65,23 @@ export default function Viewer3D() {
     if (!isMultiLayerMode) {
       return data;
     }
-    
+
     // Combine all visible layer data
     const combined = {
       header: null,
       points: [],
       lines: [],
     };
-    
+
     for (const layerId of layerOrder) {
       const layer = layers[layerId];
       if (!layer || !layer.visible || !layer.data) continue;
-      
+
       // Use header from first layer with data
       if (!combined.header && layer.data.header) {
         combined.header = layer.data.header;
       }
-      
+
       // Collect points with layer metadata
       if (layer.data.points) {
         layer.data.points.forEach((point, idx) => {
@@ -91,7 +94,7 @@ export default function Viewer3D() {
           });
         });
       }
-      
+
       // Collect lines with layer metadata
       if (layer.data.lines) {
         layer.data.lines.forEach((line, idx) => {
@@ -105,8 +108,10 @@ export default function Viewer3D() {
         });
       }
     }
-    
-    return combined.points.length > 0 || combined.lines.length > 0 ? combined : null;
+
+    return combined.points.length > 0 || combined.lines.length > 0
+      ? combined
+      : null;
   }, [isMultiLayerMode, data, layers, layerOrder]);
 
   // Clear selected object when it's been processed

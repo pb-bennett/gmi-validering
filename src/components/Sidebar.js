@@ -794,8 +794,12 @@ export default function Sidebar({ onReset, onAddFile }) {
   const file = useStore((state) => state.file);
   const data = useStore((state) => state.data);
   const layerOrder = useStore((state) => state.layerOrder);
-  const isMultiLayerMode = layerOrder.length > 0;
-  
+  const multiLayerModeEnabled = useStore(
+    (state) => state.ui.multiLayerModeEnabled,
+  );
+  const isMultiLayerMode =
+    multiLayerModeEnabled || layerOrder.length > 0;
+
   const setHighlightedCode = useStore(
     (state) => state.setHighlightedCode,
   );
@@ -1123,7 +1127,7 @@ export default function Sidebar({ onReset, onAddFile }) {
         backgroundColor: 'var(--color-card)',
         borderRightColor: 'var(--color-border)',
       }}
-      className="h-full border-r flex flex-col shadow-xl z-20 relative flex-shrink-0"
+      className="h-full border-r flex flex-col shadow-xl z-[10000] relative flex-shrink-0"
     >
       {/* Resize Handle */}
       <div
@@ -1200,794 +1204,822 @@ export default function Sidebar({ onReset, onAddFile }) {
       ) : (
         /* Legacy single-file mode */
         <div className="flex-1 overflow-y-auto">
-        {/* Oversikt */}
-        <SidebarSection
-          title="Oversikt"
-          isOpen={openSection === 'oversikt'}
-          onToggle={() => toggleSection('oversikt')}
-        >
-          <div className="space-y-3">
-            {/* File Info */}
-            <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100">
-              <div className="mb-2">
-                <span className="text-xs text-gray-500 block mb-1">
-                  Filnavn
-                </span>
-                <span className="font-medium text-gray-900 break-all block text-sm">
-                  {file?.name}
-                </span>
-              </div>
-              <div className="mb-2">
-                <span className="text-xs text-gray-500 block mb-1">
-                  Filtype
-                </span>
-                <span className="font-medium text-gray-900 text-sm">
-                  {data?.format || file?.format || 'Ukjent'}
-                </span>
-              </div>
-              <div>
-                <span className="text-xs text-gray-500 block mb-1">
-                  Størrelse
-                </span>
-                <span className="font-medium text-gray-900 text-sm">
-                  {(file?.size / 1024).toFixed(1)} KB
-                </span>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-1 gap-2">
-              <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
-                <span className="text-gray-600 text-xs">Punkter</span>
-                <span className="font-bold text-primary text-sm">
-                  {stats.pointCount}
-                </span>
-              </div>
-              <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
-                <span className="text-gray-600 text-xs">
-                  Ledninger
-                </span>
-                <span className="font-bold text-primary text-sm">
-                  {stats.lineCount}
-                </span>
-              </div>
+          {/* Oversikt */}
+          <SidebarSection
+            title="Oversikt"
+            isOpen={openSection === 'oversikt'}
+            onToggle={() => toggleSection('oversikt')}
+          >
+            <div className="space-y-3">
+              {/* File Info */}
               <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100">
-                <span className="text-gray-600 text-xs block mb-1">
-                  Total lengde
-                </span>
-                <span className="font-bold text-primary text-sm">
-                  {stats.totalLength.toLocaleString('nb-NO')}{' '}
-                  <span className="text-xs font-normal text-gray-500">
-                    meter
+                <div className="mb-2">
+                  <span className="text-xs text-gray-500 block mb-1">
+                    Filnavn
                   </span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </SidebarSection>
-
-        {/* Tema */}
-        <SidebarSection
-          title="Tema"
-          isOpen={openSection === 'tema'}
-          onToggle={() => toggleSection('tema')}
-        >
-          <div className="space-y-3">
-            {/* Points Table */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Punkter
-                </h3>
-                {Object.keys(stats.temaStats.points).length > 0 && (
-                  <button
-                    onClick={() => {
-                      const pointCodes = Object.keys(
-                        stats.temaStats.points,
-                      );
-                      const allHidden = pointCodes.every((code) =>
-                        hiddenCodes.includes(code),
-                      );
-                      if (allHidden) {
-                        // Show all: remove all point codes from hiddenCodes
-                        pointCodes.forEach((code) => {
-                          if (hiddenCodes.includes(code)) {
-                            toggleHiddenCode(code);
-                          }
-                        });
-                      } else {
-                        // Hide all: add all point codes to hiddenCodes
-                        pointCodes.forEach((code) => {
-                          if (!hiddenCodes.includes(code)) {
-                            toggleHiddenCode(code);
-                          }
-                        });
-                      }
-                    }}
-                    className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
-                  >
-                    {Object.keys(stats.temaStats.points).every(
-                      (code) => hiddenCodes.includes(code),
-                    )
-                      ? 'Vis alle'
-                      : 'Skjul alle'}
-                  </button>
-                )}
-              </div>
-              {Object.keys(stats.temaStats.points).length > 0 ? (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-2.5 py-1.5 text-left text-xs font-medium text-gray-500 uppercase">
-                          Kode / Beskrivelse
-                        </th>
-                        <th className="px-2.5 py-1.5 text-right text-xs font-medium text-gray-500 uppercase">
-                          Antall
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {Object.entries(stats.temaStats.points)
-                        .sort(([, a], [, b]) => b.count - a.count)
-                        .map(([code, data]) => {
-                          const label =
-                            codeLookups.punktMap.get(code);
-                          const isUnknown = !label;
-                          const isHidden = hiddenCodes.includes(code);
-                          const hasTypes =
-                            Object.keys(data.types).length > 0 &&
-                            !(
-                              Object.keys(data.types).length === 1 &&
-                              data.types['(Mangler Type)']
-                            );
-
-                          return (
-                            <React.Fragment key={code}>
-                              <tr
-                                className={`hover:bg-gray-50 cursor-pointer transition-colors ${
-                                  isHidden ? 'opacity-50' : ''
-                                }`}
-                                onMouseEnter={() =>
-                                  setHighlightedCode(code)
-                                }
-                                onMouseLeave={() =>
-                                  setHighlightedCode(null)
-                                }
-                              >
-                                <td className="px-3 py-2">
-                                  <div className="flex items-start gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={!isHidden}
-                                      onChange={(e) => {
-                                        e.stopPropagation();
-                                        toggleHiddenCode(code);
-                                      }}
-                                      className="mt-1 h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    <div>
-                                      <div
-                                        className={`font-mono text-xs font-bold ${
-                                          isUnknown
-                                            ? 'text-red-600'
-                                            : 'text-gray-900'
-                                        }`}
-                                      >
-                                        {code}
-                                      </div>
-                                      <div
-                                        className={`text-xs ${
-                                          isUnknown
-                                            ? 'text-red-500 italic'
-                                            : 'text-gray-500'
-                                        }`}
-                                      >
-                                        {label || 'Ukjent kode'}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2 text-right text-gray-600 font-medium align-top">
-                                  {data.count}
-                                </td>
-                              </tr>
-                              {hasTypes && (
-                                <tr className="bg-gray-50/50">
-                                  <td
-                                    colSpan="2"
-                                    className="px-3 py-1 pb-2"
-                                  >
-                                    <div className="ml-8 text-xs border-l-2 border-gray-200 pl-2 space-y-1">
-                                      {Object.entries(data.types)
-                                        .sort(([, a], [, b]) => b - a)
-                                        .map(
-                                          ([typeVal, typeCount]) => {
-                                            const isTypeHidden =
-                                              hiddenTypes.some(
-                                                (ht) =>
-                                                  ht.type ===
-                                                    typeVal &&
-                                                  ht.code === code,
-                                              );
-                                            return (
-                                              <div
-                                                key={typeVal}
-                                                className={`flex justify-between items-center text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors ${
-                                                  isTypeHidden
-                                                    ? 'opacity-50'
-                                                    : ''
-                                                }`}
-                                                onMouseEnter={() =>
-                                                  setHighlightedType(
-                                                    typeVal,
-                                                    code,
-                                                  )
-                                                }
-                                                onMouseLeave={() =>
-                                                  setHighlightedType(
-                                                    null,
-                                                    null,
-                                                  )
-                                                }
-                                              >
-                                                <div className="flex items-center gap-1">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={
-                                                      !isTypeHidden
-                                                    }
-                                                    onChange={(e) => {
-                                                      e.stopPropagation();
-                                                      toggleHiddenType(
-                                                        typeVal,
-                                                        code,
-                                                      );
-                                                    }}
-                                                    className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                  />
-                                                  <span
-                                                    className={
-                                                      typeVal ===
-                                                      '(Mangler Type)'
-                                                        ? 'italic text-red-400'
-                                                        : ''
-                                                    }
-                                                  >
-                                                    {typeVal}
-                                                  </span>
-                                                </div>
-                                                <span className="font-mono text-gray-400">
-                                                  {typeCount}
-                                                </span>
-                                              </div>
-                                            );
-                                          },
-                                        )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                    </tbody>
-                  </table>
+                  <span className="font-medium text-gray-900 break-all block text-sm">
+                    {file?.name}
+                  </span>
                 </div>
-              ) : (
-                <p className="text-sm text-gray-500 italic">
-                  Ingen punkter funnet.
-                </p>
-              )}
-            </div>
-
-            {/* Lines Table - LEDNINGER SECTION */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Ledninger
-                </h3>
-                {Object.keys(stats.temaStats.lines).length > 0 && (
-                  <button
-                    onClick={() => {
-                      const lineCodes = Object.keys(
-                        stats.temaStats.lines,
-                      );
-                      const allHidden = lineCodes.every((code) =>
-                        hiddenCodes.includes(code),
-                      );
-                      if (allHidden) {
-                        // Show all: remove all line codes from hiddenCodes
-                        lineCodes.forEach((code) => {
-                          if (hiddenCodes.includes(code)) {
-                            toggleHiddenCode(code);
-                          }
-                        });
-                      } else {
-                        // Hide all: add all line codes to hiddenCodes
-                        lineCodes.forEach((code) => {
-                          if (!hiddenCodes.includes(code)) {
-                            toggleHiddenCode(code);
-                          }
-                        });
-                      }
-                    }}
-                    className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
-                  >
-                    {Object.keys(stats.temaStats.lines).every(
-                      (code) => hiddenCodes.includes(code),
-                    )
-                      ? 'Vis alle'
-                      : 'Skjul alle'}
-                  </button>
-                )}
-              </div>
-              {Object.keys(stats.temaStats.lines).length > 0 ? (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                          Kode / Beskrivelse
-                        </th>
-                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                          Antall
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {Object.entries(stats.temaStats.lines)
-                        .sort(([, a], [, b]) => b.count - a.count)
-                        .map(([code, data]) => {
-                          const label = codeLookups.ledMap.get(code);
-                          const isUnknown = !label;
-                          const isHidden = hiddenCodes.includes(code);
-                          const hasTypes =
-                            Object.keys(data.types).length > 0 &&
-                            !(
-                              Object.keys(data.types).length === 1 &&
-                              data.types['(Mangler Type)']
-                            );
-
-                          return (
-                            <React.Fragment key={code}>
-                              <tr
-                                className={`hover:bg-gray-50 cursor-pointer transition-colors ${
-                                  isHidden ? 'opacity-50' : ''
-                                }`}
-                                onMouseEnter={() =>
-                                  setHighlightedCode(code)
-                                }
-                                onMouseLeave={() =>
-                                  setHighlightedCode(null)
-                                }
-                              >
-                                <td className="px-3 py-2">
-                                  <div className="flex items-start gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={!isHidden}
-                                      onChange={(e) => {
-                                        e.stopPropagation();
-                                        toggleHiddenCode(code);
-                                      }}
-                                      className="mt-1 h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    <div>
-                                      <div
-                                        className={`font-mono text-xs font-bold ${
-                                          isUnknown
-                                            ? 'text-red-600'
-                                            : 'text-gray-900'
-                                        }`}
-                                      >
-                                        {code}
-                                      </div>
-                                      <div
-                                        className={`text-xs ${
-                                          isUnknown
-                                            ? 'text-red-500 italic'
-                                            : 'text-gray-500'
-                                        }`}
-                                      >
-                                        {label || 'Ukjent kode'}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2 text-right text-gray-600 font-medium align-top">
-                                  {data.count}
-                                </td>
-                              </tr>
-                              {hasTypes && (
-                                <tr className="bg-gray-50/50">
-                                  <td
-                                    colSpan="2"
-                                    className="px-3 py-1 pb-2"
-                                  >
-                                    <div className="ml-8 text-xs border-l-2 border-gray-200 pl-2 space-y-1">
-                                      {Object.entries(data.types)
-                                        .sort(([, a], [, b]) => b - a)
-                                        .map(
-                                          ([typeVal, typeCount]) => {
-                                            const isTypeHidden =
-                                              hiddenTypes.some(
-                                                (ht) =>
-                                                  ht.type ===
-                                                    typeVal &&
-                                                  ht.code === code,
-                                              );
-                                            return (
-                                              <div
-                                                key={typeVal}
-                                                className={`flex justify-between items-center text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors ${
-                                                  isTypeHidden
-                                                    ? 'opacity-50'
-                                                    : ''
-                                                }`}
-                                                onMouseEnter={() =>
-                                                  setHighlightedType(
-                                                    typeVal,
-                                                    code,
-                                                  )
-                                                }
-                                                onMouseLeave={() =>
-                                                  setHighlightedType(
-                                                    null,
-                                                    null,
-                                                  )
-                                                }
-                                              >
-                                                <div className="flex items-center gap-1">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={
-                                                      !isTypeHidden
-                                                    }
-                                                    onChange={(e) => {
-                                                      e.stopPropagation();
-                                                      toggleHiddenType(
-                                                        typeVal,
-                                                        code,
-                                                      );
-                                                    }}
-                                                    className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                  />
-                                                  <span
-                                                    className={
-                                                      typeVal ===
-                                                      '(Mangler Type)'
-                                                        ? 'italic text-red-400'
-                                                        : ''
-                                                    }
-                                                  >
-                                                    {typeVal}
-                                                  </span>
-                                                </div>
-                                                <span className="font-mono text-gray-400">
-                                                  {typeCount}
-                                                </span>
-                                              </div>
-                                            );
-                                          },
-                                        )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                    </tbody>
-                  </table>
+                <div className="mb-2">
+                  <span className="text-xs text-gray-500 block mb-1">
+                    Filtype
+                  </span>
+                  <span className="font-medium text-gray-900 text-sm">
+                    {data?.format || file?.format || 'Ukjent'}
+                  </span>
                 </div>
-              ) : (
-                <p className="text-sm text-gray-500 italic">
-                  Ingen ledninger funnet.
-                </p>
-              )}
-            </div>
-          </div>
-        </SidebarSection>
-
-        {/* Felt */}
-        <SidebarSection
-          title="Felt"
-          isOpen={openSection === 'felt'}
-          onToggle={() => toggleSection('felt')}
-        >
-          {stats?.fieldAnalysis ? (
-            <div className="space-y-2">
-              {/* Open Data Table Button */}
-              <button
-                onClick={toggleDataTable}
-                className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
-                style={{
-                  backgroundColor: 'var(--color-primary)',
-                  color: 'white',
-                  borderColor: 'var(--color-primary-dark)',
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    'var(--color-primary-dark)')
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    'var(--color-primary)')
-                }
-              >
-                Åpne full datatabell
-              </button>
-
-              {/* Tabs */}
-              <div
-                className="flex border-b"
-                style={{ borderColor: 'var(--color-border)' }}
-              >
-                <button
-                  onClick={() => setFeltTab('punkter')}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                    feltTab === 'punkter' ? 'border-b-2' : ''
-                  }`}
-                  style={{
-                    color:
-                      feltTab === 'punkter'
-                        ? 'var(--color-primary)'
-                        : 'var(--color-text-secondary)',
-                    borderColor:
-                      feltTab === 'punkter'
-                        ? 'var(--color-primary)'
-                        : 'transparent',
-                  }}
-                >
-                  Punkter (
-                  {stats.fieldAnalysis.points.fieldOrder.length} felt)
-                </button>
-                <button
-                  onClick={() => setFeltTab('ledninger')}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                    feltTab === 'ledninger' ? 'border-b-2' : ''
-                  }`}
-                  style={{
-                    color:
-                      feltTab === 'ledninger'
-                        ? 'var(--color-primary)'
-                        : 'var(--color-text-secondary)',
-                    borderColor:
-                      feltTab === 'ledninger'
-                        ? 'var(--color-primary)'
-                        : 'transparent',
-                  }}
-                >
-                  Ledninger (
-                  {stats.fieldAnalysis.lines.fieldOrder.length} felt)
-                </button>
+                <div>
+                  <span className="text-xs text-gray-500 block mb-1">
+                    Størrelse
+                  </span>
+                  <span className="font-medium text-gray-900 text-sm">
+                    {(file?.size / 1024).toFixed(1)} KB
+                  </span>
+                </div>
               </div>
 
-              {/* Search and clear filters */}
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  placeholder="Søk i feltverdier..."
-                  value={feltSearchText || ''}
-                  onChange={(e) => setFeltSearchText(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded border focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  style={{
-                    backgroundColor: 'var(--color-bg)',
-                    borderColor: 'var(--color-border)',
-                    color: 'var(--color-text)',
-                  }}
-                />
-                {feltHiddenValues && feltHiddenValues.length > 0 && (
-                  <div className="flex items-center justify-between px-1">
-                    <span className="text-[10px] text-yellow-600">
-                      {feltHiddenValues.length} verdi
-                      {feltHiddenValues.length !== 1 ? 'er' : ''}{' '}
-                      skjult
+              {/* Stats */}
+              <div className="grid grid-cols-1 gap-2">
+                <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
+                  <span className="text-gray-600 text-xs">
+                    Punkter
+                  </span>
+                  <span className="font-bold text-primary text-sm">
+                    {stats.pointCount}
+                  </span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
+                  <span className="text-gray-600 text-xs">
+                    Ledninger
+                  </span>
+                  <span className="font-bold text-primary text-sm">
+                    {stats.lineCount}
+                  </span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100">
+                  <span className="text-gray-600 text-xs block mb-1">
+                    Total lengde
+                  </span>
+                  <span className="font-bold text-primary text-sm">
+                    {stats.totalLength.toLocaleString('nb-NO')}{' '}
+                    <span className="text-xs font-normal text-gray-500">
+                      meter
                     </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </SidebarSection>
+
+          {/* Tema */}
+          <SidebarSection
+            title="Tema"
+            isOpen={openSection === 'tema'}
+            onToggle={() => toggleSection('tema')}
+          >
+            <div className="space-y-3">
+              {/* Points Table */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Punkter
+                  </h3>
+                  {Object.keys(stats.temaStats.points).length > 0 && (
                     <button
-                      onClick={clearFeltFilter}
-                      className="text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
+                      onClick={() => {
+                        const pointCodes = Object.keys(
+                          stats.temaStats.points,
+                        );
+                        const allHidden = pointCodes.every((code) =>
+                          hiddenCodes.includes(code),
+                        );
+                        if (allHidden) {
+                          // Show all: remove all point codes from hiddenCodes
+                          pointCodes.forEach((code) => {
+                            if (hiddenCodes.includes(code)) {
+                              toggleHiddenCode(code);
+                            }
+                          });
+                        } else {
+                          // Hide all: add all point codes to hiddenCodes
+                          pointCodes.forEach((code) => {
+                            if (!hiddenCodes.includes(code)) {
+                              toggleHiddenCode(code);
+                            }
+                          });
+                        }
+                      }}
+                      className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
                     >
-                      Tilbakestill filter
+                      {Object.keys(stats.temaStats.points).every(
+                        (code) => hiddenCodes.includes(code),
+                      )
+                        ? 'Vis alle'
+                        : 'Skjul alle'}
                     </button>
+                  )}
+                </div>
+                {Object.keys(stats.temaStats.points).length > 0 ? (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-2.5 py-1.5 text-left text-xs font-medium text-gray-500 uppercase">
+                            Kode / Beskrivelse
+                          </th>
+                          <th className="px-2.5 py-1.5 text-right text-xs font-medium text-gray-500 uppercase">
+                            Antall
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {Object.entries(stats.temaStats.points)
+                          .sort(([, a], [, b]) => b.count - a.count)
+                          .map(([code, data]) => {
+                            const label =
+                              codeLookups.punktMap.get(code);
+                            const isUnknown = !label;
+                            const isHidden =
+                              hiddenCodes.includes(code);
+                            const hasTypes =
+                              Object.keys(data.types).length > 0 &&
+                              !(
+                                Object.keys(data.types).length ===
+                                  1 && data.types['(Mangler Type)']
+                              );
+
+                            return (
+                              <React.Fragment key={code}>
+                                <tr
+                                  className={`hover:bg-gray-50 cursor-pointer transition-colors ${
+                                    isHidden ? 'opacity-50' : ''
+                                  }`}
+                                  onMouseEnter={() =>
+                                    setHighlightedCode(code)
+                                  }
+                                  onMouseLeave={() =>
+                                    setHighlightedCode(null)
+                                  }
+                                >
+                                  <td className="px-3 py-2">
+                                    <div className="flex items-start gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={!isHidden}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          toggleHiddenCode(code);
+                                        }}
+                                        className="mt-1 h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                      />
+                                      <div>
+                                        <div
+                                          className={`font-mono text-xs font-bold ${
+                                            isUnknown
+                                              ? 'text-red-600'
+                                              : 'text-gray-900'
+                                          }`}
+                                        >
+                                          {code}
+                                        </div>
+                                        <div
+                                          className={`text-xs ${
+                                            isUnknown
+                                              ? 'text-red-500 italic'
+                                              : 'text-gray-500'
+                                          }`}
+                                        >
+                                          {label || 'Ukjent kode'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-gray-600 font-medium align-top">
+                                    {data.count}
+                                  </td>
+                                </tr>
+                                {hasTypes && (
+                                  <tr className="bg-gray-50/50">
+                                    <td
+                                      colSpan="2"
+                                      className="px-3 py-1 pb-2"
+                                    >
+                                      <div className="ml-8 text-xs border-l-2 border-gray-200 pl-2 space-y-1">
+                                        {Object.entries(data.types)
+                                          .sort(
+                                            ([, a], [, b]) => b - a,
+                                          )
+                                          .map(
+                                            ([
+                                              typeVal,
+                                              typeCount,
+                                            ]) => {
+                                              const isTypeHidden =
+                                                hiddenTypes.some(
+                                                  (ht) =>
+                                                    ht.type ===
+                                                      typeVal &&
+                                                    ht.code === code,
+                                                );
+                                              return (
+                                                <div
+                                                  key={typeVal}
+                                                  className={`flex justify-between items-center text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors ${
+                                                    isTypeHidden
+                                                      ? 'opacity-50'
+                                                      : ''
+                                                  }`}
+                                                  onMouseEnter={() =>
+                                                    setHighlightedType(
+                                                      typeVal,
+                                                      code,
+                                                    )
+                                                  }
+                                                  onMouseLeave={() =>
+                                                    setHighlightedType(
+                                                      null,
+                                                      null,
+                                                    )
+                                                  }
+                                                >
+                                                  <div className="flex items-center gap-1">
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={
+                                                        !isTypeHidden
+                                                      }
+                                                      onChange={(
+                                                        e,
+                                                      ) => {
+                                                        e.stopPropagation();
+                                                        toggleHiddenType(
+                                                          typeVal,
+                                                          code,
+                                                        );
+                                                      }}
+                                                      className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <span
+                                                      className={
+                                                        typeVal ===
+                                                        '(Mangler Type)'
+                                                          ? 'italic text-red-400'
+                                                          : ''
+                                                      }
+                                                    >
+                                                      {typeVal}
+                                                    </span>
+                                                  </div>
+                                                  <span className="font-mono text-gray-400">
+                                                    {typeCount}
+                                                  </span>
+                                                </div>
+                                              );
+                                            },
+                                          )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                      </tbody>
+                    </table>
                   </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">
+                    Ingen punkter funnet.
+                  </p>
                 )}
               </div>
 
-              {/* Tab Content */}
-              <div className="space-y-0">
-                {feltTab === 'punkter' &&
-                stats.fieldAnalysis.points.fieldOrder.length > 0 ? (
-                  stats.fieldAnalysis.points.fieldOrder.map(
-                    (fieldName) => {
-                      const fieldInfo =
-                        stats.fieldAnalysis.points.fields[fieldName];
+              {/* Lines Table - LEDNINGER SECTION */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Ledninger
+                  </h3>
+                  {Object.keys(stats.temaStats.lines).length > 0 && (
+                    <button
+                      onClick={() => {
+                        const lineCodes = Object.keys(
+                          stats.temaStats.lines,
+                        );
+                        const allHidden = lineCodes.every((code) =>
+                          hiddenCodes.includes(code),
+                        );
+                        if (allHidden) {
+                          // Show all: remove all line codes from hiddenCodes
+                          lineCodes.forEach((code) => {
+                            if (hiddenCodes.includes(code)) {
+                              toggleHiddenCode(code);
+                            }
+                          });
+                        } else {
+                          // Hide all: add all line codes to hiddenCodes
+                          lineCodes.forEach((code) => {
+                            if (!hiddenCodes.includes(code)) {
+                              toggleHiddenCode(code);
+                            }
+                          });
+                        }
+                      }}
+                      className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                    >
+                      {Object.keys(stats.temaStats.lines).every(
+                        (code) => hiddenCodes.includes(code),
+                      )
+                        ? 'Vis alle'
+                        : 'Skjul alle'}
+                    </button>
+                  )}
+                </div>
+                {Object.keys(stats.temaStats.lines).length > 0 ? (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                            Kode / Beskrivelse
+                          </th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                            Antall
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {Object.entries(stats.temaStats.lines)
+                          .sort(([, a], [, b]) => b.count - a.count)
+                          .map(([code, data]) => {
+                            const label =
+                              codeLookups.ledMap.get(code);
+                            const isUnknown = !label;
+                            const isHidden =
+                              hiddenCodes.includes(code);
+                            const hasTypes =
+                              Object.keys(data.types).length > 0 &&
+                              !(
+                                Object.keys(data.types).length ===
+                                  1 && data.types['(Mangler Type)']
+                              );
 
-                      // Try to find label from fields.json
-                      const fieldDefinition = fieldsData.find(
-                        (f) => f.fieldKey === fieldName,
-                      );
-                      const fieldLabel =
-                        fieldDefinition?.label || fieldName;
-
-                      return (
-                        <FieldSubSection
-                          key={fieldName}
-                          fieldName={fieldName}
-                          fieldLabel={fieldLabel}
-                          valueCounts={fieldInfo.valueCounts}
-                          totalCount={fieldInfo.totalCount}
-                          objectType="points"
-                          feltHiddenValues={feltHiddenValues}
-                          toggleFeltHiddenValue={
-                            toggleFeltHiddenValue
-                          }
-                          feltSearchText={feltSearchText}
-                          setHighlightedFelt={setHighlightedFelt}
-                        />
-                      );
-                    },
-                  )
-                ) : feltTab === 'punkter' ? (
-                  <p className="text-xs text-gray-500 italic pt-2">
-                    Ingen punktfelt tilgjengelig.
+                            return (
+                              <React.Fragment key={code}>
+                                <tr
+                                  className={`hover:bg-gray-50 cursor-pointer transition-colors ${
+                                    isHidden ? 'opacity-50' : ''
+                                  }`}
+                                  onMouseEnter={() =>
+                                    setHighlightedCode(code)
+                                  }
+                                  onMouseLeave={() =>
+                                    setHighlightedCode(null)
+                                  }
+                                >
+                                  <td className="px-3 py-2">
+                                    <div className="flex items-start gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={!isHidden}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          toggleHiddenCode(code);
+                                        }}
+                                        className="mt-1 h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                      />
+                                      <div>
+                                        <div
+                                          className={`font-mono text-xs font-bold ${
+                                            isUnknown
+                                              ? 'text-red-600'
+                                              : 'text-gray-900'
+                                          }`}
+                                        >
+                                          {code}
+                                        </div>
+                                        <div
+                                          className={`text-xs ${
+                                            isUnknown
+                                              ? 'text-red-500 italic'
+                                              : 'text-gray-500'
+                                          }`}
+                                        >
+                                          {label || 'Ukjent kode'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-gray-600 font-medium align-top">
+                                    {data.count}
+                                  </td>
+                                </tr>
+                                {hasTypes && (
+                                  <tr className="bg-gray-50/50">
+                                    <td
+                                      colSpan="2"
+                                      className="px-3 py-1 pb-2"
+                                    >
+                                      <div className="ml-8 text-xs border-l-2 border-gray-200 pl-2 space-y-1">
+                                        {Object.entries(data.types)
+                                          .sort(
+                                            ([, a], [, b]) => b - a,
+                                          )
+                                          .map(
+                                            ([
+                                              typeVal,
+                                              typeCount,
+                                            ]) => {
+                                              const isTypeHidden =
+                                                hiddenTypes.some(
+                                                  (ht) =>
+                                                    ht.type ===
+                                                      typeVal &&
+                                                    ht.code === code,
+                                                );
+                                              return (
+                                                <div
+                                                  key={typeVal}
+                                                  className={`flex justify-between items-center text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors ${
+                                                    isTypeHidden
+                                                      ? 'opacity-50'
+                                                      : ''
+                                                  }`}
+                                                  onMouseEnter={() =>
+                                                    setHighlightedType(
+                                                      typeVal,
+                                                      code,
+                                                    )
+                                                  }
+                                                  onMouseLeave={() =>
+                                                    setHighlightedType(
+                                                      null,
+                                                      null,
+                                                    )
+                                                  }
+                                                >
+                                                  <div className="flex items-center gap-1">
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={
+                                                        !isTypeHidden
+                                                      }
+                                                      onChange={(
+                                                        e,
+                                                      ) => {
+                                                        e.stopPropagation();
+                                                        toggleHiddenType(
+                                                          typeVal,
+                                                          code,
+                                                        );
+                                                      }}
+                                                      className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <span
+                                                      className={
+                                                        typeVal ===
+                                                        '(Mangler Type)'
+                                                          ? 'italic text-red-400'
+                                                          : ''
+                                                      }
+                                                    >
+                                                      {typeVal}
+                                                    </span>
+                                                  </div>
+                                                  <span className="font-mono text-gray-400">
+                                                    {typeCount}
+                                                  </span>
+                                                </div>
+                                              );
+                                            },
+                                          )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">
+                    Ingen ledninger funnet.
                   </p>
-                ) : null}
-
-                {feltTab === 'ledninger' &&
-                stats.fieldAnalysis.lines.fieldOrder.length > 0 ? (
-                  stats.fieldAnalysis.lines.fieldOrder.map(
-                    (fieldName) => {
-                      const fieldInfo =
-                        stats.fieldAnalysis.lines.fields[fieldName];
-
-                      // Try to find label from fields.json
-                      const fieldDefinition = fieldsData.find(
-                        (f) => f.fieldKey === fieldName,
-                      );
-                      const fieldLabel =
-                        fieldDefinition?.label || fieldName;
-
-                      return (
-                        <FieldSubSection
-                          key={fieldName}
-                          fieldName={fieldName}
-                          fieldLabel={fieldLabel}
-                          valueCounts={fieldInfo.valueCounts}
-                          totalCount={fieldInfo.totalCount}
-                          objectType="lines"
-                          feltHiddenValues={feltHiddenValues}
-                          toggleFeltHiddenValue={
-                            toggleFeltHiddenValue
-                          }
-                          feltSearchText={feltSearchText}
-                          setHighlightedFelt={setHighlightedFelt}
-                        />
-                      );
-                    },
-                  )
-                ) : feltTab === 'ledninger' ? (
-                  <p className="text-xs text-gray-500 italic pt-2">
-                    Ingen ledningfelt tilgjengelig.
-                  </p>
-                ) : null}
+                )}
               </div>
             </div>
-          ) : (
-            <p className="text-xs text-gray-500 italic">
-              Ingen feltdata tilgjengelig.
-            </p>
-          )}
-        </SidebarSection>
+          </SidebarSection>
 
-        {/* Analyse */}
-        <SidebarSection
-          title="Analyse"
-          isOpen={openSection === 'analyse'}
-          onToggle={() => toggleSection('analyse')}
-        >
-          <div className="space-y-4">
-            {isKof && (
-              <div className="p-2.5 rounded-lg border bg-white text-sm text-gray-600">
-                Analysefunksjoner er begrenset for KOF-filer (lite
-                attributtdata).
+          {/* Felt */}
+          <SidebarSection
+            title="Felt"
+            isOpen={openSection === 'felt'}
+            onToggle={() => toggleSection('felt')}
+          >
+            {stats?.fieldAnalysis ? (
+              <div className="space-y-2">
+                {/* Open Data Table Button */}
+                <button
+                  onClick={toggleDataTable}
+                  className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
+                  style={{
+                    backgroundColor: 'var(--color-primary)',
+                    color: 'white',
+                    borderColor: 'var(--color-primary-dark)',
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor =
+                      'var(--color-primary-dark)')
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor =
+                      'var(--color-primary)')
+                  }
+                >
+                  Åpne full datatabell
+                </button>
+
+                {/* Tabs */}
+                <div
+                  className="flex border-b"
+                  style={{ borderColor: 'var(--color-border)' }}
+                >
+                  <button
+                    onClick={() => setFeltTab('punkter')}
+                    className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                      feltTab === 'punkter' ? 'border-b-2' : ''
+                    }`}
+                    style={{
+                      color:
+                        feltTab === 'punkter'
+                          ? 'var(--color-primary)'
+                          : 'var(--color-text-secondary)',
+                      borderColor:
+                        feltTab === 'punkter'
+                          ? 'var(--color-primary)'
+                          : 'transparent',
+                    }}
+                  >
+                    Punkter (
+                    {stats.fieldAnalysis.points.fieldOrder.length}{' '}
+                    felt)
+                  </button>
+                  <button
+                    onClick={() => setFeltTab('ledninger')}
+                    className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                      feltTab === 'ledninger' ? 'border-b-2' : ''
+                    }`}
+                    style={{
+                      color:
+                        feltTab === 'ledninger'
+                          ? 'var(--color-primary)'
+                          : 'var(--color-text-secondary)',
+                      borderColor:
+                        feltTab === 'ledninger'
+                          ? 'var(--color-primary)'
+                          : 'transparent',
+                    }}
+                  >
+                    Ledninger (
+                    {stats.fieldAnalysis.lines.fieldOrder.length}{' '}
+                    felt)
+                  </button>
+                </div>
+
+                {/* Search and clear filters */}
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Søk i feltverdier..."
+                    value={feltSearchText || ''}
+                    onChange={(e) =>
+                      setFeltSearchText(e.target.value)
+                    }
+                    className="w-full px-3 py-2 text-xs rounded border focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{
+                      backgroundColor: 'var(--color-bg)',
+                      borderColor: 'var(--color-border)',
+                      color: 'var(--color-text)',
+                    }}
+                  />
+                  {feltHiddenValues &&
+                    feltHiddenValues.length > 0 && (
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-[10px] text-yellow-600">
+                          {feltHiddenValues.length} verdi
+                          {feltHiddenValues.length !== 1
+                            ? 'er'
+                            : ''}{' '}
+                          skjult
+                        </span>
+                        <button
+                          onClick={clearFeltFilter}
+                          className="text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          Tilbakestill filter
+                        </button>
+                      </div>
+                    )}
+                </div>
+
+                {/* Tab Content */}
+                <div className="space-y-0">
+                  {feltTab === 'punkter' &&
+                  stats.fieldAnalysis.points.fieldOrder.length > 0 ? (
+                    stats.fieldAnalysis.points.fieldOrder.map(
+                      (fieldName) => {
+                        const fieldInfo =
+                          stats.fieldAnalysis.points.fields[
+                            fieldName
+                          ];
+
+                        // Try to find label from fields.json
+                        const fieldDefinition = fieldsData.find(
+                          (f) => f.fieldKey === fieldName,
+                        );
+                        const fieldLabel =
+                          fieldDefinition?.label || fieldName;
+
+                        return (
+                          <FieldSubSection
+                            key={fieldName}
+                            fieldName={fieldName}
+                            fieldLabel={fieldLabel}
+                            valueCounts={fieldInfo.valueCounts}
+                            totalCount={fieldInfo.totalCount}
+                            objectType="points"
+                            feltHiddenValues={feltHiddenValues}
+                            toggleFeltHiddenValue={
+                              toggleFeltHiddenValue
+                            }
+                            feltSearchText={feltSearchText}
+                            setHighlightedFelt={setHighlightedFelt}
+                          />
+                        );
+                      },
+                    )
+                  ) : feltTab === 'punkter' ? (
+                    <p className="text-xs text-gray-500 italic pt-2">
+                      Ingen punktfelt tilgjengelig.
+                    </p>
+                  ) : null}
+
+                  {feltTab === 'ledninger' &&
+                  stats.fieldAnalysis.lines.fieldOrder.length > 0 ? (
+                    stats.fieldAnalysis.lines.fieldOrder.map(
+                      (fieldName) => {
+                        const fieldInfo =
+                          stats.fieldAnalysis.lines.fields[fieldName];
+
+                        // Try to find label from fields.json
+                        const fieldDefinition = fieldsData.find(
+                          (f) => f.fieldKey === fieldName,
+                        );
+                        const fieldLabel =
+                          fieldDefinition?.label || fieldName;
+
+                        return (
+                          <FieldSubSection
+                            key={fieldName}
+                            fieldName={fieldName}
+                            fieldLabel={fieldLabel}
+                            valueCounts={fieldInfo.valueCounts}
+                            totalCount={fieldInfo.totalCount}
+                            objectType="lines"
+                            feltHiddenValues={feltHiddenValues}
+                            toggleFeltHiddenValue={
+                              toggleFeltHiddenValue
+                            }
+                            feltSearchText={feltSearchText}
+                            setHighlightedFelt={setHighlightedFelt}
+                          />
+                        );
+                      },
+                    )
+                  ) : feltTab === 'ledninger' ? (
+                    <p className="text-xs text-gray-500 italic pt-2">
+                      Ingen ledningfelt tilgjengelig.
+                    </p>
+                  ) : null}
+                </div>
               </div>
-            )}
-            {/* Subsection: Attributter */}
-            <div>
-              <h4
-                className="text-xs font-semibold uppercase tracking-wider mb-2"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Attributter
-              </h4>
-              <p className="text-sm text-gray-500 italic">
-                Ingen valideringsfeil funnet.
+            ) : (
+              <p className="text-xs text-gray-500 italic">
+                Ingen feltdata tilgjengelig.
               </p>
-            </div>
+            )}
+          </SidebarSection>
 
-            {/* Subsection: Feltvalidering */}
-            <div>
-              <h4
-                className="text-xs font-semibold uppercase tracking-wider mb-2"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Feltvalidering
-              </h4>
-              {isKof ? (
-                <p className="text-sm text-gray-500 italic">
-                  Ikke tilgjengelig for KOF.
-                </p>
-              ) : (
-                <FieldValidationControl />
+          {/* Analyse */}
+          <SidebarSection
+            title="Analyse"
+            isOpen={openSection === 'analyse'}
+            onToggle={() => toggleSection('analyse')}
+          >
+            <div className="space-y-4">
+              {isKof && (
+                <div className="p-2.5 rounded-lg border bg-white text-sm text-gray-600">
+                  Analysefunksjoner er begrenset for KOF-filer (lite
+                  attributtdata).
+                </div>
               )}
-            </div>
-
-            {/* Subsection: Høydekontroll */}
-            <div>
-              <h4
-                className="text-xs font-semibold uppercase tracking-wider mb-2"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Høydekontroll (Z)
-              </h4>
-              <ZValidationControl />
-            </div>
-
-            {/* Subsection: Fall */}
-            <div>
-              <h4
-                className="text-xs font-semibold uppercase tracking-wider mb-2"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Profilanalyse
-              </h4>
-              {isKof ? (
+              {/* Subsection: Attributter */}
+              <div>
+                <h4
+                  className="text-xs font-semibold uppercase tracking-wider mb-2"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  Attributter
+                </h4>
                 <p className="text-sm text-gray-500 italic">
-                  Ikke tilgjengelig for KOF.
+                  Ingen valideringsfeil funnet.
                 </p>
-              ) : (
-                <InclineAnalysisControl />
-              )}
-            </div>
+              </div>
 
-            {/* Subsection: Topplok */}
-            <div>
-              <h4
-                className="text-xs font-semibold uppercase tracking-wider mb-2"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Topplok kontroll
-              </h4>
-              {isKof ? (
-                <p className="text-sm text-gray-500 italic">
-                  Ikke tilgjengelig for KOF.
-                </p>
-              ) : (
-                <TopplokControl />
-              )}
-            </div>
+              {/* Subsection: Feltvalidering */}
+              <div>
+                <h4
+                  className="text-xs font-semibold uppercase tracking-wider mb-2"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  Feltvalidering
+                </h4>
+                {isKof ? (
+                  <p className="text-sm text-gray-500 italic">
+                    Ikke tilgjengelig for KOF.
+                  </p>
+                ) : (
+                  <FieldValidationControl />
+                )}
+              </div>
 
-            {/* Subsection: Avvik */}
-            <div>
-              <h4
-                className="text-xs font-semibold uppercase tracking-wider mb-2"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Avviksdeteksjon
-              </h4>
-              {isKof ? (
-                <p className="text-sm text-gray-500 italic">
-                  Ikke tilgjengelig for KOF.
-                </p>
-              ) : (
-                <OutlierControl />
-              )}
+              {/* Subsection: Høydekontroll */}
+              <div>
+                <h4
+                  className="text-xs font-semibold uppercase tracking-wider mb-2"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  Høydekontroll (Z)
+                </h4>
+                <ZValidationControl />
+              </div>
+
+              {/* Subsection: Fall */}
+              <div>
+                <h4
+                  className="text-xs font-semibold uppercase tracking-wider mb-2"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  Profilanalyse
+                </h4>
+                {isKof ? (
+                  <p className="text-sm text-gray-500 italic">
+                    Ikke tilgjengelig for KOF.
+                  </p>
+                ) : (
+                  <InclineAnalysisControl />
+                )}
+              </div>
+
+              {/* Subsection: Topplok */}
+              <div>
+                <h4
+                  className="text-xs font-semibold uppercase tracking-wider mb-2"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  Topplok kontroll
+                </h4>
+                {isKof ? (
+                  <p className="text-sm text-gray-500 italic">
+                    Ikke tilgjengelig for KOF.
+                  </p>
+                ) : (
+                  <TopplokControl />
+                )}
+              </div>
+
+              {/* Subsection: Avvik */}
+              <div>
+                <h4
+                  className="text-xs font-semibold uppercase tracking-wider mb-2"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  Avviksdeteksjon
+                </h4>
+                {isKof ? (
+                  <p className="text-sm text-gray-500 italic">
+                    Ikke tilgjengelig for KOF.
+                  </p>
+                ) : (
+                  <OutlierControl />
+                )}
+              </div>
             </div>
-          </div>
-        </SidebarSection>
-      </div>
+          </SidebarSection>
+        </div>
       )}
     </div>
   );
