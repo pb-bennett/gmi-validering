@@ -47,6 +47,9 @@ export default function Home() {
     (state) => state.closeDataInspector,
   );
   const [zoomLevel, setZoomLevel] = useState(13);
+  
+  // State for "Add Layer" modal
+  const [showAddLayerModal, setShowAddLayerModal] = useState(false);
 
   // Session heartbeat: update lastActive timestamp
   useEffect(() => {
@@ -237,8 +240,12 @@ export default function Home() {
           <DevDiagnosticsPanel />
 
           {/* Sidebar - Hidden when data table is open OR field validation is open */}
-          {!dataTableOpen &&
-            !fieldValidationOpen && <Sidebar onReset={handleReset} />}
+          {!dataTableOpen && !fieldValidationOpen && (
+            <Sidebar 
+              onReset={handleReset} 
+              onAddFile={() => setShowAddLayerModal(true)}
+            />
+          )}
 
           {/* Field Validation Sidebar - 33% width */}
           {fieldValidationOpen && (
@@ -325,7 +332,6 @@ export default function Home() {
                     <DataTable />
                   </div>
                 )}
-
               </>
             )}
 
@@ -344,6 +350,35 @@ export default function Home() {
 
       {/* Tab Switcher - Shows when 3D viewer is open */}
       <TabSwitcher />
+      
+      {/* Add Layer Modal */}
+      {showAddLayerModal && (
+        <div 
+          className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50"
+          onClick={() => setShowAddLayerModal(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Legg til nytt lag</h2>
+              <button
+                onClick={() => setShowAddLayerModal(false)}
+                className="p-1 rounded hover:bg-gray-100 transition-colors"
+              >
+                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <FileUpload 
+              isAddingLayer={true}
+              onComplete={() => setShowAddLayerModal(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

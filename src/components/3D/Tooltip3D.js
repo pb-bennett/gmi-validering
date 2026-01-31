@@ -67,7 +67,7 @@ export default function Tooltip3D({ object, position, onClose }) {
         return value;
       return Math.min(Math.max(value, min), max);
     },
-    []
+    [],
   );
 
   if (!object) return null;
@@ -207,10 +207,7 @@ export default function Tooltip3D({ object, position, onClose }) {
             .filter(([key]) => !key.startsWith('_'))
             .slice(0, 20)
             .map(([key, value]) => (
-              <div
-                key={key}
-                className="flex justify-between gap-2"
-              >
+              <div key={key} className="flex justify-between gap-2">
                 <span className="font-medium text-gray-500">
                   {key}:
                 </span>

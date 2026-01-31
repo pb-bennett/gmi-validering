@@ -1,11 +1,58 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import useStore from '@/lib/store';
+import { useShallow } from 'zustand/react/shallow';
 import {
   getTerrainStats,
   resetTerrainStats,
 } from '@/lib/analysis/terrain';
+
+/**
+ * Estimate the size of an object in bytes (rough approximation)
+ */
+function estimateObjectSize(obj, visited = new WeakSet()) {
+  if (obj === null || obj === undefined) return 0;
+
+  const type = typeof obj;
+
+  if (type === 'boolean') return 4;
+  if (type === 'number') return 8;
+  if (type === 'string') return obj.length * 2;
+  if (type === 'function') return 0; // Don't count functions
+
+  if (type === 'object') {
+    // Prevent circular reference infinite loop
+    if (visited.has(obj)) return 0;
+    visited.add(obj);
+
+    let size = 0;
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        size += estimateObjectSize(item, visited);
+      }
+    } else {
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          size += key.length * 2; // Key string
+          size += estimateObjectSize(obj[key], visited);
+        }
+      }
+    }
+    return size;
+  }
+
+  return 0;
+}
+
+/**
+ * Format bytes to human-readable string
+ */
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
 
 /**
  * DevDiagnosticsPanel - Collapsible panel for terrain API stats
@@ -17,6 +64,7 @@ import {
  * - Average request time
  * - Terrain type distribution
  * - Queue status
+ * - Store memory usage
  */
 export default function DevDiagnosticsPanel() {
   const [isOpen, setIsOpen] = useState(false);
@@ -31,12 +79,28 @@ export default function DevDiagnosticsPanel() {
     (state) => state.analysis.selectedPipeIndex,
   );
 
+  // Store size calculation
+  const data = useStore((state) => state.data);
+  const layers = useStore((state) => state.layers);
+  const layerOrder = useStore(
+    useShallow((state) => state.layerOrder),
+  );
+
+  const storeSize = useMemo(() => {
+    const sizes = {
+      data: estimateObjectSize(data),
+      layers: estimateObjectSize(layers),
+      terrain: estimateObjectSize(terrainData),
+    };
+    sizes.total = sizes.data + sizes.layers + sizes.terrain;
+    return sizes;
+  }, [data, layers, terrainData]);
+
   const selectedTerrain =
     selectedPipeIndex !== null
       ? terrainData[selectedPipeIndex]
       : null;
-  const selectedWarnings =
-    selectedTerrain?.overcover?.warnings || [];
+  const selectedWarnings = selectedTerrain?.overcover?.warnings || [];
 
   const terrainJumpStats = (() => {
     if (!selectedTerrain?.points?.length) return null;
@@ -148,6 +212,38 @@ export default function DevDiagnosticsPanel() {
             </button>
           </div>
 
+          {/* Store Memory Usage */}
+          <div className="mb-2 p-2 bg-gray-800 rounded">
+            <div className="font-semibold text-gray-400 mb-1">
+              Store Memory
+            </div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+              <span className="text-gray-400">Data:</span>
+              <span className="font-mono">
+                {formatBytes(storeSize.data)}
+              </span>
+
+              <span className="text-gray-400">
+                Layers ({layerOrder?.length || 0}):
+              </span>
+              <span className="font-mono">
+                {formatBytes(storeSize.layers)}
+              </span>
+
+              <span className="text-gray-400">Terrain:</span>
+              <span className="font-mono">
+                {formatBytes(storeSize.terrain)}
+              </span>
+
+              <span className="text-gray-400 font-semibold">
+                Total:
+              </span>
+              <span className="font-mono text-cyan-400 font-semibold">
+                {formatBytes(storeSize.total)}
+              </span>
+            </div>
+          </div>
+
           {/* Queue Status */}
           <div className="mb-2 p-2 bg-gray-800 rounded">
             <div className="font-semibold text-gray-400 mb-1">
@@ -210,8 +306,10 @@ export default function DevDiagnosticsPanel() {
 
                 <span className="text-gray-400">Min Overcover:</span>
                 <span className="font-mono">
-                  {selectedTerrain?.overcover?.minOvercover !== null &&
-                  selectedTerrain?.overcover?.minOvercover !== undefined
+                  {selectedTerrain?.overcover?.minOvercover !==
+                    null &&
+                  selectedTerrain?.overcover?.minOvercover !==
+                    undefined
                     ? `${selectedTerrain.overcover.minOvercover.toFixed(2)}m`
                     : '-'}
                 </span>
@@ -234,7 +332,10 @@ export default function DevDiagnosticsPanel() {
                   </div>
                   <div className="mt-1 max-h-20 overflow-auto">
                     {terrainJumpStats.topJumps.map((j, i) => (
-                      <div key={`${j.from}-${i}`} className="flex justify-between">
+                      <div
+                        key={`${j.from}-${i}`}
+                        className="flex justify-between"
+                      >
                         <span className="font-mono">
                           {j.from.toFixed(1)}–{j.to.toFixed(1)}m
                         </span>
@@ -265,7 +366,10 @@ export default function DevDiagnosticsPanel() {
                   </div>
                   <div className="max-h-24 overflow-auto">
                     {selectedWarnings.slice(0, 10).map((w, i) => (
-                      <div key={`${w.dist}-${i}`} className="flex justify-between">
+                      <div
+                        key={`${w.dist}-${i}`}
+                        className="flex justify-between"
+                      >
                         <span className="font-mono">
                           {w.dist.toFixed(1)}m
                         </span>

@@ -113,8 +113,51 @@ const useStore = create(
             dataInspectorOpen: false,
             dataInspectorTarget: null,
             zValidationPromptOpen: false,
+            // Layer management UI state
+            expandedLayerId: null, // Only one layer expanded at a time
+            highlightedLayerId: null, // Layer being hovered in sidebar
+            mapUpdateNonce: 0,
+            multiLayerModeEnabled: false,
+          },
+          // Initial layer state template for creating new layers
+          layerTemplate: {
+            id: null,
+            name: '',
+            file: null, // { name, size, lastModified, type, format }
+            data: null, // { header, points, lines, format }
+            visible: true,
+            highlightAll: false,
+            // Per-layer filter state
+            hiddenCodes: [],
+            hiddenTypes: [],
+            feltHiddenValues: [],
+            // Per-layer analysis results
+            analysis: {
+              results: [],
+              isOpen: false,
+              selectedPipeIndex: null,
+            },
+            zValidation: {
+              results: null,
+              isOpen: false,
+            },
+            outliers: {
+              results: null,
+              hideOutliers: false,
+            },
+            terrain: {
+              data: {},
+              fetchQueue: [],
+              currentlyFetching: null,
+            },
           },
         },
+
+        // ============================================
+        // LAYERS SLICE — multi-file layer management
+        // ============================================
+        layers: {}, // { [layerId]: LayerState }
+        layerOrder: [], // Array of layerIds in display order
 
         // ============================================
         // FILE SLICE — metadata about uploaded file
@@ -806,6 +849,8 @@ const useStore = create(
           activeViewTab: 'map', // 'map' | '3d' - Current active view tab (default to 2D map)
           selectedObject3D: null, // Currently selected 3D object { type, index, data }
           mapCenterTarget: null, // { coordinates, zoom, featureId } - Target for map centering
+            layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
+          layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
           measureMode: false, // Whether the measure tool is active
           measurePoints: [], // Array of {lat, lng} points for measuring
           feltFilterActive: false, // Whether Felt filtering overrides Tema
@@ -819,6 +864,7 @@ const useStore = create(
           dataInspectorOpen: false, // Data inspector modal visibility
           dataInspectorTarget: null, // { type: 'point'|'line', index: number } | null
           zValidationPromptOpen: false, // Prompt to review missing Z values
+          multiLayerModeEnabled: false,
         },
 
         setOutlierPromptOpen: (isOpen) =>
@@ -989,7 +1035,11 @@ const useStore = create(
                   ? current.filter((_, i) => i !== existingIndex)
                   : [...current, { fieldName, value, objectType }];
               return {
-                ui: { ...state.ui, feltHiddenValues: newHidden },
+                ui: {
+                  ...state.ui,
+                  feltHiddenValues: newHidden,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                },
               };
             },
             false,
@@ -1182,6 +1232,33 @@ const useStore = create(
             'ui/clearMapCenterTarget',
           ),
 
+        setLayerFitBoundsTarget: (layerId) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                layerFitBoundsTarget: {
+                  layerId,
+                  nonce: Date.now(),
+                },
+              },
+            }),
+            false,
+            'ui/setLayerFitBoundsTarget',
+          ),
+
+        clearLayerFitBoundsTarget: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                layerFitBoundsTarget: null,
+              },
+            }),
+            false,
+            'ui/clearLayerFitBoundsTarget',
+          ),
+
         setHighlightedCode: (code) =>
           set(
             (state) => ({
@@ -1212,7 +1289,11 @@ const useStore = create(
                 ? currentHidden.filter((c) => c !== code)
                 : [...currentHidden, code];
               return {
-                ui: { ...state.ui, hiddenCodes: newHidden },
+                ui: {
+                  ...state.ui,
+                  hiddenCodes: newHidden,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                },
               };
             },
             false,
@@ -1238,7 +1319,11 @@ const useStore = create(
                       { type: typeVal, code: codeContext },
                     ];
               return {
-                ui: { ...state.ui, hiddenTypes: newHidden },
+                ui: {
+                  ...state.ui,
+                  hiddenTypes: newHidden,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                },
               };
             },
             false,
@@ -1449,6 +1534,694 @@ const useStore = create(
           ),
 
         // ============================================
+        // LAYER ACTIONS — multi-file layer management
+        // ============================================
+
+        /**
+         * Add a new layer with parsed data
+         * @param {Object} layerData - { file, data } where file is metadata and data is parsed content
+         * @returns {string} The new layer's ID
+         */
+        addLayer: (layerData) => {
+          const layerId = `layer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          const { file, data } = layerData;
+          const initial = get()._initial;
+          const inclineRequirementMode =
+            get().settings.inclineRequirementMode;
+
+          // Run initial analysis on the new layer's data
+          const isKof = data?.format === 'KOF';
+          const outlierResults = isKof
+            ? {
+                outliers: [],
+                summary: {
+                  totalObjects: 0,
+                  outlierCount: 0,
+                  threshold: 6,
+                },
+              }
+            : detectOutliers(data, 6);
+          const inclineResults = analyzeIncline(data, {
+            minInclineMode: inclineRequirementMode,
+          });
+          const zValidationResults = analyzeZValues(data);
+          const terrainFetchQueue = inclineResults.map(
+            (r) => r.lineIndex,
+          );
+
+          const newLayer = {
+            ...initial.layerTemplate,
+            id: layerId,
+            name: file?.name || `Lag ${get().layerOrder.length + 1}`,
+            file,
+            data,
+            visible: true, // Explicitly set visible
+            analysis: {
+              results: inclineResults,
+              isOpen: false,
+              selectedPipeIndex: null,
+            },
+            zValidation: {
+              results: zValidationResults,
+              isOpen: false,
+            },
+            outliers: {
+              results: outlierResults,
+              hideOutliers: false,
+            },
+            terrain: {
+              data: {},
+              fetchQueue: terrainFetchQueue,
+              currentlyFetching: null,
+            },
+          };
+
+          set(
+            (state) => ({
+              layers: {
+                ...state.layers,
+                [layerId]: newLayer,
+              },
+              layerOrder: [...state.layerOrder, layerId],
+              ui: {
+                ...state.ui,
+                expandedLayerId: layerId, // Auto-expand new layer
+                multiLayerModeEnabled: true,
+              },
+            }),
+            false,
+            'layers/add',
+          );
+
+          return layerId;
+        },
+
+        /**
+         * Remove a layer by ID
+         */
+        removeLayer: (layerId) =>
+          set(
+            (state) => {
+              const { [layerId]: removed, ...remainingLayers } =
+                state.layers;
+              const nextLayerOrder = state.layerOrder.filter(
+                (id) => id !== layerId,
+              );
+              const baseState = {
+                layers: remainingLayers,
+                layerOrder: nextLayerOrder,
+                ui: {
+                  ...state.ui,
+                  expandedLayerId:
+                    state.ui.expandedLayerId === layerId
+                      ? null
+                      : state.ui.expandedLayerId,
+                  highlightedLayerId:
+                    state.ui.highlightedLayerId === layerId
+                      ? null
+                      : state.ui.highlightedLayerId,
+                  multiLayerModeEnabled: true,
+                },
+              };
+
+              if (nextLayerOrder.length > 0) return baseState;
+
+              return {
+                ...baseState,
+                file: null,
+                data: null,
+                analysis: {
+                  results: [],
+                  isOpen: false,
+                  selectedPipeIndex: null,
+                },
+                zValidation: {
+                  results: null,
+                  isOpen: false,
+                },
+                outliers: {
+                  results: null,
+                  hideOutliers: false,
+                },
+                terrain: {
+                  data: {},
+                  fetchQueue: [],
+                  currentlyFetching: null,
+                },
+                ui: {
+                  ...baseState.ui,
+                  outlierPromptOpen: false,
+                  missingHeightPromptOpen: false,
+                  missingHeightDetailsOpen: false,
+                  missingHeightLines: [],
+                  zValidationPromptOpen: false,
+                },
+              };
+            },
+            false,
+            'layers/remove',
+          ),
+
+        /**
+         * Update a layer's properties
+         */
+        updateLayer: (layerId, updates) =>
+          set(
+            (state) => ({
+              layers: {
+                ...state.layers,
+                [layerId]: {
+                  ...state.layers[layerId],
+                  ...updates,
+                },
+              },
+            }),
+            false,
+            'layers/update',
+          ),
+
+        /**
+         * Toggle layer visibility
+         */
+        toggleLayerVisibility: (layerId) =>
+          set(
+            (state) => ({
+              layers: {
+                ...state.layers,
+                [layerId]: {
+                  ...state.layers[layerId],
+                  visible: !state.layers[layerId].visible,
+                },
+              },
+              ui: {
+                ...state.ui,
+                mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+              },
+            }),
+            false,
+            'layers/toggleVisibility',
+          ),
+
+        /**
+         * Set layer opacity (0-1)
+         */
+        /**
+         * Show all layers
+         */
+        showAllLayers: () =>
+          set(
+            (state) => {
+              const updatedLayers = {};
+              for (const id of state.layerOrder) {
+                updatedLayers[id] = {
+                  ...state.layers[id],
+                  visible: true,
+                };
+              }
+              return {
+                layers: { ...state.layers, ...updatedLayers },
+                ui: {
+                  ...state.ui,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                },
+              };
+            },
+            false,
+            'layers/showAll',
+          ),
+
+        /**
+         * Hide all layers
+         */
+        hideAllLayers: () =>
+          set(
+            (state) => {
+              const updatedLayers = {};
+              for (const id of state.layerOrder) {
+                updatedLayers[id] = {
+                  ...state.layers[id],
+                  visible: false,
+                };
+              }
+              return {
+                layers: { ...state.layers, ...updatedLayers },
+                ui: {
+                  ...state.ui,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                },
+              };
+            },
+            false,
+            'layers/hideAll',
+          ),
+
+        /**
+         * Set which layer is expanded in sidebar (only one at a time)
+         */
+        setExpandedLayer: (layerId) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                expandedLayerId:
+                  state.ui.expandedLayerId === layerId
+                    ? null
+                    : layerId,
+              },
+            }),
+            false,
+            'layers/setExpanded',
+          ),
+
+        /**
+         * Set highlighted layer (for hover effect)
+         */
+        setHighlightedLayer: (layerId) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                highlightedLayerId: layerId,
+              },
+            }),
+            false,
+            'layers/setHighlighted',
+          ),
+
+        /**
+         * Toggle per-layer highlight for all features in a layer
+         */
+        toggleLayerHighlightAll: (layerId) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    highlightAll: !layer.highlightAll,
+                  },
+                },
+                ui: {
+                  ...state.ui,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                },
+              };
+            },
+            false,
+            'layers/toggleHighlightAll',
+          ),
+
+        /**
+         * Toggle hidden code for a specific layer
+         */
+        toggleLayerHiddenCode: (layerId, code) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              const currentHidden = layer.hiddenCodes || [];
+              const newHidden = currentHidden.includes(code)
+                ? currentHidden.filter((c) => c !== code)
+                : [...currentHidden, code];
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: { ...layer, hiddenCodes: newHidden },
+                },
+                ui: {
+                  ...state.ui,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                },
+              };
+            },
+            false,
+            'layers/toggleHiddenCode',
+          ),
+
+        /**
+         * Toggle hidden type for a specific layer
+         */
+        toggleLayerHiddenType: (
+          layerId,
+          typeVal,
+          codeContext = null,
+        ) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              const currentHidden = layer.hiddenTypes || [];
+              const existingIndex = currentHidden.findIndex(
+                (ht) =>
+                  ht.type === typeVal && ht.code === codeContext,
+              );
+              const newHidden =
+                existingIndex >= 0
+                  ? currentHidden.filter(
+                      (_, i) => i !== existingIndex,
+                    )
+                  : [
+                      ...currentHidden,
+                      { type: typeVal, code: codeContext },
+                    ];
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: { ...layer, hiddenTypes: newHidden },
+                },
+                ui: {
+                  ...state.ui,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                },
+              };
+            },
+            false,
+            'layers/toggleHiddenType',
+          ),
+
+        /**
+         * Toggle felt hidden value for a specific layer
+         */
+        toggleLayerFeltHiddenValue: (
+          layerId,
+          fieldName,
+          value,
+          objectType,
+        ) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              const current = layer.feltHiddenValues || [];
+              const existingIndex = current.findIndex(
+                (item) =>
+                  item.fieldName === fieldName &&
+                  item.value === value &&
+                  item.objectType === objectType,
+              );
+              const newHidden =
+                existingIndex >= 0
+                  ? current.filter((_, i) => i !== existingIndex)
+                  : [...current, { fieldName, value, objectType }];
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    feltHiddenValues: newHidden,
+                  },
+                },
+                ui: {
+                  ...state.ui,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                  feltFilterActive: true,
+                },
+              };
+            },
+            false,
+            'layers/toggleFeltHiddenValue',
+          ),
+
+        /**
+         * Set layer analysis results
+         */
+        setLayerAnalysisResults: (layerId, results) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    analysis: { ...layer.analysis, results },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/setAnalysisResults',
+          ),
+
+        /**
+         * Toggle layer analysis modal
+         */
+        toggleLayerAnalysisModal: (layerId, isOpen) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              const newIsOpen =
+                isOpen !== undefined
+                  ? isOpen
+                  : !layer.analysis.isOpen;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    analysis: {
+                      ...layer.analysis,
+                      isOpen: newIsOpen,
+                    },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/toggleAnalysisModal',
+          ),
+
+        /**
+         * Select a pipe in layer analysis
+         */
+        selectLayerAnalysisPipe: (layerId, pipeIndex) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    analysis: {
+                      ...layer.analysis,
+                      selectedPipeIndex: pipeIndex,
+                    },
+                  },
+                },
+                ui: {
+                  ...state.ui,
+                  highlightedFeatureId: `${layerId}-ledninger-${pipeIndex}`,
+                  selectedObject3D: {
+                    type: 'line',
+                    index: pipeIndex,
+                    layerId,
+                  },
+                },
+              };
+            },
+            false,
+            'layers/selectAnalysisPipe',
+          ),
+
+        /**
+         * Set layer Z validation results
+         */
+        setLayerZValidationResults: (layerId, results) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    zValidation: { ...layer.zValidation, results },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/setZValidationResults',
+          ),
+
+        /**
+         * Toggle layer Z validation modal
+         */
+        toggleLayerZValidationModal: (layerId, isOpen) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              const newIsOpen =
+                isOpen !== undefined
+                  ? isOpen
+                  : !layer.zValidation.isOpen;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    zValidation: {
+                      ...layer.zValidation,
+                      isOpen: newIsOpen,
+                    },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/toggleZValidationModal',
+          ),
+
+        /**
+         * Set layer terrain data
+         */
+        setLayerTerrainData: (layerId, lineIndex, terrainPoints) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+
+              // Calculate overcover similar to the main terrain logic
+              const analysisResult = layer.analysis.results.find(
+                (r) => r.lineIndex === lineIndex,
+              );
+              const pipePoints =
+                analysisResult?.details?.profilePoints || [];
+              const minOvercover = get().settings.minOvercover;
+              let overcoverAnalysis = null;
+
+              if (pipePoints.length > 0 && terrainPoints.length > 0) {
+                const warnings = [];
+                let minOC = Infinity,
+                  maxOC = -Infinity,
+                  sumOC = 0,
+                  countOC = 0;
+
+                for (const pp of pipePoints) {
+                  let closestTerrain = null;
+                  let minDistDiff = Infinity;
+
+                  for (const tp of terrainPoints) {
+                    const terrainZ = tp.terrainZ ?? tp.z ?? null;
+                    if (terrainZ === null || terrainZ === undefined)
+                      continue;
+                    const diff = Math.abs(tp.dist - pp.dist);
+                    if (diff < minDistDiff) {
+                      minDistDiff = diff;
+                      closestTerrain = { ...tp, z: terrainZ };
+                    }
+                  }
+
+                  if (!closestTerrain) continue;
+                  const overcover = closestTerrain.z - pp.z;
+                  if (overcover < minOC) minOC = overcover;
+                  if (overcover > maxOC) maxOC = overcover;
+                  sumOC += overcover;
+                  countOC++;
+
+                  if (overcover >= 0 && overcover < minOvercover) {
+                    warnings.push({
+                      pipeZ: pp.z,
+                      terrainZ: closestTerrain.z,
+                      overcover,
+                      dist: pp.dist,
+                      required: minOvercover,
+                    });
+                  }
+                }
+
+                overcoverAnalysis = {
+                  hasData: countOC > 0,
+                  warnings,
+                  minOvercover: countOC > 0 ? minOC : null,
+                  maxOvercover: countOC > 0 ? maxOC : null,
+                  avgOvercover: countOC > 0 ? sumOC / countOC : null,
+                };
+              }
+
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    terrain: {
+                      ...layer.terrain,
+                      data: {
+                        ...layer.terrain.data,
+                        [lineIndex]: {
+                          points: terrainPoints,
+                          status: 'done',
+                          overcover: overcoverAnalysis,
+                        },
+                      },
+                    },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/setTerrainData',
+          ),
+
+        /**
+         * Get combined data from all visible layers (for components that need merged view)
+         */
+        getVisibleLayersData: () => {
+          const { layers, layerOrder } = get();
+          const combinedPoints = [];
+          const combinedLines = [];
+
+          for (const layerId of layerOrder) {
+            const layer = layers[layerId];
+            if (!layer || !layer.visible || !layer.data) continue;
+
+            // Add points with layer reference
+            layer.data.points?.forEach((point, index) => {
+              combinedPoints.push({
+                ...point,
+                _layerId: layerId,
+                _originalIndex: index,
+              });
+            });
+
+            // Add lines with layer reference
+            layer.data.lines?.forEach((line, index) => {
+              combinedLines.push({
+                ...line,
+                _layerId: layerId,
+                _originalIndex: index,
+              });
+            });
+          }
+
+          return { points: combinedPoints, lines: combinedLines };
+        },
+
+        /**
+         * Check if we're in multi-layer mode (more than one layer)
+         */
+        isMultiLayerMode: () => {
+          return get().layerOrder.length > 1;
+        },
+
+        /**
+         * Get all visible layer IDs
+         */
+        getVisibleLayerIds: () => {
+          const { layers, layerOrder } = get();
+          return layerOrder.filter((id) => layers[id]?.visible);
+        },
+
+        // ============================================
         // GLOBAL ACTIONS — cross-slice operations
         // ============================================
         resetAll: () =>
@@ -1458,6 +2231,8 @@ const useStore = create(
               return {
                 file: null,
                 data: null,
+                layers: {},
+                layerOrder: [],
                 parsing: { ...initial.parsing },
                 validation: { ...initial.validation },
                 analysis: { ...initial.analysis },
@@ -1625,6 +2400,21 @@ const useStore = create(
               ) {
                 state.ui.fieldValidationFilterActive = false;
               }
+              // Layer UI state migration
+              if (state.ui.expandedLayerId === undefined) {
+                state.ui.expandedLayerId = null;
+              }
+              if (state.ui.highlightedLayerId === undefined) {
+                state.ui.highlightedLayerId = null;
+              }
+            }
+
+            // Initialize layers if not present
+            if (!state.layers) {
+              state.layers = {};
+            }
+            if (!state.layerOrder) {
+              state.layerOrder = [];
             }
 
             if (!state.settings) {

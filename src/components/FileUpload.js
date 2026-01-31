@@ -6,7 +6,7 @@ import { GMIParser } from '@/lib/parsing/gmiParser';
 import { SOSIParser } from '@/lib/parsing/sosiParser';
 import { KOFParser } from '@/lib/parsing/kofParser';
 
-export default function FileUpload() {
+export default function FileUpload({ onComplete, isAddingLayer = false }) {
   const [isDragging, setIsDragging] = useState(false);
   const setFile = useStore((state) => state.setFile);
   const startParsing = useStore((state) => state.startParsing);
@@ -14,6 +14,7 @@ export default function FileUpload() {
   const setParsingError = useStore((state) => state.setParsingError);
   const setData = useStore((state) => state.setData);
   const clearData = useStore((state) => state.clearData);
+  const addLayer = useStore((state) => state.addLayer);
 
   const isQuotaExceededError = (err) => {
     const name = err?.name;
@@ -146,8 +147,27 @@ export default function FileUpload() {
             );
           }
 
+          // Create file metadata object
+          const fileMeta = {
+            name: file.name,
+            size: file.size,
+            lastModified: file.lastModified,
+            type: file.type,
+            format,
+          };
+
+          // Always use layer system - add file as a new layer
+          addLayer({ file: fileMeta, data: parsedData });
+          
+          // Also set legacy data/file state for backward compatibility
+          setFile(fileMeta);
           setData(parsedData);
           setParsingDone();
+          
+          // Notify parent if callback provided
+          if (onComplete) {
+            onComplete();
+          }
         } catch (error) {
           console.error('Parsing error:', error);
 
@@ -217,6 +237,8 @@ export default function FileUpload() {
       setParsingDone,
       setParsingError,
       clearData,
+      addLayer,
+      onComplete,
     ]
   );
 

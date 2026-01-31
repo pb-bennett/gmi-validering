@@ -153,9 +153,9 @@ export function transformPoints(
   if (
     !Array.isArray(resolvedCenter) ||
     resolvedCenter.length < 3 ||
-    ((resolvedCenter[0] === 0 &&
+    (resolvedCenter[0] === 0 &&
       resolvedCenter[1] === 0 &&
-      resolvedCenter[2] === 0) &&
+      resolvedCenter[2] === 0 &&
       (!lines || lines.length === 0))
   ) {
     let minX = Infinity;

@@ -1,8 +1,9 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import useStore from '@/lib/store';
+import { useShallow } from 'zustand/react/shallow';
 import Scene3D from './Scene3D';
 import Controls3D from './Controls3D';
 import Tooltip3D from './Tooltip3D';
@@ -10,31 +11,37 @@ import Legend3D from './Legend3D';
 
 export default function Viewer3D() {
   const data = useStore((state) => state.data);
+  const layers = useStore((state) => state.layers);
+  const layerOrder = useStore(
+    useShallow((state) => state.layerOrder),
+  );
+  const isMultiLayerMode = layerOrder && layerOrder.length > 0;
+
   const hiddenCodes = useStore(
-    (state) => state.ui?.hiddenCodes || []
+    (state) => state.ui?.hiddenCodes || [],
   );
   const hiddenTypes = useStore(
-    (state) => state.ui?.hiddenTypes || []
+    (state) => state.ui?.hiddenTypes || [],
   );
   // Felt filter state for 3D
   const feltFilterActive = useStore(
-    (state) => state.ui?.feltFilterActive || false
+    (state) => state.ui?.feltFilterActive || false,
   );
   const feltHiddenValues = useStore(
-    (state) => state.ui?.feltHiddenValues || []
+    (state) => state.ui?.feltHiddenValues || [],
   );
   // Felt highlighting on hover
   const highlightedFeltField = useStore(
-    (state) => state.ui?.highlightedFeltField
+    (state) => state.ui?.highlightedFeltField,
   );
   const highlightedFeltValue = useStore(
-    (state) => state.ui?.highlightedFeltValue
+    (state) => state.ui?.highlightedFeltValue,
   );
   const highlightedFeltObjectType = useStore(
-    (state) => state.ui?.highlightedFeltObjectType
+    (state) => state.ui?.highlightedFeltObjectType,
   );
   const selectedObject3D = useStore(
-    (state) => state.ui?.selectedObject3D
+    (state) => state.ui?.selectedObject3D,
   );
   const dataTableOpen = useStore((state) => state.ui.dataTableOpen);
   const analysisOpen = useStore((state) => state.analysis.isOpen);
@@ -45,13 +52,67 @@ export default function Viewer3D() {
     (state) => state.openDataInspector,
   );
   const setSelected3DObject = useStore(
-    (state) => state.setSelected3DObject
+    (state) => state.setSelected3DObject,
   );
   const [tooltipData, setTooltipData] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({
     x: 0,
     y: 0,
   });
+
+  // Combine data from all visible layers for 3D rendering
+  const combinedData = useMemo(() => {
+    if (!isMultiLayerMode) {
+      return data;
+    }
+
+    // Combine all visible layer data
+    const combined = {
+      header: null,
+      points: [],
+      lines: [],
+    };
+
+    for (const layerId of layerOrder) {
+      const layer = layers[layerId];
+      if (!layer || !layer.visible || !layer.data) continue;
+
+      // Use header from first layer with data
+      if (!combined.header && layer.data.header) {
+        combined.header = layer.data.header;
+      }
+
+      // Collect points with layer metadata
+      if (layer.data.points) {
+        layer.data.points.forEach((point, idx) => {
+          combined.points.push({
+            ...point,
+            _layerId: layerId,
+            _layerHiddenCodes: layer.hiddenCodes || [],
+            _layerHiddenTypes: layer.hiddenTypes || [],
+            _originalIndex: idx,
+          });
+        });
+      }
+
+      // Collect lines with layer metadata
+      if (layer.data.lines) {
+        layer.data.lines.forEach((line, idx) => {
+          combined.lines.push({
+            ...line,
+            _layerId: layerId,
+            _layerHiddenCodes: layer.hiddenCodes || [],
+            _layerHiddenTypes: layer.hiddenTypes || [],
+            _originalIndex: idx,
+          });
+        });
+      }
+    }
+
+    return combined.points.length > 0 || combined.lines.length > 0
+      ? combined
+      : null;
+  }, [isMultiLayerMode, data, layers, layerOrder]);
 
   // Clear selected object when it's been processed
   useEffect(() => {
@@ -64,7 +125,7 @@ export default function Viewer3D() {
     }
   }, [selectedObject3D, setSelected3DObject]);
 
-  if (!data) return null;
+  if (!combinedData) return null;
 
   const handleObjectClick = (objectData, event) => {
     setTooltipData(objectData);
@@ -83,7 +144,7 @@ export default function Viewer3D() {
         style={{ width: '100%', height: '100%' }}
       >
         <Scene3D
-          data={data}
+          data={combinedData}
           hiddenCodes={hiddenCodes}
           hiddenTypes={hiddenTypes}
           feltFilterActive={feltFilterActive}
