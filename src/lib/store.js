@@ -849,6 +849,8 @@ const useStore = create(
           activeViewTab: 'map', // 'map' | '3d' - Current active view tab (default to 2D map)
           selectedObject3D: null, // Currently selected 3D object { type, index, data }
           mapCenterTarget: null, // { coordinates, zoom, featureId } - Target for map centering
+            layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
+          layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
           measureMode: false, // Whether the measure tool is active
           measurePoints: [], // Array of {lat, lng} points for measuring
           feltFilterActive: false, // Whether Felt filtering overrides Tema
@@ -1228,6 +1230,33 @@ const useStore = create(
             }),
             false,
             'ui/clearMapCenterTarget',
+          ),
+
+        setLayerFitBoundsTarget: (layerId) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                layerFitBoundsTarget: {
+                  layerId,
+                  nonce: Date.now(),
+                },
+              },
+            }),
+            false,
+            'ui/setLayerFitBoundsTarget',
+          ),
+
+        clearLayerFitBoundsTarget: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                layerFitBoundsTarget: null,
+              },
+            }),
+            false,
+            'ui/clearLayerFitBoundsTarget',
           ),
 
         setHighlightedCode: (code) =>

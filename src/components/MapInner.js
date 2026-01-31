@@ -922,6 +922,45 @@ function BoundsController({
   return null;
 }
 
+function LayerFitBoundsController({ geoJsonData }) {
+  const map = useMap();
+  const target = useStore((state) => state.ui.layerFitBoundsTarget);
+  const clearLayerFitBoundsTarget = useStore(
+    (state) => state.clearLayerFitBoundsTarget,
+  );
+
+  useEffect(() => {
+    if (!map || !geoJsonData || !target?.layerId) return;
+
+    try {
+      const features = Array.isArray(geoJsonData.features)
+        ? geoJsonData.features.filter(
+            (feature) => feature?.properties?._layerId === target.layerId,
+          )
+        : [];
+
+      if (features.length === 0) return;
+
+      const layerData = {
+        type: 'FeatureCollection',
+        features,
+      };
+      const geoJsonLayer = L.geoJSON(layerData);
+      const bounds = geoJsonLayer.getBounds();
+
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 20 });
+      }
+    } catch (e) {
+      console.warn('Could not fit layer bounds', e);
+    } finally {
+      clearLayerFitBoundsTarget();
+    }
+  }, [map, geoJsonData, target, clearLayerFitBoundsTarget]);
+
+  return null;
+}
+
 function ZoomHandler({ onZoomChange }) {
   const map = useMapEvents({
     zoomend: () => {
@@ -2631,6 +2670,7 @@ export default function MapInner({ onZoomChange }) {
             format="image/png"
             transparent
             version="1.3.0"
+            minZoom={15}
             maxZoom={25}
             attribution='&copy; <a href="https://www.kartverket.no/">Kartverket</a>'
           />
@@ -2642,6 +2682,7 @@ export default function MapInner({ onZoomChange }) {
         ignoredFeatureIds={outlierFeatureIdsForBounds}
         fitBoundsKey={fitBoundsKey}
       />
+      <LayerFitBoundsController geoJsonData={geoJsonData} />
       <FeatureHighlighter geoJsonData={geoJsonData} />
       <FieldValidationZoomHandler geoJsonData={geoJsonData} />
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}

@@ -114,6 +114,7 @@ function LayerAnalysisButtons({
         </svg>
       </button>
 
+
       {/* Profilanalyse */}
       <button
         onClick={
@@ -457,7 +458,7 @@ function LayerTemaSection({
     >
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-2 transition-colors text-left hover:bg-gray-50"
+        className="w-full flex items-center gap-2 p-2 transition-colors text-left hover:bg-gray-50"
       >
         <div className="flex items-center gap-2">
           <span
@@ -476,7 +477,7 @@ function LayerTemaSection({
           )}
         </div>
         <span
-          className={`transform transition-transform duration-200 text-xs ${isOpen ? 'rotate-180' : ''}`}
+          className={`ml-auto transform transition-transform duration-200 text-xs ${isOpen ? 'rotate-180' : ''}`}
           style={{ color: 'var(--color-text-secondary)' }}
         >
           ▼
@@ -952,7 +953,7 @@ function LayerFeltSection({
           onToggle();
           setGlobalFeltActive(true);
         }}
-        className="w-full flex items-center justify-between p-2 transition-colors text-left hover:bg-gray-50"
+        className="w-full flex items-center gap-2 p-2 transition-colors text-left hover:bg-gray-50"
       >
         <div className="flex items-center gap-2">
           <span
@@ -971,7 +972,7 @@ function LayerFeltSection({
           )}
         </div>
         <span
-          className={`transform transition-transform duration-200 text-xs ${isOpen ? 'rotate-180' : ''}`}
+          className={`ml-auto transform transition-transform duration-200 text-xs ${isOpen ? 'rotate-180' : ''}`}
           style={{ color: 'var(--color-text-secondary)' }}
         >
           ▼
@@ -1073,6 +1074,9 @@ export default function LayerPanel({ layerId, codeLookups }) {
   const setFeltFilterActive = useStore(
     (state) => state.setFeltFilterActive,
   );
+  const setLayerFitBoundsTarget = useStore(
+    (state) => state.setLayerFitBoundsTarget,
+  );
 
   if (!layer) return null;
 
@@ -1147,10 +1151,11 @@ export default function LayerPanel({ layerId, codeLookups }) {
   };
 
   return (
-    <div
-      className={`border-b transition-colors ${!layer.visible ? 'opacity-60' : ''}`}
-      style={{ borderColor: 'var(--color-border)' }}
-    >
+    <div className="py-1">
+      <div
+        className={`border-b-2 transition-colors ${!layer.visible ? 'opacity-60' : ''}`}
+        style={{ borderColor: 'var(--color-border)' }}
+      >
       {/* Layer header */}
       <div
         className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-50"
@@ -1181,41 +1186,73 @@ export default function LayerPanel({ layerId, codeLookups }) {
           </div>
         </div>
 
-        {/* Expand indicator */}
-        <span
-          className={`transform transition-transform duration-200 text-xs ${isExpanded ? 'rotate-180' : ''}`}
-          style={{ color: 'var(--color-text-secondary)' }}
-        >
-          ▼
-        </span>
-
-        {/* Remove button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowRemoveConfirm(true);
-          }}
-          className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
-          title="Fjern lag"
-        >
-          <svg
-            className="w-3.5 h-3.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="ml-auto flex items-center gap-1">
+          {/* Zoom to layer */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setLayerFitBoundsTarget(layerId);
+            }}
+            className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+            title="Zoom til lag"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M7 7h10v10H7z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v4M4 4h4M20 4h-4M20 4v4M4 20v-4M4 20h4M20 20h-4M20 20v-4"
+              />
+            </svg>
+          </button>
+
+          {/* Remove button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowRemoveConfirm(true);
+            }}
+            className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+            title="Fjern lag"
+          >
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+
+          {/* Expand indicator */}
+          <span
+            className={`transform transition-transform duration-200 text-xs ${isExpanded ? 'rotate-180' : ''}`}
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            ▼
+          </span>
+        </div>
       </div>
 
       {showRemoveConfirm && (
-        <div className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-10002 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-lg bg-white shadow-xl border border-gray-200">
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-semibold text-gray-900">
@@ -1295,6 +1332,7 @@ export default function LayerPanel({ layerId, codeLookups }) {
           />
         </div>
       )}
+      </div>
     </div>
   );
 }
