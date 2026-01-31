@@ -38,6 +38,7 @@ function getPointTypeLabel(fcode) {
 
 export default function Tooltip3D({ object, position, onClose }) {
   const viewObjectInMap = useStore((state) => state.viewObjectInMap);
+  const layers = useStore((state) => state.layers);
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
@@ -45,6 +46,12 @@ export default function Tooltip3D({ object, position, onClose }) {
   const analysisResults = useStore((state) => state.analysis.results);
   const setAnalysisResults = useStore(
     (state) => state.setAnalysisResults,
+  );
+  const setLayerAnalysisResults = useStore(
+    (state) => state.setLayerAnalysisResults,
+  );
+  const setAnalysisLayerId = useStore(
+    (state) => state.setAnalysisLayerId,
   );
   const toggleAnalysisModal = useStore(
     (state) => state.toggleAnalysisModal,
@@ -119,6 +126,8 @@ export default function Tooltip3D({ object, position, onClose }) {
       viewObjectInMap(featureId, coords, 20, {
         objectType: object.type,
         lineIndex: object.lineIndex,
+        pointIndex: object.pointIndex,
+        layerId: object.layerId,
       });
     }
     onClose();
@@ -140,15 +149,28 @@ export default function Tooltip3D({ object, position, onClose }) {
     if (object.type !== 'pipe' || object.lineIndex === undefined)
       return;
 
-    if (analysisResults.length === 0 && data) {
-      const results = analyzeIncline(data, {
+    const layerData = object.layerId
+      ? layers[object.layerId]?.data
+      : data;
+    const layerResults = object.layerId
+      ? layers[object.layerId]?.analysis?.results
+      : analysisResults;
+
+    if ((!layerResults || layerResults.length === 0) && layerData) {
+      const results = analyzeIncline(layerData, {
         minInclineMode: inclineRequirementMode,
       });
+      if (object.layerId) {
+        setLayerAnalysisResults(object.layerId, results);
+      }
       setAnalysisResults(results);
+    } else if (layerResults) {
+      setAnalysisResults(layerResults);
     }
 
+    setAnalysisLayerId(object.layerId || null);
     toggleAnalysisModal(true);
-    selectAnalysisPipe(object.lineIndex);
+    selectAnalysisPipe(object.lineIndex, object.layerId || null);
     onClose();
   };
 

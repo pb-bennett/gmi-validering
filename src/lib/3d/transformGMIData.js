@@ -121,6 +121,8 @@ export function transformPipes(lines, header) {
         color: color,
         fcode: fcode,
         lineIndex: lineIndex, // Track which line this segment belongs to
+        layerId: line._layerId || null,
+        originalIndex: line._originalIndex ?? lineIndex,
         hoyderef: hoyderef, // Include height reference for debugging
         attributes: line.attributes || {},
       });
@@ -312,6 +314,8 @@ export function transformPoints(
         color: '#ec4899', // Distinct pink color for LOK to distinguish from KUM
         fcode: fcode,
         pointIndex: pointIndex,
+        layerId: point._layerId || null,
+        originalIndex: point._originalIndex ?? pointIndex,
         type: point.attributes?.Type || '(Mangler Type)',
         attributes: point.attributes || {},
       });
@@ -361,6 +365,8 @@ export function transformPoints(
         color: color,
         fcode: fcode,
         pointIndex: pointIndex,
+        layerId: point._layerId || null,
+        originalIndex: point._originalIndex ?? pointIndex,
         surfaceZ: surfaceZ,
         hasMatchingLok: !!matchingLok,
         type: point.attributes?.Type || '(Mangler Type)',
@@ -395,6 +401,8 @@ export function transformPoints(
         color: color,
         fcode: fcode,
         pointIndex: pointIndex,
+        layerId: point._layerId || null,
+        originalIndex: point._originalIndex ?? pointIndex,
         type: point.attributes?.Type || '(Mangler Type)',
         attributes: point.attributes || {},
         nearbyPipeDiameter: nearbyPipeDiameter, // Include for debugging

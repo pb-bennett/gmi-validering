@@ -935,7 +935,8 @@ function LayerFitBoundsController({ geoJsonData }) {
     try {
       const features = Array.isArray(geoJsonData.features)
         ? geoJsonData.features.filter(
-            (feature) => feature?.properties?._layerId === target.layerId,
+            (feature) =>
+              feature?.properties?._layerId === target.layerId,
           )
         : [];
 
@@ -1522,6 +1523,12 @@ function FieldValidationZoomHandler({ geoJsonData }) {
   const setAnalysisResults = useStore(
     (state) => state.setAnalysisResults,
   );
+  const setAnalysisLayerId = useStore(
+    (state) => state.setAnalysisLayerId,
+  );
+  const setLayerAnalysisResults = useStore(
+    (state) => state.setLayerAnalysisResults,
+  );
   const toggleAnalysisModal = useStore(
     (state) => state.toggleAnalysisModal,
   );
@@ -1771,6 +1778,12 @@ export default function MapInner({ onZoomChange }) {
   const setAnalysisResults = useStore(
     (state) => state.setAnalysisResults,
   );
+  const setLayerAnalysisResults = useStore(
+    (state) => state.setLayerAnalysisResults,
+  );
+  const setAnalysisLayerId = useStore(
+    (state) => state.setAnalysisLayerId,
+  );
   const toggleAnalysisModal = useStore(
     (state) => state.toggleAnalysisModal,
   );
@@ -1788,6 +1801,7 @@ export default function MapInner({ onZoomChange }) {
       if (btn) {
         const featureType = btn.dataset.featureType;
         const index = parseInt(btn.dataset.index, 10);
+        const layerId = btn.dataset.layerId || null;
 
         // Switch to 3D view
         setActiveViewTab('3d');
@@ -1797,6 +1811,7 @@ export default function MapInner({ onZoomChange }) {
           setSelected3DObject({
             type: featureType === 'Point' ? 'point' : 'line',
             index: index,
+            layerId: layerId || null,
           });
         }
       }
@@ -1813,6 +1828,7 @@ export default function MapInner({ onZoomChange }) {
       if (btn) {
         const featureType = btn.dataset.featureType;
         const index = parseInt(btn.dataset.index, 10);
+        const layerId = btn.dataset.layerId || null;
 
         if (!Number.isNaN(index)) {
           openDataInspector({
@@ -1835,18 +1851,33 @@ export default function MapInner({ onZoomChange }) {
       if (btn) {
         const featureType = btn.dataset.featureType;
         const index = parseInt(btn.dataset.index, 10);
+        const layerId = btn.dataset.layerId || null;
 
         if (featureType !== 'Line' || Number.isNaN(index)) return;
 
-        if (analysisResults.length === 0 && data) {
-          const results = analyzeIncline(data, {
+        const layerData = layerId ? layers[layerId]?.data : data;
+        const layerResults = layerId
+          ? layers[layerId]?.analysis?.results
+          : analysisResults;
+
+        if (
+          (!layerResults || layerResults.length === 0) &&
+          layerData
+        ) {
+          const results = analyzeIncline(layerData, {
             minInclineMode: inclineRequirementMode,
           });
+          if (layerId) {
+            setLayerAnalysisResults(layerId, results);
+          }
           setAnalysisResults(results);
+        } else if (layerResults) {
+          setAnalysisResults(layerResults);
         }
 
+        setAnalysisLayerId(layerId || null);
         toggleAnalysisModal(true);
-        selectAnalysisPipe(index);
+        selectAnalysisPipe(index, layerId || null);
       }
     };
 
@@ -1856,8 +1887,11 @@ export default function MapInner({ onZoomChange }) {
   }, [
     analysisResults,
     data,
+    layers,
     inclineRequirementMode,
     setAnalysisResults,
+    setLayerAnalysisResults,
+    setAnalysisLayerId,
     toggleAnalysisModal,
     selectAnalysisPipe,
   ]);
@@ -2113,7 +2147,8 @@ export default function MapInner({ onZoomChange }) {
   ]);
 
   // Check if we have any data to render - show map even with empty features if layers exist
-  const hasData = data || layerOrder.length > 0 || multiLayerModeEnabled;
+  const hasData =
+    data || layerOrder.length > 0 || multiLayerModeEnabled;
 
   // Memoized helper to check if feature is hidden by felt filter
   const isHiddenByFeltFilter = useCallback(
@@ -2183,16 +2218,36 @@ export default function MapInner({ onZoomChange }) {
     ],
   );
 
+  const getFeatureIds = useCallback((feature, objectType) => {
+    const props = feature.properties || {};
+    const id = props.id;
+    const layerId = props._layerId || null;
+    const prefix = objectType === 'points' ? 'punkter' : 'ledninger';
+    const baseId = id !== undefined ? `${prefix}-${id}` : null;
+    const layeredId =
+      layerId && id !== undefined
+        ? `${prefix}-${layerId}-${id}`
+        : baseId;
+    return { id, layerId, baseId, layeredId };
+  }, []);
+
+  const setHasFeatureId = useCallback((set, layeredId, baseId) => {
+    if (!set || !set.has) return false;
+    if (layeredId && set.has(layeredId)) return true;
+    if (baseId && set.has(baseId)) return true;
+    return false;
+  }, []);
+
   // Memoized lineStyle function - only recreated when its dependencies change
   const lineStyle = useCallback(
     (feature) => {
       const fcode = normalizeFcode(feature.properties?.S_FCODE);
       const typeVal = feature.properties?.Type || '(Mangler Type)';
-      const featureId =
-        feature.properties?.id !== undefined
-          ? `ledninger-${feature.properties.id}`
-          : null;
-      const layerId = feature.properties?._layerId;
+      const { baseId, layeredId, layerId } = getFeatureIds(
+        feature,
+        'lines',
+      );
+      const featureId = layeredId;
       const layerHiddenCodes =
         feature.properties?._layerHiddenCodes || [];
       const layerHiddenTypes =
@@ -2240,12 +2295,14 @@ export default function MapInner({ onZoomChange }) {
         (highlightedTypeContext === null ||
           highlightedTypeContext === fcode);
       const isHighlightedByFeature =
-        featureId && highlightedFeatureId === featureId;
+        featureId &&
+        (highlightedFeatureId === featureId ||
+          highlightedFeatureId === baseId);
       const isHighlightedByFeatures =
         featureId &&
         highlightedFeatureIds &&
         highlightedFeatureIds.has &&
-        highlightedFeatureIds.has(featureId);
+        setHasFeatureId(highlightedFeatureIds, featureId, baseId);
       // Felt (field value) highlighting on hover
       const isHighlightedByFelt = isHighlightedByFeltHover(
         feature,
@@ -2264,14 +2321,14 @@ export default function MapInner({ onZoomChange }) {
         filteredFeatureIds &&
         featureId &&
         filteredFeatureIds.has &&
-        !filteredFeatureIds.has(featureId);
+        !setHasFeatureId(filteredFeatureIds, featureId, baseId);
 
       // Outlier filtering
       const isOutlier =
         !fieldValidationFilterActive &&
         outlierFeatureIds &&
         featureId &&
-        outlierFeatureIds.has(featureId);
+        setHasFeatureId(outlierFeatureIds, featureId, baseId);
 
       if (isHidden || isFilteredOut || isOutlier) {
         return {
@@ -2287,7 +2344,21 @@ export default function MapInner({ onZoomChange }) {
         // Match by ID (we added 'id' property in geoJsonData creation which corresponds to index)
         const isSelected =
           feature.properties.id === analysis.selectedPipeIndex &&
-          feature.properties.featureType === 'Line';
+          feature.properties.featureType === 'Line' &&
+          (!analysis.layerId ||
+            feature.properties._layerId === analysis.layerId);
+
+        if (
+          analysis.layerId &&
+          feature.properties._layerId !== analysis.layerId
+        ) {
+          return {
+            color: getColorByFCode(fcode),
+            weight: getLineWeight(feature.properties),
+            opacity: 0.9,
+            dashArray: fcode && fcode.includes('DR') ? '5, 5' : null,
+          };
+        }
 
         if (isSelected) {
           return {
@@ -2340,6 +2411,9 @@ export default function MapInner({ onZoomChange }) {
       outlierFeatureIds,
       analysis.isOpen,
       analysis.selectedPipeIndex,
+      analysis.layerId,
+      getFeatureIds,
+      setHasFeatureId,
     ],
   );
 
@@ -2348,11 +2422,11 @@ export default function MapInner({ onZoomChange }) {
     (feature, latlng) => {
       const fcode = normalizeFcode(feature.properties?.S_FCODE);
       const typeVal = feature.properties?.Type || '(Mangler Type)';
-      const featureId =
-        feature.properties?.id !== undefined
-          ? `punkter-${feature.properties.id}`
-          : null;
-      const layerId = feature.properties?._layerId;
+      const { baseId, layeredId, layerId } = getFeatureIds(
+        feature,
+        'points',
+      );
+      const featureId = layeredId;
       const layerHiddenCodes =
         feature.properties?._layerHiddenCodes || [];
       const layerHiddenTypes =
@@ -2400,12 +2474,14 @@ export default function MapInner({ onZoomChange }) {
         (highlightedTypeContext === null ||
           highlightedTypeContext === fcode);
       const isHighlightedByFeature =
-        featureId && highlightedFeatureId === featureId;
+        featureId &&
+        (highlightedFeatureId === featureId ||
+          highlightedFeatureId === baseId);
       const isHighlightedByFeatures =
         featureId &&
         highlightedFeatureIds &&
         highlightedFeatureIds.has &&
-        highlightedFeatureIds.has(featureId);
+        setHasFeatureId(highlightedFeatureIds, featureId, baseId);
       // Felt (field value) highlighting on hover
       const isHighlightedByFelt = isHighlightedByFeltHover(
         feature,
@@ -2424,14 +2500,14 @@ export default function MapInner({ onZoomChange }) {
         filteredFeatureIds &&
         featureId &&
         filteredFeatureIds.has &&
-        !filteredFeatureIds.has(featureId);
+        !setHasFeatureId(filteredFeatureIds, featureId, baseId);
 
       // Outlier filtering
       const isOutlier =
         !fieldValidationFilterActive &&
         outlierFeatureIds &&
         featureId &&
-        outlierFeatureIds.has(featureId);
+        setHasFeatureId(outlierFeatureIds, featureId, baseId);
 
       if (isHidden || isFilteredOut || isOutlier) {
         // Return a dummy marker that is invisible
@@ -2469,6 +2545,8 @@ export default function MapInner({ onZoomChange }) {
       isHighlightedByFeltHover,
       filteredFeatureIds,
       outlierFeatureIds,
+      getFeatureIds,
+      setHasFeatureId,
     ],
   );
 
@@ -2482,6 +2560,11 @@ export default function MapInner({ onZoomChange }) {
         feature.properties?.featureType === 'Point'
           ? 'points'
           : 'lines';
+      const { baseId, layeredId, layerId } = getFeatureIds(
+        feature,
+        objectType,
+      );
+      const featureId = layeredId;
 
       // Check felt filter or tema filter based on what's active
       let isHidden;
@@ -2536,8 +2619,12 @@ export default function MapInner({ onZoomChange }) {
         const color = getColorByFCode(fcode);
         const featureId =
           props.featureType === 'Point'
-            ? `punkter-${props.id}`
-            : `ledninger-${props.id}`;
+            ? props._layerId
+              ? `punkter-${props._layerId}-${props.id}`
+              : `punkter-${props.id}`
+            : props._layerId
+              ? `ledninger-${props._layerId}-${props.id}`
+              : `ledninger-${props.id}`;
 
         let content = `<div class="text-[11px] leading-tight max-h-72 flex flex-col gap-1 p-1">`;
         content += `<div class="font-semibold flex items-center gap-1 whitespace-nowrap">`;
@@ -2569,6 +2656,7 @@ export default function MapInner({ onZoomChange }) {
           data-feature-id="${featureId}"
           data-feature-type="${props.featureType}"
           data-index="${props.id}"
+          data-layer-id="${props._layerId || ''}"
         >
           Vis i 3D
         </button>
@@ -2577,6 +2665,7 @@ export default function MapInner({ onZoomChange }) {
           data-feature-id="${featureId}"
           data-feature-type="${props.featureType}"
           data-index="${props.id}"
+          data-layer-id="${props._layerId || ''}"
         >
           Inspiser data
         </button>
@@ -2589,6 +2678,7 @@ export default function MapInner({ onZoomChange }) {
           data-feature-id="${featureId}"
           data-feature-type="${props.featureType}"
           data-index="${props.id}"
+          data-layer-id="${props._layerId || ''}"
         >
           Vis profilanalyse
         </button>`;
@@ -2606,6 +2696,7 @@ export default function MapInner({ onZoomChange }) {
       hiddenCodes,
       measureMode,
       addMeasurePoint,
+      getFeatureIds,
     ],
   );
 
@@ -2701,14 +2792,17 @@ export default function MapInner({ onZoomChange }) {
 function AnalysisPointsLayer() {
   const analysis = useStore((state) => state.analysis);
   const data = useStore((state) => state.data);
+  const layers = useStore((state) => state.layers);
 
   const { points, pipeColor, lineCoords, sourceProj } =
     useMemo(() => {
       if (
         !analysis.isOpen ||
         analysis.selectedPipeIndex === null ||
-        !data ||
-        !data.lines
+        !(analysis.layerId ? layers[analysis.layerId]?.data : data) ||
+        !(analysis.layerId
+          ? layers[analysis.layerId]?.data?.lines
+          : data?.lines)
       ) {
         return {
           points: [],
@@ -2718,7 +2812,10 @@ function AnalysisPointsLayer() {
         };
       }
 
-      const line = data.lines[analysis.selectedPipeIndex];
+      const activeData = analysis.layerId
+        ? layers[analysis.layerId]?.data
+        : data;
+      const line = activeData?.lines?.[analysis.selectedPipeIndex];
       if (!line || !line.coordinates)
         return {
           points: [],
@@ -2734,18 +2831,18 @@ function AnalysisPointsLayer() {
 
       // Determine source projection
       let sourceProj = 'EPSG:4326';
-      if (data.header?.COSYS_EPSG) {
-        const epsg = `EPSG:${data.header.COSYS_EPSG}`;
+      if (activeData?.header?.COSYS_EPSG) {
+        const epsg = `EPSG:${activeData.header.COSYS_EPSG}`;
         if (proj4.defs(epsg)) sourceProj = epsg;
-      } else if (data.header?.COSYS) {
+      } else if (activeData?.header?.COSYS) {
         if (
-          data.header.COSYS.includes('UTM') &&
-          data.header.COSYS.includes('32')
+          activeData.header.COSYS.includes('UTM') &&
+          activeData.header.COSYS.includes('32')
         )
           sourceProj = 'EPSG:25832';
         else if (
-          data.header.COSYS.includes('UTM') &&
-          data.header.COSYS.includes('33')
+          activeData.header.COSYS.includes('UTM') &&
+          activeData.header.COSYS.includes('33')
         )
           sourceProj = 'EPSG:25833';
       }
@@ -2774,7 +2871,13 @@ function AnalysisPointsLayer() {
         lineCoords: line.coordinates,
         sourceProj,
       };
-    }, [analysis.isOpen, analysis.selectedPipeIndex, data]);
+    }, [
+      analysis.isOpen,
+      analysis.selectedPipeIndex,
+      analysis.layerId,
+      data,
+      layers,
+    ]);
 
   const hoveredTerrainLatLng = useMemo(() => {
     const target = analysis.hoveredTerrainPoint;
@@ -2904,30 +3007,35 @@ function AnalysisZoomHandler() {
   const map = useMap();
   const analysis = useStore((state) => state.analysis);
   const data = useStore((state) => state.data);
+  const layers = useStore((state) => state.layers);
 
   useEffect(() => {
+    const activeData = analysis.layerId
+      ? layers[analysis.layerId]?.data
+      : data;
+
     if (
       analysis.isOpen &&
       analysis.selectedPipeIndex !== null &&
-      data &&
-      data.lines
+      activeData &&
+      activeData.lines
     ) {
-      const line = data.lines[analysis.selectedPipeIndex];
+      const line = activeData.lines[analysis.selectedPipeIndex];
       if (line && line.coordinates && line.coordinates.length > 0) {
         // Determine source projection
         let sourceProj = 'EPSG:4326';
-        if (data.header?.COSYS_EPSG) {
-          const epsg = `EPSG:${data.header.COSYS_EPSG}`;
+        if (activeData.header?.COSYS_EPSG) {
+          const epsg = `EPSG:${activeData.header.COSYS_EPSG}`;
           if (proj4.defs(epsg)) sourceProj = epsg;
-        } else if (data.header?.COSYS) {
+        } else if (activeData.header?.COSYS) {
           if (
-            data.header.COSYS.includes('UTM') &&
-            data.header.COSYS.includes('32')
+            activeData.header.COSYS.includes('UTM') &&
+            activeData.header.COSYS.includes('32')
           )
             sourceProj = 'EPSG:25832';
           else if (
-            data.header.COSYS.includes('UTM') &&
-            data.header.COSYS.includes('33')
+            activeData.header.COSYS.includes('UTM') &&
+            activeData.header.COSYS.includes('33')
           )
             sourceProj = 'EPSG:25833';
         }
@@ -2976,7 +3084,14 @@ function AnalysisZoomHandler() {
         }
       }
     }
-  }, [analysis.isOpen, analysis.selectedPipeIndex, data, map]);
+  }, [
+    analysis.isOpen,
+    analysis.selectedPipeIndex,
+    analysis.layerId,
+    data,
+    layers,
+    map,
+  ]);
 
   return null;
 }

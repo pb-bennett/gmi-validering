@@ -40,42 +40,49 @@ export default function Scene3D({
   const selectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
+  const analysisLayerId = useStore((state) => state.analysis.layerId);
+  const layers = useStore((state) => state.layers);
 
   // Helper function to check if an item is hidden by type filter (global or per-layer)
   const isHiddenByType = (item) => {
     const typeVal =
       item.type || item.attributes?.Type || '(Mangler Type)';
     const fcode = item.fcode;
-    
+
     // Check global hidden types
-    const globalHidden = hiddenTypes && hiddenTypes.length > 0 && hiddenTypes.some(
-      (ht) =>
-        ht.type === typeVal &&
-        (ht.code === null || ht.code === fcode),
-    );
-    
+    const globalHidden =
+      hiddenTypes &&
+      hiddenTypes.length > 0 &&
+      hiddenTypes.some(
+        (ht) =>
+          ht.type === typeVal &&
+          (ht.code === null || ht.code === fcode),
+      );
+
     // Check per-layer hidden types
     const layerHiddenTypes = item._layerHiddenTypes || [];
-    const layerHidden = layerHiddenTypes.length > 0 && layerHiddenTypes.some(
-      (ht) =>
-        ht.type === typeVal &&
-        (ht.code === null || ht.code === fcode),
-    );
-    
+    const layerHidden =
+      layerHiddenTypes.length > 0 &&
+      layerHiddenTypes.some(
+        (ht) =>
+          ht.type === typeVal &&
+          (ht.code === null || ht.code === fcode),
+      );
+
     return globalHidden || layerHidden;
   };
 
   // Helper function to check if an item is hidden by code filter (global or per-layer)
   const isHiddenByCode = (item) => {
     const fcode = item.fcode;
-    
+
     // Check global hidden codes
     const globalHidden = hiddenCodes && hiddenCodes.includes(fcode);
-    
+
     // Check per-layer hidden codes
     const layerHiddenCodes = item._layerHiddenCodes || [];
     const layerHidden = layerHiddenCodes.includes(fcode);
-    
+
     return globalHidden || layerHidden;
   };
 
@@ -204,7 +211,10 @@ export default function Scene3D({
   const hoveredProfileMarker = useMemo(() => {
     if (!hoveredTerrainPoint || selectedPipeIndex === null)
       return null;
-    const line = data?.lines?.[selectedPipeIndex];
+    const activeData = analysisLayerId
+      ? layers[analysisLayerId]?.data
+      : data;
+    const line = activeData?.lines?.[selectedPipeIndex];
     const coords = line?.coordinates;
     if (!coords || coords.length < 2) return null;
 
@@ -268,7 +278,14 @@ export default function Scene3D({
     }
 
     return null;
-  }, [hoveredTerrainPoint, selectedPipeIndex, data, center]);
+  }, [
+    hoveredTerrainPoint,
+    selectedPipeIndex,
+    analysisLayerId,
+    data,
+    layers,
+    center,
+  ]);
 
   // Focus camera on selected object when it changes
   useEffect(() => {
@@ -278,17 +295,35 @@ export default function Scene3D({
 
     if (selectedObject.type === 'point') {
       // Find the point in allPoints by pointIndex
-      const point = allPoints.find(
-        (p) => p.pointIndex === selectedObject.index,
-      );
+      const point = allPoints.find((p) => {
+        if (selectedObject.layerId) {
+          return (
+            p.layerId === selectedObject.layerId &&
+            p.originalIndex === selectedObject.index
+          );
+        }
+        return (
+          p.pointIndex === selectedObject.index ||
+          p.originalIndex === selectedObject.index
+        );
+      });
       if (point) {
         targetPosition = point.position;
       }
     } else if (selectedObject.type === 'line') {
       // Focus on the full extent of the line and align view with its direction
-      const lineSegments = pipes.filter(
-        (p) => p.lineIndex === selectedObject.index,
-      );
+      const lineSegments = pipes.filter((p) => {
+        if (selectedObject.layerId) {
+          return (
+            p.layerId === selectedObject.layerId &&
+            p.originalIndex === selectedObject.index
+          );
+        }
+        return (
+          p.lineIndex === selectedObject.index ||
+          p.originalIndex === selectedObject.index
+        );
+      });
       if (lineSegments.length > 0) {
         const min = new THREE.Vector3(Infinity, Infinity, Infinity);
         const max = new THREE.Vector3(
@@ -500,6 +535,11 @@ export default function Scene3D({
             const line = data.lines?.[lineIndex];
 
             if (line) {
+              const layerId = line._layerId || null;
+              const originalIndex =
+                line._originalIndex !== undefined
+                  ? line._originalIndex
+                  : lineIndex;
               const coordinates = line.coordinates?.[0]
                 ? [line.coordinates[0].y, line.coordinates[0].x] // [lat, lng]
                 : null;
@@ -510,8 +550,11 @@ export default function Scene3D({
                   fcode: line.attributes?.S_FCODE || 'UNKNOWN',
                   attributes: line.attributes || {},
                   coordinates: coordinates,
-                  featureId: `ledninger-${lineIndex}`,
-                  lineIndex: lineIndex, // Include lineIndex for profilanalyse integration
+                  featureId: layerId
+                    ? `ledninger-${layerId}-${originalIndex}`
+                    : `ledninger-${lineIndex}`,
+                  lineIndex: originalIndex,
+                  layerId: layerId,
                 },
                 event,
               );
@@ -546,6 +589,11 @@ export default function Scene3D({
               const pointObj = data.points?.[pointIndex];
 
               if (pointObj) {
+                const layerId = pointObj._layerId || null;
+                const originalIndex =
+                  pointObj._originalIndex !== undefined
+                    ? pointObj._originalIndex
+                    : pointIndex;
                 const coordinates = pointObj.coordinates?.[0]
                   ? [
                       pointObj.coordinates[0].y,
@@ -559,8 +607,11 @@ export default function Scene3D({
                     fcode: pointObj.attributes?.S_FCODE || 'UNKNOWN',
                     attributes: pointObj.attributes || {},
                     coordinates: coordinates,
-                    featureId: `punkter-${pointIndex}`,
-                    pointIndex: pointIndex,
+                    featureId: layerId
+                      ? `punkter-${layerId}-${originalIndex}`
+                      : `punkter-${pointIndex}`,
+                    pointIndex: originalIndex,
+                    layerId: layerId,
                   },
                   event,
                 );

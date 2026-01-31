@@ -28,6 +28,9 @@ function LayerAnalysisButtons({
   const setAnalysisResults = useStore(
     (state) => state.setAnalysisResults,
   );
+  const setAnalysisLayerId = useStore(
+    (state) => state.setAnalysisLayerId,
+  );
   const toggleAnalysisModal = useStore(
     (state) => state.toggleAnalysisModal,
   );
@@ -66,6 +69,7 @@ function LayerAnalysisButtons({
     });
     setLayerAnalysisResults(layerId, results);
     setAnalysisResults(results);
+    setAnalysisLayerId(layerId);
     toggleAnalysisModal(true);
     toggleLayerAnalysisModal(layerId, true);
   };
@@ -114,13 +118,13 @@ function LayerAnalysisButtons({
         </svg>
       </button>
 
-
       {/* Profilanalyse */}
       <button
         onClick={
           analysisResults.length > 0
             ? () => {
                 setAnalysisResults(analysisResults);
+                setAnalysisLayerId(layerId);
                 toggleAnalysisModal(true);
                 toggleLayerAnalysisModal(layerId, true);
               }
@@ -1156,182 +1160,184 @@ export default function LayerPanel({ layerId, codeLookups }) {
         className={`border-b-2 transition-colors ${!layer.visible ? 'opacity-60' : ''}`}
         style={{ borderColor: 'var(--color-border)' }}
       >
-      {/* Layer header */}
-      <div
-        className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-50"
-        onClick={() => setExpandedLayer(layerId)}
-      >
-        {/* Visibility toggle */}
-        <input
-          type="checkbox"
-          checked={layer.visible}
-          onChange={(e) => {
-            e.stopPropagation();
-            toggleLayerVisibility(layerId);
-          }}
-          className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          title={layer.visible ? 'Skjul lag' : 'Vis lag'}
-        />
-
-        {/* Layer name and stats */}
-        <div className="flex-1 min-w-0">
-          <div
-            className="text-xs font-medium truncate"
-            style={{ color: 'var(--color-text)' }}
-          >
-            {layer.name}
-          </div>
-          <div className="text-[10px] text-gray-500">
-            {pointCount} punkt, {lineCount} ledn.
-          </div>
-        </div>
-
-        <div className="ml-auto flex items-center gap-1">
-          {/* Zoom to layer */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setLayerFitBoundsTarget(layerId);
-            }}
-            className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
-            title="Zoom til lag"
-          >
-            <svg
-              className="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M7 7h10v10H7z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v4M4 4h4M20 4h-4M20 4v4M4 20v-4M4 20h4M20 20h-4M20 20v-4"
-              />
-            </svg>
-          </button>
-
-          {/* Remove button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowRemoveConfirm(true);
-            }}
-            className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
-            title="Fjern lag"
-          >
-            <svg
-              className="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-
-          {/* Expand indicator */}
-          <span
-            className={`transform transition-transform duration-200 text-xs ${isExpanded ? 'rotate-180' : ''}`}
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
-            ▼
-          </span>
-        </div>
-      </div>
-
-      {showRemoveConfirm && (
-        <div className="fixed inset-0 z-10002 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-lg bg-white shadow-xl border border-gray-200">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-900">
-                Fjern lag
-              </h3>
-            </div>
-            <div className="px-4 py-3 text-sm text-gray-700">
-              Er du sikker på at du vil fjerne lag “{layer.name}”?
-            </div>
-            <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setShowRemoveConfirm(false)}
-                className="px-3 py-1.5 text-sm rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
-              >
-                Avbryt
-              </button>
-              <button
-                onClick={() => {
-                  removeLayer(layerId);
-                  setShowRemoveConfirm(false);
-                }}
-                className="px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700"
-              >
-                Fjern
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Expanded content */}
-      {isExpanded && (
+        {/* Layer header */}
         <div
-          className="border-t bg-gray-50/30"
-          style={{ borderColor: 'var(--color-border)' }}
+          className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-50"
+          onClick={() => setExpandedLayer(layerId)}
         >
-          {/* Analysis buttons row */}
+          {/* Visibility toggle */}
+          <input
+            type="checkbox"
+            checked={layer.visible}
+            onChange={(e) => {
+              e.stopPropagation();
+              toggleLayerVisibility(layerId);
+            }}
+            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            title={layer.visible ? 'Skjul lag' : 'Vis lag'}
+          />
+
+          {/* Layer name and stats */}
+          <div className="flex-1 min-w-0">
+            <div
+              className="text-xs font-medium truncate"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {layer.name}
+            </div>
+            <div className="text-[10px] text-gray-500">
+              {pointCount} punkt, {lineCount} ledn.
+            </div>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1">
+            {/* Zoom to layer */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setLayerFitBoundsTarget(layerId);
+              }}
+              className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+              title="Zoom til lag"
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 7h10v10H7z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v4M4 4h4M20 4h-4M20 4v4M4 20v-4M4 20h4M20 20h-4M20 20v-4"
+                />
+              </svg>
+            </button>
+
+            {/* Remove button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowRemoveConfirm(true);
+              }}
+              className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+              title="Fjern lag"
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+
+            {/* Expand indicator */}
+            <span
+              className={`transform transition-transform duration-200 text-xs ${isExpanded ? 'rotate-180' : ''}`}
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              ▼
+            </span>
+          </div>
+        </div>
+
+        {showRemoveConfirm && (
+          <div className="fixed inset-0 z-10002 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-sm rounded-lg bg-white shadow-xl border border-gray-200">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Fjern lag
+                </h3>
+              </div>
+              <div className="px-4 py-3 text-sm text-gray-700">
+                Er du sikker på at du vil fjerne lag “{layer.name}”?
+              </div>
+              <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setShowRemoveConfirm(false)}
+                  className="px-3 py-1.5 text-sm rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
+                >
+                  Avbryt
+                </button>
+                <button
+                  onClick={() => {
+                    removeLayer(layerId);
+                    setShowRemoveConfirm(false);
+                  }}
+                  className="px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700"
+                >
+                  Fjern
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Expanded content */}
+        {isExpanded && (
           <div
-            className="px-3 py-2 border-b flex items-center justify-between"
+            className="border-t bg-gray-50/30"
             style={{ borderColor: 'var(--color-border)' }}
           >
-            <span className="text-[10px] text-gray-500">Analyse</span>
-            <LayerAnalysisButtons
+            {/* Analysis buttons row */}
+            <div
+              className="px-3 py-2 border-b flex items-center justify-between"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <span className="text-[10px] text-gray-500">
+                Analyse
+              </span>
+              <LayerAnalysisButtons
+                layerId={layerId}
+                layer={layer}
+                onTopplokClick={handleTopplokClick}
+                hasTopplokResults={!!topplokResults}
+                topplokOpen={topplokOpen}
+              />
+            </div>
+
+            <LayerTopplokSection
               layerId={layerId}
               layer={layer}
-              onTopplokClick={handleTopplokClick}
-              hasTopplokResults={!!topplokResults}
-              topplokOpen={topplokOpen}
+              results={topplokResults}
+              showResults={topplokOpen}
+              setShowResults={setTopplokOpen}
+              setResults={setTopplokResults}
+            />
+
+            {/* Tema section */}
+            <LayerTemaSection
+              layerId={layerId}
+              layer={layer}
+              codeLookups={codeLookups}
+              isOpen={innerOpen === 'tema'}
+              onToggle={toggleTema}
+            />
+
+            {/* Felt section */}
+            <LayerFeltSection
+              layerId={layerId}
+              layer={layer}
+              isOpen={innerOpen === 'felt'}
+              onToggle={toggleFelt}
+              setGlobalFeltActive={setFeltFilterActive}
             />
           </div>
-
-          <LayerTopplokSection
-            layerId={layerId}
-            layer={layer}
-            results={topplokResults}
-            showResults={topplokOpen}
-            setShowResults={setTopplokOpen}
-            setResults={setTopplokResults}
-          />
-
-          {/* Tema section */}
-          <LayerTemaSection
-            layerId={layerId}
-            layer={layer}
-            codeLookups={codeLookups}
-            isOpen={innerOpen === 'tema'}
-            onToggle={toggleTema}
-          />
-
-          {/* Felt section */}
-          <LayerFeltSection
-            layerId={layerId}
-            layer={layer}
-            isOpen={innerOpen === 'felt'}
-            onToggle={toggleFelt}
-            setGlobalFeltActive={setFeltFilterActive}
-          />
-        </div>
-      )}
+        )}
       </div>
     </div>
   );

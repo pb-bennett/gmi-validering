@@ -22,6 +22,7 @@ export default function InclineAnalysisModal() {
   const selectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
+  const analysisLayerId = useStore((state) => state.analysis.layerId);
   const selectPipe = useStore((state) => state.selectAnalysisPipe);
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
@@ -29,6 +30,10 @@ export default function InclineAnalysisModal() {
 
   // Terrain data for all lines
   const terrainData = useStore((state) => state.terrain.data);
+  const layers = useStore((state) => state.layers);
+  const activeTerrainData = analysisLayerId
+    ? layers[analysisLayerId]?.terrain?.data || {}
+    : terrainData;
 
   // Filters
   const [selectedType, setSelectedType] = useState('ALL');
@@ -105,12 +110,18 @@ export default function InclineAnalysisModal() {
         (r) => r.status === 'warning',
       );
       if (firstWarning) {
-        selectPipe(firstWarning.lineIndex);
+        selectPipe(firstWarning.lineIndex, analysisLayerId || null);
       } else {
-        selectPipe(results[0].lineIndex);
+        selectPipe(results[0].lineIndex, analysisLayerId || null);
       }
     }
-  }, [isOpen, results, selectedPipeIndex, selectPipe]);
+  }, [
+    isOpen,
+    results,
+    selectedPipeIndex,
+    selectPipe,
+    analysisLayerId,
+  ]);
 
   if (!isOpen) return null;
 
@@ -228,7 +239,7 @@ export default function InclineAnalysisModal() {
                 res.attributes.S_FCODE ||
                 'Ukjent';
               const color = getColorByFCode(fcode);
-              const terrain = terrainData[res.lineIndex];
+              const terrain = activeTerrainData[res.lineIndex];
               const terrainStatus = terrain?.status || 'idle';
               const hasOvercoverWarning =
                 terrain?.overcover?.warnings?.length > 0;
@@ -236,7 +247,9 @@ export default function InclineAnalysisModal() {
               return (
                 <div
                   key={res.lineIndex}
-                  onClick={() => selectPipe(res.lineIndex)}
+                  onClick={() =>
+                    selectPipe(res.lineIndex, analysisLayerId || null)
+                  }
                   className={`p-3 border-b cursor-pointer hover:bg-gray-100 ${
                     selectedPipeIndex === res.lineIndex
                       ? 'bg-blue-50 border-l-4 border-l-blue-500'

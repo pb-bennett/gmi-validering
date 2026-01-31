@@ -53,6 +53,8 @@ const useStore = create(
             results: [],
             isOpen: false,
             selectedPipeIndex: null,
+            layerId: null,
+            layerId: null,
             hoveredPointIndex: null,
             hoveredSegment: null,
             hoveredTerrainPoint: null,
@@ -451,6 +453,15 @@ const useStore = create(
             'analysis/setResults',
           ),
 
+        setAnalysisLayerId: (layerId) =>
+          set(
+            (state) => ({
+              analysis: { ...state.analysis, layerId },
+            }),
+            false,
+            'analysis/setLayerId',
+          ),
+
         setZValidationResults: (results) =>
           set(
             (state) => ({
@@ -471,6 +482,7 @@ const useStore = create(
                 analysis: {
                   ...state.analysis,
                   isOpen: newIsOpen,
+                  layerId: newIsOpen ? state.analysis.layerId : null,
                 },
                 // Clear highlighted feature when closing analysis
                 ui: !newIsOpen
@@ -500,20 +512,24 @@ const useStore = create(
             'zValidation/toggleModal',
           ),
 
-        selectAnalysisPipe: (index) =>
+        selectAnalysisPipe: (index, layerId = null) =>
           set(
             (state) => ({
               analysis: {
                 ...state.analysis,
                 selectedPipeIndex: index,
+                layerId: layerId,
               },
               // Also highlight on map - prefix with 'ledninger-' to match MapInner ID format
               ui: {
                 ...state.ui,
-                highlightedFeatureId: `ledninger-${index}`,
+                highlightedFeatureId: layerId
+                  ? `ledninger-${layerId}-${index}`
+                  : `ledninger-${index}`,
                 selectedObject3D: {
                   type: 'line',
                   index,
+                  layerId,
                 },
               },
             }),
@@ -849,7 +865,7 @@ const useStore = create(
           activeViewTab: 'map', // 'map' | '3d' - Current active view tab (default to 2D map)
           selectedObject3D: null, // Currently selected 3D object { type, index, data }
           mapCenterTarget: null, // { coordinates, zoom, featureId } - Target for map centering
-            layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
+          layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
           layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
           measureMode: false, // Whether the measure tool is active
           measurePoints: [], // Array of {lat, lng} points for measuring
@@ -1211,6 +1227,24 @@ const useStore = create(
                 newState.analysis = {
                   ...state.analysis,
                   selectedPipeIndex: options.lineIndex,
+                  layerId: options.layerId || null,
+                };
+              }
+
+              if (options.layerId) {
+                newState.ui = {
+                  ...newState.ui,
+                  selectedObject3D: {
+                    type:
+                      options.objectType === 'pipe'
+                        ? 'line'
+                        : 'point',
+                    index:
+                      options.lineIndex !== undefined
+                        ? options.lineIndex
+                        : options.pointIndex,
+                    layerId: options.layerId,
+                  },
                 };
               }
 
