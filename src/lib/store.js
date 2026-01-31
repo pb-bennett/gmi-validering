@@ -1568,6 +1568,53 @@ const useStore = create(
           ),
 
         // ============================================
+        // CUSTOM WMS SLICE — authenticated WMS layer
+        // NOTE: This is intentionally NOT persisted for security.
+        // Credentials are only kept in memory during the session.
+        // ============================================
+        customWmsConfig: null, // { url, username, password, layers?, enabled }
+
+        setCustomWmsConfig: (config) =>
+          set(
+            { customWmsConfig: config },
+            false,
+            'customWms/setConfig',
+          ),
+
+        toggleCustomWmsEnabled: (enabled) =>
+          set(
+            (state) => {
+              if (!state.customWmsConfig) return state;
+              return {
+                customWmsConfig: {
+                  ...state.customWmsConfig,
+                  enabled: enabled ?? !state.customWmsConfig.enabled,
+                },
+              };
+            },
+            false,
+            'customWms/toggleEnabled',
+          ),
+
+        clearCustomWmsCredentials: () =>
+          set(
+            (state) => {
+              if (!state.customWmsConfig) return state;
+              // Clear credentials but keep URL preference
+              return {
+                customWmsConfig: {
+                  ...state.customWmsConfig,
+                  username: '',
+                  password: '',
+                  enabled: false,
+                },
+              };
+            },
+            false,
+            'customWms/clearCredentials',
+          ),
+
+        // ============================================
         // LAYER ACTIONS — multi-file layer management
         // ============================================
 
@@ -2319,6 +2366,13 @@ const useStore = create(
       {
         name: 'gmi-validator-storage',
         version: STORAGE_VERSION,
+        // SECURITY: Exclude customWmsConfig from persistence
+        // Credentials should NEVER be stored in localStorage
+        partialize: (state) => {
+          // eslint-disable-next-line no-unused-vars
+          const { customWmsConfig, ...rest } = state;
+          return rest;
+        },
         migrate: (persistedState, version) => {
           if (!persistedState) return persistedState;
 

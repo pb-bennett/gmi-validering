@@ -13,6 +13,7 @@ import DataTable from '@/components/DataTable';
 import TabSwitcher from '@/components/TabSwitcher';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
+import WmsLayerModal from '@/components/WmsLayerModal';
 import useStore from '@/lib/store';
 
 // Dynamic import for 3D viewer to prevent SSR issues with Three.js
@@ -50,6 +51,10 @@ export default function Home() {
   
   // State for "Add Layer" modal
   const [showAddLayerModal, setShowAddLayerModal] = useState(false);
+  
+  // State for WMS layer modal
+  const [showWmsModal, setShowWmsModal] = useState(false);
+  const customWmsConfig = useStore((state) => state.customWmsConfig);
 
   // Session heartbeat: update lastActive timestamp
   useEffect(() => {
@@ -287,6 +292,48 @@ export default function Home() {
                     </div>
                   </div>
 
+                  {/* WMS Layer Control - Small button near bottom left */}
+                  <div
+                    className="absolute bottom-4 left-28"
+                    style={{ zIndex: 1000 }}
+                  >
+                    <div className="flex items-center gap-1">
+                      {/* WMS Settings Button */}
+                      <button
+                        onClick={() => setShowWmsModal(true)}
+                        className="px-2 py-1.5 rounded shadow text-xs font-medium border transition-colors bg-white/90 text-gray-600 border-gray-200 hover:bg-gray-100 backdrop-blur flex items-center gap-1"
+                        title={customWmsConfig ? 'Endre WMS-innstillinger' : 'Legg til Gemini WMS'}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          {customWmsConfig ? (
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                            />
+                          ) : (
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 4v16m8-8H4"
+                            />
+                          )}
+                          {customWmsConfig && (
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                          )}
+                        </svg>
+                        {customWmsConfig ? '' : 'WMS'}
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
                   {!dataTableOpen &&
                     !analysisOpen &&
@@ -379,6 +426,12 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* WMS Layer Modal */}
+      <WmsLayerModal 
+        isOpen={showWmsModal} 
+        onClose={() => setShowWmsModal(false)} 
+      />
     </div>
   );
 }

@@ -25,6 +25,7 @@ import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import { analyzeIncline } from '@/lib/analysis/incline';
 import proj4 from 'proj4';
+import AuthenticatedWmsLayer from './AuthenticatedWmsLayer';
 
 // Fix for default Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -1793,6 +1794,9 @@ export default function MapInner({ onZoomChange }) {
   const inclineRequirementMode = useStore(
     (state) => state.settings.inclineRequirementMode,
   );
+  
+  // Custom WMS layer configuration (credentials only in memory)
+  const customWmsConfig = useStore((state) => state.customWmsConfig);
 
   // Handle "Vis i 3D" button clicks in popups
   useEffect(() => {
@@ -2753,6 +2757,26 @@ export default function MapInner({ onZoomChange }) {
             onEachFeature={onEachFeature}
           />
         </LayersControl.Overlay>
+
+        {customWmsConfig?.url &&
+          customWmsConfig?.username &&
+          customWmsConfig?.password && (
+            <LayersControl.Overlay
+              checked={!!customWmsConfig.enabled}
+              name="Gemini WMS"
+            >
+              <AuthenticatedWmsLayer
+                url={customWmsConfig.url}
+                username={customWmsConfig.username}
+                password={customWmsConfig.password}
+                layers={customWmsConfig.layers}
+                opacity={1}
+                zIndex={450}
+                maxZoom={25}
+                maxNativeZoom={25}
+              />
+            </LayersControl.Overlay>
+          )}
 
         <LayersControl.Overlay checked name="Eiendomsgrenser">
           <WMSTileLayer
