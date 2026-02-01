@@ -2769,6 +2769,7 @@ export default function MapInner({ onZoomChange }) {
               name="Gemini WMS"
             >
               <AuthenticatedWmsLayer
+                key={`wms-${customWmsConfig.url ?? 'none'}-${customWmsConfig.username ?? ''}-${customWmsConfig.enabled ? 1 : 0}`}
                 url={customWmsConfig.url}
                 username={customWmsConfig.username}
                 password={customWmsConfig.password}
