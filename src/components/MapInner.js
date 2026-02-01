@@ -2714,7 +2714,10 @@ export default function MapInner({ onZoomChange }) {
       style={{ height: '100%', width: '100%' }}
       maxZoom={25} // Allow higher zoom levels globally
     >
-      <LayersControl position="topright">
+      <LayersControl
+        key={`layers-control-${customWmsConfig?.url ?? 'none'}-${customWmsConfig?.enabled ? '1' : '0'}`}
+        position="topright"
+      >
         <LayersControl.BaseLayer checked name="Kartverket Topo">
           <TileLayer
             attribution='&copy; <a href="https://www.kartverket.no/">Kartverket</a>'
