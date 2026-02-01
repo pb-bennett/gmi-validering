@@ -90,7 +90,10 @@ export default function Scene3D({
   const isHiddenByFeltFilter = (item, objectType) => {
     const attrs = item.attributes || {};
     const layerFeltHidden = item._layerFeltHiddenValues || [];
-    if (Array.isArray(layerFeltHidden) && layerFeltHidden.length > 0) {
+    if (
+      Array.isArray(layerFeltHidden) &&
+      layerFeltHidden.length > 0
+    ) {
       const match = layerFeltHidden.some((hidden) => {
         if (hidden.objectType !== objectType) return false;
         const featureValue = attrs[hidden.fieldName];

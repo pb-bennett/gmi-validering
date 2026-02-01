@@ -5,7 +5,7 @@ import useStore from '@/lib/store';
 
 /**
  * WMS Layer Modal
- * 
+ *
  * Security considerations:
  * - URL is stored in localStorage (for convenience on return visits)
  * - Username and password are NEVER stored anywhere
@@ -17,9 +17,11 @@ import useStore from '@/lib/store';
 const WMS_URL_STORAGE_KEY = 'gmi-validator-wms-url';
 
 export default function WmsLayerModal({ isOpen, onClose }) {
-  const setCustomWmsConfig = useStore((state) => state.setCustomWmsConfig);
+  const setCustomWmsConfig = useStore(
+    (state) => state.setCustomWmsConfig,
+  );
   const customWmsConfig = useStore((state) => state.customWmsConfig);
-  
+
   const [url, setUrl] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +32,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
   const [availableLayers, setAvailableLayers] = useState([]);
   const [isFetchingLayers, setIsFetchingLayers] = useState(false);
   const [layersError, setLayersError] = useState(null);
-  
+
   const formRef = useRef(null);
   const urlInputRef = useRef(null);
 
@@ -90,16 +92,20 @@ export default function WmsLayerModal({ isOpen, onClose }) {
       return;
     }
 
-    if (!layers.trim()) {
+    let resolvedLayers = layers.trim();
+
+    if (!resolvedLayers) {
       setShowAdvanced(true);
       try {
         setIsLoading(true);
         const available = await fetchCapabilitiesLayers();
         if (available.length === 1) {
-          setLayers(available[0]);
+          resolvedLayers = available[0];
+          setLayers(resolvedLayers);
         } else if (available.length > 1) {
           setAvailableLayers(available);
-          setLayers(available.join(','));
+          resolvedLayers = available.join(',');
+          setLayers(resolvedLayers);
         } else {
           setError('Fant ingen WMS-lag. Sjekk tilgang og URL.');
           setIsLoading(false);
@@ -107,7 +113,8 @@ export default function WmsLayerModal({ isOpen, onClose }) {
         }
       } catch (e) {
         setError(
-          e?.message || 'Kunne ikke hente WMS-lag. Sjekk URL/tilgang.',
+          e?.message ||
+            'Kunne ikke hente WMS-lag. Sjekk URL/tilgang.',
         );
         setIsLoading(false);
         return;
@@ -136,7 +143,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
         url: url.trim(),
         username: username.trim(),
         password: password, // This is kept in zustand state (memory only, not persisted)
-        layers: layers.trim() || undefined,
+        layers: resolvedLayers || undefined,
         enabled: true,
       });
 
@@ -286,7 +293,11 @@ export default function WmsLayerModal({ isOpen, onClose }) {
         </div>
 
         {/* Body */}
-        <form ref={formRef} onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          className="p-4 space-y-4"
+        >
           {/* Security notice */}
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
             <div className="flex items-start gap-2">
@@ -304,16 +315,21 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                 />
               </svg>
               <div className="text-xs text-amber-800">
-                <strong>Sikkerhet:</strong> URL-en lagres lokalt i nettleseren din for enklere bruk. 
-                Brukernavn og passord lagres <strong>ikke</strong> – du må oppgi dem på nytt hver gang 
-                du åpner siden. Bruk gjerne passordbehandleren i nettleseren din.
+                <strong>Sikkerhet:</strong> URL-en lagres lokalt i
+                nettleseren din for enklere bruk. Brukernavn og
+                passord lagres <strong>ikke</strong> – du må oppgi dem
+                på nytt hver gang du åpner siden. Bruk gjerne
+                passordbehandleren i nettleseren din.
               </div>
             </div>
           </div>
 
           {/* URL Input */}
           <div>
-            <label htmlFor="wms-url" className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="wms-url"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
               WMS URL
             </label>
             <input
@@ -332,7 +348,10 @@ export default function WmsLayerModal({ isOpen, onClose }) {
 
           {/* Username Input */}
           <div>
-            <label htmlFor="wms-username" className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="wms-username"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
               Brukernavn
             </label>
             <input
@@ -350,7 +369,10 @@ export default function WmsLayerModal({ isOpen, onClose }) {
 
           {/* Password Input */}
           <div>
-            <label htmlFor="wms-password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="wms-password"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
               Passord
             </label>
             <input
@@ -392,7 +414,10 @@ export default function WmsLayerModal({ isOpen, onClose }) {
           {showAdvanced && (
             <div className="pl-4 border-l-2 border-gray-200">
               <div>
-                <label htmlFor="wms-layers" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="wms-layers"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   WMS Lag (påkrevd)
                 </label>
                 <input
@@ -405,7 +430,8 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  Kommaseparert liste over lag. Bruk knappen under for å hente lagliste.
+                  Kommaseparert liste over lag. Bruk knappen under for
+                  å hente lagliste.
                 </p>
                 <div className="mt-2 flex items-center gap-2">
                   <button
@@ -414,7 +440,9 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                     disabled={isFetchingLayers}
                     className="px-3 py-1.5 text-xs font-medium rounded border bg-white hover:bg-gray-50 disabled:bg-gray-100"
                   >
-                    {isFetchingLayers ? 'Henter lag...' : 'Hent lagliste'}
+                    {isFetchingLayers
+                      ? 'Henter lag...'
+                      : 'Hent lagliste'}
                   </button>
                   {layersError && (
                     <span className="text-xs text-red-600">
@@ -438,7 +466,9 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                           <li key={layerName}>
                             <button
                               type="button"
-                              onClick={() => toggleLayerSelection(layerName)}
+                              onClick={() =>
+                                toggleLayerSelection(layerName)
+                              }
                               className={`w-full text-left px-2 py-1 text-xs hover:bg-blue-50 ${
                                 isSelected
                                   ? 'bg-blue-100 text-blue-800'

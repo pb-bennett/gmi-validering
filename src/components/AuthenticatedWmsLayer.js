@@ -1,15 +1,18 @@
 'use client';
 
 import L from 'leaflet';
-import { createLayerComponent, updateGridLayer } from '@react-leaflet/core';
+import {
+  createLayerComponent,
+  updateGridLayer,
+} from '@react-leaflet/core';
 
 /**
  * Authenticated WMS Tile Layer
- * 
+ *
  * This component renders a WMS layer with Basic Authentication.
  * Uses a server-side proxy to avoid CORS issues with WMS servers
  * that don't support cross-origin requests with auth headers.
- * 
+ *
  * Security Notes:
  * - Credentials are passed as props and only exist in memory
  * - Credentials are sent to our own proxy, which forwards them to the WMS server
@@ -24,18 +27,21 @@ const ProxiedAuthWMSTileLayer = L.TileLayer.WMS.extend({
     this._authHeader = options.authHeader;
     this._originalUrl = url;
     delete options.authHeader;
-    
+
     // Don't call parent with the original URL yet
     L.TileLayer.WMS.prototype.initialize.call(this, url, options);
   },
 
   getTileUrl: function (coords) {
     // Get the original WMS URL with all parameters
-    const originalUrl = L.TileLayer.WMS.prototype.getTileUrl.call(this, coords);
-    
+    const originalUrl = L.TileLayer.WMS.prototype.getTileUrl.call(
+      this,
+      coords,
+    );
+
     // Route through our proxy
     const proxyUrl = `/api/wms-proxy?url=${encodeURIComponent(originalUrl)}`;
-    
+
     return proxyUrl;
   },
 
@@ -55,16 +61,31 @@ const ProxiedAuthWMSTileLayer = L.TileLayer.WMS.extend({
       })
         .then((response) => {
           if (!response.ok) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.warn(
+                'WMS proxy returned non-OK status for tile:',
+                response.status,
+                response.statusText,
+                url,
+              );
+            }
             throw new Error(`HTTP ${response.status}`);
           }
           return response.blob();
         })
         .then((blob) => {
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug(
+              'WMS tile fetched successfully, size:',
+              blob.size,
+              url,
+            );
+          }
           tile.src = URL.createObjectURL(blob);
           done(null, tile);
         })
         .catch((error) => {
-          console.warn('WMS tile fetch failed:', error);
+          console.warn('WMS tile fetch failed:', error, url);
           // On error, show a transparent tile
           tile.src =
             'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';

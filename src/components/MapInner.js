@@ -3034,54 +3034,60 @@ function AnalysisPointsLayer() {
   );
 }
 
+function WmsLayerRefresher({ customWmsConfig }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !customWmsConfig) return;
+
+    // Build auth header if credentials present
+    const authHeader =
+      customWmsConfig.username && customWmsConfig.password
+        ? `Basic ${btoa(`${customWmsConfig.username}:${customWmsConfig.password}`)}`
+        : null;
+
+    // Iterate over layers and refresh the Gemini WMS layer
+    map.eachLayer((layer) => {
+      try {
+        const opts = layer?.options || {};
+        const attr = opts.attribution || '';
+        if (attr && attr.toString().includes('Gemini WMS')) {
+          // Apply auth header if available
+          if (authHeader) {
+            layer._authHeader = authHeader;
+          }
+          // Ensure layers param is up to date
+          if (typeof layer.setParams === 'function') {
+            layer.setParams({ layers: customWmsConfig.layers || '' });
+          }
+          // Force redraw to fetch tiles with new auth header/params
+          if (typeof layer.redraw === 'function') {
+            layer.redraw();
+          }
+        }
+      } catch (e) {
+        // Best-effort: we don't want exceptions to break rendering
+        // eslint-disable-next-line no-console
+        console.warn('WMS refresher error', e);
+      }
+    });
+  }, [
+    map,
+    customWmsConfig?.url,
+    customWmsConfig?.username,
+    customWmsConfig?.password,
+    customWmsConfig?.layers,
+    customWmsConfig?.enabled,
+  ]);
+
+  return null;
+}
+
 function AnalysisZoomHandler() {
   const map = useMap();
   const analysis = useStore((state) => state.analysis);
   const data = useStore((state) => state.data);
   const layers = useStore((state) => state.layers);
-
-  function WmsLayerRefresher({ customWmsConfig }) {
-    const map = useMap();
-
-    useEffect(() => {
-      if (!map || !customWmsConfig) return;
-
-      // Build auth header if credentials present
-      const authHeader =
-        customWmsConfig.username && customWmsConfig.password
-          ? `Basic ${btoa(`${customWmsConfig.username}:${customWmsConfig.password}`)}`
-          : null;
-
-      // Iterate over layers and refresh the Gemini WMS layer
-      map.eachLayer((layer) => {
-        try {
-          const opts = layer?.options || {};
-          const attr = opts.attribution || '';
-          if (attr && attr.toString().includes('Gemini WMS')) {
-            // Apply auth header if available
-            if (authHeader) {
-              layer._authHeader = authHeader;
-            }
-            // Ensure layers param is up to date
-            if (typeof layer.setParams === 'function') {
-              layer.setParams({ layers: customWmsConfig.layers || '' });
-            }
-            // Force redraw to fetch tiles with new auth header/params
-            if (typeof layer.redraw === 'function') {
-              layer.redraw();
-            }
-          }
-        } catch (e) {
-          // Best-effort: we don't want exceptions to break rendering
-          // eslint-disable-next-line no-console
-          console.warn('WMS refresher error', e);
-        }
-      });
-    }, [map, customWmsConfig?.url, customWmsConfig?.username, customWmsConfig?.password, customWmsConfig?.layers, customWmsConfig?.enabled]);
-
-    return null;
-  }
-
 
   useEffect(() => {
     const activeData = analysis.layerId
