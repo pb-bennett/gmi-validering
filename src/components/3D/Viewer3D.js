@@ -90,6 +90,7 @@ export default function Viewer3D() {
             _layerId: layerId,
             _layerHiddenCodes: layer.hiddenCodes || [],
             _layerHiddenTypes: layer.hiddenTypes || [],
+            _layerFeltHiddenValues: layer.feltHiddenValues || [],
             _originalIndex: idx,
           });
         });
@@ -103,6 +104,7 @@ export default function Viewer3D() {
             _layerId: layerId,
             _layerHiddenCodes: layer.hiddenCodes || [],
             _layerHiddenTypes: layer.hiddenTypes || [],
+            _layerFeltHiddenValues: layer.feltHiddenValues || [],
             _originalIndex: idx,
           });
         });

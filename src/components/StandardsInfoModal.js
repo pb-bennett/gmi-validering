@@ -9,9 +9,6 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
   const inclineRequirementMode = useStore(
     (state) => state.settings.inclineRequirementMode,
   );
-  const minOvercover = useStore(
-    (state) => state.settings.minOvercover,
-  );
   const updateSettings = useStore((state) => state.updateSettings);
 
   const handleModeChange = (mode) => {
@@ -24,9 +21,6 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
     }
   };
 
-  const handleOvercoverChange = (value) => {
-    updateSettings({ minOvercover: value });
-  };
   if (!isOpen) return null;
 
   return (
@@ -145,30 +139,9 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
               tilstrekkelig beskyttelse mot frost og mekaniske
               påkjenninger.
             </p>
-            <div className="mb-3">
-              <label className="flex items-center gap-2 text-sm text-gray-800">
-                <span className="font-medium">Minstekrav (m):</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={minOvercover ?? ''}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const parsed = parseFloat(
-                      String(raw).replace(',', '.'),
-                    );
-                    if (!Number.isFinite(parsed)) return;
-                    handleOvercoverChange(parsed);
-                  }}
-                  className="w-24 rounded border border-amber-200 px-2 py-1 text-sm focus:border-amber-400 focus:ring-amber-400"
-                  aria-label="Minstekrav til overdekning"
-                />
-              </label>
-              <div className="text-xs text-gray-600 mt-1">
-                Standardverdi er 1,6 m. Endring oppdaterer alle
-                overdekningsvarsler.
-              </div>
+            <div className="text-xs text-gray-600 mb-3">
+              Innstillingen for minstekrav til overdekning justeres nå
+              direkte i profilanalysen.
             </div>
             <div className="text-xs text-amber-700 bg-amber-100 p-2 rounded">
               <strong>Merk:</strong> Terrengdata hentes fra Geonorge

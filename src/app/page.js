@@ -48,10 +48,10 @@ export default function Home() {
     (state) => state.closeDataInspector,
   );
   const [zoomLevel, setZoomLevel] = useState(13);
-  
+
   // State for "Add Layer" modal
   const [showAddLayerModal, setShowAddLayerModal] = useState(false);
-  
+
   // State for WMS layer modal
   const [showWmsModal, setShowWmsModal] = useState(false);
   const customWmsConfig = useStore((state) => state.customWmsConfig);
@@ -246,8 +246,8 @@ export default function Home() {
 
           {/* Sidebar - Hidden when data table is open OR field validation is open */}
           {!dataTableOpen && !fieldValidationOpen && (
-            <Sidebar 
-              onReset={handleReset} 
+            <Sidebar
+              onReset={handleReset}
               onAddFile={() => setShowAddLayerModal(true)}
             />
           )}
@@ -302,9 +302,18 @@ export default function Home() {
                       <button
                         onClick={() => setShowWmsModal(true)}
                         className="px-2 py-1.5 rounded shadow text-xs font-medium border transition-colors bg-white/90 text-gray-600 border-gray-200 hover:bg-gray-100 backdrop-blur flex items-center gap-1"
-                        title={customWmsConfig ? 'Endre WMS-innstillinger' : 'Legg til Gemini WMS'}
+                        title={
+                          customWmsConfig
+                            ? 'Endre WMS-innstillinger'
+                            : 'Legg til Gemini WMS'
+                        }
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg
+                          className="w-3.5 h-3.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
                           {customWmsConfig ? (
                             <path
                               strokeLinecap="round"
@@ -397,29 +406,41 @@ export default function Home() {
 
       {/* Tab Switcher - Shows when 3D viewer is open */}
       <TabSwitcher />
-      
+
       {/* Add Layer Modal */}
       {showAddLayerModal && (
-        <div 
+        <div
           className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50"
           onClick={() => setShowAddLayerModal(false)}
         >
-          <div 
+          <div
             className="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Legg til nytt lag</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                Legg til nytt lag
+              </h2>
               <button
                 onClick={() => setShowAddLayerModal(false)}
                 className="p-1 rounded hover:bg-gray-100 transition-colors"
               >
-                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-6 h-6 text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
-            <FileUpload 
+            <FileUpload
               isAddingLayer={true}
               onComplete={() => setShowAddLayerModal(false)}
             />
@@ -428,9 +449,9 @@ export default function Home() {
       )}
 
       {/* WMS Layer Modal */}
-      <WmsLayerModal 
-        isOpen={showWmsModal} 
-        onClose={() => setShowWmsModal(false)} 
+      <WmsLayerModal
+        isOpen={showWmsModal}
+        onClose={() => setShowWmsModal(false)}
       />
     </div>
   );

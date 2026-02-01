@@ -88,13 +88,30 @@ export default function Scene3D({
 
   // Helper function to check if an item is hidden by Felt filter
   const isHiddenByFeltFilter = (item, objectType) => {
+    const attrs = item.attributes || {};
+    const layerFeltHidden = item._layerFeltHiddenValues || [];
+    if (Array.isArray(layerFeltHidden) && layerFeltHidden.length > 0) {
+      const match = layerFeltHidden.some((hidden) => {
+        if (hidden.objectType !== objectType) return false;
+        const featureValue = attrs[hidden.fieldName];
+        const normalizedValue =
+          featureValue === null ||
+          featureValue === undefined ||
+          featureValue === ''
+            ? '(Mangler)'
+            : String(featureValue);
+        return normalizedValue === hidden.value;
+      });
+      if (match) return true;
+    }
+
     if (
       !feltFilterActive ||
       !feltHiddenValues ||
       feltHiddenValues.length === 0
     )
       return false;
-    const attrs = item.attributes || {};
+
     return feltHiddenValues.some((hidden) => {
       if (hidden.objectType !== objectType) return false;
       const featureValue = attrs[hidden.fieldName];

@@ -1794,7 +1794,7 @@ export default function MapInner({ onZoomChange }) {
   const inclineRequirementMode = useStore(
     (state) => state.settings.inclineRequirementMode,
   );
-  
+
   // Custom WMS layer configuration (credentials only in memory)
   const customWmsConfig = useStore((state) => state.customWmsConfig);
 

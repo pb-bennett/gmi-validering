@@ -27,6 +27,10 @@ export default function InclineAnalysisModal() {
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
+  const minOvercover = useStore(
+    (state) => state.settings.minOvercover,
+  );
+  const updateSettings = useStore((state) => state.updateSettings);
 
   // Terrain data for all lines
   const terrainData = useStore((state) => state.terrain.data);
@@ -40,6 +44,10 @@ export default function InclineAnalysisModal() {
   const [showWarning, setShowWarning] = useState(true);
   const [showOk, setShowOk] = useState(true);
   const [showStandardsModal, setShowStandardsModal] = useState(false);
+
+  const handleOvercoverChange = (value) => {
+    updateSettings({ minOvercover: value });
+  };
 
   // Extract available types
   const availableTypes = useMemo(() => {
@@ -137,7 +145,27 @@ export default function InclineAnalysisModal() {
             </span>
           </h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-gray-700">
+            <span className="font-medium">Overdekning (m)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={minOvercover ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const parsed = parseFloat(
+                  String(raw).replace(',', '.'),
+                );
+                if (!Number.isFinite(parsed)) return;
+                handleOvercoverChange(parsed);
+              }}
+              className="w-20 rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-400 focus:ring-blue-400"
+              aria-label="Minstekrav til overdekning"
+              title="Minstekrav til overdekning (m)"
+            />
+          </label>
           <button
             onClick={() => setShowStandardsModal(true)}
             className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 border border-blue-200 flex items-center gap-1"
