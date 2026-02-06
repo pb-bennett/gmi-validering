@@ -2461,12 +2461,13 @@ const useStore = create(
         name: 'gmi-validator-storage',
         version: STORAGE_VERSION,
         // SECURITY: Exclude customWmsConfig from persistence
+        // Avoid persisting large datasets (terrain/layers/data) to prevent quota errors
         // Credentials should NEVER be stored in localStorage
-        partialize: (state) => {
-          // eslint-disable-next-line no-unused-vars
-          const { customWmsConfig, ...rest } = state;
-          return rest;
-        },
+        partialize: (state) => ({
+          settings: state.settings,
+          ui: state.ui,
+          lastActive: state.lastActive,
+        }),
         migrate: (persistedState, version) => {
           if (!persistedState) return persistedState;
 
