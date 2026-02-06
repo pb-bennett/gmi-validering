@@ -1,7 +1,7 @@
 'use client';
 
 import useStore from '@/lib/store';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 
 const formatCoord = (value, decimals = 2) => {
   if (value === null || value === undefined) return '-';
@@ -20,6 +20,8 @@ export default function DataDisplayModal() {
   const file = useStore((state) => state.file);
   const terrainData = useStore((state) => state.terrain.data);
   const analysisResults = useStore((state) => state.analysis.results);
+  const layers = useStore((state) => state.layers);
+  const layerOrder = useStore((state) => state.layerOrder);
   const isOpen = useStore((state) => state.ui.dataInspectorOpen);
   const target = useStore((state) => state.ui.dataInspectorTarget);
   const closeDataInspector = useStore(
@@ -29,6 +31,7 @@ export default function DataDisplayModal() {
     (state) => state.setDataInspectorTarget,
   );
   const [activeTab, setActiveTab] = useState('header');
+  const [selectedLayerId, setSelectedLayerId] = useState(null);
   const [expandedLinePoints, setExpandedLinePoints] = useState({});
   const [expandedLineTerrain, setExpandedLineTerrain] = useState({});
   const [expandedTargetPoints, setExpandedTargetPoints] =
@@ -36,24 +39,40 @@ export default function DataDisplayModal() {
   const [expandedTargetTerrain, setExpandedTargetTerrain] =
     useState(false);
 
-  const header = data?.header || {};
-  const points = data?.points || [];
-  const lines = data?.lines || [];
+  const targetLayerId = target?.layerId || null;
+
+  useEffect(() => {
+    if (!targetLayerId && layerOrder.length > 0) {
+      setSelectedLayerId((prev) => prev || layerOrder[layerOrder.length - 1]);
+    }
+  }, [targetLayerId, layerOrder]);
+
+  const effectiveLayerId = targetLayerId || selectedLayerId || null;
+  const activeLayer = effectiveLayerId ? layers[effectiveLayerId] : null;
+  const activeData = activeLayer?.data || data;
+  const activeFile = activeLayer?.file || file;
+  const activeTerrainData = activeLayer?.terrain?.data || terrainData;
+  const activeAnalysisResults =
+    activeLayer?.analysis?.results || analysisResults;
+
+  const header = activeData?.header || {};
+  const points = activeData?.points || [];
+  const lines = activeData?.lines || [];
   const targetPoint =
     target?.type === 'point' ? points?.[target.index] : null;
   const targetLine =
     target?.type === 'line' ? lines?.[target.index] : null;
   const targetTerrain = targetLine
-    ? terrainData?.[target.index]
+    ? activeTerrainData?.[target.index]
     : null;
   const targetAnalysis = useMemo(() => {
     if (!targetLine) return null;
-    return analysisResults?.find(
+    return activeAnalysisResults?.find(
       (result) => result.lineIndex === target.index,
     );
-  }, [analysisResults, targetLine, target?.index]);
+  }, [activeAnalysisResults, targetLine, target?.index]);
 
-  if (!isOpen || !data) return null;
+  if (!isOpen || !activeData) return null;
 
   const handleClose = () => {
     closeDataInspector();
@@ -204,9 +223,29 @@ export default function DataDisplayModal() {
             <h2 className="text-lg font-semibold">
               Datautforsker
             </h2>
-            <p className="text-sm text-gray-500">Fil: {file?.name}</p>
+            <p className="text-sm text-gray-500">
+              Fil: {activeFile?.name || 'Ukjent fil'}
+            </p>
           </div>
           <div className="flex items-center gap-2">
+            {!targetLayerId && layerOrder.length > 0 && (
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="font-medium">Lag</span>
+                <select
+                  className="rounded border border-gray-300 px-2 py-1 text-xs"
+                  value={effectiveLayerId || ''}
+                  onChange={(e) =>
+                    setSelectedLayerId(e.target.value || null)
+                  }
+                >
+                  {layerOrder.map((layerId) => (
+                    <option key={layerId} value={layerId}>
+                      {layers[layerId]?.file?.name || layerId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {target && (
               <button
                 onClick={() => setDataInspectorTarget(null)}

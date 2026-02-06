@@ -481,6 +481,7 @@ export default function InclineAnalysisModal() {
                       openDataInspector({
                         type: 'line',
                         index: selectedResult.lineIndex,
+                        layerId: analysisLayerId || null,
                       })
                     }
                     className="px-2 py-1 text-[11px] rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"

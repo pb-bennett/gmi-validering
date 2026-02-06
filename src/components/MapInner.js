@@ -1838,6 +1838,7 @@ export default function MapInner({ onZoomChange }) {
           openDataInspector({
             type: featureType === 'Point' ? 'point' : 'line',
             index,
+            layerId,
           });
         }
       }
