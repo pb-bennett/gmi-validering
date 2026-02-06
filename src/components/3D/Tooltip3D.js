@@ -135,11 +135,19 @@ export default function Tooltip3D({ object, position, onClose }) {
 
   const handleInspectData = () => {
     if (object.type === 'pipe' && object.lineIndex !== undefined) {
-      openDataInspector({ type: 'line', index: object.lineIndex });
+      openDataInspector({
+        type: 'line',
+        index: object.lineIndex,
+        layerId: object.layerId || null,
+      });
     }
 
     if (object.type === 'point' && object.pointIndex !== undefined) {
-      openDataInspector({ type: 'point', index: object.pointIndex });
+      openDataInspector({
+        type: 'point',
+        index: object.pointIndex,
+        layerId: object.layerId || null,
+      });
     }
 
     onClose();

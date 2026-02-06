@@ -27,17 +27,32 @@ export default function InclineAnalysisModal() {
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
+  const forceTerrainFetch = useStore(
+    (state) => state.forceTerrainFetch,
+  );
+  const forceLayerTerrainFetch = useStore(
+    (state) => state.forceLayerTerrainFetch,
+  );
+  const selectedTerrainStatus = useStore((state) => {
+    if (selectedPipeIndex === null) return 'idle';
+    if (analysisLayerId) {
+      return (
+        state.layers[analysisLayerId]?.terrain?.data?.[
+          selectedPipeIndex
+        ]?.status || 'idle'
+      );
+    }
+    return (
+      state.terrain.data[selectedPipeIndex]?.status || 'idle'
+    );
+  });
   const minOvercover = useStore(
     (state) => state.settings.minOvercover,
   );
   const updateSettings = useStore((state) => state.updateSettings);
 
-  // Terrain data for all lines
-  const terrainData = useStore((state) => state.terrain.data);
-  const layers = useStore((state) => state.layers);
-  const activeTerrainData = analysisLayerId
-    ? layers[analysisLayerId]?.terrain?.data || {}
-    : terrainData;
+  // DON'T subscribe to terrain.data or layers here - let child components do it
+  // This prevents re-rendering the entire list on every terrain update
 
   // Filters
   const [selectedType, setSelectedType] = useState('ALL');
@@ -146,6 +161,50 @@ export default function InclineAnalysisModal() {
           </h2>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (selectedPipeIndex === null) return;
+              if (analysisLayerId) {
+                forceLayerTerrainFetch(
+                  analysisLayerId,
+                  selectedPipeIndex,
+                );
+              } else {
+                forceTerrainFetch(selectedPipeIndex);
+              }
+            }}
+            disabled={selectedPipeIndex === null}
+            className="text-xs bg-white text-gray-700 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Hent terrengdata på nytt for valgt ledning"
+          >
+            {selectedTerrainStatus === 'loading' ? (
+              <span className="inline-flex items-center gap-1">
+                <svg
+                  className="animate-spin h-3 w-3"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Henter terreng…
+              </span>
+            ) : (
+              'Oppdater terreng'
+            )}
+          </button>
           <label className="flex items-center gap-2 text-xs text-gray-700">
             <span className="font-medium">Overdekning (m)</span>
             <input
@@ -267,7 +326,12 @@ export default function InclineAnalysisModal() {
                 res.attributes.S_FCODE ||
                 'Ukjent';
               const color = getColorByFCode(fcode);
-              const terrain = activeTerrainData[res.lineIndex];
+              // Use getState() to avoid subscribing to terrain updates at parent level
+              const state = useStore.getState();
+              const terrainSource = analysisLayerId
+                ? state.layers[analysisLayerId]?.terrain?.data
+                : state.terrain.data;
+              const terrain = terrainSource?.[res.lineIndex];
               const terrainStatus = terrain?.status || 'idle';
               const hasOvercoverWarning =
                 terrain?.overcover?.warnings?.length > 0;
@@ -423,8 +487,12 @@ export default function InclineAnalysisModal() {
                     {formatNumber(selectedResult.details.deltaZ, 3)} m
                   </span>
                   {(() => {
+                    const state = useStore.getState();
+                    const terrainSource = analysisLayerId
+                      ? state.layers[analysisLayerId]?.terrain?.data
+                      : state.terrain.data;
                     const terrain =
-                      terrainData[selectedResult.lineIndex];
+                      terrainSource?.[selectedResult.lineIndex];
                     if (!terrain) return null;
 
                     if (terrain.status === 'loading') {
@@ -481,6 +549,7 @@ export default function InclineAnalysisModal() {
                       openDataInspector({
                         type: 'line',
                         index: selectedResult.lineIndex,
+                        layerId: analysisLayerId || null,
                       })
                     }
                     className="px-2 py-1 text-[11px] rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"

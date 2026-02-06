@@ -6,8 +6,7 @@ import { GMIParser } from '@/lib/parsing/gmiParser';
 import { SOSIParser } from '@/lib/parsing/sosiParser';
 import { KOFParser } from '@/lib/parsing/kofParser';
 
-export default function FileUpload({ onComplete, isAddingLayer = false }) {
-  const [isDragging, setIsDragging] = useState(false);
+export function useFileLoader({ onComplete } = {}) {
   const setFile = useStore((state) => state.setFile);
   const startParsing = useStore((state) => state.startParsing);
   const setParsingDone = useStore((state) => state.setParsingDone);
@@ -158,12 +157,12 @@ export default function FileUpload({ onComplete, isAddingLayer = false }) {
 
           // Always use layer system - add file as a new layer
           addLayer({ file: fileMeta, data: parsedData });
-          
+
           // Also set legacy data/file state for backward compatibility
           setFile(fileMeta);
           setData(parsedData);
           setParsingDone();
-          
+
           // Notify parent if callback provided
           if (onComplete) {
             onComplete();
@@ -241,6 +240,13 @@ export default function FileUpload({ onComplete, isAddingLayer = false }) {
       onComplete,
     ]
   );
+
+  return { handleFile };
+}
+
+export default function FileUpload({ onComplete, isAddingLayer = false }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const { handleFile } = useFileLoader({ onComplete });
 
   const onDragOver = useCallback((e) => {
     e.preventDefault();

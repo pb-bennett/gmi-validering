@@ -1718,7 +1718,14 @@ export default function MapInner({ onZoomChange }) {
     });
     return map;
   }, [layerOrder]);
-  const analysis = useStore((state) => state.analysis);
+  // Narrow selectors for analysis state to avoid re-renders on unrelated changes
+  const analysisIsOpen = useStore((state) => state.analysis.isOpen);
+  const analysisSelectedPipeIndex = useStore(
+    (state) => state.analysis.selectedPipeIndex,
+  );
+  const analysisLayerId = useStore(
+    (state) => state.analysis.layerId,
+  );
   const measureMode = useStore((state) => state.ui.measureMode);
   const addMeasurePoint = useStore((state) => state.addMeasurePoint);
   const highlightedCode = useStore(
@@ -1838,6 +1845,7 @@ export default function MapInner({ onZoomChange }) {
           openDataInspector({
             type: featureType === 'Point' ? 'point' : 'line',
             index,
+            layerId,
           });
         }
       }
@@ -2108,8 +2116,8 @@ export default function MapInner({ onZoomChange }) {
       highlightedTypeContext || '',
       highlightedFeatureId || '',
       highlightedFeatureIds ? highlightedFeatureIds.size : 0,
-      analysis.isOpen
-        ? `open-${analysis.selectedPipeIndex}`
+      analysisIsOpen
+        ? `open-${analysisSelectedPipeIndex}`
         : 'closed',
       filteredFeatureIds ? filteredFeatureIds.size : 0,
       outlierFeatureIds ? outlierFeatureIds.size : 0,
@@ -2135,8 +2143,8 @@ export default function MapInner({ onZoomChange }) {
     highlightedTypeContext,
     highlightedFeatureId,
     highlightedFeatureIds,
-    analysis.isOpen,
-    analysis.selectedPipeIndex,
+    analysisIsOpen,
+    analysisSelectedPipeIndex,
     filteredFeatureIds,
     outlierFeatureIds,
     feltFilterActive,
@@ -2344,17 +2352,17 @@ export default function MapInner({ onZoomChange }) {
       }
 
       // Analysis Mode Highlighting
-      if (analysis.isOpen && analysis.selectedPipeIndex !== null) {
+      if (analysisIsOpen && analysisSelectedPipeIndex !== null) {
         // Match by ID (we added 'id' property in geoJsonData creation which corresponds to index)
         const isSelected =
-          feature.properties.id === analysis.selectedPipeIndex &&
+          feature.properties.id === analysisSelectedPipeIndex &&
           feature.properties.featureType === 'Line' &&
-          (!analysis.layerId ||
-            feature.properties._layerId === analysis.layerId);
+          (!analysisLayerId ||
+            feature.properties._layerId === analysisLayerId);
 
         if (
-          analysis.layerId &&
-          feature.properties._layerId !== analysis.layerId
+          analysisLayerId &&
+          feature.properties._layerId !== analysisLayerId
         ) {
           return {
             color: getColorByFCode(fcode),
@@ -2413,9 +2421,9 @@ export default function MapInner({ onZoomChange }) {
       isHighlightedByFeltHover,
       filteredFeatureIds,
       outlierFeatureIds,
-      analysis.isOpen,
-      analysis.selectedPipeIndex,
-      analysis.layerId,
+      analysisIsOpen,
+      analysisSelectedPipeIndex,
+      analysisLayerId,
       getFeatureIds,
       setHasFeatureId,
     ],
@@ -2821,18 +2829,25 @@ export default function MapInner({ onZoomChange }) {
 }
 
 function AnalysisPointsLayer() {
-  const analysis = useStore((state) => state.analysis);
+  const analysisIsOpen = useStore((state) => state.analysis.isOpen);
+  const analysisSelectedPipeIndex = useStore(
+    (state) => state.analysis.selectedPipeIndex,
+  );
+  const analysisLayerId = useStore(
+    (state) => state.analysis.layerId,
+  );
   const data = useStore((state) => state.data);
-  const layers = useStore((state) => state.layers);
 
   const { points, pipeColor, lineCoords, sourceProj } =
     useMemo(() => {
+      // Use getState() to read layers only when needed
+      const layers = useStore.getState().layers;
       if (
-        !analysis.isOpen ||
-        analysis.selectedPipeIndex === null ||
-        !(analysis.layerId ? layers[analysis.layerId]?.data : data) ||
-        !(analysis.layerId
-          ? layers[analysis.layerId]?.data?.lines
+        !analysisIsOpen ||
+        analysisSelectedPipeIndex === null ||
+        !(analysisLayerId ? layers[analysisLayerId]?.data : data) ||
+        !(analysisLayerId
+          ? layers[analysisLayerId]?.data?.lines
           : data?.lines)
       ) {
         return {
@@ -2843,10 +2858,10 @@ function AnalysisPointsLayer() {
         };
       }
 
-      const activeData = analysis.layerId
-        ? layers[analysis.layerId]?.data
+      const activeData = analysisLayerId
+        ? layers[analysisLayerId]?.data
         : data;
-      const line = activeData?.lines?.[analysis.selectedPipeIndex];
+      const line = activeData?.lines?.[analysisSelectedPipeIndex];
       if (!line || !line.coordinates)
         return {
           points: [],
@@ -2903,15 +2918,19 @@ function AnalysisPointsLayer() {
         sourceProj,
       };
     }, [
-      analysis.isOpen,
-      analysis.selectedPipeIndex,
-      analysis.layerId,
+      analysisIsOpen,
+      analysisSelectedPipeIndex,
+      analysisLayerId,
       data,
-      layers,
     ]);
 
+  // Subscribe to hoveredTerrainPoint separately (changes frequently during hover)
+  const hoveredTerrainPoint = useStore(
+    (state) => state.analysis.hoveredTerrainPoint,
+  );
+
   const hoveredTerrainLatLng = useMemo(() => {
-    const target = analysis.hoveredTerrainPoint;
+    const target = hoveredTerrainPoint;
     if (!target || !lineCoords || lineCoords.length < 2) return null;
 
     const targetDist =
@@ -2951,12 +2970,21 @@ function AnalysisPointsLayer() {
     }
 
     return null;
-  }, [analysis.hoveredTerrainPoint, lineCoords, sourceProj]);
+  }, [hoveredTerrainPoint, lineCoords, sourceProj]);
+
+  // Subscribe to hoveredSegment separately
+  const hoveredSegment = useStore(
+    (state) => state.analysis.hoveredSegment,
+  );
+
+  const hoveredPointIndex = useStore(
+    (state) => state.analysis.hoveredPointIndex,
+  );
 
   const hoveredSegmentPolyline = useMemo(() => {
-    if (!analysis.hoveredSegment || points.length === 0) return null;
+    if (!hoveredSegment || points.length === 0) return null;
 
-    const { p1, p2 } = analysis.hoveredSegment;
+    const { p1, p2 } = hoveredSegment;
     // Find points with these indices
     const point1 = points.find((p) => p.index === p1);
     const point2 = points.find((p) => p.index === p2);
@@ -2968,7 +2996,7 @@ function AnalysisPointsLayer() {
       ];
     }
     return null;
-  }, [analysis.hoveredSegment, points]);
+  }, [hoveredSegment, points]);
 
   if (points.length === 0) return null;
 
@@ -2981,7 +3009,7 @@ function AnalysisPointsLayer() {
         />
       )}
       {points.map((p) => {
-        const isHovered = analysis.hoveredPointIndex === p.index;
+        const isHovered = hoveredPointIndex === p.index;
         return (
           <CircleMarker
             key={p.index}
@@ -3085,22 +3113,29 @@ function WmsLayerRefresher({ customWmsConfig }) {
 
 function AnalysisZoomHandler() {
   const map = useMap();
-  const analysis = useStore((state) => state.analysis);
+  const analysisIsOpen = useStore((state) => state.analysis.isOpen);
+  const analysisSelectedPipeIndex = useStore(
+    (state) => state.analysis.selectedPipeIndex,
+  );
+  const analysisLayerId = useStore(
+    (state) => state.analysis.layerId,
+  );
   const data = useStore((state) => state.data);
-  const layers = useStore((state) => state.layers);
 
   useEffect(() => {
-    const activeData = analysis.layerId
-      ? layers[analysis.layerId]?.data
+    // Use getState() to read layers only when zoom effect runs
+    const layers = useStore.getState().layers;
+    const activeData = analysisLayerId
+      ? layers[analysisLayerId]?.data
       : data;
 
     if (
-      analysis.isOpen &&
-      analysis.selectedPipeIndex !== null &&
+      analysisIsOpen &&
+      analysisSelectedPipeIndex !== null &&
       activeData &&
       activeData.lines
     ) {
-      const line = activeData.lines[analysis.selectedPipeIndex];
+      const line = activeData.lines[analysisSelectedPipeIndex];
       if (line && line.coordinates && line.coordinates.length > 0) {
         // Determine source projection
         let sourceProj = 'EPSG:4326';
@@ -3165,11 +3200,10 @@ function AnalysisZoomHandler() {
       }
     }
   }, [
-    analysis.isOpen,
-    analysis.selectedPipeIndex,
-    analysis.layerId,
+    analysisIsOpen,
+    analysisSelectedPipeIndex,
+    analysisLayerId,
     data,
-    layers,
     map,
   ]);
 

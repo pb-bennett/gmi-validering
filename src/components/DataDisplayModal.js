@@ -1,7 +1,8 @@
 'use client';
 
 import useStore from '@/lib/store';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { fetchTerrainHeights } from '@/lib/analysis/terrain';
 
 const formatCoord = (value, decimals = 2) => {
   if (value === null || value === undefined) return '-';
@@ -20,6 +21,8 @@ export default function DataDisplayModal() {
   const file = useStore((state) => state.file);
   const terrainData = useStore((state) => state.terrain.data);
   const analysisResults = useStore((state) => state.analysis.results);
+  const layers = useStore((state) => state.layers);
+  const layerOrder = useStore((state) => state.layerOrder);
   const isOpen = useStore((state) => state.ui.dataInspectorOpen);
   const target = useStore((state) => state.ui.dataInspectorTarget);
   const closeDataInspector = useStore(
@@ -29,31 +32,126 @@ export default function DataDisplayModal() {
     (state) => state.setDataInspectorTarget,
   );
   const [activeTab, setActiveTab] = useState('header');
+  const [selectedLayerId, setSelectedLayerId] = useState(null);
   const [expandedLinePoints, setExpandedLinePoints] = useState({});
   const [expandedLineTerrain, setExpandedLineTerrain] = useState({});
   const [expandedTargetPoints, setExpandedTargetPoints] =
     useState(false);
   const [expandedTargetTerrain, setExpandedTargetTerrain] =
     useState(false);
+  const [pointTerrainHeights, setPointTerrainHeights] = useState({});
+  const [fetchingPointTerrain, setFetchingPointTerrain] =
+    useState(false);
+  const pointTerrainKeyRef = useRef(null);
 
-  const header = data?.header || {};
-  const points = data?.points || [];
-  const lines = data?.lines || [];
+  const targetLayerId = target?.layerId || null;
+
+  useEffect(() => {
+    if (!targetLayerId && layerOrder.length > 0) {
+      setSelectedLayerId((prev) => prev || layerOrder[layerOrder.length - 1]);
+    }
+  }, [targetLayerId, layerOrder]);
+
+  // Reset point terrain when layer changes
+  useEffect(() => {
+    setPointTerrainHeights({});
+    pointTerrainKeyRef.current = null;
+  }, [targetLayerId, selectedLayerId]);
+
+  const effectiveLayerId = targetLayerId || selectedLayerId || null;
+  const activeLayer = effectiveLayerId ? layers[effectiveLayerId] : null;
+  const activeData = activeLayer?.data || data;
+  const activeFile = activeLayer?.file || file;
+  const activeTerrainData = activeLayer?.terrain?.data || terrainData;
+  const activeAnalysisResults =
+    activeLayer?.analysis?.results || analysisResults;
+
+  const header = activeData?.header || {};
+  const points = activeData?.points || [];
+  const lines = activeData?.lines || [];
   const targetPoint =
     target?.type === 'point' ? points?.[target.index] : null;
   const targetLine =
     target?.type === 'line' ? lines?.[target.index] : null;
   const targetTerrain = targetLine
-    ? terrainData?.[target.index]
+    ? activeTerrainData?.[target.index]
     : null;
   const targetAnalysis = useMemo(() => {
     if (!targetLine) return null;
-    return analysisResults?.find(
+    return activeAnalysisResults?.find(
       (result) => result.lineIndex === target.index,
     );
-  }, [analysisResults, targetLine, target?.index]);
+  }, [activeAnalysisResults, targetLine, target?.index]);
 
-  if (!isOpen || !data) return null;
+  // Fetch terrain heights for points on demand (local state only)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const wantsPoints =
+      (!target && activeTab === 'points') || target?.type === 'point';
+    if (!wantsPoints) return;
+
+    const pts = activeData?.points || [];
+    if (!pts.length) return;
+
+    const fetchKey =
+      target?.type === 'point'
+        ? `point-${target.index}-${effectiveLayerId}`
+        : `points-tab-${effectiveLayerId}`;
+
+    if (pointTerrainKeyRef.current === fetchKey) return;
+    pointTerrainKeyRef.current = fetchKey;
+
+    const epsg = activeData?.header?.COSYS_EPSG || 25832;
+    const coordsToFetch = [];
+    const indexMap = [];
+
+    if (target?.type === 'point') {
+      const pt = pts[target.index];
+      const c = pt?.coordinates?.[0];
+      if (c?.x != null && c?.y != null) {
+        coordsToFetch.push({ x: Number(c.x), y: Number(c.y) });
+        indexMap.push(target.index);
+      }
+    } else {
+      pts.slice(0, 100).forEach((pt, idx) => {
+        const c = pt?.coordinates?.[0];
+        if (c?.x != null && c?.y != null) {
+          coordsToFetch.push({ x: Number(c.x), y: Number(c.y) });
+          indexMap.push(idx);
+        }
+      });
+    }
+
+    if (!coordsToFetch.length) return;
+
+    let cancelled = false;
+    setFetchingPointTerrain(true);
+
+    fetchTerrainHeights(coordsToFetch, epsg)
+      .then((results) => {
+        if (cancelled) return;
+        setPointTerrainHeights((prev) => {
+          const next = { ...prev };
+          indexMap.forEach((ptIdx, i) => {
+            next[ptIdx] = results[i] || null;
+          });
+          return next;
+        });
+      })
+      .catch((err) =>
+        console.error('Point terrain fetch error:', err),
+      )
+      .finally(() => {
+        if (!cancelled) setFetchingPointTerrain(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, target, effectiveLayerId, activeData]);
+
+  if (!isOpen || !activeData) return null;
 
   const handleClose = () => {
     closeDataInspector();
@@ -204,9 +302,29 @@ export default function DataDisplayModal() {
             <h2 className="text-lg font-semibold">
               Datautforsker
             </h2>
-            <p className="text-sm text-gray-500">Fil: {file?.name}</p>
+            <p className="text-sm text-gray-500">
+              Fil: {activeFile?.name || 'Ukjent fil'}
+            </p>
           </div>
           <div className="flex items-center gap-2">
+            {!targetLayerId && layerOrder.length > 0 && (
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="font-medium">Lag</span>
+                <select
+                  className="rounded border border-gray-300 px-2 py-1 text-xs"
+                  value={effectiveLayerId || ''}
+                  onChange={(e) =>
+                    setSelectedLayerId(e.target.value || null)
+                  }
+                >
+                  {layerOrder.map((layerId) => (
+                    <option key={layerId} value={layerId}>
+                      {layers[layerId]?.file?.name || layerId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {target && (
               <button
                 onClick={() => setDataInspectorTarget(null)}
@@ -285,6 +403,70 @@ export default function DataDisplayModal() {
                 </div>
                 <div className="mt-1 text-sm text-gray-800">
                   {renderPointCoordinates(targetPoint.coordinates)}
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-700">
+                  Terrenghøyde
+                </h4>
+                <div className="mt-2 text-sm text-gray-800">
+                  {fetchingPointTerrain &&
+                  !pointTerrainHeights[target.index] ? (
+                    <span className="text-xs text-gray-500">
+                      Henter terrenghøyde…
+                    </span>
+                  ) : pointTerrainHeights[target.index]?.z !=
+                    null ? (
+                    <div className="text-xs space-y-1">
+                      <div>
+                        Terreng Z:{' '}
+                        <span className="font-medium">
+                          {formatCoord(
+                            pointTerrainHeights[target.index].z,
+                            3,
+                          )}
+                        </span>{' '}
+                        m
+                      </div>
+                      {pointTerrainHeights[target.index]
+                        .terreng && (
+                        <div>
+                          Type:{' '}
+                          {pointTerrainHeights[target.index].terreng}
+                        </div>
+                      )}
+                      {pointTerrainHeights[target.index]
+                        .datakilde && (
+                        <div>
+                          Datakilde:{' '}
+                          {
+                            pointTerrainHeights[target.index]
+                              .datakilde
+                          }
+                        </div>
+                      )}
+                      {targetPoint.coordinates?.[0]?.z != null && (
+                        <div className="mt-1 pt-1 border-t">
+                          Differanse (punkt − terreng):{' '}
+                          <span className="font-medium">
+                            {formatCoord(
+                              Number(
+                                targetPoint.coordinates[0].z,
+                              ) -
+                                pointTerrainHeights[target.index].z,
+                              3,
+                            )}
+                          </span>{' '}
+                          m
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500">
+                      Ingen terrenghøyde tilgjengelig
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -415,6 +597,9 @@ export default function DataDisplayModal() {
                       Koordinater (X, Y, Z)
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Terreng Z
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Attributter
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -430,6 +615,15 @@ export default function DataDisplayModal() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {renderPointCoordinates(point.coordinates)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {fetchingPointTerrain &&
+                        pointTerrainHeights[idx] === undefined
+                          ? '…'
+                          : formatCoord(
+                              pointTerrainHeights[idx]?.z,
+                              3,
+                            )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         <pre className="text-xs">
@@ -556,7 +750,7 @@ export default function DataDisplayModal() {
                             className="px-6 pb-4 text-sm text-gray-500"
                           >
                             <div className="mt-2">
-                              {renderTerrainPoints(terrainData?.[idx])}
+                              {renderTerrainPoints(activeTerrainData?.[idx])}
                             </div>
                           </td>
                         </tr>
