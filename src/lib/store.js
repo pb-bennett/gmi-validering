@@ -725,6 +725,31 @@ const useStore = create(
             'terrain/addToQueue',
           ),
 
+        forceTerrainFetch: (lineIndex) =>
+          set(
+            (state) => {
+              const nextQueue = state.terrain.fetchQueue.filter(
+                (i) => i !== lineIndex,
+              );
+              return {
+                terrain: {
+                  ...state.terrain,
+                  data: {
+                    ...state.terrain.data,
+                    [lineIndex]: {
+                      ...(state.terrain.data[lineIndex] || {}),
+                      status: 'loading',
+                      error: null,
+                    },
+                  },
+                  fetchQueue: [lineIndex, ...nextQueue],
+                },
+              };
+            },
+            false,
+            'terrain/forceFetch',
+          ),
+
         prioritizeTerrainFetch: (lineIndex) =>
           set(
             (state) => {
@@ -2345,6 +2370,39 @@ const useStore = create(
             },
             false,
             'layers/prioritizeTerrainFetch',
+          ),
+
+        forceLayerTerrainFetch: (layerId, lineIndex) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              const nextQueue = layer.terrain.fetchQueue.filter(
+                (i) => i !== lineIndex,
+              );
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    terrain: {
+                      ...layer.terrain,
+                      data: {
+                        ...layer.terrain.data,
+                        [lineIndex]: {
+                          ...(layer.terrain.data[lineIndex] || {}),
+                          status: 'loading',
+                          error: null,
+                        },
+                      },
+                      fetchQueue: [lineIndex, ...nextQueue],
+                    },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/forceTerrainFetch',
           ),
 
         /**

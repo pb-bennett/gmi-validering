@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import FileUpload from '@/components/FileUpload';
+import GlobalFileDrop from '@/components/GlobalFileDrop';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import ZValidationModal from '@/components/ZValidationModal';
 import InclineAnalysisModal from '@/components/InclineAnalysisModal';
@@ -93,6 +94,7 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
+      <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
       {/* Floating Reset Button - Always visible when data is loaded */}
       {parsingStatus === 'done' && (
         <button
