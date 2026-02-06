@@ -2254,6 +2254,100 @@ const useStore = create(
           ),
 
         /**
+         * Set layer terrain status for a specific line
+         */
+        setLayerTerrainStatus: (layerId, lineIndex, status, error = null) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    terrain: {
+                      ...layer.terrain,
+                      data: {
+                        ...layer.terrain.data,
+                        [lineIndex]: {
+                          ...(layer.terrain.data[lineIndex] || {}),
+                          status,
+                          error,
+                        },
+                      },
+                    },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/setTerrainStatus',
+          ),
+
+        /**
+         * Pop next item from a layer's terrain fetch queue
+         */
+        popFromLayerTerrainQueue: (layerId) => {
+          const state = get();
+          const layer = state.layers[layerId];
+          if (!layer?.terrain?.fetchQueue?.length) return undefined;
+          const [next, ...rest] = layer.terrain.fetchQueue;
+          set(
+            {
+              layers: {
+                ...state.layers,
+                [layerId]: {
+                  ...layer,
+                  terrain: {
+                    ...layer.terrain,
+                    fetchQueue: rest,
+                    currentlyFetching: next ?? null,
+                  },
+                },
+              },
+            },
+            false,
+            'layers/popTerrainQueue',
+          );
+          return next;
+        },
+
+        /**
+         * Prioritize a specific line in a layer's terrain fetch queue
+         */
+        prioritizeLayerTerrainFetch: (layerId, lineIndex) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              if (
+                layer.terrain.data[lineIndex]?.status === 'done' ||
+                layer.terrain.data[lineIndex]?.status === 'loading'
+              ) {
+                return state;
+              }
+              const newQueue = layer.terrain.fetchQueue.filter(
+                (i) => i !== lineIndex,
+              );
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    terrain: {
+                      ...layer.terrain,
+                      fetchQueue: [lineIndex, ...newQueue],
+                    },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/prioritizeTerrainFetch',
+          ),
+
+        /**
          * Get combined data from all visible layers (for components that need merged view)
          */
         getVisibleLayersData: () => {
