@@ -32,12 +32,8 @@ export default function InclineAnalysisModal() {
   );
   const updateSettings = useStore((state) => state.updateSettings);
 
-  // Terrain data for all lines
-  const terrainData = useStore((state) => state.terrain.data);
-  const layers = useStore((state) => state.layers);
-  const activeTerrainData = analysisLayerId
-    ? layers[analysisLayerId]?.terrain?.data || {}
-    : terrainData;
+  // DON'T subscribe to terrain.data or layers here - let child components do it
+  // This prevents re-rendering the entire list on every terrain update
 
   // Filters
   const [selectedType, setSelectedType] = useState('ALL');
@@ -267,7 +263,12 @@ export default function InclineAnalysisModal() {
                 res.attributes.S_FCODE ||
                 'Ukjent';
               const color = getColorByFCode(fcode);
-              const terrain = activeTerrainData[res.lineIndex];
+              // Use getState() to avoid subscribing to terrain updates at parent level
+              const state = useStore.getState();
+              const terrainSource = analysisLayerId
+                ? state.layers[analysisLayerId]?.terrain?.data
+                : state.terrain.data;
+              const terrain = terrainSource?.[res.lineIndex];
               const terrainStatus = terrain?.status || 'idle';
               const hasOvercoverWarning =
                 terrain?.overcover?.warnings?.length > 0;
@@ -423,8 +424,12 @@ export default function InclineAnalysisModal() {
                     {formatNumber(selectedResult.details.deltaZ, 3)} m
                   </span>
                   {(() => {
+                    const state = useStore.getState();
+                    const terrainSource = analysisLayerId
+                      ? state.layers[analysisLayerId]?.terrain?.data
+                      : state.terrain.data;
                     const terrain =
-                      terrainData[selectedResult.lineIndex];
+                      terrainSource?.[selectedResult.lineIndex];
                     if (!terrain) return null;
 
                     if (terrain.status === 'loading') {

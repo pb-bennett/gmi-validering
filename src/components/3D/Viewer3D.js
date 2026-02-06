@@ -11,7 +11,7 @@ import Legend3D from './Legend3D';
 
 export default function Viewer3D() {
   const data = useStore((state) => state.data);
-  const layers = useStore((state) => state.layers);
+  // Use useShallow for layerOrder to only trigger on actual order changes
   const layerOrder = useStore(
     useShallow((state) => state.layerOrder),
   );
@@ -66,6 +66,9 @@ export default function Viewer3D() {
       return data;
     }
 
+    // Use getState() to avoid subscribing to layers object (which changes on terrain updates)
+    const layers = useStore.getState().layers;
+
     // Combine all visible layer data
     const combined = {
       header: null,
@@ -114,7 +117,7 @@ export default function Viewer3D() {
     return combined.points.length > 0 || combined.lines.length > 0
       ? combined
       : null;
-  }, [isMultiLayerMode, data, layers, layerOrder]);
+  }, [isMultiLayerMode, data, layerOrder]);
 
   // Clear selected object when it's been processed
   useEffect(() => {

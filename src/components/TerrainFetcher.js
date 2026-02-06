@@ -18,18 +18,19 @@ import { generateProfilePoints } from '@/lib/analysis/lineSampling';
  * - Non-blocking to keep app responsive
  */
 export default function TerrainFetcher() {
-  // Subscriptions for triggering queue processing
-  const fetchQueue = useStore((state) => state.terrain.fetchQueue);
+  // Minimal subscriptions - only what triggers processing
+  const fetchQueueLength = useStore(
+    (state) => state.terrain.fetchQueue.length,
+  );
   const selectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
   const analysisLayerId = useStore(
     (state) => state.analysis.layerId,
   );
-  const terrainData = useStore((state) => state.terrain.data);
   const layerOrder = useStore((state) => state.layerOrder);
 
-  // Base terrain actions
+  // Base terrain actions (stable references)
   const setTerrainData = useStore((state) => state.setTerrainData);
   const setTerrainStatus = useStore(
     (state) => state.setTerrainStatus,
@@ -41,7 +42,7 @@ export default function TerrainFetcher() {
     (state) => state.prioritizeTerrainFetch,
   );
 
-  // Layer terrain actions
+  // Layer terrain actions (stable references)
   const setLayerTerrainData = useStore(
     (state) => state.setLayerTerrainData,
   );
@@ -58,11 +59,12 @@ export default function TerrainFetcher() {
   const isFetchingRef = useRef(false);
 
   // Prioritize selected pipe when it changes (base or layer)
+  // Use getState() to avoid subscribing to terrain.data changes
   useEffect(() => {
     if (selectedPipeIndex === null) return;
 
+    const state = useStore.getState();
     if (analysisLayerId) {
-      const state = useStore.getState();
       const layer = state.layers[analysisLayerId];
       if (
         layer &&
@@ -73,13 +75,12 @@ export default function TerrainFetcher() {
           selectedPipeIndex,
         );
       }
-    } else if (!terrainData[selectedPipeIndex]?.status) {
+    } else if (!state.terrain.data[selectedPipeIndex]?.status) {
       prioritizeTerrainFetch(selectedPipeIndex);
     }
   }, [
     selectedPipeIndex,
     analysisLayerId,
-    terrainData,
     prioritizeTerrainFetch,
     prioritizeLayerTerrainFetch,
   ]);
@@ -226,10 +227,10 @@ export default function TerrainFetcher() {
 
   // Watch base queue and process when items are available
   useEffect(() => {
-    if (fetchQueue.length > 0 && !isFetchingRef.current) {
+    if (fetchQueueLength > 0 && !isFetchingRef.current) {
       processQueue();
     }
-  }, [fetchQueue, processQueue]);
+  }, [fetchQueueLength, processQueue]);
 
   // Watch for new layers being added (triggers layer queue processing)
   useEffect(() => {
