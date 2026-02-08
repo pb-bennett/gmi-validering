@@ -10,7 +10,7 @@ import InclineAnalysisModal from '@/components/InclineAnalysisModal';
 import FieldValidationSidebar from '@/components/FieldValidationSidebar';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
-import DataTable from '@/components/DataTable';
+import LayerDataTable from '@/components/LayerDataTable';
 import TabSwitcher from '@/components/TabSwitcher';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
@@ -30,13 +30,14 @@ const Viewer3D = dynamic(() => import('@/components/3D/Viewer3D'), {
 export default function Home() {
   const parsingStatus = useStore((state) => state.parsing.status);
   const parsingError = useStore((state) => state.parsing.error);
-  const dataTableOpen = useStore((state) => state.ui.dataTableOpen);
-  const toggleDataTable = useStore((state) => state.toggleDataTable);
   const resetAll = useStore((state) => state.resetAll);
   const updateLastActive = useStore(
     (state) => state.updateLastActive,
   );
   const analysisOpen = useStore((state) => state.analysis.isOpen);
+  const layerDataTableOpen = useStore(
+    (state) => state.ui.layerDataTable?.isOpen,
+  );
   const fieldValidationOpen = useStore(
     (state) => state.ui.fieldValidationOpen,
   );
@@ -49,6 +50,8 @@ export default function Home() {
     (state) => state.closeDataInspector,
   );
   const [zoomLevel, setZoomLevel] = useState(13);
+  const primaryViewHeight =
+    layerDataTableOpen || analysisOpen ? '55%' : '100%';
 
   // State for "Add Layer" modal
   const [showAddLayerModal, setShowAddLayerModal] = useState(false);
@@ -153,35 +156,6 @@ export default function Home() {
           <span>Nullstill og last opp ny</span>
         </button>
       )}
-      {/* Global Close DataTable Button - ALWAYS visible when table is open */}
-      {parsingStatus === 'done' && dataTableOpen && (
-        <button
-          onClick={toggleDataTable}
-          aria-label="Lukk tabell"
-          style={{
-            position: 'fixed',
-            bottom: '36%',
-            right: '16px',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            backgroundColor: '#6b7280',
-            color: 'white',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            zIndex: 10000,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            fontSize: '14px',
-            fontWeight: 600,
-          }}
-          title="Lukk tabell"
-        >
-          ✕ Lukk tabell
-        </button>
-      )}
       {/* Initial Upload Screen */}
       {parsingStatus !== 'done' && (
         <div className="flex-1 flex items-center justify-center">
@@ -246,8 +220,8 @@ export default function Home() {
           {/* Dev diagnostics panel - bottom right corner */}
           <DevDiagnosticsPanel />
 
-          {/* Sidebar - Hidden when data table is open OR field validation is open */}
-          {!dataTableOpen && !fieldValidationOpen && (
+          {/* Sidebar - Hidden when field validation is open */}
+          {!fieldValidationOpen && (
             <Sidebar
               onReset={handleReset}
               onAddFile={() => setShowAddLayerModal(true)}
@@ -274,11 +248,7 @@ export default function Home() {
                 <div
                   className="relative"
                   style={{
-                    height: dataTableOpen
-                      ? '67%'
-                      : analysisOpen
-                        ? '55%'
-                        : '100%',
+                    height: primaryViewHeight,
                     transition: 'height 0.2s ease',
                   }}
                 >
@@ -346,55 +316,63 @@ export default function Home() {
                   </div>
 
                   {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
-                  {!dataTableOpen &&
-                    !analysisOpen &&
-                    !fieldValidationOpen && (
-                      <div
-                        className="absolute bottom-4 -translate-x-1/2"
+                  {!analysisOpen && !fieldValidationOpen && (
+                    <div
+                      className="absolute bottom-4 -translate-x-1/2"
+                      style={{
+                        zIndex: 1000,
+                        left: 'calc(50% - 320px)',
+                      }}
+                    >
+                      <button
+                        onClick={() => openDataInspector(null)}
+                        className="px-4 py-2 rounded shadow font-medium border transition-colors"
                         style={{
-                          zIndex: 1000,
-                          left: 'calc(50% - 320px)',
+                          backgroundColor: 'var(--color-card)',
+                          color: 'var(--color-text)',
+                          borderColor: 'var(--color-border)',
                         }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.backgroundColor =
+                            'var(--color-page-bg)')
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.backgroundColor =
+                            'var(--color-card)')
+                        }
                       >
-                        <button
-                          onClick={() => openDataInspector(null)}
-                          className="px-4 py-2 rounded shadow font-medium border transition-colors"
-                          style={{
-                            backgroundColor: 'var(--color-card)',
-                            color: 'var(--color-text)',
-                            borderColor: 'var(--color-border)',
-                          }}
-                          onMouseEnter={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                              'var(--color-page-bg)')
-                          }
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                              'var(--color-card)')
-                          }
-                        >
-                          Inspiser data
-                        </button>
-                      </div>
-                    )}
+                        Inspiser data
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Data Table - Fixed 33% height */}
-                {dataTableOpen && (
-                  <div
-                    style={{
-                      height: '33%',
-                      transition: 'height 0.2s ease',
-                    }}
-                  >
-                    <DataTable />
-                  </div>
-                )}
               </>
             )}
 
             {/* Show 3D view when viewer is open and activeViewTab is '3d' */}
-            {viewer3DOpen && activeViewTab === '3d' && <Viewer3D />}
+            {viewer3DOpen && activeViewTab === '3d' && (
+              <div
+                className="relative"
+                style={{
+                  height: primaryViewHeight,
+                  transition: 'height 0.2s ease',
+                }}
+              >
+                <Viewer3D />
+              </div>
+            )}
+
+            {layerDataTableOpen && (
+              <div
+                style={{
+                  height: '45%',
+                  transition: 'height 0.2s ease',
+                }}
+              >
+                <LayerDataTable />
+              </div>
+            )}
 
             {/* Profile analysis modal - overlays both 2D and 3D views */}
             <InclineAnalysisModal />

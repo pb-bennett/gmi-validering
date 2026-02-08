@@ -43,7 +43,6 @@ export default function Viewer3D() {
   const selectedObject3D = useStore(
     (state) => state.ui?.selectedObject3D,
   );
-  const dataTableOpen = useStore((state) => state.ui.dataTableOpen);
   const analysisOpen = useStore((state) => state.analysis.isOpen);
   const fieldValidationOpen = useStore(
     (state) => state.ui.fieldValidationOpen,
@@ -178,7 +177,7 @@ export default function Viewer3D() {
       )}
 
       {/* Floating Inspect Button (3D) */}
-      {!dataTableOpen && !analysisOpen && !fieldValidationOpen && (
+      {!analysisOpen && !fieldValidationOpen && (
         <div
           className="absolute bottom-4 -translate-x-1/2"
           style={{ zIndex: 1000, left: 'calc(50% - 320px)' }}

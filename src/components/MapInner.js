@@ -1336,21 +1336,6 @@ function MeasureToolButton() {
 // Uses multiple mechanisms to ensure proper detection
 function MapSizeInvalidator() {
   const map = useMap();
-  const dataTableOpen = useStore((state) => state.ui.dataTableOpen);
-
-  // Effect 1: React to dataTableOpen state change
-  useEffect(() => {
-    // When dataTableOpen changes, the map container size changes
-    // Call invalidateSize multiple times to ensure it catches the DOM update
-    const timeouts = [
-      setTimeout(() => map.invalidateSize({ animate: false }), 0),
-      setTimeout(() => map.invalidateSize({ animate: false }), 50),
-      setTimeout(() => map.invalidateSize({ animate: false }), 150),
-      setTimeout(() => map.invalidateSize({ animate: false }), 300),
-    ];
-
-    return () => timeouts.forEach((t) => clearTimeout(t));
-  }, [map, dataTableOpen]);
 
   // Effect 2: Use ResizeObserver on the map container for reliable detection
   useEffect(() => {
@@ -1723,9 +1708,7 @@ export default function MapInner({ onZoomChange }) {
   const analysisSelectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
-  const analysisLayerId = useStore(
-    (state) => state.analysis.layerId,
-  );
+  const analysisLayerId = useStore((state) => state.analysis.layerId);
   const measureMode = useStore((state) => state.ui.measureMode);
   const addMeasurePoint = useStore((state) => state.addMeasurePoint);
   const highlightedCode = useStore(
@@ -2116,9 +2099,7 @@ export default function MapInner({ onZoomChange }) {
       highlightedTypeContext || '',
       highlightedFeatureId || '',
       highlightedFeatureIds ? highlightedFeatureIds.size : 0,
-      analysisIsOpen
-        ? `open-${analysisSelectedPipeIndex}`
-        : 'closed',
+      analysisIsOpen ? `open-${analysisSelectedPipeIndex}` : 'closed',
       filteredFeatureIds ? filteredFeatureIds.size : 0,
       outlierFeatureIds ? outlierFeatureIds.size : 0,
       feltFilterActive ? 1 : 0,
@@ -2833,9 +2814,7 @@ function AnalysisPointsLayer() {
   const analysisSelectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
-  const analysisLayerId = useStore(
-    (state) => state.analysis.layerId,
-  );
+  const analysisLayerId = useStore((state) => state.analysis.layerId);
   const data = useStore((state) => state.data);
 
   const { points, pipeColor, lineCoords, sourceProj } =
@@ -3117,9 +3096,7 @@ function AnalysisZoomHandler() {
   const analysisSelectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
-  const analysisLayerId = useStore(
-    (state) => state.analysis.layerId,
-  );
+  const analysisLayerId = useStore((state) => state.analysis.layerId);
   const data = useStore((state) => state.data);
 
   useEffect(() => {

@@ -88,7 +88,13 @@ const useStore = create(
             highlightedType: null,
             highlightedTypeContext: null,
             hiddenTypes: [],
-            dataTableOpen: false,
+            layerDataTable: {
+              isOpen: false,
+              layerId: null,
+              activeTabByLayer: {},
+              sortingByLayer: {},
+              columnOrderByLayer: {},
+            },
             highlightedFeatureId: null,
             highlightedFeatureIds: null,
             fieldValidationOpen: false,
@@ -880,7 +886,13 @@ const useStore = create(
           highlightedType: null,
           highlightedTypeContext: null, // Track which code the type is under
           hiddenTypes: [], // Array of {type, code} objects for context-aware hiding
-          dataTableOpen: false, // Data table visibility
+          layerDataTable: {
+            isOpen: false,
+            layerId: null,
+            activeTabByLayer: {},
+            sortingByLayer: {},
+            columnOrderByLayer: {},
+          },
           highlightedFeatureId: null, // ID of feature to highlight on map
           highlightedFeatureIds: null, // Set<string> | null - multiple feature highlight
           fieldValidationOpen: false, // Field validation sidebar visibility
@@ -1237,7 +1249,7 @@ const useStore = create(
               const newState = {
                 ui: {
                   ...state.ui,
-                  activeViewTab: 'map',
+                  // Don't change activeViewTab - let zooming work in current view
                   highlightedFeatureId: featureId,
                   mapCenterTarget: { coordinates, zoom, featureId },
                 },
@@ -1389,16 +1401,100 @@ const useStore = create(
             'ui/toggleHiddenType',
           ),
 
-        toggleDataTable: () =>
+        openLayerDataTable: (layerId) =>
           set(
             (state) => ({
               ui: {
                 ...state.ui,
-                dataTableOpen: !state.ui.dataTableOpen,
+                layerDataTable: {
+                  ...(state.ui.layerDataTable || {}),
+                  isOpen: true,
+                  layerId,
+                },
               },
             }),
             false,
-            'ui/toggleDataTable',
+            'ui/openLayerDataTable',
+          ),
+
+        closeLayerDataTable: () =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                layerDataTable: {
+                  ...(state.ui.layerDataTable || {}),
+                  isOpen: false,
+                  layerId: null,
+                },
+              },
+            }),
+            false,
+            'ui/closeLayerDataTable',
+          ),
+
+        setLayerDataTableTab: (layerId, tab) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                layerDataTable: {
+                  ...(state.ui.layerDataTable || {}),
+                  activeTabByLayer: {
+                    ...(state.ui.layerDataTable?.activeTabByLayer || {}),
+                    [layerId]: tab,
+                  },
+                },
+              },
+            }),
+            false,
+            'ui/setLayerDataTableTab',
+          ),
+
+        setLayerDataTableSorting: (layerId, tab, sorting) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                layerDataTable: {
+                  ...(state.ui.layerDataTable || {}),
+                  sortingByLayer: {
+                    ...(state.ui.layerDataTable?.sortingByLayer || {}),
+                    [layerId]: {
+                      ...(state.ui.layerDataTable?.sortingByLayer?.[
+                        layerId
+                      ] || {}),
+                      [tab]: sorting,
+                    },
+                  },
+                },
+              },
+            }),
+            false,
+            'ui/setLayerDataTableSorting',
+          ),
+
+        setLayerDataTableColumnOrder: (layerId, tab, order) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                layerDataTable: {
+                  ...(state.ui.layerDataTable || {}),
+                  columnOrderByLayer: {
+                    ...(state.ui.layerDataTable?.columnOrderByLayer || {}),
+                    [layerId]: {
+                      ...(state.ui.layerDataTable?.columnOrderByLayer?.[
+                        layerId
+                      ] || {}),
+                      [tab]: order,
+                    },
+                  },
+                },
+              },
+            }),
+            false,
+            'ui/setLayerDataTableColumnOrder',
           ),
 
         setHighlightedFeature: (featureId) =>
@@ -2052,6 +2148,46 @@ const useStore = create(
           ),
 
         /**
+         * Reset all per-layer filtering (Tema + Felt)
+         */
+        resetLayerFilters: (layerId) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              const remainingLayerFelt = Object.entries(
+                state.layers,
+              ).some(
+                ([id, l]) =>
+                  id !== layerId &&
+                  (l?.feltHiddenValues?.length || 0) > 0,
+              );
+              const hasGlobalFelt =
+                (state.ui.feltHiddenValues || []).length > 0;
+
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    hiddenCodes: [],
+                    hiddenTypes: [],
+                    feltHiddenValues: [],
+                  },
+                },
+                ui: {
+                  ...state.ui,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                  feltFilterActive:
+                    remainingLayerFelt || hasGlobalFelt,
+                },
+              };
+            },
+            false,
+            'layers/resetFilters',
+          ),
+
+        /**
          * Set layer analysis results
          */
         setLayerAnalysisResults: (layerId, results) =>
@@ -2281,7 +2417,12 @@ const useStore = create(
         /**
          * Set layer terrain status for a specific line
          */
-        setLayerTerrainStatus: (layerId, lineIndex, status, error = null) =>
+        setLayerTerrainStatus: (
+          layerId,
+          lineIndex,
+          status,
+          error = null,
+        ) =>
           set(
             (state) => {
               const layer = state.layers[layerId];
@@ -2611,6 +2752,40 @@ const useStore = create(
               }
               if (state.ui.hiddenTypes === undefined) {
                 state.ui.hiddenTypes = [];
+              }
+              if (state.ui.layerDataTable === undefined) {
+                state.ui.layerDataTable = {
+                  isOpen: false,
+                  layerId: null,
+                  activeTabByLayer: {},
+                  sortingByLayer: {},
+                  columnOrderByLayer: {},
+                };
+              } else {
+                if (state.ui.layerDataTable.isOpen === undefined) {
+                  state.ui.layerDataTable.isOpen = false;
+                }
+                if (state.ui.layerDataTable.layerId === undefined) {
+                  state.ui.layerDataTable.layerId = null;
+                }
+                if (
+                  state.ui.layerDataTable.activeTabByLayer ===
+                  undefined
+                ) {
+                  state.ui.layerDataTable.activeTabByLayer = {};
+                }
+                if (
+                  state.ui.layerDataTable.sortingByLayer ===
+                  undefined
+                ) {
+                  state.ui.layerDataTable.sortingByLayer = {};
+                }
+                if (
+                  state.ui.layerDataTable.columnOrderByLayer ===
+                  undefined
+                ) {
+                  state.ui.layerDataTable.columnOrderByLayer = {};
+                }
               }
               if (state.ui.highlightedFeatureIds === undefined) {
                 state.ui.highlightedFeatureIds = null;
