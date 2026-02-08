@@ -15,6 +15,21 @@ export function useFileLoader({ onComplete } = {}) {
   const clearData = useStore((state) => state.clearData);
   const addLayer = useStore((state) => state.addLayer);
 
+  const trackUploadSuccess = async () => {
+    try {
+      await fetch('/api/track', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ eventType: 'upload_success' }),
+        keepalive: true,
+      });
+    } catch {
+      // Best-effort only; tracking should never block file parsing.
+    }
+  };
+
   const isQuotaExceededError = (err) => {
     const name = err?.name;
     const msg = String(err?.message || '');
@@ -40,7 +55,7 @@ export function useFileLoader({ onComplete } = {}) {
   const decodeAll = (arrayBuffer) => {
     try {
       return new TextDecoder('iso-8859-1').decode(
-        new Uint8Array(arrayBuffer)
+        new Uint8Array(arrayBuffer),
       );
     } catch {
       return '';
@@ -113,7 +128,7 @@ export function useFileLoader({ onComplete } = {}) {
           if (format === 'SOSI') {
             // Pass raw bytes so sosijs can detect and decode charset correctly.
             const parser = new SOSIParser(
-              content instanceof ArrayBuffer ? content : content
+              content instanceof ArrayBuffer ? content : content,
             );
             parsedData = parser.parse();
           } else if (format === 'KOF') {
@@ -142,7 +157,7 @@ export function useFileLoader({ onComplete } = {}) {
             parsedData.lines.length === 0
           ) {
             throw new Error(
-              'Ingen objekter funnet i filen. Kontroller at filen inneholder gyldige data.'
+              'Ingen objekter funnet i filen. Kontroller at filen inneholder gyldige data.',
             );
           }
 
@@ -162,6 +177,8 @@ export function useFileLoader({ onComplete } = {}) {
           setFile(fileMeta);
           setData(parsedData);
           setParsingDone();
+
+          trackUploadSuccess();
 
           // Notify parent if callback provided
           if (onComplete) {
@@ -188,7 +205,7 @@ export function useFileLoader({ onComplete } = {}) {
                 window.localStorage
               ) {
                 window.localStorage.removeItem(
-                  'gmi-validator-storage'
+                  'gmi-validator-storage',
                 );
               }
             } catch {}
@@ -218,7 +235,7 @@ export function useFileLoader({ onComplete } = {}) {
       };
       reader.onerror = () => {
         setParsingError(
-          'Kunne ikke lese filen. Kontroller at filen er tilgjengelig og prøv igjen.'
+          'Kunne ikke lese filen. Kontroller at filen er tilgjengelig og prøv igjen.',
         );
       };
 
@@ -238,13 +255,16 @@ export function useFileLoader({ onComplete } = {}) {
       clearData,
       addLayer,
       onComplete,
-    ]
+    ],
   );
 
   return { handleFile };
 }
 
-export default function FileUpload({ onComplete, isAddingLayer = false }) {
+export default function FileUpload({
+  onComplete,
+  isAddingLayer = false,
+}) {
   const [isDragging, setIsDragging] = useState(false);
   const { handleFile } = useFileLoader({ onComplete });
 
@@ -267,7 +287,7 @@ export default function FileUpload({ onComplete, isAddingLayer = false }) {
         handleFile(e.dataTransfer.files[0]);
       }
     },
-    [handleFile]
+    [handleFile],
   );
 
   const onInputChange = useCallback(
@@ -276,7 +296,7 @@ export default function FileUpload({ onComplete, isAddingLayer = false }) {
         handleFile(e.target.files[0]);
       }
     },
-    [handleFile]
+    [handleFile],
   );
 
   return (
