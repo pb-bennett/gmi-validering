@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "records": {
+    "2026-02-08|country|unknown|upload_success": {
+      "date": "2026-02-08",
+      "areaType": "country",
+      "areaId": "unknown",
+      "areaName": "unknown",
+      "country": null,
+      "region": null,
+      "eventType": "upload_success",
+      "count": 1,
+      "createdAt": "2026-02-08T18:26:18.110Z",
+      "updatedAt": "2026-02-08T18:26:18.110Z"
+    },
+    "2026-02-08|19|country|unknown|upload_success": {
+      "date": "2026-02-08",
+      "hour": 19,
+      "areaType": "country",
+      "areaId": "unknown",
+      "areaName": "unknown",
+      "country": null,
+      "region": null,
+      "eventType": "upload_success",
+      "count": 1,
+      "createdAt": "2026-02-08T19:05:24.385Z",
+      "updatedAt": "2026-02-08T19:05:24.385Z"
+    }
+  },
+  "updatedAt": "2026-02-08T19:05:24.385Z"
+}
