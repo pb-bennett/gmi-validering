@@ -2052,6 +2052,45 @@ const useStore = create(
           ),
 
         /**
+         * Reset all per-layer filtering (Tema + Felt)
+         */
+        resetLayerFilters: (layerId) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              const remainingLayerFelt = Object.entries(
+                state.layers,
+              ).some(
+                ([id, l]) =>
+                  id !== layerId &&
+                  (l?.feltHiddenValues?.length || 0) > 0,
+              );
+              const hasGlobalFelt =
+                (state.ui.feltHiddenValues || []).length > 0;
+
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    hiddenCodes: [],
+                    hiddenTypes: [],
+                    feltHiddenValues: [],
+                  },
+                },
+                ui: {
+                  ...state.ui,
+                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+                  feltFilterActive: remainingLayerFelt || hasGlobalFelt,
+                },
+              };
+            },
+            false,
+            'layers/resetFilters',
+          ),
+
+        /**
          * Set layer analysis results
          */
         setLayerAnalysisResults: (layerId, results) =>

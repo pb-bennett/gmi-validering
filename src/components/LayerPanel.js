@@ -530,34 +530,100 @@ function LayerTemaSection({
                   .map(([code, data]) => {
                     const label = codeLookups.punktMap.get(code);
                     const isHidden = hiddenCodes.includes(code);
+                    const typeEntries = Object.entries(
+                      data.types || {},
+                    );
+                    const hasTypes =
+                      typeEntries.length > 0 &&
+                      !(
+                        typeEntries.length === 1 &&
+                        data.types?.['(Mangler Type)']
+                      );
                     return (
-                      <div
-                        key={code}
-                        className={`flex items-center justify-between px-1 py-0.5 rounded text-[11px] cursor-pointer hover:bg-gray-100 ${isHidden ? 'opacity-50' : ''}`}
-                        onMouseEnter={() => setHighlightedCode(code)}
-                        onMouseLeave={() => setHighlightedCode(null)}
-                        onClick={() =>
-                          toggleLayerHiddenCode(layerId, code)
-                        }
-                      >
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={!isHidden}
-                            onChange={() => {}}
-                            className="h-2.5 w-2.5"
-                          />
-                          <span className="font-mono font-bold">
-                            {code}
-                          </span>
-                          <span className="text-gray-500 truncate max-w-20">
-                            {label || 'Ukjent'}
+                      <React.Fragment key={code}>
+                        <div
+                          className={`flex items-center justify-between px-1 py-0.5 rounded text-[11px] cursor-pointer hover:bg-gray-100 ${isHidden ? 'opacity-50' : ''}`}
+                          onMouseEnter={() => setHighlightedCode(code)}
+                          onMouseLeave={() => setHighlightedCode(null)}
+                          onClick={() =>
+                            toggleLayerHiddenCode(layerId, code)
+                          }
+                        >
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              checked={!isHidden}
+                              onChange={() => {}}
+                              className="h-2.5 w-2.5"
+                            />
+                            <span className="font-mono font-bold">
+                              {code}
+                            </span>
+                            <span className="text-gray-500 truncate max-w-20">
+                              {label || 'Ukjent'}
+                            </span>
+                          </div>
+                          <span className="text-gray-500">
+                            {data.count}
                           </span>
                         </div>
-                        <span className="text-gray-500">
-                          {data.count}
-                        </span>
-                      </div>
+                        {hasTypes && (
+                          <div className="ml-5 border-l border-gray-200 pl-2 space-y-0.5">
+                            {typeEntries
+                              .sort(([, a], [, b]) => b - a)
+                              .map(([typeVal, typeCount]) => {
+                                const isTypeHidden = hiddenTypes.some(
+                                  (ht) =>
+                                    ht.type === typeVal &&
+                                    ht.code === code,
+                                );
+                                return (
+                                  <div
+                                    key={`${code}-${typeVal}`}
+                                    className={`flex items-center justify-between text-[10px] text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 ${isTypeHidden ? 'opacity-50' : ''}`}
+                                    onMouseEnter={() =>
+                                      setHighlightedType(
+                                        typeVal,
+                                        code,
+                                      )
+                                    }
+                                    onMouseLeave={() =>
+                                      setHighlightedType(null, null)
+                                    }
+                                    onClick={() =>
+                                      toggleLayerHiddenType(
+                                        layerId,
+                                        typeVal,
+                                        code,
+                                      )
+                                    }
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="checkbox"
+                                        checked={!isTypeHidden}
+                                        onChange={() => {}}
+                                        className="h-2.5 w-2.5"
+                                      />
+                                      <span
+                                        className={
+                                          typeVal === '(Mangler Type)'
+                                            ? 'italic text-red-400'
+                                            : ''
+                                        }
+                                      >
+                                        {typeVal}
+                                      </span>
+                                    </div>
+                                    <span className="font-mono text-gray-400">
+                                      {typeCount}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </React.Fragment>
                     );
                   })}
               </div>
@@ -1072,6 +1138,9 @@ export default function LayerPanel({ layerId, codeLookups }) {
     (state) => state.toggleLayerVisibility,
   );
   const removeLayer = useStore((state) => state.removeLayer);
+  const resetLayerFilters = useStore(
+    (state) => state.resetLayerFilters,
+  );
   const feltFilterActive = useStore(
     (state) => state.ui.feltFilterActive,
   );
@@ -1301,13 +1370,34 @@ export default function LayerPanel({ layerId, codeLookups }) {
               <span className="text-[10px] text-gray-500">
                 Analyse
               </span>
-              <LayerAnalysisButtons
-                layerId={layerId}
-                layer={layer}
-                onTopplokClick={handleTopplokClick}
-                hasTopplokResults={!!topplokResults}
-                topplokOpen={topplokOpen}
-              />
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => resetLayerFilters(layerId)}
+                  className="p-1.5 rounded transition-colors hover:bg-blue-100 text-gray-500 hover:text-blue-600"
+                  title="Nullstill filtre"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 12a9 9 0 1 0 3-6.708M3 5v4h4"
+                    />
+                  </svg>
+                </button>
+                <LayerAnalysisButtons
+                  layerId={layerId}
+                  layer={layer}
+                  onTopplokClick={handleTopplokClick}
+                  hasTopplokResults={!!topplokResults}
+                  topplokOpen={topplokOpen}
+                />
+              </div>
             </div>
 
             <LayerTopplokSection
