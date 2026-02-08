@@ -26,3 +26,9 @@ Questions:
 - Should the table include derived fields (e.g., length, Z stats), or only raw attributes? `Only raw attributes`
 
 `Select a package that would work best for us. Something that presents the data in a modern way, and is quick and agile`
+
+`3. COMPLETE`
+
+4. Now we need to revist the felt validering analysis tool. We need to make it easier to use the tool and get feedback that can be sent to a contractor to help them improve the quality of the data.
+
+-
