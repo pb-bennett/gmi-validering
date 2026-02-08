@@ -3,12 +3,12 @@
 Goal
 
 - Collect minimal aggregated data to show adoption by kommune/fylke over time.
-- Avoid storing IPs or precise timestamps; favor daily aggregates.
+- Avoid storing IPs or precise timestamps; favor daily/hourly aggregates.
 
 Scope
 
 - Track events: `upload`, `validation_success`, `validation_failure`.
-- Store `date`, `areaType` (`kommune`/`fylke`), `areaId`, `areaName`, `eventType`, `count`.
+- Store `date`, `hour` (UTC), `areaType` (`kommune`/`fylke`), `areaId`, `areaName`, `eventType`, `count`.
 
 Implementation sketch
 
@@ -35,6 +35,8 @@ Supabase setup
 
 - Run the SQL in `src/features/user-tracking/supabase.sql` to create the
   `aggregates` table and `increment_aggregate` function.
+- If you already created the table, apply the migration in
+  `src/features/user-tracking/supabase_hourly_migration.sql`.
 - Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env` and Vercel.
 
 Next steps

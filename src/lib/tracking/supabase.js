@@ -25,6 +25,7 @@ export const incrementAggregateInSupabase = async (payload) => {
 
   const {
     dateKey,
+    hourKey,
     areaType,
     areaId,
     areaName,
@@ -35,6 +36,7 @@ export const incrementAggregateInSupabase = async (payload) => {
 
   const { error } = await getClient().rpc('increment_aggregate', {
     p_date: dateKey,
+    p_hour: hourKey,
     p_area_type: areaType,
     p_area_id: areaId,
     p_area_name: areaName,

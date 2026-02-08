@@ -44,8 +44,11 @@ const writeAggregates = async (filePath, data) => {
 const toDateKey = (date = new Date()) =>
   new Date(date).toISOString().slice(0, 10);
 
+const toHourKey = (date = new Date()) => new Date(date).getUTCHours();
+
 const buildAggregatePayload = ({ eventType, location }) => {
   const dateKey = toDateKey();
+  const hourKey = toHourKey();
   const areaType = location?.areaType || 'unknown';
   const areaId = location?.areaId || 'unknown';
   const areaName = location?.areaName || 'Unknown';
@@ -54,6 +57,7 @@ const buildAggregatePayload = ({ eventType, location }) => {
 
   return {
     dateKey,
+    hourKey,
     areaType,
     areaId,
     areaName,
@@ -67,6 +71,7 @@ const incrementAggregateInFile = async (payload) => {
   const filePath = resolveStoragePath();
   const {
     dateKey,
+    hourKey,
     areaType,
     areaId,
     areaName,
@@ -75,7 +80,13 @@ const incrementAggregateInFile = async (payload) => {
     eventType,
   } = payload;
 
-  const recordKey = [dateKey, areaType, areaId, eventType].join('|');
+  const recordKey = [
+    dateKey,
+    hourKey,
+    areaType,
+    areaId,
+    eventType,
+  ].join('|');
 
   try {
     const data = await readAggregates(filePath);
@@ -87,6 +98,7 @@ const incrementAggregateInFile = async (payload) => {
     } else {
       data.records[recordKey] = {
         date: dateKey,
+        hour: hourKey,
         areaType,
         areaId,
         areaName,

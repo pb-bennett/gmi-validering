@@ -1,17 +1,21 @@
-CREATE TABLE IF NOT EXISTS public.aggregates (
-  date date NOT NULL,
-  hour smallint NOT NULL,
-  area_type text NOT NULL,
-  area_id text NOT NULL,
-  area_name text,
-  country text,
-  region text,
-  event_type text NOT NULL,
-  count bigint NOT NULL DEFAULT 0,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  PRIMARY KEY (date, hour, area_type, area_id, event_type)
-);
+ALTER TABLE public.aggregates
+  ADD COLUMN IF NOT EXISTS hour smallint NOT NULL DEFAULT 0;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints
+    WHERE table_name = 'aggregates'
+      AND constraint_type = 'PRIMARY KEY'
+  ) THEN
+    ALTER TABLE public.aggregates DROP CONSTRAINT IF EXISTS aggregates_pkey;
+  END IF;
+END $$;
+
+ALTER TABLE public.aggregates
+  ADD CONSTRAINT aggregates_pkey PRIMARY KEY
+  (date, hour, area_type, area_id, event_type);
 
 CREATE OR REPLACE FUNCTION public.increment_aggregate(
   p_date date,
