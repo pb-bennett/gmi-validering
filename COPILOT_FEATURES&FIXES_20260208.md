@@ -11,3 +11,18 @@ I want us to work on the way the app enables the user to analyse and validate fi
 - The table should occupy the same approximate area as the profile analysis
 - A user should still be able to view the map/3d view, and each row of the table should have a "zoom to" icon
 - The table will need to be scrollable both up and down, and sideways.
+
+Status:
+
+- Old data table code removed (component + wiring) so we can rebuild clean.
+
+Questions:
+
+- Should the new table show a single active layer, or a combined view of all visible layers?
+  `For a single layer, the table will open from an icon button from the layer that will be shown in the table`
+- Do you want separate tabs for points vs lines, or a unified table with a type column? `Yes, separate tabs`
+- Should filters/sorts be preserved per session, or reset on reload/new file? `They can be preserved, however not all datasets will have the same columns etc, so care should be taken not to lock the app`
+- Any limits for very large files (virtualized rows, max rows, paging)? `No, not at the moment -  we can revisit if needed`
+- Should the table include derived fields (e.g., length, Z stats), or only raw attributes? `Only raw attributes`
+
+`Select a package that would work best for us. Something that presents the data in a modern way, and is quick and agile`

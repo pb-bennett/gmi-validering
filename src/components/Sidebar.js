@@ -812,7 +812,6 @@ export default function Sidebar({ onReset, onAddFile }) {
   const toggleHiddenType = useStore(
     (state) => state.toggleHiddenType,
   );
-  const toggleDataTable = useStore((state) => state.toggleDataTable);
   const hiddenCodes = useStore((state) => state.ui.hiddenCodes);
   const hiddenTypes = useStore((state) => state.ui.hiddenTypes);
 
@@ -1721,27 +1720,6 @@ export default function Sidebar({ onReset, onAddFile }) {
           >
             {stats?.fieldAnalysis ? (
               <div className="space-y-2">
-                {/* Open Data Table Button */}
-                <button
-                  onClick={toggleDataTable}
-                  className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
-                  style={{
-                    backgroundColor: 'var(--color-primary)',
-                    color: 'white',
-                    borderColor: 'var(--color-primary-dark)',
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      'var(--color-primary-dark)')
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      'var(--color-primary)')
-                  }
-                >
-                  Åpne full datatabell
-                </button>
-
                 {/* Tabs */}
                 <div
                   className="flex border-b"

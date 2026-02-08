@@ -543,8 +543,12 @@ function LayerTemaSection({
                       <React.Fragment key={code}>
                         <div
                           className={`flex items-center justify-between px-1 py-0.5 rounded text-[11px] cursor-pointer hover:bg-gray-100 ${isHidden ? 'opacity-50' : ''}`}
-                          onMouseEnter={() => setHighlightedCode(code)}
-                          onMouseLeave={() => setHighlightedCode(null)}
+                          onMouseEnter={() =>
+                            setHighlightedCode(code)
+                          }
+                          onMouseLeave={() =>
+                            setHighlightedCode(null)
+                          }
                           onClick={() =>
                             toggleLayerHiddenCode(layerId, code)
                           }
@@ -1138,6 +1142,9 @@ export default function LayerPanel({ layerId, codeLookups }) {
     (state) => state.toggleLayerVisibility,
   );
   const removeLayer = useStore((state) => state.removeLayer);
+  const openLayerDataTable = useStore(
+    (state) => state.openLayerDataTable,
+  );
   const resetLayerFilters = useStore(
     (state) => state.resetLayerFilters,
   );
@@ -1373,7 +1380,7 @@ export default function LayerPanel({ layerId, codeLookups }) {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => resetLayerFilters(layerId)}
-                  className="p-1.5 rounded transition-colors hover:bg-blue-100 text-gray-500 hover:text-blue-600"
+                  className="p-1.5 rounded transition-colors hover:bg-blue-100 text-blue-600 hover:text-blue-700"
                   title="Nullstill filtre"
                 >
                   <svg
@@ -1387,6 +1394,25 @@ export default function LayerPanel({ layerId, codeLookups }) {
                       strokeLinejoin="round"
                       strokeWidth={2}
                       d="M3 12a9 9 0 1 0 3-6.708M3 5v4h4"
+                    />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => openLayerDataTable(layerId)}
+                  className="p-1.5 rounded transition-colors hover:bg-blue-100 text-blue-600 hover:text-blue-700"
+                  title="Åpne datatabell"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 6h16M4 10h16M4 14h16M4 18h16"
                     />
                   </svg>
                 </button>
