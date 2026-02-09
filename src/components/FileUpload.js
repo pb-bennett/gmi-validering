@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import useStore from '@/lib/store';
+import { getDatasetCoordinate } from '@/lib/tracking/datasetCoordinate';
 import { GMIParser } from '@/lib/parsing/gmiParser';
 import { SOSIParser } from '@/lib/parsing/sosiParser';
 import { KOFParser } from '@/lib/parsing/kofParser';
@@ -15,14 +16,17 @@ export function useFileLoader({ onComplete } = {}) {
   const clearData = useStore((state) => state.clearData);
   const addLayer = useStore((state) => state.addLayer);
 
-  const trackUploadSuccess = async () => {
+  const trackUploadSuccess = async (datasetCoord) => {
     try {
       await fetch('/api/track', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ eventType: 'upload_success' }),
+        body: JSON.stringify({
+          eventType: 'upload_success',
+          datasetCoord,
+        }),
         keepalive: true,
       });
     } catch {
@@ -178,7 +182,8 @@ export function useFileLoader({ onComplete } = {}) {
           setData(parsedData);
           setParsingDone();
 
-          trackUploadSuccess();
+          const datasetCoord = getDatasetCoordinate(parsedData);
+          trackUploadSuccess(datasetCoord);
 
           // Notify parent if callback provided
           if (onComplete) {

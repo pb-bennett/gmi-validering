@@ -4,6 +4,7 @@ Goal
 
 - Collect minimal aggregated data to show adoption by kommune/fylke over time.
 - Avoid storing IPs or precise timestamps; favor daily/hourly aggregates.
+- Optionally derive kommune from uploaded dataset coordinates (single lookup).
 
 Scope
 
@@ -14,6 +15,8 @@ Implementation sketch
 
 1. Add a Next.js App Router endpoint: `POST /api/track`.
    - Read `request.geo` (country, region, city, lat/lon).
+  - If dataset coordinates are provided, call Kartverket kommuneinfo once and
+    use that kommune when available.
    - If `country !== 'NO'`, record `country` aggregate and stop.
    - If lat/lon available, map to `kommune` using server-side polygon lookup and increment `date+kommune+eventType`.
    - If only city/region available, treat `city` as rough kommune and fall back to `region` (fylke) if city is missing.

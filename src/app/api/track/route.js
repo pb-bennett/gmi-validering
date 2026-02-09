@@ -1,12 +1,35 @@
 import { NextResponse } from 'next/server';
 import { getRoughLocationFromRequest } from '@/lib/tracking/location';
+import { lookupKommuneFromCoord } from '@/lib/tracking/kommuneLookup';
 import { incrementAggregate } from '@/lib/tracking/aggregates';
+
+const buildDatasetCoord = (value) => {
+  if (!value) return null;
+  const x = Number(value.x);
+  const y = Number(value.y);
+  const epsg = Number(value.epsg);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(epsg)) {
+    return null;
+  }
+  return { x, y, epsg };
+};
 
 export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
     const eventType = String(body?.eventType || 'upload_success');
-    const location = getRoughLocationFromRequest(request);
+    const datasetCoord = buildDatasetCoord(body?.datasetCoord);
+
+    let location = getRoughLocationFromRequest(request);
+    if (datasetCoord) {
+      const datasetLocation = await lookupKommuneFromCoord(datasetCoord);
+      if (datasetLocation) {
+        location = {
+          ...location,
+          ...datasetLocation,
+        };
+      }
+    }
 
     const stored = await incrementAggregate({
       eventType,
