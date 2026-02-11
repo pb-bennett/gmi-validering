@@ -86,7 +86,7 @@ Design goal: **avoid handling sensitive delivery data on the server**.
 - **No persistence of uploaded files on the server.** Parsing/validation/analysis happen in the browser.
 - **Anonymous usage tracking (opt-in via env vars):**
   - When configured, the app increments aggregate counters in Supabase.
-  - The only persisted “where” is the **kommune** (municipality) associated with the dataset (derived from dataset coordinates via Geonorge services), plus time buckets.
+  - The persisted “where” includes both the dataset kommune (from dataset coordinates via Geonorge services) and the uploader’s rough location (from request geo), plus time buckets.
   - No file contents, filenames, usernames, passwords, or IP addresses are stored.
 - **WMS credentials:** provided by the user at runtime and forwarded only for proxying requests; never persisted.
 

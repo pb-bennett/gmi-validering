@@ -43,15 +43,23 @@ export async function GET(request) {
       let wrote = false;
       if (write) {
         // perform a harmless write test (creates or increments a 'health-check' row)
-        const now = new Date().toISOString().slice(0, 10);
+        const now = new Date();
+        const dateKey = now.toISOString().slice(0, 10);
+        const hourKey = now.getUTCHours();
         wrote = Boolean(
           await incrementAggregateInSupabase({
-            dateKey: now,
-            areaType: 'health-test',
-            areaId: 'health-test',
-            areaName: 'Health Test',
-            country: 'TEST',
-            region: 'TEST',
+            dateKey,
+            hourKey,
+            datasetAreaType: 'health-test',
+            datasetAreaId: 'health-test',
+            datasetAreaName: 'Health Test',
+            datasetCountry: 'TEST',
+            datasetRegion: 'TEST',
+            uploaderAreaType: 'health-test',
+            uploaderAreaId: 'health-test',
+            uploaderAreaName: 'Health Test',
+            uploaderCountry: 'TEST',
+            uploaderRegion: 'TEST',
             eventType: 'health_check',
           }),
         );

@@ -38,10 +38,26 @@ UPDATE public.aggregates
 SET area_name = public.url_decode(area_name)
 WHERE area_name LIKE '%\%%';
 
+UPDATE public.aggregates
+SET dataset_area_name = public.url_decode(dataset_area_name)
+WHERE dataset_area_name LIKE '%\%%';
+
+UPDATE public.aggregates
+SET uploader_area_name = public.url_decode(uploader_area_name)
+WHERE uploader_area_name LIKE '%\%%';
+
 -- 5) Recompute area_id from decoded area_name where it looks wrong/empty
 UPDATE public.aggregates
 SET area_id = public.slugify_text(area_name)
 WHERE area_type = 'kommune' AND (area_id IS NULL OR area_id = '' OR area_id !~ '^[a-z0-9\-]+$');
+
+UPDATE public.aggregates
+SET dataset_area_id = public.slugify_text(dataset_area_name)
+WHERE dataset_area_type = 'kommune' AND (dataset_area_id IS NULL OR dataset_area_id = '' OR dataset_area_id !~ '^[a-z0-9\-]+$');
+
+UPDATE public.aggregates
+SET uploader_area_id = public.slugify_text(uploader_area_name)
+WHERE uploader_area_type = 'kommune' AND (uploader_area_id IS NULL OR uploader_area_id = '' OR uploader_area_id !~ '^[a-z0-9\-]+$');
 
 -- 6) Optional: verify results
 -- SELECT date, area_type, area_id, area_name FROM public.aggregates WHERE area_name LIKE '%�%' OR area_name LIKE '%C3%';

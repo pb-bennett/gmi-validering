@@ -24,32 +24,34 @@ export async function POST(request) {
     const eventType = String(body?.eventType || 'upload_success');
     const datasetCoord = buildDatasetCoord(body?.datasetCoord);
 
-    let location = getRoughLocationFromRequest(request);
+    const uploaderLocation = getRoughLocationFromRequest(request);
+    let datasetLocation = null;
     if (datasetCoord) {
-      const datasetLocation =
-        await lookupKommuneFromCoord(datasetCoord);
-      if (datasetLocation) {
-        location = {
-          ...location,
-          ...datasetLocation,
-        };
-      }
+      datasetLocation = await lookupKommuneFromCoord(datasetCoord);
     }
 
     const stored = await incrementAggregate({
       eventType,
-      location,
+      uploaderLocation,
+      datasetLocation,
     });
 
     return NextResponse.json({
       ok: true,
       stored,
-      location: {
-        country: location.country,
-        region: location.region,
-        areaType: location.areaType,
-        areaId: location.areaId,
-        areaName: location.areaName,
+      uploaderLocation: {
+        country: uploaderLocation?.country || null,
+        region: uploaderLocation?.region || null,
+        areaType: uploaderLocation?.areaType || null,
+        areaId: uploaderLocation?.areaId || null,
+        areaName: uploaderLocation?.areaName || null,
+      },
+      datasetLocation: {
+        country: datasetLocation?.country || null,
+        region: datasetLocation?.region || null,
+        areaType: datasetLocation?.areaType || null,
+        areaId: datasetLocation?.areaId || null,
+        areaName: datasetLocation?.areaName || null,
       },
     });
   } catch (error) {

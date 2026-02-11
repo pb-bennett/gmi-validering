@@ -4,12 +4,12 @@ Goal
 
 - Collect minimal aggregated data to show adoption by kommune/fylke over time.
 - Avoid storing IPs or precise timestamps; favor daily/hourly aggregates.
-- Optionally derive kommune from uploaded dataset coordinates (single lookup).
+- Store both the dataset location (from coordinates) and uploader location (from request geo).
 
 Scope
 
 - Track events: `upload`, `validation_success`, `validation_failure`.
-- Store `date`, `hour` (UTC), `areaType` (`kommune`/`fylke`), `areaId`, `areaName`, `eventType`, `count`.
+- Store `date`, `hour` (UTC), dataset + uploader area fields, `eventType`, `count`.
 
 Implementation sketch
 
@@ -17,7 +17,7 @@ Implementation sketch
    - Read `request.geo` (country, region, city, lat/lon).
 
 - If dataset coordinates are provided, call Kartverket kommuneinfo once and
-  use that kommune when available.
+  store that as the dataset kommune.
 - If `country !== 'NO'`, record `country` aggregate and stop.
 - If lat/lon available, map to `kommune` using server-side polygon lookup and increment `date+kommune+eventType`.
 - If only city/region available, treat `city` as rough kommune and fall back to `region` (fylke) if city is missing.
@@ -39,7 +39,7 @@ Local storage
 Supabase setup
 
 - Run the SQL in `src/features/user-tracking/supabase.sql` to create the
-  `aggregates` table and `increment_aggregate` function.
+  `aggregates` table and `increment_aggregate` function with dataset/uploader fields.
 - If you already created the table, apply the migration in
   `src/features/user-tracking/supabase_hourly_migration.sql`.
 - Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env` and Vercel.
