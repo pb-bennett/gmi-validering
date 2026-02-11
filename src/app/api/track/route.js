@@ -45,10 +45,24 @@ export async function POST(request) {
     const datasetCoord = buildDatasetCoord(body?.datasetCoord);
     const debug = Boolean(body?.debug);
 
-    const uploaderLocation = getRoughLocationFromRequest(request);
+    // Prefer uploader coordinates from the client (privacy + accuracy).
+    // If none provided, fall back to request geo (IP-based) as a secondary option.
+    let uploaderLocation = null;
+    if (body?.uploaderCoord) {
+      const uc = buildDatasetCoord(body.uploaderCoord);
+      if (uc) {
+        uploaderLocation = await lookupKommuneFromCoord(uc);
+      }
+    }
+
     let datasetLocation = null;
     if (datasetCoord) {
       datasetLocation = await lookupKommuneFromCoord(datasetCoord);
+    }
+
+    // If uploaderLocation still null, derive from request.geo as fallback
+    if (!uploaderLocation) {
+      uploaderLocation = getRoughLocationFromRequest(request);
     }
 
     const stored = await incrementAggregate({
