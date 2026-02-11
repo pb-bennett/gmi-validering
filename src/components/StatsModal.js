@@ -183,11 +183,6 @@ export default function StatsModal({ isOpen, onClose }) {
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
-  const s = stats?.summary;
-  const hasData = s && s.totalUploads > 0;
-
   /* Fill missing days in the daily chart for a continuous line */
   const filledDaily = useMemo(() => {
     if (!stats?.daily?.length) return [];
@@ -204,6 +199,11 @@ export default function StatsModal({ isOpen, onClose }) {
     }
     return result;
   }, [stats?.daily]);
+
+  if (!isOpen) return null;
+
+  const s = stats?.summary;
+  const hasData = s && s.totalUploads > 0;
 
   return (
     <div
