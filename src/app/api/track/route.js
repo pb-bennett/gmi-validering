@@ -18,11 +18,32 @@ const buildDatasetCoord = (value) => {
   return { x, y, epsg };
 };
 
+const DEBUG_HEADERS = [
+  'x-vercel-ip-country',
+  'x-vercel-ip-country-region',
+  'x-vercel-ip-city',
+  'x-vercel-ip-latitude',
+  'x-vercel-ip-longitude',
+  'x-forwarded-for',
+];
+
+const collectDebugHeaders = (headers) =>
+  DEBUG_HEADERS.reduce((acc, key) => {
+    try {
+      const value = headers.get(key);
+      if (value) {
+        acc[key] = value;
+      }
+    } catch {}
+    return acc;
+  }, {});
+
 export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
     const eventType = String(body?.eventType || 'upload_success');
     const datasetCoord = buildDatasetCoord(body?.datasetCoord);
+    const debug = Boolean(body?.debug);
 
     const uploaderLocation = getRoughLocationFromRequest(request);
     let datasetLocation = null;
@@ -53,6 +74,12 @@ export async function POST(request) {
         areaId: datasetLocation?.areaId || null,
         areaName: datasetLocation?.areaName || null,
       },
+      debug: debug
+        ? {
+            geo: request.geo || null,
+            headers: collectDebugHeaders(request.headers),
+          }
+        : undefined,
     });
   } catch (error) {
     console.error('Tracking error:', error);

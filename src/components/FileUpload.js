@@ -18,6 +18,8 @@ export function useFileLoader({ onComplete } = {}) {
 
   const trackUploadSuccess = async (datasetCoord) => {
     const logPrefix = '[tracking]';
+    const trackingDebug =
+      process.env.NEXT_PUBLIC_TRACKING_DEBUG === 'true';
     console.info(`${logPrefix} preparing upload tracking`, {
       hasDatasetCoord: Boolean(datasetCoord),
       epsg: datasetCoord?.epsg ?? null,
@@ -33,6 +35,7 @@ export function useFileLoader({ onComplete } = {}) {
         body: JSON.stringify({
           eventType: 'upload_success',
           datasetCoord,
+          debug: trackingDebug,
         }),
         keepalive: true,
       });
@@ -43,8 +46,14 @@ export function useFileLoader({ onComplete } = {}) {
       console.info(`${logPrefix} /api/track response`, {
         ok: response.ok,
         status: response.status,
-        location: payload?.location ?? null,
+        uploaderLocation: payload?.uploaderLocation ?? null,
+        datasetLocation: payload?.datasetLocation ?? null,
       });
+      if (trackingDebug) {
+        console.info(`${logPrefix} /api/track debug`, {
+          debug: payload?.debug ?? null,
+        });
+      }
     } catch (error) {
       console.warn(`${logPrefix} /api/track failed`, error);
       // Best-effort only; tracking should never block file parsing.
