@@ -52,6 +52,7 @@ const buildAggregatePayload = ({ eventType, location }) => {
   const areaType = location?.areaType || 'unknown';
   const areaId = location?.areaId || 'unknown';
   const areaName = location?.areaName || 'Unknown';
+  const kommuneNumber = location?.kommuneNumber || null;
   const country = location?.country || null;
   const region = location?.region || null;
 
@@ -61,6 +62,7 @@ const buildAggregatePayload = ({ eventType, location }) => {
     areaType,
     areaId,
     areaName,
+    kommuneNumber,
     country,
     region,
     eventType,
@@ -75,6 +77,7 @@ const incrementAggregateInFile = async (payload) => {
     areaType,
     areaId,
     areaName,
+    kommuneNumber,
     country,
     region,
     eventType,
@@ -102,6 +105,7 @@ const incrementAggregateInFile = async (payload) => {
         areaType,
         areaId,
         areaName,
+        kommuneNumber,
         country,
         region,
         eventType,

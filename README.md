@@ -101,7 +101,7 @@ This application was designed with a **privacy-first** approach:
 
 - **No file data leaves the browser.** All parsing, validation, and analysis runs entirely client-side. Uploaded files are never sent to or stored on the server.
 - **No personal data is collected.** There are no user accounts, cookies, or tracking pixels.
-- **Minimal anonymous usage tracking.** The only data persisted server-side is the dataset kommune (derived from file coordinates via the [Geonorge API](https://ws.geonorge.no/)). This is stored as an aggregate counter in Supabase and is used solely to understand geographic adoption. No IP addresses, filenames, or file contents are stored.
+- **Minimal anonymous usage tracking.** The only data persisted server-side is the dataset kommune (derived from file coordinates via the [Geonorge API](https://ws.geonorge.no/)), including the official kommune number. This is stored as an aggregate counter in Supabase and is used solely to understand geographic adoption. No IP addresses, filenames, or file contents are stored.
 - **WMS proxy is stateless.** The server-side WMS proxy forwards map tile requests without caching or logging credentials.
 - **SSRF protection.** The WMS proxy validates target URLs and restricts protocols to HTTP/HTTPS.
 

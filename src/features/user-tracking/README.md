@@ -9,7 +9,7 @@ Goal
 Scope
 
 - Track events: `upload`, `validation_success`, `validation_failure`.
-- Store `date`, `hour` (UTC), area fields, `eventType`, `count`.
+- Store `date`, `hour` (UTC), area fields (including `kommune_number`), `eventType`, `count`.
 
 Implementation sketch
 

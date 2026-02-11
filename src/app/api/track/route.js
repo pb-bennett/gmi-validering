@@ -42,6 +42,7 @@ export async function POST(request) {
         areaType: datasetLocation?.areaType || null,
         areaId: datasetLocation?.areaId || null,
         areaName: datasetLocation?.areaName || null,
+        kommuneNumber: datasetLocation?.kommuneNumber || null,
       },
     });
   } catch (error) {

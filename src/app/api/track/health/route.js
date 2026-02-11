@@ -53,6 +53,7 @@ export async function GET(request) {
             areaType: 'health-test',
             areaId: 'health-test',
             areaName: 'Health Test',
+            kommuneNumber: null,
             country: 'TEST',
             region: 'TEST',
             eventType: 'health_check',

@@ -1,6 +1,9 @@
 ALTER TABLE public.aggregates
   ADD COLUMN IF NOT EXISTS hour smallint NOT NULL DEFAULT 0;
 
+ALTER TABLE public.aggregates
+  ADD COLUMN IF NOT EXISTS kommune_number text;
+
 DO $$
 BEGIN
   IF EXISTS (
@@ -23,6 +26,7 @@ CREATE OR REPLACE FUNCTION public.increment_aggregate(
   p_area_type text,
   p_area_id text,
   p_area_name text,
+  p_kommune_number text,
   p_country text,
   p_region text,
   p_event_type text
@@ -34,6 +38,7 @@ BEGIN
     area_type,
     area_id,
     area_name,
+    kommune_number,
     country,
     region,
     event_type,
@@ -46,6 +51,7 @@ BEGIN
     p_area_type,
     p_area_id,
     p_area_name,
+    p_kommune_number,
     p_country,
     p_region,
     p_event_type,
