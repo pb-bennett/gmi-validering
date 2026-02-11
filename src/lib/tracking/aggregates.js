@@ -46,59 +46,23 @@ const toDateKey = (date = new Date()) =>
 
 const toHourKey = (date = new Date()) => new Date(date).getUTCHours();
 
-const normalizeLocation = (location, fallback) => {
-  const areaType = location?.areaType || fallback.areaType;
-  const areaId = location?.areaId || fallback.areaId;
-  const areaName = location?.areaName || fallback.areaName;
-  const country = location?.country || fallback.country || null;
-  const region = location?.region || fallback.region || null;
+const buildAggregatePayload = ({ eventType, location }) => {
+  const dateKey = toDateKey();
+  const hourKey = toHourKey();
+  const areaType = location?.areaType || 'unknown';
+  const areaId = location?.areaId || 'unknown';
+  const areaName = location?.areaName || 'Unknown';
+  const country = location?.country || null;
+  const region = location?.region || null;
 
   return {
+    dateKey,
+    hourKey,
     areaType,
     areaId,
     areaName,
     country,
     region,
-  };
-};
-
-const buildAggregatePayload = ({
-  eventType,
-  uploaderLocation,
-  datasetLocation,
-}) => {
-  const dateKey = toDateKey();
-  const hourKey = toHourKey();
-
-  const dataset = normalizeLocation(datasetLocation, {
-    areaType: 'unknown',
-    areaId: 'unknown',
-    areaName: 'Unknown',
-    country: null,
-    region: null,
-  });
-
-  const uploader = normalizeLocation(uploaderLocation, {
-    areaType: 'unknown',
-    areaId: 'unknown',
-    areaName: 'Unknown',
-    country: null,
-    region: null,
-  });
-
-  return {
-    dateKey,
-    hourKey,
-    datasetAreaType: dataset.areaType,
-    datasetAreaId: dataset.areaId,
-    datasetAreaName: dataset.areaName,
-    datasetCountry: dataset.country,
-    datasetRegion: dataset.region,
-    uploaderAreaType: uploader.areaType,
-    uploaderAreaId: uploader.areaId,
-    uploaderAreaName: uploader.areaName,
-    uploaderCountry: uploader.country,
-    uploaderRegion: uploader.region,
     eventType,
   };
 };
@@ -108,26 +72,19 @@ const incrementAggregateInFile = async (payload) => {
   const {
     dateKey,
     hourKey,
-    datasetAreaType,
-    datasetAreaId,
-    datasetAreaName,
-    datasetCountry,
-    datasetRegion,
-    uploaderAreaType,
-    uploaderAreaId,
-    uploaderAreaName,
-    uploaderCountry,
-    uploaderRegion,
+    areaType,
+    areaId,
+    areaName,
+    country,
+    region,
     eventType,
   } = payload;
 
   const recordKey = [
     dateKey,
     hourKey,
-    datasetAreaType,
-    datasetAreaId,
-    uploaderAreaType,
-    uploaderAreaId,
+    areaType,
+    areaId,
     eventType,
   ].join('|');
 
@@ -142,16 +99,11 @@ const incrementAggregateInFile = async (payload) => {
       data.records[recordKey] = {
         date: dateKey,
         hour: hourKey,
-        datasetAreaType,
-        datasetAreaId,
-        datasetAreaName,
-        datasetCountry,
-        datasetRegion,
-        uploaderAreaType,
-        uploaderAreaId,
-        uploaderAreaName,
-        uploaderCountry,
-        uploaderRegion,
+        areaType,
+        areaId,
+        areaName,
+        country,
+        region,
         eventType,
         count: 1,
         createdAt: new Date().toISOString(),
@@ -168,16 +120,8 @@ const incrementAggregateInFile = async (payload) => {
   }
 };
 
-export const incrementAggregate = async ({
-  eventType,
-  uploaderLocation,
-  datasetLocation,
-}) => {
-  const payload = buildAggregatePayload({
-    eventType,
-    uploaderLocation,
-    datasetLocation,
-  });
+export const incrementAggregate = async ({ eventType, location }) => {
+  const payload = buildAggregatePayload({ eventType, location });
 
   if (isSupabaseConfigured()) {
     const storedInSupabase =

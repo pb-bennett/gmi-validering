@@ -18,23 +18,12 @@ export function useFileLoader({ onComplete } = {}) {
 
   const trackUploadSuccess = async (datasetCoord) => {
     const logPrefix = '[tracking]';
-    const trackingDebug =
-      process.env.NEXT_PUBLIC_TRACKING_DEBUG === 'true';
     console.info(`${logPrefix} preparing upload tracking`, {
       hasDatasetCoord: Boolean(datasetCoord),
       epsg: datasetCoord?.epsg ?? null,
       sampleCount: datasetCoord?.sampleCount ?? null,
     });
     try {
-      console.info(`${logPrefix} requesting browser geolocation (if available)`);
-      let uploaderCoord = null;
-      try {
-        uploaderCoord = await getBrowserGeolocation(5000);
-        console.info(`${logPrefix} browser geolocation result`, { uploaderCoord });
-      } catch (err) {
-        console.warn(`${logPrefix} browser geolocation failed`, err);
-      }
-
       console.info(`${logPrefix} sending /api/track request`);
       const response = await fetch('/api/track', {
         method: 'POST',
@@ -44,8 +33,6 @@ export function useFileLoader({ onComplete } = {}) {
         body: JSON.stringify({
           eventType: 'upload_success',
           datasetCoord,
-          uploaderCoord,
-          debug: trackingDebug,
         }),
         keepalive: true,
       });
@@ -56,14 +43,8 @@ export function useFileLoader({ onComplete } = {}) {
       console.info(`${logPrefix} /api/track response`, {
         ok: response.ok,
         status: response.status,
-        uploaderLocation: payload?.uploaderLocation ?? null,
-        datasetLocation: payload?.datasetLocation ?? null,
+        location: payload?.location ?? null,
       });
-      if (trackingDebug) {
-        console.info(`${logPrefix} /api/track debug`, {
-          debug: payload?.debug ?? null,
-        });
-      }
     } catch (error) {
       console.warn(`${logPrefix} /api/track failed`, error);
       // Best-effort only; tracking should never block file parsing.
@@ -80,41 +61,6 @@ export function useFileLoader({ onComplete } = {}) {
       msg.includes('exceeded')
     );
   };
-
-  // Browser geolocation helper (WGS84 / EPSG:4326)
-  const getBrowserGeolocation = (timeoutMs = 5000) =>
-    new Promise((resolve) => {
-      if (
-        typeof navigator === 'undefined' ||
-        !navigator.geolocation ||
-        typeof navigator.geolocation.getCurrentPosition !== 'function'
-      ) {
-        return resolve(null);
-      }
-
-      let finished = false;
-      const onSuccess = (pos) => {
-        if (finished) return;
-        finished = true;
-        resolve({ x: pos.coords.longitude, y: pos.coords.latitude, epsg: 4326 });
-      };
-      const onError = () => {
-        if (finished) return;
-        finished = true;
-        resolve(null);
-      };
-      navigator.geolocation.getCurrentPosition(onSuccess, onError, {
-        enableHighAccuracy: false,
-        timeout: timeoutMs,
-      });
-
-      // Fallback timeout
-      setTimeout(() => {
-        if (finished) return;
-        finished = true;
-        resolve(null);
-      }, timeoutMs + 200);
-    });
 
   const decodeSnippet = (arrayBuffer) => {
     try {
