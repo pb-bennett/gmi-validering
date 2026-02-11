@@ -15,6 +15,7 @@ import TabSwitcher from '@/components/TabSwitcher';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
 import WmsLayerModal from '@/components/WmsLayerModal';
+import StatsModal from '@/components/StatsModal';
 import useStore from '@/lib/store';
 
 // Dynamic import for 3D viewer to prevent SSR issues with Three.js
@@ -60,6 +61,9 @@ export default function Home() {
   const [showWmsModal, setShowWmsModal] = useState(false);
   const customWmsConfig = useStore((state) => state.customWmsConfig);
 
+  // State for stats modal
+  const [showStats, setShowStats] = useState(false);
+
   // Session heartbeat: update lastActive timestamp
   useEffect(() => {
     // Update immediately on mount
@@ -98,6 +102,65 @@ export default function Home() {
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
+
+      {/* Floating Stats Button - Always visible */}
+      <button
+        onClick={() => setShowStats(true)}
+        aria-label="Vis bruksstatistikk"
+        title="Vis bruksstatistikk"
+        style={{
+          position: 'fixed',
+          bottom: '16px',
+          right: '16px',
+          zIndex: 10002,
+          padding: '10px 16px',
+          borderRadius: '12px',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          color: '#3b82f6',
+          border: '1px solid #e2e8f0',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          fontSize: '13px',
+          fontWeight: 500,
+          backdropFilter: 'blur(8px)',
+          transition: 'all 0.15s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = '#eff6ff';
+          e.currentTarget.style.borderColor = '#3b82f6';
+          e.currentTarget.style.boxShadow = '0 4px 16px rgba(59,130,246,0.2)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+          e.currentTarget.style.borderColor = '#e2e8f0';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+        }}
+      >
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+          />
+        </svg>
+        Statistikk
+      </button>
+
+      {/* Stats Modal */}
+      <StatsModal
+        isOpen={showStats}
+        onClose={() => setShowStats(false)}
+      />
+
       {/* Floating Reset Button - Always visible when data is loaded */}
       {parsingStatus === 'done' && (
         <button
