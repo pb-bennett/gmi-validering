@@ -49,7 +49,7 @@ const centroid = (coords) => {
   if (!coords.length) return null;
   const sum = coords.reduce(
     (acc, c) => ({ x: acc.x + c.x, y: acc.y + c.y }),
-    { x: 0, y: 0 }
+    { x: 0, y: 0 },
   );
   return {
     x: sum.x / coords.length,

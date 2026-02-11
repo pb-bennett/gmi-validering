@@ -15,11 +15,13 @@ Implementation sketch
 
 1. Add a Next.js App Router endpoint: `POST /api/track`.
    - Read `request.geo` (country, region, city, lat/lon).
-  - If dataset coordinates are provided, call Kartverket kommuneinfo once and
-    use that kommune when available.
-   - If `country !== 'NO'`, record `country` aggregate and stop.
-   - If lat/lon available, map to `kommune` using server-side polygon lookup and increment `date+kommune+eventType`.
-   - If only city/region available, treat `city` as rough kommune and fall back to `region` (fylke) if city is missing.
+
+- If dataset coordinates are provided, call Kartverket kommuneinfo once and
+  use that kommune when available.
+- If `country !== 'NO'`, record `country` aggregate and stop.
+- If lat/lon available, map to `kommune` using server-side polygon lookup and increment `date+kommune+eventType`.
+- If only city/region available, treat `city` as rough kommune and fall back to `region` (fylke) if city is missing.
+
 2. Use a small transactional DB (Postgres/Supabase/Neon) with an `aggregates` table and upsert/increment logic.
 3. Expose a read-only admin dashboard (protected) to show adoption by kommune over time.
 

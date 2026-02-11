@@ -37,7 +37,7 @@ Date: 2025-12-24
 
    - Define unit/integration tests and a GitHub Actions workflow to run build & tests.
 
-7. Review and finalize `COPILOT_INSTRUCTIONS.md` edits — **not-started**
+7. Review and finalize `docs/archive/COPILOT_INSTRUCTIONS.md` edits — **not-started**
 
    - Incorporate acceptance criteria, prompt templates, and sample fixtures into the instructions file.
 

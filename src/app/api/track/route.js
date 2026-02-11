@@ -8,7 +8,11 @@ const buildDatasetCoord = (value) => {
   const x = Number(value.x);
   const y = Number(value.y);
   const epsg = Number(value.epsg);
-  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(epsg)) {
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(epsg)
+  ) {
     return null;
   }
   return { x, y, epsg };
@@ -22,7 +26,8 @@ export async function POST(request) {
 
     let location = getRoughLocationFromRequest(request);
     if (datasetCoord) {
-      const datasetLocation = await lookupKommuneFromCoord(datasetCoord);
+      const datasetLocation =
+        await lookupKommuneFromCoord(datasetCoord);
       if (datasetLocation) {
         location = {
           ...location,

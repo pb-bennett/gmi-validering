@@ -17,8 +17,15 @@ export function useFileLoader({ onComplete } = {}) {
   const addLayer = useStore((state) => state.addLayer);
 
   const trackUploadSuccess = async (datasetCoord) => {
+    const logPrefix = '[tracking]';
+    console.info(`${logPrefix} preparing upload tracking`, {
+      hasDatasetCoord: Boolean(datasetCoord),
+      epsg: datasetCoord?.epsg ?? null,
+      sampleCount: datasetCoord?.sampleCount ?? null,
+    });
     try {
-      await fetch('/api/track', {
+      console.info(`${logPrefix} sending /api/track request`);
+      const response = await fetch('/api/track', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -29,7 +36,17 @@ export function useFileLoader({ onComplete } = {}) {
         }),
         keepalive: true,
       });
-    } catch {
+      const payload = await response
+        .clone()
+        .json()
+        .catch(() => null);
+      console.info(`${logPrefix} /api/track response`, {
+        ok: response.ok,
+        status: response.status,
+        location: payload?.location ?? null,
+      });
+    } catch (error) {
+      console.warn(`${logPrefix} /api/track failed`, error);
       // Best-effort only; tracking should never block file parsing.
     }
   };
@@ -183,6 +200,13 @@ export function useFileLoader({ onComplete } = {}) {
           setParsingDone();
 
           const datasetCoord = getDatasetCoordinate(parsedData);
+          console.info('[tracking] dataset coordinate computed', {
+            hasDatasetCoord: Boolean(datasetCoord),
+            epsg: datasetCoord?.epsg ?? null,
+            sampleCount: datasetCoord?.sampleCount ?? null,
+            x: datasetCoord?.x ?? null,
+            y: datasetCoord?.y ?? null,
+          });
           trackUploadSuccess(datasetCoord);
 
           // Notify parent if callback provided

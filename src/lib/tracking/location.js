@@ -25,13 +25,15 @@ const transliterateNorwegian = (s) => {
 export const slugify = (value) => {
   if (!value) return 'unknown';
   const t = transliterateNorwegian(decodeHeader(String(value)));
-  return String(t)
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9\-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80) || 'unknown';
+  return (
+    String(t)
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9\-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80) || 'unknown'
+  );
 };
 
 const pickHeader = (headers, key) => {
@@ -57,7 +59,7 @@ export const getRoughLocationFromRequest = (request) => {
   const city =
     decodeHeader(
       cleanHeaderValue(geo.city) ||
-        pickHeader(headers, 'x-vercel-ip-city')
+        pickHeader(headers, 'x-vercel-ip-city'),
     ) || null;
 
   let areaType = 'country';
