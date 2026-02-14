@@ -192,16 +192,38 @@ export default function StatsModal({ isOpen, onClose }) {
 
   useEffect(() => {
     if (!isOpen) return;
-    setLoading(true);
-    setError(null);
-    fetch('/api/stats')
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    // Defer the `setLoading(true)` to avoid calling setState synchronously
+    // inside the effect body (prevents cascading renders).
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+    });
+
+    fetch('/api/stats', { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return;
         if (data.ok) setStats(data);
         else setError(data.error || 'Ukjent feil');
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (cancelled) return;
+        if (e.name === 'AbortError') return; // fetch was aborted
+        setError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [isOpen]);
 
   /* Close on Escape */
