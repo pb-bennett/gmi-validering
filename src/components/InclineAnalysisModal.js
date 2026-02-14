@@ -33,19 +33,21 @@ export default function InclineAnalysisModal() {
   const forceLayerTerrainFetch = useStore(
     (state) => state.forceLayerTerrainFetch,
   );
-  const selectedTerrainStatus = useStore((state) => {
-    if (selectedPipeIndex === null) return 'idle';
+  const selectedTerrainEntry = useStore((state) => {
+    if (selectedPipeIndex === null) return null;
     if (analysisLayerId) {
       return (
         state.layers[analysisLayerId]?.terrain?.data?.[
           selectedPipeIndex
-        ]?.status || 'idle'
+        ] || null
       );
     }
-    return (
-      state.terrain.data[selectedPipeIndex]?.status || 'idle'
-    );
+    return state.terrain.data[selectedPipeIndex] || null;
   });
+  const selectedTerrainStatus =
+    selectedPipeIndex === null
+      ? 'idle'
+      : selectedTerrainEntry?.status || 'idle';
   const minOvercover = useStore(
     (state) => state.settings.minOvercover,
   );
@@ -320,114 +322,17 @@ export default function InclineAnalysisModal() {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {filteredResults.map((res) => {
-              const fcode =
-                res.attributes.Tema ||
-                res.attributes.S_FCODE ||
-                'Ukjent';
-              const color = getColorByFCode(fcode);
-              // Use getState() to avoid subscribing to terrain updates at parent level
-              const state = useStore.getState();
-              const terrainSource = analysisLayerId
-                ? state.layers[analysisLayerId]?.terrain?.data
-                : state.terrain.data;
-              const terrain = terrainSource?.[res.lineIndex];
-              const terrainStatus = terrain?.status || 'idle';
-              const hasOvercoverWarning =
-                terrain?.overcover?.warnings?.length > 0;
-
-              return (
-                <div
-                  key={res.lineIndex}
-                  onClick={() =>
-                    selectPipe(res.lineIndex, analysisLayerId || null)
-                  }
-                  className={`p-3 border-b cursor-pointer hover:bg-gray-100 ${
-                    selectedPipeIndex === res.lineIndex
-                      ? 'bg-blue-50 border-l-4 border-l-blue-500'
-                      : ''
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex flex-col">
-                      <span
-                        className="font-bold text-sm"
-                        style={{ color }}
-                      >
-                        {fcode}
-                      </span>
-                      <span className="text-xs text-gray-700">
-                        {res.attributes.Nett_type
-                          ? `${res.attributes.Nett_type} - `
-                          : ''}
-                        {res.attributes.Dimensjon ||
-                          res.attributes.Dim ||
-                          '?'}
-                        mm
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {/* Terrain loading spinner */}
-                      {terrainStatus === 'loading' && (
-                        <span
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded"
-                          title="Henter terrengdata..."
-                        >
-                          <svg
-                            className="animate-spin h-3 w-3"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                        </span>
-                      )}
-                      {/* Terrain done indicator */}
-                      {terrainStatus === 'done' &&
-                        !hasOvercoverWarning && (
-                          <span
-                            className="inline-flex items-center px-1.5 py-0.5 text-[10px] bg-green-50 text-green-700 rounded"
-                            title="Terrengdata OK"
-                          >
-                            ⛰️
-                          </span>
-                        )}
-                      {/* Overcover warning badge */}
-                      {hasOvercoverWarning && (
-                        <span
-                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] bg-red-50 text-red-700 rounded font-medium"
-                          title={`${terrain.overcover.warnings.length} punkt med lav overdekning`}
-                        >
-                          ⛰️ {terrain.overcover.warnings.length}⚠
-                        </span>
-                      )}
-                      <StatusBadge status={res.status} />
-                    </div>
-                  </div>
-                  {res.message !== 'OK' && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {res.message}
-                    </div>
-                  )}
-                  <div className="text-xs text-gray-400 mt-1">
-                    ID: {res.lineIndex}
-                  </div>
-                </div>
-              );
-            })}
+            {filteredResults.map((res) => (
+              <AnalysisResultRow
+                key={res.lineIndex}
+                result={res}
+                analysisLayerId={analysisLayerId}
+                isSelected={selectedPipeIndex === res.lineIndex}
+                onSelect={() =>
+                  selectPipe(res.lineIndex, analysisLayerId || null)
+                }
+              />
+            ))}
           </div>
         </div>
 
@@ -486,48 +391,40 @@ export default function InclineAnalysisModal() {
                     ΔZ:{' '}
                     {formatNumber(selectedResult.details.deltaZ, 3)} m
                   </span>
-                  {(() => {
-                    const state = useStore.getState();
-                    const terrainSource = analysisLayerId
-                      ? state.layers[analysisLayerId]?.terrain?.data
-                      : state.terrain.data;
-                    const terrain =
-                      terrainSource?.[selectedResult.lineIndex];
-                    if (!terrain) return null;
+                  {(selectedTerrainStatus === 'loading' ||
+                    selectedTerrainStatus === 'idle') && (
+                    <span className="text-gray-500 flex items-center gap-1">
+                      <svg
+                        className="animate-spin h-3 w-3"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Overdekning:{' '}
+                      {selectedTerrainStatus === 'loading'
+                        ? 'henter...'
+                        : 'venter...'}
+                    </span>
+                  )}
 
-                    if (terrain.status === 'loading') {
-                      return (
-                        <span className="text-gray-500 flex items-center gap-1">
-                          <svg
-                            className="animate-spin h-3 w-3"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                          Overdekning: henter...
-                        </span>
-                      );
-                    }
-
-                    if (
-                      terrain.status === 'done' &&
-                      terrain.overcover?.hasData
-                    ) {
-                      const oc = terrain.overcover;
+                  {selectedTerrainStatus === 'done' &&
+                    selectedTerrainEntry?.overcover?.hasData &&
+                    (() => {
+                      const oc = selectedTerrainEntry.overcover;
                       const hasWarning = oc.warnings?.length > 0;
                       return (
                         <span
@@ -538,10 +435,7 @@ export default function InclineAnalysisModal() {
                           {hasWarning && ' ⚠'}
                         </span>
                       );
-                    }
-
-                    return null;
-                  })()}
+                    })()}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -671,6 +565,8 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
   );
   const terrainPoints = terrainData?.points || [];
   const terrainStatus = terrainData?.status || 'idle';
+  const isTerrainPending =
+    terrainStatus === 'loading' || terrainStatus === 'idle';
   const overcoverWarnings = terrainData?.overcover?.warnings || [];
 
   const {
@@ -1082,10 +978,13 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
             <span className="text-yellow-700">Mulig terrengfeil</span>
           </div>
         )}
-        {terrainStatus === 'loading' && (
-          <div className="flex items-center gap-1 text-gray-500">
+      </div>
+
+      {isTerrainPending && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+          <div className="bg-white/95 border border-gray-200 rounded-lg px-5 py-4 shadow-md flex flex-col items-center gap-2">
             <svg
-              className="animate-spin h-3 w-3"
+              className="animate-spin h-9 w-9 text-blue-600"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -1104,10 +1003,14 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               ></path>
             </svg>
-            <span>Henter...</span>
+            <span className="text-xs text-gray-600 font-medium">
+              {terrainStatus === 'loading'
+                ? 'Henter terrengdata...'
+                : 'Venter på terrengdata...'}
+            </span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <svg
         width={width}
@@ -1286,31 +1189,6 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
               </g>
             );
           })}
-
-          {/* Terrain Loading Indicator */}
-          {terrainStatus === 'loading' && (
-            <g>
-              <rect
-                x={width - padding - 120}
-                y={padding + 5}
-                width={115}
-                height={24}
-                rx="4"
-                fill="white"
-                fillOpacity="0.9"
-                stroke="#e5e7eb"
-              />
-              <text
-                x={width - padding - 60}
-                y={padding + 21}
-                textAnchor="middle"
-                fill="#6b7280"
-                style={{ fontSize: '11px' }}
-              >
-                Henter terreng...
-              </text>
-            </g>
-          )}
 
           {/* Terrain snap indicator */}
           {tooltip?.type === 'terrain' &&
@@ -1740,6 +1618,118 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function AnalysisResultRow({
+  result,
+  analysisLayerId,
+  isSelected,
+  onSelect,
+}) {
+  const terrain = useStore((state) =>
+    analysisLayerId
+      ? state.layers[analysisLayerId]?.terrain?.data?.[
+          result.lineIndex
+        ]
+      : state.terrain.data[result.lineIndex],
+  );
+
+  const terrainStatus = terrain?.status || 'idle';
+  const isTerrainPending =
+    terrainStatus === 'loading' || terrainStatus === 'idle';
+  const hasOvercoverWarning =
+    (terrain?.overcover?.warnings?.length || 0) > 0;
+  const fcode =
+    result.attributes.Tema || result.attributes.S_FCODE || 'Ukjent';
+  const color = getColorByFCode(fcode);
+
+  return (
+    <div
+      onClick={onSelect}
+      className={`p-3 border-b cursor-pointer hover:bg-gray-100 ${
+        isSelected
+          ? 'bg-blue-50 border-l-4 border-l-blue-500'
+          : ''
+      }`}
+    >
+      <div className="flex justify-between items-start">
+        <div className="flex flex-col">
+          <span className="font-bold text-sm" style={{ color }}>
+            {fcode}
+          </span>
+          <span className="text-xs text-gray-700">
+            {result.attributes.Nett_type
+              ? `${result.attributes.Nett_type} - `
+              : ''}
+            {result.attributes.Dimensjon || result.attributes.Dim || '?'}
+            mm
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          {isTerrainPending && (
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded"
+              title={
+                terrainStatus === 'loading'
+                  ? 'Henter terrengdata...'
+                  : 'Venter på terrengdata...'
+              }
+            >
+              <svg
+                className="animate-spin h-3 w-3"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+            </span>
+          )}
+
+          {terrainStatus === 'done' && !hasOvercoverWarning && (
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 text-[10px] bg-green-50 text-green-700 rounded"
+              title="Terrengdata OK"
+            >
+              ⛰️
+            </span>
+          )}
+
+          {hasOvercoverWarning && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] bg-red-50 text-red-700 rounded font-medium"
+              title={`${terrain.overcover.warnings.length} punkt med lav overdekning`}
+            >
+              ⛰️ {terrain.overcover.warnings.length}⚠
+            </span>
+          )}
+
+          <StatusBadge status={result.status} />
+        </div>
+      </div>
+
+      {result.message !== 'OK' && (
+        <div className="text-xs text-gray-500 mt-1">
+          {result.message}
+        </div>
+      )}
+      <div className="text-xs text-gray-400 mt-1">
+        ID: {result.lineIndex}
+      </div>
     </div>
   );
 }
