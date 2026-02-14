@@ -563,7 +563,10 @@ export default function InclineAnalysisModal() {
               {/* Cross Section Visualization */}
               <div className="border rounded-lg p-2 bg-white shadow-sm flex-1 flex flex-col min-h-0">
                 <div className="flex-1 min-h-0 w-full">
-                  <PipeProfileVisualization result={selectedResult} />
+                  <PipeProfileVisualization
+                    result={selectedResult}
+                    analysisLayerId={analysisLayerId}
+                  />
                 </div>
               </div>
             </div>
@@ -622,7 +625,7 @@ const getColorByFCode = (fcode) => {
   return '#808080';
 };
 
-function PipeProfileVisualization({ result }) {
+function PipeProfileVisualization({ result, analysisLayerId }) {
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({
     width: 0,
@@ -655,9 +658,13 @@ function PipeProfileVisualization({ result }) {
     (state) => state.analysis.hoveredSegment,
   );
 
-  // Get terrain data for this line
-  const terrainData = useStore(
-    (state) => state.terrain.data[result.lineIndex],
+  // Get terrain data for this line (layer-aware in multi-layer mode)
+  const terrainData = useStore((state) =>
+    analysisLayerId
+      ? state.layers[analysisLayerId]?.terrain?.data?.[
+          result.lineIndex
+        ]
+      : state.terrain.data[result.lineIndex],
   );
   const minOvercover = useStore(
     (state) => state.settings.minOvercover,

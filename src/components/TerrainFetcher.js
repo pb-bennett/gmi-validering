@@ -29,6 +29,15 @@ export default function TerrainFetcher() {
     (state) => state.analysis.layerId,
   );
   const layerOrder = useStore((state) => state.layerOrder);
+  const layerQueueSignal = useStore((state) => {
+    const ids = state.layerOrder || [];
+    if (ids.length === 0) return '';
+    return ids
+      .map(
+        (id) => state.layers[id]?.terrain?.fetchQueue?.length || 0,
+      )
+      .join(',');
+  });
 
   // Base terrain actions (stable references)
   const setTerrainData = useStore((state) => state.setTerrainData);
@@ -232,7 +241,8 @@ export default function TerrainFetcher() {
     }
   }, [fetchQueueLength, processQueue]);
 
-  // Watch for new layers being added (triggers layer queue processing)
+  // Watch for layer queue changes (including prioritization/force-fetch in
+  // multi-layer mode) and process when work is available.
   useEffect(() => {
     if (layerOrder.length > 0 && !isFetchingRef.current) {
       const state = useStore.getState();
@@ -241,7 +251,7 @@ export default function TerrainFetcher() {
       );
       if (hasLayerWork) processQueue();
     }
-  }, [layerOrder, processQueue]);
+  }, [layerOrder, layerQueueSignal, processQueue]);
 
   // Cleanup on unmount
   useEffect(() => {
