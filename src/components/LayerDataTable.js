@@ -104,6 +104,9 @@ export default function LayerDataTable() {
   const setHighlightedFeature = useStore(
     (state) => state.setHighlightedFeature,
   );
+  const setHighlightedFeatureIds = useStore(
+    (state) => state.setHighlightedFeatureIds,
+  );
   const resetLayerFilters = useStore(
     (state) => state.resetLayerFilters,
   );
@@ -125,6 +128,12 @@ export default function LayerDataTable() {
       closeLayerDataTable();
     }
   }, [isOpen, layer, closeLayerDataTable]);
+
+  useEffect(() => {
+    return () => {
+      setHighlightedFeatureIds(null);
+    };
+  }, [setHighlightedFeatureIds]);
 
   const activeTab =
     layerId && layerDataTable?.activeTabByLayer?.[layerId]
@@ -343,6 +352,15 @@ export default function LayerDataTable() {
     const featureId = `${objectType}-${layerId}-${index}`;
     setHighlightedFeature(featureId);
   }, [layerId, setHighlightedFeature]);
+
+  const handleRowHoverStart = useCallback((index, objectType) => {
+    const featureId = `${objectType}-${layerId}-${index}`;
+    setHighlightedFeatureIds(new Set([featureId]));
+  }, [layerId, setHighlightedFeatureIds]);
+
+  const handleRowHoverEnd = useCallback(() => {
+    setHighlightedFeatureIds(null);
+  }, [setHighlightedFeatureIds]);
 
   // Calculate column widths based on field names
   const columnWidths = useMemo(() => {
@@ -606,6 +624,10 @@ export default function LayerDataTable() {
                 <div
                   key={row.id}
                   onClick={() => handleRowClick(row.original.__index, activeTab)}
+                  onMouseEnter={() =>
+                    handleRowHoverStart(row.original.__index, activeTab)
+                  }
+                  onMouseLeave={handleRowHoverEnd}
                   className="flex cursor-pointer hover:bg-blue-50 border-b"
                   style={{
                     position: 'absolute',
