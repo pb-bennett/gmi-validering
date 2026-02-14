@@ -295,8 +295,7 @@ const useStore = create(
                 ui: {
                   ...initial.ui,
                   mapBaseLayer: preservedMapBaseLayer,
-                  mapOverlayVisibility:
-                    preservedMapOverlayVisibility,
+                  mapOverlayVisibility: preservedMapOverlayVisibility,
                   // Keep sidebar open by default
                   sidebarOpen: true,
                   outlierPromptOpen: hasOutliers,
@@ -1491,7 +1490,8 @@ const useStore = create(
                 layerDataTable: {
                   ...(state.ui.layerDataTable || {}),
                   activeTabByLayer: {
-                    ...(state.ui.layerDataTable?.activeTabByLayer || {}),
+                    ...(state.ui.layerDataTable?.activeTabByLayer ||
+                      {}),
                     [layerId]: tab,
                   },
                 },
@@ -1509,7 +1509,8 @@ const useStore = create(
                 layerDataTable: {
                   ...(state.ui.layerDataTable || {}),
                   sortingByLayer: {
-                    ...(state.ui.layerDataTable?.sortingByLayer || {}),
+                    ...(state.ui.layerDataTable?.sortingByLayer ||
+                      {}),
                     [layerId]: {
                       ...(state.ui.layerDataTable?.sortingByLayer?.[
                         layerId
@@ -1532,11 +1533,11 @@ const useStore = create(
                 layerDataTable: {
                   ...(state.ui.layerDataTable || {}),
                   columnOrderByLayer: {
-                    ...(state.ui.layerDataTable?.columnOrderByLayer || {}),
+                    ...(state.ui.layerDataTable?.columnOrderByLayer ||
+                      {}),
                     [layerId]: {
-                      ...(state.ui.layerDataTable?.columnOrderByLayer?.[
-                        layerId
-                      ] || {}),
+                      ...(state.ui.layerDataTable
+                        ?.columnOrderByLayer?.[layerId] || {}),
                       [tab]: order,
                     },
                   },
@@ -2652,6 +2653,15 @@ const useStore = create(
           set(
             (state) => {
               const initial = get()._initial;
+              const preservedMapOverlayVisibility = {
+                ...(initial.ui.mapOverlayVisibility || {}),
+                ...(state.ui?.mapOverlayVisibility || {}),
+              };
+              const preservedMapBaseLayer =
+                state.ui?.mapBaseLayer ||
+                initial.ui.mapBaseLayer ||
+                'Kartverket Topo';
+
               return {
                 file: null,
                 data: null,
@@ -2662,7 +2672,12 @@ const useStore = create(
                 analysis: { ...initial.analysis },
                 terrain: { ...initial.terrain },
                 outliers: { ...initial.outliers },
-                ui: { ...initial.ui },
+                ui: {
+                  ...initial.ui,
+                  mapBaseLayer: preservedMapBaseLayer,
+                  mapOverlayVisibility:
+                    preservedMapOverlayVisibility,
+                },
                 // Keep settings as-is
                 settings: state.settings,
               };
@@ -2816,8 +2831,7 @@ const useStore = create(
                   state.ui.mapOverlayVisibility.eiendomsgrenser ===
                   undefined
                 ) {
-                  state.ui.mapOverlayVisibility.eiendomsgrenser =
-                    true;
+                  state.ui.mapOverlayVisibility.eiendomsgrenser = true;
                 }
               }
               if (state.ui.hiddenCodes === undefined) {
@@ -2854,8 +2868,7 @@ const useStore = create(
                   state.ui.layerDataTable.activeTabByLayer = {};
                 }
                 if (
-                  state.ui.layerDataTable.sortingByLayer ===
-                  undefined
+                  state.ui.layerDataTable.sortingByLayer === undefined
                 ) {
                   state.ui.layerDataTable.sortingByLayer = {};
                 }
