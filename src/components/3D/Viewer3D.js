@@ -43,6 +43,9 @@ export default function Viewer3D() {
   const selectedObject3D = useStore(
     (state) => state.ui?.selectedObject3D,
   );
+  const mapUpdateNonce = useStore(
+    (state) => state.ui?.mapUpdateNonce || 0,
+  );
   const analysisOpen = useStore((state) => state.analysis.isOpen);
   const fieldValidationOpen = useStore(
     (state) => state.ui.fieldValidationOpen,
@@ -116,7 +119,7 @@ export default function Viewer3D() {
     return combined.points.length > 0 || combined.lines.length > 0
       ? combined
       : null;
-  }, [isMultiLayerMode, data, layerOrder]);
+  }, [isMultiLayerMode, data, layerOrder, mapUpdateNonce]);
 
   // Clear selected object when it's been processed
   useEffect(() => {
