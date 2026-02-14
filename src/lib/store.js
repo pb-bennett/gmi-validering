@@ -2675,8 +2675,7 @@ const useStore = create(
                 ui: {
                   ...initial.ui,
                   mapBaseLayer: preservedMapBaseLayer,
-                  mapOverlayVisibility:
-                    preservedMapOverlayVisibility,
+                  mapOverlayVisibility: preservedMapOverlayVisibility,
                 },
                 // Keep settings as-is
                 settings: state.settings,

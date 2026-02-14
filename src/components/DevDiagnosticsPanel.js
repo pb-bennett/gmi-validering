@@ -69,6 +69,20 @@ function formatBytes(bytes) {
 export default function DevDiagnosticsPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const [stats, setStats] = useState(null);
+  const [lastSnapshot, setLastSnapshot] = useState(null);
+  const [lastEvent, setLastEvent] = useState(null);
+  const [heapStats, setHeapStats] = useState({
+    used: null,
+    limit: null,
+    pct: null,
+    maxSeen: null,
+  });
+  const [layerTerrainStats, setLayerTerrainStats] = useState({
+    totalQueue: 0,
+    loading: 0,
+    done: 0,
+    error: 0,
+  });
 
   const terrainData = useStore((state) => state.terrain.data);
   const fetchQueue = useStore((state) => state.terrain.fetchQueue);
@@ -87,6 +101,10 @@ export default function DevDiagnosticsPanel() {
   );
 
   const storeSize = useMemo(() => {
+    if (!isOpen) {
+      return { data: 0, layers: 0, terrain: 0, total: 0 };
+    }
+
     const sizes = {
       data: estimateObjectSize(data),
       layers: estimateObjectSize(layers),
@@ -94,7 +112,7 @@ export default function DevDiagnosticsPanel() {
     };
     sizes.total = sizes.data + sizes.layers + sizes.terrain;
     return sizes;
-  }, [data, layers, terrainData]);
+  }, [isOpen, data, layers, terrainData]);
 
   const selectedTerrain =
     selectedPipeIndex !== null
@@ -145,25 +163,123 @@ export default function DevDiagnosticsPanel() {
 
     const updateStats = () => {
       setStats(getTerrainStats());
+
+      const current = useStore.getState();
+      const ids = current.layerOrder || [];
+      const layerTotals = ids.reduce(
+        (acc, layerId) => {
+          const terrain = current.layers[layerId]?.terrain;
+          if (!terrain) return acc;
+
+          acc.totalQueue += terrain.fetchQueue?.length || 0;
+          const entries = Object.values(terrain.data || {});
+          entries.forEach((entry) => {
+            if (entry?.status === 'done') acc.done++;
+            else if (entry?.status === 'loading') acc.loading++;
+            else if (entry?.status === 'error') acc.error++;
+          });
+
+          return acc;
+        },
+        { totalQueue: 0, loading: 0, done: 0, error: 0 },
+      );
+      setLayerTerrainStats(layerTotals);
+
+      if (typeof performance !== 'undefined' && performance.memory) {
+        const used = performance.memory.usedJSHeapSize;
+        const limit = performance.memory.jsHeapSizeLimit;
+        setHeapStats((prev) => ({
+          used,
+          limit,
+          pct: limit > 0 ? (used / limit) * 100 : null,
+          maxSeen: prev.maxSeen ? Math.max(prev.maxSeen, used) : used,
+        }));
+      }
     };
 
     updateStats();
-    const interval = setInterval(updateStats, 1000);
+    const interval = setInterval(updateStats, 2000);
     return () => clearInterval(interval);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen) return;
+
+    setHeapStats({
+      used: null,
+      limit: null,
+      pct: null,
+      maxSeen: null,
+    });
+    setLayerTerrainStats({
+      totalQueue: 0,
+      loading: 0,
+      done: 0,
+      error: 0,
+    });
+  }, [isOpen]);
+
   // Count terrain data states
-  const dataStats = Object.values(terrainData).reduce(
-    (acc, td) => {
-      acc.total++;
-      if (td.status === 'done') acc.done++;
-      else if (td.status === 'loading') acc.loading++;
-      else if (td.status === 'error') acc.error++;
-      if (td.overcover?.warnings?.length > 0) acc.overcoverWarnings++;
-      return acc;
-    },
-    { total: 0, done: 0, loading: 0, error: 0, overcoverWarnings: 0 },
-  );
+  const dataStats = useMemo(() => {
+    if (!isOpen) {
+      return {
+        total: 0,
+        done: 0,
+        loading: 0,
+        error: 0,
+        overcoverWarnings: 0,
+      };
+    }
+
+    return Object.values(terrainData).reduce(
+      (acc, td) => {
+        acc.total++;
+        if (td.status === 'done') acc.done++;
+        else if (td.status === 'loading') acc.loading++;
+        else if (td.status === 'error') acc.error++;
+        if (td.overcover?.warnings?.length > 0)
+          acc.overcoverWarnings++;
+        return acc;
+      },
+      {
+        total: 0,
+        done: 0,
+        loading: 0,
+        error: 0,
+        overcoverWarnings: 0,
+      },
+    );
+  }, [isOpen, terrainData]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    try {
+      const snapshotsRaw = localStorage.getItem(
+        'gmi:dev:runtime:snapshots',
+      );
+      const eventsRaw = localStorage.getItem(
+        'gmi:dev:runtime:events',
+      );
+
+      const snapshots = snapshotsRaw ? JSON.parse(snapshotsRaw) : [];
+      const events = eventsRaw ? JSON.parse(eventsRaw) : [];
+
+      setLastSnapshot(
+        Array.isArray(snapshots) && snapshots.length > 0
+          ? snapshots[snapshots.length - 1]
+          : null,
+      );
+      setLastEvent(
+        Array.isArray(events) && events.length > 0
+          ? events[events.length - 1]
+          : null,
+      );
+    } catch {
+      setLastSnapshot(null);
+      setLastEvent(null);
+    }
+  }, [isOpen, stats]);
 
   return (
     <div className="fixed bottom-2 right-2 z-[3000]">
@@ -244,6 +360,46 @@ export default function DevDiagnosticsPanel() {
             </div>
           </div>
 
+          {/* Browser Heap */}
+          {heapStats.used !== null && heapStats.limit !== null && (
+            <div className="mb-2 p-2 bg-gray-800 rounded">
+              <div className="font-semibold text-gray-400 mb-1">
+                Browser Heap
+              </div>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                <span className="text-gray-400">Used:</span>
+                <span className="font-mono">
+                  {formatBytes(heapStats.used)}
+                </span>
+
+                <span className="text-gray-400">Limit:</span>
+                <span className="font-mono">
+                  {formatBytes(heapStats.limit)}
+                </span>
+
+                <span className="text-gray-400">Usage:</span>
+                <span
+                  className={`font-mono ${
+                    heapStats.pct >= 80
+                      ? 'text-red-400'
+                      : heapStats.pct >= 65
+                        ? 'text-yellow-300'
+                        : 'text-green-400'
+                  }`}
+                >
+                  {heapStats.pct?.toFixed(1)}%
+                </span>
+
+                <span className="text-gray-400">Max seen:</span>
+                <span className="font-mono text-cyan-400">
+                  {heapStats.maxSeen !== null
+                    ? formatBytes(heapStats.maxSeen)
+                    : '-'}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Queue Status */}
           <div className="mb-2 p-2 bg-gray-800 rounded">
             <div className="font-semibold text-gray-400 mb-1">
@@ -275,6 +431,26 @@ export default function DevDiagnosticsPanel() {
                 {dataStats.error}
               </span>
 
+              <span className="text-gray-400">Layer Queue:</span>
+              <span className="font-mono">
+                {layerTerrainStats.totalQueue}
+              </span>
+
+              <span className="text-gray-400">Layer Loading:</span>
+              <span className="font-mono text-yellow-400">
+                {layerTerrainStats.loading}
+              </span>
+
+              <span className="text-gray-400">Layer Done:</span>
+              <span className="font-mono text-green-400">
+                {layerTerrainStats.done}
+              </span>
+
+              <span className="text-gray-400">Layer Errors:</span>
+              <span className="font-mono text-red-400">
+                {layerTerrainStats.error}
+              </span>
+
               <span className="text-gray-400">
                 Overcover Warnings:
               </span>
@@ -283,6 +459,99 @@ export default function DevDiagnosticsPanel() {
               </span>
             </div>
           </div>
+
+          {(lastSnapshot || lastEvent) && (
+            <div className="mb-2 p-2 bg-gray-800 rounded">
+              <div className="font-semibold text-gray-400 mb-1">
+                Last Persisted Runtime
+              </div>
+
+              {lastSnapshot && (
+                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mb-2">
+                  <span className="text-gray-400">Timestamp:</span>
+                  <span className="font-mono text-[10px]">
+                    {lastSnapshot.ts}
+                  </span>
+
+                  <span className="text-gray-400">Reason:</span>
+                  <span className="font-mono">
+                    {lastSnapshot.reason || '-'}
+                  </span>
+
+                  <span className="text-gray-400">Layer Count:</span>
+                  <span className="font-mono">
+                    {lastSnapshot.layerCount ?? '-'}
+                  </span>
+
+                  <span className="text-gray-400">
+                    Base/Layer Queue:
+                  </span>
+                  <span className="font-mono">
+                    {lastSnapshot.baseQueue ?? 0}/
+                    {lastSnapshot.layerQueueTotal ?? 0}
+                  </span>
+
+                  <span className="text-gray-400">Cache:</span>
+                  <span className="font-mono">
+                    {lastSnapshot.terrainCacheSize ?? '-'}
+                    {lastSnapshot.terrainCacheLimit
+                      ? ` / ${lastSnapshot.terrainCacheLimit}`
+                      : ''}
+                  </span>
+
+                  <span className="text-gray-400">Heap used:</span>
+                  <span className="font-mono">
+                    {lastSnapshot.heap?.used
+                      ? formatBytes(lastSnapshot.heap.used)
+                      : '-'}
+                  </span>
+                </div>
+              )}
+
+              {lastEvent && (
+                <div className="border-t border-gray-700 pt-2">
+                  <div className="text-gray-400">Last Event:</div>
+                  <div className="font-mono text-[10px] break-all">
+                    {lastEvent.ts} • {lastEvent.type} •{' '}
+                    {lastEvent.message}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  try {
+                    const snapshots = JSON.parse(
+                      localStorage.getItem(
+                        'gmi:dev:runtime:snapshots',
+                      ) || '[]',
+                    );
+                    const events = JSON.parse(
+                      localStorage.getItem(
+                        'gmi:dev:runtime:events',
+                      ) || '[]',
+                    );
+                    console.log(
+                      'Runtime snapshots (persisted):',
+                      snapshots,
+                    );
+                    console.log(
+                      'Runtime events (persisted):',
+                      events,
+                    );
+                  } catch (error) {
+                    console.error(
+                      'Failed reading persisted runtime diagnostics',
+                      error,
+                    );
+                  }
+                }}
+                className="mt-2 text-[10px] text-gray-300 hover:text-white"
+              >
+                Log persisted runtime history
+              </button>
+            </div>
+          )}
 
           {/* Selected Line Overcover */}
           {selectedPipeIndex !== null && (
@@ -433,6 +702,26 @@ export default function DevDiagnosticsPanel() {
 
               <span className="text-gray-400">Cache Size:</span>
               <span className="font-mono">{stats.cacheSize}</span>
+
+              <span className="text-gray-400">Max Cache Size:</span>
+              <span className="font-mono text-cyan-400">
+                {stats.maxCacheSize ?? '-'}
+              </span>
+
+              <span className="text-gray-400">API Queue:</span>
+              <span className="font-mono">
+                {stats.requestQueueLength ?? '-'}
+              </span>
+
+              <span className="text-gray-400">API Queue Max:</span>
+              <span className="font-mono text-yellow-300">
+                {stats.maxRequestQueueLength ?? '-'}
+              </span>
+
+              <span className="text-gray-400">Active Requests:</span>
+              <span className="font-mono">
+                {stats.activeRequests ?? '-'}
+              </span>
 
               <span className="text-gray-400">Errors:</span>
               <span className="font-mono text-red-400">

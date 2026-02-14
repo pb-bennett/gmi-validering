@@ -48,10 +48,39 @@ export default function InclineAnalysisModal() {
     selectedPipeIndex === null
       ? 'idle'
       : selectedTerrainEntry?.status || 'idle';
+  const selectedTerrainQueued = useStore((state) => {
+    if (selectedPipeIndex === null) return false;
+    if (analysisLayerId) {
+      const queue =
+        state.layers[analysisLayerId]?.terrain?.fetchQueue || [];
+      return queue.includes(selectedPipeIndex);
+    }
+    return state.terrain.fetchQueue.includes(selectedPipeIndex);
+  });
   const minOvercover = useStore(
     (state) => state.settings.minOvercover,
   );
   const updateSettings = useStore((state) => state.updateSettings);
+
+  useEffect(() => {
+    if (!isOpen || selectedPipeIndex === null) return;
+    if (selectedTerrainStatus !== 'idle' || selectedTerrainQueued)
+      return;
+
+    if (analysisLayerId) {
+      forceLayerTerrainFetch(analysisLayerId, selectedPipeIndex);
+    } else {
+      forceTerrainFetch(selectedPipeIndex);
+    }
+  }, [
+    isOpen,
+    selectedPipeIndex,
+    selectedTerrainStatus,
+    selectedTerrainQueued,
+    analysisLayerId,
+    forceLayerTerrainFetch,
+    forceTerrainFetch,
+  ]);
 
   // DON'T subscribe to terrain.data or layers here - let child components do it
   // This prevents re-rendering the entire list on every terrain update
@@ -392,7 +421,7 @@ export default function InclineAnalysisModal() {
                     {formatNumber(selectedResult.details.deltaZ, 3)} m
                   </span>
                   {(selectedTerrainStatus === 'loading' ||
-                    selectedTerrainStatus === 'idle') && (
+                    selectedTerrainQueued) && (
                     <span className="text-gray-500 flex items-center gap-1">
                       <svg
                         className="animate-spin h-3 w-3"
@@ -560,13 +589,22 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
         ]
       : state.terrain.data[result.lineIndex],
   );
+  const isQueued = useStore((state) => {
+    if (analysisLayerId) {
+      const queue =
+        state.layers[analysisLayerId]?.terrain?.fetchQueue || [];
+      return queue.includes(result.lineIndex);
+    }
+    return state.terrain.fetchQueue.includes(result.lineIndex);
+  });
   const minOvercover = useStore(
     (state) => state.settings.minOvercover,
   );
   const terrainPoints = terrainData?.points || [];
   const terrainStatus = terrainData?.status || 'idle';
   const isTerrainPending =
-    terrainStatus === 'loading' || terrainStatus === 'idle';
+    terrainStatus === 'loading' ||
+    (terrainStatus === 'idle' && isQueued);
   const overcoverWarnings = terrainData?.overcover?.warnings || [];
 
   const {
@@ -1635,10 +1673,19 @@ function AnalysisResultRow({
         ]
       : state.terrain.data[result.lineIndex],
   );
+  const isQueued = useStore((state) => {
+    if (analysisLayerId) {
+      const queue =
+        state.layers[analysisLayerId]?.terrain?.fetchQueue || [];
+      return queue.includes(result.lineIndex);
+    }
+    return state.terrain.fetchQueue.includes(result.lineIndex);
+  });
 
   const terrainStatus = terrain?.status || 'idle';
   const isTerrainPending =
-    terrainStatus === 'loading' || terrainStatus === 'idle';
+    terrainStatus === 'loading' ||
+    (terrainStatus === 'idle' && isQueued);
   const hasOvercoverWarning =
     (terrain?.overcover?.warnings?.length || 0) > 0;
   const fcode =
@@ -1649,9 +1696,7 @@ function AnalysisResultRow({
     <div
       onClick={onSelect}
       className={`p-3 border-b cursor-pointer hover:bg-gray-100 ${
-        isSelected
-          ? 'bg-blue-50 border-l-4 border-l-blue-500'
-          : ''
+        isSelected ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
       }`}
     >
       <div className="flex justify-between items-start">
@@ -1663,7 +1708,9 @@ function AnalysisResultRow({
             {result.attributes.Nett_type
               ? `${result.attributes.Nett_type} - `
               : ''}
-            {result.attributes.Dimensjon || result.attributes.Dim || '?'}
+            {result.attributes.Dimensjon ||
+              result.attributes.Dim ||
+              '?'}
             mm
           </span>
         </div>

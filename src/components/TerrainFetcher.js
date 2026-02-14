@@ -25,17 +25,13 @@ export default function TerrainFetcher() {
   const selectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
-  const analysisLayerId = useStore(
-    (state) => state.analysis.layerId,
-  );
+  const analysisLayerId = useStore((state) => state.analysis.layerId);
   const layerOrder = useStore((state) => state.layerOrder);
   const layerQueueSignal = useStore((state) => {
     const ids = state.layerOrder || [];
     if (ids.length === 0) return '';
     return ids
-      .map(
-        (id) => state.layers[id]?.terrain?.fetchQueue?.length || 0,
-      )
+      .map((id) => state.layers[id]?.terrain?.fetchQueue?.length || 0)
       .join(',');
   });
 
@@ -75,17 +71,24 @@ export default function TerrainFetcher() {
     const state = useStore.getState();
     if (analysisLayerId) {
       const layer = state.layers[analysisLayerId];
+      const lineStatus =
+        layer?.terrain?.data?.[selectedPipeIndex]?.status;
       if (
         layer &&
-        !layer.terrain?.data?.[selectedPipeIndex]?.status
+        lineStatus !== 'done' &&
+        lineStatus !== 'loading'
       ) {
         prioritizeLayerTerrainFetch(
           analysisLayerId,
           selectedPipeIndex,
         );
       }
-    } else if (!state.terrain.data[selectedPipeIndex]?.status) {
-      prioritizeTerrainFetch(selectedPipeIndex);
+    } else {
+      const lineStatus =
+        state.terrain.data[selectedPipeIndex]?.status;
+      if (lineStatus !== 'done' && lineStatus !== 'loading') {
+        prioritizeTerrainFetch(selectedPipeIndex);
+      }
     }
   }, [
     selectedPipeIndex,
@@ -113,11 +116,7 @@ export default function TerrainFetcher() {
       const line = state.data.lines[lineIndex];
       const epsg = state.data.header?.COSYS_EPSG || 25832;
 
-      if (
-        !line ||
-        !line.coordinates ||
-        line.coordinates.length < 2
-      ) {
+      if (!line || !line.coordinates || line.coordinates.length < 2) {
         setTerrainStatus(lineIndex, 'error', 'Ugyldig geometri');
         isFetchingRef.current = false;
         setTimeout(processQueue, 10);
@@ -175,11 +174,7 @@ export default function TerrainFetcher() {
       const line = layer.data.lines[lineIndex];
       const epsg = layer.data.header?.COSYS_EPSG || 25832;
 
-      if (
-        !line ||
-        !line.coordinates ||
-        line.coordinates.length < 2
-      ) {
+      if (!line || !line.coordinates || line.coordinates.length < 2) {
         setLayerTerrainStatus(
           layerId,
           lineIndex,
