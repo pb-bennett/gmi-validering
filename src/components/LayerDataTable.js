@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+} from 'react';
 import useStore from '@/lib/store';
 import fieldsData from '@/data/fields.json';
 import {
@@ -25,13 +31,18 @@ function estimateColumnWidth(fieldName, label) {
   const charWidth = 7;
   const padding = 24;
   const labelWidth = label.length * charWidth + padding;
-  return Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, labelWidth));
+  return Math.min(
+    MAX_COLUMN_WIDTH,
+    Math.max(MIN_COLUMN_WIDTH, labelWidth),
+  );
 }
 
 function normalizeColumnOrder(fields, savedOrder) {
   const base = Array.isArray(savedOrder) ? savedOrder : [];
   const filtered = base.filter((field) => fields.includes(field));
-  const remaining = fields.filter((field) => !filtered.includes(field));
+  const remaining = fields.filter(
+    (field) => !filtered.includes(field),
+  );
   return [...filtered, ...remaining];
 }
 
@@ -43,7 +54,7 @@ const DataCell = React.memo(function DataCell({ value }) {
       : String(value);
   const isMissing = displayValue === '-';
   const needsTooltip = displayValue.length > 25;
-  
+
   return (
     <span
       className={`block truncate ${isMissing ? 'text-gray-400 italic' : ''}`}
@@ -104,6 +115,9 @@ export default function LayerDataTable() {
   const setHighlightedFeature = useStore(
     (state) => state.setHighlightedFeature,
   );
+  const setHighlightedFeatureIds = useStore(
+    (state) => state.setHighlightedFeatureIds,
+  );
   const resetLayerFilters = useStore(
     (state) => state.resetLayerFilters,
   );
@@ -115,16 +129,34 @@ export default function LayerDataTable() {
   const layer = layerId ? layers[layerId] : null;
 
   // Get filter state for this layer (memoized to prevent re-renders)
-  const hiddenCodes = useMemo(() => layer?.hiddenCodes || [], [layer?.hiddenCodes]);
-  const hiddenTypes = useMemo(() => layer?.hiddenTypes || [], [layer?.hiddenTypes]);
-  const feltHiddenValues = useMemo(() => layer?.feltHiddenValues || [], [layer?.feltHiddenValues]);
-  const hasActiveFilters = hiddenCodes.length > 0 || hiddenTypes.length > 0 || feltHiddenValues.length > 0;
+  const hiddenCodes = useMemo(
+    () => layer?.hiddenCodes || [],
+    [layer?.hiddenCodes],
+  );
+  const hiddenTypes = useMemo(
+    () => layer?.hiddenTypes || [],
+    [layer?.hiddenTypes],
+  );
+  const feltHiddenValues = useMemo(
+    () => layer?.feltHiddenValues || [],
+    [layer?.feltHiddenValues],
+  );
+  const hasActiveFilters =
+    hiddenCodes.length > 0 ||
+    hiddenTypes.length > 0 ||
+    feltHiddenValues.length > 0;
 
   useEffect(() => {
     if (isOpen && !layer) {
       closeLayerDataTable();
     }
   }, [isOpen, layer, closeLayerDataTable]);
+
+  useEffect(() => {
+    return () => {
+      setHighlightedFeatureIds(null);
+    };
+  }, [setHighlightedFeatureIds]);
 
   const activeTab =
     layerId && layerDataTable?.activeTabByLayer?.[layerId]
@@ -140,41 +172,101 @@ export default function LayerDataTable() {
   }, [layer?.data, activeTab]);
 
   // Helper to check if an item is hidden by filters
-  const isItemHidden = useCallback((item, objectType) => {
-    const attrs = item.attributes || {};
-    const fcode = attrs.S_FCODE || '';
-    const typeVal = attrs.Type || '(Mangler Type)';
+  const isItemHidden = useCallback(
+    (item, objectType) => {
+      const attrs = item.attributes || {};
+      const fcode = attrs.S_FCODE || '';
+      const typeVal = attrs.Type || '(Mangler Type)';
 
-    // Check hiddenCodes
-    if (hiddenCodes.includes(fcode)) {
-      return true;
+      // Check hiddenCodes
+      if (hiddenCodes.includes(fcode)) {
+        return true;
+      }
+
+      // Check hiddenTypes
+      const isHiddenByType = hiddenTypes.some(
+        (ht) =>
+          ht.type === typeVal &&
+          (ht.code === null || ht.code === fcode),
+      );
+      if (isHiddenByType) {
+        return true;
+      }
+
+      // Check feltHiddenValues
+      const mappedObjectType =
+        objectType === 'punkter' ? 'points' : 'lines';
+      const isHiddenByFelt = feltHiddenValues.some((hidden) => {
+        if (hidden.objectType !== mappedObjectType) return false;
+        const featureValue = attrs[hidden.fieldName];
+        const normalizedValue =
+          featureValue === null ||
+          featureValue === undefined ||
+          featureValue === ''
+            ? '(Mangler)'
+            : String(featureValue);
+        return normalizedValue === hidden.value;
+      });
+      if (isHiddenByFelt) {
+        return true;
+      }
+
+      return false;
+    },
+    [hiddenCodes, hiddenTypes, feltHiddenValues],
+  );
+
+  // Count visible objects per tab so we can auto-switch when one tab is
+  // completely filtered away.
+  const visibleCountByTab = useMemo(() => {
+    const points = layer?.data?.points || [];
+    const lines = layer?.data?.lines || [];
+
+    if (!hasActiveFilters) {
+      return {
+        punkter: points.length,
+        ledninger: lines.length,
+      };
     }
 
-    // Check hiddenTypes
-    const isHiddenByType = hiddenTypes.some(
-      (ht) => ht.type === typeVal && (ht.code === null || ht.code === fcode)
+    const visiblePoints = points.reduce(
+      (count, item) =>
+        count + (isItemHidden(item, 'punkter') ? 0 : 1),
+      0,
     );
-    if (isHiddenByType) {
-      return true;
-    }
+    const visibleLines = lines.reduce(
+      (count, item) =>
+        count + (isItemHidden(item, 'ledninger') ? 0 : 1),
+      0,
+    );
 
-    // Check feltHiddenValues
-    const mappedObjectType = objectType === 'punkter' ? 'points' : 'lines';
-    const isHiddenByFelt = feltHiddenValues.some((hidden) => {
-      if (hidden.objectType !== mappedObjectType) return false;
-      const featureValue = attrs[hidden.fieldName];
-      const normalizedValue =
-        featureValue === null || featureValue === undefined || featureValue === ''
-          ? '(Mangler)'
-          : String(featureValue);
-      return normalizedValue === hidden.value;
-    });
-    if (isHiddenByFelt) {
-      return true;
-    }
+    return {
+      punkter: visiblePoints,
+      ledninger: visibleLines,
+    };
+  }, [layer?.data, hasActiveFilters, isItemHidden]);
 
-    return false;
-  }, [hiddenCodes, hiddenTypes, feltHiddenValues]);
+  useEffect(() => {
+    if (!isOpen || !layerId || !hasActiveFilters) return;
+
+    const activeCount = visibleCountByTab[activeTab] || 0;
+    if (activeCount > 0) return;
+
+    const fallbackTab =
+      activeTab === 'punkter' ? 'ledninger' : 'punkter';
+    const fallbackCount = visibleCountByTab[fallbackTab] || 0;
+
+    if (fallbackCount > 0) {
+      setLayerDataTableTab(layerId, fallbackTab);
+    }
+  }, [
+    isOpen,
+    layerId,
+    hasActiveFilters,
+    activeTab,
+    visibleCountByTab,
+    setLayerDataTableTab,
+  ]);
 
   // Add __index and filter hidden items
   const allItemsWithIndex = useMemo(() => {
@@ -189,7 +281,9 @@ export default function LayerDataTable() {
     if (!hasActiveFilters) {
       return allItemsWithIndex;
     }
-    return allItemsWithIndex.filter((item) => !isItemHidden(item, activeTab));
+    return allItemsWithIndex.filter(
+      (item) => !isItemHidden(item, activeTab),
+    );
   }, [allItemsWithIndex, hasActiveFilters, isItemHidden, activeTab]);
 
   const totalCount = allItemsWithIndex.length;
@@ -243,7 +337,8 @@ export default function LayerDataTable() {
   }, [items]);
 
   const savedOrder = useMemo(() => {
-    return layerId && layerDataTable?.columnOrderByLayer?.[layerId]?.[activeTab]
+    return layerId &&
+      layerDataTable?.columnOrderByLayer?.[layerId]?.[activeTab]
       ? layerDataTable.columnOrderByLayer[layerId][activeTab]
       : [];
   }, [layerId, layerDataTable?.columnOrderByLayer, activeTab]);
@@ -272,7 +367,8 @@ export default function LayerDataTable() {
   ]);
 
   const sorting = useMemo(() => {
-    return layerId && layerDataTable?.sortingByLayer?.[layerId]?.[activeTab]
+    return layerId &&
+      layerDataTable?.sortingByLayer?.[layerId]?.[activeTab]
       ? layerDataTable.sortingByLayer[layerId][activeTab]
       : [];
   }, [layerId, layerDataTable?.sortingByLayer, activeTab]);
@@ -293,56 +389,87 @@ export default function LayerDataTable() {
     setDraggedField(field);
   }, []);
 
-  const handleDrop = useCallback((targetField) => {
-    if (!draggedField || draggedField === targetField || !layerId) {
-      setDraggedField(null);
-      return;
-    }
-
-    const nextOrder = [...orderedFields];
-    const draggedIndex = nextOrder.indexOf(draggedField);
-    const targetIndex = nextOrder.indexOf(targetField);
-
-    if (draggedIndex === -1 || targetIndex === -1) {
-      setDraggedField(null);
-      return;
-    }
-
-    nextOrder.splice(draggedIndex, 1);
-    nextOrder.splice(targetIndex, 0, draggedField);
-    setLayerDataTableColumnOrder(layerId, activeTab, nextOrder);
-    setDraggedField(null);
-  }, [draggedField, layerId, orderedFields, activeTab, setLayerDataTableColumnOrder]);
-
-  const handleZoomTo = useCallback((item, index, objectType) => {
-    const featureId = `${objectType}-${layerId}-${index}`;
-    let coords = null;
-
-    if (item.coordinates && item.coordinates.length > 0) {
-      if (objectType === 'punkter') {
-        coords = item.coordinates[0];
-      } else {
-        const midIdx = Math.floor(item.coordinates.length / 2);
-        coords = item.coordinates[midIdx];
+  const handleDrop = useCallback(
+    (targetField) => {
+      if (!draggedField || draggedField === targetField || !layerId) {
+        setDraggedField(null);
+        return;
       }
-    }
 
-    if (!coords || coords.y === undefined || coords.x === undefined) {
-      return;
-    }
+      const nextOrder = [...orderedFields];
+      const draggedIndex = nextOrder.indexOf(draggedField);
+      const targetIndex = nextOrder.indexOf(targetField);
 
-    viewObjectInMap(featureId, [coords.y, coords.x], 20, {
+      if (draggedIndex === -1 || targetIndex === -1) {
+        setDraggedField(null);
+        return;
+      }
+
+      nextOrder.splice(draggedIndex, 1);
+      nextOrder.splice(targetIndex, 0, draggedField);
+      setLayerDataTableColumnOrder(layerId, activeTab, nextOrder);
+      setDraggedField(null);
+    },
+    [
+      draggedField,
       layerId,
-      objectType: objectType === 'ledninger' ? 'pipe' : 'point',
-      lineIndex: objectType === 'ledninger' ? index : undefined,
-      pointIndex: objectType === 'punkter' ? index : undefined,
-    });
-  }, [layerId, viewObjectInMap]);
+      orderedFields,
+      activeTab,
+      setLayerDataTableColumnOrder,
+    ],
+  );
 
-  const handleRowClick = useCallback((index, objectType) => {
-    const featureId = `${objectType}-${layerId}-${index}`;
-    setHighlightedFeature(featureId);
-  }, [layerId, setHighlightedFeature]);
+  const handleZoomTo = useCallback(
+    (item, index, objectType) => {
+      const featureId = `${objectType}-${layerId}-${index}`;
+      let coords = null;
+
+      if (item.coordinates && item.coordinates.length > 0) {
+        if (objectType === 'punkter') {
+          coords = item.coordinates[0];
+        } else {
+          const midIdx = Math.floor(item.coordinates.length / 2);
+          coords = item.coordinates[midIdx];
+        }
+      }
+
+      if (
+        !coords ||
+        coords.y === undefined ||
+        coords.x === undefined
+      ) {
+        return;
+      }
+
+      viewObjectInMap(featureId, [coords.y, coords.x], 20, {
+        layerId,
+        objectType: objectType === 'ledninger' ? 'pipe' : 'point',
+        lineIndex: objectType === 'ledninger' ? index : undefined,
+        pointIndex: objectType === 'punkter' ? index : undefined,
+      });
+    },
+    [layerId, viewObjectInMap],
+  );
+
+  const handleRowClick = useCallback(
+    (index, objectType) => {
+      const featureId = `${objectType}-${layerId}-${index}`;
+      setHighlightedFeature(featureId);
+    },
+    [layerId, setHighlightedFeature],
+  );
+
+  const handleRowHoverStart = useCallback(
+    (index, objectType) => {
+      const featureId = `${objectType}-${layerId}-${index}`;
+      setHighlightedFeatureIds(new Set([featureId]));
+    },
+    [layerId, setHighlightedFeatureIds],
+  );
+
+  const handleRowHoverEnd = useCallback(() => {
+    setHighlightedFeatureIds(null);
+  }, [setHighlightedFeatureIds]);
 
   // Calculate column widths based on field names
   const columnWidths = useMemo(() => {
@@ -363,7 +490,11 @@ export default function LayerDataTable() {
         <ZoomButton
           onClick={(e) => {
             e.stopPropagation();
-            handleZoomTo(row.original, row.original.__index, activeTab);
+            handleZoomTo(
+              row.original,
+              row.original.__index,
+              activeTab,
+            );
           }}
         />
       ),
@@ -411,7 +542,10 @@ export default function LayerDataTable() {
   if (!isOpen || !layer) return null;
 
   // Calculate total table width for horizontal scrolling
-  const totalWidth = Object.values(columnWidths).reduce((a, b) => a + b, 0);
+  const totalWidth = Object.values(columnWidths).reduce(
+    (a, b) => a + b,
+    0,
+  );
 
   return (
     <div
@@ -484,12 +618,20 @@ export default function LayerDataTable() {
           <span style={{ color: 'var(--color-text-secondary)' }}>
             {hasActiveFilters ? (
               <>
-                <span style={{ color: 'var(--color-primary)' }}>{filteredCount}</span>
+                <span style={{ color: 'var(--color-primary)' }}>
+                  {filteredCount}
+                </span>
                 <span> av {totalCount}</span>
-                <span className="text-gray-400"> ({hiddenCount} skjult)</span>
+                <span className="text-gray-400">
+                  {' '}
+                  ({hiddenCount} skjult)
+                </span>
               </>
             ) : (
-              <span>{totalCount} {activeTab === 'punkter' ? 'punkter' : 'ledninger'}</span>
+              <span>
+                {totalCount}{' '}
+                {activeTab === 'punkter' ? 'punkter' : 'ledninger'}
+              </span>
             )}
           </span>
           {hasActiveFilters && (
@@ -547,7 +689,11 @@ export default function LayerDataTable() {
                 const isFixed = header.column.columnDef.meta?.isFixed;
                 const headerId = header.column.id;
                 const width = columnWidths[headerId] || 80;
-                const stickyLeft = isZoom ? 0 : isFixed ? 36 : undefined;
+                const stickyLeft = isZoom
+                  ? 0
+                  : isFixed
+                    ? 36
+                    : undefined;
 
                 return (
                   <div
@@ -557,10 +703,14 @@ export default function LayerDataTable() {
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => handleDrop(headerId)}
                     onClick={
-                      isZoom ? undefined : header.column.getToggleSortingHandler()
+                      isZoom
+                        ? undefined
+                        : header.column.getToggleSortingHandler()
                     }
                     className={`px-1.5 py-1 text-left text-[10px] font-medium select-none border-b shrink-0 ${
-                      isZoom ? 'text-center' : 'cursor-pointer hover:bg-gray-100'
+                      isZoom
+                        ? 'text-center'
+                        : 'cursor-pointer hover:bg-gray-100'
                     } ${isZoom || isFixed ? 'sticky z-30' : ''}`}
                     style={{
                       backgroundColor: 'var(--color-page-bg)',
@@ -570,7 +720,9 @@ export default function LayerDataTable() {
                       minWidth: width,
                       maxWidth: width,
                       left: stickyLeft,
-                      boxShadow: isFixed ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
+                      boxShadow: isFixed
+                        ? '2px 0 4px -2px rgba(0,0,0,0.1)'
+                        : undefined,
                     }}
                   >
                     <div className="flex items-center gap-0.5 truncate">
@@ -581,14 +733,18 @@ export default function LayerDataTable() {
                         )}
                       </span>
                       {header.column.getIsSorted() && (
-                        <span style={{ color: 'var(--color-primary)' }}>
-                          {header.column.getIsSorted() === 'asc' ? '↑' : '↓'}
+                        <span
+                          style={{ color: 'var(--color-primary)' }}
+                        >
+                          {header.column.getIsSorted() === 'asc'
+                            ? '↑'
+                            : '↓'}
                         </span>
                       )}
                     </div>
                   </div>
                 );
-              })
+              }),
             )}
           </div>
 
@@ -605,7 +761,16 @@ export default function LayerDataTable() {
               return (
                 <div
                   key={row.id}
-                  onClick={() => handleRowClick(row.original.__index, activeTab)}
+                  onClick={() =>
+                    handleRowClick(row.original.__index, activeTab)
+                  }
+                  onMouseEnter={() =>
+                    handleRowHoverStart(
+                      row.original.__index,
+                      activeTab,
+                    )
+                  }
+                  onMouseLeave={handleRowHoverEnd}
                   className="flex cursor-pointer hover:bg-blue-50 border-b"
                   style={{
                     position: 'absolute',
@@ -619,10 +784,15 @@ export default function LayerDataTable() {
                 >
                   {row.getVisibleCells().map((cell, index) => {
                     const isZoom = index === 0;
-                    const isFixed = cell.column.columnDef.meta?.isFixed;
+                    const isFixed =
+                      cell.column.columnDef.meta?.isFixed;
                     const cellId = cell.column.id;
                     const width = columnWidths[cellId] || 80;
-                    const stickyLeft = isZoom ? 0 : isFixed ? 36 : undefined;
+                    const stickyLeft = isZoom
+                      ? 0
+                      : isFixed
+                        ? 36
+                        : undefined;
 
                     return (
                       <div
@@ -632,16 +802,23 @@ export default function LayerDataTable() {
                         } ${isZoom || isFixed ? 'sticky z-10' : ''}`}
                         style={{
                           backgroundColor:
-                            isZoom || isFixed ? 'var(--color-card)' : 'transparent',
+                            isZoom || isFixed
+                              ? 'var(--color-card)'
+                              : 'transparent',
                           width,
                           minWidth: width,
                           maxWidth: width,
                           left: stickyLeft,
                           height: ROW_HEIGHT,
-                          boxShadow: isFixed ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
+                          boxShadow: isFixed
+                            ? '2px 0 4px -2px rgba(0,0,0,0.1)'
+                            : undefined,
                         }}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
                       </div>
                     );
                   })}

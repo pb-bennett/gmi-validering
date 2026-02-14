@@ -15,8 +15,31 @@ import TabSwitcher from '@/components/TabSwitcher';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
 import WmsLayerModal from '@/components/WmsLayerModal';
+import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
+import { getTerrainStats } from '@/lib/analysis/terrain';
 import useStore from '@/lib/store';
+
+const DEV_RUNTIME_SNAPSHOTS_KEY = 'gmi:dev:runtime:snapshots';
+const DEV_RUNTIME_EVENTS_KEY = 'gmi:dev:runtime:events';
+const DEV_RUNTIME_MAX_ITEMS = 120;
+const PUBLIC_REPO_URL =
+  'https://github.com/pb-bennett/gmi-validering';
+
+function appendDevRuntimeItem(key, item) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    const list = raw ? JSON.parse(raw) : [];
+    const next = Array.isArray(list)
+      ? [...list.slice(-(DEV_RUNTIME_MAX_ITEMS - 1)), item]
+      : [item];
+    window.localStorage.setItem(key, JSON.stringify(next));
+  } catch {
+    // Ignore storage failures in diagnostics path
+  }
+}
 
 // Dynamic import for 3D viewer to prevent SSR issues with Three.js
 const Viewer3D = dynamic(() => import('@/components/3D/Viewer3D'), {
@@ -63,6 +86,7 @@ export default function Home() {
 
   // State for stats modal
   const [showStats, setShowStats] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Session heartbeat: update lastActive timestamp
   useEffect(() => {
@@ -93,6 +117,96 @@ export default function Home() {
       window.removeEventListener('click', handleActivity);
     };
   }, [updateLastActive]);
+
+  // Dev-only persistent breadcrumbs for crashes/OOM (survive renderer restarts)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+
+    const captureSnapshot = (reason = 'interval') => {
+      const state = useStore.getState();
+      const terrainStats = getTerrainStats();
+      const heap =
+        typeof performance !== 'undefined' && performance.memory
+          ? {
+              used: performance.memory.usedJSHeapSize,
+              total: performance.memory.totalJSHeapSize,
+              limit: performance.memory.jsHeapSizeLimit,
+            }
+          : null;
+
+      const layerIds = state.layerOrder || [];
+      let layerQueueTotal = 0;
+      for (const layerId of layerIds) {
+        layerQueueTotal +=
+          state.layers[layerId]?.terrain?.fetchQueue?.length || 0;
+      }
+
+      appendDevRuntimeItem(DEV_RUNTIME_SNAPSHOTS_KEY, {
+        ts: new Date().toISOString(),
+        reason,
+        parsingStatus: state.parsing?.status,
+        activeViewTab: state.ui?.activeViewTab,
+        analysisOpen: !!state.analysis?.isOpen,
+        layerCount: layerIds.length,
+        baseQueue: state.terrain?.fetchQueue?.length || 0,
+        layerQueueTotal,
+        terrainCacheSize: terrainStats.cacheSize,
+        terrainCacheLimit: terrainStats.cacheLimit,
+        terrainCacheEvictions: terrainStats.cacheEvictions,
+        terrainApiQueue: terrainStats.requestQueueLength,
+        terrainApiQueueMax: terrainStats.maxRequestQueueLength,
+        heap,
+      });
+    };
+
+    const onError = (event) => {
+      appendDevRuntimeItem(DEV_RUNTIME_EVENTS_KEY, {
+        ts: new Date().toISOString(),
+        type: 'error',
+        message: event?.message || 'Unknown error',
+        source: event?.filename || null,
+        line: event?.lineno || null,
+        column: event?.colno || null,
+      });
+      captureSnapshot('window-error');
+    };
+
+    const onUnhandledRejection = (event) => {
+      const reason = event?.reason;
+      appendDevRuntimeItem(DEV_RUNTIME_EVENTS_KEY, {
+        ts: new Date().toISOString(),
+        type: 'unhandledrejection',
+        message:
+          reason?.message ||
+          (typeof reason === 'string'
+            ? reason
+            : 'Unhandled rejection'),
+      });
+      captureSnapshot('unhandled-rejection');
+    };
+
+    captureSnapshot('mount');
+    const interval = setInterval(
+      () => captureSnapshot('interval'),
+      5000,
+    );
+
+    window.addEventListener('error', onError);
+    window.addEventListener(
+      'unhandledrejection',
+      onUnhandledRejection,
+    );
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('error', onError);
+      window.removeEventListener(
+        'unhandledrejection',
+        onUnhandledRejection,
+      );
+      captureSnapshot('unmount');
+    };
+  }, []);
 
   const handleReset = () => {
     closeDataInspector();
@@ -131,12 +245,15 @@ export default function Home() {
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = '#eff6ff';
           e.currentTarget.style.borderColor = '#3b82f6';
-          e.currentTarget.style.boxShadow = '0 4px 16px rgba(59,130,246,0.2)';
+          e.currentTarget.style.boxShadow =
+            '0 4px 16px rgba(59,130,246,0.2)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+          e.currentTarget.style.backgroundColor =
+            'rgba(255, 255, 255, 0.95)';
           e.currentTarget.style.borderColor = '#e2e8f0';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+          e.currentTarget.style.boxShadow =
+            '0 4px 12px rgba(0,0,0,0.08)';
         }}
       >
         <svg
@@ -160,6 +277,62 @@ export default function Home() {
         isOpen={showStats}
         onClose={() => setShowStats(false)}
       />
+
+      {/* Share QR button */}
+      {parsingStatus === 'done' && (
+        <button
+          onClick={() => setShowShareModal(true)}
+          aria-label="Del app"
+          title="Vis QR-koder for app og GitHub"
+          style={{
+            position: 'fixed',
+            top: '10px',
+            right: '240px',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            color: '#2563eb',
+            border: '1px solid #2563eb',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            zIndex: 10002,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            fontSize: '12px',
+            lineHeight: 1.2,
+            fontWeight: 500,
+            backdropFilter: 'blur(8px)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#eff6ff';
+            e.currentTarget.style.borderColor = '#1d4ed8';
+            e.currentTarget.style.color = '#1d4ed8';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor =
+              'rgba(255, 255, 255, 0.95)';
+            e.currentTarget.style.borderColor = '#2563eb';
+            e.currentTarget.style.color = '#2563eb';
+          }}
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M8.684 13.342A3 3 0 019 12c0-.483-.118-.938-.316-1.342m0 2.684a3 3 0 010-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.368-2.684 3 3 0 00-5.368 2.684zm0 12a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+            />
+          </svg>
+          Del
+        </button>
+      )}
 
       {/* Floating Reset Button - Always visible when data is loaded */}
       {parsingStatus === 'done' && (
@@ -281,7 +454,9 @@ export default function Home() {
           <TerrainFetcher />
 
           {/* Dev diagnostics panel - bottom right corner */}
-          <DevDiagnosticsPanel />
+          {process.env.NODE_ENV !== 'production' && (
+            <DevDiagnosticsPanel />
+          )}
 
           {/* Sidebar - Hidden when field validation is open */}
           {!fieldValidationOpen && (
@@ -409,7 +584,6 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-
               </>
             )}
 
@@ -495,6 +669,12 @@ export default function Home() {
       <WmsLayerModal
         isOpen={showWmsModal}
         onClose={() => setShowWmsModal(false)}
+      />
+
+      <ShareQrModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        repoUrl={PUBLIC_REPO_URL}
       />
     </div>
   );

@@ -1762,6 +1762,24 @@ export default function MapInner({ onZoomChange }) {
   const setSelected3DObject = useStore(
     (state) => state.setSelected3DObject,
   );
+  const mapBaseLayer = useStore(
+    (state) => state.ui.mapBaseLayer || 'Kartverket Topo',
+  );
+  const mapOverlayVisibility = useStore(
+    (state) =>
+      state.ui.mapOverlayVisibility || {
+        data: true,
+        geminiWms: true,
+        eiendomsgrenser: true,
+      },
+  );
+  const setMapBaseLayer = useStore((state) => state.setMapBaseLayer);
+  const setMapOverlayVisibility = useStore(
+    (state) => state.setMapOverlayVisibility,
+  );
+  const toggleCustomWmsEnabled = useStore(
+    (state) => state.toggleCustomWmsEnabled,
+  );
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
@@ -2088,6 +2106,19 @@ export default function MapInner({ onZoomChange }) {
   // Use store-level map update nonce to trigger GeoJSON remounts when filters/visibility change
   const mapUpdateNonce = useStore((state) => state.ui.mapUpdateNonce);
 
+  // Include highlighted feature IDs content (not just size) so single-item hover
+  // updates trigger immediate style refresh when moving between rows.
+  const highlightedFeatureIdsKey = useMemo(() => {
+    if (!highlightedFeatureIds || highlightedFeatureIds.size === 0)
+      return '';
+
+    const ids = Array.from(highlightedFeatureIds);
+    if (ids.length <= 32) return ids.join(',');
+
+    // Keep key bounded for very large sets while still changing on content.
+    return `${ids.length}:${ids.slice(0, 32).join(',')}`;
+  }, [highlightedFeatureIds]);
+
   // Compute a style version key that changes only when styles need to update
   // This replaces the complex inline key computation
   const styleVersionKey = useMemo(() => {
@@ -2098,7 +2129,7 @@ export default function MapInner({ onZoomChange }) {
       highlightedType || '',
       highlightedTypeContext || '',
       highlightedFeatureId || '',
-      highlightedFeatureIds ? highlightedFeatureIds.size : 0,
+      highlightedFeatureIdsKey,
       analysisIsOpen ? `open-${analysisSelectedPipeIndex}` : 'closed',
       filteredFeatureIds ? filteredFeatureIds.size : 0,
       outlierFeatureIds ? outlierFeatureIds.size : 0,
@@ -2123,7 +2154,7 @@ export default function MapInner({ onZoomChange }) {
     highlightedType,
     highlightedTypeContext,
     highlightedFeatureId,
-    highlightedFeatureIds,
+    highlightedFeatureIdsKey,
     analysisIsOpen,
     analysisSelectedPipeIndex,
     filteredFeatureIds,
@@ -2704,10 +2735,13 @@ export default function MapInner({ onZoomChange }) {
       maxZoom={25} // Allow higher zoom levels globally
     >
       <LayersControl
-        key={`layers-control-${customWmsConfig?.url ?? 'none'}-${customWmsConfig?.enabled ? '1' : '0'}`}
+        key={`layers-control-${customWmsConfig?.url ?? 'none'}`}
         position="topright"
       >
-        <LayersControl.BaseLayer checked name="Kartverket Topo">
+        <LayersControl.BaseLayer
+          checked={mapBaseLayer === 'Kartverket Topo'}
+          name="Kartverket Topo"
+        >
           <TileLayer
             attribution='&copy; <a href="https://www.kartverket.no/">Kartverket</a>'
             url="https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png"
@@ -2715,7 +2749,10 @@ export default function MapInner({ onZoomChange }) {
             maxNativeZoom={18}
           />
         </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer name="Kartverket Gråtone">
+        <LayersControl.BaseLayer
+          checked={mapBaseLayer === 'Kartverket Gråtone'}
+          name="Kartverket Gråtone"
+        >
           <TileLayer
             attribution='&copy; <a href="https://www.kartverket.no/">Kartverket</a>'
             url="https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png"
@@ -2723,7 +2760,10 @@ export default function MapInner({ onZoomChange }) {
             maxNativeZoom={18}
           />
         </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer name="OpenStreetMap">
+        <LayersControl.BaseLayer
+          checked={mapBaseLayer === 'OpenStreetMap'}
+          name="OpenStreetMap"
+        >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -2731,7 +2771,10 @@ export default function MapInner({ onZoomChange }) {
             maxNativeZoom={19}
           />
         </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer name="Ingen">
+        <LayersControl.BaseLayer
+          checked={mapBaseLayer === 'Ingen'}
+          name="Ingen"
+        >
           <TileLayer
             url="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><rect width='256' height='256' fill='%23f3f4f6'/></svg>"
             tileSize={256}
@@ -2740,7 +2783,10 @@ export default function MapInner({ onZoomChange }) {
           />
         </LayersControl.BaseLayer>
 
-        <LayersControl.Overlay checked name="Data">
+        <LayersControl.Overlay
+          checked={mapOverlayVisibility.data !== false}
+          name="Data"
+        >
           <GeoJSON
             key={`geojson-${geoJsonDataKey}-${styleVersionKey}`}
             data={geoJsonData}
@@ -2754,11 +2800,11 @@ export default function MapInner({ onZoomChange }) {
           customWmsConfig?.username &&
           customWmsConfig?.password && (
             <LayersControl.Overlay
-              checked={!!customWmsConfig.enabled}
+              checked={mapOverlayVisibility.geminiWms !== false}
               name="Gemini WMS"
             >
               <AuthenticatedWmsLayer
-                key={`wms-${customWmsConfig.url ?? 'none'}-${customWmsConfig.username ?? ''}-${customWmsConfig.enabled ? 1 : 0}`}
+                key={`wms-${customWmsConfig.url ?? 'none'}-${customWmsConfig.username ?? ''}-${customWmsConfig.layers ?? ''}`}
                 url={customWmsConfig.url}
                 username={customWmsConfig.username}
                 password={customWmsConfig.password}
@@ -2771,7 +2817,10 @@ export default function MapInner({ onZoomChange }) {
             </LayersControl.Overlay>
           )}
 
-        <LayersControl.Overlay checked name="Eiendomsgrenser">
+        <LayersControl.Overlay
+          checked={mapOverlayVisibility.eiendomsgrenser !== false}
+          name="Eiendomsgrenser"
+        >
           <WMSTileLayer
             url="https://wms.geonorge.no/skwms1/wms.matrikkel"
             layers="eiendomsgrense,eiendoms_id"
@@ -2784,6 +2833,12 @@ export default function MapInner({ onZoomChange }) {
           />
         </LayersControl.Overlay>
       </LayersControl>
+
+      <LayerControlPersistence
+        onBaseLayerChange={setMapBaseLayer}
+        onOverlayChange={setMapOverlayVisibility}
+        onGeminiWmsToggle={toggleCustomWmsEnabled}
+      />
 
       {/* Force immediate refresh of AuthenticatedWmsLayer when config changes */}
       <WmsLayerRefresher customWmsConfig={customWmsConfig} />
@@ -3086,6 +3141,64 @@ function WmsLayerRefresher({ customWmsConfig }) {
     customWmsConfig?.layers,
     customWmsConfig?.enabled,
   ]);
+
+  return null;
+}
+
+function LayerControlPersistence({
+  onBaseLayerChange,
+  onOverlayChange,
+  onGeminiWmsToggle,
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+
+    const handleBaseLayerChange = (event) => {
+      const name = event?.name;
+      if (!name || !onBaseLayerChange) return;
+      onBaseLayerChange(name);
+    };
+
+    const handleOverlayAdd = (event) => {
+      const name = event?.name;
+      if (!name || !onOverlayChange) return;
+
+      if (name === 'Data') {
+        onOverlayChange('data', true);
+      } else if (name === 'Gemini WMS') {
+        onOverlayChange('geminiWms', true);
+        onGeminiWmsToggle?.(true);
+      } else if (name === 'Eiendomsgrenser') {
+        onOverlayChange('eiendomsgrenser', true);
+      }
+    };
+
+    const handleOverlayRemove = (event) => {
+      const name = event?.name;
+      if (!name || !onOverlayChange) return;
+
+      if (name === 'Data') {
+        onOverlayChange('data', false);
+      } else if (name === 'Gemini WMS') {
+        onOverlayChange('geminiWms', false);
+        onGeminiWmsToggle?.(false);
+      } else if (name === 'Eiendomsgrenser') {
+        onOverlayChange('eiendomsgrenser', false);
+      }
+    };
+
+    map.on('baselayerchange', handleBaseLayerChange);
+    map.on('overlayadd', handleOverlayAdd);
+    map.on('overlayremove', handleOverlayRemove);
+
+    return () => {
+      map.off('baselayerchange', handleBaseLayerChange);
+      map.off('overlayadd', handleOverlayAdd);
+      map.off('overlayremove', handleOverlayRemove);
+    };
+  }, [map, onBaseLayerChange, onOverlayChange, onGeminiWmsToggle]);
 
   return null;
 }

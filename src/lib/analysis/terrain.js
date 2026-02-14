@@ -15,6 +15,7 @@ const API_BASE = 'https://ws.geonorge.no/hoydedata/v1';
 const MAX_POINTS_PER_REQUEST = 50;
 const MAX_CONCURRENT_REQUESTS = 3;
 const REQUEST_DELAY_MS = 100; // Minimum delay between requests
+const MAX_CACHE_ENTRIES = 40000;
 
 // In-memory cache: Map<string, TerrainPoint>
 // Key format: `${epsg}:${x.toFixed(2)}:${y.toFixed(2)}`
@@ -28,6 +29,9 @@ const stats = {
   totalRequestTimeMs: 0,
   errors: 0,
   terrainTypes: new Map(), // Track terrain type occurrences
+  maxRequestQueueLength: 0,
+  maxCacheSize: 0,
+  cacheEvictions: 0,
 };
 
 // Request queue for rate limiting
@@ -46,7 +50,14 @@ function getCacheKey(epsg, x, y) {
  * Get cached terrain point if available
  */
 export function getCachedPoint(epsg, x, y) {
-  return cache.get(getCacheKey(epsg, x, y)) || null;
+  const key = getCacheKey(epsg, x, y);
+  const cached = cache.get(key) || null;
+  if (cached) {
+    // Refresh key order (LRU behavior)
+    cache.delete(key);
+    cache.set(key, cached);
+  }
+  return cached;
 }
 
 /**
@@ -54,7 +65,20 @@ export function getCachedPoint(epsg, x, y) {
  */
 function cachePoint(epsg, point) {
   const key = getCacheKey(epsg, point.x, point.y);
+  if (cache.has(key)) {
+    cache.delete(key);
+  }
   cache.set(key, point);
+  if (cache.size > stats.maxCacheSize) {
+    stats.maxCacheSize = cache.size;
+  }
+
+  while (cache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey === undefined) break;
+    cache.delete(oldestKey);
+    stats.cacheEvictions++;
+  }
 }
 
 /**
@@ -80,8 +104,14 @@ export function getTerrainStats() {
     cacheHitRate: `${cacheHitRate}%`,
     avgRequestTimeMs: `${avgRequestTime}ms`,
     cacheSize: cache.size,
+    cacheLimit: MAX_CACHE_ENTRIES,
+    cacheEvictions: stats.cacheEvictions,
+    maxCacheSize: stats.maxCacheSize,
     errors: stats.errors,
     terrainTypes: Object.fromEntries(stats.terrainTypes),
+    requestQueueLength: requestQueue.length,
+    activeRequests,
+    maxRequestQueueLength: stats.maxRequestQueueLength,
   };
 }
 
@@ -95,6 +125,9 @@ export function resetTerrainStats() {
   stats.totalRequestTimeMs = 0;
   stats.errors = 0;
   stats.terrainTypes.clear();
+  stats.maxRequestQueueLength = requestQueue.length;
+  stats.maxCacheSize = cache.size;
+  stats.cacheEvictions = 0;
 }
 
 /**
@@ -102,6 +135,8 @@ export function resetTerrainStats() {
  */
 export function clearTerrainCache() {
   cache.clear();
+  stats.maxCacheSize = 0;
+  stats.cacheEvictions = 0;
 }
 
 /**
@@ -199,6 +234,9 @@ async function executeRequest(points, epsg) {
 function queueRequest(points, epsg) {
   return new Promise((resolve, reject) => {
     requestQueue.push({ points, epsg, resolve, reject });
+    if (requestQueue.length > stats.maxRequestQueueLength) {
+      stats.maxRequestQueueLength = requestQueue.length;
+    }
     processQueue();
   });
 }
@@ -308,6 +346,9 @@ export function priorityQueueRequest(points, epsg) {
   return new Promise((resolve, reject) => {
     // Insert at front of queue for priority processing
     requestQueue.unshift({ points, epsg, resolve, reject });
+    if (requestQueue.length > stats.maxRequestQueueLength) {
+      stats.maxRequestQueueLength = requestQueue.length;
+    }
     processQueue();
   });
 }

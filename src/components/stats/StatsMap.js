@@ -1,6 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -36,18 +42,21 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
 
   /* Unique sorted dates from the timeline */
   const uniqueDates = useMemo(() => {
-    const s = new Set(timeline.filter((t) => t.lat && t.lng).map((t) => t.date));
+    const s = new Set(
+      timeline.filter((t) => t.lat && t.lng).map((t) => t.date),
+    );
     return [...s].sort();
   }, [timeline]);
 
-  /* Compute markers for the current dateIdx */
+  /* Compute markers for the current dateIdx (clamp out-of-range indices) */
   const markers = useMemo(() => {
-    if (dateIdx < 0) {
+    const idx = dateIdx >= uniqueDates.length ? -1 : dateIdx;
+    if (idx < 0) {
       // Show cumulative totals
       return byKommune.filter((k) => k.lat && k.lng);
     }
 
-    const currentDate = uniqueDates[dateIdx];
+    const currentDate = uniqueDates[idx];
     if (!currentDate) return [];
 
     const cumMap = {};
@@ -63,13 +72,12 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
 
   /* Markers that are "new" at the current date (for highlight) */
   const newKommuneKeys = useMemo(() => {
-    if (dateIdx < 0) return new Set();
-    const currentDate = uniqueDates[dateIdx];
+    const idx = dateIdx >= uniqueDates.length ? -1 : dateIdx;
+    if (idx < 0) return new Set();
+    const currentDate = uniqueDates[idx];
     return new Set(
       timeline
-        .filter(
-          (t) => t.date === currentDate && t.lat && t.lng,
-        )
+        .filter((t) => t.date === currentDate && t.lat && t.lng)
         .map((t) => t.kommuneNumber || t.areaName),
     );
   }, [dateIdx, uniqueDates, timeline]);
@@ -107,11 +115,10 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
     return () => clearInterval(intervalRef.current);
   }, [playing, uniqueDates.length]);
 
-  /* Reset when timeline changes */
-  useEffect(() => {
-    setDateIdx(-1);
-    setPlaying(false);
-  }, [timeline]);
+  // Avoid setting state synchronously when `timeline` updates — clamp the
+  // visible index instead of forcing a state change here to prevent cascading
+  // renders. The UI and memoized computations use `displayDateIdx`.
+  const displayDateIdx = dateIdx >= uniqueDates.length ? -1 : dateIdx;
 
   const maxCount = Math.max(...byKommune.map((k) => k.count), 1);
   const radius = (count) =>
@@ -121,8 +128,18 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
 
   /* Norwegian date format */
   const NO_MONTHS = [
-    'jan', 'feb', 'mar', 'apr', 'mai', 'jun',
-    'jul', 'aug', 'sep', 'okt', 'nov', 'des',
+    'jan',
+    'feb',
+    'mar',
+    'apr',
+    'mai',
+    'jun',
+    'jul',
+    'aug',
+    'sep',
+    'okt',
+    'nov',
+    'des',
   ];
   const fmtDate = (dateStr) => {
     const d = new Date(dateStr + 'T12:00:00');
@@ -196,12 +213,20 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
               title={playing ? 'Pause' : 'Spill av'}
             >
               {playing ? (
-                <svg className="w-4 h-4 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-4 h-4 text-gray-700"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <rect x="6" y="4" width="4" height="16" rx="1" />
                   <rect x="14" y="4" width="4" height="16" rx="1" />
                 </svg>
               ) : (
-                <svg className="w-4 h-4 text-gray-700 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-4 h-4 text-gray-700 ml-0.5"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M8 5v14l11-7z" />
                 </svg>
               )}
@@ -212,24 +237,24 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
               type="range"
               min={-1}
               max={uniqueDates.length - 1}
-              value={dateIdx}
-              onChange={(e) => {
-                setPlaying(false);
-                setDateIdx(Number(e.target.value));
-              }}
+              value={displayDateIdx}
               className="flex-1 h-1.5 appearance-none rounded bg-gray-200 accent-blue-500 cursor-pointer"
             />
 
             {/* Date label */}
             <span className="text-xs text-gray-600 font-medium min-w-[100px] text-right tabular-nums">
-              {dateIdx < 0 ? 'Alle dager' : fmtDate(uniqueDates[dateIdx])}
+              {displayDateIdx < 0
+                ? 'Alle dager'
+                : fmtDate(uniqueDates[displayDateIdx])}
             </span>
           </div>
 
           {/* Date range hint */}
           <div className="flex justify-between mt-1 text-[10px] text-gray-400 px-11">
             <span>{fmtDate(uniqueDates[0])}</span>
-            <span>{fmtDate(uniqueDates[uniqueDates.length - 1])}</span>
+            <span>
+              {fmtDate(uniqueDates[uniqueDates.length - 1])}
+            </span>
           </div>
         </div>
       )}

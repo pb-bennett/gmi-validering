@@ -104,6 +104,12 @@ const useStore = create(
             activeViewTab: 'map',
             selectedObject3D: null,
             mapCenterTarget: null,
+            mapBaseLayer: 'Kartverket Topo',
+            mapOverlayVisibility: {
+              data: true,
+              geminiWms: true,
+              eiendomsgrenser: true,
+            },
             measureMode: false,
             measurePoints: [],
             feltFilterActive: false,
@@ -247,6 +253,14 @@ const useStore = create(
                   0) > 0;
 
               const initial = get()._initial;
+              const preservedMapOverlayVisibility = {
+                ...(initial.ui.mapOverlayVisibility || {}),
+                ...(state.ui?.mapOverlayVisibility || {}),
+              };
+              const preservedMapBaseLayer =
+                state.ui?.mapBaseLayer ||
+                initial.ui.mapBaseLayer ||
+                'Kartverket Topo';
 
               // Auto-run incline analysis for all lines
               const inclineResults = analyzeIncline(data, {
@@ -280,6 +294,8 @@ const useStore = create(
                 },
                 ui: {
                   ...initial.ui,
+                  mapBaseLayer: preservedMapBaseLayer,
+                  mapOverlayVisibility: preservedMapOverlayVisibility,
                   // Keep sidebar open by default
                   sidebarOpen: true,
                   outlierPromptOpen: hasOutliers,
@@ -902,6 +918,12 @@ const useStore = create(
           activeViewTab: 'map', // 'map' | '3d' - Current active view tab (default to 2D map)
           selectedObject3D: null, // Currently selected 3D object { type, index, data }
           mapCenterTarget: null, // { coordinates, zoom, featureId } - Target for map centering
+          mapBaseLayer: 'Kartverket Topo', // Selected background map in LayersControl
+          mapOverlayVisibility: {
+            data: true,
+            geminiWms: true,
+            eiendomsgrenser: true,
+          },
           layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
           layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
           measureMode: false, // Whether the measure tool is active
@@ -933,6 +955,33 @@ const useStore = create(
             }),
             false,
             'ui/setOutlierPromptOpen',
+          ),
+
+        setMapBaseLayer: (name) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                mapBaseLayer: name,
+              },
+            }),
+            false,
+            'ui/setMapBaseLayer',
+          ),
+
+        setMapOverlayVisibility: (overlay, visible) =>
+          set(
+            (state) => ({
+              ui: {
+                ...state.ui,
+                mapOverlayVisibility: {
+                  ...(state.ui.mapOverlayVisibility || {}),
+                  [overlay]: visible,
+                },
+              },
+            }),
+            false,
+            'ui/setMapOverlayVisibility',
           ),
 
         setMissingHeightPromptOpen: (isOpen) =>
@@ -1441,7 +1490,8 @@ const useStore = create(
                 layerDataTable: {
                   ...(state.ui.layerDataTable || {}),
                   activeTabByLayer: {
-                    ...(state.ui.layerDataTable?.activeTabByLayer || {}),
+                    ...(state.ui.layerDataTable?.activeTabByLayer ||
+                      {}),
                     [layerId]: tab,
                   },
                 },
@@ -1459,7 +1509,8 @@ const useStore = create(
                 layerDataTable: {
                   ...(state.ui.layerDataTable || {}),
                   sortingByLayer: {
-                    ...(state.ui.layerDataTable?.sortingByLayer || {}),
+                    ...(state.ui.layerDataTable?.sortingByLayer ||
+                      {}),
                     [layerId]: {
                       ...(state.ui.layerDataTable?.sortingByLayer?.[
                         layerId
@@ -1482,11 +1533,11 @@ const useStore = create(
                 layerDataTable: {
                   ...(state.ui.layerDataTable || {}),
                   columnOrderByLayer: {
-                    ...(state.ui.layerDataTable?.columnOrderByLayer || {}),
+                    ...(state.ui.layerDataTable?.columnOrderByLayer ||
+                      {}),
                     [layerId]: {
-                      ...(state.ui.layerDataTable?.columnOrderByLayer?.[
-                        layerId
-                      ] || {}),
+                      ...(state.ui.layerDataTable
+                        ?.columnOrderByLayer?.[layerId] || {}),
                       [tab]: order,
                     },
                   },
@@ -2602,6 +2653,15 @@ const useStore = create(
           set(
             (state) => {
               const initial = get()._initial;
+              const preservedMapOverlayVisibility = {
+                ...(initial.ui.mapOverlayVisibility || {}),
+                ...(state.ui?.mapOverlayVisibility || {}),
+              };
+              const preservedMapBaseLayer =
+                state.ui?.mapBaseLayer ||
+                initial.ui.mapBaseLayer ||
+                'Kartverket Topo';
+
               return {
                 file: null,
                 data: null,
@@ -2612,7 +2672,11 @@ const useStore = create(
                 analysis: { ...initial.analysis },
                 terrain: { ...initial.terrain },
                 outliers: { ...initial.outliers },
-                ui: { ...initial.ui },
+                ui: {
+                  ...initial.ui,
+                  mapBaseLayer: preservedMapBaseLayer,
+                  mapOverlayVisibility: preservedMapOverlayVisibility,
+                },
                 // Keep settings as-is
                 settings: state.settings,
               };
@@ -2741,6 +2805,34 @@ const useStore = create(
               if (state.ui.highlightedCode === undefined) {
                 state.ui.highlightedCode = null;
               }
+              if (state.ui.mapBaseLayer === undefined) {
+                state.ui.mapBaseLayer = 'Kartverket Topo';
+              }
+              if (state.ui.mapOverlayVisibility === undefined) {
+                state.ui.mapOverlayVisibility = {
+                  data: true,
+                  geminiWms: true,
+                  eiendomsgrenser: true,
+                };
+              } else {
+                if (
+                  state.ui.mapOverlayVisibility.data === undefined
+                ) {
+                  state.ui.mapOverlayVisibility.data = true;
+                }
+                if (
+                  state.ui.mapOverlayVisibility.geminiWms ===
+                  undefined
+                ) {
+                  state.ui.mapOverlayVisibility.geminiWms = true;
+                }
+                if (
+                  state.ui.mapOverlayVisibility.eiendomsgrenser ===
+                  undefined
+                ) {
+                  state.ui.mapOverlayVisibility.eiendomsgrenser = true;
+                }
+              }
               if (state.ui.hiddenCodes === undefined) {
                 state.ui.hiddenCodes = [];
               }
@@ -2775,8 +2867,7 @@ const useStore = create(
                   state.ui.layerDataTable.activeTabByLayer = {};
                 }
                 if (
-                  state.ui.layerDataTable.sortingByLayer ===
-                  undefined
+                  state.ui.layerDataTable.sortingByLayer === undefined
                 ) {
                   state.ui.layerDataTable.sortingByLayer = {};
                 }
