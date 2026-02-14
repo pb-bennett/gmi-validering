@@ -1773,9 +1773,7 @@ export default function MapInner({ onZoomChange }) {
         eiendomsgrenser: true,
       },
   );
-  const setMapBaseLayer = useStore(
-    (state) => state.setMapBaseLayer,
-  );
+  const setMapBaseLayer = useStore((state) => state.setMapBaseLayer);
   const setMapOverlayVisibility = useStore(
     (state) => state.setMapOverlayVisibility,
   );
@@ -2108,6 +2106,19 @@ export default function MapInner({ onZoomChange }) {
   // Use store-level map update nonce to trigger GeoJSON remounts when filters/visibility change
   const mapUpdateNonce = useStore((state) => state.ui.mapUpdateNonce);
 
+  // Include highlighted feature IDs content (not just size) so single-item hover
+  // updates trigger immediate style refresh when moving between rows.
+  const highlightedFeatureIdsKey = useMemo(() => {
+    if (!highlightedFeatureIds || highlightedFeatureIds.size === 0)
+      return '';
+
+    const ids = Array.from(highlightedFeatureIds);
+    if (ids.length <= 32) return ids.join(',');
+
+    // Keep key bounded for very large sets while still changing on content.
+    return `${ids.length}:${ids.slice(0, 32).join(',')}`;
+  }, [highlightedFeatureIds]);
+
   // Compute a style version key that changes only when styles need to update
   // This replaces the complex inline key computation
   const styleVersionKey = useMemo(() => {
@@ -2118,7 +2129,7 @@ export default function MapInner({ onZoomChange }) {
       highlightedType || '',
       highlightedTypeContext || '',
       highlightedFeatureId || '',
-      highlightedFeatureIds ? highlightedFeatureIds.size : 0,
+      highlightedFeatureIdsKey,
       analysisIsOpen ? `open-${analysisSelectedPipeIndex}` : 'closed',
       filteredFeatureIds ? filteredFeatureIds.size : 0,
       outlierFeatureIds ? outlierFeatureIds.size : 0,
@@ -2143,7 +2154,7 @@ export default function MapInner({ onZoomChange }) {
     highlightedType,
     highlightedTypeContext,
     highlightedFeatureId,
-    highlightedFeatureIds,
+    highlightedFeatureIdsKey,
     analysisIsOpen,
     analysisSelectedPipeIndex,
     filteredFeatureIds,
