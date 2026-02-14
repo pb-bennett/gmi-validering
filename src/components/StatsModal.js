@@ -26,11 +26,29 @@ const StatsMap = dynamic(() => import('./stats/StatsMap'), {
 
 /* ── Norwegian helpers ─────────────────────────────────────────────────── */
 const NO_MONTHS = [
-  'jan', 'feb', 'mar', 'apr', 'mai', 'jun',
-  'jul', 'aug', 'sep', 'okt', 'nov', 'des',
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'mai',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'okt',
+  'nov',
+  'des',
 ];
 const NO_DAYS = ['Søn', 'Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør'];
-const NO_DAYS_MON_FIRST = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+const NO_DAYS_MON_FIRST = [
+  'Man',
+  'Tir',
+  'Ons',
+  'Tor',
+  'Fre',
+  'Lør',
+  'Søn',
+];
 
 const fmtDateShort = (dateStr) => {
   if (!dateStr) return '';
@@ -46,7 +64,9 @@ const fmtDateFull = (dateStr) => {
 
 /* ── Skeleton placeholder ──────────────────────────────────────────────── */
 const Skeleton = ({ className = '' }) => (
-  <div className={`animate-pulse bg-gray-200 rounded-lg ${className}`} />
+  <div
+    className={`animate-pulse bg-gray-200 rounded-lg ${className}`}
+  />
 );
 
 /* ── Custom recharts tooltip ───────────────────────────────────────────── */
@@ -58,7 +78,8 @@ const ChartTooltip = ({ active, payload, label, formatter }) => {
         {formatter ? formatter(label) : label}
       </p>
       <p className="text-blue-600 font-semibold">
-        {payload[0].value} opplasting{payload[0].value !== 1 ? 'er' : ''}
+        {payload[0].value} opplasting
+        {payload[0].value !== 1 ? 'er' : ''}
       </p>
     </div>
   );
@@ -68,9 +89,15 @@ const ChartTooltip = ({ active, payload, label, formatter }) => {
 const MetricCard = ({ icon, label, value, sub }) => (
   <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow">
     <div className="text-2xl mb-1">{icon}</div>
-    <div className="text-2xl font-bold text-gray-900 tabular-nums">{value}</div>
-    <div className="text-xs text-gray-500 font-medium mt-0.5">{label}</div>
-    {sub && <div className="text-[10px] text-gray-400 mt-1">{sub}</div>}
+    <div className="text-2xl font-bold text-gray-900 tabular-nums">
+      {value}
+    </div>
+    <div className="text-xs text-gray-500 font-medium mt-0.5">
+      {label}
+    </div>
+    {sub && (
+      <div className="text-[10px] text-gray-400 mt-1">{sub}</div>
+    )}
   </div>
 );
 
@@ -110,7 +137,9 @@ const ActivityHeatmap = ({ data = [] }) => {
     <div className="overflow-x-auto">
       <div
         className="inline-grid gap-[3px]"
-        style={{ gridTemplateColumns: `56px repeat(24, minmax(22px, 1fr))` }}
+        style={{
+          gridTemplateColumns: `56px repeat(24, minmax(22px, 1fr))`,
+        }}
       >
         {/* Hour headers */}
         <div />
@@ -186,19 +215,25 @@ export default function StatsModal({ isOpen, onClose }) {
   /* Fill missing days in the daily chart for a continuous line */
   const filledDaily = useMemo(() => {
     if (!stats?.daily?.length) return [];
-    const map = Object.fromEntries(stats.daily.map((d) => [d.date, d.count]));
+    const map = Object.fromEntries(
+      stats.daily.map((d) => [d.date, d.count]),
+    );
     const dates = Object.keys(map).sort();
     if (dates.length <= 1) return stats.daily;
 
     const result = [];
     const start = new Date(dates[0] + 'T12:00:00');
     const end = new Date(dates[dates.length - 1] + 'T12:00:00');
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    for (
+      let d = new Date(start);
+      d <= end;
+      d.setDate(d.getDate() + 1)
+    ) {
       const key = d.toISOString().slice(0, 10);
       result.push({ date: key, count: map[key] || 0 });
     }
     return result;
-  }, [stats?.daily]);
+  }, [stats]);
 
   if (!isOpen) return null;
 
@@ -329,9 +364,9 @@ export default function StatsModal({ isOpen, onClose }) {
                 Ingen data ennå
               </h3>
               <p className="text-sm text-gray-400 max-w-md">
-                Statistikk fylles automatisk etterhvert som filer lastes opp og
-                valideres. Last opp en GMI-, SOSI- eller KOF-fil for å komme i
-                gang!
+                Statistikk fylles automatisk etterhvert som filer
+                lastes opp og valideres. Last opp en GMI-, SOSI- eller
+                KOF-fil for å komme i gang!
               </p>
             </div>
           )}
@@ -391,7 +426,12 @@ export default function StatsModal({ isOpen, onClose }) {
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
                       data={filledDaily}
-                      margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                      margin={{
+                        top: 5,
+                        right: 10,
+                        left: 0,
+                        bottom: 0,
+                      }}
                     >
                       <defs>
                         <linearGradient
@@ -477,21 +517,27 @@ export default function StatsModal({ isOpen, onClose }) {
                   <h3 className="text-sm font-semibold text-gray-700 mb-4">
                     Topp kommuner
                   </h3>
-                  {stats.byKommune.filter((k) => k.areaName && k.areaName !== 'unknown').length === 0 ? (
+                  {stats.byKommune.filter(
+                    (k) => k.areaName && k.areaName !== 'unknown',
+                  ).length === 0 ? (
                     <div className="flex-1 flex items-center justify-center">
                       <p className="text-sm text-gray-400">
                         Ingen kommunedata registrert ennå
                       </p>
                     </div>
                   ) : (
-                    <div className="flex-1" style={{ minHeight: 280 }}>
+                    <div
+                      className="flex-1"
+                      style={{ minHeight: 280 }}
+                    >
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                           layout="vertical"
                           data={stats.byKommune
                             .filter(
                               (k) =>
-                                k.areaName && k.areaName !== 'unknown',
+                                k.areaName &&
+                                k.areaName !== 'unknown',
                             )
                             .slice(0, 10)}
                           margin={{
@@ -521,9 +567,7 @@ export default function StatsModal({ isOpen, onClose }) {
                             axisLine={false}
                             tickLine={false}
                           />
-                          <Tooltip
-                            content={<ChartTooltip />}
-                          />
+                          <Tooltip content={<ChartTooltip />} />
                           <Bar
                             dataKey="count"
                             fill="#3b82f6"
@@ -546,7 +590,12 @@ export default function StatsModal({ isOpen, onClose }) {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={stats.hourly}
-                      margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                      margin={{
+                        top: 5,
+                        right: 10,
+                        left: 0,
+                        bottom: 0,
+                      }}
                     >
                       <CartesianGrid
                         strokeDasharray="3 3"
@@ -592,7 +641,10 @@ export default function StatsModal({ isOpen, onClose }) {
 
               {/* ── Source badge ─────────────────────────────────────── */}
               <div className="text-center text-[10px] text-gray-300 pb-2">
-                Datakilde: {stats.source === 'supabase' ? 'Supabase' : 'Lokal fil'}
+                Datakilde:{' '}
+                {stats.source === 'supabase'
+                  ? 'Supabase'
+                  : 'Lokal fil'}
               </div>
             </>
           )}
