@@ -124,6 +124,7 @@ export default function Tooltip3D({ object, position, onClose }) {
     if (coords && featureId) {
       // Pass object type and line index for profilanalyse integration
       viewObjectInMap(featureId, coords, 20, {
+        switchToTab: 'map',
         objectType: object.type,
         lineIndex: object.lineIndex,
         pointIndex: object.pointIndex,

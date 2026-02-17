@@ -507,9 +507,21 @@ const useStore = create(
                   layerId: newIsOpen ? state.analysis.layerId : null,
                 },
                 // Clear highlighted feature when closing analysis
-                ui: !newIsOpen
-                  ? { ...state.ui, highlightedFeatureId: null }
-                  : state.ui,
+                ui: {
+                  ...state.ui,
+                  highlightedFeatureId: newIsOpen
+                    ? state.ui.highlightedFeatureId
+                    : null,
+                  layerDataTable: {
+                    ...(state.ui.layerDataTable || {}),
+                    isOpen: newIsOpen
+                      ? false
+                      : state.ui.layerDataTable?.isOpen || false,
+                    layerId: newIsOpen
+                      ? null
+                      : state.ui.layerDataTable?.layerId || null,
+                  },
+                },
               };
             },
             false,
@@ -1298,7 +1310,8 @@ const useStore = create(
               const newState = {
                 ui: {
                   ...state.ui,
-                  // Don't change activeViewTab - let zooming work in current view
+                  activeViewTab:
+                    options.switchToTab || state.ui.activeViewTab,
                   highlightedFeatureId: featureId,
                   mapCenterTarget: { coordinates, zoom, featureId },
                 },
@@ -1453,6 +1466,11 @@ const useStore = create(
         openLayerDataTable: (layerId) =>
           set(
             (state) => ({
+              analysis: {
+                ...state.analysis,
+                isOpen: false,
+                layerId: null,
+              },
               ui: {
                 ...state.ui,
                 layerDataTable: {

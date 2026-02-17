@@ -182,6 +182,23 @@ export function useFileLoader({ onComplete } = {}) {
             );
           }
 
+          const parsedEpsg = Number(parsedData?.header?.COSYS_EPSG);
+          if (!Number.isFinite(parsedEpsg)) {
+            const useZone32 = window.confirm(
+              'Filen mangler koordinatsystem (CRS).\n\nTrykk OK for å bruke UTM sone 32 (EPSG:25832).\nTrykk Avbryt for å bruke UTM sone 33 (EPSG:25833).',
+            );
+
+            const selectedEpsg = useZone32 ? 25832 : 25833;
+            parsedData = {
+              ...parsedData,
+              header: {
+                ...(parsedData.header || {}),
+                COSYS_EPSG: selectedEpsg,
+                COSYS: `UTM ${useZone32 ? '32' : '33'}`,
+              },
+            };
+          }
+
           // Create file metadata object
           const fileMeta = {
             name: file.name,

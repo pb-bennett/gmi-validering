@@ -214,6 +214,8 @@ const normalizeFcode = (value) => {
   return str.trim() === '' ? null : str;
 };
 
+const MISSING_TEMA_VALUE = '(Ingen verdi)';
+
 const LAYER_HIGHLIGHT_COLORS = [
   '#00E5FF',
   '#FF6B6B',
@@ -1777,9 +1779,6 @@ export default function MapInner({ onZoomChange }) {
   const setMapOverlayVisibility = useStore(
     (state) => state.setMapOverlayVisibility,
   );
-  const toggleCustomWmsEnabled = useStore(
-    (state) => state.toggleCustomWmsEnabled,
-  );
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
@@ -2266,6 +2265,7 @@ export default function MapInner({ onZoomChange }) {
   const lineStyle = useCallback(
     (feature) => {
       const fcode = normalizeFcode(feature.properties?.S_FCODE);
+      const fcodeForFilter = fcode || MISSING_TEMA_VALUE;
       const typeVal = feature.properties?.Type || '(Mangler Type)';
       const { baseId, layeredId, layerId } = getFeatureIds(
         feature,
@@ -2290,8 +2290,10 @@ export default function MapInner({ onZoomChange }) {
           isHidden = isHiddenByFeltFilter(feature, 'lines');
         } else {
           // Check both global and per-layer hidden codes
-          const globalHiddenByCode = hiddenCodes.includes(fcode);
-          const layerHiddenByCode = layerHiddenCodes.includes(fcode);
+          const globalHiddenByCode =
+            hiddenCodes.includes(fcodeForFilter);
+          const layerHiddenByCode =
+            layerHiddenCodes.includes(fcodeForFilter);
           const isHiddenByCode =
             globalHiddenByCode || layerHiddenByCode;
 
@@ -2299,12 +2301,12 @@ export default function MapInner({ onZoomChange }) {
           const globalHiddenByType = hiddenTypes.some(
             (ht) =>
               ht.type === typeVal &&
-              (ht.code === null || ht.code === fcode),
+              (ht.code === null || ht.code === fcodeForFilter),
           );
           const layerHiddenByType = layerHiddenTypes.some(
             (ht) =>
               ht.type === typeVal &&
-              (ht.code === null || ht.code === fcode),
+              (ht.code === null || ht.code === fcodeForFilter),
           );
           const isHiddenByType =
             globalHiddenByType || layerHiddenByType;
@@ -2312,12 +2314,13 @@ export default function MapInner({ onZoomChange }) {
         }
       }
 
-      const isHighlightedByCode = highlightedCode === fcode;
+      const isHighlightedByCode =
+        highlightedCode === fcodeForFilter;
       // Type highlighting should respect the code context if one is set
       const isHighlightedByType =
         highlightedType === typeVal &&
         (highlightedTypeContext === null ||
-          highlightedTypeContext === fcode);
+          highlightedTypeContext === fcodeForFilter);
       const isHighlightedByFeature =
         featureId &&
         (highlightedFeatureId === featureId ||
@@ -2445,6 +2448,7 @@ export default function MapInner({ onZoomChange }) {
   const pointToLayer = useCallback(
     (feature, latlng) => {
       const fcode = normalizeFcode(feature.properties?.S_FCODE);
+      const fcodeForFilter = fcode || MISSING_TEMA_VALUE;
       const typeVal = feature.properties?.Type || '(Mangler Type)';
       const { baseId, layeredId, layerId } = getFeatureIds(
         feature,
@@ -2469,8 +2473,10 @@ export default function MapInner({ onZoomChange }) {
           isHidden = isHiddenByFeltFilter(feature, 'points');
         } else {
           // Check both global and per-layer hidden codes
-          const globalHiddenByCode = hiddenCodes.includes(fcode);
-          const layerHiddenByCode = layerHiddenCodes.includes(fcode);
+          const globalHiddenByCode =
+            hiddenCodes.includes(fcodeForFilter);
+          const layerHiddenByCode =
+            layerHiddenCodes.includes(fcodeForFilter);
           const isHiddenByCode =
             globalHiddenByCode || layerHiddenByCode;
 
@@ -2478,12 +2484,12 @@ export default function MapInner({ onZoomChange }) {
           const globalHiddenByType = hiddenTypes.some(
             (ht) =>
               ht.type === typeVal &&
-              (ht.code === null || ht.code === fcode),
+              (ht.code === null || ht.code === fcodeForFilter),
           );
           const layerHiddenByType = layerHiddenTypes.some(
             (ht) =>
               ht.type === typeVal &&
-              (ht.code === null || ht.code === fcode),
+              (ht.code === null || ht.code === fcodeForFilter),
           );
           const isHiddenByType =
             globalHiddenByType || layerHiddenByType;
@@ -2491,12 +2497,13 @@ export default function MapInner({ onZoomChange }) {
         }
       }
 
-      const isHighlightedByCode = highlightedCode === fcode;
+      const isHighlightedByCode =
+        highlightedCode === fcodeForFilter;
       // Type highlighting should respect the code context if one is set
       const isHighlightedByType =
         highlightedType === typeVal &&
         (highlightedTypeContext === null ||
-          highlightedTypeContext === fcode);
+          highlightedTypeContext === fcodeForFilter);
       const isHighlightedByFeature =
         featureId &&
         (highlightedFeatureId === featureId ||
@@ -2579,6 +2586,7 @@ export default function MapInner({ onZoomChange }) {
     (feature, layer) => {
       // If hidden by code, type, or felt filter, don't bind popup or do anything
       const fcode = normalizeFcode(feature.properties?.S_FCODE);
+      const fcodeForFilter = fcode || MISSING_TEMA_VALUE;
       const typeVal = feature.properties?.Type || '(Mangler Type)';
       const objectType =
         feature.properties?.featureType === 'Point'
@@ -2598,9 +2606,10 @@ export default function MapInner({ onZoomChange }) {
         const isHiddenByType = hiddenTypes.some(
           (ht) =>
             ht.type === typeVal &&
-            (ht.code === null || ht.code === fcode),
+            (ht.code === null || ht.code === fcodeForFilter),
         );
-        isHidden = hiddenCodes.includes(fcode) || isHiddenByType;
+        isHidden =
+          hiddenCodes.includes(fcodeForFilter) || isHiddenByType;
       }
 
       if (isHidden) {
@@ -2796,27 +2805,6 @@ export default function MapInner({ onZoomChange }) {
           />
         </LayersControl.Overlay>
 
-        {customWmsConfig?.url &&
-          customWmsConfig?.username &&
-          customWmsConfig?.password && (
-            <LayersControl.Overlay
-              checked={mapOverlayVisibility.geminiWms !== false}
-              name="Gemini WMS"
-            >
-              <AuthenticatedWmsLayer
-                key={`wms-${customWmsConfig.url ?? 'none'}-${customWmsConfig.username ?? ''}-${customWmsConfig.layers ?? ''}`}
-                url={customWmsConfig.url}
-                username={customWmsConfig.username}
-                password={customWmsConfig.password}
-                layers={customWmsConfig.layers}
-                opacity={1}
-                zIndex={450}
-                maxZoom={25}
-                maxNativeZoom={25}
-              />
-            </LayersControl.Overlay>
-          )}
-
         <LayersControl.Overlay
           checked={mapOverlayVisibility.eiendomsgrenser !== false}
           name="Eiendomsgrenser"
@@ -2834,10 +2822,26 @@ export default function MapInner({ onZoomChange }) {
         </LayersControl.Overlay>
       </LayersControl>
 
+      {customWmsConfig?.url &&
+        customWmsConfig?.username &&
+        customWmsConfig?.password &&
+        mapOverlayVisibility.geminiWms !== false && (
+          <AuthenticatedWmsLayer
+            key={`wms-${customWmsConfig.url ?? 'none'}-${customWmsConfig.username ?? ''}-${customWmsConfig.layers ?? ''}`}
+            url={customWmsConfig.url}
+            username={customWmsConfig.username}
+            password={customWmsConfig.password}
+            layers={customWmsConfig.layers}
+            opacity={customWmsConfig?.opacity ?? 1}
+            zIndex={450}
+            maxZoom={25}
+            maxNativeZoom={25}
+          />
+        )}
+
       <LayerControlPersistence
         onBaseLayerChange={setMapBaseLayer}
         onOverlayChange={setMapOverlayVisibility}
-        onGeminiWmsToggle={toggleCustomWmsEnabled}
       />
 
       {/* Force immediate refresh of AuthenticatedWmsLayer when config changes */}
@@ -2872,7 +2876,7 @@ function AnalysisPointsLayer() {
   const analysisLayerId = useStore((state) => state.analysis.layerId);
   const data = useStore((state) => state.data);
 
-  const { points, pipeColor, lineCoords, sourceProj } =
+  const { points, lineCoords, sourceProj } =
     useMemo(() => {
       // Use getState() to read layers only when needed
       const layers = useStore.getState().layers;
@@ -3048,10 +3052,10 @@ function AnalysisPointsLayer() {
           <CircleMarker
             key={p.index}
             center={[p.lat, p.lng]}
-            radius={isHovered ? 8 : 5}
+            radius={isHovered ? 8 : 6}
             pathOptions={{
-              color: isHovered ? '#ff0000' : pipeColor,
-              fillColor: isHovered ? '#ff0000' : 'white',
+              color: isHovered ? '#b91c1c' : '#ea580c',
+              fillColor: isHovered ? '#ef4444' : '#fdba74',
               fillOpacity: 1,
               weight: 2,
               zIndexOffset: 1000, // Attempt to force on top, though CircleMarker doesn't support this directly
@@ -3148,7 +3152,6 @@ function WmsLayerRefresher({ customWmsConfig }) {
 function LayerControlPersistence({
   onBaseLayerChange,
   onOverlayChange,
-  onGeminiWmsToggle,
 }) {
   const map = useMap();
 
@@ -3167,9 +3170,6 @@ function LayerControlPersistence({
 
       if (name === 'Data') {
         onOverlayChange('data', true);
-      } else if (name === 'Gemini WMS') {
-        onOverlayChange('geminiWms', true);
-        onGeminiWmsToggle?.(true);
       } else if (name === 'Eiendomsgrenser') {
         onOverlayChange('eiendomsgrenser', true);
       }
@@ -3181,9 +3181,6 @@ function LayerControlPersistence({
 
       if (name === 'Data') {
         onOverlayChange('data', false);
-      } else if (name === 'Gemini WMS') {
-        onOverlayChange('geminiWms', false);
-        onGeminiWmsToggle?.(false);
       } else if (name === 'Eiendomsgrenser') {
         onOverlayChange('eiendomsgrenser', false);
       }
@@ -3198,7 +3195,7 @@ function LayerControlPersistence({
       map.off('overlayadd', handleOverlayAdd);
       map.off('overlayremove', handleOverlayRemove);
     };
-  }, [map, onBaseLayerChange, onOverlayChange, onGeminiWmsToggle]);
+  }, [map, onBaseLayerChange, onOverlayChange]);
 
   return null;
 }

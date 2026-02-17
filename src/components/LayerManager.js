@@ -21,6 +21,17 @@ export default function LayerManager({ onAddFile }) {
   );
   const showAllLayers = useStore((state) => state.showAllLayers);
   const hideAllLayers = useStore((state) => state.hideAllLayers);
+  const mapOverlayVisibility = useStore(
+    (state) => state.ui.mapOverlayVisibility,
+  );
+  const setMapOverlayVisibility = useStore(
+    (state) => state.setMapOverlayVisibility,
+  );
+  const setCustomWmsConfig = useStore(
+    (state) => state.setCustomWmsConfig,
+  );
+  const customWmsConfig = useStore((state) => state.customWmsConfig);
+  const [isWmsExpanded, setIsWmsExpanded] = useState(false);
 
   // Build code lookups for tema labels
   const codeLookups = useMemo(() => {
@@ -125,6 +136,94 @@ export default function LayerManager({ onAddFile }) {
             codeLookups={codeLookups}
           />
         ))}
+
+        {customWmsConfig?.url && (
+          <div className="py-1">
+            <div
+              className="border-b-2"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <div className="flex items-center gap-2 p-2 hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={mapOverlayVisibility?.geminiWms !== false}
+                  onChange={() =>
+                    setMapOverlayVisibility(
+                      'geminiWms',
+                      mapOverlayVisibility?.geminiWms === false,
+                    )
+                  }
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  title="Vis/skjul Gemini WMS"
+                />
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="text-xs font-medium truncate"
+                    style={{ color: 'var(--color-text)' }}
+                  >
+                    Gemini WMS
+                  </div>
+                  <div className="text-[10px] text-gray-500">
+                    Eksternt WMS-lag
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsWmsExpanded((prev) => !prev)}
+                  className="p-1 rounded hover:bg-gray-100 text-gray-500"
+                  title={
+                    isWmsExpanded
+                      ? 'Skjul innstillinger'
+                      : 'Vis innstillinger'
+                  }
+                >
+                  <span
+                    className={`text-xs inline-block transition-transform ${isWmsExpanded ? 'rotate-180' : ''}`}
+                  >
+                    ▼
+                  </span>
+                </button>
+              </div>
+
+              {isWmsExpanded && (
+                <div className="px-2 pb-2">
+                  <div className="ml-5 pl-2 border-l border-gray-200">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-gray-600">
+                        Opasitet
+                      </span>
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        {Math.round(
+                          (customWmsConfig?.opacity ?? 1) * 100,
+                        )}
+                        %
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      value={Math.round(
+                        (customWmsConfig?.opacity ?? 1) * 100,
+                      )}
+                      onChange={(e) => {
+                        const nextOpacity =
+                          Number(e.target.value) / 100;
+                        setCustomWmsConfig({
+                          ...customWmsConfig,
+                          opacity: nextOpacity,
+                        });
+                      }}
+                      className="w-full h-1.5 accent-blue-600"
+                      title="Juster opasitet for Gemini WMS"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add file button */}

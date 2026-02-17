@@ -175,7 +175,13 @@ export default function LayerDataTable() {
   const isItemHidden = useCallback(
     (item, objectType) => {
       const attrs = item.attributes || {};
-      const fcode = attrs.S_FCODE || '';
+      const rawFcode = attrs.S_FCODE;
+      const fcode =
+        rawFcode === null ||
+        rawFcode === undefined ||
+        String(rawFcode).trim() === ''
+          ? '(Ingen verdi)'
+          : String(rawFcode);
       const typeVal = attrs.Type || '(Mangler Type)';
 
       // Check hiddenCodes

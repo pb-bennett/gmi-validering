@@ -9,6 +9,8 @@ import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
 import LayerManager from './LayerManager';
 
+const MISSING_TEMA_VALUE = '(Ingen verdi)';
+
 function InclineAnalysisControl() {
   const data = useStore((state) => state.data);
   const setAnalysisResults = useStore(
@@ -949,7 +951,11 @@ export default function Sidebar({ onReset, onAddFile }) {
     };
 
     data.points.forEach((p) => {
-      const code = p.attributes?.S_FCODE || 'UKJENT';
+      const rawCode = p.attributes?.S_FCODE;
+      const code =
+        rawCode === null || rawCode === undefined || rawCode === ''
+          ? MISSING_TEMA_VALUE
+          : String(rawCode);
       if (!temaStats.points[code]) {
         temaStats.points[code] = { count: 0, types: {} };
       }
@@ -962,7 +968,11 @@ export default function Sidebar({ onReset, onAddFile }) {
     });
 
     data.lines.forEach((l) => {
-      const code = l.attributes?.S_FCODE || 'UKJENT';
+      const rawCode = l.attributes?.S_FCODE;
+      const code =
+        rawCode === null || rawCode === undefined || rawCode === ''
+          ? MISSING_TEMA_VALUE
+          : String(rawCode);
       if (!temaStats.lines[code]) {
         temaStats.lines[code] = { count: 0, types: {} };
       }
@@ -1338,7 +1348,9 @@ export default function Sidebar({ onReset, onAddFile }) {
                           .map(([code, data]) => {
                             const label =
                               codeLookups.punktMap.get(code);
-                            const isUnknown = !label;
+                            const isMissingTema =
+                              code === MISSING_TEMA_VALUE;
+                            const isUnknown = !label && !isMissingTema;
                             const isHidden =
                               hiddenCodes.includes(code);
                             const hasTypes =
@@ -1389,7 +1401,9 @@ export default function Sidebar({ onReset, onAddFile }) {
                                               : 'text-gray-500'
                                           }`}
                                         >
-                                          {label || 'Ukjent kode'}
+                                          {isMissingTema
+                                            ? 'Mangler Tema'
+                                            : label || 'Ukjent kode'}
                                         </div>
                                       </div>
                                     </div>
@@ -1554,7 +1568,9 @@ export default function Sidebar({ onReset, onAddFile }) {
                           .map(([code, data]) => {
                             const label =
                               codeLookups.ledMap.get(code);
-                            const isUnknown = !label;
+                            const isMissingTema =
+                              code === MISSING_TEMA_VALUE;
+                            const isUnknown = !label && !isMissingTema;
                             const isHidden =
                               hiddenCodes.includes(code);
                             const hasTypes =
@@ -1605,7 +1621,9 @@ export default function Sidebar({ onReset, onAddFile }) {
                                               : 'text-gray-500'
                                           }`}
                                         >
-                                          {label || 'Ukjent kode'}
+                                          {isMissingTema
+                                            ? 'Mangler Tema'
+                                            : label || 'Ukjent kode'}
                                         </div>
                                       </div>
                                     </div>
