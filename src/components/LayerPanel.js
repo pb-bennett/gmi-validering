@@ -8,6 +8,8 @@ import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
 
+const MISSING_TEMA_VALUE = '(Ingen verdi)';
+
 /**
  * Analysis button row with icon buttons and tooltips
  * Shows compact icon-only buttons for each analysis function
@@ -429,7 +431,11 @@ function LayerTemaSection({
     const stats = { points: {}, lines: {} };
 
     data.points?.forEach((p) => {
-      const code = p.attributes?.S_FCODE || 'UKJENT';
+      const rawCode = p.attributes?.S_FCODE;
+      const code =
+        rawCode === null || rawCode === undefined || rawCode === ''
+          ? MISSING_TEMA_VALUE
+          : String(rawCode);
       if (!stats.points[code])
         stats.points[code] = { count: 0, types: {} };
       stats.points[code].count++;
@@ -439,7 +445,11 @@ function LayerTemaSection({
     });
 
     data.lines?.forEach((l) => {
-      const code = l.attributes?.S_FCODE || 'UKJENT';
+      const rawCode = l.attributes?.S_FCODE;
+      const code =
+        rawCode === null || rawCode === undefined || rawCode === ''
+          ? MISSING_TEMA_VALUE
+          : String(rawCode);
       if (!stats.lines[code])
         stats.lines[code] = { count: 0, types: {} };
       stats.lines[code].count++;
@@ -564,7 +574,9 @@ function LayerTemaSection({
                               {code}
                             </span>
                             <span className="text-gray-500 truncate max-w-20">
-                              {label || 'Ukjent'}
+                              {code === MISSING_TEMA_VALUE
+                                ? 'Mangler Tema'
+                                : label || 'Ukjent'}
                             </span>
                           </div>
                           <span className="text-gray-500">
@@ -699,7 +711,9 @@ function LayerTemaSection({
                             {code}
                           </span>
                           <span className="text-gray-500 truncate max-w-20">
-                            {label || 'Ukjent'}
+                            {code === MISSING_TEMA_VALUE
+                              ? 'Mangler Tema'
+                              : label || 'Ukjent'}
                           </span>
                         </div>
                         <span className="text-gray-500">
@@ -1180,24 +1194,6 @@ export default function LayerPanel({ layerId, codeLookups }) {
       return 'tema';
     return null;
   });
-
-  useEffect(() => {
-    if (feltFilterActive || layer?.feltHiddenValues?.length > 0) {
-      setInnerOpen('felt');
-      return;
-    }
-    if (
-      layer?.hiddenCodes?.length > 0 ||
-      layer?.hiddenTypes?.length > 0
-    ) {
-      setInnerOpen('tema');
-    }
-  }, [
-    feltFilterActive,
-    layer?.feltHiddenValues?.length,
-    layer?.hiddenCodes?.length,
-    layer?.hiddenTypes?.length,
-  ]);
 
   const toggleTema = () => {
     if (innerOpen === 'tema') {

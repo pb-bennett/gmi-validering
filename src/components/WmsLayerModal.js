@@ -144,6 +144,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
         username: username.trim(),
         password: password, // This is kept in zustand state (memory only, not persisted)
         layers: resolvedLayers || undefined,
+        opacity: customWmsConfig?.opacity ?? 1,
         enabled: true,
       });
 
