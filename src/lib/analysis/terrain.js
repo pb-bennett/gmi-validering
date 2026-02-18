@@ -339,6 +339,15 @@ export async function fetchTerrainForProfile(profilePoints, epsg) {
   }));
 }
 
+function mapProfileWithTerrain(profilePoints, terrainResults) {
+  return profilePoints.map((p, i) => ({
+    ...p,
+    terrainZ: terrainResults[i]?.z ?? null,
+    terreng: terrainResults[i]?.terreng ?? null,
+    datakilde: terrainResults[i]?.datakilde ?? null,
+  }));
+}
+
 /**
  * Priority queue insert - adds request to front of queue for priority fetching
  */
@@ -419,6 +428,90 @@ export async function fetchTerrainHeightsPriority(points, epsg) {
   });
 
   return results;
+}
+
+/**
+ * Fetch terrain for profile with progressive callback per resolved batch.
+ * onProgress receives profile points with currently known terrain values.
+ */
+export async function fetchTerrainForProfilePriorityProgressive(
+  profilePoints,
+  epsg,
+  onProgress,
+) {
+  if (!profilePoints || profilePoints.length === 0) {
+    return [];
+  }
+
+  if (!epsg || typeof epsg !== 'number') {
+    throw new Error('Valid EPSG code required for terrain lookup');
+  }
+
+  const progressCallback =
+    typeof onProgress === 'function' ? onProgress : null;
+
+  stats.pointsRequested += profilePoints.length;
+
+  const results = new Array(profilePoints.length);
+  const uncachedPoints = [];
+  const uncachedIndices = [];
+
+  profilePoints.forEach((p, i) => {
+    const cached = getCachedPoint(epsg, p.x, p.y);
+    if (cached) {
+      results[i] = cached;
+      stats.pointsFromCache++;
+    } else {
+      uncachedPoints.push(p);
+      uncachedIndices.push(i);
+    }
+  });
+
+  if (progressCallback) {
+    progressCallback(mapProfileWithTerrain(profilePoints, results));
+  }
+
+  if (uncachedPoints.length === 0) {
+    return mapProfileWithTerrain(profilePoints, results);
+  }
+
+  const batches = [];
+  for (
+    let i = 0;
+    i < uncachedPoints.length;
+    i += MAX_POINTS_PER_REQUEST
+  ) {
+    batches.push({
+      points: uncachedPoints.slice(i, i + MAX_POINTS_PER_REQUEST),
+      indices: uncachedIndices.slice(i, i + MAX_POINTS_PER_REQUEST),
+    });
+  }
+
+  await Promise.all(
+    batches.map(async (batch) => {
+      const batchResult = await priorityQueueRequest(
+        batch.points,
+        epsg,
+      );
+
+      batch.indices.forEach((originalIndex, resultIndex) => {
+        results[originalIndex] = batchResult[resultIndex] || {
+          x: batch.points[resultIndex].x,
+          y: batch.points[resultIndex].y,
+          z: null,
+          terreng: null,
+          datakilde: null,
+          error: true,
+        };
+      });
+
+      if (progressCallback) {
+        progressCallback(mapProfileWithTerrain(profilePoints, results));
+      }
+    }),
+  );
+
+  return mapProfileWithTerrain(profilePoints, results);
 }
 
 /**

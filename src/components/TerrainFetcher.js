@@ -5,6 +5,7 @@ import useStore from '@/lib/store';
 import {
   fetchTerrainForProfile,
   fetchTerrainHeightsPriority,
+  fetchTerrainForProfilePriorityProgressive,
 } from '@/lib/analysis/terrain';
 import { generateProfilePoints } from '@/lib/analysis/lineSampling';
 
@@ -37,11 +38,17 @@ export default function TerrainFetcher() {
 
   // Base terrain actions (stable references)
   const setTerrainData = useStore((state) => state.setTerrainData);
+  const setTerrainDataPartial = useStore(
+    (state) => state.setTerrainDataPartial,
+  );
   const setTerrainStatus = useStore(
     (state) => state.setTerrainStatus,
   );
   const popFromTerrainQueue = useStore(
     (state) => state.popFromTerrainQueue,
+  );
+  const removeFromTerrainQueue = useStore(
+    (state) => state.removeFromTerrainQueue,
   );
   const prioritizeTerrainFetch = useStore(
     (state) => state.prioritizeTerrainFetch,
@@ -51,17 +58,24 @@ export default function TerrainFetcher() {
   const setLayerTerrainData = useStore(
     (state) => state.setLayerTerrainData,
   );
+  const setLayerTerrainDataPartial = useStore(
+    (state) => state.setLayerTerrainDataPartial,
+  );
   const setLayerTerrainStatus = useStore(
     (state) => state.setLayerTerrainStatus,
   );
   const popFromLayerTerrainQueue = useStore(
     (state) => state.popFromLayerTerrainQueue,
   );
+  const removeFromLayerTerrainQueue = useStore(
+    (state) => state.removeFromLayerTerrainQueue,
+  );
   const prioritizeLayerTerrainFetch = useStore(
     (state) => state.prioritizeLayerTerrainFetch,
   );
 
   const isFetchingRef = useRef(false);
+  const urgentFetchRef = useRef(null);
 
   // Prioritize selected pipe when it changes (base or layer)
   // Use getState() to avoid subscribing to terrain.data changes
@@ -227,6 +241,136 @@ export default function TerrainFetcher() {
     popFromLayerTerrainQueue,
     setLayerTerrainData,
     setLayerTerrainStatus,
+  ]);
+
+  // Urgent selected-line terrain fetch with progressive updates
+  useEffect(() => {
+    if (selectedPipeIndex === null) return;
+
+    const fetchKey = `${analysisLayerId || 'base'}:${selectedPipeIndex}`;
+    if (urgentFetchRef.current === fetchKey) return;
+
+    const state = useStore.getState();
+
+    if (analysisLayerId) {
+      const layer = state.layers[analysisLayerId];
+      const line = layer?.data?.lines?.[selectedPipeIndex];
+      const lineStatus =
+        layer?.terrain?.data?.[selectedPipeIndex]?.status;
+
+      if (
+        !layer ||
+        !line ||
+        !line.coordinates ||
+        line.coordinates.length < 2 ||
+        lineStatus === 'done' ||
+        lineStatus === 'loading'
+      ) {
+        return;
+      }
+
+      urgentFetchRef.current = fetchKey;
+      removeFromLayerTerrainQueue(analysisLayerId, selectedPipeIndex);
+      setLayerTerrainStatus(analysisLayerId, selectedPipeIndex, 'loading');
+
+      const epsg = layer.data.header?.COSYS_EPSG || 25832;
+      const profilePoints = generateProfilePoints(line.coordinates, 1);
+
+      fetchTerrainForProfilePriorityProgressive(
+        profilePoints,
+        epsg,
+        (partialPoints) => {
+          setLayerTerrainDataPartial(
+            analysisLayerId,
+            selectedPipeIndex,
+            partialPoints,
+          );
+        },
+      )
+        .then((terrainPoints) => {
+          setLayerTerrainData(
+            analysisLayerId,
+            selectedPipeIndex,
+            terrainPoints,
+          );
+        })
+        .catch((error) => {
+          console.error(
+            `Urgent layer terrain fetch error for ${analysisLayerId}/${selectedPipeIndex}:`,
+            error,
+          );
+          setLayerTerrainStatus(
+            analysisLayerId,
+            selectedPipeIndex,
+            'error',
+            error.message,
+          );
+        })
+        .finally(() => {
+          if (urgentFetchRef.current === fetchKey) {
+            urgentFetchRef.current = null;
+          }
+          setTimeout(processQueue, 0);
+        });
+
+      return;
+    }
+
+    const line = state.data?.lines?.[selectedPipeIndex];
+    const lineStatus = state.terrain.data[selectedPipeIndex]?.status;
+
+    if (
+      !line ||
+      !line.coordinates ||
+      line.coordinates.length < 2 ||
+      lineStatus === 'done' ||
+      lineStatus === 'loading'
+    ) {
+      return;
+    }
+
+    urgentFetchRef.current = fetchKey;
+    removeFromTerrainQueue(selectedPipeIndex);
+    setTerrainStatus(selectedPipeIndex, 'loading');
+
+    const epsg = state.data?.header?.COSYS_EPSG || 25832;
+    const profilePoints = generateProfilePoints(line.coordinates, 1);
+
+    fetchTerrainForProfilePriorityProgressive(
+      profilePoints,
+      epsg,
+      (partialPoints) => {
+        setTerrainDataPartial(selectedPipeIndex, partialPoints);
+      },
+    )
+      .then((terrainPoints) => {
+        setTerrainData(selectedPipeIndex, terrainPoints);
+      })
+      .catch((error) => {
+        console.error(
+          `Urgent terrain fetch error for line ${selectedPipeIndex}:`,
+          error,
+        );
+        setTerrainStatus(selectedPipeIndex, 'error', error.message);
+      })
+      .finally(() => {
+        if (urgentFetchRef.current === fetchKey) {
+          urgentFetchRef.current = null;
+        }
+        setTimeout(processQueue, 0);
+      });
+  }, [
+    selectedPipeIndex,
+    analysisLayerId,
+    processQueue,
+    setTerrainData,
+    setTerrainDataPartial,
+    setTerrainStatus,
+    setLayerTerrainData,
+    setLayerTerrainDataPartial,
+    setLayerTerrainStatus,
+    removeFromTerrainQueue,
+    removeFromLayerTerrainQueue,
   ]);
 
   // Watch base queue and process when items are available

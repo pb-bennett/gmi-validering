@@ -703,6 +703,26 @@ const useStore = create(
             'terrain/setData',
           ),
 
+        setTerrainDataPartial: (lineIndex, terrainPoints) =>
+          set(
+            (state) => ({
+              terrain: {
+                ...state.terrain,
+                data: {
+                  ...state.terrain.data,
+                  [lineIndex]: {
+                    ...(state.terrain.data[lineIndex] || {}),
+                    points: terrainPoints,
+                    status: 'loading',
+                    error: null,
+                  },
+                },
+              },
+            }),
+            false,
+            'terrain/setDataPartial',
+          ),
+
         setTerrainStatus: (lineIndex, status, error = null) =>
           set(
             (state) => ({
@@ -732,6 +752,20 @@ const useStore = create(
             }),
             false,
             'terrain/setFetchQueue',
+          ),
+
+        removeFromTerrainQueue: (lineIndex) =>
+          set(
+            (state) => ({
+              terrain: {
+                ...state.terrain,
+                fetchQueue: state.terrain.fetchQueue.filter(
+                  (i) => i !== lineIndex,
+                ),
+              },
+            }),
+            false,
+            'terrain/removeFromQueue',
           ),
 
         addToTerrainQueue: (lineIndex) =>
@@ -2484,6 +2518,43 @@ const useStore = create(
           ),
 
         /**
+         * Set partial layer terrain data for progressive rendering
+         */
+        setLayerTerrainDataPartial: (
+          layerId,
+          lineIndex,
+          terrainPoints,
+        ) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    terrain: {
+                      ...layer.terrain,
+                      data: {
+                        ...layer.terrain.data,
+                        [lineIndex]: {
+                          ...(layer.terrain.data[lineIndex] || {}),
+                          points: terrainPoints,
+                          status: 'loading',
+                          error: null,
+                        },
+                      },
+                    },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/setTerrainDataPartial',
+          ),
+
+        /**
          * Set layer terrain status for a specific line
          */
         setLayerTerrainStatus: (
@@ -2547,6 +2618,30 @@ const useStore = create(
           );
           return next;
         },
+
+        removeFromLayerTerrainQueue: (layerId, lineIndex) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    terrain: {
+                      ...layer.terrain,
+                      fetchQueue: layer.terrain.fetchQueue.filter(
+                        (i) => i !== lineIndex,
+                      ),
+                    },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/removeTerrainFromQueue',
+          ),
 
         /**
          * Prioritize a specific line in a layer's terrain fetch queue
