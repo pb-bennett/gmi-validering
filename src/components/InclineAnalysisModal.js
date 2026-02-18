@@ -180,7 +180,7 @@ export default function InclineAnalysisModal() {
   if (!isOpen) return null;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-[2000] h-[45vh] bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex flex-col border-t border-gray-200">
+    <div className="absolute bottom-0 left-0 right-0 z-2000 h-[45vh] bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex flex-col border-t border-gray-200">
       {/* Header */}
       <div className="flex-none p-3 border-b flex justify-between items-center bg-gray-50">
         <div>
@@ -366,11 +366,11 @@ export default function InclineAnalysisModal() {
         </div>
 
         {/* Main Content - Visualization */}
-        <div className="flex-1 p-4 overflow-y-auto bg-white flex flex-col">
+        <div className="flex-1 p-4 overflow-hidden bg-white flex flex-col min-h-0">
           {selectedResult ? (
             <div className="space-y-4 flex-1 flex flex-col">
               <div className="flex items-center justify-between flex-none bg-gray-50 border rounded px-2 py-1 text-xs">
-                <div className="flex items-center gap-2 flex-nowrap overflow-x-auto whitespace-nowrap">
+                <div className="flex items-center gap-2 flex-wrap overflow-hidden">
                   <span className="font-semibold">
                     Ledning #{selectedResult.lineIndex}
                   </span>
@@ -387,7 +387,7 @@ export default function InclineAnalysisModal() {
                   </span>
                   <span className="text-gray-500">•</span>
                   <span
-                    className="text-gray-700 truncate max-w-[180px]"
+                    className="text-gray-700 truncate max-w-45"
                     title={
                       selectedResult.attributes.Materiale ||
                       selectedResult.attributes.Mat ||
@@ -484,7 +484,10 @@ export default function InclineAnalysisModal() {
               </div>
 
               {/* Cross Section Visualization */}
-              <div className="border rounded-lg p-2 bg-white shadow-sm flex-1 flex flex-col min-h-0">
+              <div
+                className="border rounded-lg p-2 bg-white shadow-sm flex-1 flex flex-col min-h-0"
+                style={{ minHeight: '300px' }}
+              >
                 <div className="flex-1 min-h-0 w-full">
                   <PipeProfileVisualization
                     result={selectedResult}

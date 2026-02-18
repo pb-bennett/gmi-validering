@@ -38,9 +38,9 @@ export default function ZValidationModal() {
   };
 
   return (
-    <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/50 p-4">
+    <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/50 p-2 sm:p-3">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85%] flex flex-col overflow-hidden">
-        <div className="flex-none p-4 border-b flex justify-between items-center bg-gray-50">
+        <div className="flex-none p-3 border-b flex justify-between items-center bg-gray-50">
           <div>
             <h2 className="text-lg font-semibold">
               Høydekontroll (Z)
@@ -70,7 +70,7 @@ export default function ZValidationModal() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto p-4 space-y-4">
+        <div className="flex-1 overflow-auto p-3 space-y-3">
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="rounded border p-3 bg-gray-50">
               <div className="font-medium text-gray-700">
