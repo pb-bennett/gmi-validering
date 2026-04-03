@@ -39,6 +39,7 @@ export async function GET(request) {
           {
             ok: false,
             error: 'Unauthorized keepalive request',
+            keepaliveConfigured: Boolean(expectedSecret),
           },
           { status: 401 },
         );
@@ -50,6 +51,7 @@ export async function GET(request) {
       return NextResponse.json({
         ok: false,
         configured: false,
+        keepaliveConfigured: Boolean(expectedSecret),
         message:
           'Supabase not configured (SUPABASE_URL/SERVICE_ROLE missing)',
       });
@@ -69,6 +71,7 @@ export async function GET(request) {
         return NextResponse.json({
           ok: false,
           configured: true,
+          keepaliveConfigured: Boolean(expectedSecret),
           canQuery: false,
           error: msg,
         });
@@ -98,6 +101,7 @@ export async function GET(request) {
       return NextResponse.json({
         ok: true,
         configured: true,
+        keepaliveConfigured: Boolean(expectedSecret),
         canQuery: true,
         sample: data?.[0] || null,
         wrote,
@@ -106,6 +110,7 @@ export async function GET(request) {
       return NextResponse.json({
         ok: false,
         configured: true,
+        keepaliveConfigured: Boolean(expectedSecret),
         canQuery: false,
         error: String(err?.message || err),
       });
