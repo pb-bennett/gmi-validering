@@ -5,7 +5,7 @@ import useStore from '@/lib/store';
 export default function TabSwitcher() {
   const activeViewTab = useStore((state) => state.ui.activeViewTab);
   const setActiveViewTab = useStore(
-    (state) => state.setActiveViewTab
+    (state) => state.setActiveViewTab,
   );
   const viewer3DOpen = useStore((state) => state.ui.viewer3DOpen);
   const data = useStore((state) => state.data);

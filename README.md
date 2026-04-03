@@ -90,8 +90,11 @@ Open [http://localhost:3000](http://localhost:3000).
 | --------------------------- | --------------------------------------- |
 | `SUPABASE_URL`              | Supabase project URL for usage tracking |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key               |
+| `TRACKING_KEEPALIVE_SECRET` | Secret for authenticated keepalive writes |
 
 The app works fully without these — tracking is simply skipped.
+
+If you want to prevent Supabase from auto-pausing on low-traffic periods, schedule a periodic request to `GET /api/track/health?write=true` and send the secret either as `Authorization: Bearer <secret>` or `X-Keepalive-Secret: <secret>`. Query-string secrets are also accepted as a fallback via `?secret=<secret>`, but headers are preferred.
 
 ---
 

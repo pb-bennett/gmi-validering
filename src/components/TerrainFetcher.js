@@ -271,10 +271,17 @@ export default function TerrainFetcher() {
 
       urgentFetchRef.current = fetchKey;
       removeFromLayerTerrainQueue(analysisLayerId, selectedPipeIndex);
-      setLayerTerrainStatus(analysisLayerId, selectedPipeIndex, 'loading');
+      setLayerTerrainStatus(
+        analysisLayerId,
+        selectedPipeIndex,
+        'loading',
+      );
 
       const epsg = layer.data.header?.COSYS_EPSG || 25832;
-      const profilePoints = generateProfilePoints(line.coordinates, 1);
+      const profilePoints = generateProfilePoints(
+        line.coordinates,
+        1,
+      );
 
       fetchTerrainForProfilePriorityProgressive(
         profilePoints,

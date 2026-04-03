@@ -5,11 +5,45 @@ import {
 } from '@/lib/tracking/supabase';
 import { incrementAggregateInSupabase } from '@/lib/tracking/supabase';
 
+const getKeepaliveSecret = (request, query) => {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+
+  const headerSecret = request.headers.get('x-keepalive-secret');
+  if (headerSecret) {
+    return headerSecret.trim();
+  }
+
+  const querySecret = query.get('secret');
+  if (querySecret) {
+    return querySecret.trim();
+  }
+
+  return '';
+};
+
 export async function GET(request) {
   try {
     const query = new URL(request.url, 'http://localhost')
       .searchParams;
     const write = query.get('write') === 'true';
+    const expectedSecret =
+      process.env.TRACKING_KEEPALIVE_SECRET || '';
+
+    if (write) {
+      const providedSecret = getKeepaliveSecret(request, query);
+      if (!expectedSecret || providedSecret !== expectedSecret) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Unauthorized keepalive request',
+          },
+          { status: 401 },
+        );
+      }
+    }
 
     const configured = isSupabaseConfigured();
     if (!configured) {

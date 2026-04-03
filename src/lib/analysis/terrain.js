@@ -506,7 +506,9 @@ export async function fetchTerrainForProfilePriorityProgressive(
       });
 
       if (progressCallback) {
-        progressCallback(mapProfileWithTerrain(profilePoints, results));
+        progressCallback(
+          mapProfileWithTerrain(profilePoints, results),
+        );
       }
     }),
   );

@@ -73,9 +73,7 @@ export default function ZValidationModal() {
         <div className="flex-1 overflow-auto p-3 space-y-3">
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="rounded border p-3 bg-gray-50">
-              <div className="font-medium text-gray-700">
-                Punkter
-              </div>
+              <div className="font-medium text-gray-700">Punkter</div>
               <div className="text-gray-600 text-xs mt-1">
                 {summary?.missingPointObjects || 0} av{' '}
                 {summary?.totalPoints || 0} punkter mangler Z
@@ -86,9 +84,7 @@ export default function ZValidationModal() {
               </div>
             </div>
             <div className="rounded border p-3 bg-gray-50">
-              <div className="font-medium text-gray-700">
-                Linjer
-              </div>
+              <div className="font-medium text-gray-700">Linjer</div>
               <div className="text-gray-600 text-xs mt-1">
                 {summary?.missingLineObjects || 0} av{' '}
                 {summary?.totalLines || 0} linjer mangler Z
@@ -100,11 +96,12 @@ export default function ZValidationModal() {
             </div>
           </div>
 
-          {missingPoints.length === 0 && missingLines.length === 0 && (
-            <div className="text-sm text-gray-600">
-              Ingen objekter mangler høyde (Z).
-            </div>
-          )}
+          {missingPoints.length === 0 &&
+            missingLines.length === 0 && (
+              <div className="text-sm text-gray-600">
+                Ingen objekter mangler høyde (Z).
+              </div>
+            )}
 
           {missingPoints.length > 0 && (
             <div>
@@ -141,7 +138,9 @@ export default function ZValidationModal() {
                         </td>
                         <td className="px-3 py-2 text-right">
                           <button
-                            onClick={() => handleFocusPoint(point.index)}
+                            onClick={() =>
+                              handleFocusPoint(point.index)
+                            }
                             className="px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
                           >
                             Vis i kart
@@ -190,7 +189,9 @@ export default function ZValidationModal() {
                         </td>
                         <td className="px-3 py-2 text-right">
                           <button
-                            onClick={() => handleFocusLine(line.index)}
+                            onClick={() =>
+                              handleFocusLine(line.index)
+                            }
                             className="px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
                           >
                             Vis i kart

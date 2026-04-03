@@ -1,7 +1,13 @@
 'use client';
 
 import useStore from '@/lib/store';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { fetchTerrainHeights } from '@/lib/analysis/terrain';
 
 const formatCoord = (value, decimals = 2) => {
@@ -48,7 +54,9 @@ export default function DataDisplayModal() {
 
   useEffect(() => {
     if (!targetLayerId && layerOrder.length > 0) {
-      setSelectedLayerId((prev) => prev || layerOrder[layerOrder.length - 1]);
+      setSelectedLayerId(
+        (prev) => prev || layerOrder[layerOrder.length - 1],
+      );
     }
   }, [targetLayerId, layerOrder]);
 
@@ -59,7 +67,9 @@ export default function DataDisplayModal() {
   }, [targetLayerId, selectedLayerId]);
 
   const effectiveLayerId = targetLayerId || selectedLayerId || null;
-  const activeLayer = effectiveLayerId ? layers[effectiveLayerId] : null;
+  const activeLayer = effectiveLayerId
+    ? layers[effectiveLayerId]
+    : null;
   const activeData = activeLayer?.data || data;
   const activeFile = activeLayer?.file || file;
   const activeTerrainData = activeLayer?.terrain?.data || terrainData;
@@ -225,7 +235,9 @@ export default function DataDisplayModal() {
 
     if (terrainEntry.status === 'loading') {
       return (
-        <div className="text-xs text-gray-500">Henter høydedata...</div>
+        <div className="text-xs text-gray-500">
+          Henter høydedata...
+        </div>
       );
     }
 
@@ -299,9 +311,7 @@ export default function DataDisplayModal() {
       <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl h-[82%] flex flex-col overflow-hidden">
         <div className="flex-none p-2.5 border-b flex justify-between items-center bg-gray-50">
           <div>
-            <h2 className="text-base font-semibold">
-              Datautforsker
-            </h2>
+            <h2 className="text-base font-semibold">Datautforsker</h2>
             <p className="text-xs text-gray-500">
               Fil: {activeFile?.name || 'Ukjent fil'}
             </p>
@@ -416,8 +426,7 @@ export default function DataDisplayModal() {
                     <span className="text-xs text-gray-500">
                       Henter terrenghøyde…
                     </span>
-                  ) : pointTerrainHeights[target.index]?.z !=
-                    null ? (
+                  ) : pointTerrainHeights[target.index]?.z != null ? (
                     <div className="text-xs space-y-1">
                       <div>
                         Terreng Z:{' '}
@@ -429,8 +438,7 @@ export default function DataDisplayModal() {
                         </span>{' '}
                         m
                       </div>
-                      {pointTerrainHeights[target.index]
-                        .terreng && (
+                      {pointTerrainHeights[target.index].terreng && (
                         <div>
                           Type:{' '}
                           {pointTerrainHeights[target.index].terreng}
@@ -451,9 +459,7 @@ export default function DataDisplayModal() {
                           Differanse (punkt − terreng):{' '}
                           <span className="font-medium">
                             {formatCoord(
-                              Number(
-                                targetPoint.coordinates[0].z,
-                              ) -
+                              Number(targetPoint.coordinates[0].z) -
                                 pointTerrainHeights[target.index].z,
                               3,
                             )}
@@ -489,8 +495,10 @@ export default function DataDisplayModal() {
                 </h3>
                 {targetAnalysis && (
                   <div className="text-xs text-gray-500 mt-1">
-                    Fall: {formatCoord(targetAnalysis.details?.incline, 2)}‰
-                    {' • '}Lengde: {formatCoord(targetAnalysis.details?.length, 2)} m
+                    Fall:{' '}
+                    {formatCoord(targetAnalysis.details?.incline, 2)}‰
+                    {' • '}Lengde:{' '}
+                    {formatCoord(targetAnalysis.details?.length, 2)} m
                   </div>
                 )}
               </div>
@@ -506,9 +514,8 @@ export default function DataDisplayModal() {
                     }
                     className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
                   >
-                    {expandedTargetPoints ? 'Skjul' : 'Vis'} ({
-                      targetLine.coordinates?.length || 0
-                    })
+                    {expandedTargetPoints ? 'Skjul' : 'Vis'} (
+                    {targetLine.coordinates?.length || 0})
                   </button>
                 </div>
                 {expandedTargetPoints && (
@@ -529,9 +536,8 @@ export default function DataDisplayModal() {
                     }
                     className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
                   >
-                    {expandedTargetTerrain ? 'Skjul' : 'Vis'} ({
-                      targetTerrain?.points?.length || 0
-                    })
+                    {expandedTargetTerrain ? 'Skjul' : 'Vis'} (
+                    {targetTerrain?.points?.length || 0})
                   </button>
                 </div>
                 {expandedTargetTerrain && (
@@ -733,7 +739,11 @@ export default function DataDisplayModal() {
                         </td>
                         <td className="px-3 py-2 align-top text-sm text-gray-500">
                           <pre className="text-xs whitespace-pre-wrap wrap-break-word">
-                            {JSON.stringify(line.attributes || {}, null, 2)}
+                            {JSON.stringify(
+                              line.attributes || {},
+                              null,
+                              2,
+                            )}
                           </pre>
                         </td>
                       </tr>
@@ -756,7 +766,9 @@ export default function DataDisplayModal() {
                             className="px-6 pb-4 text-sm text-gray-500"
                           >
                             <div className="mt-2">
-                              {renderTerrainPoints(activeTerrainData?.[idx])}
+                              {renderTerrainPoints(
+                                activeTerrainData?.[idx],
+                              )}
                             </div>
                           </td>
                         </tr>
