@@ -86,10 +86,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Environment Variables (optional)
 
-| Variable                    | Purpose                                 |
-| --------------------------- | --------------------------------------- |
-| `SUPABASE_URL`              | Supabase project URL for usage tracking |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key               |
+| Variable                    | Purpose                                   |
+| --------------------------- | ----------------------------------------- |
+| `SUPABASE_URL`              | Supabase project URL for usage tracking   |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key                 |
 | `TRACKING_KEEPALIVE_SECRET` | Secret for authenticated keepalive writes |
 
 The app works fully without these — tracking is simply skipped.
