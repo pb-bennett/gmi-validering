@@ -221,8 +221,6 @@ export function useFileLoader({ onComplete } = {}) {
             hasDatasetCoord: Boolean(datasetCoord),
             epsg: datasetCoord?.epsg ?? null,
             sampleCount: datasetCoord?.sampleCount ?? null,
-            x: datasetCoord?.x ?? null,
-            y: datasetCoord?.y ?? null,
           });
           trackUploadSuccess(datasetCoord);
 
