@@ -1,10 +1,10 @@
 # Supabase access-hardening runbook (review only)
 
-**Status:** Revised after isolated validation on 2026-08-06/07. This is planning and peer-review material only. The validation did not authorize production work, and no production SQL has been executed from this runbook.
+**Status:** Revised after isolated validation on 2026-08-06/07; first production hardening executed successfully on 2026-08-07. This remains the procedural record. Actual production actions and observed results are recorded in the related production execution report.
 
-**Repository / documentation branch:** `C:\GitHub\gmi-validering` / `docs/supabase-hardening-validation-20260807`
+**Repository:** `C:\GitHub\gmi-validering`
 
-**Related records:** `docs/agent-reports/20260731-richer-usage-statistics-design.md` and `docs/agent-reports/20260807-supabase-hardening-validation.md`
+**Related records:** `docs/agent-reports/20260731-richer-usage-statistics-design.md`, `docs/agent-reports/20260807-supabase-hardening-validation.md`, and `docs/agent-reports/20260807-supabase-production-hardening-execution.md`
 
 > **Production safety gate:** Do not execute any production SQL merely because the isolated validation passed. The required flow is human review of this revision, Git diff review, an approved documentation-only commit and PR, and then a separately planned production hardening session. In that later session, execute one reviewed action/checkpoint at a time and verify it before continuing.
 
