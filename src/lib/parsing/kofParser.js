@@ -1,4 +1,9 @@
 import { normalizeFeature } from './normalizeFeature';
+import { classifyCrs, parseStrictEpsg } from '../telemetry/crs.mjs';
+import {
+  createWarningSummary,
+  recordWarning,
+} from '../telemetry/warnings.mjs';
 
 export class KOFParser {
   constructor(fileContent) {
@@ -7,6 +12,7 @@ export class KOFParser {
     this.points = [];
     this.linesParsed = [];
     this.warnings = [];
+    this.warningSummary = createWarningSummary();
     this.errors = [];
     this._lineIdCounter = 0;
   }
@@ -14,7 +20,7 @@ export class KOFParser {
   parse() {
     const lines = this.fileContent.split(/\r?\n/);
 
-    let inferredCosysEpsg = null;
+    let heuristicEpsg = null;
     let firstCoord = null;
     let activeLine = null;
     let currentSection = null;
@@ -33,7 +39,10 @@ export class KOFParser {
           })
         );
       } else if (activeLine.coordinates.length > 0) {
-        this.warnings.push(
+        recordWarning(
+          this.warnings,
+          this.warningSummary,
+          'geometry',
           `KOF: Linje ${activeLine.id} har for få punkter (${activeLine.coordinates.length}).`,
         );
       }
@@ -54,7 +63,8 @@ export class KOFParser {
 
       const parts = content.split(/\s+/);
       if (parts.length >= 2 && parts[0].toUpperCase() === 'KOORDSYS') {
-        this.header.KOORDSYS = parseInt(parts[1], 10);
+        const parsed = parseStrictEpsg(parts[1]);
+        this.header.KOORDSYS = parsed === null ? parts[1] : parsed;
         return;
       }
 
@@ -288,33 +298,35 @@ export class KOFParser {
 
     finalizeLine();
 
-    // Infer CRS if possible.
-    const koordsys = Number(this.header.KOORDSYS);
-    if (koordsys === 22) inferredCosysEpsg = 25832;
-    if (koordsys === 23) inferredCosysEpsg = 25833;
-
-    const projectionText =
+    // Explicit KOF declarations are distinguished from coordinate heuristics.
+    const hasProjection =
       this.header.Projeksjon ||
       this.header.PROJEKSJON ||
-      this.header.Projection ||
-      null;
-    if (!inferredCosysEpsg && projectionText) {
-      if (projectionText.includes('UTM 32')) inferredCosysEpsg = 25832;
-      if (projectionText.includes('UTM 33')) inferredCosysEpsg = 25833;
-    }
-
-    if (!inferredCosysEpsg && firstCoord) {
+      this.header.Projection;
+    if (!this.header.KOORDSYS && !hasProjection && firstCoord) {
       if (firstCoord.y > 1000000 && firstCoord.x > 100000) {
-        inferredCosysEpsg = 25832;
-        this.warnings.push(
-          'KOF: Fant ingen KOORDSYS. Antar EPSG:25832 basert på koordinatverdier.'
+        heuristicEpsg = 25832;
+        recordWarning(
+          this.warnings,
+          this.warningSummary,
+          'crs',
+          'KOF: Fant ingen KOORDSYS. Antar EPSG:25832 basert på koordinatverdier.',
         );
       }
     }
 
+    const crsContext = classifyCrs({
+      header: this.header,
+      sourceFormat: 'KOF',
+      heuristicEpsg,
+    });
+    this.crsContext = crsContext;
+
     this.header = {
       ...this.header,
-      ...(inferredCosysEpsg ? { COSYS_EPSG: inferredCosysEpsg } : {}),
+      ...(crsContext.epsgCategory.startsWith('epsg_')
+        ? { COSYS_EPSG: crsContext.epsg }
+        : {}),
       SOURCE_FORMAT: 'KOF',
     };
 
@@ -328,7 +340,12 @@ export class KOFParser {
       points: this.points,
       lines: this.linesParsed,
       warnings: this.warnings,
+      warningSummary: this.warningSummary,
       errors: this.errors,
+      crsContext: this.crsContext || classifyCrs({
+        header: this.header,
+        sourceFormat: 'KOF',
+      }),
     };
   }
 }

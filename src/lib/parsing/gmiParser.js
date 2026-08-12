@@ -3,6 +3,11 @@
 // Adapted from reference implementation
 
 import proj4 from 'proj4';
+import { classifyCrs } from '../telemetry/crs.mjs';
+import {
+  createWarningSummary,
+  recordWarning,
+} from '../telemetry/warnings.mjs';
 
 /**
  * GMI Parser Class - provides stateful parsing with analysis methods
@@ -16,6 +21,7 @@ export class GMIParser {
     this.points = [];
     this.linesParsed = [];
     this.warnings = [];
+    this.warningSummary = createWarningSummary();
     this.errors = [];
     this.lineFieldNames = [];
     this.pointFieldNames = [];
@@ -98,7 +104,12 @@ export class GMIParser {
       points: this.points,
       lines: this.linesParsed,
       warnings: this.warnings,
+      warningSummary: this.warningSummary,
       errors: this.errors,
+      crsContext: classifyCrs({
+        header: this.header,
+        sourceFormat: 'GMI',
+      }),
 
       fieldAnalysis: this.analyzeFields(), // Add field analysis to output
     };
@@ -140,8 +151,11 @@ export class GMIParser {
 
     // Warn when values exceed fieldNames length
     if (values.length > fieldNames.length) {
-      this.warnings.push(
-        `More _FIELDVALUES (${values.length}) than _FIELDNAMES (${fieldNames.length})`
+      recordWarning(
+        this.warnings,
+        this.warningSummary,
+        'field_shape',
+        `More _FIELDVALUES (${values.length}) than _FIELDNAMES (${fieldNames.length})`,
       );
     }
 
@@ -179,8 +193,11 @@ export class GMIParser {
             z: coords.length > 2 ? coords[2] : null,
           });
         } else {
-          this.warnings.push(
-            `Invalid coordinate at line ${j + 1}: "${this.lines[j]}"`
+          recordWarning(
+            this.warnings,
+            this.warningSummary,
+            'coordinate',
+            `Invalid coordinate at line ${j + 1}: "${this.lines[j]}"`,
           );
         }
       }
@@ -212,15 +229,21 @@ export class GMIParser {
         message: `Feil under parsing: ${error.message}`,
         details: error.stack,
       });
-      this.warnings.push(
-        `Parsing avbrutt på grunn av feil: ${error.message}`
+      recordWarning(
+        this.warnings,
+        this.warningSummary,
+        'other',
+        `Parsing avbrutt på grunn av feil: ${error.message}`,
       );
     }
 
     // Validate we got some data
     if (this.points.length === 0 && this.linesParsed.length === 0) {
-      this.warnings.push(
-        'Ingen objekter funnet i filen. Filen kan være tom eller ha et ukjent format.'
+      recordWarning(
+        this.warnings,
+        this.warningSummary,
+        'other',
+        'Ingen objekter funnet i filen. Filen kan være tom eller ha et ukjent format.',
       );
     }
 
@@ -265,8 +288,8 @@ export class GMIParser {
     // Normalize EPSG header values to numbers if present
     const normalizeEPSG = (h, key) => {
       if (h[key] != null) {
-        const n = parseInt(String(h[key]).trim(), 10);
-        if (!Number.isNaN(n)) h[key] = n;
+        const value = String(h[key]).trim();
+        if (/^\d+$/.test(value)) h[key] = Number(value);
       }
     };
     normalizeEPSG(this.header, 'COSYS_EPSG');

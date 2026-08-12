@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import DetailedStatsSection from './DetailedStatsSection';
 import {
   AreaChart,
   Area,
@@ -295,7 +296,7 @@ export default function StatsModal({ isOpen, onClose }) {
                 Bruksstatistikk
               </h2>
               <p className="text-xs text-gray-500">
-                Anonym oversikt over filopplastinger
+                Oversikt over registrerte filopplastinger
               </p>
             </div>
           </div>
@@ -338,6 +339,8 @@ export default function StatsModal({ isOpen, onClose }) {
               <Skeleton className="h-40" />
             </div>
           )}
+
+          <DetailedStatsSection />
 
           {/* Error state */}
           {!loading && error && (
@@ -400,7 +403,7 @@ export default function StatsModal({ isOpen, onClose }) {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <MetricCard
                   icon="📤"
-                  label="Totalt opplastet"
+                  label="Registrerte filopplastinger"
                   value={s.totalUploads}
                   sub={
                     s.firstDate === s.lastDate
@@ -410,7 +413,7 @@ export default function StatsModal({ isOpen, onClose }) {
                 />
                 <MetricCard
                   icon="🏘️"
-                  label="Unike kommuner"
+                  label="Kommuner med registrert aktivitet"
                   value={s.uniqueKommuner}
                 />
                 <MetricCard

@@ -1,6 +1,8 @@
 import sosijs from 'sosijs';
 import { Buffer } from 'buffer';
 import { normalizeFeature } from './normalizeFeature';
+import { classifyCrs } from '../telemetry/crs.mjs';
+import { createWarningSummary } from '../telemetry/warnings.mjs';
 
 const toUpperNo = (value) =>
   String(value || '')
@@ -69,12 +71,14 @@ const inferSosiFcode = (geomType, properties) => {
 };
 
 export class SOSIParser {
-  constructor(fileContent) {
+  constructor(fileContent, parserFactory = null) {
     this.fileContent = fileContent;
+    this.parserFactory = parserFactory;
     this.header = {};
     this.points = [];
     this.linesParsed = [];
     this.warnings = [];
+    this.warningSummary = createWarningSummary();
     this.errors = [];
   }
 
@@ -86,7 +90,9 @@ export class SOSIParser {
         globalThis.Buffer = Buffer;
       }
 
-      const parser = new sosijs.Parser();
+      const parser = this.parserFactory
+        ? this.parserFactory()
+        : new sosijs.Parser();
       let input = this.fileContent;
 
       // Prefer raw bytes so sosijs can detect and decode charset via ..TEGNSETT.
@@ -101,14 +107,7 @@ export class SOSIParser {
 
       // CRS is typically like "EPSG:25832" in geojson.crs.properties.name
       const crsName = geojson?.crs?.properties?.name;
-      const epsgMatch =
-        typeof crsName === 'string'
-          ? crsName.match(/EPSG\s*:?\s*(\d+)/i)
-          : null;
-      const COSYS_EPSG = epsgMatch ? Number(epsgMatch[1]) : null;
-
       this.header = {
-        ...(COSYS_EPSG ? { COSYS_EPSG } : {}),
         ...(crsName ? { SRID: crsName } : {}),
         SOURCE_FORMAT: 'SOSI',
       };
@@ -177,7 +176,7 @@ export class SOSIParser {
         }
       });
     } catch (err) {
-      console.error('SOSI parsing error:', err);
+      console.error('SOSI parsing failed');
       this.errors.push(`SOSI parsing failed: ${err.message}`);
     }
 
@@ -191,7 +190,12 @@ export class SOSIParser {
       points: this.points,
       lines: this.linesParsed,
       warnings: this.warnings,
+      warningSummary: this.warningSummary,
       errors: this.errors,
+      crsContext: classifyCrs({
+        header: this.header,
+        sourceFormat: 'SOSI',
+      }),
     };
   }
 }
