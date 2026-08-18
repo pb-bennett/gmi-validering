@@ -14,31 +14,93 @@ import {
   Tooltip,
   useMap,
 } from 'react-leaflet';
+import {
+  getInitialTimelineIndex,
+  getNextTimelineIndex,
+  getPlaybackIntervalMs,
+  getViewportModeAfterInteraction,
+  invalidateMapSize,
+  shouldAutoFitViewport,
+  VIEWPORT_MODE_AUTO,
+  VIEWPORT_MODE_USER,
+} from '@/lib/stats/mapTimeline.mjs';
 
 /* ── Fit-bounds helper ──────────────────────────────────────────────────── */
-function FitBounds({ markers }) {
+function ViewportOwnership({ programmaticRef, onUserInteraction }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const markUserControlled = () => {
+      if (!programmaticRef.current) onUserInteraction();
+    };
+    map.on('dragstart', markUserControlled);
+    map.on('movestart', markUserControlled);
+    map.on('zoomstart', markUserControlled);
+    return () => {
+      map.off('dragstart', markUserControlled);
+      map.off('movestart', markUserControlled);
+      map.off('zoomstart', markUserControlled);
+    };
+  }, [map, onUserInteraction, programmaticRef]);
+
+  return null;
+}
+
+function FitBounds({
+  markers,
+  mode,
+  programmaticRef,
+  resetToken,
+}) {
   const map = useMap();
   useEffect(() => {
-    if (!markers || markers.length === 0) return;
+    if (!shouldAutoFitViewport({
+      mode,
+      hasMarkers: Boolean(markers?.length),
+    })) return;
     const bounds = markers.map((m) => [m.lat, m.lng]);
-    if (bounds.length === 1) {
-      map.setView(bounds[0], 7, { animate: true });
-    } else {
-      map.fitBounds(bounds, {
-        padding: [40, 40],
-        maxZoom: 8,
-        animate: true,
-      });
+    programmaticRef.current = true;
+    try {
+      if (bounds.length === 1) {
+        map.setView(bounds[0], 7, { animate: false });
+      } else {
+        map.fitBounds(bounds, {
+          padding: [40, 40],
+          maxZoom: 8,
+          animate: false,
+        });
+      }
+    } finally {
+      programmaticRef.current = false;
     }
-  }, [markers, map]);
+  }, [markers, map, mode, programmaticRef, resetToken]);
+  return null;
+}
+
+function MapResizeSync({ expanded }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => invalidateMapSize(map));
+    const timeout = setTimeout(() => invalidateMapSize(map), 250);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timeout);
+    };
+  }, [expanded, map]);
+
   return null;
 }
 
 /* ── Main map component ────────────────────────────────────────────────── */
-export default function StatsMap({ byKommune = [], timeline = [] }) {
+export default function StatsMap({ byKommune = [], timeline = [], expanded = false }) {
   const [playing, setPlaying] = useState(false);
-  const [dateIdx, setDateIdx] = useState(-1); // -1 = show cumulative (all)
+  const [dateIdx, setDateIdx] = useState(null);
+  const [viewportMode, setViewportMode] = useState(VIEWPORT_MODE_AUTO);
+  const [resetToken, setResetToken] = useState(0);
   const intervalRef = useRef(null);
+  const previousDatesRef = useRef([]);
+  const programmaticViewportRef = useRef(false);
 
   /* Unique sorted dates from the timeline */
   const uniqueDates = useMemo(() => {
@@ -48,9 +110,27 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
     return [...s].sort();
   }, [timeline]);
 
+  useEffect(() => {
+    setDateIdx((previousIndex) => {
+      if (uniqueDates.length === 0) return -1;
+      if (previousIndex === null || previousIndex < 0) {
+        return getInitialTimelineIndex(uniqueDates);
+      }
+
+      const previousDate = previousDatesRef.current[previousIndex];
+      const preservedIndex = previousDate
+        ? uniqueDates.indexOf(previousDate)
+        : -1;
+      return preservedIndex >= 0
+        ? preservedIndex
+        : Math.min(previousIndex, uniqueDates.length - 1);
+    });
+    previousDatesRef.current = uniqueDates;
+  }, [uniqueDates]);
+
   /* Compute markers for the current dateIdx (clamp out-of-range indices) */
   const markers = useMemo(() => {
-    const idx = dateIdx >= uniqueDates.length ? -1 : dateIdx;
+    const idx = dateIdx === null ? getInitialTimelineIndex(uniqueDates) : dateIdx;
     if (idx < 0) {
       // Show cumulative totals
       return byKommune.filter((k) => k.lat && k.lng);
@@ -72,7 +152,7 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
 
   /* Markers that are "new" at the current date (for highlight) */
   const newKommuneKeys = useMemo(() => {
-    const idx = dateIdx >= uniqueDates.length ? -1 : dateIdx;
+    const idx = dateIdx === null ? getInitialTimelineIndex(uniqueDates) : dateIdx;
     if (idx < 0) return new Set();
     const currentDate = uniqueDates[idx];
     return new Set(
@@ -88,9 +168,9 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
       if (prev) return false;
       // Start from beginning if at end
       setDateIdx((idx) => {
+        if (uniqueDates.length === 0 || idx === null) return 0;
         if (idx >= uniqueDates.length - 1) return 0;
-        if (idx < 0) return 0;
-        return idx;
+        return Math.max(0, idx);
       });
       return true;
     });
@@ -104,13 +184,14 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
 
     intervalRef.current = setInterval(() => {
       setDateIdx((prev) => {
-        if (prev >= uniqueDates.length - 1) {
+        const current = prev === null ? 0 : prev;
+        if (current >= uniqueDates.length - 1) {
           setPlaying(false);
-          return prev;
+          return current;
         }
-        return prev + 1;
+        return getNextTimelineIndex(current, uniqueDates.length - 1);
       });
-    }, 900);
+    }, getPlaybackIntervalMs(uniqueDates.length));
 
     return () => clearInterval(intervalRef.current);
   }, [playing, uniqueDates.length]);
@@ -118,13 +199,29 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
   // Avoid setting state synchronously when `timeline` updates — clamp the
   // visible index instead of forcing a state change here to prevent cascading
   // renders. The UI and memoized computations use `displayDateIdx`.
-  const displayDateIdx = dateIdx >= uniqueDates.length ? -1 : dateIdx;
+  const displayDateIdx = uniqueDates.length === 0
+    ? -1
+    : dateIdx === null || dateIdx < 0
+      ? getInitialTimelineIndex(uniqueDates)
+      : Math.min(dateIdx, uniqueDates.length - 1);
 
   const maxCount = Math.max(...byKommune.map((k) => k.count), 1);
   const radius = (count) =>
     Math.max(8, Math.min(35, 8 + (count / maxCount) * 27));
 
   const hasMapData = markers.length > 0;
+
+  const markUserControlled = useCallback(() => {
+    setViewportMode((currentMode) =>
+      getViewportModeAfterInteraction(currentMode),
+    );
+  }, []);
+
+  const resetViewport = useCallback(() => {
+    if (!hasMapData) return;
+    setViewportMode(VIEWPORT_MODE_AUTO);
+    setResetToken((current) => current + 1);
+  }, [hasMapData]);
 
   /* Norwegian date format */
   const NO_MONTHS = [
@@ -148,20 +245,30 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
 
   return (
     <div className="relative h-full w-full">
-      <MapContainer
+        <MapContainer
         center={[64.5, 14]}
         zoom={4}
         className="h-full w-full rounded-lg"
         zoomControl={false}
         attributionControl={false}
         style={{ background: '#e8f0fe' }}
-      >
-        <TileLayer
+        >
+          <MapResizeSync expanded={expanded} />
+          <ViewportOwnership
+            programmaticRef={programmaticViewportRef}
+            onUserInteraction={markUserControlled}
+          />
+          <TileLayer
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           attribution=""
         />
 
-        {hasMapData && <FitBounds markers={markers} />}
+        <FitBounds
+          markers={markers}
+          mode={viewportMode}
+          programmaticRef={programmaticViewportRef}
+          resetToken={resetToken}
+        />
 
         {markers.map((m, i) => {
           const key = m.kommuneNumber || m.areaName || i;
@@ -202,13 +309,25 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
         </div>
       )}
 
+      <button
+        type="button"
+        onClick={resetViewport}
+        disabled={!hasMapData}
+        aria-label="Vis alle punkter"
+        className="absolute right-3 top-3 z-[1000] rounded-lg border border-gray-200 bg-white/95 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 shadow-md backdrop-blur-sm hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Vis alle punkter
+      </button>
+
       {/* Timeline controls */}
       {uniqueDates.length > 1 && (
         <div className="absolute bottom-3 left-3 right-3 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg px-4 py-2.5 shadow-md border border-gray-200">
           <div className="flex items-center gap-3">
             {/* Play / pause button */}
             <button
+              type="button"
               onClick={togglePlay}
+              aria-label={playing ? 'Pause' : 'Spill av'}
               className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors flex-shrink-0"
               title={playing ? 'Pause' : 'Spill av'}
             >
@@ -235,17 +354,19 @@ export default function StatsMap({ byKommune = [], timeline = [] }) {
             {/* Slider */}
             <input
               type="range"
-              min={-1}
+              min={0}
               max={uniqueDates.length - 1}
               value={displayDateIdx}
+              onChange={(event) => {
+                setPlaying(false);
+                setDateIdx(Number(event.target.value));
+              }}
               className="flex-1 h-1.5 appearance-none rounded bg-gray-200 accent-blue-500 cursor-pointer"
             />
 
             {/* Date label */}
             <span className="text-xs text-gray-600 font-medium min-w-[100px] text-right tabular-nums">
-              {displayDateIdx < 0
-                ? 'Alle dager'
-                : fmtDate(uniqueDates[displayDateIdx])}
+              {fmtDate(uniqueDates[displayDateIdx])}
             </span>
           </div>
 

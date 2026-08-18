@@ -5,6 +5,17 @@ import { analyzeIncline } from './analysis/incline';
 import { analyzeZValues } from './analysis/zValidation';
 
 const STORAGE_VERSION = 3;
+let storeApi = null;
+let hydrationCompletedDuringInitialization = false;
+
+const markStoreHydrated = (state) => {
+  if (state) state.hydrated = true;
+  if (storeApi) {
+    storeApi.setState({ hydrated: true }, false, 'persist/hydrated');
+  } else {
+    hydrationCompletedDuringInitialization = true;
+  }
+};
 
 /**
  * GMI Validator — Global State Store (Zustand)
@@ -172,6 +183,7 @@ const useStore = create(
         // ============================================
         layers: {}, // { [layerId]: LayerState }
         layerOrder: [], // Array of layerIds in display order
+        hydrated: false,
 
         // ============================================
         // FILE SLICE — metadata about uploaded file
@@ -1695,6 +1707,7 @@ const useStore = create(
           locale: 'nb-NO', // Norwegian bokmål
           autoValidateOnUpload: true,
           showWarnings: true,
+          testMode: false,
           lastFileName: null,
           inclineRequirementMode: 'fixed10', // 'fixed10' | 'variable'
           minOvercover: 1.6, // Minimum overcover in meters (default 1.6m)
@@ -2867,6 +2880,7 @@ const useStore = create(
           return nextState;
         },
         onRehydrateStorage: () => (state) => {
+          markStoreHydrated(state);
           if (state) {
             if (!state.outliers) {
               state.outliers = { results: null, hideOutliers: false };
@@ -3043,6 +3057,7 @@ const useStore = create(
                 locale: 'nb-NO',
                 autoValidateOnUpload: true,
                 showWarnings: true,
+                testMode: false,
                 lastFileName: null,
                 inclineRequirementMode: 'fixed10',
                 minOvercover: 1.6,
@@ -3051,6 +3066,10 @@ const useStore = create(
               state.settings.inclineRequirementMode === undefined
             ) {
               state.settings.inclineRequirementMode = 'fixed10';
+            }
+
+            if (state.settings.testMode === undefined) {
+              state.settings.testMode = false;
             }
 
             if (state.settings.minOvercover === undefined) {
@@ -3080,5 +3099,10 @@ const useStore = create(
     { name: 'GMI-Validator-Store' },
   ),
 );
+
+storeApi = useStore;
+if (hydrationCompletedDuringInitialization) {
+  useStore.setState({ hydrated: true }, false, 'persist/hydrated');
+}
 
 export default useStore;

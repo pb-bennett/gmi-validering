@@ -12,6 +12,7 @@ import {
 import {
   buildLegacyTrackRequestBody,
   completeSuccessfulUpload,
+  isTestModeEnabled,
 } from '@/lib/telemetry/uploadTelemetry.mjs';
 
 export function useFileLoader({ onComplete } = {}) {
@@ -22,6 +23,8 @@ export function useFileLoader({ onComplete } = {}) {
   const setData = useStore((state) => state.setData);
   const clearData = useStore((state) => state.clearData);
   const addLayer = useStore((state) => state.addLayer);
+  const testMode = useStore((state) => isTestModeEnabled(state.settings));
+  const hydrated = useStore((state) => state.hydrated === true);
 
   const trackUploadSuccess = async (datasetCoord) => {
     try {
@@ -30,7 +33,7 @@ export function useFileLoader({ onComplete } = {}) {
         headers: {
           'Content-Type': 'application/json',
         },
-          body: JSON.stringify(buildLegacyTrackRequestBody(datasetCoord)),
+        body: JSON.stringify(buildLegacyTrackRequestBody(datasetCoord)),
         keepalive: true,
       });
     } catch {
@@ -232,6 +235,8 @@ export function useFileLoader({ onComplete } = {}) {
             datasetCoord,
             trackUploadSuccess,
             onComplete,
+            testMode,
+            hydrated,
           });
         } catch (error) {
           console.error('Parsing failed');
@@ -304,6 +309,8 @@ export function useFileLoader({ onComplete } = {}) {
       clearData,
       addLayer,
       onComplete,
+      testMode,
+      hydrated,
     ],
   );
 

@@ -16,6 +16,7 @@ import {
   buildLegacyTrackRequestBody,
   completeSuccessfulUpload,
   deriveUploadTelemetry,
+  isTestModeEnabled,
 } from '../src/lib/telemetry/uploadTelemetry.mjs';
 import {
   classifyCrs,
@@ -188,6 +189,7 @@ test('legacy track body remains unchanged and telemetry failure cannot suppress 
       throw new Error('forced classifier failure');
     },
     datasetCoord,
+    hydrated: true,
     trackUploadSuccess: (coordinate) => trackingCalls.push(coordinate),
     onComplete: () => {
       completionCalls += 1;
@@ -197,4 +199,40 @@ test('legacy track body remains unchanged and telemetry failure cannot suppress 
   assert.equal(result, null);
   assert.deepEqual(trackingCalls, [datasetCoord]);
   assert.equal(completionCalls, 1);
+});
+
+test('test mode defaults off, persists as a setting, and skips tracking without skipping completion', () => {
+  assert.equal(isTestModeEnabled(undefined), false);
+  assert.equal(isTestModeEnabled({ testMode: false }), false);
+  assert.equal(isTestModeEnabled({ testMode: true }), true);
+
+  let deriveCalls = 0;
+  let trackingCalls = 0;
+  let completionCalls = 0;
+  const result = completeSuccessfulUpload({
+    testMode: true,
+    deriveTelemetry: () => {
+      deriveCalls += 1;
+      return { shouldNotBeBuilt: true };
+    },
+    datasetCoord: { x: 1, y: 2, epsg: 4326 },
+    trackUploadSuccess: () => {
+      trackingCalls += 1;
+    },
+    onComplete: () => {
+      completionCalls += 1;
+    },
+  });
+
+  assert.equal(result, null);
+  assert.equal(deriveCalls, 0);
+  assert.equal(trackingCalls, 0);
+  assert.equal(completionCalls, 1);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      buildLegacyTrackRequestBody(null),
+      'test',
+    ),
+    false,
+  );
 });

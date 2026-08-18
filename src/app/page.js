@@ -17,6 +17,7 @@ import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
+import TestModeControl from '@/components/TestModeControl';
 import { getTerrainStats } from '@/lib/analysis/terrain';
 import useStore from '@/lib/store';
 
@@ -216,6 +217,7 @@ export default function Home() {
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
+      <TestModeControl />
 
       {/* Floating Stats Button - Always visible */}
       <button

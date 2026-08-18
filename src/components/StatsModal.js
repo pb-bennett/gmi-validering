@@ -1,31 +1,33 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import DetailedStatsSection from './DetailedStatsSection';
+import { retainKommuneOptions } from '@/lib/stats/kommuneFilterState.mjs';
 import {
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
+  ANALYTICS_START_DATE,
+  formatAnalyticsStartDate,
+  UNRESOLVED_SERIES_KEY,
+} from '@/lib/stats/legacyStats.mjs';
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from 'recharts';
 
-/* ── Lazy-load the Leaflet map (SSR-unsafe) ───────────────────────────── */
 const StatsMap = dynamic(() => import('./stats/StatsMap'), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full flex items-center justify-center bg-gray-50 rounded-lg">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+    <div className="flex h-full w-full items-center justify-center rounded-lg bg-gray-50">
+      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500" />
     </div>
   ),
 });
 
-/* ── Norwegian helpers ─────────────────────────────────────────────────── */
 const NO_MONTHS = [
   'jan',
   'feb',
@@ -40,639 +42,731 @@ const NO_MONTHS = [
   'nov',
   'des',
 ];
-const NO_DAYS = ['Søn', 'Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør'];
-const NO_DAYS_MON_FIRST = [
-  'Man',
-  'Tir',
-  'Ons',
-  'Tor',
-  'Fre',
-  'Lør',
-  'Søn',
+const RESOLUTIONS = [
+  { value: 'daily', label: 'Dag' },
+  { value: 'weekly', label: 'Uke' },
+  { value: 'monthly', label: 'Måned' },
+];
+const VALUE_MODES = [
+  { value: 'count', label: 'Antall' },
+  { value: 'cumulative', label: 'Kumulativt' },
+];
+const LINE_COLORS = [
+  '#2563eb',
+  '#db2777',
+  '#059669',
+  '#d97706',
+  '#7c3aed',
+  '#0891b2',
+  '#dc2626',
+  '#4f46e5',
+  '#be123c',
+  '#15803d',
+  '#9333ea',
+  '#0369a1',
+  '#b45309',
+  '#c026d3',
+  '#0f766e',
+  '#4338ca',
 ];
 
-const fmtDateShort = (dateStr) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr + 'T12:00:00');
-  return `${d.getDate()}. ${NO_MONTHS[d.getMonth()]}`;
+const periodField = (resolution) =>
+  resolution === 'daily'
+    ? 'date'
+    : resolution === 'weekly'
+      ? 'week'
+      : 'month';
+
+const isoWeekLabel = (weekStart) => {
+  const date = new Date(`${weekStart}T12:00:00Z`);
+  const thursday = new Date(date);
+  thursday.setUTCDate(date.getUTCDate() + 3);
+  const firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
+  const week =
+    1 +
+    Math.round(
+      (thursday.getTime() - firstThursday.getTime()) / 604800000,
+    );
+  return `Uke ${String(week).padStart(2, '0')} ${thursday.getUTCFullYear()}`;
 };
 
-const fmtDateFull = (dateStr) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr + 'T12:00:00');
-  return `${d.getDate()}. ${NO_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+const formatPeriod = (value, resolution, short = false) => {
+  if (!value) return '';
+  if (resolution === 'monthly') {
+    const [year, month] = value.split('-').map(Number);
+    return `${NO_MONTHS[month - 1]}${short ? '' : ` ${year}`}`;
+  }
+  if (resolution === 'weekly') return isoWeekLabel(value);
+
+  const date = new Date(`${value}T12:00:00Z`);
+  return short
+    ? `${date.getUTCDate()}.${date.getUTCMonth() + 1}.`
+    : `${date.getUTCDate()}. ${NO_MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 };
 
-/* ── Skeleton placeholder ──────────────────────────────────────────────── */
 const Skeleton = ({ className = '' }) => (
-  <div
-    className={`animate-pulse bg-gray-200 rounded-lg ${className}`}
-  />
+  <div className={`animate-pulse rounded-lg bg-gray-200 ${className}`} />
 );
 
-/* ── Custom recharts tooltip ───────────────────────────────────────────── */
-const ChartTooltip = ({ active, payload, label, formatter }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-white shadow-lg rounded-lg px-3 py-2 border border-gray-200 text-sm">
-      <p className="font-medium text-gray-900 mb-0.5">
-        {formatter ? formatter(label) : label}
-      </p>
-      <p className="text-blue-600 font-semibold">
-        {payload[0].value} opplasting
-        {payload[0].value !== 1 ? 'er' : ''}
-      </p>
-    </div>
-  );
-};
+const UploadStatIcon = () => (
+  <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 16V4m0 0L8 8m4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
+  </svg>
+);
 
-/* ── Metric card ───────────────────────────────────────────────────────── */
-const MetricCard = ({ icon, label, value, sub }) => (
-  <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow">
-    <div className="text-2xl mb-1">{icon}</div>
-    <div className="text-2xl font-bold text-gray-900 tabular-nums">
-      {value}
-    </div>
-    <div className="text-xs text-gray-500 font-medium mt-0.5">
-      {label}
-    </div>
-    {sub && (
-      <div className="text-[10px] text-gray-400 mt-1">{sub}</div>
-    )}
+const MunicipalityStatIcon = () => (
+  <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 21h18M5 21V5l7-3 7 3v16M9 9h1m4 0h1M9 13h1m4 0h1M9 17h1m4 0h1" />
+  </svg>
+);
+
+const CompactMetric = ({ icon, value, label }) => (
+  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+    <span className="text-blue-600">{icon}</span>
+    <strong className="text-sm tabular-nums text-gray-900">{value}</strong>
+    <span>{label}</span>
   </div>
 );
 
-/* ── Activity heatmap (day-of-week × hour) ─────────────────────────────── */
-const ActivityHeatmap = ({ data = [] }) => {
-  // Remap Sunday=0 to Mon-first indexing: Mon=0…Sun=6
-  const dowRemap = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 0: 6 };
-
-  const grid = useMemo(() => {
-    const g = Array.from({ length: 7 }, () => Array(24).fill(0));
-    let max = 0;
-    for (const { dayOfWeek, hour, count } of data) {
-      const row = dowRemap[dayOfWeek] ?? dayOfWeek;
-      g[row][hour] = (g[row][hour] || 0) + count;
-      max = Math.max(max, g[row][hour]);
-    }
-    return { g, max };
-  }, [data]);
-
-  const colorScale = (val) => {
-    if (val === 0) return '#f1f5f9';
-    const t = val / (grid.max || 1);
-    if (t < 0.2) return '#dbeafe';
-    if (t < 0.4) return '#93c5fd';
-    if (t < 0.6) return '#60a5fa';
-    if (t < 0.8) return '#3b82f6';
-    return '#1d4ed8';
-  };
-
-  const textColor = (val) => {
-    if (val === 0) return 'transparent';
-    const t = val / (grid.max || 1);
-    return t >= 0.6 ? '#fff' : '#1e40af';
-  };
-
+const TimeTooltip = ({ active, payload, label, resolution }) => {
+  if (!active || !payload?.length) return null;
   return (
-    <div className="overflow-x-auto">
-      <div
-        className="inline-grid gap-[3px]"
-        style={{
-          gridTemplateColumns: `56px repeat(24, minmax(22px, 1fr))`,
-        }}
-      >
-        {/* Hour headers */}
-        <div />
-        {Array.from({ length: 24 }, (_, h) => (
-          <div
-            key={h}
-            className="text-[10px] text-gray-400 text-center font-mono"
-          >
-            {h}
-          </div>
-        ))}
-
-        {/* Rows */}
-        {NO_DAYS_MON_FIRST.map((dayLabel, di) => (
-          <div key={di} className="contents">
-            <div className="text-xs text-gray-500 font-medium flex items-center pr-2 justify-end">
-              {dayLabel}
-            </div>
-            {grid.g[di].map((val, hi) => (
-              <div
-                key={hi}
-                className="rounded-[3px] flex items-center justify-center transition-colors"
-                style={{
-                  backgroundColor: colorScale(val),
-                  height: '22px',
-                  minWidth: '22px',
-                  fontSize: '9px',
-                  color: textColor(val),
-                  fontWeight: 600,
-                }}
-                title={`${dayLabel} kl ${String(hi).padStart(2, '0')}:00 — ${val} opplasting${val !== 1 ? 'er' : ''}`}
-              >
-                {val > 0 ? val : ''}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
+    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-lg">
+      <p className="mb-1 font-medium text-gray-900">
+        {formatPeriod(label, resolution)}
+      </p>
+      {payload.map((entry) => (
+        <p key={entry.dataKey} style={{ color: entry.color }}>
+          {entry.name}: {entry.value} registrerte opplastinger
+        </p>
+      ))}
     </div>
   );
 };
 
-/* ══════════════════════════════════════════════════════════════════════════
-   MAIN MODAL
-   ══════════════════════════════════════════════════════════════════════════ */
+const getSeriesFor = (stats, resolution, valueMode) => {
+  if (!stats) return [];
+  if (valueMode === 'cumulative') {
+    return stats.cumulativeByResolution?.[resolution] || [];
+  }
+  return stats[resolution] || [];
+};
+
+const buildChartData = ({
+  stats,
+  selectedIds,
+  resolution,
+  valueMode,
+  chartMode,
+  includeUnknown,
+}) => {
+  const field = periodField(resolution);
+  if (chartMode === 'total') {
+    return getSeriesFor(stats, resolution, valueMode).map((point) => ({
+      period: point[field],
+      total: valueMode === 'cumulative' ? point.cumulative : point.count,
+    }));
+  }
+
+  const comparisonIds = [
+    ...selectedIds,
+    ...(includeUnknown ? [UNRESOLVED_SERIES_KEY] : []),
+  ];
+  const domain = getSeriesFor(stats, resolution, 'count');
+  const bySeries = new Map();
+  for (const id of comparisonIds) {
+    const series = getSeriesFor(
+      stats?.byKommuneSeries?.[id],
+      resolution,
+      valueMode,
+    );
+    bySeries.set(
+      id,
+      new Map(series.map((point) => [
+        point[field],
+        valueMode === 'cumulative' ? point.cumulative : point.count,
+      ])),
+    );
+  }
+
+  const previous = new Map(comparisonIds.map((id) => [id, 0]));
+  return domain.map((point) => {
+    const row = { period: point[field] };
+    for (const id of comparisonIds) {
+      const value = bySeries.get(id)?.get(point[field]);
+      if (value !== undefined) previous.set(id, value);
+      row[id] =
+        value !== undefined
+          ? value
+          : valueMode === 'cumulative'
+            ? previous.get(id)
+            : 0;
+    }
+    return row;
+  });
+};
+
 export default function StatsModal({ isOpen, onClose }) {
   const [stats, setStats] = useState(null);
+  const [analyticsStartDate, setAnalyticsStartDate] = useState(
+    ANALYTICS_START_DATE,
+  );
+  const [availableKommuner, setAvailableKommuner] = useState([]);
+  const [unresolvedAvailable, setUnresolvedAvailable] = useState(false);
+  const [selectedKommuneIds, setSelectedKommuneIds] = useState([]);
+  const [includeUnknown, setIncludeUnknown] = useState(true);
+  const [selectionSearch, setSelectionSearch] = useState('');
+  const [timeResolution, setTimeResolution] = useState('daily');
+  const [valueMode, setValueMode] = useState('count');
+  const [chartMode, setChartMode] = useState('total');
+  const [expandedChart, setExpandedChart] = useState(false);
+  const [expandedMap, setExpandedMap] = useState(false);
+  const [kommuneSelectorOpen, setKommuneSelectorOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const initializedSelection = useRef(false);
+  const hasLoaded = useRef(false);
+  const skipNextSelectionRequest = useRef(false);
+  const kommuneSelectorRef = useRef(null);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
 
-    let cancelled = false;
+    if (skipNextSelectionRequest.current) {
+      skipNextSelectionRequest.current = false;
+      return undefined;
+    }
+
     const controller = new AbortController();
+    const initialRequest = !hasLoaded.current;
+    const query = new URLSearchParams();
+    if (!initialRequest) {
+      query.set('kommuneIds', selectedKommuneIds.join(','));
+      query.set('includeUnknown', includeUnknown ? '1' : '0');
+      query.set('includeComparison', chartMode === 'per' ? '1' : '0');
+    }
 
-    // Defer the `setLoading(true)` to avoid calling setState synchronously
-    // inside the effect body (prevents cascading renders).
     Promise.resolve().then(() => {
-      if (cancelled) return;
       setLoading(true);
       setError(null);
     });
 
-    fetch('/api/stats', { signal: controller.signal })
-      .then((r) => r.json())
+    fetch(`/api/stats${query.toString() ? `?${query}` : ''}`, {
+      signal: controller.signal,
+    })
+      .then((response) => response.json())
       .then((data) => {
-        if (cancelled) return;
-        if (data.ok) setStats(data);
-        else setError(data.error || 'Ukjent feil');
+        if (!data.ok) {
+          setError(data.error || 'Statistikken er midlertidig utilgjengelig.');
+          return;
+        }
+        setStats(data);
+        setAnalyticsStartDate(data.analyticsStartDate || ANALYTICS_START_DATE);
+        setAvailableKommuner((current) =>
+          retainKommuneOptions(current, data.kommuneOptions),
+        );
+        setUnresolvedAvailable((current) =>
+          current || data.unresolvedUploadsAvailable === true,
+        );
+        if (!initializedSelection.current) {
+          skipNextSelectionRequest.current = true;
+          setSelectedKommuneIds(
+            (data.kommuneOptions || []).map(
+              (kommune) => kommune.kommuneNumber,
+            ),
+          );
+          initializedSelection.current = true;
+        }
+        hasLoaded.current = true;
       })
-      .catch((e) => {
-        if (cancelled) return;
-        if (e.name === 'AbortError') return; // fetch was aborted
-        setError(e.message);
+      .catch((requestError) => {
+        if (requestError.name !== 'AbortError') {
+          setError('Statistikken er midlertidig utilgjengelig.');
+        }
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      .finally(() => setLoading(false));
 
     return () => {
-      cancelled = true;
       controller.abort();
     };
-  }, [isOpen]);
+  }, [
+    isOpen,
+    selectedKommuneIds,
+    includeUnknown,
+    chartMode,
+  ]);
 
-  /* Close on Escape */
   useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e) => e.key === 'Escape' && onClose();
+    if (!isOpen) {
+      setKommuneSelectorOpen(false);
+      return undefined;
+    }
+    const handler = (event) => {
+      if (!kommuneSelectorRef.current?.contains(event.target)) {
+        setKommuneSelectorOpen(false);
+      }
+    };
+    if (kommuneSelectorOpen) {
+      document.addEventListener('pointerdown', handler);
+    }
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [isOpen, kommuneSelectorOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handler = (event) => {
+      if (event.key !== 'Escape') return;
+      if (kommuneSelectorOpen) {
+        setKommuneSelectorOpen(false);
+      } else {
+        onClose();
+      }
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, onClose]);
+  }, [isOpen, kommuneSelectorOpen, onClose]);
 
-  /* Fill missing days in the daily chart for a continuous line */
-  const filledDaily = useMemo(() => {
-    if (!stats?.daily?.length) return [];
-    const map = Object.fromEntries(
-      stats.daily.map((d) => [d.date, d.count]),
+  const filteredKommuner = useMemo(() => {
+    const needle = selectionSearch.trim().toLocaleLowerCase('nb-NO');
+    if (!needle) return availableKommuner;
+    return availableKommuner.filter((kommune) =>
+      `${kommune.areaName} ${kommune.kommuneNumber}`
+        .toLocaleLowerCase('nb-NO')
+        .includes(needle),
     );
-    const dates = Object.keys(map).sort();
-    if (dates.length <= 1) return stats.daily;
+  }, [availableKommuner, selectionSearch]);
 
-    const result = [];
-    const start = new Date(dates[0] + 'T12:00:00');
-    const end = new Date(dates[dates.length - 1] + 'T12:00:00');
-    for (
-      let d = new Date(start);
-      d <= end;
-      d.setDate(d.getDate() + 1)
-    ) {
-      const key = d.toISOString().slice(0, 10);
-      result.push({ date: key, count: map[key] || 0 });
-    }
-    return result;
-  }, [stats]);
+  const selectedSet = useMemo(
+    () => new Set(selectedKommuneIds),
+    [selectedKommuneIds],
+  );
+  const allKnownSelected =
+    availableKommuner.length > 0 &&
+    selectedKommuneIds.length === availableKommuner.length;
+  const hasSelectedAll = allKnownSelected &&
+    availableKommuner.every((kommune) => selectedSet.has(kommune.kommuneNumber));
+  const displayedStats = stats;
+  const summary = displayedStats?.summary;
+  const ranking = displayedStats?.ranking || displayedStats?.byKommune || [];
+  const hasData = Boolean(summary && summary.totalUploads > 0);
+  const chartData = useMemo(
+    () =>
+      buildChartData({
+        stats: displayedStats,
+        selectedIds: selectedKommuneIds,
+        resolution: timeResolution,
+        valueMode,
+        chartMode,
+        includeUnknown,
+      }),
+    [
+      displayedStats,
+      selectedKommuneIds,
+      timeResolution,
+      valueMode,
+      chartMode,
+      availableKommuner,
+      includeUnknown,
+    ],
+  );
+  const comparisonLineIds = [
+    ...selectedKommuneIds,
+    ...(chartMode === 'per' &&
+    includeUnknown &&
+    displayedStats?.byKommuneSeries?.[UNRESOLVED_SERIES_KEY]
+      ? [UNRESOLVED_SERIES_KEY]
+      : []),
+  ];
+
+  const clearDisplayedStats = () => {
+    setStats(null);
+    setError(null);
+    setLoading(false);
+  };
+
+  const updateSelectedKommuner = (nextIds) => {
+    clearDisplayedStats();
+    setSelectedKommuneIds([...new Set(nextIds)].sort());
+  };
+
+  const toggleKommune = (kommuneNumber) => {
+    const next = selectedSet.has(kommuneNumber)
+      ? selectedKommuneIds.filter((id) => id !== kommuneNumber)
+      : [...selectedKommuneIds, kommuneNumber];
+    updateSelectedKommuner(next);
+  };
+
+  const selectAll = () =>
+    updateSelectedKommuner(
+      availableKommuner.map((kommune) => kommune.kommuneNumber),
+    );
+
+  const clearAll = () => updateSelectedKommuner([]);
+
+  const toggleUnknown = () => {
+    clearDisplayedStats();
+    setIncludeUnknown((current) => !current);
+  };
+
+  const changeChartMode = (mode) => {
+    if (mode !== chartMode) clearDisplayedStats();
+    setChartMode(mode);
+  };
+
+  const toggleChartExpansion = () => {
+    setExpandedMap(false);
+    setExpandedChart((current) => !current);
+  };
+
+  const toggleMapExpansion = () => {
+    setExpandedChart(false);
+    setExpandedMap((current) => !current);
+  };
 
   if (!isOpen) return null;
 
-  const s = stats?.summary;
-  const hasData = s && s.totalUploads > 0;
-
   return (
     <div
-      className="fixed inset-0 z-[10003] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[10003] flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="relative bg-gray-50 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        style={{ width: '92vw', height: '90vh', maxWidth: '1400px' }}
-        onClick={(e) => e.stopPropagation()}
+        className="relative flex h-[94vh] w-[96vw] max-w-[1480px] flex-col overflow-hidden rounded-xl bg-gray-50 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
       >
-        {/* ── Header ────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-              <svg
-                className="w-5 h-5 text-blue-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">
-                Bruksstatistikk
-              </h2>
-              <p className="text-xs text-gray-500">
-                Oversikt over registrerte filopplastinger
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-200 bg-white px-4 py-2.5">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <h2 className="text-base font-bold text-gray-900">Bruksstatistikk</h2>
+              <p className="text-[11px] text-gray-400">
+                Statistikk fra {formatAnalyticsStartDate(analyticsStartDate)}
               </p>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <CompactMetric
+                icon={<UploadStatIcon />}
+                value={summary?.totalUploads ?? '...'}
+                label="Registrerte filopplastinger"
+              />
+              <CompactMetric
+                icon={<MunicipalityStatIcon />}
+                value={summary?.uniqueKommuner ?? '...'}
+                label="Kommuner med registrert aktivitet"
+              />
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors group"
-            aria-label="Lukk"
-          >
-            <svg
-              className="w-5 h-5 text-gray-400 group-hover:text-gray-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+
+          <div ref={kommuneSelectorRef} className="relative">
+            <button
+              type="button"
+              aria-expanded={kommuneSelectorOpen}
+              aria-haspopup="dialog"
+              onClick={() => setKommuneSelectorOpen((current) => !current)}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:border-blue-300 hover:bg-blue-50"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
+              <MunicipalityStatIcon />
+              <span>Kommuner</span>
+              <span className="tabular-nums text-gray-500">
+                {selectedKommuneIds.length}/{availableKommuner.length}
+              </span>
+              <span aria-hidden="true" className="text-[10px]">{kommuneSelectorOpen ? '▲' : '▼'}</span>
+            </button>
 
-        {/* ── Content (scrollable) ──────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Loading state */}
-          {loading && (
-            <div className="space-y-6 animate-in">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-28" />
-                ))}
-              </div>
-              <Skeleton className="h-56" />
-              <div className="grid md:grid-cols-2 gap-4">
-                <Skeleton className="h-72" />
-                <Skeleton className="h-72" />
-              </div>
-              <Skeleton className="h-40" />
-            </div>
-          )}
-
-          <DetailedStatsSection />
-
-          {/* Error state */}
-          {!loading && error && (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
-                <svg
-                  className="w-8 h-8 text-red-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
-                  />
-                </svg>
-              </div>
-              <p className="text-gray-600 font-medium mb-1">
-                Kunne ikke hente statistikk
-              </p>
-              <p className="text-sm text-gray-400">{error}</p>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {!loading && !error && stats && !hasData && (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mb-5">
-                <svg
-                  className="w-10 h-10 text-blue-300"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                Ingen data ennå
-              </h3>
-              <p className="text-sm text-gray-400 max-w-md">
-                Statistikk fylles automatisk etterhvert som filer
-                lastes opp og valideres. Last opp en GMI-, SOSI- eller
-                KOF-fil for å komme i gang!
-              </p>
-            </div>
-          )}
-
-          {/* ── Data views ────────────────────────────────────────────  */}
-          {!loading && !error && hasData && (
-            <>
-              {/* Metric cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <MetricCard
-                  icon="📤"
-                  label="Registrerte filopplastinger"
-                  value={s.totalUploads}
-                  sub={
-                    s.firstDate === s.lastDate
-                      ? fmtDateFull(s.firstDate)
-                      : `${fmtDateShort(s.firstDate)} – ${fmtDateShort(s.lastDate)}`
-                  }
-                />
-                <MetricCard
-                  icon="🏘️"
-                  label="Kommuner med registrert aktivitet"
-                  value={s.uniqueKommuner}
-                />
-                <MetricCard
-                  icon="📅"
-                  label="Aktive dager"
-                  value={s.activeDays}
-                />
-                <MetricCard
-                  icon="⏱️"
-                  label="Mest aktive time"
-                  value={
-                    stats.hourly?.length
-                      ? (() => {
-                          const peak = stats.hourly.reduce((a, b) =>
-                            b.count > a.count ? b : a,
-                          );
-                          return `kl ${String(peak.hour).padStart(2, '0')}`;
-                        })()
-                      : '—'
-                  }
-                  sub={
-                    stats.hourly?.length
-                      ? `${stats.hourly.reduce((a, b) => (b.count > a.count ? b : a)).count} opplastinger`
-                      : undefined
-                  }
-                />
-              </div>
-
-              {/* ── Daily chart ─────────────────────────────────────── */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-700 mb-4">
-                  Opplastinger over tid
-                </h3>
-                <div style={{ height: 220 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={filledDaily}
-                      margin={{
-                        top: 5,
-                        right: 10,
-                        left: 0,
-                        bottom: 0,
-                      }}
-                    >
-                      <defs>
-                        <linearGradient
-                          id="statsGradient"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="5%"
-                            stopColor="#3b82f6"
-                            stopOpacity={0.25}
-                          />
-                          <stop
-                            offset="95%"
-                            stopColor="#3b82f6"
-                            stopOpacity={0}
-                          />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="#f1f5f9"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="date"
-                        tickFormatter={fmtDateShort}
-                        tick={{ fontSize: 11, fill: '#94a3b8' }}
-                        axisLine={false}
-                        tickLine={false}
-                        interval="preserveStartEnd"
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tick={{ fontSize: 11, fill: '#94a3b8' }}
-                        axisLine={false}
-                        tickLine={false}
-                        width={30}
-                      />
-                      <Tooltip
-                        content={
-                          <ChartTooltip formatter={fmtDateFull} />
-                        }
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="count"
-                        stroke="#3b82f6"
-                        fill="url(#statsGradient)"
-                        strokeWidth={2.5}
-                        dot={filledDaily.length <= 30}
-                        activeDot={{ r: 5, fill: '#3b82f6' }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+            {kommuneSelectorOpen && (
+              <div
+                role="dialog"
+                aria-label="Velg kommuner"
+                className="absolute right-0 top-full z-[1100] mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-gray-200 bg-white p-3 shadow-xl"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-800">Kommuner</h3>
+                    <p className="text-[10px] text-gray-400">Avkryssede inngår</p>
+                  </div>
+                  <span className="text-[10px] tabular-nums text-gray-400">
+                    {selectedKommuneIds.length} av {availableKommuner.length} valgt
+                  </span>
                 </div>
-              </div>
-
-              {/* ── Map + Kommune bar chart ──────────────────────────── */}
-              <div className="grid md:grid-cols-5 gap-4">
-                {/* Map */}
-                <div className="md:col-span-3 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="px-5 pt-4 pb-2">
-                    <h3 className="text-sm font-semibold text-gray-700">
-                      Geografisk oversikt
-                    </h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      Bruk tidslinjen for å se utvikling over tid
+                <input
+                  type="search"
+                  value={selectionSearch}
+                  onChange={(event) => setSelectionSearch(event.target.value)}
+                  placeholder="Søk kommune"
+                  aria-label="Søk kommune"
+                  className="mb-2 w-full rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-blue-500"
+                />
+                <div className="mb-2 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={selectAll}
+                    disabled={hasSelectedAll}
+                    className="flex-1 rounded bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 disabled:opacity-40"
+                  >
+                    Velg alle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    disabled={selectedKommuneIds.length === 0}
+                    className="flex-1 rounded bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-600 disabled:opacity-40"
+                  >
+                    Fjern alle
+                  </button>
+                </div>
+                <div className="max-h-52 overflow-y-auto rounded border border-gray-100">
+                  {filteredKommuner.map((kommune) => (
+                    <label
+                      key={kommune.kommuneNumber}
+                      className="flex cursor-pointer items-center gap-2 border-b border-gray-100 px-2 py-1.5 text-xs last:border-b-0 hover:bg-blue-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedSet.has(kommune.kommuneNumber)}
+                        onChange={() => toggleKommune(kommune.kommuneNumber)}
+                        className="accent-blue-600"
+                      />
+                      <span className="truncate text-gray-700">{kommune.areaName}</span>
+                    </label>
+                  ))}
+                  {filteredKommuner.length === 0 && (
+                    <p className="px-2 py-3 text-center text-[11px] text-gray-400">
+                      Ingen kommuner å vise
                     </p>
-                  </div>
-                  <div className="flex-1 min-h-[340px]">
-                    <StatsMap
-                      byKommune={stats.byKommune}
-                      timeline={stats.timeline}
-                    />
-                  </div>
-                </div>
-
-                {/* Top kommuner */}
-                <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex flex-col">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4">
-                    Topp kommuner
-                  </h3>
-                  {stats.byKommune.filter(
-                    (k) => k.areaName && k.areaName !== 'unknown',
-                  ).length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center">
-                      <p className="text-sm text-gray-400">
-                        Ingen kommunedata registrert ennå
-                      </p>
-                    </div>
-                  ) : (
-                    <div
-                      className="flex-1"
-                      style={{ minHeight: 280 }}
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          layout="vertical"
-                          data={stats.byKommune
-                            .filter(
-                              (k) =>
-                                k.areaName &&
-                                k.areaName !== 'unknown',
-                            )
-                            .slice(0, 10)}
-                          margin={{
-                            top: 0,
-                            right: 20,
-                            left: 0,
-                            bottom: 0,
-                          }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#f1f5f9"
-                            horizontal={false}
-                          />
-                          <XAxis
-                            type="number"
-                            allowDecimals={false}
-                            tick={{ fontSize: 11, fill: '#94a3b8' }}
-                            axisLine={false}
-                            tickLine={false}
-                          />
-                          <YAxis
-                            type="category"
-                            dataKey="areaName"
-                            width={110}
-                            tick={{ fontSize: 12, fill: '#475569' }}
-                            axisLine={false}
-                            tickLine={false}
-                          />
-                          <Tooltip content={<ChartTooltip />} />
-                          <Bar
-                            dataKey="count"
-                            fill="#3b82f6"
-                            radius={[0, 6, 6, 0]}
-                            barSize={20}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
                   )}
                 </div>
-              </div>
-
-              {/* ── Hourly profile ──────────────────────────────────── */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-700 mb-4">
-                  Aktivitet per time (UTC)
-                </h3>
-                <div style={{ height: 180 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={stats.hourly}
-                      margin={{
-                        top: 5,
-                        right: 10,
-                        left: 0,
-                        bottom: 0,
-                      }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="#f1f5f9"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fontSize: 10, fill: '#94a3b8' }}
-                        axisLine={false}
-                        tickLine={false}
-                        interval={1}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tick={{ fontSize: 11, fill: '#94a3b8' }}
-                        axisLine={false}
-                        tickLine={false}
-                        width={25}
-                      />
-                      <Tooltip content={<ChartTooltip />} />
-                      <Bar
-                        dataKey="count"
-                        fill="#60a5fa"
-                        radius={[4, 4, 0, 0]}
-                        barSize={16}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* ── Heatmap ─────────────────────────────────────────── */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-700 mb-1">
-                  Aktivitetskart — ukedag × time
-                </h3>
-                <p className="text-[11px] text-gray-400 mb-4">
-                  Mørke celler = flere opplastinger
+                {unresolvedAvailable && (
+                  <label className="mt-2 flex cursor-pointer items-start gap-2 rounded bg-gray-50 px-2 py-1.5 text-[11px] text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={includeUnknown}
+                      onChange={toggleUnknown}
+                      className="mt-0.5 accent-gray-600"
+                    />
+                    <span>
+                      <span className="block font-medium">Uten registrert kommune</span>
+                      <span className="block text-[10px] text-gray-400">Tas med i totaltall, ikke kart eller kommune-linjer</span>
+                    </span>
+                  </label>
+                )}
+                <p className="mt-2 text-[10px] leading-4 text-gray-400">
+                  Opplastinger uten registrert kommune inngår i totaltallene når de er valgt, men kan ikke vises i kommuneoversikten eller på kartet.
                 </p>
-                <ActivityHeatmap data={stats.heatmap} />
               </div>
+            )}
+          </div>
 
-              {/* ── Source badge ─────────────────────────────────────── */}
-              <div className="text-center text-[10px] text-gray-300 pb-2">
-                Datakilde:{' '}
-                {stats.source === 'supabase'
-                  ? 'Supabase'
-                  : 'Lokal fil'}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Lukk"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <main className={expandedChart || expandedMap ? 'min-w-0' : 'min-w-0 space-y-3'}>
+            {loading && (
+              <div className="flex h-8 items-center gap-2">
+                <Skeleton className="h-2 w-24" />
+                <span className="text-[11px] text-gray-400">Henter statistikk ...</span>
               </div>
-            </>
-          )}
+            )}
+
+            {!loading && error && (
+              <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-8 text-center text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {!loading && !error && displayedStats && (
+              <>
+                {!expandedChart && !expandedMap && summary.unresolvedUploads > 0 && (
+                  <p className="text-[11px] text-gray-500">
+                    {summary.unresolvedUploads} opplasting{summary.unresolvedUploads === 1 ? '' : 'er'} uten registrert kommune er med i totaltallet.
+                  </p>
+                )}
+
+                {hasData && !expandedMap && (
+                  <section className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-800">Utvikling over tid</h3>
+                        <p className="text-[10px] text-gray-400">Registrerte filopplastinger</p>
+                      </div>
+                      <div className="flex flex-wrap gap-1 text-[11px]">
+                        <div className="flex rounded border border-gray-200 bg-gray-50 p-0.5">
+                          {RESOLUTIONS.map((resolution) => (
+                            <button
+                              key={resolution.value}
+                              type="button"
+                              onClick={() => setTimeResolution(resolution.value)}
+                              className={`rounded px-2 py-1 ${timeResolution === resolution.value ? 'bg-white font-semibold text-blue-700 shadow-sm' : 'text-gray-500'}`}
+                            >
+                              {resolution.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex rounded border border-gray-200 bg-gray-50 p-0.5">
+                          {VALUE_MODES.map((mode) => (
+                            <button
+                              key={mode.value}
+                              type="button"
+                              onClick={() => setValueMode(mode.value)}
+                              className={`rounded px-2 py-1 ${valueMode === mode.value ? 'bg-white font-semibold text-blue-700 shadow-sm' : 'text-gray-500'}`}
+                            >
+                              {mode.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex rounded border border-gray-200 bg-gray-50 p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => changeChartMode('total')}
+                            className={`rounded px-2 py-1 ${chartMode === 'total' ? 'bg-white font-semibold text-blue-700 shadow-sm' : 'text-gray-500'}`}
+                          >
+                            Totalt
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => changeChartMode('per')}
+                            className={`rounded px-2 py-1 ${chartMode === 'per' ? 'bg-white font-semibold text-blue-700 shadow-sm' : 'text-gray-500'}`}
+                          >
+                            Per kommune
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={toggleChartExpansion}
+                          className="rounded border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:border-blue-300 hover:text-blue-700"
+                          aria-label={expandedChart ? 'Lukk utvidet visning' : 'Utvid diagram'}
+                        >
+                          {expandedChart ? 'Lukk utvidet visning' : 'Utvid diagram'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {chartMode === 'per' && comparisonLineIds.length === 0 ? (
+                      <div className="flex h-56 items-center justify-center rounded border border-dashed border-gray-200 px-4 text-center text-sm text-gray-500">
+                        Velg minst én kommune eller inkluder uten registrert kommune for å sammenligne utviklingen.
+                      </div>
+                    ) : (
+                      <div className={expandedChart ? 'h-[calc(94vh-8rem)] min-h-[28rem] w-full' : 'h-64 w-full'}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData} margin={{ top: 5, right: 12, left: 0, bottom: 4 }}>
+                            <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                            <XAxis
+                              dataKey="period"
+                              tickFormatter={(value) => formatPeriod(value, timeResolution, true)}
+                              tick={{ fontSize: 10, fill: '#94a3b8' }}
+                              axisLine={false}
+                              tickLine={false}
+                              minTickGap={24}
+                            />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={34} />
+                            <Tooltip content={<TimeTooltip resolution={timeResolution} />} />
+                            {chartMode === 'total' ? (
+                              <Line type="monotone" dataKey="total" name="Registrerte opplastinger" stroke="#2563eb" strokeWidth={2.5} dot={chartData.length <= 31} activeDot={{ r: 4 }} />
+                            ) : (
+                              comparisonLineIds.map((id, index) => (
+                                <Line
+                                  key={id}
+                                  type="monotone"
+                                  dataKey={id}
+                                  name={id === UNRESOLVED_SERIES_KEY
+                                    ? 'Uten registrert kommune'
+                                    : availableKommuner.find((kommune) => kommune.kommuneNumber === id)?.areaName || id}
+                                  stroke={LINE_COLORS[index % LINE_COLORS.length]}
+                                  strokeWidth={2}
+                                  dot={false}
+                                  activeDot={{ r: 4 }}
+                                />
+                              ))
+                            )}
+                            {chartMode === 'per' && (
+                              <Legend wrapperStyle={{ fontSize: 11, maxHeight: 64, overflowY: 'auto' }} />
+                            )}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {!hasData && !expandedMap && (
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-10 text-center">
+                    <h3 className="text-sm font-semibold text-gray-700">Ingen registrerte opplastinger i utvalget</h3>
+                    <p className="mt-1 text-xs text-gray-500">Velg kommuner eller inkluder opplastinger uten registrert kommune.</p>
+                  </div>
+                )}
+
+                {hasData && !expandedChart && (
+                  <section className={expandedMap ? 'space-y-2' : ''}>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-800">Kommuner</h3>
+                      <div className="flex items-center gap-2">
+                        {!expandedMap && (
+                          <span className="text-[10px] text-gray-400">Ranking og kart følger samme utvalg</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={toggleMapExpansion}
+                          className="rounded border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:border-blue-300 hover:text-blue-700"
+                          aria-label={expandedMap ? 'Lukk utvidet visning' : 'Utvid kart'}
+                        >
+                          {expandedMap ? 'Lukk utvidet visning' : 'Utvid kart'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className={expandedMap
+                      ? 'h-[calc(94vh-9rem)] min-h-[30rem] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm'
+                      : 'grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(15rem,1fr)]'}>
+                      <div className={expandedMap
+                        ? 'h-full w-full'
+                        : 'h-[clamp(20rem,38vw,30rem)] min-h-[20rem] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm'}>
+                        <StatsMap
+                          byKommune={displayedStats.byKommune}
+                          timeline={displayedStats.timeline}
+                          expanded={expandedMap}
+                        />
+                      </div>
+                      {!expandedMap && <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                        <h4 className="mb-2 text-xs font-semibold text-gray-700">Fordeling</h4>
+                        {ranking.length === 0 ? (
+                          <p className="py-12 text-center text-xs text-gray-400">Ingen kommunedata i utvalget</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {ranking.slice(0, 10).map((kommune) => (
+                              <div key={kommune.isUnresolved ? UNRESOLVED_SERIES_KEY : kommune.kommuneNumber} className="flex items-center gap-2 text-xs">
+                                <span className="w-28 truncate text-gray-600">{kommune.areaName}</span>
+                                <div className="h-2 min-w-0 flex-1 rounded bg-gray-100">
+                                  <div
+                                    className="h-2 rounded bg-blue-500"
+                                    style={{ width: `${Math.max(4, (kommune.count / ranking[0].count) * 100)}%` }}
+                                  />
+                                </div>
+                                <span className="w-10 text-right tabular-nums text-gray-500">{kommune.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+
+            {!loading && !error && !displayedStats && (
+              <div className="rounded-lg border border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500">
+                Henter statistikk …
+              </div>
+            )}
+
+          </main>
         </div>
       </div>
     </div>
