@@ -6,6 +6,14 @@ import { getDatasetCoordinate } from '@/lib/tracking/datasetCoordinate';
 import { GMIParser } from '@/lib/parsing/gmiParser';
 import { SOSIParser } from '@/lib/parsing/sosiParser';
 import { KOFParser } from '@/lib/parsing/kofParser';
+import {
+  classifyCrs,
+} from '@/lib/telemetry/classifiers.mjs';
+import {
+  buildLegacyTrackRequestBody,
+  completeSuccessfulUpload,
+  isTestModeEnabled,
+} from '@/lib/telemetry/uploadTelemetry.mjs';
 
 export function useFileLoader({ onComplete } = {}) {
   const setFile = useStore((state) => state.setFile);
@@ -15,38 +23,20 @@ export function useFileLoader({ onComplete } = {}) {
   const setData = useStore((state) => state.setData);
   const clearData = useStore((state) => state.clearData);
   const addLayer = useStore((state) => state.addLayer);
+  const testMode = useStore((state) => isTestModeEnabled(state.settings));
+  const hydrated = useStore((state) => state.hydrated === true);
 
   const trackUploadSuccess = async (datasetCoord) => {
-    const logPrefix = '[tracking]';
-    console.info(`${logPrefix} preparing upload tracking`, {
-      hasDatasetCoord: Boolean(datasetCoord),
-      epsg: datasetCoord?.epsg ?? null,
-      sampleCount: datasetCoord?.sampleCount ?? null,
-    });
     try {
-      console.info(`${logPrefix} sending /api/track request`);
-      const response = await fetch('/api/track', {
+      await fetch('/api/track', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          eventType: 'upload_success',
-          datasetCoord,
-        }),
+        body: JSON.stringify(buildLegacyTrackRequestBody(datasetCoord)),
         keepalive: true,
       });
-      const payload = await response
-        .clone()
-        .json()
-        .catch(() => null);
-      console.info(`${logPrefix} /api/track response`, {
-        ok: response.ok,
-        status: response.status,
-        location: payload?.location ?? null,
-      });
-    } catch (error) {
-      console.warn(`${logPrefix} /api/track failed`, error);
+    } catch {
       // Best-effort only; tracking should never block file parsing.
     }
   };
@@ -182,13 +172,23 @@ export function useFileLoader({ onComplete } = {}) {
             );
           }
 
-          const parsedEpsg = Number(parsedData?.header?.COSYS_EPSG);
-          if (!Number.isFinite(parsedEpsg)) {
+          let crs = classifyCrs({
+            header: parsedData?.header || {},
+            sourceFormat: format,
+            sourceCrs: parsedData?.crsContext || null,
+          });
+          if (crs.crsStatus === 'missing' || crs.crsStatus === 'invalid') {
             const useZone32 = window.confirm(
               'Filen mangler koordinatsystem (CRS).\n\nTrykk OK for å bruke UTM sone 32 (EPSG:25832).\nTrykk Avbryt for å bruke UTM sone 33 (EPSG:25833).',
             );
 
             const selectedEpsg = useZone32 ? 25832 : 25833;
+            crs = classifyCrs({
+              header: parsedData?.header || {},
+              sourceFormat: format,
+              sourceCrs: crs,
+              userChoice: selectedEpsg,
+            });
             parsedData = {
               ...parsedData,
               header: {
@@ -196,8 +196,13 @@ export function useFileLoader({ onComplete } = {}) {
                 COSYS_EPSG: selectedEpsg,
                 COSYS: `UTM ${useZone32 ? '32' : '33'}`,
               },
+              crsContext: crs,
             };
+          } else {
+            parsedData = { ...parsedData, crsContext: crs };
           }
+
+          const { warningSummary, ...parsedDataForApp } = parsedData;
 
           // Create file metadata object
           const fileMeta = {
@@ -209,27 +214,32 @@ export function useFileLoader({ onComplete } = {}) {
           };
 
           // Always use layer system - add file as a new layer
-          addLayer({ file: fileMeta, data: parsedData });
+          addLayer({ file: fileMeta, data: parsedDataForApp });
 
           // Also set legacy data/file state for backward compatibility
           setFile(fileMeta);
-          setData(parsedData);
+          setData(parsedDataForApp);
           setParsingDone();
 
-          const datasetCoord = getDatasetCoordinate(parsedData);
-          console.info('[tracking] dataset coordinate computed', {
-            hasDatasetCoord: Boolean(datasetCoord),
-            epsg: datasetCoord?.epsg ?? null,
-            sampleCount: datasetCoord?.sampleCount ?? null,
-          });
-          trackUploadSuccess(datasetCoord);
+          const datasetCoord = getDatasetCoordinate(parsedDataForApp);
 
-          // Notify parent if callback provided
-          if (onComplete) {
-            onComplete();
-          }
+          void completeSuccessfulUpload({
+            telemetryInput: {
+              parsedData: parsedDataForApp,
+              fileName: file.name,
+              fileSize: file.size,
+              crs,
+              datasetCoord,
+              warningSummary,
+            },
+            datasetCoord,
+            trackUploadSuccess,
+            onComplete,
+            testMode,
+            hydrated,
+          });
         } catch (error) {
-          console.error('Parsing error:', error);
+          console.error('Parsing failed');
 
           // Exceptionally large files can cause Zustand persist/localStorage to exceed quota.
           // In that case, avoid getting stuck in a loop of failing writes and show a simple message.
@@ -299,6 +309,8 @@ export function useFileLoader({ onComplete } = {}) {
       clearData,
       addLayer,
       onComplete,
+      testMode,
+      hydrated,
     ],
   );
 

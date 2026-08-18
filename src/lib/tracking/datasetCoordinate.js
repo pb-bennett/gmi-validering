@@ -1,18 +1,4 @@
-const getEpsgFromHeader = (header = {}) => {
-  const candidates = [header.COSYS_EPSG, header.COSYSVER_EPSG];
-  for (const value of candidates) {
-    const num = Number(value);
-    if (Number.isFinite(num)) return num;
-  }
-
-  const srid = header.SRID;
-  if (typeof srid === 'string') {
-    const match = srid.match(/EPSG\s*:?\s*(\d+)/i);
-    if (match) return Number(match[1]);
-  }
-
-  return null;
-};
+import { getOperationalEpsg } from '../telemetry/crs.mjs';
 
 const collectCoordinates = (data) => {
   const coords = [];
@@ -58,7 +44,7 @@ const centroid = (coords) => {
 };
 
 export const getDatasetCoordinate = (data, maxSamples = 200) => {
-  const epsg = getEpsgFromHeader(data?.header || {});
+  const epsg = getOperationalEpsg(data || {});
   if (!epsg) return null;
 
   const coords = collectCoordinates(data);
