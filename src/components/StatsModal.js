@@ -8,6 +8,7 @@ import {
   formatAnalyticsStartDate,
   UNRESOLVED_SERIES_KEY,
 } from '@/lib/stats/legacyStats.mjs';
+import { filterActiveTooltipEntries } from '@/lib/stats/chartTooltip.mjs';
 import {
   CartesianGrid,
   Legend,
@@ -128,14 +129,15 @@ const CompactMetric = ({ icon, value, label }) => (
   </div>
 );
 
-const TimeTooltip = ({ active, payload, label, resolution }) => {
+const TimeTooltip = ({ active, payload, label, resolution, chartMode }) => {
   if (!active || !payload?.length) return null;
+  const visiblePayload = filterActiveTooltipEntries(payload, chartMode);
   return (
     <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-lg">
       <p className="mb-1 font-medium text-gray-900">
         {formatPeriod(label, resolution)}
       </p>
-      {payload.map((entry) => (
+      {visiblePayload.map((entry) => (
         <p key={entry.dataKey} style={{ color: entry.color }}>
           {entry.name}: {entry.value} registrerte opplastinger
         </p>
@@ -174,6 +176,7 @@ const buildChartData = ({
   ];
   const domain = getSeriesFor(stats, resolution, 'count');
   const bySeries = new Map();
+  const periodCountsBySeries = new Map();
   for (const id of comparisonIds) {
     const series = getSeriesFor(
       stats?.byKommuneSeries?.[id],
@@ -187,13 +190,23 @@ const buildChartData = ({
         valueMode === 'cumulative' ? point.cumulative : point.count,
       ])),
     );
+    periodCountsBySeries.set(
+      id,
+      new Map(
+        getSeriesFor(stats?.byKommuneSeries?.[id], resolution, 'count').map(
+          (point) => [point[field], point.count],
+        ),
+      ),
+    );
   }
 
   const previous = new Map(comparisonIds.map((id) => [id, 0]));
   return domain.map((point) => {
-    const row = { period: point[field] };
+    const row = { period: point[field], periodCounts: {} };
     for (const id of comparisonIds) {
       const value = bySeries.get(id)?.get(point[field]);
+      row.periodCounts[id] =
+        periodCountsBySeries.get(id)?.get(point[field]) || 0;
       if (value !== undefined) previous.set(id, value);
       row[id] =
         value !== undefined
@@ -218,7 +231,7 @@ export default function StatsModal({ isOpen, onClose }) {
   const [selectionSearch, setSelectionSearch] = useState('');
   const [timeResolution, setTimeResolution] = useState('daily');
   const [valueMode, setValueMode] = useState('count');
-  const [chartMode, setChartMode] = useState('total');
+  const [chartMode, setChartMode] = useState('per');
   const [expandedChart, setExpandedChart] = useState(false);
   const [expandedMap, setExpandedMap] = useState(false);
   const [kommuneSelectorOpen, setKommuneSelectorOpen] = useState(false);
@@ -269,7 +282,7 @@ export default function StatsModal({ isOpen, onClose }) {
           current || data.unresolvedUploadsAvailable === true,
         );
         if (!initializedSelection.current) {
-          skipNextSelectionRequest.current = true;
+           skipNextSelectionRequest.current = chartMode === 'total';
           setSelectedKommuneIds(
             (data.kommuneOptions || []).map(
               (kommune) => kommune.kommuneNumber,
@@ -667,7 +680,14 @@ export default function StatsModal({ isOpen, onClose }) {
                               minTickGap={24}
                             />
                             <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={34} />
-                            <Tooltip content={<TimeTooltip resolution={timeResolution} />} />
+                             <Tooltip
+                               content={
+                                 <TimeTooltip
+                                   resolution={timeResolution}
+                                   chartMode={chartMode}
+                                 />
+                               }
+                             />
                             {chartMode === 'total' ? (
                               <Line type="monotone" dataKey="total" name="Registrerte opplastinger" stroke="#2563eb" strokeWidth={2.5} dot={chartData.length <= 31} activeDot={{ r: 4 }} />
                             ) : (
