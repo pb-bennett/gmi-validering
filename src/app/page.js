@@ -19,6 +19,7 @@ import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
 import TestModeControl from '@/components/TestModeControl';
 import { getTerrainStats } from '@/lib/analysis/terrain';
+import { claimStatisticsCue } from '@/lib/statisticsCue.mjs';
 import useStore from '@/lib/store';
 
 const DEV_RUNTIME_SNAPSHOTS_KEY = 'gmi:dev:runtime:snapshots';
@@ -88,6 +89,30 @@ export default function Home() {
   // State for stats modal
   const [showStats, setShowStats] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [statisticsCueActive, setStatisticsCueActive] = useState(false);
+
+  useEffect(() => {
+    let sessionStorage;
+    try {
+      sessionStorage = window.sessionStorage;
+    } catch {
+      return;
+    }
+
+    const shouldCue = claimStatisticsCue(sessionStorage);
+    if (!shouldCue) return;
+
+    let reducedMotion = false;
+    try {
+      reducedMotion = window.matchMedia?.(
+        '(prefers-reduced-motion: reduce)',
+      ).matches;
+    } catch {
+      // If motion preference detection fails, keep the cue harmlessly enabled.
+    }
+
+    if (!reducedMotion) setStatisticsCueActive(true);
+  }, []);
 
   // Session heartbeat: update lastActive timestamp
   useEffect(() => {
@@ -221,9 +246,19 @@ export default function Home() {
 
       {/* Floating Stats Button - Always visible */}
       <button
+        className={
+          statisticsCueActive
+            ? 'statistics-button statistics-button--cue'
+            : 'statistics-button'
+        }
         onClick={() => setShowStats(true)}
         aria-label="Vis bruksstatistikk"
         title="Vis bruksstatistikk"
+        onAnimationEnd={(event) => {
+          if (event.animationName === 'statistics-button-entrance') {
+            setStatisticsCueActive(false);
+          }
+        }}
         style={{
           position: 'fixed',
           bottom: '16px',
@@ -231,31 +266,31 @@ export default function Home() {
           zIndex: 10002,
           padding: '10px 16px',
           borderRadius: '12px',
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          color: '#3b82f6',
-          border: '1px solid #e2e8f0',
+          backgroundColor: '#db2777',
+          color: '#ffffff',
+          border: '1px solid #be185d',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          boxShadow: '0 6px 18px rgba(190,24,93,0.28)',
           fontSize: '13px',
           fontWeight: 500,
           backdropFilter: 'blur(8px)',
           transition: 'all 0.15s ease',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#eff6ff';
-          e.currentTarget.style.borderColor = '#3b82f6';
+          e.currentTarget.style.backgroundColor = '#be185d';
+          e.currentTarget.style.borderColor = '#9d174d';
           e.currentTarget.style.boxShadow =
-            '0 4px 16px rgba(59,130,246,0.2)';
+            '0 6px 20px rgba(190,24,93,0.38)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor =
-            'rgba(255, 255, 255, 0.95)';
-          e.currentTarget.style.borderColor = '#e2e8f0';
+            '#db2777';
+          e.currentTarget.style.borderColor = '#be185d';
           e.currentTarget.style.boxShadow =
-            '0 4px 12px rgba(0,0,0,0.08)';
+            '0 6px 18px rgba(190,24,93,0.28)';
         }}
       >
         <svg
@@ -271,7 +306,8 @@ export default function Home() {
             d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
           />
         </svg>
-        Statistikk
+           <span className="statistics-button__badge">Ny</span>
+           <span>Statistikk</span>
       </button>
 
       {/* Stats Modal */}
