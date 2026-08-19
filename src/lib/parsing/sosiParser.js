@@ -111,6 +111,15 @@ export class SOSIParser {
         ...(crsName ? { SRID: crsName } : {}),
         SOURCE_FORMAT: 'SOSI',
       };
+      const crsContext = classifyCrs({
+        header: this.header,
+        sourceFormat: 'SOSI',
+      });
+      this.crsContext = crsContext;
+      if (crsContext.epsg !== null) {
+        // Keep the numeric operational CRS field separate from telemetry provenance.
+        this.header.COSYS_EPSG = crsContext.epsg;
+      }
 
       const features = Array.isArray(geojson?.features)
         ? geojson.features
@@ -192,7 +201,7 @@ export class SOSIParser {
       warnings: this.warnings,
       warningSummary: this.warningSummary,
       errors: this.errors,
-      crsContext: classifyCrs({
+      crsContext: this.crsContext || classifyCrs({
         header: this.header,
         sourceFormat: 'SOSI',
       }),
