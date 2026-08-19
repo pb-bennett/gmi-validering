@@ -24,8 +24,11 @@ import 'leaflet/dist/leaflet.css';
 import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import { analyzeIncline } from '@/lib/analysis/incline';
-import proj4 from 'proj4';
 import AuthenticatedWmsLayer from './AuthenticatedWmsLayer';
+import {
+  getMapSourceProjection,
+  projectCoordinateToWgs84,
+} from '@/lib/map/coordinateProjection';
 
 // Fix for default Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -37,25 +40,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl:
     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
-
-// Define common projections
-proj4.defs(
-  'EPSG:25832',
-  '+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-);
-proj4.defs(
-  'EPSG:25833',
-  '+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-);
-proj4.defs(
-  'EPSG:32632',
-  '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs',
-);
-proj4.defs(
-  'EPSG:32633',
-  '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs',
-);
-proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs');
 
 // --- Styling Functions ---
 
@@ -1371,42 +1355,8 @@ function ZoomToFeatureHandler() {
       const { x, y, featureId } = e.detail;
 
       if (x !== undefined && y !== undefined) {
-        // Determine source projection from data
-        let sourceProj = 'EPSG:4326';
-        if (data?.header?.COSYS_EPSG) {
-          const epsg = `EPSG:${data.header.COSYS_EPSG}`;
-          if (proj4.defs(epsg)) {
-            sourceProj = epsg;
-          }
-        } else if (data?.header?.COSYS) {
-          if (
-            data.header.COSYS.includes('UTM') &&
-            data.header.COSYS.includes('32')
-          ) {
-            sourceProj = 'EPSG:25832';
-          } else if (
-            data.header.COSYS.includes('UTM') &&
-            data.header.COSYS.includes('33')
-          ) {
-            sourceProj = 'EPSG:25833';
-          }
-        }
-
-        // Transform coordinates to WGS84 if needed
-        let transformedCoords;
-        if (sourceProj === 'EPSG:4326') {
-          transformedCoords = [x, y];
-        } else {
-          try {
-            transformedCoords = proj4(sourceProj, 'EPSG:4326', [
-              x,
-              y,
-            ]);
-          } catch (err) {
-            console.error('Coordinate transformation error:', err);
-            transformedCoords = [x, y];
-          }
-        }
+        // Transform canonical [easting, northing] coordinates to WGS84.
+        const transformedCoords = projectCoordinateToWgs84(data, x, y);
 
         // Leaflet expects [lat, lng]
         // proj4 returns [lng, lat] for geographic projections
@@ -1590,25 +1540,7 @@ function MapCenterHandler() {
     ) {
       // coordinates are [y, x] from GMI (northing, easting)
       // Need to transform from UTM to WGS84
-      let sourceProj = 'EPSG:4326';
-      if (data?.header?.COSYS_EPSG) {
-        const epsg = `EPSG:${data.header.COSYS_EPSG}`;
-        if (proj4.defs(epsg)) {
-          sourceProj = epsg;
-        }
-      } else if (data?.header?.COSYS) {
-        if (
-          data.header.COSYS.includes('UTM') &&
-          data.header.COSYS.includes('32')
-        ) {
-          sourceProj = 'EPSG:25832';
-        } else if (
-          data.header.COSYS.includes('UTM') &&
-          data.header.COSYS.includes('33')
-        ) {
-          sourceProj = 'EPSG:25833';
-        }
-      }
+      const sourceProj = getMapSourceProjection(data);
 
       let lat, lng;
       if (sourceProj === 'EPSG:4326') {
@@ -1617,10 +1549,10 @@ function MapCenterHandler() {
       } else {
         try {
           // coordinates are [y, x] from GMI, need to transform [x, y] (easting, northing)
-          const [transformedLng, transformedLat] = proj4(
-            sourceProj,
-            'EPSG:4326',
-            [coordinates[1], coordinates[0]],
+          const [transformedLng, transformedLat] = projectCoordinateToWgs84(
+            data,
+            coordinates[1],
+            coordinates[0],
           );
           lat = transformedLat;
           lng = transformedLng;
@@ -1963,43 +1895,14 @@ export default function MapInner({ onZoomChange }) {
 
     // Process each data source
     for (const source of dataSources) {
-      const { points, lines, header } = source.data;
+      const { points, lines } = source.data;
       const layerId = source.layerId;
 
-      // Determine source projection
-      let sourceProj = 'EPSG:4326'; // Default to WGS84
-      if (header?.COSYS_EPSG) {
-        const epsg = `EPSG:${header.COSYS_EPSG}`;
-        if (proj4.defs(epsg)) {
-          sourceProj = epsg;
-        } else {
-          console.warn(
-            `Unknown EPSG code: ${header.COSYS_EPSG}, assuming raw coordinates are compatible or WGS84`,
-          );
-        }
-      } else if (header?.COSYS) {
-        // Simple heuristic for COSYS string
-        if (
-          header.COSYS.includes('UTM') &&
-          header.COSYS.includes('32')
-        ) {
-          sourceProj = 'EPSG:25832';
-        } else if (
-          header.COSYS.includes('UTM') &&
-          header.COSYS.includes('33')
-        ) {
-          sourceProj = 'EPSG:25833';
-        }
-      }
+      const sourceProj = getMapSourceProjection(source.data);
 
       // Helper to transform coordinate
       const transform = (x, y) => {
-        if (sourceProj === 'EPSG:4326') return [x, y]; // No transform needed if already WGS84
-        try {
-          return proj4(sourceProj, 'EPSG:4326', [x, y]);
-        } catch (e) {
-          return [x, y];
-        }
+        return projectCoordinateToWgs84(source.data, x, y);
       };
 
       // Process Lines
@@ -2913,39 +2816,13 @@ function AnalysisPointsLayer() {
       );
       const color = getColorByFCode(fcode || '');
 
-      // Determine source projection
-      let sourceProj = 'EPSG:4326';
-      if (activeData?.header?.COSYS_EPSG) {
-        const epsg = `EPSG:${activeData.header.COSYS_EPSG}`;
-        if (proj4.defs(epsg)) sourceProj = epsg;
-      } else if (activeData?.header?.COSYS) {
-        if (
-          activeData.header.COSYS.includes('UTM') &&
-          activeData.header.COSYS.includes('32')
-        )
-          sourceProj = 'EPSG:25832';
-        else if (
-          activeData.header.COSYS.includes('UTM') &&
-          activeData.header.COSYS.includes('33')
-        )
-          sourceProj = 'EPSG:25833';
-      }
+      const sourceProj = getMapSourceProjection(activeData);
 
       const pts = line.coordinates.map((c, i) => {
         let lat, lng;
-        if (sourceProj === 'EPSG:4326') {
-          lat = c.y;
-          lng = c.x;
-        } else {
-          try {
-            const [l, t] = proj4(sourceProj, 'EPSG:4326', [c.x, c.y]);
-            lng = l;
-            lat = t;
-          } catch (e) {
-            lat = c.y;
-            lng = c.x;
-          }
-        }
+        const [l, t] = projectCoordinateToWgs84(activeData, c.x, c.y);
+        lng = l;
+        lat = t;
         return { lat, lng, z: c.z, index: i };
       });
 
@@ -2988,19 +2865,13 @@ function AnalysisPointsLayer() {
         const x = p1.x + (p2.x - p1.x) * t;
         const y = p1.y + (p2.y - p1.y) * t;
         let lat, lng;
-        if (sourceProj === 'EPSG:4326') {
-          lat = y;
-          lng = x;
-        } else {
-          try {
-            const [l, tLat] = proj4(sourceProj, 'EPSG:4326', [x, y]);
-            lng = l;
-            lat = tLat;
-          } catch (e) {
-            lat = y;
-            lng = x;
-          }
-        }
+        const [l, tLat] = projectCoordinateToWgs84(
+          activeData,
+          x,
+          y,
+        );
+        lng = l;
+        lat = tLat;
         return [lat, lng];
       }
 
@@ -3224,35 +3095,15 @@ function AnalysisZoomHandler() {
     ) {
       const line = activeData.lines[analysisSelectedPipeIndex];
       if (line && line.coordinates && line.coordinates.length > 0) {
-        // Determine source projection
-        let sourceProj = 'EPSG:4326';
-        if (activeData.header?.COSYS_EPSG) {
-          const epsg = `EPSG:${activeData.header.COSYS_EPSG}`;
-          if (proj4.defs(epsg)) sourceProj = epsg;
-        } else if (activeData.header?.COSYS) {
-          if (
-            activeData.header.COSYS.includes('UTM') &&
-            activeData.header.COSYS.includes('32')
-          )
-            sourceProj = 'EPSG:25832';
-          else if (
-            activeData.header.COSYS.includes('UTM') &&
-            activeData.header.COSYS.includes('33')
-          )
-            sourceProj = 'EPSG:25833';
-        }
+        const sourceProj = getMapSourceProjection(activeData);
 
         const latLngs = line.coordinates.map((c) => {
-          if (sourceProj === 'EPSG:4326') return [c.y, c.x];
-          try {
-            const [lng, lat] = proj4(sourceProj, 'EPSG:4326', [
-              c.x,
-              c.y,
-            ]);
-            return [lat, lng];
-          } catch (e) {
-            return [c.y, c.x];
-          }
+          const [lng, lat] = projectCoordinateToWgs84(
+            activeData,
+            c.x,
+            c.y,
+          );
+          return [lat, lng];
         });
 
         const bounds = L.latLngBounds(latLngs);

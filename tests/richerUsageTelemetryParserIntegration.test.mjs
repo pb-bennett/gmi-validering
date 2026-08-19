@@ -4,13 +4,21 @@ import { register } from 'node:module';
 
 register('./esmJsLoader.mjs', import.meta.url);
 
-const [{ GMIParser }, { KOFParser }, { SOSIParser }, { getDatasetCoordinate }] =
-  await Promise.all([
-    import('../src/lib/parsing/gmiParser.js'),
-    import('../src/lib/parsing/kofParser.js'),
-    import('../src/lib/parsing/sosiParser.js'),
-    import('../src/lib/tracking/datasetCoordinate.js'),
-  ]);
+const [
+  { GMIParser },
+  { KOFParser },
+  { SOSIParser },
+  { getDatasetCoordinate },
+  { transformPipes },
+  { getMapSourceProjection, projectCoordinateToWgs84 },
+] = await Promise.all([
+  import('../src/lib/parsing/gmiParser.js'),
+  import('../src/lib/parsing/kofParser.js'),
+  import('../src/lib/parsing/sosiParser.js'),
+  import('../src/lib/tracking/datasetCoordinate.js'),
+  import('../src/lib/3d/transformGMIData.js'),
+  import('../src/lib/map/coordinateProjection.js'),
+]);
 
 import {
   buildLegacyTrackRequestBody,
@@ -131,6 +139,75 @@ test('SOSI parser uses strict declared CRS handling at its parser boundary', () 
   assert.equal(unsupported.crsContext.crsStatus, 'unsupported');
   assert.equal(unsupported.crsContext.epsgCategory, 'other');
   assert.equal(getDatasetCoordinate(unsupported), null);
+});
+
+test('SOSI production coordinates reach the 2D map in the correct CRS and order', () => {
+  const parsed = new SOSIParser('representative-sosi-input', () => ({
+    parse: () => ({
+      dumps: () => ({
+        crs: { properties: { name: 'EPSG:25832' } },
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              // sosijs GeoJSON output is [x, y] = [easting, northing].
+              coordinates: [
+                [597000, 6643000, 12.5],
+                [597010, 6643010, 12.4],
+              ],
+            },
+            properties: { objekttypenavn: 'Vannledning' },
+          },
+        ],
+      }),
+    }),
+  })).parse();
+
+  assert.equal(parsed.header.SRID, 'EPSG:25832');
+  assert.equal(parsed.header.COSYS_EPSG, 25832);
+  assert.equal(parsed.crsContext.crsStatus, 'declared');
+  assert.equal(parsed.crsContext.epsg, 25832);
+  assert.deepEqual(parsed.lines[0].coordinates[0], {
+    x: 597000,
+    y: 6643000,
+    z: 12.5,
+  });
+  assert.equal(getMapSourceProjection(parsed), 'EPSG:25832');
+
+  const [lng, lat] = projectCoordinateToWgs84(
+    parsed,
+    parsed.lines[0].coordinates[0].x,
+    parsed.lines[0].coordinates[0].y,
+  );
+  assert.ok(lng > 10.7 && lng < 10.8);
+  assert.ok(lat > 59.9 && lat < 60.0);
+
+  const [swappedLng, swappedLat] = projectCoordinateToWgs84(
+    parsed,
+    parsed.lines[0].coordinates[0].y,
+    parsed.lines[0].coordinates[0].x,
+  );
+  assert.ok(Math.abs(swappedLng - lng) > 1);
+  assert.ok(Math.abs(swappedLat - lat) > 1);
+
+  const kof = new KOFParser(
+    '00 KOORDSYS 22\n05 1 6643000 597000 12.5',
+  ).parse();
+  const [kofLng, kofLat] = projectCoordinateToWgs84(
+    kof,
+    kof.points[0].coordinates[0].x,
+    kof.points[0].coordinates[0].y,
+  );
+  assert.ok(Math.abs(kofLng - lng) < 1e-9);
+  assert.ok(Math.abs(kofLat - lat) < 1e-9);
+
+  const threeD = transformPipes(parsed.lines, parsed.header);
+  assert.deepEqual(threeD.center, [597005, 6643005, 12.45]);
+  assert.equal(threeD.pipes.length, 1);
+  assert.equal(threeD.pipes[0].start[0], -5);
+  assert.ok(Math.abs(threeD.pipes[0].start[1] - 0.05) < 1e-12);
+  assert.equal(threeD.pipes[0].start[2], 5);
 });
 
 test('dataset coordinate uses parser-owned shared operational CRS provenance', () => {
