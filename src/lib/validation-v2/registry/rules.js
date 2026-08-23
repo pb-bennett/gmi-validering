@@ -35,34 +35,18 @@ function deepFreeze(value) {
  */
 export const VALIDATION_RULES = deepFreeze([
   {
-    ruleId: 'innmaling.common.height-reference.required',
+    ruleId: 'innmaling.common.height-reference.valid',
     canonicalFieldId: 'heightReference',
     geometryScopes: [GeometryScope.POINT, GeometryScope.LINE],
-    evaluatorKind: RuleEvaluatorKind.REQUIRED,
-    category: RuleCategory.REQUIRED_FIELD,
-    title: 'Høydereferanse er påkrevd',
-    description: 'Alle innmålte objekt skal ha en tilhørende høydereferanse.',
+    evaluatorKind: RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE,
+    category: RuleCategory.REQUIRED_ALLOWED_VALUE,
+    title: 'Høydereferanse er gyldig',
+    description: 'Alle innmålte objekt skal ha en gyldig høydereferanse.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
     source: {
       document: 'Innmålingsinstruks Vedlegg A',
       pages: '5, 7',
-    },
-    allowedValues: [],
-  },
-  {
-    ruleId: 'innmaling.common.height-reference.allowed-value',
-    canonicalFieldId: 'heightReference',
-    geometryScopes: [GeometryScope.POINT, GeometryScope.LINE],
-    evaluatorKind: RuleEvaluatorKind.ALLOWED_VALUE,
-    category: RuleCategory.ALLOWED_VALUE,
-    title: 'Høydereferanse har tillatt verdi',
-    description: 'En oppgitt høydereferanse skal bruke en kildeautorisert kode.',
-    severity: RuleSeverity.ERROR,
-    provenance: RuleProvenance.STANDARD,
-    source: {
-      document: 'Innmålingsinstruks Vedlegg A',
-      pages: '7',
     },
     allowedValues: HEIGHT_REFERENCE_VALUES,
   },
@@ -114,7 +98,7 @@ function assertInvariant(condition, message) {
  */
 export function validateRuleRegistry(rules = VALIDATION_RULES) {
   assertInvariant(Array.isArray(rules), 'rules must be an array');
-  assertInvariant(rules.length === 4, `expected 4 rules, got ${rules.length}`);
+  assertInvariant(rules.length === 3, `expected 3 rules, got ${rules.length}`);
   const ruleIds = new Set();
 
   for (const rule of rules) {
@@ -140,7 +124,8 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
     );
     assertInvariant(
       (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED && rule.category === RuleCategory.REQUIRED_FIELD) ||
-        (rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE && rule.category === RuleCategory.ALLOWED_VALUE),
+        (rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE && rule.category === RuleCategory.ALLOWED_VALUE) ||
+        (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE && rule.category === RuleCategory.REQUIRED_ALLOWED_VALUE),
       `${rule.ruleId} has an evaluator/category mismatch`
     );
     assertInvariant(typeof rule.title === 'string' && rule.title.length > 0, `${rule.ruleId} needs a title`);
@@ -150,7 +135,10 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
     assertInvariant(rule.source && typeof rule.source.document === 'string' && typeof rule.source.pages === 'string', `${rule.ruleId} needs source metadata`);
     assertInvariant(Array.isArray(rule.allowedValues), `${rule.ruleId} needs allowedValues`);
     assertInvariant(new Set(rule.allowedValues).size === rule.allowedValues.length, `${rule.ruleId} has duplicate allowed values`);
-    if (rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE) {
+    if (
+      rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE ||
+      rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE
+    ) {
       assertInvariant(rule.allowedValues.length > 0, `${rule.ruleId} needs allowed values`);
     } else {
       assertInvariant(rule.allowedValues.length === 0, `${rule.ruleId} must not define allowed values`);

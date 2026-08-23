@@ -43,7 +43,7 @@ parsers produce `GMI`, `SOSI`, or `KOF`; the GMI parser also provides
 ## Mode selector and legacy behavior
 
 `FieldValidationSidebar` now contains a keyboard-usable two-button selector:
-`Dagens validator` and `Validator 2.0 (beta)`. Local state defaults to
+`Validator 1.0` and `Validator 2.0 (beta)`. Local state defaults to
 `legacy`, so the existing validator remains the initial and unchanged
 implementation. The legacy sidebar is kept in a separate
 `LegacyFieldValidationSidebar` component and is not rewritten to use V2.
@@ -122,7 +122,7 @@ also clears local result/error state immediately.
 ## Summary and coverage presentation
 
 The V2 header identifies `Validator 2.0`, `Beta - begrenset regeldekning`, and
-GMI support. It states that four rules are currently checked. After a run, the
+GMI support. It states that three rules are currently checked. After a run, the
 compact summary displays the selected layer, active rule count, FAIL finding
 count, INDETERMINATE finding count, point count, and line count.
 
@@ -139,7 +139,7 @@ policy is introduced.
 
 ## Rule results and affected objects
 
-All four A5 rule results are listed using the registry title and result counts:
+All three A5 rule results are listed using the registry title and result counts:
 pass, FAIL, INDETERMINATE, and NOT_EVALUATED. Each rule is an accessible
 button with `aria-expanded`; expansion shows its A5 findings and affected
 layer-qualified ObjectRefs.
@@ -184,13 +184,13 @@ sidebar at smaller widths.
 Verification results:
 
 - A6 tests: `8/8`
-- A5 tests: `22/22`
+- A5 tests: `21/21`
 - A4 tests: `15/15`
 - A3 tests: `16/16`
 - A2 tests: `12/12`
 - A1 tests: `20/20`
 - A0 tests: `11/11`
-- Full Node suite (`node --test`): `213/213`
+- Full Node suite (`node --test`): `219/219`
 - Frontend build (`npm run build`): passed
 - Changed-file ESLint: passed
 - `git diff --check`: passed
@@ -207,13 +207,13 @@ longer fall through to `Bestått`. Behavioral regressions cover point-only rules
 with no points, line-only rules with no lines, empty datasets, normal passing
 objects, FAIL and INDETERMINATE precedence, and meaningful mixed
 NOT_EVALUATED results. The resulting focused A6 suite remains `8/8`, the A5
-suite remains `22/22`, the full suite remains `213/213`, and the frontend build
+suite remains `21/21`, the full suite is now `219/219`, and the frontend build
 continues to pass.
 
 ## A5 compatibility and explicit non-goals
 
 A6 consumes the existing A5 public runner and rule registry without changing
-rule semantics, evaluator behavior, result states, provenance, or the four-rule
+rule semantics, evaluator behavior, result states, provenance, or the three-rule
 set. The legacy validator remains selectable and default.
 
 This slice does not add map navigation, map/table synchronization, table
@@ -225,6 +225,6 @@ or production wiring beyond the local UI host.
 ## Recommended next slice
 
 The next step is user beta testing against real GMI files. Review whether the
-four source-backed checks, status separation, selected-layer behavior, and
+three source-backed checks, status separation, selected-layer behavior, and
 affected-object presentation are understandable and useful before selecting a
 follow-up slice. Do not expand rule coverage automatically.

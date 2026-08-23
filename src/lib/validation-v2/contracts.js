@@ -103,6 +103,7 @@ export const EvaluationState = Object.freeze({
 export const RuleEvaluatorKind = Object.freeze({
   REQUIRED: 'REQUIRED',
   ALLOWED_VALUE: 'ALLOWED_VALUE',
+  REQUIRED_ALLOWED_VALUE: 'REQUIRED_ALLOWED_VALUE',
 });
 
 /**
@@ -125,6 +126,7 @@ export const RuleSeverity = Object.freeze({
 export const RuleCategory = Object.freeze({
   REQUIRED_FIELD: 'REQUIRED_FIELD',
   ALLOWED_VALUE: 'ALLOWED_VALUE',
+  REQUIRED_ALLOWED_VALUE: 'REQUIRED_ALLOWED_VALUE',
 });
 
 /**
@@ -286,8 +288,8 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @property {string} ruleId
  * @property {string} canonicalFieldId
  * @property {Array<'point'|'line'>} geometryScopes
- * @property {'REQUIRED'|'ALLOWED_VALUE'} evaluatorKind
- * @property {'REQUIRED_FIELD'|'ALLOWED_VALUE'} category
+ * @property {'REQUIRED'|'ALLOWED_VALUE'|'REQUIRED_ALLOWED_VALUE'} evaluatorKind
+ * @property {'REQUIRED_FIELD'|'ALLOWED_VALUE'|'REQUIRED_ALLOWED_VALUE'} category
  * @property {string} title
  * @property {string} description
  * @property {'ERROR'} severity
@@ -304,6 +306,7 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @property {number} failCount
  * @property {number} notEvaluatedCount
  * @property {number} indeterminateCount
+ * @property {{point: Object, line: Object}} geometryBreakdown
  * @property {Array<Object>} findings
  * @property {Array<ObjectRef>} affectedObjectRefs
  */

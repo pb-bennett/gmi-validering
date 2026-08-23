@@ -31,7 +31,8 @@ was changed.
 The A5 rules were checked against the bundled Innmålingsinstruks main document,
 its Vedlegg A code-table document, and the repository's
 `20260820-innmalingsinstruks-rule-source-mapping.md` research. The research
-marks the four starter rules READY/high-confidence. The seven exact
+marks the three active starter rules READY/high-confidence after the
+Høydereferanse checks were consolidated. The seven exact
 Høydereferanse codes are transcribed from Vedlegg A p. 7:
 
 - `BUNN_INNVENDIG`
@@ -44,12 +45,11 @@ Høydereferanse codes are transcribed from Vedlegg A p. 7:
 
 Implemented rules are exactly:
 
-- `innmaling.common.height-reference.required`
-- `innmaling.common.height-reference.allowed-value`
+- `innmaling.common.height-reference.valid`
 - `innmaling.point.tema.required`
 - `innmaling.line.tema.required`
 
-No proposed rule was omitted from this four-rule set for lack of evidence. All
+No active rule was omitted from this three-rule set for lack of evidence. All
 other fields, Tema allowed-value rules, geometry applicability rules, hydraulic
 classification, Z checks, and profile rules remain deferred because the source
 mapping identifies unresolved applicability, transcription, or domain-policy
@@ -74,16 +74,16 @@ Severity is rule metadata, never a prevalence or percentage heuristic.
 `runGmiValidationV2({ layerId, dataset, datasetRevision, sourceFormat: 'gmi' })`
 validates exactly one explicit selected layer. It calls A1 schema binding once,
 creates A2 point/line ObjectRefs once, reuses those refs for enabled rules, and
-calls A3/A4 only for the fields needed by the four rules. It reads no global
+calls A3/A4 only for the fields needed by the three rules. It reads no global
 state, visible-layer collections, merged datasets, or alternate layers.
 
 The immutable result retains layer/revision/source identity, the A1 schema
-binding and source diagnostics, four rule results, and a compact run summary.
+binding and source diagnostics, three rule results, and a compact run summary.
 It does not include the dataset, all input objects, coordinates, or unrelated
 attributes.
 
-Evidence is cached once per canonical field and layer-qualified ObjectRef, so
-the two height-reference rules reuse one A4 extraction per object. Finding
+Evidence is cached once per canonical field and layer-qualified ObjectRef. The
+combined Høydereferanse rule uses one A4 extraction per object. Finding
 projections retain primitive observed values and provenance; caller-owned object
 values are omitted from findings rather than frozen or exposed recursively.
 
@@ -149,7 +149,7 @@ stores, UI, map code, telemetry, or planning JSON.
 
 ## Tests
 
-`tests/validationV2GmiA5.test.mjs` contains 22 focused synthetic tests covering
+`tests/validationV2GmiA5.test.mjs` contains 21 focused synthetic tests covering
 the exact rule registry and source values, one-layer input, required and
 allowed-value evaluators, absent/missing/present/uncertain states, point/line
 Tema rules and A3 compatibility, fallback/conflict behavior, cross-layer
@@ -164,13 +164,13 @@ schema ambiguity, and Tema/S_FCODE value conflicts.
 
 ## Verification
 
-- Targeted A5 tests: `22/22`
+- Targeted A5 tests: `21/21`
 - A4 tests: `15/15`
 - A3 tests: `16/16`
 - A2 tests: `12/12`
 - A1 tests: `20/20`
 - A0 tests: `11/11`
-- Full suite (`node --test`): `205/205`
+- Full suite (`node --test`): `219/219`
 
 ## A0-A4 compatibility and explicit non-goals
 

@@ -64,6 +64,39 @@ export function evaluateAllowedValue(value, allowedValues) {
 }
 
 /**
+ * Evaluate one required field whose present value must also be source-authorized.
+ *
+ * @param {Object} value
+ * @param {Array<*>} allowedValues
+ * @returns {{state: string, reasonCode: string|null}}
+ */
+export function evaluateRequiredAllowedValue(value, allowedValues) {
+  switch (value.state) {
+    case ObjectValueState.FIELD_ABSENT:
+      return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_FIELD_ABSENT };
+    case ObjectValueState.VALUE_MISSING:
+      return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING };
+    case ObjectValueState.VALUE_PRESENT:
+      return {
+        state: allowedValues.some((allowedValue) => Object.is(allowedValue, value.sourceValue))
+          ? EvaluationState.PASS
+          : EvaluationState.FAIL,
+        reasonCode: allowedValues.some((allowedValue) => Object.is(allowedValue, value.sourceValue))
+          ? null
+          : RuleReasonCode.VALUE_NOT_ALLOWED,
+      };
+    case ObjectValueState.BINDING_AMBIGUOUS:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.BINDING_AMBIGUOUS };
+    case ObjectValueState.UNRESOLVED_SOURCE:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.UNRESOLVED_SOURCE };
+    case ObjectValueState.SCHEMA_UNAVAILABLE:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.SCHEMA_UNAVAILABLE };
+    default:
+      throw new Error('unsupported ObjectFieldValue state for required allowed-value evaluator');
+  }
+}
+
+/**
  * Evaluate Tema requiredness from the specialized A3 result.
  *
  * @param {Object} identity

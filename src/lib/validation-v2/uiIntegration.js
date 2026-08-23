@@ -30,6 +30,19 @@ export function getValidationV2ObjectLabel(objectRef) {
   return `${label} ${number}`;
 }
 
+export function getDefaultValidationV2Geometry(layer) {
+  if (layer?.data?.points?.length > 0) return 'point';
+  if (layer?.data?.lines?.length > 0) return 'line';
+  return 'point';
+}
+
+export function getValidationV2GeometrySelection(layer, requestedGeometry) {
+  if (requestedGeometry === 'point' || requestedGeometry === 'line') {
+    return requestedGeometry;
+  }
+  return getDefaultValidationV2Geometry(layer);
+}
+
 export function isCurrentValidationV2Result(result, layerId, datasetRevision) {
   return Boolean(
     result &&
@@ -39,20 +52,136 @@ export function isCurrentValidationV2Result(result, layerId, datasetRevision) {
 }
 
 export function getValidationV2RuleStatus(ruleResult) {
-  if (ruleResult.failCount > 0) {
+  return getRuleStatusCounts({
+    evaluatedCount: ruleResult.evaluatedObjectCount,
+    passCount: ruleResult.passCount,
+    failCount: ruleResult.failCount,
+    notEvaluatedCount: ruleResult.notEvaluatedCount,
+    indeterminateCount: ruleResult.indeterminateCount,
+  });
+}
+
+export function getValidationV2GeometryRuleStatus(ruleResult, geometryScope) {
+  return getRuleStatusCounts(
+    ruleResult.geometryBreakdown?.[geometryScope] || {
+      evaluatedCount: 0,
+      passCount: 0,
+      failCount: 0,
+      notEvaluatedCount: 0,
+      indeterminateCount: 0,
+    },
+  );
+}
+
+function getRuleStatusCounts(counts) {
+  if (counts.failCount > 0) {
     return { label: 'Må rettes', className: 'text-red-700 bg-red-50 border-red-200' };
   }
-  if (ruleResult.indeterminateCount > 0) {
+  if (counts.indeterminateCount > 0) {
     return { label: 'Må vurderes', className: 'text-amber-700 bg-amber-50 border-amber-200' };
   }
-  if (ruleResult.evaluatedObjectCount === 0) {
+  if (counts.evaluatedCount === 0) {
     return { label: 'Ikke kontrollert', className: 'text-gray-700 bg-gray-50 border-gray-200' };
   }
-  if (ruleResult.notEvaluatedCount > 0 && ruleResult.passCount === 0) {
+  if (counts.notEvaluatedCount > 0 && counts.passCount === 0) {
     return { label: 'Ikke kontrollert', className: 'text-gray-700 bg-gray-50 border-gray-200' };
   }
-  if (ruleResult.notEvaluatedCount > 0) {
+  if (counts.notEvaluatedCount > 0) {
     return { label: 'Delvis kontrollert', className: 'text-gray-700 bg-gray-50 border-gray-200' };
   }
   return { label: 'Bestått', className: 'text-green-700 bg-green-50 border-green-200' };
+}
+
+export function getValidationV2GeometrySummary(result, geometryScope) {
+  const objectCount = geometryScope === 'point'
+    ? result.summary.evaluatedPointCount
+    : result.summary.evaluatedLineCount;
+  const rules = result.ruleResults.filter((ruleResult) =>
+    ruleResult.rule.geometryScopes.includes(geometryScope)
+  );
+  return rules.reduce(
+    (summary, ruleResult) => {
+      const counts = ruleResult.geometryBreakdown[geometryScope];
+      summary.failCount += counts.failCount;
+      summary.indeterminateCount += counts.indeterminateCount;
+      summary.findingCount += counts.findingCount;
+      return summary;
+    },
+    { objectCount, failCount: 0, indeterminateCount: 0, findingCount: 0 },
+  );
+}
+
+function isSafeGroupValue(value) {
+  return value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint';
+}
+
+function groupValueKey(value) {
+  if (Array.isArray(value)) {
+    const encodedItems = value.map((item) => {
+      const encoded = groupValueKey(item);
+      return `${encoded.length}:${encoded}`;
+    }).join('');
+    return `array:${value.length}:${encodedItems}`;
+  }
+  if (!isSafeGroupValue(value)) return 'unsupported:0:';
+  if (typeof value === 'number') {
+    const numberValue = Number.isNaN(value)
+      ? 'NaN'
+      : Object.is(value, -0)
+        ? '-0'
+        : String(value);
+    return `number:${numberValue.length}:${numberValue}`;
+  }
+  const primitiveValue = value === null ? 'null' : String(value);
+  return `${typeof value}:${primitiveValue.length}:${primitiveValue}`;
+}
+
+function getFindingGroupValue(finding) {
+  const observed = finding.observed || {};
+  if (finding.reasonCode === 'VALUE_NOT_ALLOWED') {
+    return observed.sourceValue;
+  }
+  if (finding.reasonCode === 'TEMA_CONFLICT') {
+    return (observed.conflicts || []).map((conflict) => conflict.rawValue);
+  }
+  return null;
+}
+
+export function groupValidationV2Findings(findings, geometryScope) {
+  const groups = new Map();
+  for (const finding of findings) {
+    if (finding.geometryScope !== geometryScope) continue;
+    const value = getFindingGroupValue(finding);
+    const key = `${finding.reasonCode}|${groupValueKey(value)}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        key,
+        reasonCode: finding.reasonCode,
+        observedValue: finding.reasonCode === 'VALUE_NOT_ALLOWED' && isSafeGroupValue(value)
+          ? value
+          : null,
+        findings: [],
+      };
+      groups.set(key, group);
+    }
+    group.findings.push(finding);
+  }
+  return [...groups.values()];
+}
+
+export function getValidationV2GeometryView(result, geometryScope) {
+  return {
+    result,
+    geometryScope,
+    summary: getValidationV2GeometrySummary(result, geometryScope),
+    ruleResults: result.ruleResults.filter((ruleResult) =>
+      ruleResult.rule.geometryScopes.includes(geometryScope)
+    ),
+  };
 }

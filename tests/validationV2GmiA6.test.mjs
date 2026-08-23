@@ -30,14 +30,14 @@ function makeLayer(id, format = 'GMI') {
   };
 }
 
-test('mode integration keeps Dagens validator as the default and isolates V2', async () => {
+test('mode integration keeps Validator 1.0 as the default and isolates V2', async () => {
   const source = await readFile(
     new URL('../src/components/FieldValidationSidebar.js', import.meta.url),
     'utf8',
   );
 
   assert.match(source, /useState\('legacy'\)/);
-  assert.match(source, /Dagens validator/);
+  assert.match(source, /Validator 1\.0/);
   assert.match(source, /Validator 2\.0 \(beta\)/);
   assert.match(source, /LegacyFieldValidationSidebar/);
   assert.match(source, /ValidationV2Workspace/);
@@ -193,7 +193,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
 
   const normalPass = runGmiValidationV2(createValidationV2Input(makeLayer('pass')));
   const heightRequiredPass = normalPass.ruleResults.find(
-    (ruleResult) => ruleResult.rule.ruleId === 'innmaling.common.height-reference.required',
+    (ruleResult) => ruleResult.rule.ruleId === 'innmaling.common.height-reference.valid',
   );
   assert.equal(heightRequiredPass.passCount, 2);
   assert.equal(getValidationV2RuleStatus(heightRequiredPass).label, 'Bestått');
@@ -226,15 +226,14 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   assert.equal(pointTemaIndeterminate.indeterminateCount, 1);
   assert.equal(getValidationV2RuleStatus(pointTemaIndeterminate).label, 'Må vurderes');
 
-  const mixedLayer = makeLayer('mixed');
-  mixedLayer.data.points[0].attributes.Høydereferanse = null;
-  const mixedResult = runGmiValidationV2(createValidationV2Input(mixedLayer));
-  const heightAllowedMixed = mixedResult.ruleResults.find(
-    (ruleResult) => ruleResult.rule.ruleId === 'innmaling.common.height-reference.allowed-value',
-  );
-  assert.equal(heightAllowedMixed.passCount, 1);
-  assert.equal(heightAllowedMixed.notEvaluatedCount, 1);
-  assert.equal(getValidationV2RuleStatus(heightAllowedMixed).label, 'Delvis kontrollert');
+  const mixedStatus = getValidationV2RuleStatus({
+    evaluatedObjectCount: 2,
+    passCount: 1,
+    failCount: 0,
+    notEvaluatedCount: 1,
+    indeterminateCount: 0,
+  });
+  assert.equal(mixedStatus.label, 'Delvis kontrollert');
 
   const source = await readFile(
     new URL('../src/components/validation-v2/ValidationV2Workspace.js', import.meta.url),
@@ -246,20 +245,21 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   );
   const presentationSource = `${source}\n${integrationSource}`;
   for (const label of [
-    'Beta - begrenset regeldekning',
+    'Beta · GMI · 3 regler',
     'Må rettes',
     'Må vurderes',
     'Bestått',
     'Ikke kontrollert',
-    'Aktive regler',
-    'Må vurderes',
+    'Punkter',
+    'Ledninger',
   ]) {
     assert.match(presentationSource, new RegExp(label));
   }
-  assert.match(source, /failFindingCount/);
-  assert.match(source, /indeterminateFindingCount/);
+  assert.match(source, /createValidationV2ViewController/);
+  assert.match(source, /geometryView/);
   assert.match(source, /ruleResults/);
-  assert.match(source, /aria-expanded/);
+  assert.match(source, /role="tab"/);
+  assert.match(source, /groupValidationV2Findings/);
   assert.match(source, /Andre felt i datasettet/);
   assert.match(source, /UNKNOWN_SOURCE_FIELD/);
 });

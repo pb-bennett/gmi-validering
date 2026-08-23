@@ -384,7 +384,7 @@ function ValidationModeSelector({ mode, onChange }) {
               : 'text-gray-600 hover:bg-white/70'
           }`}
         >
-          Dagens validator
+          Validator 1.0
         </button>
         <button
           type="button"

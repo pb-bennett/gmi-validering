@@ -12,6 +12,7 @@ import { extractGmiObjectFieldValue } from './objectFieldValue.js';
 import { resolveGmiTemaIdentity } from './temaIdentity.js';
 import {
   evaluateAllowedValue,
+  evaluateRequiredAllowedValue,
   evaluateRequiredField,
   evaluateTemaRequired,
 } from './ruleEvaluation.js';
@@ -160,6 +161,9 @@ function copyConflictEvidence(conflicts = []) {
 }
 
 function evaluateRule({ rule, evidence }) {
+  if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE) {
+    return evaluateRequiredAllowedValue(evidence, rule.allowedValues);
+  }
   if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED) {
     return rule.canonicalFieldId === 'tema'
       ? evaluateTemaRequired(evidence)
@@ -209,7 +213,7 @@ export function createFinding({ rule, ref, evidence, evaluation }) {
     geometryScope: ref.geometryScope,
     reasonCode: evaluation.reasonCode || RuleReasonCode.BINDING_AMBIGUOUS,
     observed: getObservedEvidence(evidence),
-    expectedValues: rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE
+    expectedValues: rule.allowedValues.length > 0
       ? rule.allowedValues
       : null,
   };
@@ -221,6 +225,10 @@ function createRuleResult(rule, refs, context) {
   let failCount = 0;
   let notEvaluatedCount = 0;
   let indeterminateCount = 0;
+  const geometryBreakdown = {
+    point: createGeometryCounts(),
+    line: createGeometryCounts(),
+  };
 
   for (const ref of refs) {
     const evidenceKey = `${rule.canonicalFieldId}|${ref.key}`;
@@ -237,12 +245,19 @@ function createRuleResult(rule, refs, context) {
       context.evidenceCache.set(evidenceKey, evidence);
     }
     const evaluation = evaluateRule({ rule, evidence });
+    const geometryCounts = geometryBreakdown[ref.geometryScope];
+    geometryCounts.evaluatedCount += 1;
     if (evaluation.state === EvaluationState.PASS) passCount += 1;
+    if (evaluation.state === EvaluationState.PASS) geometryCounts.passCount += 1;
     if (evaluation.state === EvaluationState.FAIL) failCount += 1;
+    if (evaluation.state === EvaluationState.FAIL) geometryCounts.failCount += 1;
     if (evaluation.state === EvaluationState.NOT_EVALUATED) notEvaluatedCount += 1;
+    if (evaluation.state === EvaluationState.NOT_EVALUATED) geometryCounts.notEvaluatedCount += 1;
     if (evaluation.state === EvaluationState.INDETERMINATE) indeterminateCount += 1;
+    if (evaluation.state === EvaluationState.INDETERMINATE) geometryCounts.indeterminateCount += 1;
     if (evaluation.state === EvaluationState.FAIL || evaluation.state === EvaluationState.INDETERMINATE) {
       findings.push(createFinding({ rule, ref, evidence, evaluation }));
+      geometryCounts.findingCount += 1;
     }
   }
 
@@ -253,8 +268,20 @@ function createRuleResult(rule, refs, context) {
     failCount,
     notEvaluatedCount,
     indeterminateCount,
+    geometryBreakdown,
     findings,
     affectedObjectRefs: findings.map((finding) => finding.objectRef),
+  };
+}
+
+function createGeometryCounts() {
+  return {
+    evaluatedCount: 0,
+    passCount: 0,
+    failCount: 0,
+    notEvaluatedCount: 0,
+    indeterminateCount: 0,
+    findingCount: 0,
   };
 }
 

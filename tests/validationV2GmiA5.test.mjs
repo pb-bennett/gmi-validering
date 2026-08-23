@@ -8,6 +8,7 @@ register('./esmJsLoader.mjs', import.meta.url);
 const api = await import('../src/lib/validation-v2/index.js');
 const {
   evaluateAllowedValue,
+  evaluateRequiredAllowedValue,
   evaluateRequiredField,
   evaluateTemaRequired,
 } = await import(
@@ -116,27 +117,24 @@ function syntheticRef() {
   });
 }
 
-const HEIGHT_REQUIRED = 'innmaling.common.height-reference.required';
-const HEIGHT_ALLOWED = 'innmaling.common.height-reference.allowed-value';
+const HEIGHT_VALID = 'innmaling.common.height-reference.valid';
 const POINT_TEMA_REQUIRED = 'innmaling.point.tema.required';
 const LINE_TEMA_REQUIRED = 'innmaling.line.tema.required';
 
-test('rule registry contains exactly the reviewed first four source-backed rules', () => {
+test('rule registry contains exactly the reviewed three source-backed rules', () => {
   const rules = getValidationRules();
   assert.equal(validateRuleRegistry(), true);
-  assert.equal(rules.length, 4);
+  assert.equal(rules.length, 3);
   assert.deepEqual(rules.map((rule) => rule.ruleId), [
-    HEIGHT_REQUIRED,
-    HEIGHT_ALLOWED,
+    HEIGHT_VALID,
     POINT_TEMA_REQUIRED,
     LINE_TEMA_REQUIRED,
   ]);
-  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 4);
+  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 3);
   assert(rules.every((rule) => rule.provenance === RuleProvenance.STANDARD));
   assert(rules.every((rule) => rule.severity === RuleSeverity.ERROR));
   assert.deepEqual(rules.map((rule) => rule.category), [
-    RuleCategory.REQUIRED_FIELD,
-    RuleCategory.ALLOWED_VALUE,
+    RuleCategory.REQUIRED_ALLOWED_VALUE,
     RuleCategory.REQUIRED_FIELD,
     RuleCategory.REQUIRED_FIELD,
   ]);
@@ -168,7 +166,7 @@ test('Høydereferanse allowed values are independently source-verified', () => {
     'UKJENT',
     'UNDERKANT_UTVENDIG',
   ];
-  const rule = getValidationRules().find((candidate) => candidate.ruleId === HEIGHT_ALLOWED);
+  const rule = getValidationRules().find((candidate) => candidate.ruleId === HEIGHT_VALID);
 
   assert.deepEqual(rule.allowedValues, sourceExpected);
   assert.equal(new Set(rule.allowedValues).size, 7);
@@ -266,22 +264,52 @@ test('allowed-value evaluator is exact and leaves missing values to requiredness
   }
 });
 
-test('height required rule distinguishes absent, missing, present, and uncertain schemas', () => {
+test('combined Høydereferanse rule distinguishes missing, invalid, and uncertain evidence', () => {
+  const allowedValues = getValidationRules().find((rule) => rule.ruleId === HEIGHT_VALID).allowedValues;
+  assert.equal(
+    evaluateRequiredAllowedValue({ state: ObjectValueState.VALUE_PRESENT, sourceValue: allowedValues[0] }, allowedValues).state,
+    EvaluationState.PASS,
+  );
+  assert.equal(
+    evaluateRequiredAllowedValue({ state: ObjectValueState.VALUE_PRESENT, sourceValue: 'not-authorized' }, allowedValues).reasonCode,
+    RuleReasonCode.VALUE_NOT_ALLOWED,
+  );
+  assert.equal(
+    evaluateRequiredAllowedValue({ state: ObjectValueState.VALUE_MISSING }, allowedValues).reasonCode,
+    RuleReasonCode.REQUIRED_VALUE_MISSING,
+  );
+
   const absent = run(makeDataset({
     pointSchema: { Tema: {} },
     lineSchema: { Tema: {} },
     pointAttributes: { Tema: 'VL' },
     lineAttributes: { Tema: 'SP' },
   }));
-  assert.equal(ruleResult(absent, HEIGHT_REQUIRED).failCount, 2);
-  assert.equal(ruleResult(absent, HEIGHT_REQUIRED).findings[0].reasonCode, RuleReasonCode.REQUIRED_FIELD_ABSENT);
+  assert.equal(ruleResult(absent, HEIGHT_VALID).failCount, 2);
+  assert.equal(ruleResult(absent, HEIGHT_VALID).findings[0].reasonCode, RuleReasonCode.REQUIRED_FIELD_ABSENT);
 
   const missing = run(makeDataset({
     pointAttributes: { Høydereferanse: null, Tema: 'VL' },
     lineAttributes: { Høydereferanse: '', Tema: 'SP' },
   }));
-  assert.equal(ruleResult(missing, HEIGHT_REQUIRED).failCount, 2);
-  assert.equal(ruleResult(missing, HEIGHT_REQUIRED).findings[0].reasonCode, RuleReasonCode.REQUIRED_VALUE_MISSING);
+  assert.equal(ruleResult(missing, HEIGHT_VALID).failCount, 2);
+  assert.equal(ruleResult(missing, HEIGHT_VALID).findings[0].reasonCode, RuleReasonCode.REQUIRED_VALUE_MISSING);
+  assert.equal(ruleResult(missing, HEIGHT_VALID).notEvaluatedCount, 0);
+
+  const valid = run(makeDataset({
+    pointAttributes: { Høydereferanse: allowedValues[0], Tema: 'VL' },
+    lineAttributes: { Høydereferanse: allowedValues[6], Tema: 'SP' },
+  }));
+  assert.equal(ruleResult(valid, HEIGHT_VALID).passCount, 2);
+
+  const invalid = run(makeDataset({
+    pointAttributes: { Høydereferanse: 'TOPP_INNVENDIG ', Tema: 'VL' },
+    lineAttributes: { Høydereferanse: 'not-authorized', Tema: 'SP' },
+  }));
+  assert.equal(ruleResult(invalid, HEIGHT_VALID).failCount, 2);
+  assert(ruleResult(invalid, HEIGHT_VALID).findings.every(
+    (finding) => finding.reasonCode === RuleReasonCode.VALUE_NOT_ALLOWED,
+  ));
 
   const unresolved = run(makeDataset({
     pointSchema: { HREF: {} },
@@ -289,40 +317,16 @@ test('height required rule distinguishes absent, missing, present, and uncertain
     pointAttributes: { HREF: 'NN2000' },
     lineAttributes: { HREF: 'NN2000' },
   }));
-  assert.equal(ruleResult(unresolved, HEIGHT_REQUIRED).indeterminateCount, 2);
-  assert.equal(ruleResult(unresolved, HEIGHT_REQUIRED).findings[0].reasonCode, RuleReasonCode.UNRESOLVED_SOURCE);
+  assert.equal(ruleResult(unresolved, HEIGHT_VALID).indeterminateCount, 2);
+  assert.equal(ruleResult(unresolved, HEIGHT_VALID).findings[0].reasonCode, RuleReasonCode.UNRESOLVED_SOURCE);
 
   const unavailable = run(makeDataset({
     includeFieldAnalysis: false,
     points: [{}],
     lines: [{}],
   }));
-  assert.equal(ruleResult(unavailable, HEIGHT_REQUIRED).indeterminateCount, 2);
-  assert.equal(ruleResult(unavailable, HEIGHT_REQUIRED).findings[0].reasonCode, RuleReasonCode.SCHEMA_UNAVAILABLE);
-});
-
-test('height allowed-value rule passes source codes, fails unknown codes, and does not duplicate missing failures', () => {
-  const valid = getValidationRules().find((rule) => rule.ruleId === HEIGHT_ALLOWED).allowedValues;
-  const result = run(makeDataset({
-    pointAttributes: { Høydereferanse: valid[0], Tema: 'VL' },
-    lineAttributes: { Høydereferanse: valid[6], Tema: 'SP' },
-  }));
-  assert.equal(ruleResult(result, HEIGHT_ALLOWED).passCount, 2);
-  assert.equal(ruleResult(result, HEIGHT_ALLOWED).findings.length, 0);
-
-  const invalid = run(makeDataset({
-    pointAttributes: { Høydereferanse: 'TOPP_INNVENDIG ', Tema: 'VL' },
-    lineAttributes: { Høydereferanse: 'not-authorized', Tema: 'SP' },
-  }));
-  assert.equal(ruleResult(invalid, HEIGHT_ALLOWED).failCount, 2);
-  assert(ruleResult(invalid, HEIGHT_ALLOWED).findings.every((finding) => finding.reasonCode === RuleReasonCode.VALUE_NOT_ALLOWED));
-
-  const missing = run(makeDataset({
-    pointAttributes: { Høydereferanse: null, Tema: 'VL' },
-    lineAttributes: { Høydereferanse: '', Tema: 'SP' },
-  }));
-  assert.equal(ruleResult(missing, HEIGHT_ALLOWED).notEvaluatedCount, 2);
-  assert.equal(ruleResult(missing, HEIGHT_ALLOWED).findings.length, 0);
+  assert.equal(ruleResult(unavailable, HEIGHT_VALID).indeterminateCount, 2);
+  assert.equal(ruleResult(unavailable, HEIGHT_VALID).findings[0].reasonCode, RuleReasonCode.SCHEMA_UNAVAILABLE);
 });
 
 test('point and line Tema rules use A3 identity semantics and never cross geometry', () => {
@@ -389,7 +393,7 @@ test('A1 schema ambiguity retains compact competing-target provenance in an A5 f
     canonicalFieldId: 'heightReference',
   });
   const finding = createFinding({
-    rule: getValidationRules().find((rule) => rule.ruleId === HEIGHT_REQUIRED),
+    rule: getValidationRules().find((rule) => rule.ruleId === HEIGHT_VALID),
     ref: syntheticRef(),
     evidence,
     evaluation: evaluateRequiredField(evidence),
@@ -422,7 +426,7 @@ test('A1 schema ambiguity never substitutes unresolved-source provenance', () =>
     canonicalFieldId: 'heightReference',
   });
   const finding = createFinding({
-    rule: getValidationRules().find((rule) => rule.ruleId === HEIGHT_REQUIRED),
+    rule: getValidationRules().find((rule) => rule.ruleId === HEIGHT_VALID),
     ref: syntheticRef(),
     evidence,
     evaluation: evaluateRequiredField(evidence),
@@ -450,7 +454,7 @@ test('accepted A4 object-value conflicts retain observations separately from sch
     }],
     lines: [],
   }));
-  const finding = ruleResult(result, HEIGHT_REQUIRED).findings[0];
+  const finding = ruleResult(result, HEIGHT_VALID).findings[0];
 
   assert.equal(finding.state, EvaluationState.INDETERMINATE);
   assert.deepEqual(finding.observed.conflicts.map((observation) => observation.rawValue), [
@@ -543,24 +547,39 @@ test('runner preserves PASS, FAIL, NOT_EVALUATED, and INDETERMINATE aggregation'
     ],
   }));
 
-  assert.deepEqual(ruleResult(result, HEIGHT_REQUIRED), {
-    rule: ruleResult(result, HEIGHT_REQUIRED).rule,
+  assert.deepEqual(ruleResult(result, HEIGHT_VALID), {
+    rule: ruleResult(result, HEIGHT_VALID).rule,
     evaluatedObjectCount: 3,
-    passCount: 2,
-    failCount: 1,
+    passCount: 1,
+    failCount: 2,
     notEvaluatedCount: 0,
     indeterminateCount: 0,
-    findings: ruleResult(result, HEIGHT_REQUIRED).findings,
-    affectedObjectRefs: ruleResult(result, HEIGHT_REQUIRED).affectedObjectRefs,
+    geometryBreakdown: {
+      point: {
+        evaluatedCount: 2,
+        passCount: 0,
+        failCount: 2,
+        notEvaluatedCount: 0,
+        indeterminateCount: 0,
+        findingCount: 2,
+      },
+      line: {
+        evaluatedCount: 1,
+        passCount: 1,
+        failCount: 0,
+        notEvaluatedCount: 0,
+        indeterminateCount: 0,
+        findingCount: 0,
+      },
+    },
+    findings: ruleResult(result, HEIGHT_VALID).findings,
+    affectedObjectRefs: ruleResult(result, HEIGHT_VALID).affectedObjectRefs,
   });
-  assert.equal(ruleResult(result, HEIGHT_ALLOWED).passCount, 1);
-  assert.equal(ruleResult(result, HEIGHT_ALLOWED).failCount, 1);
-  assert.equal(ruleResult(result, HEIGHT_ALLOWED).notEvaluatedCount, 1);
   assert.equal(ruleResult(result, POINT_TEMA_REQUIRED).passCount, 1);
   assert.equal(ruleResult(result, POINT_TEMA_REQUIRED).failCount, 1);
   assert.equal(ruleResult(result, LINE_TEMA_REQUIRED).passCount, 1);
-  assert.equal(result.summary.totalRules, 4);
-  assert.equal(result.summary.rulesWithFailures, 3);
+  assert.equal(result.summary.totalRules, 3);
+  assert.equal(result.summary.rulesWithFailures, 2);
   assert.equal(result.summary.failFindingCount, 3);
   assert.equal(result.summary.indeterminateFindingCount, 0);
   assert.equal(result.summary.evaluatedPointCount, 2);
@@ -636,7 +655,7 @@ test('runner reads only enabled rule fields and never object metadata or unrelat
     lines: [],
   }));
   assert.equal(ruleResult(result, POINT_TEMA_REQUIRED).passCount, 1);
-  assert.equal(ruleResult(result, HEIGHT_ALLOWED).passCount, 1);
+   assert.equal(ruleResult(result, HEIGHT_VALID).passCount, 1);
 });
 
 test('finding projection does not freeze or expose caller-owned object values', () => {
@@ -646,7 +665,7 @@ test('finding projection does not freeze or expose caller-owned object values', 
     lineAttributes: { Høydereferanse: 'TOPP_INNVENDIG', Tema: 'SP' },
   });
   const result = run(dataset);
-  const finding = ruleResult(result, HEIGHT_ALLOWED).findings[0];
+   const finding = ruleResult(result, HEIGHT_VALID).findings[0];
 
   assert.equal(finding.state, EvaluationState.FAIL);
   assert.equal(Object.prototype.hasOwnProperty.call(finding.observed, 'sourceValue'), false);
