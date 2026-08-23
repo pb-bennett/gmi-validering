@@ -1,0 +1,395 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-08-23",
+  "purpose": "Non-executable deterministic synthetic vectors for a future Validator 2.0 GMI adapter implementation.",
+  "documentationOnly": true,
+  "runtimeImportAllowed": false,
+  "specReference": "docs/validation-v2/gmi-adapter-spec.json",
+  "fixturePolicy": {
+    "syntheticOnly": true,
+    "oneVectorMayContainMultipleLayersOnlyToProveIsolation": true,
+    "operationalDataAllowed": false,
+    "coordinatesRequired": false,
+    "defaultDatasetRevision": "synthetic-rev-1"
+  },
+  "vectors": [
+    {
+      "id": "GMI-TV-001",
+      "category": "direct-mapping",
+      "title": "Exact direct field mapping",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["Høydereferanse"],"attributes":{"Høydereferanse":"TOPP_UTVENDIG"}},
+      "resolveCanonicalFieldIds": ["heightReference"],
+      "expected": {"bindingState":"BOUND","mappingKind":"DIRECT","sourceKey":"Høydereferanse","objectValueState":"VALUE_PRESENT","validationAuthoritative":true},
+      "assertions": ["Literal source key is retained.","No alias table is consulted after exact direct match."]
+    },
+    {
+      "id": "GMI-TV-002",
+      "category": "case-normalization",
+      "title": "Unique case-only direct variant",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["MATERIAL"],"attributes":{"MATERIAL":"PVC"}},
+      "resolveCanonicalFieldIds": ["material"],
+      "expected": {"bindingState":"BOUND","mappingKind":"CASE_NORMALIZED","sourceKey":"MATERIAL","objectValueState":"VALUE_PRESENT","validationAuthoritative":true},
+      "assertions": ["Material and MATERIAL compare by case only.","Literal MATERIAL remains in provenance."]
+    },
+    {
+      "id": "GMI-TV-003",
+      "category": "multiple-candidates",
+      "title": "Two accepted case variants with equal values",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["Material","MATERIAL"],"attributeEntries":[{"key":"Material","value":"PVC"},{"key":"MATERIAL","value":"PVC"}]},
+      "resolveCanonicalFieldIds": ["material"],
+      "expected": {"bindingState":"MULTIPLE_ACCEPTED","objectValueState":"VALUE_PRESENT","selectedSourceKey":"Material","conflict":false,"candidateCount":2},
+      "assertions": ["Exact direct key has precedence.","Both candidates remain in provenance.","Strictly equal values may resolve without hiding coexistence."]
+    },
+    {
+      "id": "GMI-TV-004",
+      "category": "multiple-candidates",
+      "title": "Two accepted case variants with conflicting values",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["Material","MATERIAL"],"attributeEntries":[{"key":"Material","value":"PVC"},{"key":"MATERIAL","value":"PE"}]},
+      "resolveCanonicalFieldIds": ["material"],
+      "expected": {"bindingState":"MULTIPLE_ACCEPTED","objectValueState":"BINDING_AMBIGUOUS","conflict":true,"candidateCount":2},
+      "assertions": ["The adapter does not silently prefer the direct value when another accepted present value disagrees."]
+    },
+    {
+      "id": "GMI-TV-005",
+      "category": "absence",
+      "title": "Field absent from known schema",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["Tema"],"attributes":{"Tema":"KUM"}},
+      "resolveCanonicalFieldIds": ["heightReference"],
+      "expected": {"bindingState":"FIELD_ABSENT","objectValueState":"FIELD_ABSENT","sourceKey":null},
+      "assertions": ["FIELD_ABSENT is not VALUE_MISSING."]
+    },
+    {
+      "id": "GMI-TV-006",
+      "category": "missing-value",
+      "title": "Bound field with null object value",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["Høydereferanse"],"attributes":{"Høydereferanse":null}},
+      "resolveCanonicalFieldIds": ["heightReference"],
+      "expected": {"bindingState":"BOUND","objectValueState":"VALUE_MISSING","sourceKey":"Høydereferanse"},
+      "assertions": ["The schema binding remains valid even when every object value is null."]
+    },
+    {
+      "id": "GMI-TV-007",
+      "category": "missing-value",
+      "title": "Bound field with zero-length string",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["Merknad"],"attributes":{"Merknad":""}},
+      "resolveCanonicalFieldIds": ["note"],
+      "expected": {"bindingState":"BOUND","objectValueState":"VALUE_MISSING","sourceValue":""},
+      "assertions": ["Empty string is missing without trimming any other value."]
+    },
+    {
+      "id": "GMI-TV-008",
+      "category": "value-preservation",
+      "title": "Whitespace-only string is retained for later field policy",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["Merknad"],"attributes":{"Merknad":"   "}},
+      "resolveCanonicalFieldIds": ["note"],
+      "expected": {"bindingState":"BOUND","objectValueState":"VALUE_PRESENT","sourceValue":"   ","lexicalFlags":["WHITESPACE_ONLY"]},
+      "assertions": ["The adapter does not globally trim or decide text validity."]
+    },
+    {
+      "id": "GMI-TV-009",
+      "category": "value-preservation",
+      "title": "Numeric zero is present",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["Nøyaktighet"],"attributes":{"Nøyaktighet":0}},
+      "resolveCanonicalFieldIds": ["horizontalAccuracy"],
+      "expected": {"bindingState":"BOUND","objectValueState":"VALUE_PRESENT","sourceValue":0},
+      "assertions": ["No zero-as-missing rule exists in the adapter."]
+    },
+    {
+      "id": "GMI-TV-010",
+      "category": "value-preservation",
+      "title": "Numeric-looking lexical value is not reconstructed",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["SDR"],"attributes":{"SDR":11}},
+      "resolveCanonicalFieldIds": ["sdr"],
+      "expected": {"objectValueState":"VALUE_PRESENT","sourceValue":11,"sourceLexeme":"UNAVAILABLE","normalizedValue":null},
+      "assertions": ["The adapter does not claim the parser value was lexically 11 or 11.0.","No parseFloat equivalence is applied."]
+    },
+    {
+      "id": "GMI-TV-011",
+      "category": "tema-identity",
+      "title": "Direct Tema only",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["Tema"],"attributes":{"Tema":"KUM"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"BOUND","identityState":"RESOLVED","sourceKey":"Tema","mappingKind":"DIRECT","value":"KUM","validationAuthoritative":true},
+      "assertions": ["Direct Tema is preferred and source-backed when delivered."]
+    },
+    {
+      "id": "GMI-TV-012",
+      "category": "tema-identity",
+      "title": "S_FCODE fallback only",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["S_FCODE"],"attributes":{"S_FCODE":"SP"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"BOUND","identityState":"RESOLVED","sourceKey":"S_FCODE","mappingKind":"ACCEPTED_FALLBACK","value":"SP","validationAuthoritative":true},
+      "assertions": ["Fallback provenance remains distinguishable from direct Tema."]
+    },
+    {
+      "id": "GMI-TV-013",
+      "category": "tema-identity",
+      "title": "Tema and matching S_FCODE",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["Tema","S_FCODE"],"attributes":{"Tema":"SP","S_FCODE":"SP"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"MULTIPLE_ACCEPTED","identityState":"RESOLVED","sourceKey":"Tema","mappingKind":"DIRECT","candidateCount":2,"conflict":false},
+      "assertions": ["Tema remains preferred.","S_FCODE is retained as secondary provenance."]
+    },
+    {
+      "id": "GMI-TV-014",
+      "category": "tema-identity",
+      "title": "Tema and conflicting S_FCODE",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["Tema","S_FCODE"],"attributes":{"Tema":"SP","S_FCODE":"VL"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"MULTIPLE_ACCEPTED","identityState":"CONFLICT","selectedValue":null,"candidateCount":2,"conflict":true},
+      "assertions": ["Neither identity is silently selected.","Downstream object classification cannot proceed as resolved."]
+    },
+    {
+      "id": "GMI-TV-015",
+      "category": "tema-identity",
+      "title": "Direct Tema bound but missing; S_FCODE supplies fallback",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["Tema","S_FCODE"],"attributes":{"Tema":null,"S_FCODE":"OV"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"MULTIPLE_ACCEPTED","identityState":"RESOLVED","sourceKey":"S_FCODE","mappingKind":"ACCEPTED_FALLBACK","directCandidateValueState":"VALUE_MISSING"},
+      "assertions": ["Object-level fallback is allowed when direct Tema has no usable value."]
+    },
+    {
+      "id": "GMI-TV-016",
+      "category": "tema-rejected-candidate",
+      "title": "PTEMA-only identity is rejected",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["PTEMA"],"attributes":{"PTEMA":"KUM"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","identityState":"UNRESOLVED_SOURCE","validationAuthoritative":false},
+      "assertions": ["PTEMA remains NOT_OBSERVED_IN_SAMPLE policy and is never guessed into the adapter."]
+    },
+    {
+      "id": "GMI-TV-017",
+      "category": "tema-rejected-candidate",
+      "title": "LTEMA-only identity is rejected",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["LTEMA"],"attributes":{"LTEMA":"SP"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","identityState":"UNRESOLVED_SOURCE","validationAuthoritative":false},
+      "assertions": ["LTEMA remains NOT_OBSERVED_IN_SAMPLE policy and is never guessed into the adapter."]
+    },
+    {
+      "id": "GMI-TV-018",
+      "category": "tema-rejected-candidate",
+      "title": ".P_TEMA remains unresolved",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":[".P_TEMA"],"attributes":{".P_TEMA":"KUM"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","identityState":"UNRESOLVED_SOURCE","sourceKey":".P_TEMA","validationAuthoritative":null},
+      "assertions": ["Observed structural candidate is retained diagnostically and never silently mapped."]
+    },
+    {
+      "id": "GMI-TV-019",
+      "category": "tema-rejected-candidate",
+      "title": ".L_TEMA remains unresolved",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":[".L_TEMA"],"attributes":{".L_TEMA":"SP"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","identityState":"UNRESOLVED_SOURCE","sourceKey":".L_TEMA","validationAuthoritative":null},
+      "assertions": ["Observed structural candidate is retained diagnostically and never silently mapped."]
+    },
+    {
+      "id": "GMI-TV-020",
+      "category": "tema-rejected-candidate",
+      "title": "FCODE-only identity is rejected",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["FCODE"],"attributes":{"FCODE":"KUM"}},
+      "resolveCanonicalFieldIds": ["tema"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","identityState":"UNRESOLVED_SOURCE","validationAuthoritative":false},
+      "assertions": ["FCODE is not observed and has no approved GMI mapping."]
+    },
+    {
+      "id": "GMI-TV-021",
+      "category": "legacy-suffix-rejection",
+      "title": "All nine geometry-suffixed logical keys are rejected as source identities",
+      "input": {"layerId":"layer-a","pointSchemaKeys":["InnvendigUtvendig_punkt","Tykkelse_punkt","Tema_punkt","NOBB-VAVVS-nr_punkt","S_HYPERLINK_punkt"],"lineSchemaKeys":["Tema_led","InnvendigUtvendig_led","Tykkelse_led","NOBB-VAVVS-nr_led"]},
+      "resolveCanonicalFieldIds": ["insideOutside","wallThickness","tema","nobbVavvsNumber","attachmentLink"],
+      "expected": {"rejectedSourceKeys":["InnvendigUtvendig_punkt","Tykkelse_punkt","Tema_punkt","NOBB-VAVVS-nr_punkt","S_HYPERLINK_punkt","Tema_led","InnvendigUtvendig_led","Tykkelse_led","NOBB-VAVVS-nr_led"],"acceptedBindingCount":0},
+      "assertions": ["Legacy logical identity never becomes delivered GMI evidence."]
+    },
+    {
+      "id": "GMI-TV-022",
+      "category": "unsuffixed-shared-field",
+      "title": "Unsuffixed shared properties bind in a point context",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["InnvendigUtvendig","Tykkelse","NOBB-VAVVS-nr","S_HYPERLINK"],"attributes":{"InnvendigUtvendig":"OD","Tykkelse":10,"NOBB-VAVVS-nr":123,"S_HYPERLINK":"synthetic-link"}},
+      "resolveCanonicalFieldIds": ["insideOutside","wallThickness","nobbVavvsNumber","attachmentLink"],
+      "expected": {"allBindingStates":"BOUND","allMappingKinds":"DIRECT","geometryScope":"point"},
+      "assertions": ["Point applicability does not change any canonical ID or source key."]
+    },
+    {
+      "id": "GMI-TV-023",
+      "category": "unsuffixed-shared-field",
+      "title": "Unsuffixed shared properties bind in a line context",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["InnvendigUtvendig","Tykkelse","NOBB-VAVVS-nr","S_HYPERLINK"],"attributes":{"InnvendigUtvendig":"ID","Tykkelse":8.5,"NOBB-VAVVS-nr":456,"S_HYPERLINK":"synthetic-link"}},
+      "resolveCanonicalFieldIds": ["insideOutside","wallThickness","nobbVavvsNumber","attachmentLink"],
+      "expected": {"allBindingStates":"BOUND","allMappingKinds":"DIRECT","geometryScope":"line"},
+      "assertions": ["Line applicability does not change any canonical ID or source key."]
+    },
+    {
+      "id": "GMI-TV-024",
+      "category": "width-dimension",
+      "title": "Bredde binds point width",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["Bredde"],"attributes":{"Bredde":1000}},
+      "resolveCanonicalFieldIds": ["width"],
+      "expected": {"bindingState":"BOUND","canonicalFieldId":"width","mappingKind":"DIRECT","sourceKey":"Bredde"},
+      "assertions": ["Width is a point rule concern; field identity remains geometry-neutral metadata plus scoped binding."]
+    },
+    {
+      "id": "GMI-TV-025",
+      "category": "width-dimension",
+      "title": "Dimensjon binds line dimension",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["Dimensjon"],"attributes":{"Dimensjon":200}},
+      "resolveCanonicalFieldIds": ["dimension"],
+      "expected": {"bindingState":"BOUND","canonicalFieldId":"dimension","mappingKind":"DIRECT","sourceKey":"Dimensjon"},
+      "assertions": ["Dimensjon never binds width."]
+    },
+    {
+      "id": "GMI-TV-026",
+      "category": "width-dimension",
+      "title": "DIM does not satisfy point width",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["DIM"],"attributes":{"DIM":1000}},
+      "resolveCanonicalFieldIds": ["width"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","objectValueState":"UNRESOLVED_SOURCE","validationAuthoritative":false},
+      "assertions": ["Observed alias occurrence elsewhere is not semantic approval."]
+    },
+    {
+      "id": "GMI-TV-027",
+      "category": "width-dimension",
+      "title": "DIMENSJON does not silently satisfy point width",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["DIMENSJON"],"attributes":{"DIMENSJON":1000}},
+      "resolveCanonicalFieldIds": ["width"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","objectValueState":"UNRESOLVED_SOURCE","validationAuthoritative":false},
+      "assertions": ["Case normalization is evaluated against Bredde, not against unrelated Dimensjon."]
+    },
+    {
+      "id": "GMI-TV-028",
+      "category": "width-dimension",
+      "title": "DIM remains unresolved for line dimension",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["DIM"],"attributes":{"DIM":200}},
+      "resolveCanonicalFieldIds": ["dimension"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","objectValueState":"UNRESOLVED_SOURCE","validationAuthoritative":null},
+      "assertions": ["Literal occurrence in line schemas does not establish equivalence to Dimensjon."]
+    },
+    {
+      "id": "GMI-TV-029",
+      "category": "measurement-quality",
+      "title": "H_MÅLEMETODE does not satisfy horizontal accuracy",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["H_MÅLEMETODE"],"attributes":{"H_MÅLEMETODE":"synthetic-code"}},
+      "resolveCanonicalFieldIds": ["horizontalAccuracy"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","validationAuthoritative":false},
+      "assertions": ["The legacy semantic alias is disabled."]
+    },
+    {
+      "id": "GMI-TV-030",
+      "category": "measurement-quality",
+      "title": "H_NOYAKTIGHET does not satisfy horizontal or vertical accuracy",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["H_NOYAKTIGHET"],"attributes":{"H_NOYAKTIGHET":3}},
+      "resolveCanonicalFieldIds": ["horizontalAccuracy","verticalAccuracy"],
+      "expected": {"bindingStates":{"horizontalAccuracy":"UNRESOLVED_SOURCE","verticalAccuracy":"UNRESOLVED_SOURCE"},"validationAuthoritative":false},
+      "assertions": ["The adapter rejects rather than guessing which accuracy concept the header might mean."]
+    },
+    {
+      "id": "GMI-TV-031",
+      "category": "measurement-quality",
+      "title": "Four XY and Z measurement concepts remain independent",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["Målemetode","Nøyaktighet","MålemetodeHøyde","NøyaktighetHøyde"],"attributes":{"Målemetode":"GNSS","Nøyaktighet":3,"MålemetodeHøyde":"GNSS","NøyaktighetHøyde":5}},
+      "resolveCanonicalFieldIds": ["measurementMethod","horizontalAccuracy","heightMeasurementMethod","verticalAccuracy"],
+      "expected": {"distinctBindingCount":4,"allBindingStates":"BOUND","allMappingKinds":"DIRECT"},
+      "assertions": ["No field can satisfy another of the four concepts."]
+    },
+    {
+      "id": "GMI-TV-032",
+      "category": "observed-unresolved-alias",
+      "title": "HREF remains observed but unresolved",
+      "input": {"layerId":"layer-a","geometryScope":"point","schemaKeys":["HREF"],"attributes":{"HREF":"NN2000"}},
+      "resolveCanonicalFieldIds": ["heightReference"],
+      "expected": {"bindingState":"UNRESOLVED_SOURCE","sourceKey":"HREF","validationAuthoritative":null},
+      "assertions": ["Header occurrence does not approve the semantic mapping."]
+    },
+    {
+      "id": "GMI-TV-033",
+      "category": "disabled-alias-family",
+      "title": "Unsupported abbreviations and transliterations remain disabled",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["HOYDEREFERANSE","MALEMETODE","METODE","PN","TRYKKKLASSE","SN","NETTTYPE","MATERIALE","MATR","DIAMETER"],"attributes":{}},
+      "resolveCanonicalFieldIds": ["heightReference","measurementMethod","pressureClass","ringStiffness","networkType","material","width"],
+      "expected": {"acceptedBindingCount":0,"allRecognizedStates":"UNRESOLVED_SOURCE"},
+      "assertions": ["No transliteration, abbreviation, punctuation change, or semantic alias is created by case normalization."]
+    },
+    {
+      "id": "GMI-TV-034",
+      "category": "geometry-separation",
+      "title": "One selected dataset may bind point Bredde and line Dimensjon independently",
+      "input": {"layerId":"layer-a","pointSchemaKeys":["Bredde"],"lineSchemaKeys":["Dimensjon"],"pointAttributes":{"Bredde":1000},"lineAttributes":{"Dimensjon":200}},
+      "resolveCanonicalFieldIds": ["width","dimension"],
+      "expected": {"pointBinding":{"canonicalFieldId":"width","sourceKey":"Bredde"},"lineBinding":{"canonicalFieldId":"dimension","sourceKey":"Dimensjon"},"crossMappingCount":0},
+      "assertions": ["Geometry contexts share layer identity but never share a field value."]
+    },
+    {
+      "id": "GMI-TV-035",
+      "category": "layer-isolation",
+      "title": "Selected layer cannot borrow a binding from another visible layer",
+      "input": {"selectedLayerId":"layer-a","layers":{"layer-a":{"pointSchemaKeys":["Tema"]},"layer-b":{"pointSchemaKeys":["Høydereferanse"]}}},
+      "resolveCanonicalFieldIds": ["heightReference"],
+      "expected": {"layerId":"layer-a","bindingState":"FIELD_ABSENT","borrowedCandidateCount":0},
+      "assertions": ["Layer B is not inspected even if visible.","No merged schema is permitted."]
+    },
+    {
+      "id": "GMI-TV-036",
+      "category": "layer-isolation",
+      "title": "Selected layer cannot borrow a value and equal indices remain distinct",
+      "input": {"selectedLayerId":"layer-a","layers":{"layer-a":{"points":[{"id":1,"attributes":{"Høydereferanse":null}}]},"layer-b":{"points":[{"id":1,"attributes":{"Høydereferanse":"NN2000"}}]}}},
+      "resolveCanonicalFieldIds": ["heightReference"],
+      "expected": {"layerAValueState":"VALUE_MISSING","borrowedValueCount":0,"objectRefKeysDistinctAcrossLayers":true},
+      "assertions": ["Bare parser ID and array index do not create cross-layer identity.","Layer B value is unreachable from Layer A resolution."]
+    },
+    {
+      "id": "GMI-TV-037",
+      "category": "consumer-boundary",
+      "title": "Hydraulic validation targets never classify identity",
+      "input": {"layerId":"layer-a","geometryScope":"line","schemaKeys":["SDR","Ringstivhet","Trykklasse"],"attributes":{"SDR":11,"Ringstivhet":"SN8","Trykklasse":"PN10"}},
+      "resolveCanonicalFieldIds": ["tema","sdr","ringStiffness","pressureClass"],
+      "expected": {"temaIdentityState":"MISSING","hydraulicClass":"NOT_COMPUTED_BY_ADAPTER","targetFieldBindings":3},
+      "assertions": ["Presence of SDR, Ringstivhet, or Trykklasse cannot manufacture Tema or hydraulic class."]
+    },
+    {
+      "id": "GMI-TV-038",
+      "category": "schema-source",
+      "title": "fieldAnalysis proves schema even when all values are null",
+      "input": {"layerId":"layer-a","geometryScope":"line","fieldAnalysisKeys":["Ringstivhet"],"objects":[{"attributes":{"Ringstivhet":null}},{"attributes":{"Ringstivhet":null}}]},
+      "resolveCanonicalFieldIds": ["ringStiffness"],
+      "expected": {"bindingState":"BOUND","objectValueStates":["VALUE_MISSING","VALUE_MISSING"]},
+      "assertions": ["A field with no populated values is still present in the layer schema."]
+    },
+    {
+      "id": "GMI-TV-039",
+      "category": "schema-source",
+      "title": "Empty geometry with fieldAnalysis retains schema binding",
+      "input": {"layerId":"layer-a","geometryScope":"point","fieldAnalysisKeys":["Tema","Høydereferanse"],"objects":[]},
+      "resolveCanonicalFieldIds": ["tema","heightReference"],
+      "expected": {"bindingStates":{"tema":"BOUND","heightReference":"BOUND"},"objectValueCount":0},
+      "assertions": ["No objects are invented and field presence is not confused with object value presence."]
+    },
+    {
+      "id": "GMI-TV-040",
+      "category": "schema-source",
+      "title": "Empty geometry without schema metadata is unavailable, not absent",
+      "input": {"layerId":"layer-a","geometryScope":"point","fieldAnalysisKeys":null,"objects":[]},
+      "resolveCanonicalFieldIds": ["tema","heightReference"],
+      "expected": {"allBindingStates":"SCHEMA_UNAVAILABLE"},
+      "assertions": ["The adapter does not claim FIELD_ABSENT when it cannot establish the schema."]
+    }
+  ],
+  "coverage": {
+    "vectorCount": 40,
+    "canonicalDirectMappingFamily": true,
+    "caseNormalizationFamily": true,
+    "fieldAbsentVsValueMissing": true,
+    "temaPrecedenceAndConflict": true,
+    "unsupportedTemaCandidates": ["PTEMA", "LTEMA", ".P_TEMA", ".L_TEMA", "FCODE"],
+    "allNineLegacySuffixKeysRejected": true,
+    "unsuffixedSharedPointAndLine": true,
+    "widthDimensionSeparation": true,
+    "xyZFieldIndependence": true,
+    "legacyAliasFamilies": true,
+    "rawValueAndCoercionPolicy": true,
+    "oneLayerIsolation": true,
+    "objectRefLayerIdentity": true,
+    "hydraulicClassificationBoundary": true,
+    "schemaMetadataFallback": true
+  }
+}
