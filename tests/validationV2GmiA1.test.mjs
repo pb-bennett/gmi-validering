@@ -60,6 +60,12 @@ test('rejects malformed one-layer input explicitly', () => {
     () => bindGmiLayerSchema(input({}, { datasetRevision: '' })),
     /non-empty datasetRevision/
   );
+  for (const datasetRevision of [123, {}, null, ' ', '\t']) {
+    assert.throws(
+      () => bindGmiLayerSchema(input({}, { datasetRevision })),
+      /non-empty datasetRevision/
+    );
+  }
   assert.throws(
     () => bindGmiLayerSchema(input({}, { sourceFormat: 'GMI' })),
     /exactly gmi/
@@ -466,7 +472,6 @@ test('A1 runtime has no planning or legacy dependencies and exposes no later API
   }
   assert.equal('extractObjectValue' in api, false);
   assert.equal('resolveTemaIdentity' in api, false);
-  assert.equal('createObjectRef' in api, false);
   assert.equal('runValidationV2' in api, false);
   assert.equal('bindGmiLayerSchemaWithRegistry' in api, false);
 });

@@ -106,14 +106,14 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @typedef {Object} GmiLayerAdapterInput
  * @property {string} layerId Non-empty browser-local identity of the selected layer.
  * @property {Object} dataset The exact parsed dataset owned by layerId.
- * @property {*} datasetRevision Opaque ownership and staleness identity.
+ * @property {string} datasetRevision Non-empty caller-provided ownership and staleness identity.
  * @property {'gmi'} sourceFormat The source format; must be GMI for this contract.
  */
 
 /**
  * @typedef {Object} LayerFieldBinding
  * @property {string} layerId Exact owner of the bound dataset.
- * @property {*} datasetRevision Staleness identity for that owner dataset.
+ * @property {string} datasetRevision Non-empty staleness identity for that owner dataset.
  * @property {'gmi'} sourceFormat
  * @property {'point'|'line'} geometryScope
  * @property {string} canonicalFieldId
@@ -131,7 +131,7 @@ export const GMI_SOURCE_FORMAT = 'gmi';
 /**
  * @typedef {Object} SourceFieldDiagnostic
  * @property {string} layerId
- * @property {*} datasetRevision
+ * @property {string} datasetRevision Non-empty caller-provided revision identity.
  * @property {'point'|'line'} geometryScope
  * @property {string} sourceKey Literal schema key.
  * @property {'RECOGNIZED_UNRESOLVED'|'DISABLED_UNSUPPORTED'|'UNKNOWN_SOURCE_FIELD'} classification
@@ -147,7 +147,7 @@ export const GMI_SOURCE_FORMAT = 'gmi';
 /**
  * @typedef {Object} GmiLayerSchemaBindingResult
  * @property {string} layerId
- * @property {*} datasetRevision
+ * @property {string} datasetRevision Non-empty caller-provided revision identity.
  * @property {'gmi'} sourceFormat
  * @property {{point: Object, line: Object}} geometryContexts
  * @property {Array<LayerFieldBinding>} bindings
@@ -158,12 +158,11 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @typedef {Object} ObjectRef
  * @property {string} key Layer-qualified ephemeral identity.
  * @property {string} layerId Exact owner layer.
- * @property {*} datasetRevision Staleness identity for the exact run dataset.
- * @property {'point'|'line'} geometryType
- * @property {number} sourceIndex Index only within this layer and revision.
- * @property {{kind: 'guid'|'parser-id'|'index', value: string|number}} localIdentity
- * @property {string|number|undefined} parserId Optional delivered/parser identity.
- * @property {string|undefined} guid Optional delivered GUID.
+ * @property {string} datasetRevision Non-empty staleness identity for the exact run dataset.
+ * @property {'point'|'line'} geometryScope Geometry-local identity context.
+ * @property {'point'|'line'} geometryType Always equal to geometryScope.
+ * @property {number} sourceIndex Zero-based index only within this layer, revision, and geometry.
+ * @property {{kind: 'index', value: number}} localIdentity Index-only identity.
  */
 
 /**

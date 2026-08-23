@@ -34,8 +34,8 @@ collections, or extra layer properties.
 The result retains `layerId`, `datasetRevision`, and `sourceFormat`, and contains
 `geometryContexts`, `bindings`, and `sourceFieldDiagnostics`. There is one
 binding for each of the 41 canonical fields in each point/line context. Results,
-bindings, contexts, candidates, and diagnostics are frozen. The opaque revision
-token is retained without freezing a caller-owned object.
+bindings, contexts, candidates, and diagnostics are frozen. `datasetRevision` is
+retained exactly as a non-empty string.
 
 ## Actual parser structures
 
@@ -141,14 +141,15 @@ multiple case variants, unknown-field inventory, global/layer isolation,
 immutability, input preservation, and runtime dependency isolation. Throwing
 getters prove that schema binding does not read attribute values.
 
-## GMI-A2 boundary
+## GMI-A2/A3 boundary
 
-GMI-A2 should consume the frozen A1 binding result and add per-object Tema/
-`S_FCODE` identity handling with `RESOLVED`, `MISSING`, `CONFLICT`, and
-`UNRESOLVED_SOURCE`. A2 should require an existing layer-qualified object
-reference and preserve all accepted candidate provenance. Object extraction,
-value equivalence, and any validation or classification consumer remain outside
-this A1 implementation.
+GMI-A2 is now the completed ObjectRef prerequisite: it creates layer-qualified
+references and enforces layer, dataset-revision, geometry, and local-position
+isolation independently of A1 schema binding. The next per-object Tema/
+`S_FCODE` identity slice is GMI-A3. A3 should require an existing ObjectRef,
+preserve all accepted candidate provenance, and produce `RESOLVED`, `MISSING`,
+`CONFLICT`, or `UNRESOLVED_SOURCE`. Object extraction, value equivalence, and
+any validation or classification consumer remain outside this A1 implementation.
 
 ## Sol review correction
 

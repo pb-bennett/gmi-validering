@@ -13,6 +13,11 @@ export {
 } from './contracts.js';
 export { bindGmiLayerSchema } from './gmiLayerSchemaBinding.js';
 export {
+  assertObjectRefOwnership,
+  createGmiObjectRefs,
+  createObjectRef,
+} from './objectRef.js';
+export {
   getCanonicalField,
   getCanonicalFieldByDirectSourceKey,
   getCanonicalFields,

@@ -25,30 +25,16 @@ const GEOMETRY_CONTEXTS = [
   },
 ];
 
-function deepFreeze(value, propertyName) {
-  if (propertyName === 'datasetRevision') {
-    return value;
-  }
+function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
     return value;
   }
 
   Object.freeze(value);
-  for (const [key, child] of Object.entries(value)) {
-    // The revision is an opaque caller-owned token. Freeze the result record,
-    // but never mutate a caller-owned object used as that token.
-    if (key !== 'datasetRevision' && propertyName !== 'datasetRevision') {
-      deepFreeze(child, key);
-    }
+  for (const child of Object.values(value)) {
+    deepFreeze(child);
   }
   return value;
-}
-
-function isNonEmptyIdentity(value) {
-  if (typeof value === 'string') {
-    return value.trim().length > 0;
-  }
-  return value !== null && value !== undefined;
 }
 
 function assertValidInput(input) {
@@ -61,7 +47,10 @@ function assertValidInput(input) {
   if (!input.dataset || typeof input.dataset !== 'object' || Array.isArray(input.dataset)) {
     throw new TypeError('bindGmiLayerSchema requires a dataset object');
   }
-  if (!isNonEmptyIdentity(input.datasetRevision)) {
+  if (
+    typeof input.datasetRevision !== 'string' ||
+    input.datasetRevision.trim().length === 0
+  ) {
     throw new TypeError('bindGmiLayerSchema requires a non-empty datasetRevision');
   }
   if (input.sourceFormat !== GMI_SOURCE_FORMAT) {
