@@ -1,9 +1,10 @@
 import {
+  AuthorityState,
   BindingState,
   GMI_SOURCE_FORMAT,
   MappingKind,
   ObjectValueState,
-  TemaIdentityState,
+  SourceKind,
 } from './contracts.js';
 import { assertObjectRefOwnership } from './objectRef.js';
 import { getCanonicalField } from './registry/registry.js';
@@ -15,11 +16,10 @@ const ACCEPTED_MAPPING_KINDS = new Set([
   MappingKind.ACCEPTED_FALLBACK,
 ]);
 const UNSUPPORTED_MAPPING_KIND = MappingKind.UNSUPPORTED_CANDIDATE;
-const TEMA_CANONICAL_FIELD_ID = 'tema';
 
 function assertInputObject(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    throw new TypeError('resolveGmiTemaIdentity requires an input object');
+    throw new TypeError('extractGmiObjectFieldValue requires an input object');
   }
 }
 
@@ -56,14 +56,23 @@ function assertSchemaBinding(schemaBinding, layerId, datasetRevision) {
   }
 }
 
-function getTemaBinding(schemaBinding, geometryScope) {
+function assertCanonicalField(canonicalFieldId) {
+  assertNonEmptyString(canonicalFieldId, 'canonicalFieldId');
+  const field = getCanonicalField(canonicalFieldId);
+  if (!field) {
+    throw new Error(`unknown canonicalFieldId ${canonicalFieldId}`);
+  }
+  return field;
+}
+
+function getFieldBinding(schemaBinding, canonicalFieldId, geometryScope) {
   const matches = schemaBinding.bindings.filter(
     (binding) =>
-      binding.canonicalFieldId === TEMA_CANONICAL_FIELD_ID &&
+      binding.canonicalFieldId === canonicalFieldId &&
       binding.geometryScope === geometryScope
   );
   if (matches.length !== 1) {
-    throw new Error('schemaBinding must contain exactly one Tema binding for the object geometry');
+    throw new Error('schemaBinding must contain exactly one binding for the requested field and geometry');
   }
   const binding = matches[0];
   if (
@@ -71,43 +80,31 @@ function getTemaBinding(schemaBinding, geometryScope) {
     binding.datasetRevision !== schemaBinding.datasetRevision ||
     binding.sourceFormat !== GMI_SOURCE_FORMAT
   ) {
-    throw new Error('Tema binding ownership does not match schemaBinding');
+    throw new Error('field binding ownership does not match schemaBinding');
   }
   if (!Array.isArray(binding.candidates)) {
-    throw new TypeError('Tema binding must contain candidates');
+    throw new TypeError('field binding must contain candidates');
   }
   return binding;
 }
 
-function getAcceptedCandidates(binding) {
+function getAcceptedCandidates(binding, canonicalFieldId) {
   const accepted = binding.candidates.filter((candidate) =>
     ACCEPTED_MAPPING_KINDS.has(candidate.mappingKind)
   );
   for (const candidate of accepted) {
     if (
-      candidate.canonicalFieldId !== TEMA_CANONICAL_FIELD_ID ||
+      candidate.canonicalFieldId !== canonicalFieldId ||
       typeof candidate.sourceKey !== 'string' ||
       candidate.sourceKey.length === 0
     ) {
-      throw new Error('Tema binding contains an invalid accepted candidate');
+      throw new Error('field binding contains an invalid accepted candidate');
     }
   }
   return accepted;
 }
 
-function getUnresolvedCandidates(binding) {
-  return binding.candidates.filter((candidate) => {
-    if (candidate.mappingKind !== UNSUPPORTED_MAPPING_KIND) {
-      return false;
-    }
-    if (candidate.canonicalFieldId !== TEMA_CANONICAL_FIELD_ID) {
-      throw new Error('Tema binding contains an invalid unsupported candidate');
-    }
-    return true;
-  });
-}
-
-function copyUnresolvedCandidate(candidate) {
+function copySchemaCandidate(candidate) {
   return {
     canonicalFieldId: candidate.canonicalFieldId,
     sourceKey: candidate.sourceKey,
@@ -117,6 +114,18 @@ function copyUnresolvedCandidate(candidate) {
     authorityState: candidate.authorityState,
     confidence: candidate.confidence,
   };
+}
+
+function getUnresolvedCandidates(binding, canonicalFieldId) {
+  return binding.candidates.filter((candidate) => {
+    if (candidate.mappingKind !== UNSUPPORTED_MAPPING_KIND) {
+      return false;
+    }
+    if (candidate.canonicalFieldId !== canonicalFieldId) {
+      throw new Error('field binding contains an invalid unsupported candidate');
+    }
+    return true;
+  }).map(copySchemaCandidate);
 }
 
 function observeCandidate(attributes, candidate) {
@@ -148,7 +157,7 @@ function deepFreeze(value, propertyName) {
     propertyName === 'datasetRevision' ||
     propertyName === 'objectRef' ||
     propertyName === 'rawValue' ||
-    propertyName === 'resolvedValue'
+    propertyName === 'sourceValue'
   ) {
     return value;
   }
@@ -163,35 +172,49 @@ function createResult({
   layerId,
   datasetRevision,
   objectRef,
+  canonicalFieldId,
   bindingState,
   state,
-  resolvedValue = null,
-  preferredSourceKey = null,
+  sourceKey = null,
   mappingKind = null,
-  observations = [],
+  sourceKind = SourceKind.UNKNOWN,
+  validationAuthoritative = null,
+  authorityState = AuthorityState.UNRESOLVED,
+  confidence = 'LOW',
+  sourceValue,
+  candidates = [],
   conflicts = [],
   unresolvedCandidates = [],
+  schemaCandidates = [],
 }) {
   return deepFreeze({
+    objectRef,
+    canonicalFieldId,
+    state,
+    bindingState,
+    sourceKey,
+    mappingKind,
+    sourceKind,
+    validationAuthoritative,
+    authorityState,
+    confidence,
+    sourceValue,
+    sourceLexeme: 'UNAVAILABLE',
+    normalizedValue: null,
+    lexicalFlags: [],
+    candidates,
+    conflicts,
+    unresolvedCandidates,
+    schemaCandidates,
     layerId,
     datasetRevision,
     sourceFormat: GMI_SOURCE_FORMAT,
-    objectRef,
-    canonicalFieldId: TEMA_CANONICAL_FIELD_ID,
-    bindingState,
-    state,
-    resolvedValue,
-    preferredSourceKey,
-    mappingKind,
-    observations,
-    conflicts,
-    unresolvedCandidates,
   });
 }
 
 /**
- * Resolve canonical Tema identity for one existing ObjectRef and one exact
- * A1 binding result. Only accepted Tema/S_FCODE properties are read.
+ * Extract one raw canonical field value for one existing layer-qualified
+ * ObjectRef and one compatible A1 schema-binding result.
  *
  * @param {Object} input
  * @param {string} input.layerId
@@ -200,9 +223,10 @@ function createResult({
  * @param {'gmi'} input.sourceFormat
  * @param {Object} input.schemaBinding
  * @param {import('./contracts.js').ObjectRef} input.objectRef
- * @returns {import('./contracts.js').TemaIdentityResult}
+ * @param {string} input.canonicalFieldId
+ * @returns {import('./contracts.js').ObjectFieldValue}
  */
-export function resolveGmiTemaIdentity(input) {
+export function extractGmiObjectFieldValue(input) {
   assertInputObject(input);
   const {
     layerId,
@@ -211,6 +235,7 @@ export function resolveGmiTemaIdentity(input) {
     sourceFormat,
     schemaBinding,
     objectRef,
+    canonicalFieldId,
   } = input;
   assertNonEmptyString(layerId, 'layerId');
   assertNonEmptyString(datasetRevision, 'datasetRevision');
@@ -218,6 +243,7 @@ export function resolveGmiTemaIdentity(input) {
     throw new TypeError('sourceFormat must be exactly gmi');
   }
   assertDataset(dataset);
+  const canonicalField = assertCanonicalField(canonicalFieldId);
   assertSchemaBinding(schemaBinding, layerId, datasetRevision);
   assertObjectRefOwnership({
     objectRef,
@@ -233,110 +259,158 @@ export function resolveGmiTemaIdentity(input) {
     throw new RangeError('objectRef sourceIndex is outside the selected dataset geometry');
   }
 
-  const binding = getTemaBinding(schemaBinding, objectRef.geometryScope);
-  const canonicalTema = getCanonicalField(TEMA_CANONICAL_FIELD_ID);
-  if (!canonicalTema) {
-    throw new Error('canonical Tema field is unavailable');
-  }
-
-  if (binding.state === BindingState.SCHEMA_UNAVAILABLE) {
-    throw new Error('cannot resolve Tema when schema is unavailable');
-  }
-  if (binding.state === BindingState.AMBIGUOUS) {
-    throw new Error('cannot resolve Tema from an ambiguous schema binding');
-  }
-
-  const acceptedCandidates = getAcceptedCandidates(binding);
-  const unresolvedCandidates = getUnresolvedCandidates(binding).map(
-    copyUnresolvedCandidate
+  const binding = getFieldBinding(
+    schemaBinding,
+    canonicalField.canonicalFieldId,
+    objectRef.geometryScope
   );
-  if (binding.state === BindingState.UNRESOLVED_SOURCE) {
-    if (acceptedCandidates.length > 0) {
-      throw new Error('unresolved Tema binding cannot contain accepted candidates');
+  const unresolvedCandidates = getUnresolvedCandidates(
+    binding,
+    canonicalField.canonicalFieldId
+  );
+  const schemaCandidates = binding.candidates.map(copySchemaCandidate);
+
+  if (binding.state === BindingState.FIELD_ABSENT) {
+    if (binding.candidates.length > 0) {
+      throw new Error('absent field binding contains source candidates');
     }
     return createResult({
       layerId,
       datasetRevision,
       objectRef,
+      canonicalFieldId: canonicalField.canonicalFieldId,
       bindingState: binding.state,
-      state: TemaIdentityState.UNRESOLVED_SOURCE,
-      unresolvedCandidates,
+      state: ObjectValueState.FIELD_ABSENT,
     });
   }
-  if (binding.state === BindingState.FIELD_ABSENT) {
-    if (acceptedCandidates.length > 0 || unresolvedCandidates.length > 0) {
-      throw new Error('absent Tema binding contains source candidates');
+  if (binding.state === BindingState.SCHEMA_UNAVAILABLE) {
+    if (binding.candidates.length > 0) {
+      throw new Error('unavailable field binding contains source candidates');
     }
     return createResult({
       layerId,
       datasetRevision,
       objectRef,
+      canonicalFieldId: canonicalField.canonicalFieldId,
       bindingState: binding.state,
-      state: TemaIdentityState.MISSING,
+      state: ObjectValueState.SCHEMA_UNAVAILABLE,
+    });
+  }
+  if (binding.state === BindingState.UNRESOLVED_SOURCE) {
+    if (getAcceptedCandidates(binding, canonicalField.canonicalFieldId).length > 0) {
+      throw new Error('unresolved field binding contains accepted candidates');
+    }
+    return createResult({
+      layerId,
+      datasetRevision,
+      objectRef,
+      canonicalFieldId: canonicalField.canonicalFieldId,
+      bindingState: binding.state,
+      state: ObjectValueState.UNRESOLVED_SOURCE,
+      unresolvedCandidates,
+      schemaCandidates,
+    });
+  }
+  if (binding.state === BindingState.AMBIGUOUS) {
+    return createResult({
+      layerId,
+      datasetRevision,
+      objectRef,
+      canonicalFieldId: canonicalField.canonicalFieldId,
+      bindingState: binding.state,
+      state: ObjectValueState.BINDING_AMBIGUOUS,
+      unresolvedCandidates,
+      schemaCandidates,
+      conflicts: Array.isArray(binding.conflicts)
+        ? binding.conflicts.map((conflict) => ({
+          sourceKeys: [...conflict.sourceKeys],
+          canonicalFieldIds: [...conflict.canonicalFieldIds],
+        }))
+        : [],
     });
   }
   if (
     binding.state !== BindingState.BOUND &&
     binding.state !== BindingState.MULTIPLE_ACCEPTED
   ) {
-    throw new Error('unsupported Tema binding state');
-  }
-  if (acceptedCandidates.length === 0) {
-    throw new Error('accepted Tema binding has no accepted candidates');
+    throw new Error('unsupported field binding state');
   }
 
+  const acceptedCandidates = getAcceptedCandidates(binding, canonicalField.canonicalFieldId);
+  if (acceptedCandidates.length === 0) {
+    throw new Error('bound field binding has no accepted candidates');
+  }
   const object = geometryCollection[objectRef.sourceIndex];
   const attributes = object && object.attributes;
-  const safeAttributes = attributes && typeof attributes === 'object'
-    ? attributes
-    : Object.create(null);
-  const observations = acceptedCandidates.map((candidate) =>
-    observeCandidate(safeAttributes, candidate)
+  if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) {
+    throw new TypeError('feature.attributes must be an object container for bound field extraction');
+  }
+  const candidates = acceptedCandidates.map((candidate) =>
+    observeCandidate(attributes, candidate)
   );
-  const presentObservations = observations.filter(
-    (observation) => observation.valueState === ObjectValueState.VALUE_PRESENT
+  const presentCandidates = candidates.filter(
+    (candidate) => candidate.valueState === ObjectValueState.VALUE_PRESENT
   );
 
-  if (presentObservations.length === 0) {
+  if (presentCandidates.length === 0) {
+    const preferred = acceptedCandidates[0];
     return createResult({
       layerId,
       datasetRevision,
       objectRef,
+      canonicalFieldId: canonicalField.canonicalFieldId,
       bindingState: binding.state,
-      state: TemaIdentityState.MISSING,
-      observations,
+      state: ObjectValueState.VALUE_MISSING,
+      sourceKey: preferred.sourceKey,
+      mappingKind: preferred.mappingKind,
+      sourceKind: preferred.sourceKind,
+      validationAuthoritative: preferred.validationAuthoritative,
+      authorityState: preferred.authorityState,
+      confidence: preferred.confidence,
+      sourceValue: undefined,
+      candidates,
       unresolvedCandidates,
+      schemaCandidates,
     });
   }
 
-  const firstValue = presentObservations[0].rawValue;
-  const valuesAgree = presentObservations.every((observation) =>
-    Object.is(observation.rawValue, firstValue)
+  const firstValue = presentCandidates[0].rawValue;
+  const valuesAgree = presentCandidates.every((candidate) =>
+    Object.is(candidate.rawValue, firstValue)
   );
   if (!valuesAgree) {
     return createResult({
       layerId,
       datasetRevision,
       objectRef,
+      canonicalFieldId: canonicalField.canonicalFieldId,
       bindingState: binding.state,
-      state: TemaIdentityState.CONFLICT,
-      observations,
-      conflicts: presentObservations,
+      state: ObjectValueState.BINDING_AMBIGUOUS,
+      sourceValue: undefined,
+      candidates,
+      conflicts: presentCandidates,
       unresolvedCandidates,
+      schemaCandidates,
     });
   }
 
-  const preferred = presentObservations[0];
+  const preferred = presentCandidates[0];
   return createResult({
     layerId,
     datasetRevision,
     objectRef,
+    canonicalFieldId: canonicalField.canonicalFieldId,
     bindingState: binding.state,
-    state: TemaIdentityState.RESOLVED,
-    resolvedValue: preferred.rawValue,
-    preferredSourceKey: preferred.sourceKey,
+    state: ObjectValueState.VALUE_PRESENT,
+    sourceKey: preferred.sourceKey,
     mappingKind: preferred.mappingKind,
-    observations,
+    sourceKind: preferred.sourceKind,
+    validationAuthoritative: preferred.validationAuthoritative,
+    authorityState: preferred.authorityState,
+    confidence: preferred.confidence,
+    sourceValue: preferred.rawValue,
+    candidates,
     unresolvedCandidates,
+    schemaCandidates,
   });
 }

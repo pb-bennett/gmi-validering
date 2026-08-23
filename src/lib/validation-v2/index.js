@@ -13,6 +13,7 @@ export {
 } from './contracts.js';
 export { bindGmiLayerSchema } from './gmiLayerSchemaBinding.js';
 export { resolveGmiTemaIdentity } from './temaIdentity.js';
+export { extractGmiObjectFieldValue } from './objectFieldValue.js';
 export {
   assertObjectRefOwnership,
   createGmiObjectRefs,
