@@ -129,6 +129,36 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  */
 
 /**
+ * @typedef {Object} TemaCandidateObservation
+ * @property {string} sourceKey Literal accepted Tema source key.
+ * @property {'DIRECT'|'CASE_NORMALIZED'|'ACCEPTED_FALLBACK'} mappingKind
+ * @property {'DELIVERED_GMI_PROPERTY'} sourceKind
+ * @property {boolean} validationAuthoritative
+ * @property {'AUTHORITATIVE'} authorityState
+ * @property {'HIGH'|'MEDIUM'|'LOW'} confidence
+ * @property {boolean} propertyPresent Whether the object owns this source key.
+ * @property {'VALUE_PRESENT'|'VALUE_MISSING'} valueState
+ * @property {*} rawValue Unmodified value, when present.
+ */
+
+/**
+ * @typedef {Object} TemaIdentityResult
+ * @property {string} layerId
+ * @property {string} datasetRevision
+ * @property {'gmi'} sourceFormat
+ * @property {ObjectRef} objectRef
+ * @property {'tema'} canonicalFieldId
+ * @property {'BOUND'|'MULTIPLE_ACCEPTED'|'FIELD_ABSENT'|'UNRESOLVED_SOURCE'} bindingState
+ * @property {'RESOLVED'|'MISSING'|'CONFLICT'|'UNRESOLVED_SOURCE'} state
+ * @property {*} resolvedValue Present only as a usable resolved identity value.
+ * @property {string|null} preferredSourceKey
+ * @property {'DIRECT'|'CASE_NORMALIZED'|'ACCEPTED_FALLBACK'|null} mappingKind
+ * @property {Array<TemaCandidateObservation>} observations
+ * @property {Array<TemaCandidateObservation>} conflicts
+ * @property {Array<Object>} unresolvedCandidates
+ */
+
+/**
  * @typedef {Object} SourceFieldDiagnostic
  * @property {string} layerId
  * @property {string} datasetRevision Non-empty caller-provided revision identity.
