@@ -88,6 +88,16 @@ export const CaseNormalizationPolicy = Object.freeze({
 });
 
 /**
+ * Classification for source-field diagnostics that are not accepted canonical
+ * evidence.
+ */
+export const SourceFieldDiagnosticKind = Object.freeze({
+  RECOGNIZED_UNRESOLVED: 'RECOGNIZED_UNRESOLVED',
+  DISABLED_UNSUPPORTED: 'DISABLED_UNSUPPORTED',
+  UNKNOWN_SOURCE_FIELD: 'UNKNOWN_SOURCE_FIELD',
+});
+
+/**
  * The only source format represented by the A0 input contract.
  */
 export const GMI_SOURCE_FORMAT = 'gmi';
@@ -116,6 +126,32 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @property {'HIGH'|'MEDIUM'|'LOW'} confidence
  * @property {Array<Object>} candidates Accepted and recognized unsupported literal candidates.
  * @property {Array<Object>} conflicts Schema ambiguity details only.
+ */
+
+/**
+ * @typedef {Object} SourceFieldDiagnostic
+ * @property {string} layerId
+ * @property {*} datasetRevision
+ * @property {'point'|'line'} geometryScope
+ * @property {string} sourceKey Literal schema key.
+ * @property {'RECOGNIZED_UNRESOLVED'|'DISABLED_UNSUPPORTED'|'UNKNOWN_SOURCE_FIELD'} classification
+ * @property {string|null} canonicalFieldId Set when there is one possible known target.
+ * @property {Array<string>} possibleCanonicalFieldIds Known possible targets.
+ * @property {'UNSUPPORTED_CANDIDATE'|null} mappingKind
+ * @property {'DELIVERED_GMI_PROPERTY'} sourceKind
+ * @property {boolean|null} validationAuthoritative
+ * @property {'AUTHORITATIVE'|'NON_AUTHORITATIVE'|'UNRESOLVED'} authorityState
+ * @property {'HIGH'|'MEDIUM'|'LOW'} confidence
+ */
+
+/**
+ * @typedef {Object} GmiLayerSchemaBindingResult
+ * @property {string} layerId
+ * @property {*} datasetRevision
+ * @property {'gmi'} sourceFormat
+ * @property {{point: Object, line: Object}} geometryContexts
+ * @property {Array<LayerFieldBinding>} bindings
+ * @property {Array<SourceFieldDiagnostic>} sourceFieldDiagnostics
  */
 
 /**

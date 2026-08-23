@@ -7,6 +7,7 @@ import {
   MappingKind,
   ObjectValueState,
   SourceKind,
+  SourceFieldDiagnosticKind,
   TemaIdentityState,
 } from '../contracts.js';
 import { CANONICAL_FIELDS } from './fields.js';
@@ -33,6 +34,7 @@ const ENUMS = {
   AuthorityState,
   Confidence,
   CaseNormalizationPolicy,
+  SourceFieldDiagnosticKind,
 };
 
 function assertInvariant(condition, message) {

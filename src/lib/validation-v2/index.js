@@ -8,8 +8,10 @@ export {
   MappingKind,
   ObjectValueState,
   SourceKind,
+  SourceFieldDiagnosticKind,
   TemaIdentityState,
 } from './contracts.js';
+export { bindGmiLayerSchema } from './gmiLayerSchemaBinding.js';
 export {
   getCanonicalField,
   getCanonicalFieldByDirectSourceKey,
