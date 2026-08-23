@@ -5,8 +5,10 @@ import useStore from '@/lib/store';
 import { validateFields } from '@/lib/validation/fieldValidation';
 import FieldDetailModal from './FieldDetailModal';
 import MissingFieldsReport from './MissingFieldsReport';
+import ValidationV2ErrorBoundary from './validation-v2/ValidationV2ErrorBoundary';
+import ValidationV2Workspace from './validation-v2/ValidationV2Workspace';
 
-export default function FieldValidationSidebar() {
+function LegacyFieldValidationSidebar() {
   const data = useStore((state) => state.data);
   const toggleFieldValidation = useStore(
     (state) => state.toggleFieldValidation
@@ -117,7 +119,7 @@ export default function FieldValidationSidebar() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-white border-r shadow-xl relative z-20">
+    <div className="min-h-0 flex-1 flex flex-col bg-white border-r shadow-xl relative z-20">
       {/* Header */}
       <div className="p-6 border-b bg-gray-50 relative">
         <button
@@ -360,6 +362,60 @@ export default function FieldValidationSidebar() {
         isOpen={!!selectedField}
         onClose={() => setSelectedField(null)}
       />
+    </div>
+  );
+}
+
+function ValidationModeSelector({ mode, onChange }) {
+  return (
+    <div
+      className="flex-none border-b bg-white p-2"
+      role="group"
+      aria-label="Valideringsmodus"
+    >
+      <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1">
+        <button
+          type="button"
+          aria-pressed={mode === 'legacy'}
+          onClick={() => onChange('legacy')}
+          className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+            mode === 'legacy'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:bg-white/70'
+          }`}
+        >
+          Dagens validator
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === 'v2'}
+          onClick={() => onChange('v2')}
+          className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+            mode === 'v2'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-gray-600 hover:bg-white/70'
+          }`}
+        >
+          Validator 2.0 (beta)
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function FieldValidationSidebar() {
+  const [mode, setMode] = useState('legacy');
+
+  return (
+    <div className="h-full flex flex-col">
+      <ValidationModeSelector mode={mode} onChange={setMode} />
+      {mode === 'v2' ? (
+        <ValidationV2ErrorBoundary>
+          <ValidationV2Workspace />
+        </ValidationV2ErrorBoundary>
+      ) : (
+        <LegacyFieldValidationSidebar />
+      )}
     </div>
   );
 }
