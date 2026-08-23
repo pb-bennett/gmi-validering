@@ -268,7 +268,9 @@ export function extractGmiObjectFieldValue(input) {
     binding,
     canonicalField.canonicalFieldId
   );
-  const schemaCandidates = binding.candidates.map(copySchemaCandidate);
+  const schemaCandidates = binding.candidates
+    .filter((candidate) => ACCEPTED_MAPPING_KINDS.has(candidate.mappingKind))
+    .map(copySchemaCandidate);
 
   if (binding.state === BindingState.FIELD_ABSENT) {
     if (binding.candidates.length > 0) {

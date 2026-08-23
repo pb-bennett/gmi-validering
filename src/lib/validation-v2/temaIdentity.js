@@ -287,9 +287,10 @@ export function resolveGmiTemaIdentity(input) {
 
   const object = geometryCollection[objectRef.sourceIndex];
   const attributes = object && object.attributes;
-  const safeAttributes = attributes && typeof attributes === 'object'
-    ? attributes
-    : Object.create(null);
+  if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) {
+    throw new TypeError('feature.attributes must be an object container for bound Tema resolution');
+  }
+  const safeAttributes = attributes;
   const observations = acceptedCandidates.map((candidate) =>
     observeCandidate(safeAttributes, candidate)
   );

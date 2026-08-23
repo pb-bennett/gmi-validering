@@ -88,6 +88,59 @@ export const CaseNormalizationPolicy = Object.freeze({
 });
 
 /**
+ * Rule evaluation outcomes. These are separate from object and binding states.
+ */
+export const EvaluationState = Object.freeze({
+  PASS: 'PASS',
+  FAIL: 'FAIL',
+  NOT_EVALUATED: 'NOT_EVALUATED',
+  INDETERMINATE: 'INDETERMINATE',
+});
+
+/**
+ * Generic evaluator kinds used by the first V2 rule set.
+ */
+export const RuleEvaluatorKind = Object.freeze({
+  REQUIRED: 'REQUIRED',
+  ALLOWED_VALUE: 'ALLOWED_VALUE',
+});
+
+/**
+ * Source provenance for rule definitions.
+ */
+export const RuleProvenance = Object.freeze({
+  STANDARD: 'STANDARD',
+});
+
+/**
+ * Fixed severity metadata for the first source-backed rule set.
+ */
+export const RuleSeverity = Object.freeze({
+  ERROR: 'ERROR',
+});
+
+/**
+ * Stable categories for the first source-backed rule set.
+ */
+export const RuleCategory = Object.freeze({
+  REQUIRED_FIELD: 'REQUIRED_FIELD',
+  ALLOWED_VALUE: 'ALLOWED_VALUE',
+});
+
+/**
+ * Stable machine-readable reason codes for rule findings.
+ */
+export const RuleReasonCode = Object.freeze({
+  REQUIRED_FIELD_ABSENT: 'REQUIRED_FIELD_ABSENT',
+  REQUIRED_VALUE_MISSING: 'REQUIRED_VALUE_MISSING',
+  VALUE_NOT_ALLOWED: 'VALUE_NOT_ALLOWED',
+  BINDING_AMBIGUOUS: 'BINDING_AMBIGUOUS',
+  UNRESOLVED_SOURCE: 'UNRESOLVED_SOURCE',
+  SCHEMA_UNAVAILABLE: 'SCHEMA_UNAVAILABLE',
+  TEMA_CONFLICT: 'TEMA_CONFLICT',
+});
+
+/**
  * Classification for source-field diagnostics that are not accepted canonical
  * evidence.
  */
@@ -185,6 +238,19 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  */
 
 /**
+ * @typedef {Object} ValidationFinding
+ * @property {string} ruleId
+ * @property {RuleDefinition} rule
+ * @property {'FAIL'|'INDETERMINATE'} state
+ * @property {ObjectRef} objectRef
+ * @property {string} canonicalFieldId
+ * @property {'point'|'line'} geometryScope
+ * @property {string} reasonCode
+ * @property {Object} observed
+ * @property {Array<*>|null} expectedValues
+ */
+
+/**
  * @typedef {Object} ObjectRef
  * @property {string} key Layer-qualified ephemeral identity.
  * @property {string} layerId Exact owner layer.
@@ -211,4 +277,44 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @property {Array<string>} lexicalFlags Non-validating observations.
  * @property {Array<Object>} candidates
  * @property {Array<Object>} conflicts
+ * @property {Array<Object>} schemaCandidates Accepted schema candidates.
+ * @property {Array<Object>} unresolvedCandidates Unsupported source candidates.
+ */
+
+/**
+ * @typedef {Object} RuleDefinition
+ * @property {string} ruleId
+ * @property {string} canonicalFieldId
+ * @property {Array<'point'|'line'>} geometryScopes
+ * @property {'REQUIRED'|'ALLOWED_VALUE'} evaluatorKind
+ * @property {'REQUIRED_FIELD'|'ALLOWED_VALUE'} category
+ * @property {string} title
+ * @property {string} description
+ * @property {'ERROR'} severity
+ * @property {'STANDARD'} provenance
+ * @property {{document: string, pages: string}} source
+ * @property {Array<*>} allowedValues
+ */
+
+/**
+ * @typedef {Object} RuleResult
+ * @property {RuleDefinition} rule
+ * @property {number} evaluatedObjectCount
+ * @property {number} passCount
+ * @property {number} failCount
+ * @property {number} notEvaluatedCount
+ * @property {number} indeterminateCount
+ * @property {Array<Object>} findings
+ * @property {Array<ObjectRef>} affectedObjectRefs
+ */
+
+/**
+ * @typedef {Object} ValidationRunV2
+ * @property {string} layerId
+ * @property {string} datasetRevision
+ * @property {'gmi'} sourceFormat
+ * @property {Object} schemaBinding
+ * @property {Array<SourceFieldDiagnostic>} sourceFieldDiagnostics
+ * @property {Array<RuleResult>} ruleResults
+ * @property {Object} summary
  */
