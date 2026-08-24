@@ -24,6 +24,10 @@ import 'leaflet/dist/leaflet.css';
 import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import { analyzeIncline } from '@/lib/analysis/incline';
+import {
+  getHoveredTerrainLatLng,
+  selectAnalysisActiveData,
+} from '@/lib/analysis/profileAnalysisHover';
 import AuthenticatedWmsLayer from './AuthenticatedWmsLayer';
 import {
   getMapSourceProjection,
@@ -2776,39 +2780,29 @@ function AnalysisPointsLayer() {
   const analysisSelectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
-  const analysisLayerId = useStore((state) => state.analysis.layerId);
-  const data = useStore((state) => state.data);
+  const activeData = useStore(selectAnalysisActiveData);
 
-  const { points, lineCoords, sourceProj } =
+  const { points, lineCoords } =
     useMemo(() => {
-      // Use getState() to read layers only when needed
-      const layers = useStore.getState().layers;
       if (
         !analysisIsOpen ||
         analysisSelectedPipeIndex === null ||
-        !(analysisLayerId ? layers[analysisLayerId]?.data : data) ||
-        !(analysisLayerId
-          ? layers[analysisLayerId]?.data?.lines
-          : data?.lines)
+        !activeData ||
+        !activeData.lines
       ) {
         return {
           points: [],
           pipeColor: '#3388ff',
           lineCoords: [],
-          sourceProj: 'EPSG:4326',
         };
       }
 
-      const activeData = analysisLayerId
-        ? layers[analysisLayerId]?.data
-        : data;
       const line = activeData?.lines?.[analysisSelectedPipeIndex];
       if (!line || !line.coordinates)
         return {
           points: [],
           pipeColor: '#3388ff',
           lineCoords: [],
-          sourceProj: 'EPSG:4326',
         };
 
       const fcode = normalizeFcode(
@@ -2816,13 +2810,12 @@ function AnalysisPointsLayer() {
       );
       const color = getColorByFCode(fcode || '');
 
-      const sourceProj = getMapSourceProjection(activeData);
-
       const pts = line.coordinates.map((c, i) => {
-        let lat, lng;
-        const [l, t] = projectCoordinateToWgs84(activeData, c.x, c.y);
-        lng = l;
-        lat = t;
+        const [lng, lat] = projectCoordinateToWgs84(
+          activeData,
+          c.x,
+          c.y,
+        );
         return { lat, lng, z: c.z, index: i };
       });
 
@@ -2830,13 +2823,11 @@ function AnalysisPointsLayer() {
         points: pts,
         pipeColor: color,
         lineCoords: line.coordinates,
-        sourceProj,
       };
     }, [
       analysisIsOpen,
       analysisSelectedPipeIndex,
-      analysisLayerId,
-      data,
+      activeData,
     ]);
 
   // Subscribe to hoveredTerrainPoint separately (changes frequently during hover)
@@ -2844,42 +2835,15 @@ function AnalysisPointsLayer() {
     (state) => state.analysis.hoveredTerrainPoint,
   );
 
-  const hoveredTerrainLatLng = useMemo(() => {
-    const target = hoveredTerrainPoint;
-    if (!target || !lineCoords || lineCoords.length < 2) return null;
-
-    const targetDist =
-      target.lineDist !== undefined ? target.lineDist : target.dist;
-
-    let distSoFar = 0;
-    for (let i = 0; i < lineCoords.length - 1; i++) {
-      const p1 = lineCoords[i];
-      const p2 = lineCoords[i + 1];
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const segLen = Math.sqrt(dx * dx + dy * dy);
-      if (segLen < 0.0001) continue;
-
-      if (targetDist <= distSoFar + segLen) {
-        const t = (targetDist - distSoFar) / segLen;
-        const x = p1.x + (p2.x - p1.x) * t;
-        const y = p1.y + (p2.y - p1.y) * t;
-        let lat, lng;
-        const [l, tLat] = projectCoordinateToWgs84(
-          activeData,
-          x,
-          y,
-        );
-        lng = l;
-        lat = tLat;
-        return [lat, lng];
-      }
-
-      distSoFar += segLen;
-    }
-
-    return null;
-  }, [hoveredTerrainPoint, lineCoords, sourceProj]);
+  const hoveredTerrainLatLng = useMemo(
+    () =>
+      getHoveredTerrainLatLng(
+        hoveredTerrainPoint,
+        lineCoords,
+        activeData,
+      ),
+    [hoveredTerrainPoint, lineCoords, activeData],
+  );
 
   // Subscribe to hoveredSegment separately
   const hoveredSegment = useStore(
