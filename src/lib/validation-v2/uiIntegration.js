@@ -1,4 +1,5 @@
 import { getDatasetRevision } from './datasetRevision.js';
+import { getValidationV2AggregateStatus } from './resultPresentation.js';
 
 export const VALIDATION_V2_SOURCE_FORMAT = 'gmi';
 
@@ -52,7 +53,7 @@ export function isCurrentValidationV2Result(result, layerId, datasetRevision) {
 }
 
 export function getValidationV2RuleStatus(ruleResult) {
-  return getRuleStatusCounts({
+  return getValidationV2AggregateStatus({
     evaluatedCount: ruleResult.evaluatedObjectCount,
     passCount: ruleResult.passCount,
     failCount: ruleResult.failCount,
@@ -62,7 +63,7 @@ export function getValidationV2RuleStatus(ruleResult) {
 }
 
 export function getValidationV2GeometryRuleStatus(ruleResult, geometryScope) {
-  return getRuleStatusCounts(
+  return getValidationV2AggregateStatus(
     ruleResult.geometryBreakdown?.[geometryScope] || {
       evaluatedCount: 0,
       passCount: 0,
@@ -71,25 +72,6 @@ export function getValidationV2GeometryRuleStatus(ruleResult, geometryScope) {
       indeterminateCount: 0,
     },
   );
-}
-
-function getRuleStatusCounts(counts) {
-  if (counts.failCount > 0) {
-    return { label: 'Må rettes', className: 'text-red-700 bg-red-50 border-red-200' };
-  }
-  if (counts.indeterminateCount > 0) {
-    return { label: 'Må vurderes', className: 'text-amber-700 bg-amber-50 border-amber-200' };
-  }
-  if (counts.evaluatedCount === 0) {
-    return { label: 'Ikke kontrollert', className: 'text-gray-700 bg-gray-50 border-gray-200' };
-  }
-  if (counts.notEvaluatedCount > 0 && counts.passCount === 0) {
-    return { label: 'Ikke kontrollert', className: 'text-gray-700 bg-gray-50 border-gray-200' };
-  }
-  if (counts.notEvaluatedCount > 0) {
-    return { label: 'Delvis kontrollert', className: 'text-gray-700 bg-gray-50 border-gray-200' };
-  }
-  return { label: 'Bestått', className: 'text-green-700 bg-green-50 border-green-200' };
 }
 
 export function getValidationV2GeometrySummary(result, geometryScope) {

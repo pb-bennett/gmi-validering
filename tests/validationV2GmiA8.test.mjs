@@ -627,7 +627,8 @@ test('one run drives both geometry tabs, uses dynamic rule count, and preserves 
   assert.match(source, /getValidationRules/);
   assert.match(source, /result\?\.summary\?\.totalRules \?\? getValidationRules\(\)\.length/);
   assert.doesNotMatch(source, /3 regler/);
-  assert.match(source, /MAX_VISIBLE_GROUP_OBJECTS = 15/);
+  assert.match(source, /ValidationV2RuleList/);
+  assert.doesNotMatch(source, /FindingGroups|objectRef\.sourceIndex/);
 });
 
 test('two layers do not share bindings, values, ObjectRefs, findings, counts, or results', () => {

@@ -156,7 +156,7 @@ test('affected object labels stay geometry-local and do not expose coordinates',
     'utf8',
   );
   assert.doesNotMatch(source, /coordinates|feature\.id|guid|operational/i);
-  assert.match(source, /finding\.objectRef\.key/);
+  assert.doesNotMatch(source, /finding\.objectRef\.key/);
 });
 
 test('zero-applicable rules are not passed, while A5 status precedence and neutral states remain intact', async () => {
@@ -169,9 +169,9 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   assert.equal(pointTemaNoPoints.evaluatedObjectCount, 0);
   assert.deepEqual(
     getValidationV2RuleStatus(pointTemaNoPoints).label,
-    'Ikke kontrollert',
+    'Delvis oppfylt',
   );
-  assert.notEqual(getValidationV2RuleStatus(pointTemaNoPoints).label, 'Bestått');
+  assert.notEqual(getValidationV2RuleStatus(pointTemaNoPoints).label, 'Oppfylt');
 
   const noLines = makeLayer('no-lines');
   noLines.data.lines = [];
@@ -180,7 +180,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
     (ruleResult) => ruleResult.rule.ruleId === 'innmaling.line.tema.required',
   );
   assert.equal(lineTemaNoLines.evaluatedObjectCount, 0);
-  assert.equal(getValidationV2RuleStatus(lineTemaNoLines).label, 'Ikke kontrollert');
+  assert.equal(getValidationV2RuleStatus(lineTemaNoLines).label, 'Delvis oppfylt');
 
   const empty = makeLayer('empty');
   empty.data.points = [];
@@ -188,7 +188,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   const emptyResult = runGmiValidationV2(createValidationV2Input(empty));
   assert(emptyResult.ruleResults.every((ruleResult) => {
     return ruleResult.evaluatedObjectCount === 0 &&
-      getValidationV2RuleStatus(ruleResult).label === 'Ikke kontrollert';
+      getValidationV2RuleStatus(ruleResult).label === 'Delvis oppfylt';
   }));
 
   const normalPass = runGmiValidationV2(createValidationV2Input(makeLayer('pass')));
@@ -196,7 +196,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
     (ruleResult) => ruleResult.rule.ruleId === 'innmaling.common.height-reference.valid',
   );
   assert.equal(heightRequiredPass.passCount, 2);
-  assert.equal(getValidationV2RuleStatus(heightRequiredPass).label, 'Bestått');
+  assert.equal(getValidationV2RuleStatus(heightRequiredPass).label, 'Oppfylt');
 
   const failLayer = makeLayer('fail');
   failLayer.data.points[0].attributes.Tema = null;
@@ -205,7 +205,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
     (ruleResult) => ruleResult.rule.ruleId === 'innmaling.point.tema.required',
   );
   assert.equal(pointTemaFail.failCount, 1);
-  assert.equal(getValidationV2RuleStatus(pointTemaFail).label, 'Må rettes');
+  assert.equal(getValidationV2RuleStatus(pointTemaFail).label, 'Ikke oppfylt');
 
   const indeterminateLayer = makeLayer('indeterminate');
   indeterminateLayer.data.fieldAnalysis.points = {
@@ -224,7 +224,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   );
   assert.equal(pointTemaIndeterminate.failCount, 0);
   assert.equal(pointTemaIndeterminate.indeterminateCount, 1);
-  assert.equal(getValidationV2RuleStatus(pointTemaIndeterminate).label, 'Må vurderes');
+  assert.equal(getValidationV2RuleStatus(pointTemaIndeterminate).label, 'Delvis oppfylt');
 
   const mixedStatus = getValidationV2RuleStatus({
     evaluatedObjectCount: 2,
@@ -233,7 +233,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
     notEvaluatedCount: 1,
     indeterminateCount: 0,
   });
-  assert.equal(mixedStatus.label, 'Delvis kontrollert');
+  assert.equal(mixedStatus.label, 'Oppfylt');
 
   const source = await readFile(
     new URL('../src/components/validation-v2/ValidationV2Workspace.js', import.meta.url),
@@ -246,10 +246,9 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   const presentationSource = `${source}\n${integrationSource}`;
   for (const label of [
     'Beta · GMI ·',
-    'Må rettes',
-    'Må vurderes',
-    'Bestått',
-    'Ikke kontrollert',
+    'Ikke oppfylt',
+    'Delvis oppfylt',
+    'Oppfylt',
     'Punkter',
     'Ledninger',
   ]) {
@@ -260,7 +259,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   assert.match(source, /geometryView/);
   assert.match(source, /ruleResults/);
   assert.match(source, /role="tab"/);
-  assert.match(source, /groupValidationV2Findings/);
+  assert.match(source, /ValidationV2RuleList/);
   assert.match(source, /Andre felt i datasettet/);
   assert.match(source, /UNKNOWN_SOURCE_FIELD/);
 });

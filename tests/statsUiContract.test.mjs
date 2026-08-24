@@ -12,6 +12,8 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   const legacyStats = read('src/lib/stats/legacyStats.mjs');
   const detailed = read('src/components/DetailedStatsSection.js');
   const testMode = read('src/components/TestModeControl.js');
+  const tabSwitcher = read('src/components/TabSwitcher.js');
+  const page = read('src/app/page.js');
   const activation = read('src/lib/testModeActivation.mjs');
 
   for (const label of [
@@ -47,6 +49,12 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(activation, /testmodus/);
   assert.match(activation, /'1'/);
   assert.doesNotMatch(testMode, /Aktiver testmodus/);
+  assert.match(testMode, /aria-label="Slå av testmodus"/);
+  assert.doesNotMatch(testMode, /fixed left-4 bottom-4/);
+  assert.match(tabSwitcher, /<TestModeControl \/>/);
+  assert.match(tabSwitcher, /Kartoversikt/);
+  assert.match(tabSwitcher, /3D-visning/);
+  assert.doesNotMatch(page, /<TestModeControl \/>/);
   assert.match(modal, /Opplastinger uten registrert kommune/);
   assert.match(modal, /Statistikk fra/);
   assert.match(modal, /formatAnalyticsStartDate/);

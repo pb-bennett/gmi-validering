@@ -171,8 +171,8 @@ test('common Høydereferanse and geometry-specific Tema results reconcile by geo
   const lineTema = ruleResult(result, LINE_TEMA_REQUIRED);
   assert.equal(pointTema.geometryBreakdown.line.evaluatedCount, 0);
   assert.equal(lineTema.geometryBreakdown.point.evaluatedCount, 0);
-  assert.equal(getValidationV2GeometryRuleStatus(lineTema, 'point').label, 'Ikke kontrollert');
-  assert.equal(getValidationV2GeometryRuleStatus(pointTema, 'line').label, 'Ikke kontrollert');
+  assert.equal(getValidationV2GeometryRuleStatus(lineTema, 'point').label, 'Delvis oppfylt');
+  assert.equal(getValidationV2GeometryRuleStatus(pointTema, 'line').label, 'Delvis oppfylt');
 
   const indeterminate = resultFor(makeLayer('indeterminate', {
     pointSchema: { HREF: {}, Tema: {} },
@@ -305,7 +305,7 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
   assert.match(source, /role="tab"/);
   assert.match(source, /controller\.selectGeometry/);
   assert.match(source, /geometrySummary/);
-  assert.match(source, /getValidationV2GeometryRuleStatus/);
+  assert.doesNotMatch(source, /getValidationV2GeometryRuleStatus/);
   assert.doesNotMatch(source, /height-reference\.required|height-reference\.allowed-value/);
 });
 
@@ -361,18 +361,16 @@ test('finding grouping preserves signed zero, structural conflict arrays, and eq
   assert.equal(identicalGroups[0].findings.length, 2);
 });
 
-test('compact grouped findings expose bounded show-more controls and no object metadata', async () => {
+test('compact rule rows expose summaries without individual object metadata', async () => {
   const source = await readFile(
-    new URL('../src/components/validation-v2/ValidationV2Workspace.js', import.meta.url),
+    new URL('../src/components/validation-v2/ValidationV2RuleList.js', import.meta.url),
     'utf8',
   );
-  assert.match(source, /MAX_VISIBLE_GROUP_OBJECTS = 15/);
-  assert.match(source, /Vis alle/);
-  assert.match(source, /Vis færre/);
-  assert.match(source, /groupValidationV2Findings/);
-  assert.match(source, /finding\.objectRef\.key/);
-  assert.doesNotMatch(source, /coordinates|guid|feature\.id|LayerDataTable|viewObjectInMap/);
-  assert.doesNotMatch(source, /Aktive regler|4 regler|Beta - begrenset regeldekning/);
+  assert.match(source, /Objekter i grunnlaget/);
+  assert.match(source, /aria-expanded/);
+  assert.match(source, /aria-controls/);
+  assert.match(source, /<button/);
+  assert.doesNotMatch(source, /finding\.objectRef\.key|Objekt 1|Vis alle|FindingGroups/);
 });
 
 test('legacy mode is visibly Validator 1.0 and remains the default host choice', async () => {
