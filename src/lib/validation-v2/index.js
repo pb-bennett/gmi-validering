@@ -16,6 +16,7 @@ export {
   SourceKind,
   SourceFieldDiagnosticKind,
   TemaIdentityState,
+  ValueComparisonPolicy,
 } from './contracts.js';
 export { bindGmiLayerSchema } from './gmiLayerSchemaBinding.js';
 export { resolveGmiTemaIdentity } from './temaIdentity.js';

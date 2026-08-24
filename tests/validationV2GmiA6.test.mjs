@@ -245,7 +245,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   );
   const presentationSource = `${source}\n${integrationSource}`;
   for (const label of [
-    'Beta · GMI · 3 regler',
+    'Beta · GMI ·',
     'Må rettes',
     'Må vurderes',
     'Bestått',
@@ -255,6 +255,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   ]) {
     assert.match(presentationSource, new RegExp(label));
   }
+  assert.match(source, /getValidationRules/);
   assert.match(source, /createValidationV2ViewController/);
   assert.match(source, /geometryView/);
   assert.match(source, /ruleResults/);

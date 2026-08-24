@@ -73,14 +73,11 @@ function ruleResult(result, ruleId) {
   return result.ruleResults.find((candidate) => candidate.rule.ruleId === ruleId);
 }
 
-test('active beta registry contains exactly three rules and the combined Høydereferanse rule', () => {
+test('active beta registry retains A7 rules and the combined Høydereferanse rule', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 3);
-  assert.deepEqual(rules.map((rule) => rule.ruleId), [
-    HEIGHT_VALID,
-    POINT_TEMA_REQUIRED,
-    LINE_TEMA_REQUIRED,
-  ]);
+  assert.equal(rules[0].ruleId, HEIGHT_VALID);
+  assert(rules.some((rule) => rule.ruleId === POINT_TEMA_REQUIRED));
+  assert(rules.some((rule) => rule.ruleId === LINE_TEMA_REQUIRED));
   assert.equal(rules.some((rule) => rule.ruleId.endsWith('.required') && rule.canonicalFieldId === 'heightReference'), false);
   assert.equal(rules.some((rule) => rule.ruleId.endsWith('.allowed-value') && rule.canonicalFieldId === 'heightReference'), false);
 
@@ -243,8 +240,45 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
   assert.equal(lineView.result, result);
   assert.equal(pointView.ruleResults[0], result.ruleResults[0]);
   assert.equal(pointView.ruleResults[0].findings[0].objectRef, result.ruleResults[0].findings[0].objectRef);
-  assert.deepEqual(pointView.ruleResults.map((rule) => rule.rule.ruleId), [HEIGHT_VALID, POINT_TEMA_REQUIRED]);
-  assert.deepEqual(lineView.ruleResults.map((rule) => rule.rule.ruleId), [HEIGHT_VALID, LINE_TEMA_REQUIRED]);
+  assert.deepEqual(pointView.ruleResults.map((rule) => rule.rule.ruleId), [
+    HEIGHT_VALID,
+    'innmaling.common.installation-year.required',
+    'innmaling.common.capture-date.required',
+    'innmaling.common.surveyed-by.required',
+    'innmaling.common.case-number.required',
+    'innmaling.common.horizontal-accuracy.required',
+    'innmaling.common.vertical-accuracy.required',
+    'innmaling.common.max-horizontal-deviation.required',
+    'innmaling.common.max-vertical-deviation.required',
+    'innmaling.common.positioning-condition.valid',
+    'innmaling.common.positioning-cause.valid',
+    'innmaling.common.visibility.valid',
+    POINT_TEMA_REQUIRED,
+    'innmaling.point.inside-outside.valid',
+    'innmaling.point.wall-thickness.required',
+    'innmaling.point.nobb-vavvs-number.required',
+    'innmaling.point.nobb-vavvs-frame-number.required',
+  ]);
+  assert.deepEqual(lineView.ruleResults.map((rule) => rule.rule.ruleId), [
+    HEIGHT_VALID,
+    'innmaling.common.installation-year.required',
+    'innmaling.common.capture-date.required',
+    'innmaling.common.surveyed-by.required',
+    'innmaling.common.case-number.required',
+    'innmaling.common.horizontal-accuracy.required',
+    'innmaling.common.vertical-accuracy.required',
+    'innmaling.common.max-horizontal-deviation.required',
+    'innmaling.common.max-vertical-deviation.required',
+    'innmaling.common.positioning-condition.valid',
+    'innmaling.common.positioning-cause.valid',
+    'innmaling.common.visibility.valid',
+    LINE_TEMA_REQUIRED,
+    'innmaling.line.dimension.required',
+    'innmaling.line.network-type.valid',
+    'innmaling.line.inside-outside.valid',
+    'innmaling.line.pipe-shape.valid',
+    'innmaling.line.nobb-vavvs-number.required',
+  ]);
   assert.equal(input.datasetRevision, result.datasetRevision);
   assert.equal(getDefaultValidationV2Geometry(layer), 'point');
   const linesOnly = makeLayer('lines-only', { points: [], lines: [{}] });

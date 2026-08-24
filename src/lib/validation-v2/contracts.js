@@ -107,6 +107,15 @@ export const RuleEvaluatorKind = Object.freeze({
 });
 
 /**
+ * Value comparison policies declared by individual rule definitions.
+ */
+export const ValueComparisonPolicy = Object.freeze({
+  NONE: 'NONE',
+  EXACT: 'EXACT',
+  INTEGER_CODE_STRING: 'INTEGER_CODE_STRING',
+});
+
+/**
  * Source provenance for rule definitions.
  */
 export const RuleProvenance = Object.freeze({
@@ -296,6 +305,7 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @property {'STANDARD'} provenance
  * @property {{document: string, pages: string}} source
  * @property {Array<*>} allowedValues
+ * @property {'NONE'|'EXACT'|'INTEGER_CODE_STRING'} valueComparison
  */
 
 /**

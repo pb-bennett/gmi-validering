@@ -162,7 +162,7 @@ function copyConflictEvidence(conflicts = []) {
 
 function evaluateRule({ rule, evidence }) {
   if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE) {
-    return evaluateRequiredAllowedValue(evidence, rule.allowedValues);
+    return evaluateRequiredAllowedValue(evidence, rule.allowedValues, rule.valueComparison);
   }
   if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED) {
     return rule.canonicalFieldId === 'tema'

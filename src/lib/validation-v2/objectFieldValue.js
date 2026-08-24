@@ -9,6 +9,7 @@ import {
 import { assertObjectRefOwnership } from './objectRef.js';
 import { getCanonicalField } from './registry/registry.js';
 import { isMissingValue } from './valueSemantics.js';
+import { GMI_SOURCE_LEXEMES } from '../parsing/gmiLexicalEvidence.js';
 
 const ACCEPTED_MAPPING_KINDS = new Set([
   MappingKind.DIRECT,
@@ -134,6 +135,13 @@ function observeCandidate(attributes, candidate) {
     candidate.sourceKey
   );
   const rawValue = propertyPresent ? attributes[candidate.sourceKey] : undefined;
+  const sourceLexemes = attributes[GMI_SOURCE_LEXEMES];
+  const sourceLexeme = sourceLexemes && Object.prototype.hasOwnProperty.call(
+    sourceLexemes,
+    candidate.sourceKey,
+  )
+    ? sourceLexemes[candidate.sourceKey]
+    : 'UNAVAILABLE';
   return {
     sourceKey: candidate.sourceKey,
     mappingKind: candidate.mappingKind,
@@ -146,6 +154,7 @@ function observeCandidate(attributes, candidate) {
       ? ObjectValueState.VALUE_MISSING
       : ObjectValueState.VALUE_PRESENT,
     rawValue,
+    sourceLexeme,
   };
 }
 
@@ -182,6 +191,7 @@ function createResult({
   authorityState = AuthorityState.UNRESOLVED,
   confidence = 'LOW',
   sourceValue,
+  sourceLexeme = 'UNAVAILABLE',
   candidates = [],
   conflicts = [],
   unresolvedCandidates = [],
@@ -199,7 +209,7 @@ function createResult({
     authorityState,
     confidence,
     sourceValue,
-    sourceLexeme: 'UNAVAILABLE',
+    sourceLexeme,
     normalizedValue: null,
     lexicalFlags: [],
     candidates,
@@ -370,6 +380,7 @@ export function extractGmiObjectFieldValue(input) {
       authorityState: preferred.authorityState,
       confidence: preferred.confidence,
       sourceValue: undefined,
+      sourceLexeme: preferred.sourceLexeme,
       candidates,
       unresolvedCandidates,
       schemaCandidates,
@@ -411,6 +422,7 @@ export function extractGmiObjectFieldValue(input) {
     authorityState: preferred.authorityState,
     confidence: preferred.confidence,
     sourceValue: preferred.rawValue,
+    sourceLexeme: preferred.sourceLexeme,
     candidates,
     unresolvedCandidates,
     schemaCandidates,

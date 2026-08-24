@@ -8,6 +8,7 @@ import {
   createWarningSummary,
   recordWarning,
 } from '../telemetry/warnings.mjs';
+import { GMI_SOURCE_LEXEMES } from './gmiLexicalEvidence.js';
 
 /**
  * GMI Parser Class - provides stateful parsing with analysis methods
@@ -120,12 +121,15 @@ export class GMIParser {
    * @private
    */
   _parseFieldValues(fieldValues, fieldNames) {
-    const values = String(fieldValues || '').split(';');
+    const values = String(fieldValues ?? '').split(';');
     const attributes = {};
+    const sourceLexemes = {};
 
     fieldNames.forEach((fieldName, index) => {
       if (index < values.length) {
-        let raw = values[index] || '';
+        const sourceLexeme = values[index];
+        sourceLexemes[fieldName] = sourceLexeme;
+        let raw = sourceLexeme || '';
         raw = raw.trim();
 
         // Normalize empty -> null
@@ -149,6 +153,13 @@ export class GMIParser {
       }
     });
 
+    Object.defineProperty(attributes, GMI_SOURCE_LEXEMES, {
+      value: Object.freeze(sourceLexemes),
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    });
+
     // Warn when values exceed fieldNames length
     if (values.length > fieldNames.length) {
       recordWarning(
@@ -160,6 +171,20 @@ export class GMIParser {
     }
 
     return attributes;
+  }
+
+  /**
+   * Remove only the structural separator after _FIELDVALUES. The remaining
+   * whitespace belongs to the delivered field lexeme.
+   * @private
+   */
+  _getRawFieldValues(line) {
+    const marker = '_FIELDVALUES';
+    const markerIndex = line.indexOf(marker);
+    const values = line.slice(markerIndex + marker.length);
+    return values.startsWith(' ') || values.startsWith('\t')
+      ? values.slice(1)
+      : values;
   }
 
   /**
@@ -366,12 +391,13 @@ export class GMIParser {
               !this.lines[i].startsWith(':') &&
               !this.lines[i].startsWith('[')
             ) {
-              const propLine = this.lines[i].trim();
+              const rawPropLine = this.lines[i];
+              const propLine = rawPropLine.trim();
               if (propLine.startsWith('_EXTENT')) {
                 lineFeature.extent = propLine.substring(7).trim();
               } else if (propLine.startsWith('_FIELDVALUES')) {
                 lineFeature.attributes = this._parseFieldValues(
-                  propLine.substring(12),
+                  this._getRawFieldValues(rawPropLine),
                   this.lineFieldNames
                 );
               } else if (propLine.startsWith('GUID')) {
@@ -423,12 +449,13 @@ export class GMIParser {
               !this.lines[i].startsWith(':') &&
               !this.lines[i].startsWith('[')
             ) {
-              const propLine = this.lines[i].trim();
+              const rawPropLine = this.lines[i];
+              const propLine = rawPropLine.trim();
               if (propLine.startsWith('_EXTENT')) {
                 pointFeature.extent = propLine.substring(7).trim();
               } else if (propLine.startsWith('_FIELDVALUES')) {
                 pointFeature.attributes = this._parseFieldValues(
-                  propLine.substring(12),
+                  this._getRawFieldValues(rawPropLine),
                   this.pointFieldNames
                 );
               } else if (propLine.startsWith('GUID')) {

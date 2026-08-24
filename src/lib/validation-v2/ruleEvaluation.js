@@ -4,7 +4,33 @@ import {
   ObjectValueState,
   RuleReasonCode,
   TemaIdentityState,
+  ValueComparisonPolicy,
 } from './contracts.js';
+
+function isAllowedValue(value, sourceLexeme, allowedValues, valueComparison) {
+  const hasSourceLexeme = typeof sourceLexeme === 'string' && sourceLexeme !== 'UNAVAILABLE';
+  if (valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING) {
+    if (hasSourceLexeme) {
+      return typeof sourceLexeme === 'string' && allowedValues.some(
+        (allowedValue) => Object.is(allowedValue, sourceLexeme),
+      );
+    }
+    if (typeof value === 'string') {
+      return allowedValues.some((allowedValue) => Object.is(allowedValue, value));
+    }
+    if (
+      typeof value === 'number' &&
+      Number.isSafeInteger(value) &&
+      !Object.is(value, -0)
+    ) {
+      const canonicalCode = String(value);
+      return allowedValues.some((allowedValue) => Object.is(allowedValue, canonicalCode));
+    }
+    return false;
+  }
+  const comparisonValue = hasSourceLexeme ? sourceLexeme : value;
+  return allowedValues.some((allowedValue) => Object.is(allowedValue, comparisonValue));
+}
 
 /**
  * Evaluate requiredness from existing A4 evidence only.
@@ -68,23 +94,31 @@ export function evaluateAllowedValue(value, allowedValues) {
  *
  * @param {Object} value
  * @param {Array<*>} allowedValues
+ * @param {'EXACT'|'INTEGER_CODE_STRING'} [valueComparison='EXACT']
  * @returns {{state: string, reasonCode: string|null}}
  */
-export function evaluateRequiredAllowedValue(value, allowedValues) {
+export function evaluateRequiredAllowedValue(
+  value,
+  allowedValues,
+  valueComparison = ValueComparisonPolicy.EXACT,
+) {
   switch (value.state) {
     case ObjectValueState.FIELD_ABSENT:
       return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_FIELD_ABSENT };
     case ObjectValueState.VALUE_MISSING:
       return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING };
-    case ObjectValueState.VALUE_PRESENT:
+    case ObjectValueState.VALUE_PRESENT: {
+      const allowed = isAllowedValue(
+        value.sourceValue,
+        value.sourceLexeme,
+        allowedValues,
+        valueComparison,
+      );
       return {
-        state: allowedValues.some((allowedValue) => Object.is(allowedValue, value.sourceValue))
-          ? EvaluationState.PASS
-          : EvaluationState.FAIL,
-        reasonCode: allowedValues.some((allowedValue) => Object.is(allowedValue, value.sourceValue))
-          ? null
-          : RuleReasonCode.VALUE_NOT_ALLOWED,
+        state: allowed ? EvaluationState.PASS : EvaluationState.FAIL,
+        reasonCode: allowed ? null : RuleReasonCode.VALUE_NOT_ALLOWED,
       };
+    }
     case ObjectValueState.BINDING_AMBIGUOUS:
       return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.BINDING_AMBIGUOUS };
     case ObjectValueState.UNRESOLVED_SOURCE:

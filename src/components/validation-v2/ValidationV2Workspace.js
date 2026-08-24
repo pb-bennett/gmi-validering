@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import useStore from '@/lib/store';
 import { runGmiValidationV2 } from '@/lib/validation-v2';
+import { getValidationRules } from '@/lib/validation-v2/registry/rules';
 import { getDatasetRevision } from '@/lib/validation-v2/datasetRevision';
 import { createValidationV2ViewController } from '@/lib/validation-v2/validationViewController';
 import {
@@ -217,6 +218,7 @@ export default function ValidationV2Workspace() {
   const geometryView = result ? viewState.geometryView : null;
   const activeRuleResults = geometryView?.ruleResults || [];
   const geometrySummary = geometryView?.summary || null;
+  const visibleRuleCount = result?.summary?.totalRules ?? getValidationRules().length;
 
   const selectLayer = (event) => {
     const nextLayerId = event.target.value;
@@ -251,7 +253,7 @@ export default function ValidationV2Workspace() {
       <div className="flex-none border-b bg-white px-2 py-2">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-gray-900">Validator 2.0</h2>
-          <span className="text-[10px] font-medium text-blue-700">Beta · GMI · 3 regler</span>
+          <span className="text-[10px] font-medium text-blue-700">Beta · GMI · {visibleRuleCount} regler</span>
         </div>
         <div className="mt-2 flex items-center gap-1.5">
           <label className="text-[11px] font-medium text-gray-700" htmlFor="validation-v2-layer">Lag</label>
