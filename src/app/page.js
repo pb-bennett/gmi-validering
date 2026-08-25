@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { startTransition, useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { InfoIcon } from '@phosphor-icons/react';
 import FileUpload from '@/components/FileUpload';
 import GlobalFileDrop from '@/components/GlobalFileDrop';
 import DataDisplayModal from '@/components/DataDisplayModal';
@@ -17,7 +18,10 @@ import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
+import AppInfoModal from '@/components/AppInfoModal';
 import TestModeControl from '@/components/TestModeControl';
+import { CURRENT_APP_VERSION, LATEST_ANNOUNCED_RELEASE } from '@/data/appReleases.mjs';
+import { decideAutomaticAppInfo } from '@/lib/appInfoState.mjs';
 import { getTerrainStats } from '@/lib/analysis/terrain';
 import { claimStatisticsCue } from '@/lib/statisticsCue.mjs';
 import useStore from '@/lib/store';
@@ -90,6 +94,34 @@ export default function Home() {
   const [showStats, setShowStats] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [statisticsCueActive, setStatisticsCueActive] = useState(false);
+  const [showAppInfo, setShowAppInfo] = useState(false);
+  const [appInfoInitialTab, setAppInfoInitialTab] = useState('about');
+  const appInfoTriggerRef = useRef(null);
+  const appInfoAutoCheckedRef = useRef(false);
+
+  // Decide and claim the first info popup before the heartbeat can create the legacy key.
+  useEffect(() => {
+    if (appInfoAutoCheckedRef.current) return;
+    appInfoAutoCheckedRef.current = true;
+
+    let storage = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      // The info modal remains usable when browser storage is unavailable.
+    }
+
+    const decision = decideAutomaticAppInfo({
+      storage,
+      latestAnnouncedRelease: LATEST_ANNOUNCED_RELEASE,
+    });
+    if (!decision.open) return;
+
+    startTransition(() => {
+      setAppInfoInitialTab(decision.tab);
+      setShowAppInfo(true);
+    });
+  }, []);
 
   useEffect(() => {
     let sessionStorage;
@@ -244,6 +276,25 @@ export default function Home() {
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
       <TestModeControl />
 
+      {/* Application information - always available */}
+      <button
+        ref={appInfoTriggerRef}
+        type="button"
+        onClick={() => {
+          setAppInfoInitialTab('about');
+          setShowAppInfo(true);
+        }}
+        aria-haspopup="dialog"
+        aria-label={`Om appen, versjon ${CURRENT_APP_VERSION}`}
+        title="Informasjon om appen og versjonshistorikk"
+        className="fixed bottom-4 left-4 z-[10002] flex min-h-11 items-center gap-2 rounded-xl border border-blue-300 bg-white/95 px-3 py-2 text-sm font-medium text-blue-700 shadow-lg backdrop-blur transition-colors hover:border-blue-500 hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:px-4"
+      >
+        <InfoIcon size={16} weight="regular" aria-hidden="true" className="h-4 w-4 shrink-0" />
+        <span>
+          Om appen · v{CURRENT_APP_VERSION}
+        </span>
+      </button>
+
       {/* Floating Stats Button - Always visible */}
       <button
         className={
@@ -314,6 +365,12 @@ export default function Home() {
       <StatsModal
         isOpen={showStats}
         onClose={() => setShowStats(false)}
+      />
+      <AppInfoModal
+        isOpen={showAppInfo}
+        initialTab={appInfoInitialTab}
+        onClose={() => setShowAppInfo(false)}
+        openerRef={appInfoTriggerRef}
       />
 
       {/* Share QR button */}
