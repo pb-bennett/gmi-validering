@@ -6,9 +6,10 @@ import * as phosphorIcons from '@phosphor-icons/react';
 const readSource = (path) =>
   readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-const [pageSource, modalSource, stateSource, catalogSource, globalCssSource, packageJsonSource] = await Promise.all([
+const [pageSource, modalSource, contactFormSource, stateSource, catalogSource, globalCssSource, packageJsonSource] = await Promise.all([
   readSource('src/app/page.js'),
   readSource('src/components/AppInfoModal.js'),
+  readSource('src/components/ContactForm.js'),
   readSource('src/lib/appInfoState.mjs'),
   readSource('src/data/appReleases.mjs'),
   readSource('src/app/globals.css'),
@@ -70,7 +71,9 @@ test('modal source has a stable accessible dialog and tab shell', () => {
   assert.match(modalSource, /app-info-inner focus-visible:outline/);
   assert.match(modalSource, /function AppInfoHero\(\{ title/);
   assert.equal((modalSource.match(/<AppInfoHero\b/g) || []).length, 5);
-  assert.equal((modalSource.match(/relative overflow-hidden rounded-2xl bg-slate-950/g) || []).length, 1);
+  assert.equal((modalSource.match(/relative overflow-hidden rounded-t-2xl rounded-b-none bg-slate-950/g) || []).length, 1);
+  assert.match(modalSource, /const APP_INFO_TAB_CONTENT_CLASS = 'space-y-7 \[&>\*:not\(:first-child\)\]:mx-2';/);
+  assert.equal((modalSource.match(/className=\{APP_INFO_TAB_CONTENT_CLASS\}/g) || []).length, 5);
   assert.match(modalSource, /className="app-info-hero-title"/);
   assert.match(modalSource, /<main className="min-h-0 flex-1 overflow-y-auto/);
   assert.match(modalSource, /overflow-y-auto overscroll-contain app-info-scroll/);
@@ -96,7 +99,7 @@ test('AppInfo uses verified Phosphor icons and one dependency', () => {
   assert.doesNotMatch(packageJsonSource, /lucide-react/);
 });
 
-test('Om follows the human-friendly five-section structure', () => {
+test('Om follows the human-friendly six-section structure', () => {
   const aboutStart = modalSource.indexOf('function AboutContent');
   const futureStart = modalSource.indexOf('function FutureContent');
   const aboutSource = modalSource.slice(aboutStart, futureStart);
@@ -105,23 +108,65 @@ test('Om follows the human-friendly five-section structure', () => {
     'Hva er dette?',
     'Hvorfor finnes det?',
     'Hva er dette ikke?',
-    'Nysgjerrig eller bekymret?',
+    'Hvem er jeg?',
     'Hvem er du?',
+    'Nysgjerrig eller bekymret?',
   ]) {
     assert.match(aboutSource, new RegExp(heading));
   }
-  assert.match(aboutSource, /sjekke, utforske og forstå VA-måle- og leveringsdata/);
-  assert.match(aboutSource, /ikke-kommersielt/);
-  assert.match(aboutSource, /ingen planer om abonnement, betalte funksjoner, reklame/);
-  assert.match(aboutSource, /praktisk arbeid med GMI-filer og entreprenørleveranser/);
-  assert.match(aboutSource, /repetitivt/);
-  assert.match(aboutSource, /godkjennes eller avvises/);
-  assert.match(aboutSource, /Automatiske kontroller støtter faglige vurderinger/);
-  assert.match(aboutSource, /ikke utviklet av, for eller sammen med Invera/);
-  assert.match(aboutSource, /VA\/GMI-fil åpnes i et nettleserbasert verktøy/);
-  assert.match(aboutSource, /Kildekoden er offentlig/);
-  assert.match(aboutSource, /\[Personlig tekst legges inn her\.\]/);
-  assert.doesNotMatch(aboutSource, /sendes ikke|lastes ikke opp|aldri lagres|never leave the browser/i);
+  const headingOrder = [
+    'Hva er dette?',
+    'Hvorfor finnes det?',
+    'Hva er dette ikke?',
+    'Hvem er jeg?',
+    'Hvem er du?',
+    'Nysgjerrig eller bekymret?',
+  ].map((heading) => aboutSource.indexOf(`>${heading}</h3>`));
+  assert.ok(headingOrder.every((index, position) => index > (headingOrder[position - 1] ?? -1)));
+  assert.match(aboutSource, /utforske og validere VA-innmålingsfiler/);
+  assert.match(aboutSource, /entreprenører til kommuner i sluttfasen av infrastrukturprosjekter/);
+  assert.match(aboutSource, /full støtte for Geminis eget GMI-format/);
+  assert.match(aboutSource, /begrenset støtte for SOSI- og KOF-formatene/);
+  assert.match(aboutSource, /<ul className="mt-2 list-disc space-y-2 pl-5 leading-\[1\.6\]">/);
+  for (const feature of [
+    'Laste inn flere filer i samme sesjon',
+    'Visualisere innmålingsdata i både 2D og 3D',
+    'Filtrere og fremheve objekter etter verdier i datafeltene',
+    'Vise objektene i en tilpassbar datatabell',
+    'Kontrollere og visualisere fall og estimert overdekning for ledninger i profil',
+    'Validere datafeltene mot kravene i innmålingsinstruksen',
+  ]) {
+    assert.match(aboutSource, new RegExp(feature));
+  }
+  assert.match(aboutSource, /Det finnes allerede gode og omfattende verktøy i bransjen/);
+  assert.match(aboutSource, /Mye av dette gjentas for hver nye leveranse/);
+  assert.match(aboutSource, /redusere det repetitive kontrollarbeidet/);
+  assert.match(aboutSource, /Automatiske kontroller kan finne mangler/);
+  assert.match(aboutSource, /Gemini VA, Gemini Terrain eller andre komplette fag- og GIS-systemer/);
+  assert.match(aboutSource, /ikke utviklet av, for eller i samarbeid med Invera/);
+  assert.match(aboutSource, /Jeg har jobbet med kommunalteknikk i over seks år/);
+  assert.match(aboutSource, /Gemini VA og Portal\+/);
+  assert.match(aboutSource, /hvor nyttig en god 3D-visning kan være/);
+  assert.match(aboutSource, /GMI Validator er først og fremst laget for deg/);
+  assert.match(aboutSource, /private VA-tilknytninger/);
+  assert.match(aboutSource, /Entreprenører kan på sin side bruke GMI Validator/);
+  assert.match(aboutSource, /Det er sunt å ta sikkerhet og personvern på alvor/);
+  assert.match(aboutSource, /Det meste skjer lokalt i nettleseren på din egen PC/);
+  assert.match(aboutSource, /GMI-, SOSI- eller KOF-filen lastes ikke opp til serveren/);
+  assert.match(aboutSource, /koordinatpunkter langs ledningene automatisk til Kartverket/);
+  assert.match(aboutSource, /punkt- og kommuneoppslag/);
+  assert.match(aboutSource, /aggregerte tellinger per kommune, dato og time/);
+  assert.match(aboutSource, /Vercel Web Analytics/);
+  assert.match(aboutSource, /Appen sender ikke filinnhold eller filrelaterte data/);
+  assert.match(aboutSource, /Når du velger å sende tilbakemelding gjennom Kontakt/);
+  assert.match(aboutSource, /appversjonen legges til av serveren/);
+  assert.match(aboutSource, /Ingen innmålingsfil, koordinater, valideringsresultater/);
+  assert.match(aboutSource, /gjennom Resend til mottakerens postkasse/);
+  assert.match(aboutSource, /30 dagers datalagring/);
+  assert.match(aboutSource, /mottakerens postkasse kan lagre meldingen lenger/);
+  assert.match(aboutSource, /Kildekoden til GMI Validator er offentlig tilgjengelig/);
+  assert.match(aboutSource, /Jeg ønsker at GMI Validator skal være så åpent og transparent som mulig/);
+  assert.doesNotMatch(aboutSource, /\[Personlig tekst legges inn her\.\]/);
 });
 
 test('modal content keeps current branding and places source action on Om only', () => {
@@ -139,24 +184,40 @@ test('modal content keeps current branding and places source action on Om only',
   assert.doesNotMatch(modalSource.slice(contactStart, contactEnd), /GitHub|github|SourceCodeLink|Kildekode/);
 });
 
-test('release news presents the statistics feature and no fabricated release', () => {
-  assert.match(modalSource, /Nyheter/);
-  assert.match(modalSource, /Ny statistikkvisning/);
-  assert.match(modalSource, /Statistikken er nå brutt ned per kommune/);
-  assert.match(modalSource, /Du kan også se kommuneaktiviteten på kart/);
+test('Nytt presents the two newest feature highlights with restrained mockups', () => {
+  const newsStart = modalSource.indexOf('function NewsContent');
+  const historyStart = modalSource.indexOf('function HistoryContent');
+  const newsSource = modalSource.slice(newsStart, historyStart);
+
+  assert.match(newsSource, /<AppInfoHero title="Nytt" \/>/);
+  assert.match(newsSource, /NEWS_HIGHLIGHTS\.map/);
+  assert.match(newsSource, /<article/);
+  assert.match(newsSource, /<ReleaseMeta release=\{highlight\.release\} \/>/);
+  assert.match(newsSource, /<NewsHighlightMockup type=\{highlight\.mockup\} \/>/);
+  assert.doesNotMatch(newsSource, /releaseEntry\.news\.map|ReleaseDetails/);
+
+  assert.match(modalSource, /version === '1\.1\.0'/);
+  assert.match(modalSource, /title: 'Informasjon, nyheter og versjonshistorikk'/);
+  assert.match(modalSource, /Om, Nytt, Versjonshistorikk, Fremtiden og Kontakt/);
+  assert.match(modalSource, /version === '1\.0\.0'/);
+  assert.match(modalSource, /title: 'Ny statistikkvisning'/);
+  assert.match(modalSource, /fordeling per kommune/);
+  assert.match(modalSource, /mockup: 'info'/);
+  assert.match(modalSource, /mockup: 'statistics'/);
+  assert.match(modalSource, /function InfoModalMockup/);
+  assert.match(modalSource, /function StatisticsMockup/);
+  assert.match(modalSource, /Utvikling over tid/);
   assert.match(modalSource, /if \(activeTab === 'news'\) return <NewsContent \/>;/);
   assert.match(modalSource, /if \(activeTab === 'future'\) return <FutureContent \/>;/);
   assert.doesNotMatch(modalSource, /onHistory/);
-  assert.match(catalogSource, /formell versjonshistorikk/);
-  assert.match(modalSource, /eyebrow="Nyheter"/);
-  assert.match(modalSource, /version=\{releaseEntry\?\.version \?\? CURRENT_APP_VERSION\}/);
-  assert.doesNotMatch(modalSource, /releaseEntry\.highlights/);
-  assert.doesNotMatch(modalSource, /Dette er nytt|Også nytt/);
-  assert.doesNotMatch(modalSource, /Nøkkeltall på ett sted|Utvikling over tid|Sammenlign utvalg|Kart og fordeling/);
-  assert.doesNotMatch(catalogSource, /1\.1\.0/);
+  assert.match(catalogSource, /Informasjon, nyheter og versjonshistorikk/);
+  assert.match(catalogSource, /Ny statistikkvisning/);
+  assert.match(catalogSource, /version: '1\.1\.0'/);
+  assert.match(catalogSource, /version: '1\.0\.2'/);
+  assert.match(catalogSource, /version: '1\.0\.1'/);
   assert.match(catalogSource, /version: '1\.0\.0'/);
-  assert.match(catalogSource, /title: 'Ny statistikkvisning'/);
   assert.match(catalogSource, /announce: true/);
+  assert.match(modalSource, /CURRENT_APP_VERSION/);
   assert.match(modalSource, /APP_RELEASES\.map/);
 });
 
@@ -166,29 +227,29 @@ test('future roadmap stays separate from released versions and has no date', () 
   const futureEnd = modalSource.indexOf('function ReleaseDetails', futureStart);
   const aboutSource = modalSource.slice(aboutStart, futureStart);
   const futureSource = modalSource.slice(futureStart, futureEnd);
-  assert.doesNotMatch(aboutSource, /Videre utvikling|1\.1\.0|Validator 2\.0/);
+  assert.doesNotMatch(aboutSource, /Videre utvikling|1\.2\.0|Validator 2\.0/);
   assert.match(futureSource, /<AppInfoHero title="Fremtiden – videre utvikling" \/>/);
   assert.doesNotMatch(futureSource, /app-info-roadmap-heading|<h3[^>]*>Videre utvikling<\/h3>/);
 
-  const roadmapStart = futureSource.indexOf('v1.1.0');
+  const roadmapStart = futureSource.indexOf('v1.2.0');
   assert.ok(roadmapStart > 0);
   const roadmapSource = futureSource.slice(roadmapStart);
 
-  assert.match(roadmapSource, /versjon 1\.1\.0/);
-  assert.match(roadmapSource, /v1\.1\.0/);
+  assert.match(roadmapSource, /versjon 1\.2\.0/);
+  assert.match(roadmapSource, /v1\.2\.0/);
   assert.match(roadmapSource, /Validator 2\.0 \(beta\)/);
   assert.match(roadmapSource, /Den nye valideringslogikken gir tydeligere kontroller/);
   assert.match(roadmapSource, /Planlagt/);
   assert.match(roadmapSource, /Planene kan endres etter hvert som funksjonene utvikles og testes/);
   assert.doesNotMatch(roadmapSource, /Senere:|Videre forbedringer av tabellvisning/);
   assert.doesNotMatch(roadmapSource, /202\d|releasedOn|januar|august/);
-  assert.doesNotMatch(catalogSource, /1\.1\.0|Validator 2\.0/);
+  assert.doesNotMatch(catalogSource, /1\.2\.0|Validator 2\.0/);
 });
 
 test('all tabs use the shared hero titles without redundant lower page headings', () => {
   for (const title of [
     'Et verktøy for kontroll og utforsking av VA-innmålingsleveranser',
-    'Nyheter',
+    'Nytt',
     'Versjonshistorikk',
     'Fremtiden – videre utvikling',
     'Kontakt',
@@ -203,7 +264,7 @@ test('all tabs use the shared hero titles without redundant lower page headings'
   assert.doesNotMatch(modalSource.slice(contactStart, contactEnd), /<p[^>]*>Kontakt<\/p>/);
 });
 
-test('contact remains a placeholder and app-info adds no network or user-data persistence', () => {
+test('contact form keeps the C1 payload boundary and accessible form contract', () => {
   const contactStart = modalSource.indexOf('function ContactContent');
   const contactEnd = modalSource.indexOf('function TabContent');
   const contactSource = modalSource.slice(contactStart, contactEnd);
@@ -211,13 +272,46 @@ test('contact remains a placeholder and app-info adds no network or user-data pe
   const sourceLinkEnd = modalSource.indexOf('function AppInfoHero');
   const sourceLinkSource = modalSource.slice(sourceLinkStart, sourceLinkEnd);
 
-  assert.match(contactSource, /Tilbakemeldinger/);
-  assert.match(contactSource, /finner feil/);
-  assert.match(contactSource, /kommentarer til hvordan/);
-  assert.match(contactSource, /forslag til forbedringer/);
-  assert.match(contactSource, /sende inn tilbakemeldinger direkte fra appen/);
+  assert.match(contactSource, /<ContactForm \/>/);
+  assert.match(contactSource, /Har du funnet en feil/);
   assert.doesNotMatch(contactSource, /GitHub|github|SourceCodeLink|Kildekode/);
-  assert.doesNotMatch(contactSource, /<form|onSubmit|mailto:|Resend/i);
+  assert.match(contactFormSource, /<form/);
+  assert.match(contactFormSource, /<select/);
+  for (const category of [
+    "value: 'bug', label: 'Feil'",
+    "value: 'suggestion', label: 'Forslag'",
+    "value: 'comment', label: 'Kommentar'",
+    "value: 'other', label: 'Annet'",
+  ]) {
+    assert.match(contactFormSource, new RegExp(category));
+  }
+  assert.match(contactFormSource, /name="category"/);
+  assert.match(contactFormSource, /required/);
+  assert.match(contactFormSource, /type="email"/);
+  assert.match(contactFormSource, /autoComplete="email"/);
+  assert.match(contactFormSource, /E-post[\s\S]*valgfritt/);
+  assert.match(contactFormSource, /<textarea/);
+  assert.match(contactFormSource, /name="message"/);
+  assert.match(contactFormSource, /maxLength=\{4000\}/);
+  assert.match(contactFormSource, /name="website"/);
+  assert.match(contactFormSource, /tabIndex=\{-1\}/);
+  assert.match(contactFormSource, /aria-hidden="true"/);
+  assert.match(contactFormSource, /buildContactPayload = \(\{ category, message, email, website \}\) => \(\{/);
+  assert.match(contactFormSource, /fetch\('\/api\/contact'/);
+  assert.match(contactFormSource, /method: 'POST'/);
+  assert.match(contactFormSource, /Content-Type.*application\/json/);
+  assert.match(contactFormSource, /aria-busy=\{isSubmitting\}/);
+  assert.match(contactFormSource, /disabled=\{isSubmitting\}/);
+  assert.match(contactFormSource, /role="status"/);
+  assert.match(contactFormSource, /aria-live="polite"/);
+  assert.match(contactFormSource, /Bare det du skriver her/);
+  assert.match(contactFormSource, /via Resend til mottakerens postkasse/);
+  assert.match(contactFormSource, /Ingen fil- eller valideringsdata legges ved/);
+  assert.match(contactFormSource, /Takk! Tilbakemeldingen er sendt/);
+  assert.doesNotMatch(contactFormSource, /name="name"|type="file"|attachment|screenshot/i);
+  assert.doesNotMatch(contactFormSource, /zustand|useStore|localStorage|coordinates|municipality|WMS|telemetry|parser|file upload/i);
+  assert.doesNotMatch(contactFormSource, /dangerouslySetInnerHTML|from ['"]lucide-react['"]|<svg\b/);
+  assert.doesNotMatch(contactFormSource, /NEXT_PUBLIC_RESEND|RESEND_API_KEY|CONTACT_TO_EMAIL|CONTACT_FROM_EMAIL|api\.resend\.com/i);
   assert.match(sourceLinkSource, /<GithubLogoIcon/);
   assert.match(sourceLinkSource, /<ArrowSquareOutIcon/);
   assert.doesNotMatch(sourceLinkSource, /<svg/);

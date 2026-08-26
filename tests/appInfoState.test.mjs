@@ -12,12 +12,12 @@ import {
 } from '../src/lib/appInfoState.mjs';
 
 const latestRelease = {
-  version: '1.0.0',
+  version: '1.1.0',
   announce: true,
 };
 
 const laterRelease = {
-  version: '1.1.0',
+  version: '1.2.0',
   announce: true,
 };
 
@@ -62,7 +62,7 @@ test('brand-new users open Om and claim the introduction and announcement', () =
   assert.deepEqual(JSON.parse(storage.value(APP_INFO_STORAGE_KEY)), {
     schema: 1,
     introSeen: true,
-    lastSeenAnnouncement: '1.0.0',
+    lastSeenAnnouncement: '1.1.0',
   });
   assert.equal(
     decideAutomaticAppInfo({
@@ -91,9 +91,9 @@ test('pre-feature users open Nytt once using only legacy-key existence', () => {
   );
 });
 
-test('v1.0.0 acknowledgement does not repeat for the unannounced v1.0.1 patch', () => {
+test('v1.1.0 acknowledgement does not repeat for the unannounced v1.0.2 patch', () => {
   const storage = makeStorage({
-    [APP_INFO_STORAGE_KEY]: stateJson(true, '1.0.0'),
+    [APP_INFO_STORAGE_KEY]: stateJson(true, '1.1.0'),
   });
   const before = storage.value(APP_INFO_STORAGE_KEY);
   const decision = decideAutomaticAppInfo({
@@ -107,14 +107,14 @@ test('v1.0.0 acknowledgement does not repeat for the unannounced v1.0.1 patch', 
   writeAppInfoState(storage, {
     schema: 1,
     introSeen: true,
-    lastSeenAnnouncement: '1.0.0',
+    lastSeenAnnouncement: '1.1.0',
   });
   assert.equal(storage.value(APP_INFO_STORAGE_KEY), before);
 });
 
 test('later announced releases open Nytt once, while unannounced patches do not', () => {
   const storage = makeStorage({
-    [APP_INFO_STORAGE_KEY]: stateJson(true, '1.0.0'),
+    [APP_INFO_STORAGE_KEY]: stateJson(true, '1.1.0'),
   });
   const decision = decideAutomaticAppInfo({
     storage,
@@ -132,7 +132,7 @@ test('later announced releases open Nytt once, while unannounced patches do not'
   );
 
   const patchStorage = makeStorage({
-    [APP_INFO_STORAGE_KEY]: stateJson(true, '1.0.0'),
+    [APP_INFO_STORAGE_KEY]: stateJson(true, '1.1.0'),
   });
   assert.equal(
     decideAutomaticAppInfo({
@@ -156,7 +156,7 @@ test('introSeen false is claimed as Om and current announcement is acknowledged'
   assert.deepEqual(JSON.parse(storage.value(APP_INFO_STORAGE_KEY)), {
     schema: 1,
     introSeen: true,
-    lastSeenAnnouncement: '1.0.0',
+    lastSeenAnnouncement: '1.1.0',
   });
 });
 
@@ -164,8 +164,8 @@ test('malformed state is treated as absent and replaced safely', () => {
   for (const raw of [
     '{',
     '[]',
-     JSON.stringify({ schema: 2, introSeen: true, lastSeenAnnouncement: '1.0.0' }),
-     JSON.stringify({ schema: 1, introSeen: 'yes', lastSeenAnnouncement: '1.0.0' }),
+     JSON.stringify({ schema: 2, introSeen: true, lastSeenAnnouncement: '1.1.0' }),
+     JSON.stringify({ schema: 1, introSeen: 'yes', lastSeenAnnouncement: '1.1.0' }),
     JSON.stringify({ schema: 1, introSeen: true, lastSeenAnnouncement: 'latest' }),
   ]) {
     assert.equal(parseAppInfoState(raw), null);
@@ -179,7 +179,7 @@ test('malformed state is treated as absent and replaced safely', () => {
     assert.deepEqual(JSON.parse(storage.value(APP_INFO_STORAGE_KEY)), {
       schema: 1,
       introSeen: true,
-      lastSeenAnnouncement: '1.0.0',
+    lastSeenAnnouncement: '1.1.0',
     });
   }
 });

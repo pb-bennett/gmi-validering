@@ -33,6 +33,7 @@ import {
   getMapSourceProjection,
   projectCoordinateToWgs84,
 } from '@/lib/map/coordinateProjection';
+import { createFeaturePopupContent } from '@/lib/map/featurePopupContent.mjs';
 
 // Fix for default Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -2566,67 +2567,9 @@ export default function MapInner({ onZoomChange }) {
               ? `ledninger-${props._layerId}-${props.id}`
               : `ledninger-${props.id}`;
 
-        let content = `<div class="text-[11px] leading-tight max-h-72 flex flex-col gap-1 p-1">`;
-        content += `<div class="font-semibold flex items-center gap-1 whitespace-nowrap">`;
-        content += `<span>Type:</span><span>${props.featureType}</span>`;
-        if (fcode) {
-          content += `<span class="text-gray-400">•</span><span>Code:</span><span style="color: ${color}; font-weight: 700;">${fcode}</span>`;
-        }
-        content += `</div>`;
-
-        content +=
-          '<div class="mt-1 border-t pt-1 flex-1 overflow-auto">';
-        Object.entries(props).forEach(([key, value]) => {
-          if (
-            key !== 'featureType' &&
-            key !== 'id' &&
-            key !== 'S_FCODE' &&
-            value !== null &&
-            value !== ''
-          ) {
-            content += `<strong>${key}:</strong> ${value}<br/>`;
-          }
-        });
-        content += '</div>';
-
-        // Add "Vis i 3D" button
-        content += `<div class="mt-1 pt-2 border-t grid grid-cols-2 gap-2">
-        <button 
-          class="vis-i-3d-btn px-2 py-1 text-[11px] bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-          data-feature-id="${featureId}"
-          data-feature-type="${props.featureType}"
-          data-index="${props.id}"
-          data-layer-id="${props._layerId || ''}"
-        >
-          Vis i 3D
-        </button>
-        <button 
-          class="inspect-data-btn px-2 py-1 text-[11px] bg-gray-700 hover:bg-gray-800 text-white rounded transition-colors"
-          data-feature-id="${featureId}"
-          data-feature-type="${props.featureType}"
-          data-index="${props.id}"
-          data-layer-id="${props._layerId || ''}"
-        >
-          Inspiser data
-        </button>
-      `;
-
-        if (props.featureType === 'Line') {
-          content += `
-        <button 
-          class="show-profile-btn col-span-2 px-2 py-1 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors"
-          data-feature-id="${featureId}"
-          data-feature-type="${props.featureType}"
-          data-index="${props.id}"
-          data-layer-id="${props._layerId || ''}"
-        >
-          Vis profilanalyse
-        </button>`;
-        }
-
-        content += `</div>`;
-        content += '</div>';
-        layer.bindPopup(content);
+        layer.bindPopup(
+          createFeaturePopupContent(props, featureId, color, fcode),
+        );
       }
     },
     [

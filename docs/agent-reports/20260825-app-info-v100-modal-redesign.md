@@ -1,4 +1,4 @@
-# GMI Validator v1.0.0 App Information Correction
+# GMI Validator v1.1.0 App Information and Release History Preparation
 
 Date: 2026-08-25
 Branch: `feature/app-info-version-changelog`
@@ -6,22 +6,38 @@ Repository: `C:\GitHub\gmi-validering`
 
 ## Scope
 
-This is a correction and redesign of the uncommitted application-information,
+This is a correction and continuation of the uncommitted application-information,
 version, and changelog implementation described in the two 2026-08-24 reports.
-Those reports remain historical records and were not rewritten.
+Those reports remain historical records and were not rewritten. This feature
+branch prepares the next application release; no production deployment is
+implied.
 
 The application release model is now:
 
-- `GMI Validator v1.0.0` is the current, announced release.
-- `v1.0.0` is the first and only formal release-history entry.
+- `GMI Validator v1.1.0` is the current, announced feature release on this
+  feature branch.
+- Released history is ordered newest first: `v1.1.0`, `v1.0.2`, `v1.0.1`, and
+  `v1.0.0`.
+- `v1.0.1` records the SOSI stability correction, before the `v1.0.2`
+  Profile Analysis stability correction.
 - No earlier `0.x` history is recorded or implied.
-- `v1.1.0 — Validator 2.0 Beta` is reserved conceptually only and is not in the
-  runtime catalogue.
+- `v1.2.0 — Validator 2.0 Beta` is planned only and is not in the runtime
+  release catalogue.
 - Application versioning remains separate from Validator 1.0/2.0 wording and
   from any Git SHA or build identifier.
 
 `package.json`, the root package-lock metadata, and `CURRENT_APP_VERSION` now
-all resolve to `1.0.0`.
+all resolve to `1.1.0`.
+
+## Release Dates
+
+The catalogue uses `2026-08-19` for `v1.0.1`, supported by the SOSI fix commit,
+and `2026-08-24` for `v1.0.2`, supported by the Profile Analysis fix commit.
+These are source-history dates, not independently verified production
+deployment dates. The existing statistics baseline and the upcoming feature
+branch release use no date because a confident production-release date could
+not be established. The modal omits the date when `releasedOn` is absent rather
+than inventing one.
 
 ## Verified Statistics Claims
 
@@ -48,7 +64,7 @@ features were added to the release notes.
 
 `AppInfoModal` now uses a stable shell:
 
-- Desktop height is `min(78dvh, 48rem)` with a substantial minimum height and a
+- Desktop height is `min(86dvh, 56rem)` with a substantial minimum height and a
   viewport-safe fallback for short laptop screens.
 - Mobile uses nearly the full available viewport without forcing the desktop
   minimum height.
@@ -68,30 +84,39 @@ large marketing gradients, or a card around every paragraph.
 
 ### Om
 
-The tab is branded `GMI Validator` and now follows a readable five-section flow:
-`Hva er dette?`, `Hvorfor finnes det?`, `Hva er dette ikke?`, `Nysgjerrig eller
-bekymret?`, and `Hvem er du?`. The sections use concise placeholders covering
-purpose, practical background, decision-support boundaries, project independence,
-conservative transparency, and the source-code action.
+The tab is branded `GMI Validator` and now follows the final six-section flow:
+`Hva er dette?`, `Hvorfor finnes det?`, `Hva er dette ikke?`, `Hvem er jeg?`,
+`Hvem er du?`, and `Nysgjerrig eller bekymret?`. The approved Norwegian copy is
+inserted for the tool purpose and feature list, motivation, scope and boundaries,
+author background, intended users, and transparency/privacy information. The
+existing GitHub source-code action remains immediately after the transparency
+content.
 
-The copy is intentionally not final product or legal prose. The personal section
-contains `[Personlig tekst legges inn her.]` for the user to replace. No absolute
-outbound-data/privacy claims were added.
+The privacy wording was updated following the Sol outbound-data/privacy audit.
+It now discloses terrain coordinate requests, municipality lookup, aggregate
+statistics, and Vercel Web Analytics. No application behavior, network/data
+flows, or privacy handling were changed by this copy-only update.
 
 ### Nytt
 
 The tab derives its content from `LATEST_ANNOUNCED_RELEASE`, displays the
-`v1.0.0` current/new badges and `Ny statistikkvisning` theme, and renders the
-four verified statistics highlights above. Secondary content mentions the app
-information, formal history, and future launch messages. It does not claim
-that Validator 2.0 exists in this release.
+`v1.1.0` current/new badges and catalogue-provided title and short news copy.
+The concise layout remains unchanged and does not restore the former statistics
+feature-card treatment. It does not claim that Validator 2.0 exists in this
+release.
 
 ### Versjonshistorikk
 
 The history is a newest-first timeline/accordion driven directly by
-`APP_RELEASES`. It currently contains exactly one entry, `v1.0.0`, with its
-date, current-version marker, summary, and structured change notes. Manual
-expansion does not affect announcement acknowledgement state.
+`APP_RELEASES`. It contains `v1.1.0`, `v1.0.2`, `v1.0.1`, and `v1.0.0`, with
+the SOSI correction before the Profile Analysis correction. Manual expansion
+does not affect announcement acknowledgement state. The planned `v1.2.0`
+Validator 2.0 Beta remains outside released history.
+
+### Fremtiden
+
+The roadmap remains a separate unreleased section marked `Planlagt`. It now
+identifies Validator 2.0 (beta) as planned application version `v1.2.0`.
 
 ### Kontakt
 
@@ -105,9 +130,9 @@ address, Resend integration, or new backend/network functionality.
 `src/lib/appInfoState.mjs` was kept stable because its migration and detection
 strategy already matches the required behavior:
 
-- a new browser opens `Om` and claims the current announced `v1.0.0`;
+- a new browser opens `Om` and claims the current announced `v1.1.0`;
 - a pre-feature browser identified only by the existing
-  `gmi-validator-storage` key opens `Nytt` for `v1.0.0` once;
+  `gmi-validator-storage` key opens `Nytt` for `v1.1.0` once;
 - an acknowledged announcement does not repeat;
 - a later announced release is handled generically and once;
 - an unannounced patch does not force a popup;
@@ -117,15 +142,26 @@ strategy already matches the required behavior:
 The dedicated `gmi-validering:app-info:v1` schema remains unchanged and stores
 only the existing acknowledgement fields.
 
+## Corrected Release History Update
+
+The release catalogue remains the single data source for current version,
+latest announced news, and released history. `v1.1.0` is announced; `v1.0.2`,
+`v1.0.1`, and the historical `v1.0.0` entry are not announced. Existing users
+whose stored announcement is already `v1.1.0` do not see the unannounced patch
+entries, and manual opening still does not acknowledge releases. The privacy
+wording in `Om` now reflects the Sol outbound-data/privacy audit; this copy-only
+update changes no privacy, network, telemetry, parsing, validation, or other
+application behavior.
+
 ## Tests and Checks
 
 - Focused app-info/version tests: **18 passed**
-- Full Node suite: **133 passed**
+- Full Node suite: **132 passed**
 - Relevant statistics UI contracts: included in the full suite and passed
 - Focused ESLint on modified JavaScript/ES module/test files: the new app-info
   files pass; one pre-existing error remains at `src/app/page.js:146` for the
   unrelated `statisticsCueActive` state update inside an effect
-- `npm.cmd run build`: **passed**
+- `npm run build`: **passed**
 - `git diff --check`: **passed**; Git reported only LF-to-CRLF normalization
   warnings
 
@@ -163,8 +199,8 @@ No commit, push, merge, tag, deployment, or release operation was performed.
 The roadmap content was moved from the bottom of `Om` into a dedicated
 `Fremtiden` tab between `Versjonshistorikk` and `Kontakt`. The existing roadmap
 wording and shared hero treatment were retained. Released-version data and the
-separation between released `v1.0.1`/`v1.0.0` and planned `v1.1.0` remain
-unchanged.
+separation between released `v1.1.0`/`v1.0.2`/`v1.0.1`/`v1.0.0` and planned
+`v1.2.0` remain explicit.
 
 ## Phosphor and Om Follow-up
 
