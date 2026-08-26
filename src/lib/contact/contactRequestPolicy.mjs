@@ -1,6 +1,7 @@
 export const CONTACT_MAX_BODY_BYTES = 20 * 1024;
 export const CONTACT_MAX_MESSAGE_CODE_POINTS = 4_000;
 export const CONTACT_MAX_EMAIL_LENGTH = 254;
+export const CONTACT_MAX_NAME_CODE_POINTS = 100;
 
 export const CONTACT_CATEGORY_LABELS = Object.freeze({
   bug: 'Feil',
@@ -12,6 +13,7 @@ export const CONTACT_CATEGORY_LABELS = Object.freeze({
 const CONTACT_REQUEST_KEYS = new Set([
   'category',
   'message',
+  'name',
   'email',
   'website',
 ]);
@@ -78,6 +80,18 @@ const normalizeMessage = (value) => {
   }
 
   return trimmed;
+};
+
+const normalizeName = (value) => {
+  if (value === undefined) return null;
+  if (typeof value !== 'string' || hasUnpairedSurrogate(value)) {
+    throw invalidRequest();
+  }
+  const normalized = value.normalize('NFC');
+  if (hasForbiddenTextCharacters(normalized)) throw invalidRequest();
+  const trimmed = normalized.trim();
+  if ([...trimmed].length > CONTACT_MAX_NAME_CODE_POINTS) throw invalidRequest();
+  return trimmed === '' ? null : trimmed;
 };
 
 const EMAIL_LOCAL_PART = /^[A-Za-z0-9!#$%&'*+\/?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+\/?^_`{|}~-]+)*$/u;
@@ -178,6 +192,7 @@ export const validateContactRequest = (body) => {
     category: body.category,
     categoryLabel: CONTACT_CATEGORY_LABELS[body.category],
     message: normalizeMessage(body.message),
+    name: normalizeName(body.name),
     email: normalizeEmail(body.email),
     honeypot: website !== undefined && website !== '',
   };

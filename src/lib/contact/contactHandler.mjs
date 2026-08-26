@@ -143,6 +143,7 @@ export const createContactPostHandler = ({ rateLimiter, deliver }) =>
           category: body.category,
           categoryLabel: body.categoryLabel,
           message: body.message,
+          name: body.name,
           email: body.email,
         });
       } catch {

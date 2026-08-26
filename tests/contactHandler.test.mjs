@@ -55,6 +55,7 @@ test('successful normalised submission reaches fake delivery exactly once with a
     category: 'bug',
     categoryLabel: 'Feil',
     message: 'På kafé\nmed feil',
+    name: null,
     email: 'Bruker@example.no',
   }]);
   assertStableHeaders(result);

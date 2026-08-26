@@ -34,7 +34,7 @@ test('accepts all categories and maps them to Norwegian labels', () => {
   ]) {
     assert.deepEqual(
       validateContactRequest({ category, message: 'Hei' }),
-      { category, categoryLabel, message: 'Hei', email: null, honeypot: false },
+      { category, categoryLabel, message: 'Hei', name: null, email: null, honeypot: false },
     );
   }
 });
@@ -128,7 +128,7 @@ test('rejects malformed, display-name, list, control, Unicode, and over-length e
   }
 });
 
-test('requires the exact four top-level fields and scalar string types', () => {
+test('requires the exact five top-level fields and scalar string types', () => {
   for (const body of [
     { category: 'bug', message: 'Hei', extra: 'no' },
     { category: 'bug', message: 'Hei', nested: { value: 'no' } },
@@ -141,6 +141,14 @@ test('requires the exact four top-level fields and scalar string types', () => {
     'Hei',
   ]) {
     assertInvalid(body);
+  }
+});
+
+test('normalises optional Unicode names and enforces safe 100-code-point boundary', () => {
+  assert.equal(validateContactRequest({ category: 'bug', message: 'Hei', name: '  Åse e\u0301  ' }).name, 'Åse é');
+  assert.equal([...validateContactRequest({ category: 'bug', message: 'Hei', name: 'a'.repeat(100) }).name].length, 100);
+  for (const name of ['a'.repeat(101), 'Hei\u0000', 'Hei\u202e', '\ud800']) {
+    assertInvalid({ category: 'bug', message: 'Hei', name });
   }
 });
 
@@ -198,6 +206,7 @@ test('parses valid JSON, rejects malformed JSON and duplicate keys, and bounds e
       category: 'bug',
       categoryLabel: 'Feil',
       message: validRequest.message,
+      name: null,
        email: 'Bruker@example.no',
       honeypot: false,
     },

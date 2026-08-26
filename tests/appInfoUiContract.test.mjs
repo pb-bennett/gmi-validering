@@ -296,7 +296,7 @@ test('contact form keeps the C1 payload boundary and accessible form contract', 
   assert.match(contactFormSource, /name="website"/);
   assert.match(contactFormSource, /tabIndex=\{-1\}/);
   assert.match(contactFormSource, /aria-hidden="true"/);
-  assert.match(contactFormSource, /buildContactPayload = \(\{ category, message, email, website \}\) => \(\{/);
+  assert.match(contactFormSource, /buildContactPayload = \(\{ category, message, name, email, website \}\) => \(\{/);
   assert.match(contactFormSource, /fetch\('\/api\/contact'/);
   assert.match(contactFormSource, /method: 'POST'/);
   assert.match(contactFormSource, /Content-Type.*application\/json/);
@@ -308,8 +308,11 @@ test('contact form keeps the C1 payload boundary and accessible form contract', 
   assert.match(contactFormSource, /via Resend til mottakerens postkasse/);
   assert.match(contactFormSource, /Ingen fil- eller valideringsdata legges ved/);
   assert.match(contactFormSource, /Takk! Tilbakemeldingen er sendt/);
-  assert.doesNotMatch(contactFormSource, /name="name"|type="file"|attachment|screenshot/i);
-  assert.doesNotMatch(contactFormSource, /zustand|useStore|localStorage|coordinates|municipality|WMS|telemetry|parser|file upload/i);
+  assert.match(contactFormSource, /name="name"/);
+  assert.match(contactFormSource, /autoComplete="name"/);
+  assert.match(contactFormSource, /gmi-validering:contact-profile:v1/);
+  assert.doesNotMatch(contactFormSource, /type="file"|attachment|screenshot/i);
+  assert.doesNotMatch(contactFormSource, /zustand|useStore|coordinates|municipality|WMS|telemetry|parser|file upload/i);
   assert.doesNotMatch(contactFormSource, /dangerouslySetInnerHTML|from ['"]lucide-react['"]|<svg\b/);
   assert.doesNotMatch(contactFormSource, /NEXT_PUBLIC_RESEND|RESEND_API_KEY|CONTACT_TO_EMAIL|CONTACT_FROM_EMAIL|api\.resend\.com/i);
   assert.match(sourceLinkSource, /<GithubLogoIcon/);

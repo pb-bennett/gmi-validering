@@ -1,10 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+export const CONTACT_PROFILE_STORAGE_KEY = 'gmi-validering:contact-profile:v1';
 
 const INITIAL_FORM = Object.freeze({
   category: 'bug',
   message: '',
+  name: '',
   email: '',
   website: '',
 });
@@ -57,9 +60,10 @@ const validateForm = (form) => {
   return errors;
 };
 
-export const buildContactPayload = ({ category, message, email, website }) => ({
+export const buildContactPayload = ({ category, message, name, email, website }) => ({
   category,
   message,
+  name,
   email,
   website,
 });
@@ -75,9 +79,43 @@ export default function ContactForm() {
   const fieldRefs = useRef({});
   const isSubmitting = status === 'submitting';
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CONTACT_PROFILE_STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      const savedKeys = saved && typeof saved === 'object' ? Object.keys(saved) : [];
+      if (
+        savedKeys.length === 3 &&
+        savedKeys.every((key) => ['schema', 'name', 'email'].includes(key)) &&
+        saved.schema === 1 &&
+        typeof saved.name === 'string' &&
+        typeof saved.email === 'string'
+      ) {
+        // Hydrate the controlled fields from the optional browser profile.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setForm((current) => ({ ...current, name: saved.name, email: saved.email }));
+      }
+    } catch {
+      // Local storage is optional and may be unavailable or malformed.
+    }
+  }, []);
+
+  const persistProfile = (next) => {
+    try {
+      window.localStorage.setItem(CONTACT_PROFILE_STORAGE_KEY, JSON.stringify({ schema: 1, name: next.name, email: next.email }));
+    } catch {
+      // Local storage is optional and may be unavailable.
+    }
+  };
+
   const updateField = (field) => (event) => {
     const { value } = event.target;
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+      if (field === 'name' || field === 'email') persistProfile(next);
+      return next;
+    });
     if (fieldErrors[field]) {
       setFieldErrors((current) => ({ ...current, [field]: undefined }));
     }
@@ -93,7 +131,7 @@ export default function ContactForm() {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setStatus('validation');
-      const firstInvalidField = ['category', 'email', 'message'].find(
+      const firstInvalidField = ['category', 'name', 'email', 'message'].find(
         (field) => errors[field],
       );
       fieldRefs.current[firstInvalidField]?.focus();
@@ -124,7 +162,7 @@ export default function ContactForm() {
         return;
       }
 
-      setForm(INITIAL_FORM);
+      setForm((current) => ({ ...INITIAL_FORM, name: current.name, email: current.email }));
       setStatus('success');
     } catch {
       setFormError(ERROR_MESSAGES.send_failed);
@@ -185,6 +223,29 @@ export default function ContactForm() {
               {fieldErrors.category}
             </p>
           )}
+        </div>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <label htmlFor="contact-name" className="text-sm font-semibold text-slate-800">
+            Navn <span className="font-normal text-slate-500">(valgfritt)</span>
+          </label>
+          <input
+            id="contact-name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            maxLength={100}
+            ref={(node) => { fieldRefs.current.name = node; }}
+            value={form.name}
+            onChange={updateField('name')}
+            disabled={isSubmitting}
+            aria-invalid={fieldErrors.name ? 'true' : undefined}
+            aria-describedby={fieldErrors.name ? 'contact-name-error' : undefined}
+            className={FIELD_CLASS}
+          />
+          {fieldErrors.name && <p id="contact-name-error" className={ERROR_CLASS}>{fieldErrors.name}</p>}
         </div>
 
         <div>
@@ -262,7 +323,7 @@ export default function ContactForm() {
       </div>
 
       <p className="max-w-[54rem] text-xs leading-5 text-slate-500">
-        Bare det du skriver her, og appversjonen som vises over, sendes på e-post via Resend til mottakerens postkasse. E-postadressen er valgfri og brukes bare hvis du ønsker svar. Ingen fil- eller valideringsdata legges ved.
+        Navn og e-post huskes lokalt i nettleseren for enkelhets skyld. Bare det du skriver her, og appversjonen som vises over, sendes på e-post via Resend til mottakerens postkasse. E-postadressen er valgfri og brukes bare hvis du ønsker svar. Ingen fil- eller valideringsdata legges ved.
       </p>
 
       <div className="flex flex-wrap items-center gap-4">

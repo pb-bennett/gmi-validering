@@ -56,6 +56,7 @@ const getValidatedFields = (input) => {
     return validateContactRequest({
       category: input?.category,
       message: input?.message,
+      name: input?.name ?? undefined,
       email: input?.email ?? undefined,
       website: '',
     });
@@ -69,7 +70,7 @@ const buildEmail = ({ fields, sender, recipient }) => {
     from: `GMI Validator <${sender}>`,
     to: recipient,
     subject: `GMI Validator: ${fields.categoryLabel}`,
-    text: `Kategori: ${fields.categoryLabel}\nAppversjon: ${CURRENT_APP_VERSION}\n\nMelding:\n${fields.message}`,
+    text: `Kategori: ${fields.categoryLabel}\nAppversjon: ${CURRENT_APP_VERSION}${fields.name ? `\nNavn: ${fields.name}` : ''}\n\nMelding:\n${fields.message}`,
   };
 
   if (fields.email) email.reply_to = fields.email;
