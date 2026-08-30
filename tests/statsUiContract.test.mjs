@@ -46,6 +46,9 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(detailed, /Detaljert statistikk er ikke aktivert ennå/);
   assert.match(testMode, /Testmodus er aktiv/);
   assert.match(testMode, /opplastinger registreres ikke/);
+  assert.match(testMode, /Utviklerverkt/);
+  assert.match(testMode, /developerToolsOpen/);
+  assert.match(testMode, /DevDiagnosticsPanel/);
   assert.match(activation, /testmodus/);
   assert.match(activation, /'1'/);
   assert.doesNotMatch(testMode, /Aktiver testmodus/);
@@ -55,6 +58,7 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(tabSwitcher, /Kartoversikt/);
   assert.match(tabSwitcher, /3D-visning/);
   assert.doesNotMatch(page, /<TestModeControl \/>/);
+  assert.doesNotMatch(page, /DevDiagnosticsPanel/);
   assert.match(modal, /Opplastinger uten registrert kommune/);
   assert.match(modal, /Statistikk fra/);
   assert.match(modal, /formatAnalyticsStartDate/);

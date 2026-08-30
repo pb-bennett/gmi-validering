@@ -88,13 +88,21 @@ test('tracking fails closed around persisted Testmodus hydration', () => {
   assert.equal(isTrackingAllowed({ hydrated: true, testMode: false }), true);
 });
 
-test('Testmodus is an in-flow toolbar control and retains its activation effect', async () => {
+test('Testmodus exposes one developer control only while active', async () => {
   const control = await readFile(new URL('../src/components/TestModeControl.js', import.meta.url), 'utf8');
   const toolbar = await readFile(new URL('../src/components/TabSwitcher.js', import.meta.url), 'utf8');
   const page = await readFile(new URL('../src/app/page.js', import.meta.url), 'utf8');
   assert.match(control, /aria-label="Slå av testmodus"/);
+  assert.match(control, /Utviklerverkt/);
+  assert.match(control, /DevDiagnosticsPanel isOpen=\{developerToolsOpen\}/);
+  const diagnostics = await readFile(new URL('../src/components/DevDiagnosticsPanel.js', import.meta.url), 'utf8');
+  assert.match(diagnostics, /if \(!isOpen \|\| !stats\) return null/);
+  assert.match(diagnostics, /top-full[\s\S]*bg-gray-900/);
+  assert.doesNotMatch(diagnostics, /fixed bottom-2 right-2/);
+  assert.doesNotMatch(control, />DEV</);
   assert.doesNotMatch(control, /fixed left-4 bottom-4/);
   assert.match(toolbar, /<TestModeControl \/>/);
   assert.match(toolbar, /viewer3DOpen && data/);
   assert.doesNotMatch(page, /<TestModeControl \/>/);
+  assert.doesNotMatch(page, /DevDiagnosticsPanel/);
 });

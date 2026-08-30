@@ -13,7 +13,6 @@ import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
 import TabSwitcher from '@/components/TabSwitcher';
 import TerrainFetcher from '@/components/TerrainFetcher';
-import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
@@ -488,11 +487,6 @@ export default function Home() {
         <>
           {/* Background terrain fetcher - runs in background */}
           <TerrainFetcher />
-
-          {/* Dev diagnostics panel - bottom right corner */}
-          {process.env.NODE_ENV !== 'production' && (
-            <DevDiagnosticsPanel />
-          )}
 
           {/* Sidebar - Hidden when field validation is open */}
           {!fieldValidationOpen && (
