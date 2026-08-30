@@ -7,6 +7,8 @@ import { analyzeIncline } from '@/lib/analysis/incline';
 import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
+import { EnvelopeSimpleIcon, InfoIcon } from '@phosphor-icons/react';
+import { CURRENT_APP_VERSION } from '@/data/appReleases.mjs';
 import LayerManager from './LayerManager';
 
 const MISSING_TEMA_VALUE = '(Ingen verdi)';
@@ -92,6 +94,7 @@ function InclineAnalysisControl() {
           </span>
         </div>
       )}
+
     </div>
   );
 }
@@ -792,7 +795,7 @@ function FieldSubSection({
   );
 }
 
-export default function Sidebar({ onReset, onAddFile }) {
+export default function Sidebar({ onReset, onAddFile, onOpenAppInfo, onOpenContact, appInfoTriggerRef }) {
   const file = useStore((state) => state.file);
   const data = useStore((state) => state.data);
   const layerOrder = useStore((state) => state.layerOrder);
@@ -1202,6 +1205,17 @@ export default function Sidebar({ onReset, onAddFile }) {
             >
               Innmålingskontroll
             </span>
+          <button
+            ref={appInfoTriggerRef}
+            type="button"
+            onClick={onOpenAppInfo}
+            aria-haspopup="dialog"
+            aria-label={`Om appen, versjon ${CURRENT_APP_VERSION}`}
+            className="mt-1 inline-flex min-h-7 max-w-full items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600"
+          >
+            <InfoIcon size={14} weight="regular" aria-hidden="true" />
+            <span className="whitespace-nowrap">Om appen · v{CURRENT_APP_VERSION}</span>
+          </button>
           </div>
         </div>
       </div>
@@ -2017,6 +2031,25 @@ export default function Sidebar({ onReset, onAddFile }) {
           </SidebarSection>
         </div>
       )}
+
+      <div
+        className="mt-auto border-t px-4 py-3"
+        style={{
+          borderColor: 'var(--color-border)',
+          backgroundColor: 'var(--color-sidebar-bg)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onOpenContact}
+          aria-haspopup="dialog"
+          className="flex min-h-9 w-full items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+          style={{ color: 'var(--color-primary)' }}
+        >
+          <EnvelopeSimpleIcon size={17} weight="regular" aria-hidden="true" />
+          Kontakt
+        </button>
+      </div>
     </div>
   );
 }

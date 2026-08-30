@@ -2,11 +2,12 @@
 
 import { useMemo, useState, useRef, useEffect } from 'react';
 import useStore from '@/lib/store';
+import { EnvelopeSimpleIcon } from '@phosphor-icons/react';
 import { validateFields } from '@/lib/validation/fieldValidation';
 import FieldDetailModal from './FieldDetailModal';
 import MissingFieldsReport from './MissingFieldsReport';
 
-export default function FieldValidationSidebar() {
+export default function FieldValidationSidebar({ onOpenContact }) {
   const data = useStore((state) => state.data);
   const toggleFieldValidation = useStore(
     (state) => state.toggleFieldValidation
@@ -353,6 +354,18 @@ export default function FieldValidationSidebar() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="mt-auto border-t px-4 py-3">
+        <button
+          type="button"
+          onClick={onOpenContact}
+          aria-haspopup="dialog"
+          className="flex min-h-9 w-full items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        >
+          <EnvelopeSimpleIcon size={17} weight="regular" aria-hidden="true" />
+          Kontakt
+        </button>
       </div>
 
       <FieldDetailModal

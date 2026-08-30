@@ -148,6 +148,54 @@
   box-shadow: 0 1px 3px rgba(131, 24, 67, 0.28);
 }
 
+.app-info-dialog {
+  width: min(1180px, calc(100vw - 48px));
+  height: min(86dvh, 56rem);
+  min-height: 34rem;
+  max-height: calc(100dvh - 2rem);
+}
+
+.app-info-inner {
+  width: 100%;
+  max-width: 56rem;
+  margin-inline: auto;
+}
+
+.app-info-hero-title {
+  margin-top: 1rem;
+  max-width: 42rem;
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.55;
+  color: rgb(203 213 225);
+}
+
+@media (min-width: 640px) {
+  .app-info-hero-title {
+    font-size: 1.25rem;
+  }
+}
+
+.app-info-scroll {
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 639px) {
+  .app-info-dialog {
+    width: 100%;
+    height: calc(100dvh - 1rem);
+    min-height: 0;
+    max-height: none;
+  }
+}
+
+@media (max-height: 720px) and (min-width: 640px) {
+  .app-info-dialog {
+    height: calc(100dvh - 2rem);
+    min-height: 0;
+  }
+}
+
 .statistics-button--cue {
   --statistics-cue-start-x: -96px;
   --statistics-cue-start-y: -18px;

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { startTransition, useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { EnvelopeSimpleIcon, InfoIcon } from '@phosphor-icons/react';
 import FileUpload from '@/components/FileUpload';
 import GlobalFileDrop from '@/components/GlobalFileDrop';
 import DataDisplayModal from '@/components/DataDisplayModal';
@@ -13,11 +14,13 @@ import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
 import TabSwitcher from '@/components/TabSwitcher';
 import TerrainFetcher from '@/components/TerrainFetcher';
-import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
-import TestModeControl from '@/components/TestModeControl';
+import AppInfoModal from '@/components/AppInfoModal';
+import { TestModeActivation } from '@/components/TestModeControl';
+import { CURRENT_APP_VERSION, LATEST_ANNOUNCED_RELEASE } from '@/data/appReleases.mjs';
+import { decideAutomaticAppInfo } from '@/lib/appInfoState.mjs';
 import { getTerrainStats } from '@/lib/analysis/terrain';
 import { claimStatisticsCue } from '@/lib/statisticsCue.mjs';
 import useStore from '@/lib/store';
@@ -90,6 +93,34 @@ export default function Home() {
   const [showStats, setShowStats] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [statisticsCueActive, setStatisticsCueActive] = useState(false);
+  const [showAppInfo, setShowAppInfo] = useState(false);
+  const [appInfoInitialTab, setAppInfoInitialTab] = useState('about');
+  const appInfoTriggerRef = useRef(null);
+  const appInfoAutoCheckedRef = useRef(false);
+
+  // Decide and claim the first info popup before the heartbeat can create the legacy key.
+  useEffect(() => {
+    if (appInfoAutoCheckedRef.current) return;
+    appInfoAutoCheckedRef.current = true;
+
+    let storage = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      // The info modal remains usable when browser storage is unavailable.
+    }
+
+    const decision = decideAutomaticAppInfo({
+      storage,
+      latestAnnouncedRelease: LATEST_ANNOUNCED_RELEASE,
+    });
+    if (!decision.open) return;
+
+    startTransition(() => {
+      setAppInfoInitialTab(decision.tab);
+      setShowAppInfo(true);
+    });
+  }, []);
 
   useEffect(() => {
     let sessionStorage;
@@ -239,11 +270,15 @@ export default function Home() {
     resetAll();
   };
 
+  const openAppInfo = (tab = 'about') => {
+    setAppInfoInitialTab(tab);
+    setShowAppInfo(true);
+  };
+
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
-      <TestModeControl />
-
+      <TestModeActivation />
       {/* Floating Stats Button - Always visible */}
       <button
         className={
@@ -314,6 +349,12 @@ export default function Home() {
       <StatsModal
         isOpen={showStats}
         onClose={() => setShowStats(false)}
+      />
+      <AppInfoModal
+        isOpen={showAppInfo}
+        initialTab={appInfoInitialTab}
+        onClose={() => setShowAppInfo(false)}
+        openerRef={appInfoTriggerRef}
       />
 
       {/* Share QR button */}
@@ -480,6 +521,29 @@ export default function Home() {
 
             <div className="bg-white shadow rounded-lg p-6">
               <FileUpload />
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  ref={appInfoTriggerRef}
+                  type="button"
+                  onClick={() => openAppInfo('about')}
+                  aria-haspopup="dialog"
+                  aria-label={`Om appen, versjon ${CURRENT_APP_VERSION}`}
+                  title="Informasjon om appen og versjonshistorikk"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                >
+                  <InfoIcon size={15} weight="regular" aria-hidden="true" />
+                  <span className="whitespace-nowrap">Om appen · v{CURRENT_APP_VERSION}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAppInfo('contact')}
+                  aria-haspopup="dialog"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                >
+                  <EnvelopeSimpleIcon size={15} weight="regular" aria-hidden="true" />
+                  <span className="whitespace-nowrap">Kontakt</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -491,23 +555,21 @@ export default function Home() {
           {/* Background terrain fetcher - runs in background */}
           <TerrainFetcher />
 
-          {/* Dev diagnostics panel - bottom right corner */}
-          {process.env.NODE_ENV !== 'production' && (
-            <DevDiagnosticsPanel />
-          )}
-
           {/* Sidebar - Hidden when field validation is open */}
           {!fieldValidationOpen && (
             <Sidebar
               onReset={handleReset}
               onAddFile={() => setShowAddLayerModal(true)}
+              onOpenAppInfo={() => openAppInfo('about')}
+              onOpenContact={() => openAppInfo('contact')}
+              appInfoTriggerRef={appInfoTriggerRef}
             />
           )}
 
           {/* Field Validation Sidebar - 33% width */}
           {fieldValidationOpen && (
             <div className="w-1/3 h-full flex-none">
-              <FieldValidationSidebar />
+              <FieldValidationSidebar onOpenContact={() => openAppInfo('contact')} />
             </div>
           )}
 

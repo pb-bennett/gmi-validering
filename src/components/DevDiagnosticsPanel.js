@@ -66,8 +66,7 @@ function formatBytes(bytes) {
  * - Queue status
  * - Store memory usage
  */
-export default function DevDiagnosticsPanel() {
-  const [isOpen, setIsOpen] = useState(false);
+export default function DevDiagnosticsPanel({ isOpen = false }) {
   const [stats, setStats] = useState(null);
   const [lastSnapshot, setLastSnapshot] = useState(null);
   const [lastEvent, setLastEvent] = useState(null);
@@ -281,10 +280,12 @@ export default function DevDiagnosticsPanel() {
     }
   }, [isOpen, stats]);
 
+  if (!isOpen || !stats) return null;
+
   return (
-    <div className="fixed bottom-2 right-2 z-[3000]">
-      {/* Toggle Button */}
-      <button
+    <div className="absolute top-full left-1/2 z-[3000] mt-2 w-72 max-h-96 -translate-x-1/2 overflow-auto rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
+      {/* Legacy toggle removed; the Testmodus control owns this action. */}
+      {/* {false && <button
         onClick={() => setIsOpen(!isOpen)}
         className="bg-gray-800 text-white text-xs px-2 py-1 rounded shadow hover:bg-gray-700 flex items-center gap-1"
         title="Terrain API Diagnostics"
@@ -309,11 +310,10 @@ export default function DevDiagnosticsPanel() {
           />
         </svg>
         DEV
-      </button>
+      </button>} */}
 
       {/* Panel */}
-      {isOpen && stats && (
-        <div className="absolute bottom-8 right-0 bg-gray-900 text-white text-xs rounded shadow-lg p-3 w-72 max-h-96 overflow-auto">
+      <div className="contents">
           <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
             <h3 className="font-bold">Terrain API Stats</h3>
             <button
@@ -753,8 +753,7 @@ export default function DevDiagnosticsPanel() {
               </div>
             </div>
           )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

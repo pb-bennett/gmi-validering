@@ -1,6 +1,8 @@
 'use client';
 
 import useStore from '@/lib/store';
+import { isTestModeEnabled } from '@/lib/telemetry/uploadTelemetry.mjs';
+import TestModeControl from './TestModeControl';
 
 export default function TabSwitcher() {
   const activeViewTab = useStore((state) => state.ui.activeViewTab);
@@ -9,12 +11,17 @@ export default function TabSwitcher() {
   );
   const viewer3DOpen = useStore((state) => state.ui.viewer3DOpen);
   const data = useStore((state) => state.data);
+  const testModeVisible = useStore(
+    (state) => state.hydrated === true && isTestModeEnabled(state.settings),
+  );
+  const showTabs = viewer3DOpen && data;
 
-  // Only show tab switcher when 3D viewer is open AND data is loaded
-  if (!viewer3DOpen || !data) return null;
+  if (!showTabs && !testModeVisible) return null;
 
   return (
     <div className="fixed top-2 left-1/2 transform -translate-x-1/2 z-10001 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200/50 flex overflow-hidden p-0.5 gap-0.5">
+      {showTabs && (
+        <>
       <button
         onClick={() => setActiveViewTab('map')}
         className={`px-3.5 py-1.5 text-sm font-medium transition-all rounded-md flex items-center gap-1.5 ${
@@ -61,6 +68,9 @@ export default function TabSwitcher() {
         </svg>
         3D-visning
       </button>
+        </>
+      )}
+      <TestModeControl />
     </div>
   );
 }
