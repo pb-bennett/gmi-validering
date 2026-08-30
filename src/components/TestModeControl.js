@@ -7,11 +7,9 @@ import { isTestModeActivation } from '@/lib/testModeActivation.mjs';
 import { GearSixIcon } from '@phosphor-icons/react';
 import DevDiagnosticsPanel from './DevDiagnosticsPanel';
 
-export default function TestModeControl() {
-  const testMode = useStore((state) => isTestModeEnabled(state.settings));
+export function TestModeActivation() {
   const hydrated = useStore((state) => state.hydrated === true);
   const updateSettings = useStore((state) => state.updateSettings);
-  const [developerToolsOpen, setDeveloperToolsOpen] = useState(false);
 
   useEffect(() => {
     if (!hydrated || typeof window === 'undefined') return;
@@ -25,6 +23,15 @@ export default function TestModeControl() {
     const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
     window.history.replaceState(window.history.state, '', nextUrl);
   }, [hydrated, updateSettings]);
+
+  return null;
+}
+
+export default function TestModeControl() {
+  const testMode = useStore((state) => isTestModeEnabled(state.settings));
+  const hydrated = useStore((state) => state.hydrated === true);
+  const updateSettings = useStore((state) => state.updateSettings);
+  const [developerToolsOpen, setDeveloperToolsOpen] = useState(false);
 
   if (!hydrated || !testMode) return null;
 

@@ -79,8 +79,8 @@ export const buildLegacyTrackRequestBody = (datasetCoord) => ({
 
 export const isTestModeEnabled = (settings) => settings?.testMode === true;
 
-export const isTrackingAllowed = ({ hydrated, testMode } = {}) =>
-  hydrated === true && testMode === false;
+export const isTrackingAllowed = ({ hydrated, testMode, urlTestMode } = {}) =>
+  hydrated === true && testMode === false && urlTestMode !== true;
 
 export const completeSuccessfulUpload = ({
   deriveTelemetry = deriveUploadTelemetry,
@@ -89,9 +89,10 @@ export const completeSuccessfulUpload = ({
   trackUploadSuccess,
   onComplete,
   testMode = false,
+  urlTestMode = false,
   hydrated = false,
 } = {}) => {
-  if (!isTrackingAllowed({ hydrated, testMode })) {
+  if (!isTrackingAllowed({ hydrated, testMode, urlTestMode })) {
     if (onComplete) onComplete();
     return null;
   }

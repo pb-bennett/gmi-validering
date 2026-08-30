@@ -347,6 +347,11 @@ test('contact form keeps the C1 payload boundary and accessible form contract', 
   assert.match(contactFormSource, /disabled=\{isSubmitting\}/);
   assert.match(contactFormSource, /role="status"/);
   assert.match(contactFormSource, /aria-live="polite"/);
+  assert.match(contactFormSource, /const successActionRef = useRef\(null\)/);
+  assert.match(contactFormSource, /const previousStatusRef = useRef\(status\)/);
+  assert.match(contactFormSource, /status === 'success'[\s\S]*successActionRef\.current\?\.focus\(\)/);
+  assert.match(contactFormSource, /status === 'idle' && previousStatusRef\.current === 'success'[\s\S]*fieldRefs\.current\.category\?\.focus\(\)/);
+  assert.match(contactFormSource, /ref=\{successActionRef\}/);
   assert.match(contactFormSource, /Bare det du skriver her/);
   assert.match(contactFormSource, /via Resend til mottakerens postkasse/);
   assert.match(contactFormSource, /Ingen fil- eller valideringsdata legges ved/);

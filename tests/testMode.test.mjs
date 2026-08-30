@@ -25,7 +25,10 @@ const {
   completeSuccessfulUpload,
   isTrackingAllowed,
 } = await import('../src/lib/telemetry/uploadTelemetry.mjs');
-const { isTestModeActivation } = await import(
+const {
+  isTestModeActivation,
+  isTestModeActivatedFromLocation,
+} = await import(
   '../src/lib/testModeActivation.mjs'
 );
 
@@ -88,9 +91,38 @@ test('tracking fails closed around persisted Testmodus hydration', () => {
   assert.equal(isTrackingAllowed({ hydrated: true, testMode: false }), true);
 });
 
+test('exact URL activation skips the first upload before the React effect can run', () => {
+  const run = (search) => {
+    let trackingCalls = 0;
+    completeSuccessfulUpload({
+      testMode: false,
+      urlTestMode: isTestModeActivatedFromLocation({ search }),
+      hydrated: true,
+      deriveTelemetry: () => ({ shouldNotBeSent: true }),
+      trackUploadSuccess: () => { trackingCalls += 1; },
+    });
+    return trackingCalls;
+  };
+
+  assert.equal(run('?testmodus=1'), 0);
+  assert.equal(run(''), 1);
+  for (const search of [
+    '?testmodus=0',
+    '?testmodus=01',
+    '?testmodus=1&testmodus=1',
+    '?testmodus=true',
+    '?testmodus=%31%31',
+    '?testmodus=1=1',
+    '?other=value',
+  ]) {
+    assert.equal(run(search), 1, search);
+  }
+});
+
 test('Testmodus exposes one developer control only while active', async () => {
   const control = await readFile(new URL('../src/components/TestModeControl.js', import.meta.url), 'utf8');
   const toolbar = await readFile(new URL('../src/components/TabSwitcher.js', import.meta.url), 'utf8');
+  const fileUpload = await readFile(new URL('../src/components/FileUpload.js', import.meta.url), 'utf8');
   const page = await readFile(new URL('../src/app/page.js', import.meta.url), 'utf8');
   assert.match(control, /aria-label="Slå av testmodus"/);
   assert.match(control, /Utviklerverkt/);
@@ -103,6 +135,10 @@ test('Testmodus exposes one developer control only while active', async () => {
   assert.doesNotMatch(control, /fixed left-4 bottom-4/);
   assert.match(toolbar, /<TestModeControl \/>/);
   assert.match(toolbar, /viewer3DOpen && data/);
+  assert.match(control, /export function TestModeActivation\(\)/);
+  assert.match(fileUpload, /testMode: isTestModeEnabled\(useStore\.getState\(\)\.settings\)/);
+  assert.match(fileUpload, /urlTestMode: isTestModeActivatedFromLocation\(\)/);
+  assert.match(page, /<TestModeActivation \/>/);
   assert.doesNotMatch(page, /<TestModeControl \/>/);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);
 });

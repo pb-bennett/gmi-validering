@@ -39,7 +39,13 @@ const createFetchMock = ({ status = 200, onCall } = {}) => {
   return { calls, fetchMock };
 };
 
-const makeSender = ({ config = CONFIG, fetchImpl, timeoutMs, now } = {}) =>
+const makeSender = ({
+  config = CONFIG,
+  fetchImpl,
+  timeoutMs,
+  now,
+  createUniqueId = () => 'test-id',
+} = {}) =>
   createContactEmailSender({
     getEnv: (name) => config[name],
     fetchImpl: fetchImpl || (async () => {
@@ -47,6 +53,7 @@ const makeSender = ({ config = CONFIG, fetchImpl, timeoutMs, now } = {}) =>
     }),
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
     ...(now === undefined ? {} : { now }),
+    createUniqueId,
   });
 
 const getRequest = (calls) => {
@@ -78,7 +85,7 @@ test('valid configuration sends one fixed, plain-text Resend request', async () 
   ]);
   assert.equal(body.from, 'GMI Validator <sender@example.test>');
   assert.equal(body.to, 'owner@example.test');
-  assert.equal(body.subject, 'GMI Validator: Feil — Uten navn — 15.01.2026 13:34:56');
+  assert.equal(body.subject, 'GMI Validator: Feil — Uten navn — 15.01.2026 13:34:56 — test-id');
   assert.equal(
     body.text,
     `Kategori: Feil\nAppversjon: ${CURRENT_APP_VERSION}\nE-post: Bruker@example.no\n\nMelding:\nFeil på kartet\nved kafé.`,
@@ -105,8 +112,28 @@ test('a supplied name is included in the subject while email stays out of it', a
   const [, options] = getRequest(calls);
   const body = JSON.parse(options.body);
 
-  assert.equal(body.subject, 'GMI Validator: Feil — Paul Bennett — 15.01.2026 13:34:56');
+  assert.equal(body.subject, 'GMI Validator: Feil — Paul Bennett — 15.01.2026 13:34:56 — test-id');
   assert.equal(body.subject.includes('user@example.com'), false);
+});
+
+test('subjects include a distinct injected identifier for deterministic collision coverage', async () => {
+  const { calls, fetchMock } = createFetchMock();
+  const ids = ['a1b2c3d4', 'e5f60718'];
+  let idIndex = 0;
+  const sender = makeSender({
+    fetchImpl: fetchMock,
+    now: TEST_NOW,
+    createUniqueId: () => ids[idIndex++],
+  });
+
+  await sender({ category: 'bug', name: 'Paul Bennett', message: 'Første melding' });
+  await sender({ category: 'bug', name: 'Paul Bennett', message: 'Andre melding' });
+
+  const firstBody = JSON.parse(calls[0][1].body);
+  const secondBody = JSON.parse(calls[1][1].body);
+  assert.equal(firstBody.subject, 'GMI Validator: Feil — Paul Bennett — 15.01.2026 13:34:56 — a1b2c3d4');
+  assert.equal(secondBody.subject, 'GMI Validator: Feil — Paul Bennett — 15.01.2026 13:34:56 — e5f60718');
+  assert.notEqual(firstBody.subject, secondBody.subject);
 });
 
 test('the configured timeout is approximately eight seconds and is abortable', () => {
@@ -182,7 +209,7 @@ test('an absent email omits E-post and Reply-To and never changes From', async (
   assert.equal(Object.hasOwn(body, 'reply_to'), false);
   assert.equal(body.from, 'GMI Validator <sender@example.test>');
   assert.equal(body.to, 'owner@example.test');
-  assert.equal(body.subject, 'GMI Validator: Forslag — Anonym — 15.01.2026 13:34:56');
+  assert.equal(body.subject, 'GMI Validator: Forslag — Anonym — 15.01.2026 13:34:56 — test-id');
   assert.equal(body.text.includes('E-post:'), false);
   assert.equal(body.text, `Kategori: Forslag\nAppversjon: ${CURRENT_APP_VERSION}\n\nMelding:\nEt forslag`);
 });
@@ -202,7 +229,7 @@ test('all category subjects are fixed and derived from the category', async () =
     });
     const [, options] = getRequest(calls);
     const body = JSON.parse(options.body);
-    assert.equal(body.subject, `GMI Validator: ${label} — Anonym — 15.01.2026 13:34:56`);
+    assert.equal(body.subject, `GMI Validator: ${label} — Anonym — 15.01.2026 13:34:56 — test-id`);
     assert.match(body.text, new RegExp(`^Kategori: ${label}\\n`, 'u'));
   }
 });

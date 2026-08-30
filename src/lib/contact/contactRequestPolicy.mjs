@@ -88,7 +88,9 @@ const normalizeName = (value) => {
     throw invalidRequest();
   }
   const normalized = value.normalize('NFC');
-  if (hasForbiddenTextCharacters(normalized)) throw invalidRequest();
+  if (/\r|\n/u.test(normalized) || hasForbiddenTextCharacters(normalized)) {
+    throw invalidRequest();
+  }
   const trimmed = normalized.trim();
   if ([...trimmed].length > CONTACT_MAX_NAME_CODE_POINTS) throw invalidRequest();
   return trimmed === '' ? null : trimmed;

@@ -14,6 +14,7 @@ import {
   completeSuccessfulUpload,
   isTestModeEnabled,
 } from '@/lib/telemetry/uploadTelemetry.mjs';
+import { isTestModeActivatedFromLocation } from '@/lib/testModeActivation.mjs';
 
 export function useFileLoader({ onComplete } = {}) {
   const setFile = useStore((state) => state.setFile);
@@ -23,7 +24,6 @@ export function useFileLoader({ onComplete } = {}) {
   const setData = useStore((state) => state.setData);
   const clearData = useStore((state) => state.clearData);
   const addLayer = useStore((state) => state.addLayer);
-  const testMode = useStore((state) => isTestModeEnabled(state.settings));
   const hydrated = useStore((state) => state.hydrated === true);
 
   const trackUploadSuccess = async (datasetCoord) => {
@@ -235,7 +235,8 @@ export function useFileLoader({ onComplete } = {}) {
             datasetCoord,
             trackUploadSuccess,
             onComplete,
-            testMode,
+            testMode: isTestModeEnabled(useStore.getState().settings),
+            urlTestMode: isTestModeActivatedFromLocation(),
             hydrated,
           });
         } catch (error) {
@@ -309,7 +310,6 @@ export function useFileLoader({ onComplete } = {}) {
       clearData,
       addLayer,
       onComplete,
-      testMode,
       hydrated,
     ],
   );

@@ -77,7 +77,18 @@ export default function ContactForm() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState('');
   const fieldRefs = useRef({});
+  const successActionRef = useRef(null);
+  const previousStatusRef = useRef(status);
   const isSubmitting = status === 'submitting';
+
+  useEffect(() => {
+    if (status === 'success') {
+      successActionRef.current?.focus();
+    } else if (status === 'idle' && previousStatusRef.current === 'success') {
+      fieldRefs.current.category?.focus();
+    }
+    previousStatusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     try {
@@ -178,6 +189,7 @@ export default function ContactForm() {
         </p>
         <button
           type="button"
+          ref={successActionRef}
           onClick={() => setStatus('idle')}
           className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-700"
         >

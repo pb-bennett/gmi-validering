@@ -18,6 +18,7 @@ import WmsLayerModal from '@/components/WmsLayerModal';
 import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
 import AppInfoModal from '@/components/AppInfoModal';
+import { TestModeActivation } from '@/components/TestModeControl';
 import { CURRENT_APP_VERSION, LATEST_ANNOUNCED_RELEASE } from '@/data/appReleases.mjs';
 import { decideAutomaticAppInfo } from '@/lib/appInfoState.mjs';
 import { getTerrainStats } from '@/lib/analysis/terrain';
@@ -277,6 +278,7 @@ export default function Home() {
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
+      <TestModeActivation />
       {/* Floating Stats Button - Always visible */}
       <button
         className={

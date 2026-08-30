@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { CURRENT_APP_VERSION } from '../../data/appReleases.mjs';
 import { validateContactRequest } from './contactRequestPolicy.mjs';
 
@@ -5,6 +6,7 @@ export const CONTACT_PROVIDER_URL = 'https://api.resend.com/emails';
 export const CONTACT_SEND_TIMEOUT_MS = 8_000;
 const CONTACT_USER_AGENT = 'GMI-Validator-Contact/1.0';
 const CONTACT_TIME_ZONE = 'Europe/Oslo';
+const createContactSubjectId = () => randomBytes(8).toString('hex');
 
 const EMAIL_LOCAL_PART = /^[A-Za-z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+\/=?^_`{|}~-]+)*$/u;
 const EMAIL_DOMAIN = /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/u;
@@ -82,12 +84,12 @@ const formatContactTimestamp = (date) => {
   return `${values.day}.${values.month}.${values.year} ${values.hour}:${values.minute}:${values.second}`;
 };
 
-const buildEmail = ({ fields, sender, recipient, now }) => {
+const buildEmail = ({ fields, sender, recipient, now, createUniqueId }) => {
   const subjectName = fields.name || (fields.email ? 'Uten navn' : 'Anonym');
   const email = {
     from: `GMI Validator <${sender}>`,
     to: recipient,
-    subject: `GMI Validator: ${fields.categoryLabel} — ${subjectName} — ${formatContactTimestamp(now())}`,
+    subject: `GMI Validator: ${fields.categoryLabel} — ${subjectName} — ${formatContactTimestamp(now())} — ${createUniqueId()}`,
     text: `Kategori: ${fields.categoryLabel}\nAppversjon: ${CURRENT_APP_VERSION}${fields.name ? `\nNavn: ${fields.name}` : ''}${fields.email ? `\nE-post: ${fields.email}` : ''}\n\nMelding:\n${fields.message}`,
   };
 
@@ -100,6 +102,7 @@ export const createContactEmailSender = ({
   getEnv = (name) => process.env[name],
   timeoutMs = CONTACT_SEND_TIMEOUT_MS,
   now = () => new Date(),
+  createUniqueId = createContactSubjectId,
 } = {}) => async (input) => {
   const configuration = getConfiguration(getEnv);
   if (!configuration) return { outcome: 'unavailable' };
@@ -125,6 +128,7 @@ export const createContactEmailSender = ({
         sender: configuration.sender,
         recipient: configuration.recipient,
         now,
+        createUniqueId,
       })),
     });
 

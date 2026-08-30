@@ -147,7 +147,15 @@ test('requires the exact five top-level fields and scalar string types', () => {
 test('normalises optional Unicode names and enforces safe 100-code-point boundary', () => {
   assert.equal(validateContactRequest({ category: 'bug', message: 'Hei', name: '  Åse e\u0301  ' }).name, 'Åse é');
   assert.equal([...validateContactRequest({ category: 'bug', message: 'Hei', name: 'a'.repeat(100) }).name].length, 100);
-  for (const name of ['a'.repeat(101), 'Hei\u0000', 'Hei\u202e', '\ud800']) {
+  for (const name of [
+    'a'.repeat(101),
+    'Hei\u0000',
+    'Hei\u202e',
+    '\ud800',
+    'Alice\nBob',
+    'Alice\rBob',
+    'Alice\r\nBob',
+  ]) {
     assertInvalid({ category: 'bug', message: 'Hei', name });
   }
 });
