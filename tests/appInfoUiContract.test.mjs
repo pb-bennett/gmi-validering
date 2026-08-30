@@ -98,6 +98,9 @@ test('modal source has a stable accessible dialog and tab shell', () => {
   assert.match(modalSource, /app-info-dialog/);
   assert.match(modalSource, /app-info-inner focus-visible:outline/);
   assert.match(modalSource, /function AppInfoHero\(\{ title/);
+  assert.match(modalSource, /function AppInfoHero\(\{ title, eyebrow = 'GMI Validator', version = CURRENT_APP_VERSION \}\)/);
+  assert.match(modalSource, /bg-slate-950 px-5 py-6 text-white shadow-sm sm:px-7 sm:py-5/);
+  assert.doesNotMatch(modalSource, /compact/);
   assert.equal((modalSource.match(/<AppInfoHero\b/g) || []).length, 5);
   assert.equal((modalSource.match(/relative overflow-hidden rounded-t-2xl rounded-b-none bg-slate-950/g) || []).length, 1);
   assert.match(modalSource, /const APP_INFO_TAB_CONTENT_CLASS = 'space-y-7 \[&>\*:not\(:first-child\)\]:mx-2';/);
@@ -261,13 +264,18 @@ test('future roadmap stays separate from released versions and has no date', () 
   assert.match(futureSource, /<AppInfoHero title="Fremtiden – videre utvikling" \/>/);
   assert.doesNotMatch(futureSource, /app-info-roadmap-heading|<h3[^>]*>Videre utvikling<\/h3>/);
 
-  const roadmapStart = futureSource.indexOf('v1.2.0');
+  const screenshotRoadmapStart = futureSource.indexOf('Bedre tilbakemeldinger');
+  const validatorRoadmapStart = futureSource.indexOf('Validator 2.0 (beta)');
+  assert.ok(screenshotRoadmapStart > 0 && validatorRoadmapStart > screenshotRoadmapStart);
+  const roadmapStart = screenshotRoadmapStart;
   assert.ok(roadmapStart > 0);
   const roadmapSource = futureSource.slice(roadmapStart);
 
   assert.match(roadmapSource, /versjon 1\.2\.0/);
   assert.match(roadmapSource, /v1\.2\.0/);
   assert.match(roadmapSource, /Validator 2\.0 \(beta\)/);
+  assert.match(roadmapSource, /Bedre tilbakemeldinger/);
+  assert.match(roadmapSource, /Planlagt støtte for å legge ved skjermbilder i Kontakt-skjemaet, slik at feil og visuelle problemer blir enklere å beskrive\./);
   assert.match(roadmapSource, /Den nye valideringslogikken gir tydeligere kontroller/);
   assert.match(roadmapSource, /Planlagt/);
   assert.match(roadmapSource, /Planene kan endres etter hvert som funksjonene utvikles og testes/);
@@ -303,8 +311,12 @@ test('contact form keeps the C1 payload boundary and accessible form contract', 
   const sourceLinkSource = modalSource.slice(sourceLinkStart, sourceLinkEnd);
 
   assert.match(contactSource, /<ContactForm \/>/);
-  assert.match(contactSource, /<AppInfoHero title="Kontakt" compact \/>/);
+  assert.match(contactSource, /<AppInfoHero title="Kontakt" \/>/);
   assert.match(contactSource, /Har du funnet en feil/);
+  assert.match(contactSource, /flex max-w-\[54rem\] items-start gap-2\.5 rounded-lg border border-cyan-100 bg-cyan-50\/70 px-3 py-2\.5/);
+  assert.doesNotMatch(contactSource, /<InfoIcon size=\{17\} weight="regular" aria-hidden="true"/);
+  assert.match(contactSource, /<span className="mr-1\.5 inline-flex rounded-md bg-cyan-100 px-1\.5 py-0\.5 text-xs font-semibold leading-5 text-cyan-800">Planlagt<\/span>/);
+  assert.match(contactSource, /Mulighet for å legge ved skjermbilder kommer i en senere versjon\./);
   assert.doesNotMatch(contactSource, /GitHub|github|SourceCodeLink|Kildekode/);
   assert.match(contactFormSource, /<form/);
   assert.match(contactFormSource, /<select/);

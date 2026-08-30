@@ -85,9 +85,9 @@ function SourceCodeLink() {
   );
 }
 
-function AppInfoHero({ title, eyebrow = 'GMI Validator', version = CURRENT_APP_VERSION, compact = false }) {
+function AppInfoHero({ title, eyebrow = 'GMI Validator', version = CURRENT_APP_VERSION }) {
   return (
-      <section className={`relative overflow-hidden rounded-t-2xl rounded-b-none bg-slate-950 px-5 py-6 text-white shadow-sm sm:px-7 ${compact ? 'sm:py-5' : 'sm:py-8'}`}>
+      <section className="relative overflow-hidden rounded-t-2xl rounded-b-none bg-slate-950 px-5 py-6 text-white shadow-sm sm:px-7 sm:py-5">
       <div className="absolute right-0 top-0 h-32 w-32 translate-x-12 -translate-y-12 rounded-full border-[18px] border-cyan-400/20" aria-hidden="true" />
       <div className="relative">
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -230,6 +230,15 @@ function FutureContent() {
     <div className={APP_INFO_TAB_CONTENT_CLASS}>
       <AppInfoHero title="Fremtiden – videre utvikling" />
       <section>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-700">Planlagt</span>
+          </div>
+          <h4 className="mt-3 text-base font-bold text-slate-900">Bedre tilbakemeldinger</h4>
+          <p className="mt-1.5 text-[15px] leading-[1.6] text-slate-600">
+            Planlagt støtte for å legge ved skjermbilder i Kontakt-skjemaet, slik at feil og visuelle problemer blir enklere å beskrive.
+          </p>
+        </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-md bg-slate-900 px-2 py-1 text-xs font-semibold text-white">v1.2.0</span>
@@ -466,12 +475,18 @@ function HistoryContent({ expandedVersion, onToggle }) {
 function ContactContent() {
   return (
     <div className={CONTACT_TAB_CONTENT_CLASS}>
-      <AppInfoHero title="Kontakt" compact />
+      <AppInfoHero title="Kontakt" />
       <section aria-labelledby="app-info-contact-heading">
         <h3 id="app-info-contact-heading" className="sr-only">Tilbakemeldinger</h3>
         <p className="max-w-[54rem] text-base leading-[1.6] text-slate-700">
           Har du funnet en feil, har en kommentar, et forslag eller en idé til noe som kan gjøres bedre? Jeg vil gjerne høre fra deg.
         </p>
+        <div className="flex max-w-[54rem] items-start gap-2.5 rounded-lg border border-cyan-100 bg-cyan-50/70 px-3 py-2.5 text-sm leading-6 text-slate-700">
+          <p>
+            <span className="mr-1.5 inline-flex rounded-md bg-cyan-100 px-1.5 py-0.5 text-xs font-semibold leading-5 text-cyan-800">Planlagt</span>
+            Mulighet for å legge ved skjermbilder kommer i en senere versjon.
+          </p>
+        </div>
         <ContactForm />
       </section>
     </div>
