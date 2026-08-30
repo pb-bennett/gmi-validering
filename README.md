@@ -38,6 +38,8 @@ Støtten er ikke lik på tvers av formatene. Kontroller og visninger kan derfor 
 
 ## Personvern og databehandling
 
+Se [detaljert dokumentasjon om personvern og databehandling](docs/privacy.md).
+
 - Selve innmålingsfilen behandles lokalt i nettleseren og lastes ikke opp til GMI Validators applikasjonsserver.
 - Enkelte funksjoner sender avledede eller valgte koordinater til eksterne tjenester når det trengs for terrengdata, profilberegninger eller kommuneoppslag.
 - Karttjenester kan motta kartområdet eller visningen som nettleseren ber om, slik at kartet kan tegnes.
@@ -95,6 +97,8 @@ Prosjektet bruker Next.js og React. Kartvisningen bygger på Leaflet, 3D-visning
 
 ## Konfigurasjon
 
+Se [utviklerdokumentasjonen](docs/development.md) for prosjektstruktur, testing og konfigurasjon.
+
 Vanlig bruk av den publiserte løsningen krever ingen lokal konfigurasjon.
 
 Serverfunksjoner kan konfigureres med miljøvariabler for Supabase-basert bruksstatistikk, lokal statistikkfallback, keepalive-beskyttelse og Kontakt-funksjonens e-postlevering. Variablene omfatter blant annet `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TRACKING_KEEPALIVE_SECRET`, `TRACKING_STORAGE_PATH`, `RESEND_API_KEY`, `CONTACT_TO_EMAIL` og `CONTACT_FROM_EMAIL`.
@@ -102,6 +106,8 @@ Serverfunksjoner kan konfigureres med miljøvariabler for Supabase-basert brukss
 Verdier skal settes i det lokale eller deployede miljøet og aldri legges i kildekoden eller committes til Git. Hemmelige verdier skal bare være tilgjengelige på serversiden og skal ikke legges i URL-er eller eksponeres til klientkoden.
 
 ## Tilbakemeldinger
+
+Se [sikkerhetsdokumentasjonen](SECURITY.md) for rapportering av sårbarheter.
 
 Bruk **Kontakt** i den publiserte løsningen for spørsmål, feil og forslag.
 
