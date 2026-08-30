@@ -14,12 +14,10 @@ import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
 import TabSwitcher from '@/components/TabSwitcher';
 import TerrainFetcher from '@/components/TerrainFetcher';
-import DevDiagnosticsPanel from '@/components/DevDiagnosticsPanel';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
 import AppInfoModal from '@/components/AppInfoModal';
-import TestModeControl from '@/components/TestModeControl';
 import { CURRENT_APP_VERSION, LATEST_ANNOUNCED_RELEASE } from '@/data/appReleases.mjs';
 import { decideAutomaticAppInfo } from '@/lib/appInfoState.mjs';
 import { getTerrainStats } from '@/lib/analysis/terrain';
@@ -279,8 +277,6 @@ export default function Home() {
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
-      <TestModeControl />
-
       {/* Floating Stats Button - Always visible */}
       <button
         className={
@@ -556,11 +552,6 @@ export default function Home() {
         <>
           {/* Background terrain fetcher - runs in background */}
           <TerrainFetcher />
-
-          {/* Dev diagnostics panel - bottom right corner */}
-          {process.env.NODE_ENV !== 'production' && (
-            <DevDiagnosticsPanel />
-          )}
 
           {/* Sidebar - Hidden when field validation is open */}
           {!fieldValidationOpen && (

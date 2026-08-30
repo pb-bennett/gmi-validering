@@ -12,6 +12,8 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   const legacyStats = read('src/lib/stats/legacyStats.mjs');
   const detailed = read('src/components/DetailedStatsSection.js');
   const testMode = read('src/components/TestModeControl.js');
+  const tabSwitcher = read('src/components/TabSwitcher.js');
+  const page = read('src/app/page.js');
   const activation = read('src/lib/testModeActivation.mjs');
 
   for (const label of [
@@ -44,9 +46,24 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(detailed, /Detaljert statistikk er ikke aktivert ennå/);
   assert.match(testMode, /Testmodus er aktiv/);
   assert.match(testMode, /opplastinger registreres ikke/);
+  assert.match(testMode, /Utviklerverkt/);
+  assert.match(testMode, /developerToolsOpen/);
+  assert.match(testMode, /DevDiagnosticsPanel/);
   assert.match(activation, /testmodus/);
   assert.match(activation, /'1'/);
   assert.doesNotMatch(testMode, /Aktiver testmodus/);
+  assert.match(testMode, /aria-label="Slå av testmodus"/);
+  assert.doesNotMatch(testMode, /fixed left-4 bottom-4/);
+  assert.match(tabSwitcher, /<TestModeControl \/>/);
+  assert.match(tabSwitcher, /const testModeVisible = useStore/);
+  assert.match(tabSwitcher, /state\.hydrated === true && isTestModeEnabled\(state\.settings\)/);
+  assert.match(tabSwitcher, /const showTabs = viewer3DOpen && data/);
+  assert.match(tabSwitcher, /if \(!showTabs && !testModeVisible\) return null/);
+  assert.match(tabSwitcher, /showTabs && \(/);
+  assert.match(tabSwitcher, /Kartoversikt/);
+  assert.match(tabSwitcher, /3D-visning/);
+  assert.doesNotMatch(page, /<TestModeControl \/>/);
+  assert.doesNotMatch(page, /DevDiagnosticsPanel/);
   assert.match(modal, /Opplastinger uten registrert kommune/);
   assert.match(modal, /Statistikk fra/);
   assert.match(modal, /formatAnalyticsStartDate/);
