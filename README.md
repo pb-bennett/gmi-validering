@@ -45,7 +45,7 @@ Se [detaljert dokumentasjon om personvern og databehandling](docs/privacy.md).
 - Karttjenester kan motta kartområdet eller visningen som nettleseren ber om, slik at kartet kan tegnes.
 - Ved vellykket innlasting samles det inn aggregerte brukstellinger, blant annet per kommune, dato og time. Statistikken lagres ikke som selve innmålingsfilen.
 - GMI Validator bruker Vercel Web Analytics for overordnet besøks- og bruksstatistikk.
-- Når du sender en melding gjennom Kontakt, sendes bare opplysningene du skriver inn, sammen med appversjonen som serveren legger til, via Resend til den konfigurerte mottakeren. Navn og e-post tas bare med når du oppgir dem.
+- Når du sender en melding gjennom Kontakt, sendes opplysningene du skriver inn, sammen med appversjon og nødvendig servergenerert leveringsmetadata, via Resend til den konfigurerte mottakeren. Navn og e-post tas bare med når du oppgir dem.
 
 Kildekoden er offentlig, slik at databehandlingen og bruken av eksterne tjenester kan etterprøves i kildekoden.
 

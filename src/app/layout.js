@@ -12,7 +12,7 @@ const roboto = Roboto({
 export const metadata = {
   title: 'GMI Validator',
   description:
-    'GMI Validator - minimal Next.js + Tailwind boilerplate',
+    'Nettbasert validering og analyse av innmålingsdata for vann og avløp.',
 };
 
 export default function RootLayout({ children }) {

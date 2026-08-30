@@ -19,4 +19,4 @@ Troubleshooting
 
 - Ensure EPSG is detected in the uploaded file header (25832/25833 are supported).
 - If EPSG is missing or unsupported, kommune lookup is skipped.
-- Check the API response by calling `/api/track/debug` and inspecting header-based location.
+- For deployed troubleshooting, use the application logs and the tracking tests. To investigate locally, run the app in development mode and inspect the server response and configured Vercel geo headers.
