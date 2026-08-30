@@ -2,7 +2,7 @@
 
 import { startTransition, useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { InfoIcon } from '@phosphor-icons/react';
+import { EnvelopeSimpleIcon, InfoIcon } from '@phosphor-icons/react';
 import FileUpload from '@/components/FileUpload';
 import GlobalFileDrop from '@/components/GlobalFileDrop';
 import DataDisplayModal from '@/components/DataDisplayModal';
@@ -271,29 +271,15 @@ export default function Home() {
     resetAll();
   };
 
+  const openAppInfo = (tab = 'about') => {
+    setAppInfoInitialTab(tab);
+    setShowAppInfo(true);
+  };
+
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
       <TestModeControl />
-
-      {/* Application information - always available */}
-      <button
-        ref={appInfoTriggerRef}
-        type="button"
-        onClick={() => {
-          setAppInfoInitialTab('about');
-          setShowAppInfo(true);
-        }}
-        aria-haspopup="dialog"
-        aria-label={`Om appen, versjon ${CURRENT_APP_VERSION}`}
-        title="Informasjon om appen og versjonshistorikk"
-        className="fixed bottom-4 left-4 z-[10002] flex min-h-11 items-center gap-2 rounded-xl border border-blue-300 bg-white/95 px-3 py-2 text-sm font-medium text-blue-700 shadow-lg backdrop-blur transition-colors hover:border-blue-500 hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:px-4"
-      >
-        <InfoIcon size={16} weight="regular" aria-hidden="true" className="h-4 w-4 shrink-0" />
-        <span>
-          Om appen · v{CURRENT_APP_VERSION}
-        </span>
-      </button>
 
       {/* Floating Stats Button - Always visible */}
       <button
@@ -537,6 +523,29 @@ export default function Home() {
 
             <div className="bg-white shadow rounded-lg p-6">
               <FileUpload />
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  ref={appInfoTriggerRef}
+                  type="button"
+                  onClick={() => openAppInfo('about')}
+                  aria-haspopup="dialog"
+                  aria-label={`Om appen, versjon ${CURRENT_APP_VERSION}`}
+                  title="Informasjon om appen og versjonshistorikk"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                >
+                  <InfoIcon size={15} weight="regular" aria-hidden="true" />
+                  <span className="whitespace-nowrap">Om appen · v{CURRENT_APP_VERSION}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAppInfo('contact')}
+                  aria-haspopup="dialog"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                >
+                  <EnvelopeSimpleIcon size={15} weight="regular" aria-hidden="true" />
+                  <span className="whitespace-nowrap">Kontakt</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -558,13 +567,16 @@ export default function Home() {
             <Sidebar
               onReset={handleReset}
               onAddFile={() => setShowAddLayerModal(true)}
+              onOpenAppInfo={() => openAppInfo('about')}
+              onOpenContact={() => openAppInfo('contact')}
+              appInfoTriggerRef={appInfoTriggerRef}
             />
           )}
 
           {/* Field Validation Sidebar - 33% width */}
           {fieldValidationOpen && (
             <div className="w-1/3 h-full flex-none">
-              <FieldValidationSidebar />
+              <FieldValidationSidebar onOpenContact={() => openAppInfo('contact')} />
             </div>
           )}
 

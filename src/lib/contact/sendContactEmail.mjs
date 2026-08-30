@@ -4,6 +4,7 @@ import { validateContactRequest } from './contactRequestPolicy.mjs';
 export const CONTACT_PROVIDER_URL = 'https://api.resend.com/emails';
 export const CONTACT_SEND_TIMEOUT_MS = 8_000;
 const CONTACT_USER_AGENT = 'GMI-Validator-Contact/1.0';
+const CONTACT_TIME_ZONE = 'Europe/Oslo';
 
 const EMAIL_LOCAL_PART = /^[A-Za-z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+\/=?^_`{|}~-]+)*$/u;
 const EMAIL_DOMAIN = /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/u;
@@ -65,12 +66,29 @@ const getValidatedFields = (input) => {
   }
 };
 
-const buildEmail = ({ fields, sender, recipient }) => {
+const formatContactTimestamp = (date) => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: CONTACT_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+
+  return `${values.day}.${values.month}.${values.year} ${values.hour}:${values.minute}:${values.second}`;
+};
+
+const buildEmail = ({ fields, sender, recipient, now }) => {
+  const subjectName = fields.name || (fields.email ? 'Uten navn' : 'Anonym');
   const email = {
     from: `GMI Validator <${sender}>`,
     to: recipient,
-    subject: `GMI Validator: ${fields.categoryLabel}`,
-    text: `Kategori: ${fields.categoryLabel}\nAppversjon: ${CURRENT_APP_VERSION}${fields.name ? `\nNavn: ${fields.name}` : ''}\n\nMelding:\n${fields.message}`,
+    subject: `GMI Validator: ${fields.categoryLabel} — ${subjectName} — ${formatContactTimestamp(now())}`,
+    text: `Kategori: ${fields.categoryLabel}\nAppversjon: ${CURRENT_APP_VERSION}${fields.name ? `\nNavn: ${fields.name}` : ''}${fields.email ? `\nE-post: ${fields.email}` : ''}\n\nMelding:\n${fields.message}`,
   };
 
   if (fields.email) email.reply_to = fields.email;
@@ -81,6 +99,7 @@ export const createContactEmailSender = ({
   fetchImpl = (...args) => fetch(...args),
   getEnv = (name) => process.env[name],
   timeoutMs = CONTACT_SEND_TIMEOUT_MS,
+  now = () => new Date(),
 } = {}) => async (input) => {
   const configuration = getConfiguration(getEnv);
   if (!configuration) return { outcome: 'unavailable' };
@@ -105,6 +124,7 @@ export const createContactEmailSender = ({
         fields,
         sender: configuration.sender,
         recipient: configuration.recipient,
+        now,
       })),
     });
 

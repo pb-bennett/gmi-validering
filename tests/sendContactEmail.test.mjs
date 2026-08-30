@@ -39,13 +39,14 @@ const createFetchMock = ({ status = 200, onCall } = {}) => {
   return { calls, fetchMock };
 };
 
-const makeSender = ({ config = CONFIG, fetchImpl, timeoutMs } = {}) =>
+const makeSender = ({ config = CONFIG, fetchImpl, timeoutMs, now } = {}) =>
   createContactEmailSender({
     getEnv: (name) => config[name],
     fetchImpl: fetchImpl || (async () => {
       throw new Error('unexpected network access');
     }),
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    ...(now === undefined ? {} : { now }),
   });
 
 const getRequest = (calls) => {
@@ -53,9 +54,11 @@ const getRequest = (calls) => {
   return calls[0];
 };
 
+const TEST_NOW = () => new Date('2026-01-15T12:34:56.000Z');
+
 test('valid configuration sends one fixed, plain-text Resend request', async () => {
   const { calls, fetchMock } = createFetchMock();
-  const outcome = await makeSender({ fetchImpl: fetchMock })(VALID_INPUT);
+  const outcome = await makeSender({ fetchImpl: fetchMock, now: TEST_NOW })(VALID_INPUT);
   const [url, options] = getRequest(calls);
   const body = JSON.parse(options.body);
 
@@ -75,10 +78,10 @@ test('valid configuration sends one fixed, plain-text Resend request', async () 
   ]);
   assert.equal(body.from, 'GMI Validator <sender@example.test>');
   assert.equal(body.to, 'owner@example.test');
-  assert.equal(body.subject, 'GMI Validator: Feil');
+  assert.equal(body.subject, 'GMI Validator: Feil — Uten navn — 15.01.2026 13:34:56');
   assert.equal(
     body.text,
-    `Kategori: Feil\nAppversjon: ${CURRENT_APP_VERSION}\n\nMelding:\nFeil på kartet\nved kafé.`,
+    `Kategori: Feil\nAppversjon: ${CURRENT_APP_VERSION}\nE-post: Bruker@example.no\n\nMelding:\nFeil på kartet\nved kafé.`,
   );
   assert.equal(body.reply_to, 'Bruker@example.no');
   assert.equal(Object.hasOwn(body, 'html'), false);
@@ -89,6 +92,21 @@ test('valid configuration sends one fixed, plain-text Resend request', async () 
     'text',
     'to',
   ]);
+});
+
+test('a supplied name is included in the subject while email stays out of it', async () => {
+  const { calls, fetchMock } = createFetchMock();
+  await makeSender({ fetchImpl: fetchMock, now: TEST_NOW })({
+    category: 'bug',
+    name: '  Paul Bennett  ',
+    email: 'user@example.com',
+    message: 'Melding',
+  });
+  const [, options] = getRequest(calls);
+  const body = JSON.parse(options.body);
+
+  assert.equal(body.subject, 'GMI Validator: Feil — Paul Bennett — 15.01.2026 13:34:56');
+  assert.equal(body.subject.includes('user@example.com'), false);
 });
 
 test('the configured timeout is approximately eight seconds and is abortable', () => {
@@ -150,9 +168,9 @@ test('a missing configuration outcome does not disclose configuration values', a
   assert.equal(JSON.stringify(outcome).includes('sender@example.test'), false);
 });
 
-test('an absent email omits Reply-To and never changes From', async () => {
+test('an absent email omits E-post and Reply-To and never changes From', async () => {
   const { calls, fetchMock } = createFetchMock();
-  const outcome = await makeSender({ fetchImpl: fetchMock })({
+  const outcome = await makeSender({ fetchImpl: fetchMock, now: TEST_NOW })({
     category: 'suggestion',
     message: 'Et forslag',
     email: null,
@@ -164,7 +182,9 @@ test('an absent email omits Reply-To and never changes From', async () => {
   assert.equal(Object.hasOwn(body, 'reply_to'), false);
   assert.equal(body.from, 'GMI Validator <sender@example.test>');
   assert.equal(body.to, 'owner@example.test');
-  assert.equal(body.subject, 'GMI Validator: Forslag');
+  assert.equal(body.subject, 'GMI Validator: Forslag — Anonym — 15.01.2026 13:34:56');
+  assert.equal(body.text.includes('E-post:'), false);
+  assert.equal(body.text, `Kategori: Forslag\nAppversjon: ${CURRENT_APP_VERSION}\n\nMelding:\nEt forslag`);
 });
 
 test('all category subjects are fixed and derived from the category', async () => {
@@ -175,14 +195,14 @@ test('all category subjects are fixed and derived from the category', async () =
     ['other', 'Annet'],
   ]) {
     const { calls, fetchMock } = createFetchMock();
-    await makeSender({ fetchImpl: fetchMock })({
+    await makeSender({ fetchImpl: fetchMock, now: TEST_NOW })({
       category,
       categoryLabel: 'arbitrary submitted label',
       message: 'Melding',
     });
     const [, options] = getRequest(calls);
     const body = JSON.parse(options.body);
-    assert.equal(body.subject, `GMI Validator: ${label}`);
+    assert.equal(body.subject, `GMI Validator: ${label} — Anonym — 15.01.2026 13:34:56`);
     assert.match(body.text, new RegExp(`^Kategori: ${label}\\n`, 'u'));
   }
 });

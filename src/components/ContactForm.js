@@ -20,7 +20,7 @@ const CATEGORIES = Object.freeze([
 ]);
 
 const FIELD_CLASS =
-  'mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100 disabled:bg-slate-100';
+  'mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100 disabled:bg-slate-100';
 const ERROR_CLASS = 'mt-1 text-sm text-rose-700';
 
 const ERROR_MESSAGES = Object.freeze({
@@ -191,9 +191,9 @@ export default function ContactForm() {
     <form
       onSubmit={handleSubmit}
       aria-busy={isSubmitting}
-      className="mt-6 space-y-5"
+      className="mt-4 space-y-4"
     >
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="contact-category" className="text-sm font-semibold text-slate-800">
             Kategori <span className="font-normal text-slate-500">(påkrevd)</span>
@@ -226,7 +226,7 @@ export default function ContactForm() {
         </div>
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="contact-name" className="text-sm font-semibold text-slate-800">
             Navn <span className="font-normal text-slate-500">(valgfritt)</span>
@@ -296,11 +296,11 @@ export default function ContactForm() {
           onChange={updateField('message')}
           required
           maxLength={4000}
-          rows={7}
+          rows={6}
           disabled={isSubmitting}
           aria-invalid={fieldErrors.message ? 'true' : undefined}
           aria-describedby={fieldErrors.message ? 'contact-message-error' : undefined}
-          className={`${FIELD_CLASS} resize-y min-h-36`}
+          className={`${FIELD_CLASS} min-h-32 resize-y`}
         />
         {fieldErrors.message && (
           <p id="contact-message-error" className={ERROR_CLASS}>

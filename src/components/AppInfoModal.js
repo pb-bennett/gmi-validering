@@ -17,6 +17,7 @@ import ContactForm from './ContactForm';
 
 const PUBLIC_REPO_URL = 'https://github.com/pb-bennett/gmi-validering';
 const APP_INFO_TAB_CONTENT_CLASS = 'space-y-7 [&>*:not(:first-child)]:mx-2';
+const CONTACT_TAB_CONTENT_CLASS = 'space-y-4 [&>*:not(:first-child)]:mx-2';
 
 const TABS = [
   { id: 'about', label: 'Om' },
@@ -84,9 +85,9 @@ function SourceCodeLink() {
   );
 }
 
-function AppInfoHero({ title, eyebrow = 'GMI Validator', version = CURRENT_APP_VERSION }) {
+function AppInfoHero({ title, eyebrow = 'GMI Validator', version = CURRENT_APP_VERSION, compact = false }) {
   return (
-      <section className="relative overflow-hidden rounded-t-2xl rounded-b-none bg-slate-950 px-5 py-6 text-white shadow-sm sm:px-7 sm:py-8">
+      <section className={`relative overflow-hidden rounded-t-2xl rounded-b-none bg-slate-950 px-5 py-6 text-white shadow-sm sm:px-7 ${compact ? 'sm:py-5' : 'sm:py-8'}`}>
       <div className="absolute right-0 top-0 h-32 w-32 translate-x-12 -translate-y-12 rounded-full border-[18px] border-cyan-400/20" aria-hidden="true" />
       <div className="relative">
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -464,8 +465,8 @@ function HistoryContent({ expandedVersion, onToggle }) {
 
 function ContactContent() {
   return (
-    <div className={APP_INFO_TAB_CONTENT_CLASS}>
-      <AppInfoHero title="Kontakt" />
+    <div className={CONTACT_TAB_CONTENT_CLASS}>
+      <AppInfoHero title="Kontakt" compact />
       <section aria-labelledby="app-info-contact-heading">
         <h3 id="app-info-contact-heading" className="sr-only">Tilbakemeldinger</h3>
         <p className="max-w-[54rem] text-base leading-[1.6] text-slate-700">

@@ -6,7 +6,7 @@ import * as phosphorIcons from '@phosphor-icons/react';
 const readSource = (path) =>
   readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-const [pageSource, modalSource, contactFormSource, stateSource, catalogSource, globalCssSource, packageJsonSource] = await Promise.all([
+const [pageSource, modalSource, contactFormSource, stateSource, catalogSource, globalCssSource, packageJsonSource, sidebarSource, fieldValidationSidebarSource] = await Promise.all([
   readSource('src/app/page.js'),
   readSource('src/components/AppInfoModal.js'),
   readSource('src/components/ContactForm.js'),
@@ -14,24 +14,52 @@ const [pageSource, modalSource, contactFormSource, stateSource, catalogSource, g
   readSource('src/data/appReleases.mjs'),
   readSource('src/app/globals.css'),
   readSource('package.json'),
+  readSource('src/components/Sidebar.js'),
+  readSource('src/components/FieldValidationSidebar.js'),
 ]);
 
-test('persistent trigger and popup decision are independent of upload state', () => {
-  const trigger = pageSource.indexOf('aria-label={`Om appen');
-  const initialUpload = pageSource.indexOf("parsingStatus !== 'done'");
-  const loadedApp = pageSource.indexOf("parsingStatus === 'done'");
+test('start-state AppInfo actions stay in the upload card while popup decision remains independent', () => {
+  const initialUpload = pageSource.indexOf('/* Initial Upload Screen */');
   const decision = pageSource.indexOf('decideAutomaticAppInfo');
   const heartbeat = pageSource.indexOf('updateLastActive();');
 
-  assert.ok(trigger > 0 && trigger < initialUpload);
-  assert.ok(trigger < loadedApp);
+  assert.ok(initialUpload > 0);
+  assert.doesNotMatch(pageSource, /fixed bottom-4 left-4/);
+  assert.match(pageSource.slice(initialUpload), /ref=\{appInfoTriggerRef\}/);
+  assert.match(pageSource.slice(initialUpload), /openAppInfo\('about'\)/);
+  assert.match(pageSource.slice(initialUpload), /openAppInfo\('contact'\)/);
+  assert.match(pageSource.slice(initialUpload), /flex flex-wrap items-center justify-center gap-2/);
+  assert.match(pageSource.slice(initialUpload), /Om appen · v\{CURRENT_APP_VERSION\}/);
+  assert.match(pageSource.slice(initialUpload), /<EnvelopeSimpleIcon\b/);
+  assert.match(pageSource, /onClick=\{\(\) => openAppInfo\('about'\)\}/);
   assert.ok(pageSource.includes('ref={appInfoTriggerRef}'));
   assert.match(pageSource, /CURRENT_APP_VERSION/);
   assert.doesNotMatch(pageSource, /Om appen[^\n]*1\.1\.0/);
-  assert.match(pageSource, /setAppInfoInitialTab\('about'\)/);
+  assert.match(pageSource, /openAppInfo\('about'\)/);
   assert.match(pageSource, /setShowAppInfo\(true\)/);
   assert.ok(decision > 0 && decision < heartbeat);
   assert.match(pageSource, /appInfoAutoCheckedRef/);
+});
+
+test('loaded-state AppInfo and persistent Kontakt actions use the existing modal', () => {
+  assert.match(sidebarSource, /<InfoIcon\b/);
+  assert.match(sidebarSource, /Om appen · v\{CURRENT_APP_VERSION\}/);
+  assert.match(sidebarSource, /onClick=\{onOpenAppInfo\}/);
+  assert.match(sidebarSource, /<EnvelopeSimpleIcon\b/);
+  assert.match(sidebarSource, /Kontakt/);
+  assert.match(sidebarSource, /onClick=\{onOpenContact\}/);
+  assert.match(sidebarSource, /mt-auto border-t px-4 py-3/);
+  assert.match(sidebarSource, /items-center justify-center gap-2 rounded-lg/);
+  assert.match(pageSource, /onOpenAppInfo=\{\(\) => openAppInfo\('about'\)\}/);
+  assert.match(pageSource, /onOpenContact=\{\(\) => openAppInfo\('contact'\)\}/);
+  assert.match(pageSource, /initialTab=\{appInfoInitialTab\}/);
+  assert.match(pageSource, /openAppInfo = \(tab = 'about'\)/);
+  assert.match(pageSource, /setAppInfoInitialTab\(tab\)/);
+  assert.match(fieldValidationSidebarSource, /<EnvelopeSimpleIcon\b/);
+  assert.match(fieldValidationSidebarSource, /onClick=\{onOpenContact\}/);
+  assert.match(pageSource, /<FieldValidationSidebar onOpenContact=\{\(\) => openAppInfo\('contact'\)\} \/>/);
+  assert.match(pageSource, /<EnvelopeSimpleIcon\b/);
+  assert.match(pageSource, /onClick=\{\(\) => openAppInfo\('contact'\)\}/);
 });
 
 test('modal source has a stable accessible dialog and tab shell', () => {
@@ -73,7 +101,9 @@ test('modal source has a stable accessible dialog and tab shell', () => {
   assert.equal((modalSource.match(/<AppInfoHero\b/g) || []).length, 5);
   assert.equal((modalSource.match(/relative overflow-hidden rounded-t-2xl rounded-b-none bg-slate-950/g) || []).length, 1);
   assert.match(modalSource, /const APP_INFO_TAB_CONTENT_CLASS = 'space-y-7 \[&>\*:not\(:first-child\)\]:mx-2';/);
-  assert.equal((modalSource.match(/className=\{APP_INFO_TAB_CONTENT_CLASS\}/g) || []).length, 5);
+  assert.match(modalSource, /const CONTACT_TAB_CONTENT_CLASS = 'space-y-4 \[&>\*:not\(:first-child\)\]:mx-2';/);
+  assert.equal((modalSource.match(/className=\{APP_INFO_TAB_CONTENT_CLASS\}/g) || []).length, 4);
+  assert.match(modalSource, /className=\{CONTACT_TAB_CONTENT_CLASS\}/);
   assert.match(modalSource, /className="app-info-hero-title"/);
   assert.match(modalSource, /<main className="min-h-0 flex-1 overflow-y-auto/);
   assert.match(modalSource, /overflow-y-auto overscroll-contain app-info-scroll/);
@@ -273,6 +303,7 @@ test('contact form keeps the C1 payload boundary and accessible form contract', 
   const sourceLinkSource = modalSource.slice(sourceLinkStart, sourceLinkEnd);
 
   assert.match(contactSource, /<ContactForm \/>/);
+  assert.match(contactSource, /<AppInfoHero title="Kontakt" compact \/>/);
   assert.match(contactSource, /Har du funnet en feil/);
   assert.doesNotMatch(contactSource, /GitHub|github|SourceCodeLink|Kildekode/);
   assert.match(contactFormSource, /<form/);
