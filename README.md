@@ -1,138 +1,122 @@
 # GMI Validator
 
-A web-based validation tool for **GMI**, **SOSI**, and **KOF** files used in Norwegian water and wastewater (VA) infrastructure. It helps municipal engineers and contractors verify as-built data before import into VA databases.
+GMI Validator er et nettbasert verktøy for å lese, kontrollere og utforske innmålingsdata for vann og avløp (VA).
 
-**Live app:** Hosted on [Vercel](https://vercel.com)
+**Åpne verktøyet: [gmi-validator.no](https://gmi-validator.no)**
 
----
+## Hva er GMI Validator?
 
-## What It Does
+Verktøyet er laget for kommuner, entreprenører og konsulenter som arbeider med innmålingsleveranser. Det gir en rask oversikt over innholdet i en fil før dataene eventuelt skal videre til et VA- eller GIS-system.
 
-Upload a file and the app instantly parses, validates, and visualises the data — all in the browser.
+Behandlingen starter lokalt i nettleseren. Du trenger derfor ingen installasjon for å bruke den publiserte løsningen.
 
-| Capability               | Description                                                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Multi-format parsing** | GMI, SOSI (via [sosijs](https://github.com/nicwaller/sosijs)), and KOF survey files                                           |
-| **Field validation**     | Checks required fields, acceptable values, and custom domain rules for points and lines                                       |
-| **Incline analysis**     | Detects backfall, flat pipes, and low incline on gravity sewer lines                                                          |
-| **Z-value validation**   | Flags missing or zero Z coordinates across all geometry                                                                       |
-| **Terrain comparison**   | Fetches ground elevation from [Geonorge Høydedata API](https://ws.geonorge.no/hoydedata/v1/) and compares against pipe depths |
-| **Topplokk check**       | Verifies that manholes (KUM, SLU, SLS, SAN) have a matching lid (LOK)                                                         |
-| **Outlier detection**    | Statistical identification of objects far from the main data cluster                                                          |
-| **2D map**               | Interactive Leaflet map with layer management, WMS overlay support, and legend                                                |
-| **3D viewer**            | Three.js-based pipe network visualisation with terrain context                                                                |
-| **Multi-layer**          | Load multiple files simultaneously and compare layers side-by-side                                                            |
+## Hva kan verktøyet gjøre?
 
-The entire UI is in **Norwegian (bokmål)**.
+- lese og analysere innmålingsfiler
+- kontrollere felt, attributter og verdier mot definerte regler
+- finne manglende eller uventede høydeverdier
+- analysere fall, overdekning og terreng der funksjonen trenger høydeinformasjon
+- vise data i 2D-kart og en enkel 3D-visning
+- laste inn flere lag og sammenligne dem
+- vise WMS-kartlag fra en konfigurerbar tjeneste
+- undersøke objekter, egenskaper og valideringsresultater i egne visninger
 
----
+## Støttede formater
 
-## Tech Stack
+- **GMI** er hovedformatet og har det bredeste kontrollgrunnlaget.
+- **SOSI** (`.sos` og `.sosi`) støttes for innlasting, visning og et mer begrenset kontrollgrunnlag.
+- **KOF** (`.kof`) støttes for innlasting, visning og et mer begrenset kontrollgrunnlag.
 
-|                           |                                                                                                                                      |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Framework**             | [Next.js 16](https://nextjs.org) with React 19 and the React Compiler                                                                |
-| **Styling**               | [Tailwind CSS 4](https://tailwindcss.com)                                                                                            |
-| **State**                 | [Zustand](https://zustand-demo.pmnd.rs/) — single store with logical slices                                                          |
-| **Map**                   | [Leaflet](https://leafletjs.com) / [React Leaflet](https://react-leaflet.js.org)                                                     |
-| **3D**                    | [Three.js](https://threejs.org) via [React Three Fiber](https://docs.pmnd.rs/react-three-fiber) & [Drei](https://drei.docs.pmnd.rs/) |
-| **Coordinate transforms** | [proj4js](http://proj4js.org/)                                                                                                       |
-| **Virtualised tables**    | [TanStack Table](https://tanstack.com/table) + [TanStack Virtual](https://tanstack.com/virtual)                                      |
-| **Hosting**               | [Vercel](https://vercel.com)                                                                                                         |
-| **Analytics**             | [Vercel Analytics](https://vercel.com/analytics) (anonymous, cookie-free)                                                            |
+Støtten er ikke lik på tvers av formatene. Kontroller og visninger kan derfor variere med filformat og innhold.
 
----
+## Slik bruker du løsningen
 
-## Project Structure
+1. Åpne [gmi-validator.no](https://gmi-validator.no).
+2. Velg en fil, eller slipp den i opplastingsområdet.
+3. Se valideringsresultater, kart, lag og analyser.
+4. Undersøk funnene mot prosjektets krav og den øvrige dokumentasjonen.
 
-```
-src/
-├── app/                  # Next.js App Router (pages, API routes)
-│   └── api/
-│       ├── track/        # Anonymous usage tracking endpoint
-│       └── wms-proxy/    # Server-side WMS proxy to avoid CORS
-├── components/           # UI components (Sidebar, MapView, FileUpload, 3D/, …)
-├── data/                 # Validation rules (JSON) & reference documents
-│   └── rules/            # Point/line field rules + custom logic
-├── features/             # Feature modules (user-tracking docs & SQL)
-└── lib/
-    ├── parsing/          # Parsers: gmiParser, sosiParser, kofParser
-    ├── validation/       # Rule engine (validator, fieldValidation)
-    ├── analysis/         # incline, zValidation, terrain, outliers, topplok
-    ├── tracking/         # Kommune lookup, Supabase client, geo helpers
-    ├── 3d/               # Data transforms & colour mapping for 3D view
-    └── store.js          # Zustand global store
-```
+## Personvern og databehandling
 
----
+Se [detaljert dokumentasjon om personvern og databehandling](docs/privacy.md).
 
-## Getting Started
+- Selve innmålingsfilen behandles lokalt i nettleseren og lastes ikke opp til GMI Validators applikasjonsserver.
+- Enkelte funksjoner sender avledede eller valgte koordinater til eksterne tjenester når det trengs for terrengdata, profilberegninger eller kommuneoppslag.
+- Karttjenester kan motta kartområdet eller visningen som nettleseren ber om, slik at kartet kan tegnes.
+- Ved vellykket innlasting samles det inn aggregerte brukstellinger, blant annet per kommune, dato og time. Statistikken lagres ikke som selve innmålingsfilen.
+- GMI Validator bruker Vercel Web Analytics for overordnet besøks- og bruksstatistikk.
+- Når du sender en melding gjennom Kontakt, sendes opplysningene du skriver inn, sammen med appversjon og nødvendig servergenerert leveringsmetadata, via Resend til den konfigurerte mottakeren. Navn og e-post tas bare med når du oppgir dem.
 
-### Prerequisites
+Kildekoden er offentlig, slik at databehandlingen og bruken av eksterne tjenester kan etterprøves i kildekoden.
 
-- **Node.js** ≥ 18
-- **npm** (or your preferred package manager)
+## Begrensninger og faglig ansvar
 
-### Install & Run
+GMI Validator er et hjelpemiddel. Resultatene er ikke et offisielt vedtak om at en leveranse skal godkjennes eller avvises. Prosjektkrav, kommunens rutiner og faglig vurdering gjelder fortsatt.
+
+## Status
+
+Løsningen er i produksjon.
+
+Gjeldende versjon er **v1.1.0**.
+
+Prosjektet er lite, selvstendig og ikke-kommersielt.
+
+## Lokal utvikling
+
+### Forutsetninger
+
+- Node.js **20.9.0 eller nyere**
+- npm
+
+### Starte lokalt
 
 ```bash
-git clone https://github.com/<your-org>/gmi-validering.git
+git clone https://github.com/pb-bennett/gmi-validering.git
 cd gmi-validering
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Åpne deretter [http://localhost:3000](http://localhost:3000).
 
-### Environment Variables (optional)
+Bygg produksjonsversjonen med:
 
-| Variable                    | Purpose                                   |
-| --------------------------- | ----------------------------------------- |
-| `SUPABASE_URL`              | Supabase project URL for usage tracking   |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key                 |
-| `TRACKING_KEEPALIVE_SECRET` | Secret for authenticated keepalive writes |
+```bash
+npm run build
+```
 
-The app works fully without these — tracking is simply skipped.
+Kjør testene med:
 
-If you want to prevent Supabase from auto-pausing on low-traffic periods, schedule a periodic request to `GET /api/track/health?write=true` and send the secret either as `Authorization: Bearer <secret>` or `X-Keepalive-Secret: <secret>`. Query-string secrets are also accepted as a fallback via `?secret=<secret>`, but headers are preferred.
+```bash
+node --test "tests/*.test.mjs"
+```
 
----
+### Teknologi
 
-## Security & Privacy
+Prosjektet bruker Next.js og React. Kartvisningen bygger på Leaflet, 3D-visningen på Three.js, og tilstand håndteres med Zustand. Valideringsreglene ligger i JSON-filer under `src/data/rules/`.
 
-This application was designed with a **privacy-first** approach:
+## Konfigurasjon
 
-- **No file data leaves the browser.** All parsing, validation, and analysis runs entirely client-side. Uploaded files are never sent to or stored on the server.
-- **No personal data is collected.** There are no user accounts, cookies, or tracking pixels.
-- **Minimal anonymous usage tracking.** The only data persisted server-side is the dataset kommune (derived from file coordinates via the [Geonorge API](https://ws.geonorge.no/)), including the official kommune number. This is stored as an aggregate counter in Supabase and is used solely to understand geographic adoption. No IP addresses, filenames, or file contents are stored.
-- **WMS proxy is stateless.** The server-side WMS proxy forwards map tile requests without caching or logging credentials.
-- **SSRF protection.** The WMS proxy validates target URLs and restricts protocols to HTTP/HTTPS.
+Se [utviklerdokumentasjonen](docs/development.md) for prosjektstruktur, testing og konfigurasjon.
 
----
+Vanlig bruk av den publiserte løsningen krever ingen lokal konfigurasjon.
 
-## Development
+Serverfunksjoner kan konfigureres med miljøvariabler for Supabase-basert bruksstatistikk, lokal statistikkfallback, keepalive-beskyttelse og Kontakt-funksjonens e-postlevering. Variablene omfatter blant annet `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TRACKING_KEEPALIVE_SECRET`, `TRACKING_STORAGE_PATH`, `RESEND_API_KEY`, `CONTACT_TO_EMAIL` og `CONTACT_FROM_EMAIL`.
 
-This project has been developed iteratively with the assistance of **GitHub Copilot** (AI pair-programming). Developer-facing notes are in [docs/DEVELOPER_NOTES.md](docs/DEVELOPER_NOTES.md), and historic Copilot prompts/specs/reviews are archived under [docs/archive/](docs/archive/).
+Verdier skal settes i det lokale eller deployede miljøet og aldri legges i kildekoden eller committes til Git. Hemmelige verdier skal bare være tilgjengelige på serversiden og skal ikke legges i URL-er eller eksponeres til klientkoden.
 
-### Key Design Decisions
+## Tilbakemeldinger
 
-- **Client-side processing** — keeps infrastructure costs minimal and avoids handling sensitive data on the server.
-- **Zustand over Redux/Context** — chosen for small bundle size, selective subscriptions, and simplicity.
-- **React Compiler** — enabled via Next.js 16 for automatic memoisation.
-- **Rule-driven validation** — field rules are defined in JSON (`src/data/rules/`) making them easy to update without code changes.
-- **Norwegian UI / English codebase** — all user-facing text is in Norwegian bokmål; all code, comments, and documentation are in English.
+Se [sikkerhetsdokumentasjonen](SECURITY.md) for rapportering av sårbarheter.
 
-### Scripts
+Bruk **Kontakt** i den publiserte løsningen for spørsmål, feil og forslag.
 
-| Command         | Action                   |
-| --------------- | ------------------------ |
-| `npm run dev`   | Start development server |
-| `npm run build` | Production build         |
-| `npm run start` | Serve production build   |
-| `npm run lint`  | Run ESLint               |
+For problemer som gjelder kildekoden eller selve prosjektet kan du også bruke [GitHub Issues](https://github.com/pb-bennett/gmi-validering/issues).
 
----
+## Uavhengighet
 
-## License
+GMI Validator er et selvstendig prosjekt og er ikke offisielt utviklet av eller på vegne av Gemini-produktets eier, Kartverket, kommuner eller andre eksterne tjenesteleverandører.
 
-[MIT](LICENSE) — Copyright © 2025 Paul Bennett
+## Lisens
+
+[MIT](LICENSE)
