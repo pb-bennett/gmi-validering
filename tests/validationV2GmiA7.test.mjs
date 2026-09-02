@@ -243,6 +243,9 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
   assert.deepEqual(pointView.ruleResults.map((rule) => rule.rule.ruleId), [
     HEIGHT_VALID,
     'innmaling.common.installation-year.required',
+    'innmaling.common.measurement-method.required',
+    'innmaling.common.height-measurement-method.required',
+    'innmaling.common.vertical-level.required',
     'innmaling.common.capture-date.required',
     'innmaling.common.surveyed-by.required',
     'innmaling.common.case-number.required',
@@ -259,6 +262,9 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
   assert.deepEqual(lineView.ruleResults.map((rule) => rule.rule.ruleId), [
     HEIGHT_VALID,
     'innmaling.common.installation-year.required',
+    'innmaling.common.measurement-method.required',
+    'innmaling.common.height-measurement-method.required',
+    'innmaling.common.vertical-level.required',
     'innmaling.common.capture-date.required',
     'innmaling.common.surveyed-by.required',
     'innmaling.common.case-number.required',

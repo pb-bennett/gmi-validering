@@ -67,6 +67,7 @@ test('aggregate status follows the approved truth table without mutation', () =>
 
 test('all active rules resolve exact canonical short labels', () => {
   const expected = [
+    'Målemetode', 'MålemetodeHøyde', 'Vertikalnivå',
     'Høydereferanse', 'Anleggsår', 'Datafangstdato', 'Innmålt av', 'Saksnummer',
     'Nøyaktighet XY', 'Nøyaktighet høyde Z', 'Maksavvik horisontalt',
     'Maksavvik vertikalt', 'Stedfestingsforhold', 'Stedfestingsårsak',
@@ -131,8 +132,8 @@ test('point and line presentation universes are the reviewed active counts', () 
     counts({ passCount: 1 }),
     rule.geometryScopes,
   ));
-  assert.equal(getValidationV2PresentationRules(results, 'point').length, 14);
-  assert.equal(getValidationV2PresentationRules(results, 'line').length, 18);
+  assert.equal(getValidationV2PresentationRules(results, 'point').length, 17);
+  assert.equal(getValidationV2PresentationRules(results, 'line').length, 21);
 });
 
 test('one-open reducer behavior retains visible expansion and closes hidden/context state', () => {

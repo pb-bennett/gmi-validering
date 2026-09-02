@@ -1107,5 +1107,71 @@
         ]
       }
     ]
+  },
+  {
+    "canonicalFieldId": "measurementMethod",
+    "displayName": "Målemetode",
+    "description": "Metoden som ble brukt ved innmåling.",
+    "appliesTo": ["point", "line"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {"text": "Kodeverdiene håndheves ikke i dette steget.", "sources": [{"documentId": "appendix-a", "pages": "23–25"}]}
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+      "version": "3.2 / 01.08.2026",
+      "pages": "4, 6–7",
+      "auditSourceRuleIds": ["innmaling.common.measurement-method.required"]
+    }]
+  },
+  {
+    "canonicalFieldId": "heightMeasurementMethod",
+    "displayName": "MålemetodeHøyde",
+    "description": "Metoden som ble brukt ved høydemåling.",
+    "appliesTo": ["point", "line"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {"text": "Kodeverdiene håndheves ikke i dette steget.", "sources": [{"documentId": "appendix-a", "pages": "25–27"}]}
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+      "version": "3.2 / 01.08.2026",
+      "pages": "4, 7, 25–27",
+      "auditSourceRuleIds": ["innmaling.common.height-measurement-method.required"]
+    }]
+  },
+  {
+    "canonicalFieldId": "verticalLevel",
+    "displayName": "Vertikalnivå",
+    "description": "Vertikalnivået objektet tilhører.",
+    "appliesTo": ["point", "line"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {"text": "Kodeverdiene håndheves ikke i dette steget.", "sources": [{"documentId": "appendix-a", "pages": "4, 9"}]}
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+      "version": "3.2 / 01.08.2026",
+      "pages": "4, 9",
+      "auditSourceRuleIds": ["innmaling.common.vertical-level.required"]
+    }]
   }
 ]

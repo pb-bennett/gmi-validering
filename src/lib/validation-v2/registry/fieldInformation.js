@@ -3,6 +3,9 @@ import { getCanonicalField } from './registry.js';
 
 const REQUIRED_FIELD_INFORMATION = Object.freeze([
   'heightReference',
+  'measurementMethod',
+  'heightMeasurementMethod',
+  'verticalLevel',
   'installationYear',
   'captureDate',
   'surveyedBy',

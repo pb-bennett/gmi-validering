@@ -66,11 +66,29 @@ test('field information composes documentation with executable rule metadata', (
   assert.deepEqual(tema.allowedValues, []);
   assert.equal(tema.description, null);
   assert.equal(getFieldInformation('tema').documentationStatus, 'PARTIAL');
+
+  for (const [canonicalFieldId, ruleId] of [
+    ['measurementMethod', 'innmaling.common.measurement-method.required'],
+    ['heightMeasurementMethod', 'innmaling.common.height-measurement-method.required'],
+    ['verticalLevel', 'innmaling.common.vertical-level.required'],
+  ]) {
+    const presenceOnly = composeFieldInformation({
+      canonicalFieldId,
+      geometryScope: 'line',
+      rule: getValidationRule(ruleId),
+    });
+    assert.equal(presenceOnly.requiredness, 'REQUIRED', canonicalFieldId);
+    assert.deepEqual(presenceOnly.allowedValues, [], canonicalFieldId);
+    assert.deepEqual(getFieldInformation(canonicalFieldId).valueInfo, {}, canonicalFieldId);
+  }
 });
 
 test('v3.2 Field Info has the reviewed field and per-value provenance', () => {
   const sourceContract = {
     heightReference: [['appendix-a', '4, 6'], ['main-instruction', '10, 13–18']],
+    measurementMethod: [['appendix-a', '4, 6–7']],
+    heightMeasurementMethod: [['appendix-a', '4, 7, 25–27']],
+    verticalLevel: [['appendix-a', '4, 9']],
     installationYear: [['appendix-a', '4, 6']],
     captureDate: [['appendix-a', '4, 6']],
     surveyedBy: [['appendix-a', '4, 6']],

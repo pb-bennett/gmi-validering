@@ -52,6 +52,12 @@ const COMMON = [
   ['innmaling.common.positioning-cause.valid', 'Stedfestingsårsak er gyldig', 'positioningCause', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 8; main 9–10, 18', ['FJERN', 'FLYTT_DELV', 'FLYTT_HELT', 'NYTT', 'PÅVI', 'UENDR'], ValueComparisonPolicy.EXACT],
 ];
 
+const SLICE3_COMMON = [
+  ['innmaling.common.measurement-method.required', 'Målemetode er oppgitt', 'measurementMethod', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6–7', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.height-measurement-method.required', 'Målemetode høyde er oppgitt', 'heightMeasurementMethod', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 7, 25–27', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.vertical-level.required', 'Vertikalnivå er oppgitt', 'verticalLevel', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 9', [], ValueComparisonPolicy.NONE],
+];
+
 const POINT = [
   ['innmaling.point.tema.required', 'Punktobjekt har Tema', 'tema', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 10–12', [], ValueComparisonPolicy.NONE],
   ['innmaling.point.inside-outside.valid', 'Punktets innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 14', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
@@ -70,6 +76,7 @@ const LINE = [
 
 const INVENTORY = [
   ...COMMON.map((entry) => ({ entry, scopes: ['point', 'line'] })),
+  ...SLICE3_COMMON.map((entry) => ({ entry, scopes: ['point', 'line'] })),
   ...POINT.map((entry) => ({ entry, scopes: ['point'] })),
   ...LINE.map((entry) => ({ entry, scopes: ['line'] })),
 ];
@@ -80,6 +87,9 @@ const NEW_INVENTORY = INVENTORY.filter(({ entry: [ruleId] }) =>
 );
 
 const COMMON_ATTRIBUTES = {
+  Målemetode: 'arbitrary-xy-method',
+  MålemetodeHøyde: 'arbitrary-z-method',
+  Vertikalnivå: 'arbitrary-level',
   Høydereferanse: 'TOPP_INNVENDIG',
   Anleggsår: 2020,
   Datafangstdato: '24.08.2026',
@@ -174,12 +184,14 @@ function oneObjectDataset(scope, attributes, schema = schemaFor(attributes)) {
 }
 
 const PARSER_POINT_FIELDS = [
+  'Målemetode', 'MålemetodeHøyde', 'Vertikalnivå',
   'Høydereferanse', 'Anleggsår', 'Datafangstdato', 'Innmålt_av', 'Saksnummer',
   'Nøyaktighet', 'NøyaktighetHøyde', 'MaksAvvikHorisontalt', 'MaksAvvikVertikalt',
   'Stedfestingsforhold', 'Stedfestingsårsak', 'Synbarhet', 'Tema',
   'InnvendigUtvendig', 'Tykkelse', 'NOBB-VAVVS-nr', 'NOBB-VAVVS-nr-ramme',
 ];
 const PARSER_LINE_FIELDS = [
+  'Målemetode', 'MålemetodeHøyde', 'Vertikalnivå',
   'Tykkelse', 'Material',
   'Høydereferanse', 'Anleggsår', 'Datafangstdato', 'Innmålt_av', 'Saksnummer',
   'Nøyaktighet', 'NøyaktighetHøyde', 'MaksAvvikHorisontalt', 'MaksAvvikVertikalt',
@@ -187,10 +199,12 @@ const PARSER_LINE_FIELDS = [
   'Nett_type', 'InnvendigUtvendig', 'Rørform', 'NOBB-VAVVS-nr',
 ];
 const PARSER_POINT_DEFAULTS = [
+  'arbitrary-xy-method', 'arbitrary-z-method', 'arbitrary-level',
   'TOPP_INNVENDIG', '2020', '24.08.2026', 'surveyor', 'case-1', '1', '2', '3', '4',
   'I_VANN', 'NYTT', '0', 'VL', 'ID', '10', '1234567', '7654321',
 ];
 const PARSER_LINE_DEFAULTS = [
+  'arbitrary-xy-method', 'arbitrary-z-method', 'arbitrary-level',
   '0.5', 'PVC-0',
   'TOPP_INNVENDIG', '2020', '24.08.2026', 'surveyor', 'case-1', '1', '2', '3', '4',
   'I_VANN', 'NYTT', '0', 'SP', '110', 'F', 'OD', 'A', '1234567',
@@ -213,13 +227,19 @@ function runParsedGmi(options) {
   return { parsed, result: run(parsed, 'parsed-a8') };
 }
 
-test('A8 registry includes the Slice 2 line required-presence inventory', () => {
+test('A8 registry includes the Slice 3 common required-presence inventory', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 21);
-  assert.deepEqual(rules.map((rule) => rule.ruleId), INVENTORY.map(({ entry: [ruleId] }) => ruleId));
-  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('point')).length, 14);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('line')).length, 18);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 2).length, 11);
+  assert.equal(rules.length, 24);
+  assert.deepEqual(rules.map((rule) => rule.ruleId), [
+    ...COMMON.slice(0, 2).map(([ruleId]) => ruleId),
+    ...SLICE3_COMMON.map(([ruleId]) => ruleId),
+    ...COMMON.slice(2).map(([ruleId]) => ruleId),
+    ...POINT.map(([ruleId]) => ruleId),
+    ...LINE.map(([ruleId]) => ruleId),
+  ]);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('point')).length, 17);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('line')).length, 21);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 2).length, 14);
   assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'point').length, 3);
   assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'line').length, 7);
 
@@ -250,13 +270,32 @@ test('A8 registry includes the Slice 2 line required-presence inventory', () => 
       valueComparison,
     }, ruleId);
   }
-  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 21);
+  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 24);
   assert.equal(rules.filter((rule) => rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING).length, 0);
   assert.equal(rules.some((rule) => rule.canonicalFieldId === 'visibility'), false);
   assert.equal(rules.every((rule) => rule.source.document === 'Innmålingsinstruks Vedlegg A'), true);
   assert.deepEqual(rules.find((rule) => rule.ruleId === 'innmaling.line.network-type.valid').allowedValues,
     ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7']);
   assert.equal(api.validateRuleRegistry(), true);
+});
+
+test('Slice 3 common measurement fields are independent presence-only rules', () => {
+  for (const [field, ruleId] of [
+    ['Målemetode', 'innmaling.common.measurement-method.required'],
+    ['MålemetodeHøyde', 'innmaling.common.height-measurement-method.required'],
+    ['Vertikalnivå', 'innmaling.common.vertical-level.required'],
+  ]) {
+    const absentAttributes = { ...LINE_ATTRIBUTES };
+    delete absentAttributes[field];
+    assert.equal(ruleResult(run(oneObjectDataset('line', absentAttributes)), ruleId).findings[0].reasonCode,
+      RuleReasonCode.REQUIRED_FIELD_ABSENT, field);
+    for (const value of [null, '']) {
+      const missing = run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, [field]: value }));
+      assert.equal(ruleResult(missing, ruleId).findings[0].reasonCode,
+        RuleReasonCode.REQUIRED_VALUE_MISSING, `${field}:${value}`);
+    }
+    assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, [field]: 'not-a-declared-code' })), ruleId).failCount, 0);
+  }
 });
 
 test('Slice 2 line Material and Tykkelse are independent required-presence rules', () => {
@@ -414,6 +453,9 @@ test('every new A8 practical rule implements the required state matrix', () => {
     const scope = scopes[0];
     const sourceAttributes = scope === 'point' ? { ...POINT_ATTRIBUTES } : { ...LINE_ATTRIBUTES };
     const sourceKey = {
+      measurementMethod: 'Målemetode',
+      heightMeasurementMethod: 'MålemetodeHøyde',
+      verticalLevel: 'Vertikalnivå',
       installationYear: 'Anleggsår',
       captureDate: 'Datafangstdato',
       surveyedBy: 'Innmålt_av',
@@ -617,10 +659,11 @@ test('one run drives both geometry tabs, uses dynamic rule count, and preserves 
   assert.equal(runCount, 1);
   assert.equal(pointState.result, lineState.result);
   assert.equal(pointState.result.datasetRevision, input.datasetRevision);
-  assert.equal(pointState.result.summary.totalRules, 21);
+  assert.equal(pointState.result.summary.totalRules, 24);
   assert.equal(pointState.result.ruleResults[0].findings[0]?.objectRef, lineState.result.ruleResults[0].findings[0]?.objectRef);
   assert.deepEqual(lineState.geometryView.ruleResults.map((candidate) => candidate.rule.geometryScopes), [
     ...COMMON.map(() => ['point', 'line']),
+    ...SLICE3_COMMON.map(() => ['point', 'line']),
     ...LINE.map(() => ['line']),
   ]);
 
@@ -670,7 +713,7 @@ test('representative multi-thousand-object run completes with bounded finding sh
   const started = process.hrtime.bigint();
   const result = run(makeDataset({ points, lines }));
   const elapsedMilliseconds = Number(process.hrtime.bigint() - started) / 1e6;
-  assert.equal(result.summary.totalRules, 21);
+  assert.equal(result.summary.totalRules, 24);
   assert.equal(result.summary.evaluatedPointCount, 1500);
   assert.equal(result.summary.evaluatedLineCount, 1500);
   assert.equal(result.ruleResults.flatMap((candidate) => candidate.findings).length, 0);
