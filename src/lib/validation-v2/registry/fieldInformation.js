@@ -16,6 +16,7 @@ const REQUIRED_FIELD_INFORMATION = Object.freeze([
   'tema',
   'insideOutside',
   'wallThickness',
+  'material',
   'dimension',
   'networkType',
   'pipeShape',

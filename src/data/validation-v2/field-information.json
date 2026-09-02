@@ -773,7 +773,8 @@
         "version": "3.2 / 01.08.2026",
         "pages": "5, 9; line 16",
         "auditSourceRuleIds": [
-          "innmaling.point.wall-thickness.required"
+          "innmaling.point.wall-thickness.required",
+          "innmaling.line.wall-thickness.required"
         ]
       }
     ],
@@ -782,9 +783,41 @@
         "description": "Tykkelsen på punktobjektets vegg; heltall i mm."
       },
       "line": {
-        "description": "Tykkelsen på ledningen; tall i mm med én desimal."
+        "description": "Tykkelsen på ledningen; tall i mm med én desimal.",
+        "documentedFormat": "Tall"
       }
     }
+  },
+  {
+    "canonicalFieldId": "material",
+    "displayName": "Material",
+    "description": "Materialet på ledningen.",
+    "appliesTo": [
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Materialets kodeverdier håndheves ikke i dette steget.",
+        "validationStatus": "PENDING"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 19",
+        "auditSourceRuleIds": [
+          "innmaling.line.material.required"
+        ]
+      }
+    ]
   },
   {
     "canonicalFieldId": "nobbVavvsNumber",

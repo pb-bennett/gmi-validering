@@ -59,8 +59,10 @@ const POINT = [
 ];
 
 const LINE = [
+  ['innmaling.line.wall-thickness.required', 'Ledningens tykkelse er oppgitt', 'wallThickness', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 16', [], ValueComparisonPolicy.NONE],
   ['innmaling.line.tema.required', 'Ledning har Tema', 'tema', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 16–19', [], ValueComparisonPolicy.NONE],
   ['innmaling.line.dimension.required', 'Ledningens dimensjon er oppgitt', 'dimension', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 16', [], ValueComparisonPolicy.NONE],
+  ['innmaling.line.material.required', 'Ledningens materiale er oppgitt', 'material', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 19', [], ValueComparisonPolicy.NONE],
   ['innmaling.line.network-type.valid', 'Nett-type er gyldig', 'networkType', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 19', ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7'], ValueComparisonPolicy.EXACT],
   ['innmaling.line.inside-outside.valid', 'Ledningens innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 21', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
   ['innmaling.line.pipe-shape.valid', 'Rørform er gyldig', 'pipeShape', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 21', ['A', 'E', 'F', 'R', 'S', 'T', 'X'], ValueComparisonPolicy.EXACT],
@@ -106,6 +108,8 @@ const LINE_ATTRIBUTES = {
   Nett_type: 'F',
   InnvendigUtvendig: 'OD',
   Rørform: 'A',
+  Tykkelse: 0.5,
+  Material: 'PVC-0',
   'NOBB-VAVVS-nr': '1234567',
 };
 
@@ -176,6 +180,7 @@ const PARSER_POINT_FIELDS = [
   'InnvendigUtvendig', 'Tykkelse', 'NOBB-VAVVS-nr', 'NOBB-VAVVS-nr-ramme',
 ];
 const PARSER_LINE_FIELDS = [
+  'Tykkelse', 'Material',
   'Høydereferanse', 'Anleggsår', 'Datafangstdato', 'Innmålt_av', 'Saksnummer',
   'Nøyaktighet', 'NøyaktighetHøyde', 'MaksAvvikHorisontalt', 'MaksAvvikVertikalt',
   'Stedfestingsforhold', 'Stedfestingsårsak', 'Synbarhet', 'Tema', 'Dimensjon',
@@ -186,6 +191,7 @@ const PARSER_POINT_DEFAULTS = [
   'I_VANN', 'NYTT', '0', 'VL', 'ID', '10', '1234567', '7654321',
 ];
 const PARSER_LINE_DEFAULTS = [
+  '0.5', 'PVC-0',
   'TOPP_INNVENDIG', '2020', '24.08.2026', 'surveyor', 'case-1', '1', '2', '3', '4',
   'I_VANN', 'NYTT', '0', 'SP', '110', 'F', 'OD', 'A', '1234567',
 ];
@@ -207,15 +213,15 @@ function runParsedGmi(options) {
   return { parsed, result: run(parsed, 'parsed-a8') };
 }
 
-test('A8 registry is exactly the reviewed 19-rule inventory', () => {
+test('A8 registry includes the Slice 2 line required-presence inventory', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 19);
+  assert.equal(rules.length, 21);
   assert.deepEqual(rules.map((rule) => rule.ruleId), INVENTORY.map(({ entry: [ruleId] }) => ruleId));
   assert.equal(rules.filter((rule) => rule.geometryScopes.includes('point')).length, 14);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('line')).length, 16);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('line')).length, 18);
   assert.equal(rules.filter((rule) => rule.geometryScopes.length === 2).length, 11);
   assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'point').length, 3);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'line').length, 5);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'line').length, 7);
 
   for (const { entry, scopes } of INVENTORY) {
     const [ruleId, title, canonicalFieldId, evaluatorKind, category, pages, allowedValues, valueComparison] = entry;
@@ -244,13 +250,71 @@ test('A8 registry is exactly the reviewed 19-rule inventory', () => {
       valueComparison,
     }, ruleId);
   }
-  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 19);
+  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 21);
   assert.equal(rules.filter((rule) => rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING).length, 0);
   assert.equal(rules.some((rule) => rule.canonicalFieldId === 'visibility'), false);
   assert.equal(rules.every((rule) => rule.source.document === 'Innmålingsinstruks Vedlegg A'), true);
   assert.deepEqual(rules.find((rule) => rule.ruleId === 'innmaling.line.network-type.valid').allowedValues,
     ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7']);
   assert.equal(api.validateRuleRegistry(), true);
+});
+
+test('Slice 2 line Material and Tykkelse are independent required-presence rules', () => {
+  const materialRuleId = 'innmaling.line.material.required';
+  const lineThicknessRuleId = 'innmaling.line.wall-thickness.required';
+  const pointThicknessRuleId = 'innmaling.point.wall-thickness.required';
+
+  for (const [field, ruleId] of [['Material', materialRuleId], ['Tykkelse', lineThicknessRuleId]]) {
+    const absentAttributes = { ...LINE_ATTRIBUTES };
+    delete absentAttributes[field];
+    const absent = run(oneObjectDataset('line', absentAttributes));
+    assert.equal(ruleResult(absent, ruleId).findings[0].reasonCode, RuleReasonCode.REQUIRED_FIELD_ABSENT, field);
+    for (const value of [null, '']) {
+      const missing = run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, [field]: value }));
+      assert.equal(ruleResult(missing, ruleId).findings[0].reasonCode, RuleReasonCode.REQUIRED_VALUE_MISSING, `${field}:${value}`);
+    }
+  }
+
+  assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Material: 'deliberately-not-a-code' })), materialRuleId).failCount, 0);
+  assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Tykkelse: 'not-numeric' })), lineThicknessRuleId).failCount, 0);
+
+  const pointWithThickness = run(oneObjectDataset('point', { ...POINT_ATTRIBUTES }));
+  assert.equal(ruleResult(pointWithThickness, materialRuleId).geometryBreakdown.point.evaluatedCount, 0);
+  assert.equal(ruleResult(pointWithThickness, lineThicknessRuleId).geometryBreakdown.point.evaluatedCount, 0);
+  assert.equal(ruleResult(pointWithThickness, pointThicknessRuleId).passCount, 1);
+
+  const lineWithThickness = run(oneObjectDataset('line', { ...LINE_ATTRIBUTES }));
+  assert.equal(ruleResult(lineWithThickness, lineThicknessRuleId).passCount, 1);
+  assert.equal(ruleResult(lineWithThickness, pointThicknessRuleId).geometryBreakdown.line.evaluatedCount, 0);
+});
+
+test('mixed point/line datasets never borrow Tykkelse values across geometry', () => {
+  const pointThicknessRuleId = 'innmaling.point.wall-thickness.required';
+  const lineThicknessRuleId = 'innmaling.line.wall-thickness.required';
+
+  const pointMissing = { ...POINT_ATTRIBUTES };
+  delete pointMissing.Tykkelse;
+  const pointMissingResult = run(makeDataset({
+    points: [{ attributes: pointMissing }],
+    lines: [{ attributes: { ...LINE_ATTRIBUTES, Tykkelse: 0.5 } }],
+    pointAttributes: pointMissing,
+    lineAttributes: { ...LINE_ATTRIBUTES, Tykkelse: 0.5 },
+  }));
+  assert.equal(ruleResult(pointMissingResult, pointThicknessRuleId).geometryBreakdown.point.failCount, 1);
+  assert.equal(ruleResult(pointMissingResult, pointThicknessRuleId).findings[0].reasonCode, RuleReasonCode.REQUIRED_FIELD_ABSENT);
+  assert.equal(ruleResult(pointMissingResult, lineThicknessRuleId).geometryBreakdown.line.passCount, 1);
+
+  const lineMissing = { ...LINE_ATTRIBUTES };
+  delete lineMissing.Tykkelse;
+  const lineMissingResult = run(makeDataset({
+    points: [{ attributes: { ...POINT_ATTRIBUTES, Tykkelse: 10 } }],
+    lines: [{ attributes: lineMissing }],
+    pointAttributes: { ...POINT_ATTRIBUTES, Tykkelse: 10 },
+    lineAttributes: lineMissing,
+  }));
+  assert.equal(ruleResult(lineMissingResult, pointThicknessRuleId).geometryBreakdown.point.passCount, 1);
+  assert.equal(ruleResult(lineMissingResult, lineThicknessRuleId).geometryBreakdown.line.failCount, 1);
+  assert.equal(ruleResult(lineMissingResult, lineThicknessRuleId).findings[0].reasonCode, RuleReasonCode.REQUIRED_FIELD_ABSENT);
 });
 
 
@@ -367,6 +431,7 @@ test('every new A8 practical rule implements the required state matrix', () => {
       nobbVavvsFrameNumber: 'NOBB-VAVVS-nr-ramme',
       dimension: 'Dimensjon',
       networkType: 'Nett_type',
+      material: 'Material',
       pipeShape: 'Rørform',
     }[canonicalFieldId];
     const validValue = canonicalFieldId === 'visibility' ? 0 : (allowedValues[0] || sourceAttributes[sourceKey]);
@@ -552,7 +617,7 @@ test('one run drives both geometry tabs, uses dynamic rule count, and preserves 
   assert.equal(runCount, 1);
   assert.equal(pointState.result, lineState.result);
   assert.equal(pointState.result.datasetRevision, input.datasetRevision);
-  assert.equal(pointState.result.summary.totalRules, 19);
+  assert.equal(pointState.result.summary.totalRules, 21);
   assert.equal(pointState.result.ruleResults[0].findings[0]?.objectRef, lineState.result.ruleResults[0].findings[0]?.objectRef);
   assert.deepEqual(lineState.geometryView.ruleResults.map((candidate) => candidate.rule.geometryScopes), [
     ...COMMON.map(() => ['point', 'line']),
@@ -605,7 +670,7 @@ test('representative multi-thousand-object run completes with bounded finding sh
   const started = process.hrtime.bigint();
   const result = run(makeDataset({ points, lines }));
   const elapsedMilliseconds = Number(process.hrtime.bigint() - started) / 1e6;
-  assert.equal(result.summary.totalRules, 19);
+  assert.equal(result.summary.totalRules, 21);
   assert.equal(result.summary.evaluatedPointCount, 1500);
   assert.equal(result.summary.evaluatedLineCount, 1500);
   assert.equal(result.ruleResults.flatMap((candidate) => candidate.findings).length, 0);

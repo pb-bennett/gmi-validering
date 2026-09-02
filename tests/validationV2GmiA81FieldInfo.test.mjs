@@ -85,6 +85,7 @@ test('v3.2 Field Info has the reviewed field and per-value provenance', () => {
     tema: [['appendix-a', '4, 10–12; line 16–19']],
     insideOutside: [['appendix-a', '4, 14; line 21']],
     wallThickness: [['appendix-a', '5, 9; line 16']],
+    material: [['appendix-a', '5, 19']],
     nobbVavvsNumber: [['appendix-a', '5, 10; line 16']],
     nobbVavvsFrameNumber: [['appendix-a', '5, 10']],
     dimension: [['appendix-a', '5, 16']],
@@ -144,9 +145,30 @@ test('v3.2 Field Info has the reviewed field and per-value provenance', () => {
   assert.deepEqual(getFieldInformation('visibility').sources[0].auditSourceRuleIds, []);
   assert.match(getFieldInformation('nobbVavvsNumber').description, /valgfritt/);
   assert.deepEqual(getFieldInformation('nobbVavvsNumber').sources[0].auditSourceRuleIds, []);
+  assert.equal(getFieldInformation('horizontalAccuracy').documentedFormat, 'Heltall');
+  assert.equal(getFieldInformation('material').description, 'Materialet på ledningen.');
+  assert.equal(getFieldInformation('material').qualifications[0].text,
+    'Materialets kodeverdier håndheves ikke i dette steget.');
+  assert.equal(getFieldInformation('material').sources[0].title,
+    'Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil');
   assert.equal(composeFieldInformation({
     canonicalFieldId: 'visibility', geometryScope: 'point', rule: null,
   }), null);
+  const pointThickness = composeFieldInformation({
+    canonicalFieldId: 'wallThickness', geometryScope: 'point',
+    rule: getValidationRule('innmaling.point.wall-thickness.required'),
+  });
+  const lineThickness = composeFieldInformation({
+    canonicalFieldId: 'wallThickness', geometryScope: 'line',
+    rule: getValidationRule('innmaling.line.wall-thickness.required'),
+  });
+  assert.equal(pointThickness.documentedFormat, 'Heltall');
+  assert.equal(lineThickness.documentedFormat, 'Tall');
+  assert.notEqual(pointThickness.description, lineThickness.description);
+  assert.deepEqual(composeFieldInformation({
+    canonicalFieldId: 'material', geometryScope: 'line',
+    rule: getValidationRule('innmaling.line.material.required'),
+  }).allowedValues, []);
 });
 
 test('field data is lazy, cached, current-result-bound, and does not mutate the result', () => {
