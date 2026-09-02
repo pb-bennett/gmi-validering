@@ -1,5 +1,52 @@
 import fieldInformationData from '../../../data/validation-v2/field-information.json' with { type: 'json' };
 import { getCanonicalField } from './registry.js';
+import {
+  HEIGHT_MEASUREMENT_METHOD_VALUES,
+  MEASUREMENT_METHOD_VALUES,
+} from './rules.js';
+
+const MEASUREMENT_VALUE_INFO = Object.fromEntries(
+  MEASUREMENT_METHOD_VALUES.map((value) => [value, {
+    label: value,
+    sources: [{ documentId: 'appendix-a', pages: '23–25' }],
+  }]),
+);
+const HEIGHT_MEASUREMENT_VALUE_INFO = Object.fromEntries(
+  HEIGHT_MEASUREMENT_METHOD_VALUES.map((value) => [value, {
+    label: value,
+    sources: [{ documentId: 'appendix-a', pages: '25–27' }],
+  }]),
+);
+
+const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry) => {
+  if (entry.canonicalFieldId === 'measurementMethod') {
+    return {
+      ...entry,
+      documentationStatus: 'COMPLETE',
+      qualifications: [],
+      valueInfo: MEASUREMENT_VALUE_INFO,
+      sources: entry.sources.map((source) => ({
+        ...source,
+        pages: '4, 6–7, 23–25',
+        auditSourceRuleIds: ['innmaling.common.measurement-method.required'],
+      })),
+    };
+  }
+  if (entry.canonicalFieldId === 'heightMeasurementMethod') {
+    return {
+      ...entry,
+      documentationStatus: 'COMPLETE',
+      qualifications: [],
+      valueInfo: HEIGHT_MEASUREMENT_VALUE_INFO,
+      sources: entry.sources.map((source) => ({
+        ...source,
+        pages: '4, 7, 25–27',
+        auditSourceRuleIds: ['innmaling.common.height-measurement-method.required'],
+      })),
+    };
+  }
+  return entry;
+});
 
 const REQUIRED_FIELD_INFORMATION = Object.freeze([
   'heightReference',
@@ -78,9 +125,9 @@ export function validateFieldInformationRegistry(entries = fieldInformationData)
   return true;
 }
 
-validateFieldInformationRegistry();
+validateFieldInformationRegistry(FIELD_INFORMATION_WITH_MEASUREMENT_LISTS);
 
-export const FIELD_INFORMATION = deepFreeze(fieldInformationData);
+export const FIELD_INFORMATION = deepFreeze(FIELD_INFORMATION_WITH_MEASUREMENT_LISTS);
 const byId = new Map(FIELD_INFORMATION.map((entry) => [entry.canonicalFieldId, entry]));
 
 export function getFieldInformation(canonicalFieldId) {

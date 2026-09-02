@@ -1117,9 +1117,9 @@
     "documentedFormat": "Kode",
     "range": null,
     "qualifications": [
-      {"text": "Kodeverdiene håndheves ikke i dette steget.", "sources": [{"documentId": "appendix-a", "pages": "23–25"}]}
+      {"text": "Kun autoritative v3.2-koder passerer automatisk kodevalidering; andre leverte verdier flagges for manuell validering.", "sources": [{"documentId": "appendix-a", "pages": "23–25"}]}
     ],
-    "documentationStatus": "PARTIAL",
+    "documentationStatus": "COMPLETE",
     "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
     "valueInfo": {},
     "sources": [{
@@ -1139,9 +1139,9 @@
     "documentedFormat": "Kode",
     "range": null,
     "qualifications": [
-      {"text": "Kodeverdiene håndheves ikke i dette steget.", "sources": [{"documentId": "appendix-a", "pages": "25–27"}]}
+      {"text": "Kun autoritative v3.2-koder passerer automatisk kodevalidering; andre leverte verdier flagges for manuell validering.", "sources": [{"documentId": "appendix-a", "pages": "25–27"}]}
     ],
-    "documentationStatus": "PARTIAL",
+    "documentationStatus": "COMPLETE",
     "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
     "valueInfo": {},
     "sources": [{

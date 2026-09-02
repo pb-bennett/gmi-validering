@@ -53,8 +53,8 @@ const COMMON = [
 ];
 
 const SLICE3_COMMON = [
-  ['innmaling.common.measurement-method.required', 'Målemetode er oppgitt', 'measurementMethod', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6–7', [], ValueComparisonPolicy.NONE],
-  ['innmaling.common.height-measurement-method.required', 'Målemetode høyde er oppgitt', 'heightMeasurementMethod', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 7, 25–27', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.measurement-method.required', 'Målemetode er gyldig', 'measurementMethod', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 6–7, 23–25', ['10', '11', '12', '13', '14', '15', '18', '19', '20', '21', '22', '23', '24', '30', '31', '32', '33', '34', '35', '36', '37', '38', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '60', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70', '71', '72', '73', '74', '77', '78', '79', '80', '81', '82', '90', '91', '92', '93', '94', '95', '96', '97', '99'], ValueComparisonPolicy.INTEGER_CODE_STRING],
+  ['innmaling.common.height-measurement-method.required', 'Målemetode høyde er gyldig', 'heightMeasurementMethod', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 7, 25–27', ['10', '11', '12', '13', '14', '15', '18', '19', '20', '21', '22', '23', '24', '36', '60', '61', '62', '63', '64', '66', '67', '68', '69', '70', '74', '78', '79', '90', '91', '92', '93', '94', '95', '96', '99'], ValueComparisonPolicy.INTEGER_CODE_STRING],
   ['innmaling.common.vertical-level.required', 'Vertikalnivå er oppgitt', 'verticalLevel', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 9', [], ValueComparisonPolicy.NONE],
 ];
 
@@ -87,8 +87,8 @@ const NEW_INVENTORY = INVENTORY.filter(({ entry: [ruleId] }) =>
 );
 
 const COMMON_ATTRIBUTES = {
-  Målemetode: 'arbitrary-xy-method',
-  MålemetodeHøyde: 'arbitrary-z-method',
+  Målemetode: '10',
+  MålemetodeHøyde: '10',
   Vertikalnivå: 'arbitrary-level',
   Høydereferanse: 'TOPP_INNVENDIG',
   Anleggsår: 2020,
@@ -227,7 +227,7 @@ function runParsedGmi(options) {
   return { parsed, result: run(parsed, 'parsed-a8') };
 }
 
-test('A8 registry includes the Slice 3 common required-presence inventory', () => {
+test('A8 registry includes the Slice 5 measurement allowed-value inventory', () => {
   const rules = getValidationRules();
   assert.equal(rules.length, 24);
   assert.deepEqual(rules.map((rule) => rule.ruleId), [
@@ -271,7 +271,7 @@ test('A8 registry includes the Slice 3 common required-presence inventory', () =
     }, ruleId);
   }
   assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 24);
-  assert.equal(rules.filter((rule) => rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING).length, 0);
+  assert.equal(rules.filter((rule) => rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING).length, 2);
   assert.equal(rules.some((rule) => rule.canonicalFieldId === 'visibility'), false);
   assert.equal(rules.every((rule) => rule.source.document === 'Innmålingsinstruks Vedlegg A'), true);
   assert.deepEqual(rules.find((rule) => rule.ruleId === 'innmaling.line.network-type.valid').allowedValues,
@@ -279,7 +279,7 @@ test('A8 registry includes the Slice 3 common required-presence inventory', () =
   assert.equal(api.validateRuleRegistry(), true);
 });
 
-test('Slice 3 common measurement fields are independent presence-only rules', () => {
+test('measurement fields retain required presence and enforce current v3.2 codes', () => {
   for (const [field, ruleId] of [
     ['Målemetode', 'innmaling.common.measurement-method.required'],
     ['MålemetodeHøyde', 'innmaling.common.height-measurement-method.required'],
@@ -294,8 +294,61 @@ test('Slice 3 common measurement fields are independent presence-only rules', ()
       assert.equal(ruleResult(missing, ruleId).findings[0].reasonCode,
         RuleReasonCode.REQUIRED_VALUE_MISSING, `${field}:${value}`);
     }
-    assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, [field]: 'not-a-declared-code' })), ruleId).failCount, 0);
+    const invalid = ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, [field]: 'not-a-declared-code' })), ruleId);
+    assert.equal(invalid.failCount, field === 'Vertikalnivå' ? 0 : 1, field);
   }
+});
+
+test('measurement numeric code lexical evidence rejects near misses and keeps XY/Z 97 distinct', () => {
+  const cases = [
+    ['Målemetode', '97', 0],
+    ['MålemetodeHøyde', '97', 1],
+    ['Målemetode', '01', 1],
+    ['Målemetode', ' 10', 1],
+    ['Målemetode', '10 ', 1],
+    ['Målemetode', '+10', 1],
+    ['Målemetode', '10.0', 1],
+    ['MålemetodeHøyde', '010', 1],
+    ['MålemetodeHøyde', '-10', 1],
+  ];
+  const ruleForField = {
+    Målemetode: 'innmaling.common.measurement-method.required',
+    MålemetodeHøyde: 'innmaling.common.height-measurement-method.required',
+  };
+  for (const [field, value, expectedFailCount] of cases) {
+    const result = ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, [field]: value })), ruleForField[field]);
+    assert.equal(result.failCount, expectedFailCount, `${field}:${value}`);
+    if (expectedFailCount) assert.equal(result.findings[0].reasonCode, RuleReasonCode.VALUE_NOT_ALLOWED);
+  }
+});
+
+test('measurement lists cover every authoritative value in both geometries without cross-binding', () => {
+  const fields = [
+    ['Målemetode', 'innmaling.common.measurement-method.required'],
+    ['MålemetodeHøyde', 'innmaling.common.height-measurement-method.required'],
+  ];
+  for (const [field, ruleId] of fields) {
+    const rule = getValidationRules().find((candidate) => candidate.ruleId === ruleId);
+    for (const scope of ['point', 'line']) {
+      for (const value of rule.allowedValues) {
+        const result = ruleResult(run(oneObjectDataset(scope, {
+          ...(scope === 'point' ? POINT_ATTRIBUTES : LINE_ATTRIBUTES),
+          [field]: value,
+        })), ruleId);
+        assert.equal(result.geometryBreakdown[scope].passCount, 1, `${scope}:${field}:${value}`);
+      }
+    }
+  }
+
+  const mixed = run(makeDataset({
+    points: [{ attributes: { ...POINT_ATTRIBUTES, Målemetode: '97', MålemetodeHøyde: '10' } }],
+    lines: [{ attributes: { ...LINE_ATTRIBUTES, Målemetode: '10', MålemetodeHøyde: '97' } }],
+    pointAttributes: { ...POINT_ATTRIBUTES, Målemetode: '97', MålemetodeHøyde: '10' },
+    lineAttributes: { ...LINE_ATTRIBUTES, Målemetode: '10', MålemetodeHøyde: '97' },
+  }));
+  assert.equal(ruleResult(mixed, 'innmaling.common.measurement-method.required').failCount, 0);
+  assert.equal(ruleResult(mixed, 'innmaling.common.height-measurement-method.required').geometryBreakdown.point.passCount, 1);
+  assert.equal(ruleResult(mixed, 'innmaling.common.height-measurement-method.required').geometryBreakdown.line.failCount, 1);
 });
 
 test('Slice 2 line Material and Tykkelse are independent required-presence rules', () => {
@@ -409,6 +462,96 @@ test('real GMI exact enum lexemes preserve whitespace failures and exact passes'
     assert.deepEqual(parsed.errors, []);
     assert.equal(rule.failCount, 1, testCase.ruleId);
     assert.equal(rule.findings[0].reasonCode, RuleReasonCode.VALUE_NOT_ALLOWED, testCase.ruleId);
+  }
+});
+
+test('real GMI measurement lexemes control numeric-code validation', () => {
+  const valid = runParsedGmi({
+    pointOverrides: { [PARSER_POINT_FIELDS[0]]: '97', [PARSER_POINT_FIELDS[1]]: '10' },
+    lineOverrides: { [PARSER_LINE_FIELDS[0]]: '10', [PARSER_LINE_FIELDS[1]]: '36' },
+  });
+  for (const ruleId of [
+    'innmaling.common.measurement-method.required',
+    'innmaling.common.height-measurement-method.required',
+  ]) {
+    assert.equal(ruleResult(valid.result, ruleId).failCount, 0, ruleId);
+  }
+  assert.equal(valid.parsed.points[0].attributes[PARSER_POINT_FIELDS[0]], 97);
+  assert.equal(valid.parsed.points[0].attributes[GMI_SOURCE_LEXEMES][PARSER_POINT_FIELDS[0]], '97');
+  assert.equal(valid.parsed.lines[0].attributes[GMI_SOURCE_LEXEMES][PARSER_LINE_FIELDS[1]], '36');
+
+  const height97 = runParsedGmi({
+    pointOverrides: { [PARSER_POINT_FIELDS[0]]: '10', [PARSER_POINT_FIELDS[1]]: '97' },
+    lineOverrides: { [PARSER_LINE_FIELDS[0]]: '10', [PARSER_LINE_FIELDS[1]]: '36' },
+  });
+  assert.equal(height97.parsed.points[0].attributes[PARSER_POINT_FIELDS[1]], 97);
+  assert.equal(height97.parsed.points[0].attributes[GMI_SOURCE_LEXEMES][PARSER_POINT_FIELDS[1]], '97');
+  const height97Rule = ruleResult(
+    height97.result,
+    'innmaling.common.height-measurement-method.required',
+  );
+  assert.equal(height97Rule.failCount, 1);
+  assert.equal(height97Rule.findings[0].reasonCode, RuleReasonCode.VALUE_NOT_ALLOWED);
+
+  const cases = [
+    { field: PARSER_POINT_FIELDS[0], lexeme: '01', scope: 'point', expectedValue: 1 },
+    { field: PARSER_POINT_FIELDS[0], lexeme: ' 10', scope: 'point', expectedValue: 10 },
+    { field: PARSER_POINT_FIELDS[1], lexeme: '10 ', scope: 'point', expectedValue: 10 },
+    { field: PARSER_POINT_FIELDS[1], lexeme: '+10', scope: 'point', expectedValue: '+10' },
+    { field: PARSER_LINE_FIELDS[0], lexeme: '10.0', scope: 'line', expectedValue: 10 },
+  ];
+  const ruleForField = {
+    [PARSER_POINT_FIELDS[0]]: 'innmaling.common.measurement-method.required',
+    [PARSER_POINT_FIELDS[1]]: 'innmaling.common.height-measurement-method.required',
+  };
+  for (const { field, lexeme, scope, expectedValue } of cases) {
+    const options = {
+      pointOverrides: { [PARSER_POINT_FIELDS[0]]: '97', [PARSER_POINT_FIELDS[1]]: '10' },
+      lineOverrides: { [PARSER_LINE_FIELDS[0]]: '10', [PARSER_LINE_FIELDS[1]]: '36' },
+    };
+    options[scope === 'point' ? 'pointOverrides' : 'lineOverrides'][field] = lexeme;
+    const { parsed, result } = runParsedGmi(options);
+    const attributes = parsed[scope === 'point' ? 'points' : 'lines'][0].attributes;
+    assert.equal(attributes[field], expectedValue, `${field}:${lexeme} parsed value`);
+    assert.equal(attributes[GMI_SOURCE_LEXEMES][field], lexeme, `${field}:${lexeme} source lexeme`);
+    const rule = ruleResult(result, ruleForField[field]);
+    assert.equal(rule.failCount, 1, `${field}:${lexeme}`);
+    assert.equal(rule.findings[0].reasonCode, RuleReasonCode.VALUE_NOT_ALLOWED);
+  }
+});
+
+test('measurement integer-code validation covers the direct no-lexeme fallback', () => {
+  const ruleCases = [
+    ['innmaling.common.measurement-method.required', ['10', '97'], [10, 97]],
+    ['innmaling.common.height-measurement-method.required', ['10', '36'], [10, 36]],
+  ];
+  for (const [ruleId, validStrings, validNumbers] of ruleCases) {
+    const allowedValues = getValidationRules().find((rule) => rule.ruleId === ruleId).allowedValues;
+    for (const sourceValue of validStrings) {
+      assert.equal(
+        evaluateRequiredAllowedValue({ state: ObjectValueState.VALUE_PRESENT, sourceValue }, allowedValues,
+          ValueComparisonPolicy.INTEGER_CODE_STRING).state,
+        EvaluationState.PASS,
+        `${ruleId}:${sourceValue}`,
+      );
+    }
+    for (const sourceValue of validNumbers) {
+      assert.equal(
+        evaluateRequiredAllowedValue({ state: ObjectValueState.VALUE_PRESENT, sourceValue }, allowedValues,
+          ValueComparisonPolicy.INTEGER_CODE_STRING).state,
+        EvaluationState.PASS,
+        `${ruleId}:${sourceValue}`,
+      );
+    }
+    for (const sourceValue of ['10x', '01', 10.5, Number.MAX_SAFE_INTEGER + 1, -0]) {
+      const evaluation = evaluateRequiredAllowedValue(
+        { state: ObjectValueState.VALUE_PRESENT, sourceValue },
+        allowedValues,
+        ValueComparisonPolicy.INTEGER_CODE_STRING,
+      );
+      assert.equal(evaluation.state, EvaluationState.FAIL, `${ruleId}:${String(sourceValue)}`);
+      assert.equal(evaluation.reasonCode, RuleReasonCode.VALUE_NOT_ALLOWED);
+    }
   }
 });
 

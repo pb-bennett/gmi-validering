@@ -43,6 +43,19 @@ const POSITIONING_CAUSE_VALUES = [
 const INSIDE_OUTSIDE_VALUES = ['ID', 'OD'];
 const NETWORK_TYPE_VALUES = ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7'];
 const PIPE_SHAPE_VALUES = ['A', 'E', 'F', 'R', 'S', 'T', 'X'];
+export const MEASUREMENT_METHOD_VALUES = [
+  '10', '11', '12', '13', '14', '15', '18', '19', '20', '21', '22', '23', '24',
+  '30', '31', '32', '33', '34', '35', '36', '37', '38', '40', '41', '42', '43',
+  '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56',
+  '60', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70', '71', '72',
+  '73', '74', '77', '78', '79', '80', '81', '82', '90', '91', '92', '93', '94',
+  '95', '96', '97', '99',
+];
+export const HEIGHT_MEASUREMENT_METHOD_VALUES = [
+  '10', '11', '12', '13', '14', '15', '18', '19', '20', '21', '22', '23', '24',
+  '36', '60', '61', '62', '63', '64', '66', '67', '68', '69', '70', '74', '78',
+  '79', '90', '91', '92', '93', '94', '95', '96', '99',
+];
 
 function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
@@ -97,29 +110,29 @@ export const VALIDATION_RULES = deepFreeze([
     ruleId: 'innmaling.common.measurement-method.required',
     canonicalFieldId: 'measurementMethod',
     geometryScopes: [GeometryScope.POINT, GeometryScope.LINE],
-    evaluatorKind: RuleEvaluatorKind.REQUIRED,
-    category: RuleCategory.REQUIRED_FIELD,
-    title: 'Målemetode er oppgitt',
-    description: 'Alle innmålte objekt skal ha oppgitt målemetode.',
+    evaluatorKind: RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE,
+    category: RuleCategory.REQUIRED_ALLOWED_VALUE,
+    title: 'Målemetode er gyldig',
+    description: 'Alle innmålte objekt skal ha en gyldig målemetodekode fra v3.2-listen.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6–7' },
-    allowedValues: [],
-    valueComparison: ValueComparisonPolicy.NONE,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6–7, 23–25' },
+    allowedValues: MEASUREMENT_METHOD_VALUES,
+    valueComparison: ValueComparisonPolicy.INTEGER_CODE_STRING,
   },
   {
     ruleId: 'innmaling.common.height-measurement-method.required',
     canonicalFieldId: 'heightMeasurementMethod',
     geometryScopes: [GeometryScope.POINT, GeometryScope.LINE],
-    evaluatorKind: RuleEvaluatorKind.REQUIRED,
-    category: RuleCategory.REQUIRED_FIELD,
-    title: 'Målemetode høyde er oppgitt',
-    description: 'Alle innmålte objekt skal ha oppgitt målemetode for høyde.',
+    evaluatorKind: RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE,
+    category: RuleCategory.REQUIRED_ALLOWED_VALUE,
+    title: 'Målemetode høyde er gyldig',
+    description: 'Alle innmålte objekt skal ha en gyldig høydemålemetodekode fra v3.2-listen.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
     source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 7, 25–27' },
-    allowedValues: [],
-    valueComparison: ValueComparisonPolicy.NONE,
+    allowedValues: HEIGHT_MEASUREMENT_METHOD_VALUES,
+    valueComparison: ValueComparisonPolicy.INTEGER_CODE_STRING,
   },
   {
     ruleId: 'innmaling.common.vertical-level.required',
@@ -485,7 +498,8 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
     }
     if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE) {
       assertInvariant(
-        rule.valueComparison === ValueComparisonPolicy.EXACT,
+        rule.valueComparison === ValueComparisonPolicy.EXACT ||
+          rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING,
         `${rule.ruleId} has invalid combined comparison policy`
       );
     }
