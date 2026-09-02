@@ -68,6 +68,87 @@ test('field information composes documentation with executable rule metadata', (
   assert.equal(getFieldInformation('tema').documentationStatus, 'PARTIAL');
 });
 
+test('v3.2 Field Info has the reviewed field and per-value provenance', () => {
+  const sourceContract = {
+    heightReference: [['appendix-a', '4, 6'], ['main-instruction', '10, 13–18']],
+    installationYear: [['appendix-a', '4, 6']],
+    captureDate: [['appendix-a', '4, 6']],
+    surveyedBy: [['appendix-a', '4, 6']],
+    caseNumber: [['appendix-a', '4, 6']],
+    horizontalAccuracy: [['appendix-a', '4, 6'], ['main-instruction', '10']],
+    verticalAccuracy: [['appendix-a', '4, 6'], ['main-instruction', '10']],
+    maxHorizontalDeviation: [['appendix-a', '4, 6'], ['main-instruction', '5, 10']],
+    maxVerticalDeviation: [['appendix-a', '4, 6'], ['main-instruction', '5, 10']],
+    positioningCondition: [['appendix-a', '4, 7–8']],
+    positioningCause: [['appendix-a', '4, 8'], ['main-instruction', '9–10, 18']],
+    visibility: [['appendix-a', '4, 8']],
+    tema: [['appendix-a', '4, 10–12; line 16–19']],
+    insideOutside: [['appendix-a', '4, 14; line 21']],
+    wallThickness: [['appendix-a', '5, 9; line 16']],
+    nobbVavvsNumber: [['appendix-a', '5, 10; line 16']],
+    nobbVavvsFrameNumber: [['appendix-a', '5, 10']],
+    dimension: [['appendix-a', '5, 16']],
+    networkType: [['appendix-a', '5, 19']],
+    pipeShape: [['appendix-a', '5, 21']],
+  };
+  for (const [fieldId, expected] of Object.entries(sourceContract)) {
+    const sources = getFieldInformation(fieldId).sources;
+    assert.deepEqual(sources.map(({ documentId, pages }) => [documentId, pages]), expected, fieldId);
+    for (const source of sources) {
+      assert.equal(source.version, source.documentId === 'appendix-a'
+        ? '3.2 / 01.08.2026'
+        : '3.2 / august 2026', fieldId);
+    }
+  }
+
+  const valueSourceContract = {
+    heightReference: {
+      values: ['BUNN_INNVENDIG', 'PÅ_BAKKEN', 'SENTER', 'TOPP_INNVENDIG', 'TOPP_UTVENDIG', 'UKJENT', 'UNDERKANT_UTVENDIG'],
+      source: ['main-instruction', '10, 13–18'],
+    },
+    positioningCondition: {
+      values: ['DELV_LUKK_GRØ', 'I_TUNNEL', 'I_VANN', 'IKKE_STEDF', 'LUKK_GRØ', 'OVERFL_VANN', 'POS_FRA_KUM', 'PÅVI', 'ÅPEN_GRØ', 'ÅPEN_KUM'],
+      source: ['appendix-a', '7–8'],
+    },
+    positioningCause: {
+      values: ['FJERN', 'FLYTT_DELV', 'FLYTT_HELT', 'NYTT', 'PÅVI', 'UENDR'],
+      source: ['appendix-a', '8'],
+    },
+    visibility: {
+      values: ['0', '1', '2', '3'],
+      source: ['appendix-a', '8'],
+    },
+    insideOutside: {
+      values: ['ID', 'OD'],
+      source: ['appendix-a', '14, 21'],
+    },
+    networkType: {
+      values: ['F', 'H', 'O', 'S', 'S6', 'O1', 'O2', 'S7'],
+      source: ['appendix-a', '19'],
+    },
+    pipeShape: {
+      values: ['A', 'E', 'F', 'R', 'S', 'T', 'X'],
+      source: ['appendix-a', '21'],
+    },
+  };
+  for (const [fieldId, { values, source }] of Object.entries(valueSourceContract)) {
+    const valueInfo = getFieldInformation(fieldId).valueInfo;
+    assert.deepEqual(Object.keys(valueInfo), values, fieldId);
+    for (const value of values) {
+      assert.deepEqual(valueInfo[value].sources.map(({ documentId, pages }) => [documentId, pages]),
+        [source], `${fieldId}.${value}`);
+    }
+  }
+
+  assert.match(getFieldInformation('visibility').description, /Utgått/);
+  assert.deepEqual(getFieldInformation('visibility').sources[0].auditSourceRuleIds, []);
+  assert.match(getFieldInformation('nobbVavvsNumber').description, /valgfritt/);
+  assert.deepEqual(getFieldInformation('nobbVavvsNumber').sources[0].auditSourceRuleIds, []);
+  assert.equal(composeFieldInformation({
+    canonicalFieldId: 'visibility', geometryScope: 'point', rule: null,
+  }), null);
+});
+
 test('field data is lazy, cached, current-result-bound, and does not mutate the result', () => {
   clearValidationV2FieldDataCache();
   const layer = makeLayer('field-data-cache', [{ attributes: { Høydereferanse: 'TOPP_INNVENDIG' } }]);
@@ -108,24 +189,26 @@ test('field data is lazy, cached, current-result-bound, and does not mutate the 
 
 test('delivered lexemes remain separate and current evaluator semantics are reused', () => {
   clearValidationV2FieldDataCache();
-  const lexemes = ['1', '01', '1.0', ' 1', '1 '];
-  const points = lexemes.map((lexeme) => ({
-    attributes: addLexeme({ Synbarhet: 1 }, 'Synbarhet', lexeme),
+  const lexemes = ['F', 'O1', ' O1', 'o1', 'O1 '];
+  const lines = lexemes.map((lexeme) => ({
+    attributes: addLexeme({ Nett_type: lexeme }, 'Nett_type', lexeme),
   }));
-  const layer = makeLayer('lexeme-data', points, ['Synbarhet']);
+  const layer = makeLayer('lexeme-data', [], ['Nett_type']);
+  layer.data.lines = lines;
+  layer.data.fieldAnalysis.lines = { Nett_type: {} };
   const { input, result } = runLayer(layer);
   const summary = getValidationV2FieldDataSummary({
     ...input,
     result,
-    geometryScope: 'point',
-    canonicalFieldId: 'visibility',
-    rule: getValidationRule('innmaling.common.visibility.valid'),
+    geometryScope: 'line',
+    canonicalFieldId: 'networkType',
+    rule: getValidationRule('innmaling.line.network-type.valid'),
   });
   assert.equal(summary.uniqueValueCount, 5);
   assert.equal(summary.rows.length, 5);
   assert.deepEqual(summary.rows.map((row) => row.deliveredValue).sort(), lexemes.map(JSON.stringify).sort());
-  assert.equal(summary.rows.find((row) => row.deliveredValue === '"1"').ruleAcceptance, 'Gyldig');
-  assert.equal(summary.rows.filter((row) => row.ruleAcceptance === 'Ugyldig').length, 4);
+  assert.equal(summary.rows.find((row) => row.deliveredValue === '"F"').ruleAcceptance, 'Gyldig');
+  assert.equal(summary.rows.filter((row) => row.ruleAcceptance === 'Ugyldig').length, 3);
 });
 
 test('missing and unresolved field data preserve deliberate buckets', () => {

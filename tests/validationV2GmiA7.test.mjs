@@ -252,12 +252,9 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
     'innmaling.common.max-vertical-deviation.required',
     'innmaling.common.positioning-condition.valid',
     'innmaling.common.positioning-cause.valid',
-    'innmaling.common.visibility.valid',
     POINT_TEMA_REQUIRED,
     'innmaling.point.inside-outside.valid',
     'innmaling.point.wall-thickness.required',
-    'innmaling.point.nobb-vavvs-number.required',
-    'innmaling.point.nobb-vavvs-frame-number.required',
   ]);
   assert.deepEqual(lineView.ruleResults.map((rule) => rule.rule.ruleId), [
     HEIGHT_VALID,
@@ -271,13 +268,11 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
     'innmaling.common.max-vertical-deviation.required',
     'innmaling.common.positioning-condition.valid',
     'innmaling.common.positioning-cause.valid',
-    'innmaling.common.visibility.valid',
     LINE_TEMA_REQUIRED,
     'innmaling.line.dimension.required',
     'innmaling.line.network-type.valid',
     'innmaling.line.inside-outside.valid',
     'innmaling.line.pipe-shape.valid',
-    'innmaling.line.nobb-vavvs-number.required',
   ]);
   assert.equal(input.datasetRevision, result.datasetRevision);
   assert.equal(getDefaultValidationV2Geometry(layer), 'point');

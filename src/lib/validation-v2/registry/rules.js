@@ -41,9 +41,8 @@ const POSITIONING_CAUSE_VALUES = [
 ];
 
 const INSIDE_OUTSIDE_VALUES = ['ID', 'OD'];
-const NETWORK_TYPE_VALUES = ['F', 'H', 'O', 'S', 'S6'];
+const NETWORK_TYPE_VALUES = ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7'];
 const PIPE_SHAPE_VALUES = ['A', 'E', 'F', 'R', 'S', 'T', 'X'];
-const VISIBILITY_VALUES = ['0', '1', '2', '3'];
 
 function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
@@ -75,7 +74,7 @@ export const VALIDATION_RULES = deepFreeze([
     provenance: RuleProvenance.STANDARD,
     source: {
       document: 'Innmålingsinstruks Vedlegg A',
-      pages: '5, 7',
+      pages: '4, 6; main 10, 13–18',
     },
     allowedValues: HEIGHT_REFERENCE_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
@@ -90,7 +89,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha oppgitt anleggsår.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5–6' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -104,7 +103,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha oppgitt datafangstdato.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5–6' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -118,7 +117,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha oppgitt hvem som målte inn objektet.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5–6' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -132,7 +131,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha oppgitt saksnummer.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5–6' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -146,7 +145,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha oppgitt horisontal nøyaktighet.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 8' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6; main 10' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -160,7 +159,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha oppgitt vertikal nøyaktighet.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 8' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6; main 10' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -174,7 +173,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha oppgitt maksimalt horisontalt avvik.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 10' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6; main 5, 10' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -188,7 +187,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha oppgitt maksimalt vertikalt avvik.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 10' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6; main 5, 10' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -202,7 +201,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha et gyldig stedfestingsforhold.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 8–9' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 7–8' },
     allowedValues: POSITIONING_CONDITION_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
   },
@@ -216,23 +215,9 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle innmålte objekt skal ha en gyldig stedfestingsårsak.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 9' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 8; main 9–10, 18' },
     allowedValues: POSITIONING_CAUSE_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
-  },
-  {
-    ruleId: 'innmaling.common.visibility.valid',
-    canonicalFieldId: 'visibility',
-    geometryScopes: [GeometryScope.POINT, GeometryScope.LINE],
-    evaluatorKind: RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE,
-    category: RuleCategory.REQUIRED_ALLOWED_VALUE,
-    title: 'Synbarhet er gyldig',
-    description: 'Alle innmålte objekt skal ha en gyldig synbarhetskode.',
-    severity: RuleSeverity.ERROR,
-    provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 9' },
-    allowedValues: VISIBILITY_VALUES,
-    valueComparison: ValueComparisonPolicy.INTEGER_CODE_STRING,
   },
   {
     ruleId: 'innmaling.point.tema.required',
@@ -246,7 +231,7 @@ export const VALIDATION_RULES = deepFreeze([
     provenance: RuleProvenance.STANDARD,
     source: {
       document: 'Innmålingsinstruks Vedlegg A',
-      pages: '5, 11–13',
+      pages: '4, 10–12',
     },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
@@ -261,7 +246,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle punktobjekt skal ha en gyldig innvendig/utvendig-kode.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 15' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 14' },
     allowedValues: INSIDE_OUTSIDE_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
   },
@@ -275,35 +260,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle punktobjekt skal ha oppgitt tykkelse.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 15' },
-    allowedValues: [],
-    valueComparison: ValueComparisonPolicy.NONE,
-  },
-  {
-    ruleId: 'innmaling.point.nobb-vavvs-number.required',
-    canonicalFieldId: 'nobbVavvsNumber',
-    geometryScopes: [GeometryScope.POINT],
-    evaluatorKind: RuleEvaluatorKind.REQUIRED,
-    category: RuleCategory.REQUIRED_FIELD,
-    title: 'Punktets NOBB/VAVVS-nummer er oppgitt',
-    description: 'Alle punktobjekt skal ha oppgitt NOBB/VAVVS-nummer.',
-    severity: RuleSeverity.ERROR,
-    provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 17' },
-    allowedValues: [],
-    valueComparison: ValueComparisonPolicy.NONE,
-  },
-  {
-    ruleId: 'innmaling.point.nobb-vavvs-frame-number.required',
-    canonicalFieldId: 'nobbVavvsFrameNumber',
-    geometryScopes: [GeometryScope.POINT],
-    evaluatorKind: RuleEvaluatorKind.REQUIRED,
-    category: RuleCategory.REQUIRED_FIELD,
-    title: 'Rammens NOBB/VAVVS-nummer er oppgitt',
-    description: 'Alle punktobjekt skal ha oppgitt NOBB/VAVVS-nummer for ramme.',
-    severity: RuleSeverity.ERROR,
-    provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 18' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 9' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -319,7 +276,7 @@ export const VALIDATION_RULES = deepFreeze([
     provenance: RuleProvenance.STANDARD,
     source: {
       document: 'Innmålingsinstruks Vedlegg A',
-      pages: '6, 19–21',
+      pages: '5, 16–19',
     },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
@@ -334,7 +291,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle ledninger skal ha oppgitt dimensjon.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '6, 23' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 16' },
     allowedValues: [],
     valueComparison: ValueComparisonPolicy.NONE,
   },
@@ -348,7 +305,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle ledninger skal ha en gyldig nett-type.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '6, 21–22' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 19' },
     allowedValues: NETWORK_TYPE_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
   },
@@ -362,7 +319,7 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle ledninger skal ha en gyldig innvendig/utvendig-kode.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '6, 23' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 21' },
     allowedValues: INSIDE_OUTSIDE_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
   },
@@ -376,23 +333,9 @@ export const VALIDATION_RULES = deepFreeze([
     description: 'Alle ledninger skal ha en gyldig rørform.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '6, 23–24' },
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 21' },
     allowedValues: PIPE_SHAPE_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
-  },
-  {
-    ruleId: 'innmaling.line.nobb-vavvs-number.required',
-    canonicalFieldId: 'nobbVavvsNumber',
-    geometryScopes: [GeometryScope.LINE],
-    evaluatorKind: RuleEvaluatorKind.REQUIRED,
-    category: RuleCategory.REQUIRED_FIELD,
-    title: 'Ledningens NOBB/VAVVS-nummer er oppgitt',
-    description: 'Alle ledninger skal ha oppgitt NOBB/VAVVS-nummer.',
-    severity: RuleSeverity.ERROR,
-    provenance: RuleProvenance.STANDARD,
-    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '6, 25' },
-    allowedValues: [],
-    valueComparison: ValueComparisonPolicy.NONE,
   },
 ]);
 
@@ -472,16 +415,9 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
     }
     if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE) {
       assertInvariant(
-        rule.valueComparison === ValueComparisonPolicy.EXACT ||
-          rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING,
+        rule.valueComparison === ValueComparisonPolicy.EXACT,
         `${rule.ruleId} has invalid combined comparison policy`
       );
-      if (rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING) {
-        assertInvariant(
-          rule.ruleId === 'innmaling.common.visibility.valid',
-          `${rule.ruleId} uses an unapproved integer-code comparison policy`
-        );
-      }
     }
   }
   return true;

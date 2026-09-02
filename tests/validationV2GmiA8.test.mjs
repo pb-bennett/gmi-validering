@@ -39,35 +39,31 @@ const {
 } = api;
 
 const COMMON = [
-  ['innmaling.common.height-reference.valid', 'Høydereferanse er gyldig', 'heightReference', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 7', ['BUNN_INNVENDIG', 'PÅ_BAKKEN', 'SENTER', 'TOPP_INNVENDIG', 'TOPP_UTVENDIG', 'UKJENT', 'UNDERKANT_UTVENDIG'], ValueComparisonPolicy.EXACT],
-  ['innmaling.common.installation-year.required', 'Anleggsår er oppgitt', 'installationYear', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5–6', [], ValueComparisonPolicy.NONE],
-  ['innmaling.common.capture-date.required', 'Datafangstdato er oppgitt', 'captureDate', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5–6', [], ValueComparisonPolicy.NONE],
-  ['innmaling.common.surveyed-by.required', 'Innmålt av er oppgitt', 'surveyedBy', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5–6', [], ValueComparisonPolicy.NONE],
-  ['innmaling.common.case-number.required', 'Saksnummer er oppgitt', 'caseNumber', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5–6', [], ValueComparisonPolicy.NONE],
-  ['innmaling.common.horizontal-accuracy.required', 'Nøyaktighet XY er oppgitt', 'horizontalAccuracy', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 8', [], ValueComparisonPolicy.NONE],
-  ['innmaling.common.vertical-accuracy.required', 'Nøyaktighet høyde Z er oppgitt', 'verticalAccuracy', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 8', [], ValueComparisonPolicy.NONE],
-  ['innmaling.common.max-horizontal-deviation.required', 'Maksavvik horisontalt er oppgitt', 'maxHorizontalDeviation', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 10', [], ValueComparisonPolicy.NONE],
-  ['innmaling.common.max-vertical-deviation.required', 'Maksavvik vertikalt er oppgitt', 'maxVerticalDeviation', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 10', [], ValueComparisonPolicy.NONE],
-  ['innmaling.common.positioning-condition.valid', 'Stedfestingsforhold er gyldig', 'positioningCondition', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 8–9', ['DELV_LUKK_GRØ', 'I_TUNNEL', 'I_VANN', 'IKKE_STEDF', 'LUKK_GRØ', 'OVERFL_VANN', 'POS_FRA_KUM', 'PÅVI', 'ÅPEN_GRØ', 'ÅPEN_KUM'], ValueComparisonPolicy.EXACT],
-  ['innmaling.common.positioning-cause.valid', 'Stedfestingsårsak er gyldig', 'positioningCause', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 9', ['FJERN', 'FLYTT_DELV', 'FLYTT_HELT', 'NYTT', 'PÅVI', 'UENDR'], ValueComparisonPolicy.EXACT],
-  ['innmaling.common.visibility.valid', 'Synbarhet er gyldig', 'visibility', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 9', ['0', '1', '2', '3'], ValueComparisonPolicy.INTEGER_CODE_STRING],
+  ['innmaling.common.height-reference.valid', 'Høydereferanse er gyldig', 'heightReference', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 6; main 10, 13–18', ['BUNN_INNVENDIG', 'PÅ_BAKKEN', 'SENTER', 'TOPP_INNVENDIG', 'TOPP_UTVENDIG', 'UKJENT', 'UNDERKANT_UTVENDIG'], ValueComparisonPolicy.EXACT],
+  ['innmaling.common.installation-year.required', 'Anleggsår er oppgitt', 'installationYear', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.capture-date.required', 'Datafangstdato er oppgitt', 'captureDate', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.surveyed-by.required', 'Innmålt av er oppgitt', 'surveyedBy', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.case-number.required', 'Saksnummer er oppgitt', 'caseNumber', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.horizontal-accuracy.required', 'Nøyaktighet XY er oppgitt', 'horizontalAccuracy', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6; main 10', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.vertical-accuracy.required', 'Nøyaktighet høyde Z er oppgitt', 'verticalAccuracy', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6; main 10', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.max-horizontal-deviation.required', 'Maksavvik horisontalt er oppgitt', 'maxHorizontalDeviation', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6; main 5, 10', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.max-vertical-deviation.required', 'Maksavvik vertikalt er oppgitt', 'maxVerticalDeviation', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 6; main 5, 10', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.positioning-condition.valid', 'Stedfestingsforhold er gyldig', 'positioningCondition', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 7–8', ['DELV_LUKK_GRØ', 'I_TUNNEL', 'I_VANN', 'IKKE_STEDF', 'LUKK_GRØ', 'OVERFL_VANN', 'POS_FRA_KUM', 'PÅVI', 'ÅPEN_GRØ', 'ÅPEN_KUM'], ValueComparisonPolicy.EXACT],
+  ['innmaling.common.positioning-cause.valid', 'Stedfestingsårsak er gyldig', 'positioningCause', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 8; main 9–10, 18', ['FJERN', 'FLYTT_DELV', 'FLYTT_HELT', 'NYTT', 'PÅVI', 'UENDR'], ValueComparisonPolicy.EXACT],
 ];
 
 const POINT = [
-  ['innmaling.point.tema.required', 'Punktobjekt har Tema', 'tema', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 11–13', [], ValueComparisonPolicy.NONE],
-  ['innmaling.point.inside-outside.valid', 'Punktets innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 15', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
-  ['innmaling.point.wall-thickness.required', 'Punktets tykkelse er oppgitt', 'wallThickness', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 15', [], ValueComparisonPolicy.NONE],
-  ['innmaling.point.nobb-vavvs-number.required', 'Punktets NOBB/VAVVS-nummer er oppgitt', 'nobbVavvsNumber', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 17', [], ValueComparisonPolicy.NONE],
-  ['innmaling.point.nobb-vavvs-frame-number.required', 'Rammens NOBB/VAVVS-nummer er oppgitt', 'nobbVavvsFrameNumber', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 18', [], ValueComparisonPolicy.NONE],
+  ['innmaling.point.tema.required', 'Punktobjekt har Tema', 'tema', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 10–12', [], ValueComparisonPolicy.NONE],
+  ['innmaling.point.inside-outside.valid', 'Punktets innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 14', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
+  ['innmaling.point.wall-thickness.required', 'Punktets tykkelse er oppgitt', 'wallThickness', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 9', [], ValueComparisonPolicy.NONE],
 ];
 
 const LINE = [
-  ['innmaling.line.tema.required', 'Ledning har Tema', 'tema', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '6, 19–21', [], ValueComparisonPolicy.NONE],
-  ['innmaling.line.dimension.required', 'Ledningens dimensjon er oppgitt', 'dimension', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '6, 23', [], ValueComparisonPolicy.NONE],
-  ['innmaling.line.network-type.valid', 'Nett-type er gyldig', 'networkType', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '6, 21–22', ['F', 'H', 'O', 'S', 'S6'], ValueComparisonPolicy.EXACT],
-  ['innmaling.line.inside-outside.valid', 'Ledningens innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '6, 23', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
-  ['innmaling.line.pipe-shape.valid', 'Rørform er gyldig', 'pipeShape', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '6, 23–24', ['A', 'E', 'F', 'R', 'S', 'T', 'X'], ValueComparisonPolicy.EXACT],
-  ['innmaling.line.nobb-vavvs-number.required', 'Ledningens NOBB/VAVVS-nummer er oppgitt', 'nobbVavvsNumber', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '6, 25', [], ValueComparisonPolicy.NONE],
+  ['innmaling.line.tema.required', 'Ledning har Tema', 'tema', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 16–19', [], ValueComparisonPolicy.NONE],
+  ['innmaling.line.dimension.required', 'Ledningens dimensjon er oppgitt', 'dimension', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 16', [], ValueComparisonPolicy.NONE],
+  ['innmaling.line.network-type.valid', 'Nett-type er gyldig', 'networkType', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 19', ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7'], ValueComparisonPolicy.EXACT],
+  ['innmaling.line.inside-outside.valid', 'Ledningens innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 21', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
+  ['innmaling.line.pipe-shape.valid', 'Rørform er gyldig', 'pipeShape', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 21', ['A', 'E', 'F', 'R', 'S', 'T', 'X'], ValueComparisonPolicy.EXACT],
 ];
 
 const INVENTORY = [
@@ -211,15 +207,15 @@ function runParsedGmi(options) {
   return { parsed, result: run(parsed, 'parsed-a8') };
 }
 
-test('A8 registry is exactly the reviewed 23-rule inventory', () => {
+test('A8 registry is exactly the reviewed 19-rule inventory', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 23);
+  assert.equal(rules.length, 19);
   assert.deepEqual(rules.map((rule) => rule.ruleId), INVENTORY.map(({ entry: [ruleId] }) => ruleId));
-  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('point')).length, 17);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('line')).length, 18);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 2).length, 12);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'point').length, 5);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'line').length, 6);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('point')).length, 14);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('line')).length, 16);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 2).length, 11);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'point').length, 3);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'line').length, 5);
 
   for (const { entry, scopes } of INVENTORY) {
     const [ruleId, title, canonicalFieldId, evaluatorKind, category, pages, allowedValues, valueComparison] = entry;
@@ -248,59 +244,16 @@ test('A8 registry is exactly the reviewed 23-rule inventory', () => {
       valueComparison,
     }, ruleId);
   }
-  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 23);
-  assert.equal(rules.filter((rule) => rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING).length, 1);
-  assert.equal(rules.find((rule) => rule.canonicalFieldId === 'visibility').valueComparison, ValueComparisonPolicy.INTEGER_CODE_STRING);
+  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 19);
+  assert.equal(rules.filter((rule) => rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING).length, 0);
+  assert.equal(rules.some((rule) => rule.canonicalFieldId === 'visibility'), false);
+  assert.equal(rules.every((rule) => rule.source.document === 'Innmålingsinstruks Vedlegg A'), true);
+  assert.deepEqual(rules.find((rule) => rule.ruleId === 'innmaling.line.network-type.valid').allowedValues,
+    ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7']);
   assert.equal(api.validateRuleRegistry(), true);
 });
 
-test('real GMI parser preserves source lexemes without changing ordinary attributes', () => {
-  for (const lexeme of ['0', '1', '2', '3']) {
-    const { parsed, result } = runParsedGmi({ pointOverrides: { Synbarhet: lexeme } });
-    const pointAttributes = parsed.points[0].attributes;
-    assert.equal(pointAttributes.Synbarhet, Number(lexeme));
-    assert.equal(pointAttributes.Høydereferanse, 'TOPP_INNVENDIG');
-    assert.equal(pointAttributes.Stedfestingsforhold, 'I_VANN');
-    assert.equal(pointAttributes.Stedfestingsårsak, 'NYTT');
-    assert.equal(Object.keys(pointAttributes).includes('gmiSourceLexemes'), false);
-    assert.equal(JSON.stringify(pointAttributes).includes('gmiSourceLexemes'), false);
-    assert.equal(pointAttributes[GMI_SOURCE_LEXEMES].Synbarhet, lexeme);
-    const schemaBinding = api.bindGmiLayerSchema({
-      layerId: 'parsed-a8',
-      dataset: parsed,
-      datasetRevision: 'revision-parsed-a8',
-      sourceFormat: 'gmi',
-    });
-    const extracted = api.extractGmiObjectFieldValue({
-      layerId: 'parsed-a8',
-      dataset: parsed,
-      datasetRevision: 'revision-parsed-a8',
-      sourceFormat: 'gmi',
-      schemaBinding,
-      objectRef: api.createObjectRef({
-        layerId: 'parsed-a8',
-        datasetRevision: 'revision-parsed-a8',
-        geometryScope: 'point',
-        objectIndex: 0,
-      }),
-      canonicalFieldId: 'visibility',
-    });
-    assert.equal(extracted.sourceValue, Number(lexeme));
-    assert.equal(extracted.sourceLexeme, lexeme);
-    assert.equal(ruleResult(result, 'innmaling.common.visibility.valid').geometryBreakdown.point.passCount, 1);
-    assert.equal(ruleResult(result, 'innmaling.common.visibility.valid').geometryBreakdown.line.passCount, 1);
-  }
-});
 
-test('real GMI Synbarhet lexemes reject lossy numeric spellings end to end', () => {
-  for (const lexeme of ['01', '1.0', '-0', '1.5', '4', ' 1', '1 ', 'x1', '1x']) {
-    const { parsed, result } = runParsedGmi({ pointOverrides: { Synbarhet: lexeme } });
-    const visibility = ruleResult(result, 'innmaling.common.visibility.valid');
-    assert.deepEqual(parsed.errors, [], lexeme);
-    assert.equal(visibility.geometryBreakdown.point.failCount, 1, lexeme);
-    assert.equal(visibility.findings[0].reasonCode, RuleReasonCode.VALUE_NOT_ALLOWED, lexeme);
-  }
-});
 
 test('real GMI exact enum lexemes preserve whitespace failures and exact passes', () => {
   const exact = runParsedGmi();
@@ -356,28 +309,40 @@ test('real GMI exact enum lexemes preserve whitespace failures and exact passes'
   }
 });
 
-test('lexical evidence stays outside schema binding, unknown fields, and telemetry-visible data', () => {
-  const { parsed, result } = runParsedGmi({ pointOverrides: { Synbarhet: '01' } });
-  assert(result.sourceFieldDiagnostics.every((diagnostic) =>
-    diagnostic.sourceKey !== 'gmiSourceLexemes'
-  ));
-  assert.equal(result.sourceFieldDiagnostics.some((diagnostic) =>
-    diagnostic.sourceKey === String(GMI_SOURCE_LEXEMES)
-  ), false);
-  assert.equal(Object.keys(parsed.points[0]).includes('gmiSourceLexemes'), false);
-  assert.equal(JSON.stringify(parsed).includes('gmiSourceLexemes'), false);
-  assert.equal(JSON.stringify(parsed).includes('Symbol(gmiSourceLexemes)'), false);
-  assert.equal(parsed.points[0].attributes.Synbarhet, 1);
-  assert.equal(result.ruleResults.flatMap((candidate) => candidate.findings)
-    .some((finding) => finding.canonicalFieldId === 'gmiSourceLexemes'), false);
-
-  const applicationCopy = { ...parsed, crsContext: { ...parsed.crsContext } };
-  const copiedResult = run(applicationCopy, 'parsed-copy');
-  assert.equal(
-    ruleResult(copiedResult, 'innmaling.common.visibility.valid').findings[0].reasonCode,
-    RuleReasonCode.VALUE_NOT_ALLOWED,
-  );
+test('v3.2 retires Synbarhet and makes all NOBB fields optional', () => {
+  const pointAttributes = { ...POINT_ATTRIBUTES };
+  const lineAttributes = { ...LINE_ATTRIBUTES };
+  delete pointAttributes.Synbarhet;
+  delete pointAttributes['NOBB-VAVVS-nr'];
+  delete pointAttributes['NOBB-VAVVS-nr-ramme'];
+  delete lineAttributes.Synbarhet;
+  delete lineAttributes['NOBB-VAVVS-nr'];
+  const result = run(makeDataset({
+    points: [{ attributes: pointAttributes }],
+    lines: [{ attributes: lineAttributes }],
+    pointAttributes,
+    lineAttributes,
+  }));
+  assert.equal(result.ruleResults.some(({ rule }) => rule.canonicalFieldId === 'visibility'), false);
+  assert.equal(result.ruleResults.some(({ rule }) => rule.canonicalFieldId === 'nobbVavvsNumber'), false);
+  assert.equal(result.ruleResults.some(({ rule }) => rule.canonicalFieldId === 'nobbVavvsFrameNumber'), false);
+  assert.equal(result.ruleResults.flatMap(({ findings }) => findings).length, 0);
+  assertReconciliation(result);
 });
+
+test('v3.2 Nett_type accepts exactly all eight authoritative values', () => {
+  for (const value of ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7']) {
+    const lineAttributes = { ...LINE_ATTRIBUTES, Nett_type: value };
+    const result = run(makeDataset({ lines: [{ attributes: lineAttributes }], lineAttributes }));
+    assert.equal(ruleResult(result, 'innmaling.line.network-type.valid').failCount, 0, value);
+  }
+  for (const value of ['f', 'O1 ', ' O2', 'O-1', 'S-7']) {
+    const lineAttributes = { ...LINE_ATTRIBUTES, Nett_type: value };
+    const result = run(makeDataset({ lines: [{ attributes: lineAttributes }], lineAttributes }));
+    assert.equal(ruleResult(result, 'innmaling.line.network-type.valid').failCount, 1, value);
+  }
+});
+
 
 test('every new A8 practical rule implements the required state matrix', () => {
   for (const { entry, scopes } of NEW_INVENTORY) {
@@ -434,32 +399,6 @@ test('every new A8 practical rule implements the required state matrix', () => {
   }
 });
 
-test('A8 code rules remain exact and only Synbarhet accepts parser integer codes', () => {
-  const visibility = getValidationRules().find((rule) => rule.canonicalFieldId === 'visibility');
-  for (const value of [0, 1, 2, 3, '0', '1', '2', '3']) {
-    assert.equal(
-      evaluateRequiredAllowedValue({ state: ObjectValueState.VALUE_PRESENT, sourceValue: value }, visibility.allowedValues, visibility.valueComparison).state,
-      EvaluationState.PASS,
-      String(value),
-    );
-  }
-  for (const value of [-0, 4, '1.0', true, false, 1.5, 'x1', '1x', '01']) {
-    assert.equal(
-      evaluateRequiredAllowedValue({ state: ObjectValueState.VALUE_PRESENT, sourceValue: value }, visibility.allowedValues, visibility.valueComparison).reasonCode,
-      RuleReasonCode.VALUE_NOT_ALLOWED,
-      String(value),
-    );
-  }
-  const height = getValidationRules().find((rule) => rule.canonicalFieldId === 'heightReference');
-  assert.equal(
-    evaluateRequiredAllowedValue({ state: ObjectValueState.VALUE_PRESENT, sourceValue: 1 }, height.allowedValues, height.valueComparison).state,
-    EvaluationState.FAIL,
-  );
-  assert.equal(
-    evaluateRequiredAllowedValue({ state: ObjectValueState.VALUE_PRESENT, sourceValue: 'TOPP_INNVENDIG ' }, height.allowedValues, height.valueComparison).state,
-    EvaluationState.FAIL,
-  );
-});
 
 test('binding uncertainty is indeterminate and unsupported aliases never satisfy A8 fields', () => {
   const ambiguousDataset = oneObjectDataset('point', {
@@ -613,7 +552,7 @@ test('one run drives both geometry tabs, uses dynamic rule count, and preserves 
   assert.equal(runCount, 1);
   assert.equal(pointState.result, lineState.result);
   assert.equal(pointState.result.datasetRevision, input.datasetRevision);
-  assert.equal(pointState.result.summary.totalRules, 23);
+  assert.equal(pointState.result.summary.totalRules, 19);
   assert.equal(pointState.result.ruleResults[0].findings[0]?.objectRef, lineState.result.ruleResults[0].findings[0]?.objectRef);
   assert.deepEqual(lineState.geometryView.ruleResults.map((candidate) => candidate.rule.geometryScopes), [
     ...COMMON.map(() => ['point', 'line']),
@@ -666,7 +605,7 @@ test('representative multi-thousand-object run completes with bounded finding sh
   const started = process.hrtime.bigint();
   const result = run(makeDataset({ points, lines }));
   const elapsedMilliseconds = Number(process.hrtime.bigint() - started) / 1e6;
-  assert.equal(result.summary.totalRules, 23);
+  assert.equal(result.summary.totalRules, 19);
   assert.equal(result.summary.evaluatedPointCount, 1500);
   assert.equal(result.summary.evaluatedLineCount, 1500);
   assert.equal(result.ruleResults.flatMap((candidate) => candidate.findings).length, 0);

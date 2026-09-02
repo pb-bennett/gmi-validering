@@ -69,9 +69,8 @@ test('all active rules resolve exact canonical short labels', () => {
   const expected = [
     'Høydereferanse', 'Anleggsår', 'Datafangstdato', 'Innmålt av', 'Saksnummer',
     'Nøyaktighet XY', 'Nøyaktighet høyde Z', 'Maksavvik horisontalt',
-    'Maksavvik vertikalt', 'Stedfestingsforhold', 'Stedfestingsårsak', 'Synbarhet',
-    'Tema', 'Innvendig/utvendig', 'Tykkelse', 'NOBB/VAVVS-nummer',
-    'NOBB/VAVVS-nummer ramme', 'Dimensjon', 'Nett-type', 'Rørform',
+    'Maksavvik vertikalt', 'Stedfestingsforhold', 'Stedfestingsårsak',
+    'Tema', 'Innvendig/utvendig', 'Tykkelse', 'Dimensjon', 'Nett-type', 'Rørform',
   ];
   const rules = getValidationRules();
   const labels = [...new Set(rules.map((rule) => getFieldInformation(rule.canonicalFieldId).displayName))];
@@ -132,8 +131,8 @@ test('point and line presentation universes are the reviewed active counts', () 
     counts({ passCount: 1 }),
     rule.geometryScopes,
   ));
-  assert.equal(getValidationV2PresentationRules(results, 'point').length, 17);
-  assert.equal(getValidationV2PresentationRules(results, 'line').length, 18);
+  assert.equal(getValidationV2PresentationRules(results, 'point').length, 14);
+  assert.equal(getValidationV2PresentationRules(results, 'line').length, 16);
 });
 
 test('one-open reducer behavior retains visible expansion and closes hidden/context state', () => {
