@@ -1,0 +1,9 @@
+# GMI Validator Codex execution controls
+
+approvals_reviewer = "user"
+
+[agents]
+enabled = false
+
+[features]
+multi_agent = false
