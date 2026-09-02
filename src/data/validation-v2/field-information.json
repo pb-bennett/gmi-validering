@@ -1161,9 +1161,9 @@
     "documentedFormat": "Kode",
     "range": null,
     "qualifications": [
-      {"text": "Kodeverdiene håndheves ikke i dette steget.", "sources": [{"documentId": "appendix-a", "pages": "4, 9"}]}
+      {"text": "Kun autoritative v3.2-koder passerer automatisk kodevalidering; andre leverte verdier flagges for manuell validering.", "sources": [{"documentId": "appendix-a", "pages": "4, 9"}]}
     ],
-    "documentationStatus": "PARTIAL",
+    "documentationStatus": "COMPLETE",
     "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
     "valueInfo": {},
     "sources": [{

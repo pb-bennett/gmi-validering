@@ -78,10 +78,11 @@ test('field information composes documentation with executable rule metadata', (
       rule: getValidationRule(ruleId),
     });
     assert.equal(presenceOnly.requiredness, 'REQUIRED', canonicalFieldId);
-    if (canonicalFieldId === 'measurementMethod' || canonicalFieldId === 'heightMeasurementMethod') {
-      assert.equal(presenceOnly.allowedValues.length, canonicalFieldId === 'measurementMethod' ? 69 : 35);
+    if (canonicalFieldId === 'measurementMethod' || canonicalFieldId === 'heightMeasurementMethod' || canonicalFieldId === 'verticalLevel') {
+      assert.equal(presenceOnly.allowedValues.length,
+        canonicalFieldId === 'measurementMethod' ? 69 : canonicalFieldId === 'heightMeasurementMethod' ? 35 : 7);
       assert.equal(Object.keys(getFieldInformation(canonicalFieldId).valueInfo).length,
-        canonicalFieldId === 'measurementMethod' ? 69 : 35);
+        canonicalFieldId === 'measurementMethod' ? 69 : canonicalFieldId === 'heightMeasurementMethod' ? 35 : 7);
     } else {
       assert.deepEqual(presenceOnly.allowedValues, [], canonicalFieldId);
       assert.deepEqual(getFieldInformation(canonicalFieldId).valueInfo, {}, canonicalFieldId);
@@ -134,6 +135,10 @@ test('v3.2 Field Info has the reviewed field and per-value provenance', () => {
     heightMeasurementMethod: {
       values: ['10', '11', '12', '13', '14', '15', '18', '19', '20', '21', '22', '23', '24', '36', '60', '61', '62', '63', '64', '66', '67', '68', '69', '70', '74', '78', '79', '90', '91', '92', '93', '94', '95', '96', '99'],
       source: ['appendix-a', '25–27'],
+    },
+    verticalLevel: {
+      values: ['UNDER_GRUNN', 'PÅ_GRUNN_VANNOVERF', 'OVER_GRUNN', 'PÅ_BUNN', 'I_VANNSØYL', 'SLISSING', 'UNDER_BUNN'],
+      source: ['appendix-a', '4, 9'],
     },
     heightReference: {
       values: ['BUNN_INNVENDIG', 'PÅ_BAKKEN', 'SENTER', 'TOPP_INNVENDIG', 'TOPP_UTVENDIG', 'UKJENT', 'UNDERKANT_UTVENDIG'],

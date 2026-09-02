@@ -55,7 +55,7 @@ const COMMON = [
 const SLICE3_COMMON = [
   ['innmaling.common.measurement-method.required', 'Målemetode er gyldig', 'measurementMethod', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 6–7, 23–25', ['10', '11', '12', '13', '14', '15', '18', '19', '20', '21', '22', '23', '24', '30', '31', '32', '33', '34', '35', '36', '37', '38', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '60', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70', '71', '72', '73', '74', '77', '78', '79', '80', '81', '82', '90', '91', '92', '93', '94', '95', '96', '97', '99'], ValueComparisonPolicy.INTEGER_CODE_STRING],
   ['innmaling.common.height-measurement-method.required', 'Målemetode høyde er gyldig', 'heightMeasurementMethod', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 7, 25–27', ['10', '11', '12', '13', '14', '15', '18', '19', '20', '21', '22', '23', '24', '36', '60', '61', '62', '63', '64', '66', '67', '68', '69', '70', '74', '78', '79', '90', '91', '92', '93', '94', '95', '96', '99'], ValueComparisonPolicy.INTEGER_CODE_STRING],
-  ['innmaling.common.vertical-level.required', 'Vertikalnivå er oppgitt', 'verticalLevel', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 9', [], ValueComparisonPolicy.NONE],
+  ['innmaling.common.vertical-level.required', 'Vertikalnivå er gyldig', 'verticalLevel', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 9', ['UNDER_GRUNN', 'PÅ_GRUNN_VANNOVERF', 'OVER_GRUNN', 'PÅ_BUNN', 'I_VANNSØYL', 'SLISSING', 'UNDER_BUNN'], ValueComparisonPolicy.EXACT],
 ];
 
 const POINT = [
@@ -89,7 +89,7 @@ const NEW_INVENTORY = INVENTORY.filter(({ entry: [ruleId] }) =>
 const COMMON_ATTRIBUTES = {
   Målemetode: '10',
   MålemetodeHøyde: '10',
-  Vertikalnivå: 'arbitrary-level',
+  Vertikalnivå: 'UNDER_GRUNN',
   Høydereferanse: 'TOPP_INNVENDIG',
   Anleggsår: 2020,
   Datafangstdato: '24.08.2026',
@@ -199,12 +199,12 @@ const PARSER_LINE_FIELDS = [
   'Nett_type', 'InnvendigUtvendig', 'Rørform', 'NOBB-VAVVS-nr',
 ];
 const PARSER_POINT_DEFAULTS = [
-  'arbitrary-xy-method', 'arbitrary-z-method', 'arbitrary-level',
+  'arbitrary-xy-method', 'arbitrary-z-method', 'UNDER_GRUNN',
   'TOPP_INNVENDIG', '2020', '24.08.2026', 'surveyor', 'case-1', '1', '2', '3', '4',
   'I_VANN', 'NYTT', '0', 'VL', 'ID', '10', '1234567', '7654321',
 ];
 const PARSER_LINE_DEFAULTS = [
-  'arbitrary-xy-method', 'arbitrary-z-method', 'arbitrary-level',
+  'arbitrary-xy-method', 'arbitrary-z-method', 'UNDER_GRUNN',
   '0.5', 'PVC-0',
   'TOPP_INNVENDIG', '2020', '24.08.2026', 'surveyor', 'case-1', '1', '2', '3', '4',
   'I_VANN', 'NYTT', '0', 'SP', '110', 'F', 'OD', 'A', '1234567',
@@ -227,7 +227,7 @@ function runParsedGmi(options) {
   return { parsed, result: run(parsed, 'parsed-a8') };
 }
 
-test('A8 registry includes the Slice 5 measurement allowed-value inventory', () => {
+test('A8 registry includes the Slice 6 vertical-level allowed-value inventory', () => {
   const rules = getValidationRules();
   assert.equal(rules.length, 24);
   assert.deepEqual(rules.map((rule) => rule.ruleId), [
@@ -295,8 +295,41 @@ test('measurement fields retain required presence and enforce current v3.2 codes
         RuleReasonCode.REQUIRED_VALUE_MISSING, `${field}:${value}`);
     }
     const invalid = ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, [field]: 'not-a-declared-code' })), ruleId);
-    assert.equal(invalid.failCount, field === 'Vertikalnivå' ? 0 : 1, field);
+    assert.equal(invalid.failCount, 1, field);
+    assert.equal(invalid.findings[0].reasonCode, RuleReasonCode.VALUE_NOT_ALLOWED, field);
   }
+});
+
+test('vertical level accepts exactly the v3.2 codes without normalization or geometry leakage', () => {
+  const ruleId = 'innmaling.common.vertical-level.required';
+  const rule = getValidationRules().find((candidate) => candidate.ruleId === ruleId);
+  for (const scope of ['point', 'line']) {
+    for (const value of rule.allowedValues) {
+      const result = run(oneObjectDataset(scope, {
+        ...(scope === 'point' ? POINT_ATTRIBUTES : LINE_ATTRIBUTES),
+        Vertikalnivå: value,
+      }));
+      assert.equal(ruleResult(result, ruleId).geometryBreakdown[scope].passCount, 1, `${scope}:${value}`);
+    }
+  }
+
+  for (const value of ['under_grunn', 'Under_Grunn', ' UNDER_GRUNN', 'UNDER_GRUNN ',
+    'unknown-level', '!_VANNSØYLEN']) {
+    const result = run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Vertikalnivå: value }));
+    const ruleResultForValue = ruleResult(result, ruleId);
+    assert.equal(ruleResultForValue.failCount, 1, value);
+    assert.equal(ruleResultForValue.findings[0].reasonCode, RuleReasonCode.VALUE_NOT_ALLOWED, value);
+  }
+
+  const mixed = run(makeDataset({
+    points: [{ attributes: { ...POINT_ATTRIBUTES, Vertikalnivå: 'I_VANNSØYL' } }],
+    lines: [{ attributes: { ...LINE_ATTRIBUTES, Vertikalnivå: '!_VANNSØYLEN' } }],
+    pointAttributes: { ...POINT_ATTRIBUTES, Vertikalnivå: 'I_VANNSØYL' },
+    lineAttributes: { ...LINE_ATTRIBUTES, Vertikalnivå: '!_VANNSØYLEN' },
+  }));
+  const mixedRule = ruleResult(mixed, ruleId);
+  assert.equal(mixedRule.geometryBreakdown.point.passCount, 1);
+  assert.equal(mixedRule.geometryBreakdown.line.failCount, 1);
 });
 
 test('measurement numeric code lexical evidence rejects near misses and keeps XY/Z 97 distinct', () => {
@@ -415,6 +448,7 @@ test('real GMI exact enum lexemes preserve whitespace failures and exact passes'
   const exact = runParsedGmi();
   for (const ruleId of [
     'innmaling.common.height-reference.valid',
+    'innmaling.common.vertical-level.required',
     'innmaling.common.positioning-condition.valid',
     'innmaling.common.positioning-cause.valid',
     'innmaling.point.inside-outside.valid',
@@ -430,6 +464,10 @@ test('real GMI exact enum lexemes preserve whitespace failures and exact passes'
     {
       pointOverrides: { Høydereferanse: ' TOPP_INNVENDIG ' },
       ruleId: 'innmaling.common.height-reference.valid',
+    },
+    {
+      lineOverrides: { Vertikalnivå: ' UNDER_GRUNN ' },
+      ruleId: 'innmaling.common.vertical-level.required',
     },
     {
       lineOverrides: { Stedfestingsforhold: ' I_VANN ' },

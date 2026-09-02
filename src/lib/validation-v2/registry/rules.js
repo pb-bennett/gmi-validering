@@ -56,6 +56,15 @@ export const HEIGHT_MEASUREMENT_METHOD_VALUES = [
   '36', '60', '61', '62', '63', '64', '66', '67', '68', '69', '70', '74', '78',
   '79', '90', '91', '92', '93', '94', '95', '96', '99',
 ];
+export const VERTICAL_LEVEL_VALUES = [
+  'UNDER_GRUNN',
+  'PÅ_GRUNN_VANNOVERF',
+  'OVER_GRUNN',
+  'PÅ_BUNN',
+  'I_VANNSØYL',
+  'SLISSING',
+  'UNDER_BUNN',
+];
 
 function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
@@ -138,15 +147,15 @@ export const VALIDATION_RULES = deepFreeze([
     ruleId: 'innmaling.common.vertical-level.required',
     canonicalFieldId: 'verticalLevel',
     geometryScopes: [GeometryScope.POINT, GeometryScope.LINE],
-    evaluatorKind: RuleEvaluatorKind.REQUIRED,
-    category: RuleCategory.REQUIRED_FIELD,
-    title: 'Vertikalnivå er oppgitt',
-    description: 'Alle innmålte objekt skal ha oppgitt vertikalnivå.',
+    evaluatorKind: RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE,
+    category: RuleCategory.REQUIRED_ALLOWED_VALUE,
+    title: 'Vertikalnivå er gyldig',
+    description: 'Alle innmålte objekt skal ha en gyldig vertikalnivåkode fra v3.2-listen.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
     source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 9' },
-    allowedValues: [],
-    valueComparison: ValueComparisonPolicy.NONE,
+    allowedValues: VERTICAL_LEVEL_VALUES,
+    valueComparison: ValueComparisonPolicy.EXACT,
   },
   {
     ruleId: 'innmaling.common.capture-date.required',

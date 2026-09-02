@@ -3,6 +3,7 @@ import { getCanonicalField } from './registry.js';
 import {
   HEIGHT_MEASUREMENT_METHOD_VALUES,
   MEASUREMENT_METHOD_VALUES,
+  VERTICAL_LEVEL_VALUES,
 } from './rules.js';
 
 const MEASUREMENT_VALUE_INFO = Object.fromEntries(
@@ -15,6 +16,12 @@ const HEIGHT_MEASUREMENT_VALUE_INFO = Object.fromEntries(
   HEIGHT_MEASUREMENT_METHOD_VALUES.map((value) => [value, {
     label: value,
     sources: [{ documentId: 'appendix-a', pages: '25–27' }],
+  }]),
+);
+const VERTICAL_LEVEL_VALUE_INFO = Object.fromEntries(
+  VERTICAL_LEVEL_VALUES.map((value) => [value, {
+    label: value,
+    sources: [{ documentId: 'appendix-a', pages: '4, 9' }],
   }]),
 );
 
@@ -42,6 +49,19 @@ const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry
         ...source,
         pages: '4, 7, 25–27',
         auditSourceRuleIds: ['innmaling.common.height-measurement-method.required'],
+      })),
+    };
+  }
+  if (entry.canonicalFieldId === 'verticalLevel') {
+    return {
+      ...entry,
+      documentationStatus: 'COMPLETE',
+      qualifications: [],
+      valueInfo: VERTICAL_LEVEL_VALUE_INFO,
+      sources: entry.sources.map((source) => ({
+        ...source,
+        pages: '4, 9',
+        auditSourceRuleIds: ['innmaling.common.vertical-level.required'],
       })),
     };
   }
