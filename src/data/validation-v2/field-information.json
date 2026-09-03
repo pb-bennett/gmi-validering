@@ -1,5 +1,36 @@
 [
   {
+    "canonicalFieldId": "type",
+    "displayName": "Type",
+    "description": "Type-kode for punktobjekt når den er tilgjengelig. Automatisk validering godtar nøyaktig v3.2-listen på 72 verdier.",
+    "appliesTo": [
+      "point"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Feltet er valgfritt når Type ikke er tilgjengelig; oppgitt verdi må være en aktuell v3.2-kode.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 12–14",
+        "auditSourceRuleIds": [
+          "innmaling.point.type.valid"
+        ]
+      }
+    ]
+  },
+  {
     "canonicalFieldId": "heightReference",
     "displayName": "Høydereferanse",
     "description": "Høyden på objektet er knyttet til en angitt referanse.",

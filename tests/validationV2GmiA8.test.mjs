@@ -6,7 +6,7 @@ import { register } from 'node:module';
 register('./esmJsLoader.mjs', import.meta.url);
 
 const api = await import('../src/lib/validation-v2/index.js');
-const { evaluateRequiredAllowedValue, evaluateRequiredField } = await import(
+const { evaluateAllowedValue, evaluateRequiredAllowedValue, evaluateRequiredField } = await import(
   '../src/lib/validation-v2/ruleEvaluation.js'
 );
 const { bindGmiLayerSchemaWithRegistry } = await import(
@@ -41,6 +41,7 @@ const {
   EXPECTED_LINE_TEMA_VALUES,
   EXPECTED_MATERIAL_VALUES,
   EXPECTED_POINT_TEMA_VALUES,
+  EXPECTED_TYPE_VALUES,
 } = await import('./fixtures/validationV2GmiV32DomainValues.mjs');
 
 const COMMON = [
@@ -65,6 +66,7 @@ const SLICE3_COMMON = [
 
 const POINT = [
   ['innmaling.point.tema.required', 'Punktobjekt har gyldig Tema', 'tema', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 10–12', EXPECTED_POINT_TEMA_VALUES, ValueComparisonPolicy.EXACT],
+  ['innmaling.point.type.valid', 'Punktets Type er gyldig når den er oppgitt', 'type', RuleEvaluatorKind.ALLOWED_VALUE, RuleCategory.ALLOWED_VALUE, '4, 12–14', EXPECTED_TYPE_VALUES, ValueComparisonPolicy.EXACT],
   ['innmaling.point.inside-outside.valid', 'Punktets innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 14', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
   ['innmaling.point.wall-thickness.required', 'Punktets tykkelse er oppgitt', 'wallThickness', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 9', [], ValueComparisonPolicy.NONE],
 ];
@@ -88,7 +90,8 @@ const INVENTORY = [
 const NEW_INVENTORY = INVENTORY.filter(({ entry: [ruleId] }) =>
   !ruleId.includes('.height-reference.') &&
   !ruleId.endsWith('.point.tema.required') &&
-  !ruleId.endsWith('.line.tema.required')
+  !ruleId.endsWith('.line.tema.required') &&
+  !ruleId.endsWith('.point.type.valid')
 );
 
 const COMMON_ATTRIBUTES = {
@@ -234,7 +237,7 @@ function runParsedGmi(options) {
 
 test('A8 registry includes the Slice 6 vertical-level allowed-value inventory', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 24);
+  assert.equal(rules.length, 25);
   assert.deepEqual(rules.map((rule) => rule.ruleId), [
     ...COMMON.slice(0, 2).map(([ruleId]) => ruleId),
     ...SLICE3_COMMON.map(([ruleId]) => ruleId),
@@ -242,10 +245,10 @@ test('A8 registry includes the Slice 6 vertical-level allowed-value inventory', 
     ...POINT.map(([ruleId]) => ruleId),
     ...LINE.map(([ruleId]) => ruleId),
   ]);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('point')).length, 17);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('point')).length, 18);
   assert.equal(rules.filter((rule) => rule.geometryScopes.includes('line')).length, 21);
   assert.equal(rules.filter((rule) => rule.geometryScopes.length === 2).length, 14);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'point').length, 3);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'point').length, 4);
   assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'line').length, 7);
 
   for (const { entry, scopes } of INVENTORY) {
@@ -275,7 +278,7 @@ test('A8 registry includes the Slice 6 vertical-level allowed-value inventory', 
       valueComparison,
     }, ruleId);
   }
-  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 24);
+  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 25);
   assert.equal(rules.filter((rule) => rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING).length, 2);
   assert.equal(rules.some((rule) => rule.canonicalFieldId === 'visibility'), false);
   assert.equal(rules.every((rule) => rule.source.document === 'Innmålingsinstruks Vedlegg A'), true);
@@ -705,6 +708,51 @@ test('v3.2 Nett_type accepts exactly all eight authoritative values', () => {
   }
 });
 
+test('v3.2 Type uses an independent exact 72-value optional-if-present list', () => {
+  const rule = getValidationRules().find((candidate) => candidate.ruleId === 'innmaling.point.type.valid');
+  assert.equal(rule.allowedValues.length, 72);
+  assert.equal(new Set(rule.allowedValues).size, 72);
+  assert.deepEqual(rule.allowedValues, EXPECTED_TYPE_VALUES);
+  for (const value of EXPECTED_TYPE_VALUES) {
+    const result = run(oneObjectDataset('point', { ...POINT_ATTRIBUTES, Type: value }));
+    assert.equal(ruleResult(result, rule.ruleId).failCount, 0, value);
+  }
+  for (const value of ['DB11', 'DB15', 'DB22', 'DB30']) {
+    assert.equal(ruleResult(run(oneObjectDataset('point', { ...POINT_ATTRIBUTES, Type: value })), rule.ruleId).failCount, 0, value);
+  }
+  for (const value of ['D811', 'D815', 'D822', 'D830', 'UNKNOWN', 'db11', ' DB11', 'DB11 ', 'DB-11', 'DB011']) {
+    const result = run(oneObjectDataset('point', { ...POINT_ATTRIBUTES, Type: value }));
+    assert.equal(ruleResult(result, rule.ruleId).failCount, 1, value);
+    assert.equal(ruleResult(result, rule.ruleId).findings[0].reasonCode, RuleReasonCode.VALUE_NOT_ALLOWED, value);
+  }
+  for (const value of [undefined, null, '']) {
+    const attributes = { ...POINT_ATTRIBUTES };
+    if (value !== undefined) attributes.Type = value;
+    const result = run(oneObjectDataset('point', attributes));
+    const typeResult = ruleResult(result, rule.ruleId);
+    assert.equal(typeResult.failCount, 0, String(value));
+    assert.equal(typeResult.notEvaluatedCount, 1, String(value));
+  }
+});
+
+test('Type remains point-only, isolated, and ambiguous binding is indeterminate', () => {
+  const lineResult = run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Type: 'D811' }));
+  assert.equal(ruleResult(lineResult, 'innmaling.point.type.valid').evaluatedObjectCount, 0);
+
+  const mixed = run(makeDataset({
+    points: [{ attributes: { ...POINT_ATTRIBUTES, Type: 'DB11' } }],
+    lines: [{ attributes: { ...LINE_ATTRIBUTES } }],
+    pointAttributes: { ...POINT_ATTRIBUTES, Type: 'DB11' },
+  }));
+  assert.equal(ruleResult(mixed, 'innmaling.point.type.valid').passCount, 1);
+  assert.equal(ruleResult(mixed, 'innmaling.point.type.valid').geometryBreakdown.line.evaluatedCount, 0);
+  assertReconciliation(mixed);
+
+  const ambiguous = evaluateAllowedValue({ state: ObjectValueState.BINDING_AMBIGUOUS }, EXPECTED_TYPE_VALUES);
+  assert.equal(ambiguous.state, EvaluationState.INDETERMINATE);
+  assert.equal(ambiguous.reasonCode, RuleReasonCode.BINDING_AMBIGUOUS);
+});
+
 
 test('every new A8 practical rule implements the required state matrix', () => {
   for (const { entry, scopes } of NEW_INVENTORY) {
@@ -918,7 +966,7 @@ test('one run drives both geometry tabs, uses dynamic rule count, and preserves 
   assert.equal(runCount, 1);
   assert.equal(pointState.result, lineState.result);
   assert.equal(pointState.result.datasetRevision, input.datasetRevision);
-  assert.equal(pointState.result.summary.totalRules, 24);
+  assert.equal(pointState.result.summary.totalRules, 25);
   assert.equal(pointState.result.ruleResults[0].findings[0]?.objectRef, lineState.result.ruleResults[0].findings[0]?.objectRef);
   assert.deepEqual(lineState.geometryView.ruleResults.map((candidate) => candidate.rule.geometryScopes), [
     ...COMMON.map(() => ['point', 'line']),
@@ -972,7 +1020,7 @@ test('representative multi-thousand-object run completes with bounded finding sh
   const started = process.hrtime.bigint();
   const result = run(makeDataset({ points, lines }));
   const elapsedMilliseconds = Number(process.hrtime.bigint() - started) / 1e6;
-  assert.equal(result.summary.totalRules, 24);
+  assert.equal(result.summary.totalRules, 25);
   assert.equal(result.summary.evaluatedPointCount, 1500);
   assert.equal(result.summary.evaluatedLineCount, 1500);
   assert.equal(result.ruleResults.flatMap((candidate) => candidate.findings).length, 0);

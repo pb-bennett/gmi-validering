@@ -19,6 +19,7 @@ const {
   EXPECTED_LINE_TEMA_VALUES,
   EXPECTED_MATERIAL_VALUES,
   EXPECTED_POINT_TEMA_VALUES,
+  EXPECTED_TYPE_VALUES,
 } = await import('./fixtures/validationV2GmiV32DomainValues.mjs');
 const { createValidationV2Input } = await import('../src/lib/validation-v2/uiIntegration.js');
 const { GMI_SOURCE_LEXEMES } = await import('../src/lib/parsing/gmiLexicalEvidence.js');
@@ -76,6 +77,14 @@ test('field information composes documentation with executable rule metadata', (
     geometryScope: 'line',
     rule: getValidationRule('innmaling.line.tema.required'),
   }).allowedValues, EXPECTED_LINE_TEMA_VALUES);
+  const type = composeFieldInformation({
+    canonicalFieldId: 'type',
+    geometryScope: 'point',
+    rule: getValidationRule('innmaling.point.type.valid'),
+  });
+  assert.equal(type.required, false);
+  assert.equal(type.requiredness, 'NOT_REQUIRED');
+  assert.deepEqual(type.allowedValues, EXPECTED_TYPE_VALUES);
 
   for (const [canonicalFieldId, ruleId] of [
     ['measurementMethod', 'innmaling.common.measurement-method.required'],
@@ -121,6 +130,7 @@ test('v3.2 Field Info has the reviewed field and per-value provenance', () => {
     insideOutside: [['appendix-a', '4, 14; line 21']],
     wallThickness: [['appendix-a', '5, 9; line 16']],
     material: [['appendix-a', '5, 19–21']],
+    type: [['appendix-a', '4, 12–14']],
     nobbVavvsNumber: [['appendix-a', '5, 10; line 16']],
     nobbVavvsFrameNumber: [['appendix-a', '5, 10']],
     dimension: [['appendix-a', '5, 16']],
@@ -181,6 +191,10 @@ test('v3.2 Field Info has the reviewed field and per-value provenance', () => {
     material: {
       values: EXPECTED_MATERIAL_VALUES,
       source: ['appendix-a', '19–21'],
+    },
+    type: {
+      values: EXPECTED_TYPE_VALUES,
+      source: ['appendix-a', '12–14'],
     },
   };
   for (const [fieldId, { values, source }] of Object.entries(valueSourceContract)) {

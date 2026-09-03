@@ -71,7 +71,7 @@ test('all active rules resolve exact canonical short labels', () => {
     'Høydereferanse', 'Anleggsår', 'Datafangstdato', 'Innmålt av', 'Saksnummer',
     'Nøyaktighet XY', 'Nøyaktighet høyde Z', 'Maksavvik horisontalt',
     'Maksavvik vertikalt', 'Stedfestingsforhold', 'Stedfestingsårsak',
-    'Tema', 'Innvendig/utvendig', 'Tykkelse', 'Dimensjon', 'Nett-type', 'Rørform',
+    'Tema', 'Type', 'Innvendig/utvendig', 'Tykkelse', 'Dimensjon', 'Nett-type', 'Rørform',
   ];
   const rules = getValidationRules();
   const labels = [...new Set(rules.map((rule) => getFieldInformation(rule.canonicalFieldId).displayName))];
@@ -132,7 +132,7 @@ test('point and line presentation universes are the reviewed active counts', () 
     counts({ passCount: 1 }),
     rule.geometryScopes,
   ));
-  assert.equal(getValidationV2PresentationRules(results, 'point').length, 17);
+  assert.equal(getValidationV2PresentationRules(results, 'point').length, 18);
   assert.equal(getValidationV2PresentationRules(results, 'line').length, 21);
 });
 

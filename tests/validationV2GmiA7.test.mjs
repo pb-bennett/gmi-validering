@@ -256,6 +256,7 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
     'innmaling.common.positioning-condition.valid',
     'innmaling.common.positioning-cause.valid',
     POINT_TEMA_REQUIRED,
+    'innmaling.point.type.valid',
     'innmaling.point.inside-outside.valid',
     'innmaling.point.wall-thickness.required',
   ]);

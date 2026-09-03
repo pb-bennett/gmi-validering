@@ -82,6 +82,19 @@ export const POINT_TEMA_VALUES = [
   'SEP', 'SLA', 'SLAMKIOSK', 'SLG', 'SLI', 'SLS', 'SLU', 'SPR', 'STR', 'SUMP', 'SVB',
   'TNK', 'TOP', 'TØKSTVL', 'TØMSTBOBIL', 'UTS', 'VANNPOST', 'VKI', 'VPK', 'VST',
 ];
+export const TYPE_VALUES = [
+  'BBAK', 'BFJE', 'BNOD', 'BRED', 'BSPY', 'BSTR', 'BTRN',
+  'DAM', 'KAS', 'SBA', 'STM', 'TAN',
+  'DAN', 'DANODE', 'DB11', 'DB15', 'DB22', 'DB30', 'DB45', 'DB90',
+  'DBJUST410', 'DBJUST420', 'DBJUST430', 'DDAM', 'DEND', 'DFOT', 'DOVG',
+  'DPPT', 'DPORT', 'DREPMUF', 'DST', 'DTERSK', 'DTAN', 'DVF', 'DVPR',
+  'FORAKLOSS', 'FORAPLATE', 'FORASPUNT', 'GRØSTENG', 'GRØSTENG01',
+  'GRØSTENG06', 'GRØSTENG10', 'KBRE', 'KDRE', 'KFDL', 'KINS', 'KKAB',
+  'KLV', 'KMIN', 'KPPK', 'KPRØVFET', 'KPRØVOIL', 'KSDM', 'KSTA', 'KSTF',
+  'KTRY', 'KUMINLØP', 'KUMPEILGRV', 'KUMUTJEV', 'KUMUTLØP', 'KVIPP', 'XLOK', 'PSNK',
+  'PTOR', 'RBIO', 'RMEK', 'RMKJ', 'RSDM', 'SLAPUMP', 'SMIN', 'SSTA',
+  'TTAN',
+];
 export const LINE_TEMA_VALUES = [
   'AF', 'AFBO', 'AFD', 'AFK', 'AFLU', 'AFO', 'AFP', 'AFS', 'AFT', 'AFVAR', 'AFX', 'DR',
   'I2', 'I2D', 'I2I', 'I2O', 'I2P', 'I2S', 'I3', 'LEBEKXX500', 'LEBEKXX510', 'LEBEKXX511',
@@ -329,6 +342,20 @@ export const VALIDATION_RULES = deepFreeze([
       pages: '4, 10–12',
     },
     allowedValues: POINT_TEMA_VALUES,
+    valueComparison: ValueComparisonPolicy.EXACT,
+  },
+  {
+    ruleId: 'innmaling.point.type.valid',
+    canonicalFieldId: 'type',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.ALLOWED_VALUE,
+    category: RuleCategory.ALLOWED_VALUE,
+    title: 'Punktets Type er gyldig når den er oppgitt',
+    description: 'Oppgitt Type for punktobjekt skal være en gyldig v3.2-kode; feltet er valgfritt når det ikke er tilgjengelig.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 12–14' },
+    allowedValues: TYPE_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
   },
   {

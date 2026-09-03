@@ -6,6 +6,7 @@ import {
   MATERIAL_VALUES,
   MEASUREMENT_METHOD_VALUES,
   POINT_TEMA_VALUES,
+  TYPE_VALUES,
   VERTICAL_LEVEL_VALUES,
 } from './rules.js';
 
@@ -43,6 +44,12 @@ const LINE_TEMA_VALUE_INFO = Object.fromEntries(
   LINE_TEMA_VALUES.map((value) => [value, {
     label: value,
     sources: [{ documentId: 'appendix-a', pages: '16–19' }],
+  }]),
+);
+const TYPE_VALUE_INFO = Object.fromEntries(
+  TYPE_VALUES.map((value) => [value, {
+    label: value,
+    sources: [{ documentId: 'appendix-a', pages: '12–14' }],
   }]),
 );
 
@@ -117,6 +124,19 @@ const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry
           'innmaling.point.tema.required',
           'innmaling.line.tema.required',
         ],
+      })),
+    };
+  }
+  if (entry.canonicalFieldId === 'type') {
+    return {
+      ...entry,
+      documentationStatus: 'COMPLETE',
+      qualifications: [],
+      valueInfo: TYPE_VALUE_INFO,
+      sources: entry.sources.map((source) => ({
+        ...source,
+        pages: '4, 12–14',
+        auditSourceRuleIds: ['innmaling.point.type.valid'],
       })),
     };
   }
