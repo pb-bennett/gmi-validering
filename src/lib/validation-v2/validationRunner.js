@@ -14,6 +14,7 @@ import {
   evaluateAllowedValue,
   evaluateRequiredAllowedValue,
   evaluateRequiredField,
+  evaluateTemaRequiredAllowedValue,
   evaluateTemaRequired,
 } from './ruleEvaluation.js';
 import { getValidationRules } from './registry/rules.js';
@@ -162,6 +163,9 @@ function copyConflictEvidence(conflicts = []) {
 
 function evaluateRule({ rule, evidence }) {
   if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE) {
+    if (rule.canonicalFieldId === 'tema') {
+      return evaluateTemaRequiredAllowedValue(evidence, rule.allowedValues);
+    }
     return evaluateRequiredAllowedValue(evidence, rule.allowedValues, rule.valueComparison);
   }
   if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED) {

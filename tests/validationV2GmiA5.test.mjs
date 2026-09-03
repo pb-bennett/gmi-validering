@@ -45,7 +45,7 @@ const datasetRevision = 'synthetic-rev-a5';
 function makeDataset({
   pointSchema = { Høydereferanse: {}, Tema: {} },
   lineSchema = { Høydereferanse: {}, Tema: {} },
-  pointAttributes = { Høydereferanse: 'TOPP_INNVENDIG', Tema: 'VL' },
+  pointAttributes = { Høydereferanse: 'TOPP_INNVENDIG', Tema: 'KUM' },
   lineAttributes = { Høydereferanse: 'TOPP_INNVENDIG', Tema: 'SP' },
   points,
   lines,
@@ -132,8 +132,8 @@ test('rule registry retains the reviewed A5 rules and validates structurally', (
   assert(rules.every((rule) => rule.provenance === RuleProvenance.STANDARD));
   assert(rules.every((rule) => rule.severity === RuleSeverity.ERROR));
   assert.equal(rules.find((rule) => rule.ruleId === HEIGHT_VALID).category, RuleCategory.REQUIRED_ALLOWED_VALUE);
-  assert.equal(rules.find((rule) => rule.ruleId === POINT_TEMA_REQUIRED).category, RuleCategory.REQUIRED_FIELD);
-  assert.equal(rules.find((rule) => rule.ruleId === LINE_TEMA_REQUIRED).category, RuleCategory.REQUIRED_FIELD);
+  assert.equal(rules.find((rule) => rule.ruleId === POINT_TEMA_REQUIRED).category, RuleCategory.REQUIRED_ALLOWED_VALUE);
+  assert.equal(rules.find((rule) => rule.ruleId === LINE_TEMA_REQUIRED).category, RuleCategory.REQUIRED_ALLOWED_VALUE);
   assert(rules.every((rule) => Object.isFrozen(rule)));
   assert(rules.every((rule) => Object.isFrozen(rule.geometryScopes)));
   assert(rules.every((rule) => Object.isFrozen(rule.source)));
@@ -278,14 +278,14 @@ test('combined Høydereferanse rule distinguishes missing, invalid, and uncertai
   const absent = run(makeDataset({
     pointSchema: { Tema: {} },
     lineSchema: { Tema: {} },
-    pointAttributes: { Tema: 'VL' },
+    pointAttributes: { Tema: 'KUM' },
     lineAttributes: { Tema: 'SP' },
   }));
   assert.equal(ruleResult(absent, HEIGHT_VALID).failCount, 2);
   assert.equal(ruleResult(absent, HEIGHT_VALID).findings[0].reasonCode, RuleReasonCode.REQUIRED_FIELD_ABSENT);
 
   const missing = run(makeDataset({
-    pointAttributes: { Høydereferanse: null, Tema: 'VL' },
+    pointAttributes: { Høydereferanse: null, Tema: 'KUM' },
     lineAttributes: { Høydereferanse: '', Tema: 'SP' },
   }));
   assert.equal(ruleResult(missing, HEIGHT_VALID).failCount, 2);
@@ -293,13 +293,13 @@ test('combined Høydereferanse rule distinguishes missing, invalid, and uncertai
   assert.equal(ruleResult(missing, HEIGHT_VALID).notEvaluatedCount, 0);
 
   const valid = run(makeDataset({
-    pointAttributes: { Høydereferanse: allowedValues[0], Tema: 'VL' },
+    pointAttributes: { Høydereferanse: allowedValues[0], Tema: 'KUM' },
     lineAttributes: { Høydereferanse: allowedValues[6], Tema: 'SP' },
   }));
   assert.equal(ruleResult(valid, HEIGHT_VALID).passCount, 2);
 
   const invalid = run(makeDataset({
-    pointAttributes: { Høydereferanse: 'TOPP_INNVENDIG ', Tema: 'VL' },
+    pointAttributes: { Høydereferanse: 'TOPP_INNVENDIG ', Tema: 'KUM' },
     lineAttributes: { Høydereferanse: 'not-authorized', Tema: 'SP' },
   }));
   assert.equal(ruleResult(invalid, HEIGHT_VALID).failCount, 2);
@@ -329,7 +329,7 @@ test('point and line Tema rules use A3 identity semantics and never cross geomet
   const result = run(makeDataset({
     pointSchema: { Tema: {}, Høydereferanse: {} },
     lineSchema: { Tema: {}, Høydereferanse: {} },
-    pointAttributes: { Tema: 'VL', Høydereferanse: 'TOPP_INNVENDIG' },
+    pointAttributes: { Tema: 'KUM', Høydereferanse: 'TOPP_INNVENDIG' },
     lineAttributes: { Tema: null, Høydereferanse: 'TOPP_INNVENDIG' },
   }));
   assert.equal(ruleResult(result, POINT_TEMA_REQUIRED).passCount, 1);
@@ -339,7 +339,7 @@ test('point and line Tema rules use A3 identity semantics and never cross geomet
   const conflict = run(makeDataset({
     pointSchema: { Tema: {}, S_FCODE: {} },
     lineSchema: { Tema: {}, S_FCODE: {} },
-    pointAttributes: { Tema: 'VL', S_FCODE: 'SP', Høydereferanse: 'TOPP_INNVENDIG' },
+    pointAttributes: { Tema: 'KUM', S_FCODE: 'SP', Høydereferanse: 'TOPP_INNVENDIG' },
     lineAttributes: { Tema: 'SP', S_FCODE: 'VL', Høydereferanse: 'TOPP_INNVENDIG' },
   }));
   assert.equal(ruleResult(conflict, POINT_TEMA_REQUIRED).indeterminateCount, 1);
@@ -350,7 +350,7 @@ test('point and line Tema rules use A3 identity semantics and never cross geomet
 test('Tema fallback satisfies requiredness, while unresolved and conflicting identity remain non-pass', () => {
   const fallback = run(makeDataset({
     pointSchema: { Tema: {}, S_FCODE: {}, Høydereferanse: {} },
-    pointAttributes: { Tema: null, S_FCODE: 'VL', Høydereferanse: 'TOPP_INNVENDIG' },
+    pointAttributes: { Tema: null, S_FCODE: 'KUM', Høydereferanse: 'TOPP_INNVENDIG' },
   }));
   assert.equal(ruleResult(fallback, POINT_TEMA_REQUIRED).passCount, 1);
 
@@ -518,7 +518,7 @@ test('equal local indexes remain layer-qualified and cannot cross layer ownershi
     lines: [],
   }), { layerId: 'layer-a' });
   const layerB = run(makeDataset({
-    points: [{ attributes: { Høydereferanse: 'TOPP_INNVENDIG', Tema: 'VL' } }],
+    points: [{ attributes: { Høydereferanse: 'TOPP_INNVENDIG', Tema: 'KUM' } }],
     lines: [],
   }), { layerId: 'layer-b' });
   const findingA = ruleResult(layerA, POINT_TEMA_REQUIRED).findings[0];
@@ -535,7 +535,7 @@ test('equal local indexes remain layer-qualified and cannot cross layer ownershi
 test('runner preserves PASS, FAIL, NOT_EVALUATED, and INDETERMINATE aggregation', () => {
   const result = run(makeDataset({
     points: [
-      { attributes: { Høydereferanse: 'not-authorized', Tema: 'VL' } },
+      { attributes: { Høydereferanse: 'not-authorized', Tema: 'KUM' } },
       { attributes: { Høydereferanse: null, Tema: null } },
     ],
     lines: [
@@ -635,7 +635,7 @@ test('runner reads only enabled rule fields and never object metadata or unrelat
   });
   Object.defineProperty(attributes, 'Tema', {
     enumerable: true,
-    get: () => 'VL',
+    get: () => 'KUM',
   });
   Object.defineProperty(attributes, 'UNRELATED', {
     enumerable: true,
@@ -665,7 +665,7 @@ test('runner reads only enabled rule fields and never object metadata or unrelat
 test('finding projection does not freeze or expose caller-owned object values', () => {
   const rawObject = { unexpected: true };
   const dataset = makeDataset({
-    pointAttributes: { Høydereferanse: rawObject, Tema: 'VL' },
+    pointAttributes: { Høydereferanse: rawObject, Tema: 'KUM' },
     lineAttributes: { Høydereferanse: 'TOPP_INNVENDIG', Tema: 'SP' },
   });
   const result = run(dataset);

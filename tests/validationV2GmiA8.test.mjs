@@ -37,6 +37,11 @@ const {
   createObjectRef,
   runGmiValidationV2,
 } = api;
+const {
+  EXPECTED_LINE_TEMA_VALUES,
+  EXPECTED_MATERIAL_VALUES,
+  EXPECTED_POINT_TEMA_VALUES,
+} = await import('./fixtures/validationV2GmiV32DomainValues.mjs');
 
 const COMMON = [
   ['innmaling.common.height-reference.valid', 'Høydereferanse er gyldig', 'heightReference', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 6; main 10, 13–18', ['BUNN_INNVENDIG', 'PÅ_BAKKEN', 'SENTER', 'TOPP_INNVENDIG', 'TOPP_UTVENDIG', 'UKJENT', 'UNDERKANT_UTVENDIG'], ValueComparisonPolicy.EXACT],
@@ -59,16 +64,16 @@ const SLICE3_COMMON = [
 ];
 
 const POINT = [
-  ['innmaling.point.tema.required', 'Punktobjekt har Tema', 'tema', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '4, 10–12', [], ValueComparisonPolicy.NONE],
+  ['innmaling.point.tema.required', 'Punktobjekt har gyldig Tema', 'tema', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 10–12', EXPECTED_POINT_TEMA_VALUES, ValueComparisonPolicy.EXACT],
   ['innmaling.point.inside-outside.valid', 'Punktets innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 14', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
   ['innmaling.point.wall-thickness.required', 'Punktets tykkelse er oppgitt', 'wallThickness', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 9', [], ValueComparisonPolicy.NONE],
 ];
 
 const LINE = [
   ['innmaling.line.wall-thickness.required', 'Ledningens tykkelse er oppgitt', 'wallThickness', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 16', [], ValueComparisonPolicy.NONE],
-  ['innmaling.line.tema.required', 'Ledning har Tema', 'tema', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 16–19', [], ValueComparisonPolicy.NONE],
+  ['innmaling.line.tema.required', 'Ledning har gyldig Tema', 'tema', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 16–19', EXPECTED_LINE_TEMA_VALUES, ValueComparisonPolicy.EXACT],
   ['innmaling.line.dimension.required', 'Ledningens dimensjon er oppgitt', 'dimension', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 16', [], ValueComparisonPolicy.NONE],
-  ['innmaling.line.material.required', 'Ledningens materiale er oppgitt', 'material', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 19', [], ValueComparisonPolicy.NONE],
+  ['innmaling.line.material.required', 'Ledningens materiale er gyldig', 'material', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 19–21', EXPECTED_MATERIAL_VALUES, ValueComparisonPolicy.EXACT],
   ['innmaling.line.network-type.valid', 'Nett-type er gyldig', 'networkType', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 19', ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7'], ValueComparisonPolicy.EXACT],
   ['innmaling.line.inside-outside.valid', 'Ledningens innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 21', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
   ['innmaling.line.pipe-shape.valid', 'Rørform er gyldig', 'pipeShape', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '5, 21', ['A', 'E', 'F', 'R', 'S', 'T', 'X'], ValueComparisonPolicy.EXACT],
@@ -105,7 +110,7 @@ const COMMON_ATTRIBUTES = {
 };
 const POINT_ATTRIBUTES = {
   ...COMMON_ATTRIBUTES,
-  Tema: 'VL',
+  Tema: 'KUM',
   InnvendigUtvendig: 'ID',
   Tykkelse: 10,
   'NOBB-VAVVS-nr': '1234567',
@@ -119,7 +124,7 @@ const LINE_ATTRIBUTES = {
   InnvendigUtvendig: 'OD',
   Rørform: 'A',
   Tykkelse: 0.5,
-  Material: 'PVC-0',
+  Material: 'PVC',
   'NOBB-VAVVS-nr': '1234567',
 };
 
@@ -384,7 +389,7 @@ test('measurement lists cover every authoritative value in both geometries witho
   assert.equal(ruleResult(mixed, 'innmaling.common.height-measurement-method.required').geometryBreakdown.line.failCount, 1);
 });
 
-test('Slice 2 line Material and Tykkelse are independent required-presence rules', () => {
+test('line Material retains required presence and enforces the current v3.2 list', () => {
   const materialRuleId = 'innmaling.line.material.required';
   const lineThicknessRuleId = 'innmaling.line.wall-thickness.required';
   const pointThicknessRuleId = 'innmaling.point.wall-thickness.required';
@@ -400,7 +405,10 @@ test('Slice 2 line Material and Tykkelse are independent required-presence rules
     }
   }
 
-  assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Material: 'deliberately-not-a-code' })), materialRuleId).failCount, 0);
+  assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Material: 'deliberately-not-a-code' })), materialRuleId).failCount, 1);
+  assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Material: 'PVC-O' })), materialRuleId).passCount, 1);
+  assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Material: 'PVC-0' })), materialRuleId).failCount, 1);
+  assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Material: 'PE100-RC-PP0' })), materialRuleId).passCount, 1);
   assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Tykkelse: 'not-numeric' })), lineThicknessRuleId).failCount, 0);
 
   const pointWithThickness = run(oneObjectDataset('point', { ...POINT_ATTRIBUTES }));
@@ -411,6 +419,76 @@ test('Slice 2 line Material and Tykkelse are independent required-presence rules
   const lineWithThickness = run(oneObjectDataset('line', { ...LINE_ATTRIBUTES }));
   assert.equal(ruleResult(lineWithThickness, lineThicknessRuleId).passCount, 1);
   assert.equal(ruleResult(lineWithThickness, pointThicknessRuleId).geometryBreakdown.line.evaluatedCount, 0);
+});
+
+test('production domain rules exactly match the independent v3.2 authoritative lists', () => {
+  const expected = [
+    ['innmaling.line.material.required', EXPECTED_MATERIAL_VALUES, 45],
+    ['innmaling.point.tema.required', EXPECTED_POINT_TEMA_VALUES, 81],
+    ['innmaling.line.tema.required', EXPECTED_LINE_TEMA_VALUES, 108],
+  ];
+  for (const [ruleId, values, expectedLength] of expected) {
+    const rule = getValidationRules().find((candidate) => candidate.ruleId === ruleId);
+    assert.equal(values.length, expectedLength, `${ruleId} fixture length`);
+    assert.equal(rule.allowedValues.length, expectedLength, `${ruleId} production length`);
+    assert.deepEqual(rule.allowedValues, values, `${ruleId} production contents`);
+  }
+});
+
+test('point and line Tema enforce their independent current v3.2 lists', () => {
+  const pointRuleId = 'innmaling.point.tema.required';
+  const lineRuleId = 'innmaling.line.tema.required';
+  for (const value of EXPECTED_POINT_TEMA_VALUES) {
+    const attributes = { ...POINT_ATTRIBUTES, Tema: value };
+    assert.equal(ruleResult(run(oneObjectDataset('point', attributes)), pointRuleId).passCount, 1, `point:${value}`);
+  }
+  for (const value of EXPECTED_LINE_TEMA_VALUES) {
+    const attributes = { ...LINE_ATTRIBUTES, Tema: value };
+    assert.equal(ruleResult(run(oneObjectDataset('line', attributes)), lineRuleId).passCount, 1, `line:${value}`);
+  }
+  for (const value of ['SP', 'I2', 'AF', 'XF', 'XG', 'XGP', 'XGS', 'XK', '12', '12D', '121', '120', '12P',
+    'sp', ' SP', 'SP ', 'not-a-code']) {
+    const pointResult = ruleResult(run(oneObjectDataset('point', { ...POINT_ATTRIBUTES, Tema: value })), pointRuleId);
+    assert.equal(pointResult.failCount, 1, `point near miss:${value}`);
+  }
+  for (const value of ['I2B', 'XF', 'XG', 'XGP', 'XGS', 'XK', '12', '12D', '121', '120', '12P',
+    'sp', ' SP', 'SP ', 'not-a-code']) {
+    const lineResult = ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Tema: value })), lineRuleId);
+    assert.equal(lineResult.failCount, 1, `line near miss:${value}`);
+  }
+  for (const value of ['LEBEKXX500', 'LEBEKXX510', 'LEBEKXX511', 'LEGRØXX500', 'LEKAXX500']) {
+    assert.equal(ruleResult(run(oneObjectDataset('line', { ...LINE_ATTRIBUTES, Tema: value })), lineRuleId).passCount, 1, value);
+  }
+});
+
+test('Tema requiredness, direct preference, S_FCODE fallback, conflicts, and geometry isolation remain unchanged', () => {
+  for (const scope of ['point', 'line']) {
+    const base = scope === 'point' ? POINT_ATTRIBUTES : LINE_ATTRIBUTES;
+    const ruleId = scope === 'point' ? 'innmaling.point.tema.required' : 'innmaling.line.tema.required';
+    const missing = { ...base };
+    delete missing.Tema;
+    assert.equal(ruleResult(run(oneObjectDataset(scope, missing)), ruleId).findings[0].reasonCode,
+      RuleReasonCode.REQUIRED_FIELD_ABSENT);
+    for (const value of [null, '']) {
+      const result = ruleResult(run(oneObjectDataset(scope, { ...base, Tema: value })), ruleId);
+      assert.equal(result.findings[0].reasonCode, RuleReasonCode.REQUIRED_VALUE_MISSING, `${scope}:${value}`);
+    }
+    const fallback = { ...base, S_FCODE: base.Tema };
+    delete fallback.Tema;
+    assert.equal(ruleResult(run(oneObjectDataset(scope, fallback)), ruleId).passCount, 1, `${scope}:fallback`);
+    const conflict = { ...base, S_FCODE: base.Tema === 'SP' ? 'VL' : 'SP' };
+    assert.equal(ruleResult(run(oneObjectDataset(scope, conflict)), ruleId).indeterminateCount, 1, `${scope}:conflict`);
+  }
+  const mixed = run(makeDataset({
+    points: [{ attributes: { ...POINT_ATTRIBUTES, Tema: 'SP' } }],
+    lines: [{ attributes: { ...LINE_ATTRIBUTES, Tema: 'VL' } }],
+    pointAttributes: { ...POINT_ATTRIBUTES, Tema: 'SP' },
+    lineAttributes: { ...LINE_ATTRIBUTES, Tema: 'VL' },
+  }));
+  assert.equal(ruleResult(mixed, 'innmaling.point.tema.required').geometryBreakdown.point.failCount, 1);
+  assert.equal(ruleResult(mixed, 'innmaling.line.tema.required').geometryBreakdown.line.failCount, 0);
+  assert.equal(ruleResult(mixed, 'innmaling.point.tema.required').geometryBreakdown.line.evaluatedCount, 0);
+  assert.equal(ruleResult(mixed, 'innmaling.line.tema.required').geometryBreakdown.point.evaluatedCount, 0);
 });
 
 test('mixed point/line datasets never borrow Tykkelse values across geometry', () => {

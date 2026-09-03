@@ -131,6 +131,43 @@ export function evaluateRequiredAllowedValue(
 }
 
 /**
+ * Evaluate a strict allowed-value set against the existing Tema identity
+ * result. Resolution remains owned by temaIdentity.js; this only validates
+ * its resolved raw value without normalization.
+ */
+export function evaluateTemaRequiredAllowedValue(identity, allowedValues) {
+  if (identity.bindingState === BindingState.SCHEMA_UNAVAILABLE) {
+    return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.SCHEMA_UNAVAILABLE };
+  }
+  if (identity.bindingState === BindingState.AMBIGUOUS) {
+    return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.BINDING_AMBIGUOUS };
+  }
+  switch (identity.state) {
+    case TemaIdentityState.RESOLVED: {
+      const allowed = allowedValues.some((allowedValue) =>
+        Object.is(allowedValue, identity.resolvedValue));
+      return {
+        state: allowed ? EvaluationState.PASS : EvaluationState.FAIL,
+        reasonCode: allowed ? null : RuleReasonCode.VALUE_NOT_ALLOWED,
+      };
+    }
+    case TemaIdentityState.MISSING:
+      return {
+        state: EvaluationState.FAIL,
+        reasonCode: identity.bindingState === BindingState.FIELD_ABSENT
+          ? RuleReasonCode.REQUIRED_FIELD_ABSENT
+          : RuleReasonCode.REQUIRED_VALUE_MISSING,
+      };
+    case TemaIdentityState.CONFLICT:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.TEMA_CONFLICT };
+    case TemaIdentityState.UNRESOLVED_SOURCE:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.UNRESOLVED_SOURCE };
+    default:
+      throw new Error('unsupported Tema identity state for required allowed-value evaluator');
+  }
+}
+
+/**
  * Evaluate Tema requiredness from the specialized A3 result.
  *
  * @param {Object} identity

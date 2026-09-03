@@ -2,7 +2,10 @@ import fieldInformationData from '../../../data/validation-v2/field-information.
 import { getCanonicalField } from './registry.js';
 import {
   HEIGHT_MEASUREMENT_METHOD_VALUES,
+  LINE_TEMA_VALUES,
+  MATERIAL_VALUES,
   MEASUREMENT_METHOD_VALUES,
+  POINT_TEMA_VALUES,
   VERTICAL_LEVEL_VALUES,
 } from './rules.js';
 
@@ -22,6 +25,24 @@ const VERTICAL_LEVEL_VALUE_INFO = Object.fromEntries(
   VERTICAL_LEVEL_VALUES.map((value) => [value, {
     label: value,
     sources: [{ documentId: 'appendix-a', pages: '4, 9' }],
+  }]),
+);
+const MATERIAL_VALUE_INFO = Object.fromEntries(
+  MATERIAL_VALUES.map((value) => [value, {
+    label: value,
+    sources: [{ documentId: 'appendix-a', pages: '19–21' }],
+  }]),
+);
+const POINT_TEMA_VALUE_INFO = Object.fromEntries(
+  POINT_TEMA_VALUES.map((value) => [value, {
+    label: value,
+    sources: [{ documentId: 'appendix-a', pages: '10–12' }],
+  }]),
+);
+const LINE_TEMA_VALUE_INFO = Object.fromEntries(
+  LINE_TEMA_VALUES.map((value) => [value, {
+    label: value,
+    sources: [{ documentId: 'appendix-a', pages: '16–19' }],
   }]),
 );
 
@@ -62,6 +83,40 @@ const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry
         ...source,
         pages: '4, 9',
         auditSourceRuleIds: ['innmaling.common.vertical-level.required'],
+      })),
+    };
+  }
+  if (entry.canonicalFieldId === 'material') {
+    return {
+      ...entry,
+      documentationStatus: 'COMPLETE',
+      qualifications: [],
+      valueInfo: MATERIAL_VALUE_INFO,
+      sources: entry.sources.map((source) => ({
+        ...source,
+        pages: '5, 19–21',
+        auditSourceRuleIds: ['innmaling.line.material.required'],
+      })),
+    };
+  }
+  if (entry.canonicalFieldId === 'tema') {
+    return {
+      ...entry,
+      documentationStatus: 'COMPLETE',
+      qualifications: [],
+      valueInfo: {},
+      byGeometry: {
+        ...(entry.byGeometry || {}),
+        point: { ...(entry.byGeometry?.point || {}), valueInfo: POINT_TEMA_VALUE_INFO },
+        line: { ...(entry.byGeometry?.line || {}), valueInfo: LINE_TEMA_VALUE_INFO },
+      },
+      sources: entry.sources.map((source) => ({
+        ...source,
+        pages: '4, 10–12; line 16–19',
+        auditSourceRuleIds: [
+          'innmaling.point.tema.required',
+          'innmaling.line.tema.required',
+        ],
       })),
     };
   }
