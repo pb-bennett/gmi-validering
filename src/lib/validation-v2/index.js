@@ -4,6 +4,7 @@ export {
   CaseNormalizationPolicy,
   Confidence,
   EvaluationState,
+  FieldRelationshipKind,
   GeometryScope,
   GMI_SOURCE_FORMAT,
   MappingKind,

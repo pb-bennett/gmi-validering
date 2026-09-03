@@ -23,6 +23,7 @@ function InformationRow({ label, children }) {
 
 function InstructionPanel({ field, rule }) {
   const allowedValues = rule.allowedValues || [];
+  const isRelationshipRule = rule.evaluatorKind === 'FIELD_RELATIONSHIP';
   return (
     <div className="space-y-3">
       <dl>
@@ -48,6 +49,28 @@ function InstructionPanel({ field, rule }) {
         <p className="text-xs leading-5 text-gray-700">{field.description || MISSING_INFORMATION}</p>
       </section>
 
+      {field.compatibility && (
+        <section>
+          <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            Type passer til Tema
+          </h3>
+          <p className="mb-1 text-xs text-gray-600">
+            Eksakte kombinasjoner fra Innmålingsinstruks Vedlegg A, side {field.compatibility.sources[0]?.pages}.
+          </p>
+          <ul className="max-h-56 divide-y divide-gray-100 overflow-auto border-y border-gray-100 text-xs">
+            {Object.entries(field.compatibility.byType).map(([type, relationship]) => (
+              <li key={type} className="flex gap-2 py-1.5">
+                <code className="shrink-0 font-semibold text-blue-700">{type}</code>
+                <span className="text-gray-700">{relationship.temaValues.join(', ')}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[11px] text-gray-500">
+            Kontroller: {field.compatibility.sources[0]?.auditSourceRuleIds.join(', ')}
+          </p>
+        </section>
+      )}
+
       <dl>
         <InformationRow label="Enhet">{field.units || MISSING_INFORMATION}</InformationRow>
         <InformationRow label="Dokumentert format">{field.documentedFormat || MISSING_INFORMATION}</InformationRow>
@@ -65,7 +88,7 @@ function InstructionPanel({ field, rule }) {
         </section>
       )}
 
-      <section>
+      {!isRelationshipRule && <section>
         <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
           Verdier kontrollert av denne regelen
         </h3>
@@ -87,7 +110,7 @@ function InstructionPanel({ field, rule }) {
         ) : (
           <p className="text-xs text-gray-600">Ingen tillatt verdiliste for denne regelen.</p>
         )}
-      </section>
+      </section>}
 
       <section>
         <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Kilde</h3>
@@ -191,6 +214,7 @@ export default function ValidationV2FieldInfoModal({
   const onCloseRef = useRef(onClose);
   const [activeTab, setActiveTab] = useState(TABS.INSTRUCTION);
   const [fieldDataState, setFieldDataState] = useState({ loading: false, summary: null, error: null });
+  const fieldDataEnabled = rule?.fieldDataEnabled !== false;
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -250,12 +274,14 @@ export default function ValidationV2FieldInfoModal({
   };
 
   const selectTab = (tab) => {
+    if (tab === TABS.DATA && !fieldDataEnabled) return;
     setActiveTab(tab);
     if (tab === TABS.DATA && !fieldDataState.summary && !fieldDataState.error) loadFieldData();
   };
 
   const moveTab = (event, direction) => {
     event.preventDefault();
+    if (!fieldDataEnabled) return;
     const nextTab = direction === 'next' ? TABS.DATA : TABS.INSTRUCTION;
     selectTab(nextTab);
     requestAnimationFrame(() => tabRefs.current[nextTab]?.focus());
@@ -304,6 +330,8 @@ export default function ValidationV2FieldInfoModal({
               ref={(element) => { tabRefs.current[tab] = element; }}
               aria-selected={activeTab === tab}
               aria-controls={`validation-v2-field-panel-${tab}`}
+              disabled={tab === TABS.DATA && !fieldDataEnabled}
+              title={tab === TABS.DATA && !fieldDataEnabled ? 'Fildata er ikke tilgjengelig for relasjonsregler' : undefined}
               tabIndex={activeTab === tab ? 0 : -1}
               onClick={() => selectTab(tab)}
               onKeyDown={(event) => {
@@ -312,7 +340,7 @@ export default function ValidationV2FieldInfoModal({
                 if (event.key === 'Home') moveTabTo(event, TABS.INSTRUCTION);
                 if (event.key === 'End') moveTabTo(event, TABS.DATA);
               }}
-              className={`min-h-9 border-b-2 px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ${activeTab === tab ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              className={`min-h-9 border-b-2 px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40 ${activeTab === tab ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
             >
               {label}
             </button>

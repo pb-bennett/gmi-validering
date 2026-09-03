@@ -132,7 +132,7 @@ test('point and line presentation universes are the reviewed active counts', () 
     counts({ passCount: 1 }),
     rule.geometryScopes,
   ));
-  assert.equal(getValidationV2PresentationRules(results, 'point').length, 18);
+  assert.equal(getValidationV2PresentationRules(results, 'point').length, 19);
   assert.equal(getValidationV2PresentationRules(results, 'line').length, 21);
 });
 

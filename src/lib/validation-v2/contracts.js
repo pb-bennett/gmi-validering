@@ -104,6 +104,14 @@ export const RuleEvaluatorKind = Object.freeze({
   REQUIRED: 'REQUIRED',
   ALLOWED_VALUE: 'ALLOWED_VALUE',
   REQUIRED_ALLOWED_VALUE: 'REQUIRED_ALLOWED_VALUE',
+  FIELD_RELATIONSHIP: 'FIELD_RELATIONSHIP',
+});
+
+/**
+ * Cross-field relationship policies declared by relationship rules.
+ */
+export const FieldRelationshipKind = Object.freeze({
+  ALLOWED_PAIRS: 'ALLOWED_PAIRS',
 });
 
 /**
@@ -136,6 +144,7 @@ export const RuleCategory = Object.freeze({
   REQUIRED_FIELD: 'REQUIRED_FIELD',
   ALLOWED_VALUE: 'ALLOWED_VALUE',
   REQUIRED_ALLOWED_VALUE: 'REQUIRED_ALLOWED_VALUE',
+  FIELD_COMPATIBILITY: 'FIELD_COMPATIBILITY',
 });
 
 /**
@@ -149,6 +158,10 @@ export const RuleReasonCode = Object.freeze({
   UNRESOLVED_SOURCE: 'UNRESOLVED_SOURCE',
   SCHEMA_UNAVAILABLE: 'SCHEMA_UNAVAILABLE',
   TEMA_CONFLICT: 'TEMA_CONFLICT',
+  OPTIONAL_TYPE_NOT_SUPPLIED: 'OPTIONAL_TYPE_NOT_SUPPLIED',
+  RELATIONSHIP_PREREQUISITE_FAILED: 'RELATIONSHIP_PREREQUISITE_FAILED',
+  RELATIONSHIP_INPUT_INDETERMINATE: 'RELATIONSHIP_INPUT_INDETERMINATE',
+  TYPE_TEMA_INCOMPATIBLE: 'TYPE_TEMA_INCOMPATIBLE',
 });
 
 /**
@@ -259,6 +272,8 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @property {string} reasonCode
  * @property {Object} observed
  * @property {Array<*>|null} expectedValues
+ * @property {Object|null} [expectedRelationship]
+ * @property {Object|null} [details]
  */
 
 /**
@@ -297,15 +312,19 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @property {string} ruleId
  * @property {string} canonicalFieldId
  * @property {Array<'point'|'line'>} geometryScopes
- * @property {'REQUIRED'|'ALLOWED_VALUE'|'REQUIRED_ALLOWED_VALUE'} evaluatorKind
- * @property {'REQUIRED_FIELD'|'ALLOWED_VALUE'|'REQUIRED_ALLOWED_VALUE'} category
+ * @property {'REQUIRED'|'ALLOWED_VALUE'|'REQUIRED_ALLOWED_VALUE'|'FIELD_RELATIONSHIP'} evaluatorKind
+ * @property {'REQUIRED_FIELD'|'ALLOWED_VALUE'|'REQUIRED_ALLOWED_VALUE'|'FIELD_COMPATIBILITY'} category
  * @property {string} title
  * @property {string} description
  * @property {'ERROR'} severity
  * @property {'STANDARD'} provenance
  * @property {{document: string, pages: string}} source
- * @property {Array<*>} allowedValues
- * @property {'NONE'|'EXACT'|'INTEGER_CODE_STRING'} valueComparison
+ * @property {Array<*>} [allowedValues]
+ * @property {'NONE'|'EXACT'|'INTEGER_CODE_STRING'} [valueComparison]
+ * @property {Array<string>} [inputFieldIds]
+ * @property {{kind: 'ALLOWED_PAIRS', optionalInputFieldId: string, optionalInputReasonCode: string, failureReasonCode: string, prerequisiteRuleIds: Array<string>, allowedPairs: Array<Array<*>>}} [relationship]
+ * @property {string} [resultLabel]
+ * @property {boolean} [fieldDataEnabled]
  */
 
 /**

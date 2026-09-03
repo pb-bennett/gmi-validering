@@ -12,6 +12,7 @@ import { extractGmiObjectFieldValue } from './objectFieldValue.js';
 import { resolveGmiTemaIdentity } from './temaIdentity.js';
 import {
   evaluateAllowedValue,
+  evaluateFieldRelationship,
   evaluateRequiredAllowedValue,
   evaluateRequiredField,
   evaluateTemaRequiredAllowedValue,
@@ -79,9 +80,9 @@ export function createUnavailableTemaEvidence(binding) {
   };
 }
 
-function getRuleEvidence({ rule, ref, dataset, datasetRevision, schemaBinding, layerId }) {
-  if (rule.canonicalFieldId === 'tema') {
-    const binding = getBinding(schemaBinding, rule.canonicalFieldId, ref.geometryScope);
+function getFieldEvidence({ canonicalFieldId, ref, dataset, datasetRevision, schemaBinding, layerId }) {
+  if (canonicalFieldId === 'tema') {
+    const binding = getBinding(schemaBinding, canonicalFieldId, ref.geometryScope);
     if (binding.state === BindingState.SCHEMA_UNAVAILABLE || binding.state === BindingState.AMBIGUOUS) {
       return createUnavailableTemaEvidence(binding);
     }
@@ -101,7 +102,7 @@ function getRuleEvidence({ rule, ref, dataset, datasetRevision, schemaBinding, l
     sourceFormat: GMI_SOURCE_FORMAT,
     schemaBinding,
     objectRef: ref,
-    canonicalFieldId: rule.canonicalFieldId,
+    canonicalFieldId,
   });
 }
 
@@ -161,7 +162,15 @@ function copyConflictEvidence(conflicts = []) {
   });
 }
 
-function evaluateRule({ rule, evidence }) {
+function evaluateRule({ rule, evidence, rulesById }) {
+  if (rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP) {
+    return evaluateFieldRelationship({
+      inputFieldIds: rule.inputFieldIds,
+      evidenceByField: evidence,
+      prerequisiteRules: rule.relationship.prerequisiteRuleIds.map((ruleId) => rulesById.get(ruleId)),
+      relationship: rule.relationship,
+    });
+  }
   if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE) {
     if (rule.canonicalFieldId === 'tema') {
       return evaluateTemaRequiredAllowedValue(evidence, rule.allowedValues);
@@ -208,6 +217,19 @@ function getObservedEvidence(evidence) {
 }
 
 export function createFinding({ rule, ref, evidence, evaluation }) {
+  const isRelationship = rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP;
+  const observed = isRelationship
+    ? Object.fromEntries(rule.inputFieldIds.map((fieldId) => [
+      fieldId,
+      getObservedEvidence(evidence[fieldId]),
+    ]))
+    : getObservedEvidence(evidence);
+  const inputValues = evaluation.details?.inputValues || [];
+  const allowedValuesForPrimary = isRelationship
+    ? rule.relationship.allowedPairs
+      .filter((pair) => Object.is(pair[0], inputValues[0]))
+      .map((pair) => pair[1])
+    : [];
   return {
     ruleId: rule.ruleId,
     rule,
@@ -216,10 +238,18 @@ export function createFinding({ rule, ref, evidence, evaluation }) {
     canonicalFieldId: rule.canonicalFieldId,
     geometryScope: ref.geometryScope,
     reasonCode: evaluation.reasonCode || RuleReasonCode.BINDING_AMBIGUOUS,
-    observed: getObservedEvidence(evidence),
-    expectedValues: rule.allowedValues.length > 0
+    observed,
+    expectedValues: Array.isArray(rule.allowedValues) && rule.allowedValues.length > 0
       ? rule.allowedValues
       : null,
+    expectedRelationship: isRelationship
+      ? {
+        kind: rule.relationship.kind,
+        inputFieldIds: [...rule.inputFieldIds],
+        allowedValuesForPrimary,
+      }
+      : null,
+    details: evaluation.details || null,
   };
 }
 
@@ -235,20 +265,27 @@ function createRuleResult(rule, refs, context) {
   };
 
   for (const ref of refs) {
-    const evidenceKey = `${rule.canonicalFieldId}|${ref.key}`;
-    let evidence = context.evidenceCache.get(evidenceKey);
-    if (!evidence) {
-      evidence = getRuleEvidence({
-        rule,
-        ref,
-        dataset: context.dataset,
-        datasetRevision: context.datasetRevision,
-        schemaBinding: context.schemaBinding,
-        layerId: context.layerId,
-      });
-      context.evidenceCache.set(evidenceKey, evidence);
-    }
-    const evaluation = evaluateRule({ rule, evidence });
+    const inputFieldIds = rule.inputFieldIds || [rule.canonicalFieldId];
+    const evidenceByField = Object.fromEntries(inputFieldIds.map((canonicalFieldId) => {
+      const evidenceKey = `${canonicalFieldId}|${ref.key}`;
+      let fieldEvidence = context.evidenceCache.get(evidenceKey);
+      if (!fieldEvidence) {
+        fieldEvidence = getFieldEvidence({
+          canonicalFieldId,
+          ref,
+          dataset: context.dataset,
+          datasetRevision: context.datasetRevision,
+          schemaBinding: context.schemaBinding,
+          layerId: context.layerId,
+        });
+        context.evidenceCache.set(evidenceKey, fieldEvidence);
+      }
+      return [canonicalFieldId, fieldEvidence];
+    }));
+    const evidence = rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP
+      ? evidenceByField
+      : evidenceByField[rule.canonicalFieldId];
+    const evaluation = evaluateRule({ rule, evidence, rulesById: context.rulesById });
     const geometryCounts = geometryBreakdown[ref.geometryScope];
     geometryCounts.evaluatedCount += 1;
     if (evaluation.state === EvaluationState.PASS) passCount += 1;
@@ -305,6 +342,7 @@ export function runGmiValidationV2(input) {
     datasetRevision: input.datasetRevision,
     schemaBinding,
     evidenceCache: new Map(),
+    rulesById: new Map(rules.map((rule) => [rule.ruleId, rule])),
   };
   const ruleResults = rules.map((rule) =>
     createRuleResult(rule, getRefsForRule(rule, objectRefs), context)

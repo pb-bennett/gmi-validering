@@ -6,6 +6,7 @@ import {
   MATERIAL_VALUES,
   MEASUREMENT_METHOD_VALUES,
   POINT_TEMA_VALUES,
+  TYPE_TEMA_COMPATIBILITY_BY_TYPE,
   TYPE_VALUES,
   VERTICAL_LEVEL_VALUES,
 } from './rules.js';
@@ -52,6 +53,28 @@ const TYPE_VALUE_INFO = Object.fromEntries(
     sources: [{ documentId: 'appendix-a', pages: '12–14' }],
   }]),
 );
+const TYPE_TEMA_COMPATIBILITY_SOURCE = {
+  documentId: 'appendix-a',
+  pages: '12–14',
+  auditSourceRuleIds: [
+    'innmaling.point.type.valid',
+    'innmaling.point.type-tema.compatible',
+  ],
+};
+const TYPE_TEMA_COMPATIBILITY_INFO = {
+  kind: 'ALLOWED_PAIRS',
+  inputFieldIds: ['type', 'tema'],
+  byType: Object.fromEntries(Object.entries(TYPE_TEMA_COMPATIBILITY_BY_TYPE).map(
+    ([type, temaValues]) => [type, {
+      temaValues: [...temaValues],
+      sources: [{ ...TYPE_TEMA_COMPATIBILITY_SOURCE }],
+    }],
+  )),
+  multiTemaTypes: Object.fromEntries(Object.entries(TYPE_TEMA_COMPATIBILITY_BY_TYPE)
+    .filter(([, temaValues]) => temaValues.length > 1)
+    .map(([type, temaValues]) => [type, [...temaValues]])),
+  sources: [{ ...TYPE_TEMA_COMPATIBILITY_SOURCE }],
+};
 
 const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry) => {
   if (entry.canonicalFieldId === 'measurementMethod') {
@@ -131,12 +154,15 @@ const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry
     return {
       ...entry,
       documentationStatus: 'COMPLETE',
-      qualifications: [],
       valueInfo: TYPE_VALUE_INFO,
+      compatibility: TYPE_TEMA_COMPATIBILITY_INFO,
       sources: entry.sources.map((source) => ({
         ...source,
         pages: '4, 12–14',
-        auditSourceRuleIds: ['innmaling.point.type.valid'],
+        auditSourceRuleIds: [
+          'innmaling.point.type.valid',
+          'innmaling.point.type-tema.compatible',
+        ],
       })),
     };
   }
@@ -212,6 +238,21 @@ export function validateFieldInformationRegistry(entries = fieldInformationData)
     if (entry.byGeometry && Object.keys(entry.byGeometry).some((scope) => !['point', 'line'].includes(scope))) {
       throw new Error(`Invalid geometry overlay: ${entry.canonicalFieldId}`);
     }
+    if (entry.compatibility) {
+      if (
+        entry.compatibility.kind !== 'ALLOWED_PAIRS' ||
+        !Array.isArray(entry.compatibility.inputFieldIds) ||
+        !entry.compatibility.byType ||
+        !Array.isArray(entry.compatibility.sources)
+      ) {
+        throw new Error(`Invalid compatibility information: ${entry.canonicalFieldId}`);
+      }
+      for (const [type, relationship] of Object.entries(entry.compatibility.byType)) {
+        if (!Array.isArray(relationship.temaValues) || !Array.isArray(relationship.sources)) {
+          throw new Error(`Invalid compatibility relationship: ${entry.canonicalFieldId}.${type}`);
+        }
+      }
+    }
     ids.add(entry.canonicalFieldId);
   }
   for (const fieldId of REQUIRED_FIELD_INFORMATION) {
@@ -242,8 +283,11 @@ export function composeFieldInformation({ canonicalFieldId, geometryScope, rule 
     directGmiSourceKey: canonicalField.directGmiSourceKey,
     appliesTo: [...information.appliesTo],
     geometryScope,
-    required: rule.evaluatorKind !== 'ALLOWED_VALUE',
-    requiredness: rule.evaluatorKind !== 'ALLOWED_VALUE' ? 'REQUIRED' : 'NOT_REQUIRED',
+    required: rule.evaluatorKind === 'REQUIRED' || rule.evaluatorKind === 'REQUIRED_ALLOWED_VALUE',
+    requiredness:
+      rule.evaluatorKind === 'REQUIRED' || rule.evaluatorKind === 'REQUIRED_ALLOWED_VALUE'
+        ? 'REQUIRED'
+        : 'NOT_REQUIRED',
     allowedValues: [...(rule.allowedValues || [])],
     ruleId: rule.ruleId,
   };

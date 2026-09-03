@@ -130,7 +130,10 @@ export function matchesValidationV2Status(status, filter = ValidationV2StatusFil
 export function getValidationV2RulePresentation(ruleResult, geometryScope, registryIndex = 0) {
   const counts = ruleResult?.geometryBreakdown?.[geometryScope] || EMPTY_COUNTS;
   const fieldInformation = getFieldInformation(ruleResult?.rule?.canonicalFieldId);
-  const displayName = fieldInformation?.displayName || ruleResult?.rule?.canonicalFieldId || 'Ukjent kontroll';
+  const displayName = ruleResult?.rule?.resultLabel ||
+    fieldInformation?.displayName ||
+    ruleResult?.rule?.canonicalFieldId ||
+    'Ukjent kontroll';
   const status = getValidationV2AggregateStatus(counts);
   return {
     ruleResult,
@@ -138,6 +141,7 @@ export function getValidationV2RulePresentation(ruleResult, geometryScope, regis
     counts,
     displayName,
     status,
+    fieldDataEnabled: ruleResult?.rule?.fieldDataEnabled !== false,
     registryIndex,
     expansionKey: `${geometryScope}:${ruleResult?.rule?.ruleId || registryIndex}`,
   };

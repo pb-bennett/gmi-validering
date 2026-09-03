@@ -67,6 +67,7 @@ const SLICE3_COMMON = [
 const POINT = [
   ['innmaling.point.tema.required', 'Punktobjekt har gyldig Tema', 'tema', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 10–12', EXPECTED_POINT_TEMA_VALUES, ValueComparisonPolicy.EXACT],
   ['innmaling.point.type.valid', 'Punktets Type er gyldig når den er oppgitt', 'type', RuleEvaluatorKind.ALLOWED_VALUE, RuleCategory.ALLOWED_VALUE, '4, 12–14', EXPECTED_TYPE_VALUES, ValueComparisonPolicy.EXACT],
+  ['innmaling.point.type-tema.compatible', 'Punktets Type passer til Tema', 'type', RuleEvaluatorKind.FIELD_RELATIONSHIP, RuleCategory.FIELD_COMPATIBILITY, '12–14', undefined, undefined],
   ['innmaling.point.inside-outside.valid', 'Punktets innvendig/utvendig-kode er gyldig', 'insideOutside', RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, RuleCategory.REQUIRED_ALLOWED_VALUE, '4, 14', ['ID', 'OD'], ValueComparisonPolicy.EXACT],
   ['innmaling.point.wall-thickness.required', 'Punktets tykkelse er oppgitt', 'wallThickness', RuleEvaluatorKind.REQUIRED, RuleCategory.REQUIRED_FIELD, '5, 9', [], ValueComparisonPolicy.NONE],
 ];
@@ -91,7 +92,8 @@ const NEW_INVENTORY = INVENTORY.filter(({ entry: [ruleId] }) =>
   !ruleId.includes('.height-reference.') &&
   !ruleId.endsWith('.point.tema.required') &&
   !ruleId.endsWith('.line.tema.required') &&
-  !ruleId.endsWith('.point.type.valid')
+  !ruleId.endsWith('.point.type.valid') &&
+  !ruleId.endsWith('.point.type-tema.compatible')
 );
 
 const COMMON_ATTRIBUTES = {
@@ -235,9 +237,9 @@ function runParsedGmi(options) {
   return { parsed, result: run(parsed, 'parsed-a8') };
 }
 
-test('A8 registry includes the Slice 6 vertical-level allowed-value inventory', () => {
+test('A8 registry includes the Slice 8 Type/Tema compatibility inventory', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 25);
+  assert.equal(rules.length, 26);
   assert.deepEqual(rules.map((rule) => rule.ruleId), [
     ...COMMON.slice(0, 2).map(([ruleId]) => ruleId),
     ...SLICE3_COMMON.map(([ruleId]) => ruleId),
@@ -245,10 +247,10 @@ test('A8 registry includes the Slice 6 vertical-level allowed-value inventory', 
     ...POINT.map(([ruleId]) => ruleId),
     ...LINE.map(([ruleId]) => ruleId),
   ]);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('point')).length, 18);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.includes('point')).length, 19);
   assert.equal(rules.filter((rule) => rule.geometryScopes.includes('line')).length, 21);
   assert.equal(rules.filter((rule) => rule.geometryScopes.length === 2).length, 14);
-  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'point').length, 4);
+  assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'point').length, 5);
   assert.equal(rules.filter((rule) => rule.geometryScopes.length === 1 && rule.geometryScopes[0] === 'line').length, 7);
 
   for (const { entry, scopes } of INVENTORY) {
@@ -278,7 +280,7 @@ test('A8 registry includes the Slice 6 vertical-level allowed-value inventory', 
       valueComparison,
     }, ruleId);
   }
-  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 25);
+  assert.equal(new Set(rules.map((rule) => rule.ruleId)).size, 26);
   assert.equal(rules.filter((rule) => rule.valueComparison === ValueComparisonPolicy.INTEGER_CODE_STRING).length, 2);
   assert.equal(rules.some((rule) => rule.canonicalFieldId === 'visibility'), false);
   assert.equal(rules.every((rule) => rule.source.document === 'Innmålingsinstruks Vedlegg A'), true);
@@ -966,7 +968,7 @@ test('one run drives both geometry tabs, uses dynamic rule count, and preserves 
   assert.equal(runCount, 1);
   assert.equal(pointState.result, lineState.result);
   assert.equal(pointState.result.datasetRevision, input.datasetRevision);
-  assert.equal(pointState.result.summary.totalRules, 25);
+  assert.equal(pointState.result.summary.totalRules, 26);
   assert.equal(pointState.result.ruleResults[0].findings[0]?.objectRef, lineState.result.ruleResults[0].findings[0]?.objectRef);
   assert.deepEqual(lineState.geometryView.ruleResults.map((candidate) => candidate.rule.geometryScopes), [
     ...COMMON.map(() => ['point', 'line']),
@@ -1020,7 +1022,7 @@ test('representative multi-thousand-object run completes with bounded finding sh
   const started = process.hrtime.bigint();
   const result = run(makeDataset({ points, lines }));
   const elapsedMilliseconds = Number(process.hrtime.bigint() - started) / 1e6;
-  assert.equal(result.summary.totalRules, 25);
+  assert.equal(result.summary.totalRules, 26);
   assert.equal(result.summary.evaluatedPointCount, 1500);
   assert.equal(result.summary.evaluatedLineCount, 1500);
   assert.equal(result.ruleResults.flatMap((candidate) => candidate.findings).length, 0);

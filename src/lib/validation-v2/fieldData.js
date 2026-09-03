@@ -279,6 +279,9 @@ export function getValidationV2FieldDataSummary(input) {
   if (!rule || rule.canonicalFieldId !== input.canonicalFieldId || !rule.geometryScopes.includes(input.geometryScope)) {
     throw new Error('field data rule does not match the requested field and geometry');
   }
+  if (rule.fieldDataEnabled === false) {
+    throw new Error('field data is disabled for relationship rules');
+  }
   const binding = getBinding(input.result, input.canonicalFieldId, input.geometryScope);
   let cache = datasetCaches.get(input.dataset);
   if (!cache) {

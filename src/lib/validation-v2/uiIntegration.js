@@ -131,6 +131,9 @@ function getFindingGroupValue(finding) {
   if (finding.reasonCode === 'TEMA_CONFLICT') {
     return (observed.conflicts || []).map((conflict) => conflict.rawValue);
   }
+  if (finding.reasonCode === 'TYPE_TEMA_INCOMPATIBLE') {
+    return [observed.type?.sourceValue, observed.tema?.resolvedValue];
+  }
   return null;
 }
 
@@ -145,9 +148,11 @@ export function groupValidationV2Findings(findings, geometryScope) {
       group = {
         key,
         reasonCode: finding.reasonCode,
-        observedValue: finding.reasonCode === 'VALUE_NOT_ALLOWED' && isSafeGroupValue(value)
-          ? value
-          : null,
+        observedValue:
+          (finding.reasonCode === 'VALUE_NOT_ALLOWED' && isSafeGroupValue(value)) ||
+          (finding.reasonCode === 'TYPE_TEMA_INCOMPATIBLE' && Array.isArray(value))
+            ? value
+            : null,
         findings: [],
       };
       groups.set(key, group);

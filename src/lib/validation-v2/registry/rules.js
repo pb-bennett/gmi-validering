@@ -1,8 +1,10 @@
 import {
+  FieldRelationshipKind,
   GeometryScope,
   RuleCategory,
   RuleEvaluatorKind,
   RuleProvenance,
+  RuleReasonCode,
   RuleSeverity,
   ValueComparisonPolicy,
 } from '../contracts.js';
@@ -95,6 +97,84 @@ export const TYPE_VALUES = [
   'PTOR', 'RBIO', 'RMEK', 'RMKJ', 'RSDM', 'SLAPUMP', 'SMIN', 'SSTA',
   'TTAN',
 ];
+export const TYPE_TEMA_COMPATIBILITY_BY_TYPE = deepFreeze({
+  BBAK: ['BAS'],
+  BFJE: ['BAS'],
+  BNOD: ['BAS'],
+  BRED: ['BAS'],
+  BSPY: ['BAS', 'BFD'],
+  BSTR: ['BAS'],
+  BTRN: ['BAS'],
+  DAM: ['BFD'],
+  KAS: ['BFD'],
+  SBA: ['BFD'],
+  STM: ['BFD'],
+  TAN: ['BFD'],
+  DAN: ['DRO'],
+  DANODE: ['DRO'],
+  DDAM: ['DRO'],
+  DPORT: ['DRO'],
+  DTAN: ['DRO'],
+  DTERSK: ['DRO'],
+  DB11: ['DIV'],
+  DB15: ['DIV'],
+  DB22: ['DIV'],
+  DB30: ['DIV'],
+  DB45: ['DIV'],
+  DB90: ['DIV'],
+  DBJUST410: ['DIV'],
+  DBJUST420: ['DIV'],
+  DBJUST430: ['DIV'],
+  DEND: ['DIV'],
+  DFOT: ['DIV'],
+  DOVG: ['DIV'],
+  DPPT: ['DIV'],
+  DREPMUF: ['DIV'],
+  DST: ['DIV'],
+  DVPR: ['DIV'],
+  DVF: ['FNT'],
+  FORAKLOSS: ['FORAKONSTR'],
+  FORAPLATE: ['FORAKONSTR'],
+  FORASPUNT: ['FORAKONSTR'],
+  GRØSTENG: ['GRØKONSTR'],
+  GRØSTENG01: ['GRØKONSTR'],
+  GRØSTENG06: ['GRØKONSTR'],
+  GRØSTENG10: ['GRØKONSTR'],
+  KBRE: ['KUM'],
+  KDRE: ['KUM'],
+  KFDL: ['KUM'],
+  KINS: ['KUM'],
+  KKAB: ['KUM'],
+  KLV: ['KUM'],
+  KMIN: ['KUM'],
+  KPPK: ['KUM'],
+  KPRØVFET: ['KUM'],
+  KPRØVOIL: ['KUM'],
+  KSDM: ['KUM'],
+  KSTA: ['KUM'],
+  KSTF: ['KUM'],
+  KTRY: ['KUM'],
+  KUMINLØP: ['KUM'],
+  KUMPEILGRV: ['KUM'],
+  KUMUTJEV: ['KUM'],
+  KUMUTLØP: ['KUM'],
+  KVIPP: ['KUM'],
+  XLOK: ['KUM'],
+  PSNK: ['PAF', 'POV', 'PSP', 'PST', 'PMK'],
+  PTOR: ['PAF', 'POV', 'PSP', 'PST', 'PMK'],
+  RBIO: ['RSP', 'RVA'],
+  RMEK: ['RSP', 'RVA'],
+  RMKJ: ['RSP', 'RVA'],
+  RSDM: ['ROV'],
+  SLAPUMP: ['SLA'],
+  SMIN: ['SAN'],
+  SSTA: ['SLG', 'SLS', 'SLU'],
+  TTAN: ['TNK'],
+});
+export const TYPE_TEMA_ALLOWED_PAIRS = deepFreeze(
+  Object.entries(TYPE_TEMA_COMPATIBILITY_BY_TYPE)
+    .flatMap(([type, temas]) => temas.map((tema) => [type, tema])),
+);
 export const LINE_TEMA_VALUES = [
   'AF', 'AFBO', 'AFD', 'AFK', 'AFLU', 'AFO', 'AFP', 'AFS', 'AFT', 'AFVAR', 'AFX', 'DR',
   'I2', 'I2D', 'I2I', 'I2O', 'I2P', 'I2S', 'I3', 'LEBEKXX500', 'LEBEKXX510', 'LEBEKXX511',
@@ -359,6 +439,32 @@ export const VALIDATION_RULES = deepFreeze([
     valueComparison: ValueComparisonPolicy.EXACT,
   },
   {
+    ruleId: 'innmaling.point.type-tema.compatible',
+    canonicalFieldId: 'type',
+    inputFieldIds: ['type', 'tema'],
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.FIELD_RELATIONSHIP,
+    category: RuleCategory.FIELD_COMPATIBILITY,
+    title: 'Punktets Type passer til Tema',
+    resultLabel: 'Type passer til Tema',
+    description: 'Oppgitt Type for punktobjekt skal være tillatt for objektets Tema.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '12–14' },
+    relationship: {
+      kind: FieldRelationshipKind.ALLOWED_PAIRS,
+      optionalInputFieldId: 'type',
+      optionalInputReasonCode: RuleReasonCode.OPTIONAL_TYPE_NOT_SUPPLIED,
+      failureReasonCode: RuleReasonCode.TYPE_TEMA_INCOMPATIBLE,
+      prerequisiteRuleIds: [
+        'innmaling.point.type.valid',
+        'innmaling.point.tema.required',
+      ],
+      allowedPairs: TYPE_TEMA_ALLOWED_PAIRS,
+    },
+    fieldDataEnabled: false,
+  },
+  {
     ruleId: 'innmaling.point.inside-outside.valid',
     canonicalFieldId: 'insideOutside',
     geometryScopes: [GeometryScope.POINT],
@@ -504,6 +610,7 @@ function assertInvariant(condition, message) {
 export function validateRuleRegistry(rules = VALIDATION_RULES) {
   assertInvariant(Array.isArray(rules), 'rules must be an array');
   const ruleIds = new Set();
+  const rulesById = new Map(rules.map((rule) => [rule?.ruleId, rule]));
 
   for (const rule of rules) {
     assertInvariant(rule && typeof rule === 'object', 'rule must be an object');
@@ -529,7 +636,8 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
     assertInvariant(
       (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED && rule.category === RuleCategory.REQUIRED_FIELD) ||
         (rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE && rule.category === RuleCategory.ALLOWED_VALUE) ||
-        (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE && rule.category === RuleCategory.REQUIRED_ALLOWED_VALUE),
+        (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE && rule.category === RuleCategory.REQUIRED_ALLOWED_VALUE) ||
+        (rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP && rule.category === RuleCategory.FIELD_COMPATIBILITY),
       `${rule.ruleId} has an evaluator/category mismatch`
     );
     assertInvariant(typeof rule.title === 'string' && rule.title.length > 0, `${rule.ruleId} needs a title`);
@@ -537,6 +645,84 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
     assertInvariant(rule.severity === RuleSeverity.ERROR, `${rule.ruleId} has invalid severity`);
     assertInvariant(rule.provenance === RuleProvenance.STANDARD, `${rule.ruleId} has invalid provenance`);
     assertInvariant(rule.source && typeof rule.source.document === 'string' && typeof rule.source.pages === 'string', `${rule.ruleId} needs source metadata`);
+
+    if (rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP) {
+      assertInvariant(!Object.hasOwn(rule, 'allowedValues'), `${rule.ruleId} must not define allowedValues`);
+      assertInvariant(!Object.hasOwn(rule, 'valueComparison'), `${rule.ruleId} must not define valueComparison`);
+      assertInvariant(
+        Array.isArray(rule.inputFieldIds) &&
+          rule.inputFieldIds.length === 2 &&
+          new Set(rule.inputFieldIds).size === rule.inputFieldIds.length,
+        `${rule.ruleId} needs two unique relationship inputs`
+      );
+      assertInvariant(
+        rule.inputFieldIds[0] === rule.canonicalFieldId,
+        `${rule.ruleId} primary field must be the first relationship input`
+      );
+      assertInvariant(
+        rule.inputFieldIds.every((fieldId) => Boolean(getCanonicalField(fieldId))),
+        `${rule.ruleId} references an unknown relationship input`
+      );
+      assertInvariant(
+        rule.relationship?.kind === FieldRelationshipKind.ALLOWED_PAIRS,
+        `${rule.ruleId} has an invalid relationship kind`
+      );
+      assertInvariant(
+        rule.inputFieldIds.includes(rule.relationship.optionalInputFieldId) &&
+          Object.values(RuleReasonCode).includes(rule.relationship.optionalInputReasonCode) &&
+          Object.values(RuleReasonCode).includes(rule.relationship.failureReasonCode),
+        `${rule.ruleId} has invalid optional-input semantics`
+      );
+      const prerequisiteRuleIds = rule.relationship?.prerequisiteRuleIds;
+      assertInvariant(
+        Array.isArray(prerequisiteRuleIds) &&
+          prerequisiteRuleIds.length === rule.inputFieldIds.length &&
+          new Set(prerequisiteRuleIds).size === prerequisiteRuleIds.length,
+        `${rule.ruleId} needs one unique prerequisite rule per input`
+      );
+      const prerequisiteRules = prerequisiteRuleIds.map((ruleId) => rulesById.get(ruleId));
+      assertInvariant(
+        prerequisiteRules.every(Boolean),
+        `${rule.ruleId} references an unknown prerequisite rule`
+      );
+      for (const [index, prerequisiteRule] of prerequisiteRules.entries()) {
+        assertInvariant(
+          prerequisiteRule.canonicalFieldId === rule.inputFieldIds[index],
+          `${rule.ruleId} prerequisite order must match relationship inputs`
+        );
+        assertInvariant(
+          prerequisiteRule.evaluatorKind !== RuleEvaluatorKind.FIELD_RELATIONSHIP &&
+            Array.isArray(prerequisiteRule.allowedValues) &&
+            prerequisiteRule.allowedValues.length > 0,
+          `${rule.ruleId} prerequisite must own an allowed-value list`
+        );
+        assertInvariant(
+          rule.geometryScopes.every((scope) => prerequisiteRule.geometryScopes.includes(scope)),
+          `${rule.ruleId} prerequisite has incompatible geometry`
+        );
+      }
+      const allowedPairs = rule.relationship?.allowedPairs;
+      assertInvariant(Array.isArray(allowedPairs) && allowedPairs.length > 0, `${rule.ruleId} needs allowed pairs`);
+      assertInvariant(
+        allowedPairs.every((pair) => Array.isArray(pair) && pair.length === rule.inputFieldIds.length),
+        `${rule.ruleId} has an invalid allowed pair`
+      );
+      const pairKeys = allowedPairs.map((pair) => JSON.stringify(pair));
+      assertInvariant(new Set(pairKeys).size === pairKeys.length, `${rule.ruleId} has duplicate allowed pairs`);
+      for (const pair of allowedPairs) {
+        pair.forEach((value, index) => {
+          assertInvariant(
+            prerequisiteRules[index].allowedValues.some((allowedValue) => Object.is(allowedValue, value)),
+            `${rule.ruleId} pair member is not current for ${rule.inputFieldIds[index]}`
+          );
+        });
+      }
+      assertInvariant(rule.fieldDataEnabled === false, `${rule.ruleId} must disable single-field data`);
+      continue;
+    }
+
+    assertInvariant(!Object.hasOwn(rule, 'relationship'), `${rule.ruleId} must not define a relationship`);
+    assertInvariant(!Object.hasOwn(rule, 'inputFieldIds'), `${rule.ruleId} must not define relationship inputs`);
     assertInvariant(Array.isArray(rule.allowedValues), `${rule.ruleId} needs allowedValues`);
     assertInvariant(new Set(rule.allowedValues).size === rule.allowedValues.length, `${rule.ruleId} has duplicate allowed values`);
     assertInvariant(
