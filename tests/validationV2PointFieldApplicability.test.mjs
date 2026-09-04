@@ -31,8 +31,8 @@ const EXPECTED_EXPLICIT_CELLS = [
   { tema: 'SLU', canonicalFieldId: 'width', state: 'APPLICABLE' },
   { tema: 'LOK', canonicalFieldId: 'constructionMethod', state: 'APPLICABLE' },
   { tema: 'LOK', canonicalFieldId: 'width', state: 'APPLICABLE' },
-  { tema: 'LOK', canonicalFieldId: 'manholeShape', state: 'UNKNOWN' },
-  { tema: 'LOK', canonicalFieldId: 'cone', state: 'UNKNOWN' },
+  { tema: 'LOK', canonicalFieldId: 'manholeShape', state: 'NOT_APPLICABLE' },
+  { tema: 'LOK', canonicalFieldId: 'cone', state: 'NOT_APPLICABLE' },
   { tema: 'KUMI', canonicalFieldId: 'constructionMethod', state: 'APPLICABLE' },
   { tema: 'KUMI', canonicalFieldId: 'manholeShape', state: 'APPLICABLE' },
   { tema: 'KUMI', canonicalFieldId: 'cone', state: 'APPLICABLE' },
@@ -112,8 +112,8 @@ test('production policy has exactly the independent explicit 88-cell inventory',
   assert.equal(actualCells.length, 88);
   assert.equal(new Set(actualKeys).size, 88);
   assert.equal(actualCells.filter(({ state }) => state === 'APPLICABLE').length, 71);
-  assert.equal(actualCells.filter(({ state }) => state === 'UNKNOWN').length, 10);
-  assert.equal(actualCells.filter(({ state }) => state === 'NOT_APPLICABLE').length, 7);
+  assert.equal(actualCells.filter(({ state }) => state === 'UNKNOWN').length, 8);
+  assert.equal(actualCells.filter(({ state }) => state === 'NOT_APPLICABLE').length, 9);
 
   for (const expected of EXPECTED_EXPLICIT_CELLS) {
     assert.equal(
@@ -138,9 +138,17 @@ test('every expected explicit lookup returns its independent literal state', () 
   }
 });
 
-test('LOK Kumform and Kjegle remain explicitly UNKNOWN', () => {
-  assert.equal(getPointFieldApplicability('LOK', 'manholeShape').state, 'UNKNOWN');
-  assert.equal(getPointFieldApplicability('LOK', 'cone').state, 'UNKNOWN');
+test('LOK Kumform and Kjegle are explicit NOT_APPLICABLE decisions', () => {
+  assert.equal(getPointFieldApplicability('LOK', 'manholeShape').state, 'NOT_APPLICABLE');
+  assert.equal(getPointFieldApplicability('LOK', 'cone').state, 'NOT_APPLICABLE');
+});
+
+test('KMR and SUMP remain explicitly UNKNOWN for all four fields', () => {
+  for (const tema of ['KMR', 'SUMP']) {
+    for (const canonicalFieldId of ['constructionMethod', 'manholeShape', 'cone', 'width']) {
+      assert.equal(getPointFieldApplicability(tema, canonicalFieldId).state, 'UNKNOWN');
+    }
+  }
 });
 
 test('unlisted and current-but-unapproved Tema combinations remain UNKNOWN', () => {
@@ -149,11 +157,25 @@ test('unlisted and current-but-unapproved Tema combinations remain UNKNOWN', () 
   assert.equal(getPointFieldApplicability('STR', 'not-a-field').state, 'UNKNOWN');
 });
 
-test('NOT_APPLICABLE is returned only for the seven explicit approved cells', () => {
+test('NOT_APPLICABLE is returned only for the nine explicit approved cells', () => {
   const explicitNotApplicable = EXPECTED_EXPLICIT_CELLS.filter(
     ({ state }) => state === 'NOT_APPLICABLE'
   );
-  assert.equal(explicitNotApplicable.length, 7);
+  assert.equal(explicitNotApplicable.length, 9);
+  assert.deepEqual(
+    explicitNotApplicable.map(({ tema, canonicalFieldId }) => `${tema}:${canonicalFieldId}`).sort(),
+    [
+      'KRN:constructionMethod',
+      'KRN:manholeShape',
+      'KRN:cone',
+      'KRN:width',
+      'LOK:manholeShape',
+      'LOK:cone',
+      'STR:constructionMethod',
+      'STR:manholeShape',
+      'STR:cone',
+    ].sort()
+  );
   for (const expected of explicitNotApplicable) {
     assert.equal(
       getPointFieldApplicability(expected.tema, expected.canonicalFieldId).state,
@@ -185,7 +207,7 @@ test('Tema lookup uses exact current identity and does not normalize aliases or 
 test('policy metadata identifies project/domain authority and separate provenance', () => {
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyId, 'validator-2-point-field-applicability');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyVersion, '3.2.0');
-  assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyRevision, '2026-09-04.2');
+  assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyRevision, '2026-09-04.3');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.effectiveDate, '2026-09-04');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.decisionDate, '2026-09-04');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.authority, 'PROJECT/DOMAIN POLICY');

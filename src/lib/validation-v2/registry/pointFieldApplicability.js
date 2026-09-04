@@ -77,9 +77,10 @@ for (const canonicalFieldId of ['manholeShape', 'cone']) {
   cells.push({
     tema: 'LOK',
     canonicalFieldId,
-    state: PointFieldApplicabilityState.UNKNOWN,
+    state: PointFieldApplicabilityState.NOT_APPLICABLE,
     authority: POLICY_AUTHORITY,
-    rationale: 'Explicitly unresolved by the approved partial policy; no affirmative evidence supports APPLICABLE or NOT_APPLICABLE.',
+    rationale:
+      'Explicit domain-owner PROJECT/DOMAIN POLICY decision that this exact current v3.2 Tema/field combination is not applicable; the state is positive policy, not an inference from absent fields or a complement of APPLICABLE, and is not STANDARD Innmålingsinstruks behavior.',
   });
 }
 
@@ -129,7 +130,7 @@ for (const tema of ['KMR', 'SUMP']) {
 export const POINT_FIELD_APPLICABILITY_POLICY = deepFreeze({
   policyId: 'validator-2-point-field-applicability',
   policyVersion: '3.2.0',
-  policyRevision: '2026-09-04.2',
+  policyRevision: '2026-09-04.3',
   effectiveDate: '2026-09-04',
   decisionDate: '2026-09-04',
   authority: POLICY_AUTHORITY,

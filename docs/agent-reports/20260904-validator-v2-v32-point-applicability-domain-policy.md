@@ -2,6 +2,8 @@
 
 **Review date:** 2026-09-04
 
+**Current policy revision:** `2026-09-04.3`
+
 **Scope:** planning and domain review only; no production code, tests, registry, commit, push, deployment, or production-configuration changes
 
 **Repository checkpoint:** `feature/validator-v2-v32-baseline` at `2da5429`
@@ -18,7 +20,7 @@ The approved policy is explicit but remains deliberately limited to applicabilit
 
 - record `APPLICABLE` for `KUM`, `SAN`, `SLS`, and `SLU` for all four fields under the approved project policy;
 - record `APPLICABLE` for `LOK` for `Byggemetode` and `Bredde` under the approved project policy;
-- leave `LOK` → `Kumform` and `Kjegle` `UNKNOWN`, rather than restoring the old behavior wholesale;
+- The earlier planning position for the two remaining LOK fields is superseded by policy revision `2026-09-04.3`: `Kumform` and `Kjegle` are now explicit positive `NOT_APPLICABLE` decisions.
 - apply the additional explicit domain-owner decisions recorded below;
 - retain `UNKNOWN` where no positive decision exists; and
 - treat `NOT_APPLICABLE` as an explicit positive policy state, never as the complement of `APPLICABLE`.
@@ -142,14 +144,14 @@ Other plausible-sounding objects such as `KMR` (Kammer), `STR` (Stakerør), and 
 - **Legacy:** `KUM/SAN/SLS/SLU`; missing values failed, outside supplied values were unexpected.
 - **Provenance:** PRAKSIS, medium confidence. The apparent intent was to suppress false positives on objects for which chamber shape was not considered meaningful.
 - **V3.2:** the seven allowed values and partial shape meaning are STANDARD; no Tema scope is supplied.
-- **Current assessment:** approved project-policy `APPLICABLE` for `KUM`, `SAN`, `SLS`, `SLU`, and all 13 newly approved Tema in section 6. `LOK`, `KMR`, and `SUMP` remain `UNKNOWN`; `STR` and `KRN` are explicitly `NOT_APPLICABLE`. Do not infer applicability from a Tema name.
+- **Current assessment:** approved project-policy `APPLICABLE` for `KUM`, `SAN`, `SLS`, `SLU`, and all 13 newly approved Tema in section 6; `LOK` is `NOT_APPLICABLE` for `Kumform`; `STR` and `KRN` are explicitly `NOT_APPLICABLE`. Do not infer applicability from a Tema name.
 
 ### Kjegle
 
 - **Legacy:** `KUM/SAN/SLS/SLU`; missing values failed, outside supplied values were unexpected.
 - **Provenance:** PRAKSIS, medium confidence. No comment or commit message resolves required versus advisory semantics.
 - **V3.2:** the five allowed values, including `U` (no cone), are STANDARD; no Tema scope is supplied.
-- **Current assessment:** approved project-policy `APPLICABLE` for `KUM`, `SAN`, `SLS`, `SLU`, and all 13 newly approved Tema in section 6. `LOK`, `KMR`, and `SUMP` remain `UNKNOWN`; `STR` and `KRN` are explicitly `NOT_APPLICABLE`. The existence of a "no cone" value does not make applicability equivalent to requiredness.
+- **Current assessment:** approved project-policy `APPLICABLE` for `KUM`, `SAN`, `SLS`, `SLU`, and all 13 newly approved Tema in section 6; `LOK` is `NOT_APPLICABLE` for `Kjegle`; `STR` and `KRN` are explicitly `NOT_APPLICABLE`. The existence of a "no cone" value does not make applicability equivalent to requiredness.
 
 ### Bredde
 
@@ -168,7 +170,7 @@ This table is the approved partial PROJECT/DOMAIN POLICY artifact and is represe
 | `SAN` | `APPLICABLE` | `APPLICABLE` | `APPLICABLE` | `APPLICABLE` | Approved PROJECT/DOMAIN POLICY; legacy PRAKSIS and delivery evidence preserved |
 | `SLS` | `APPLICABLE` | `APPLICABLE` | `APPLICABLE` | `APPLICABLE` | Approved PROJECT/DOMAIN POLICY; legacy PRAKSIS and delivery evidence preserved |
 | `SLU` | `APPLICABLE` | `APPLICABLE` | `APPLICABLE` | `APPLICABLE` | Approved PROJECT/DOMAIN POLICY; legacy PRAKSIS and delivery evidence preserved |
-| `LOK` | `APPLICABLE` | `UNKNOWN` | `UNKNOWN` | `APPLICABLE` | `Byggemetode` and `Bredde` explicitly approved; legacy `Byggemetode` inclusion is PRAKSIS evidence, not STANDARD behavior |
+| `LOK` | `APPLICABLE` | `NOT_APPLICABLE` | `NOT_APPLICABLE` | `APPLICABLE` | Explicit domain-owner decisions; `Kumform` and `Kjegle` are positive `NOT_APPLICABLE` policy states, not inferences from absent fields or complements; legacy `Byggemetode` inclusion is PRAKSIS evidence, not STANDARD behavior |
 | `KUMI`, `KOTREKUM`, `MKS`, `MKV`, `PMK`, `PMKAF`, `PMKOV`, `PMKSP`, `PMKVL`, `RED`, `SANI`, `SLG`, `SLI` | `APPLICABLE` | `APPLICABLE` | `APPLICABLE` | `APPLICABLE` | Explicit domain-owner `PROJECT/DOMAIN POLICY`; not STANDARD Innmålingsinstruks mapping |
 | `STR` | `NOT_APPLICABLE` | `NOT_APPLICABLE` | `NOT_APPLICABLE` | `APPLICABLE` | Explicit domain-owner `PROJECT/DOMAIN POLICY`; historical population is PRAKSIS evidence only |
 | `KRN` | `NOT_APPLICABLE` | `NOT_APPLICABLE` | `NOT_APPLICABLE` | `NOT_APPLICABLE` | Explicit domain-owner `PROJECT/DOMAIN POLICY`; historical Byggemetode population is PRAKSIS evidence only |
@@ -204,26 +206,24 @@ Target-field presence must never promote an `UNKNOWN` applicability cell. Suppli
 
 1. `KMR` remains `UNKNOWN` for all four fields and requires future owner review; no policy is inferred from its name.
 2. `SUMP` remains `UNKNOWN` for all four fields and requires future owner review; no policy is inferred from its name.
-3. `LOK` remains `UNKNOWN` for `Kumform` and `Kjegle`.
-4. Whether an applicable field is required, recommended, or merely allowed for each Tema. This remains a separate unresolved concern.
-5. How `Bredde` requiredness should handle polygon delineation once applicability is known; the current GMI-only model cannot establish the exception.
+3. Whether an applicable field is required, recommended, or merely allowed for each Tema. This remains a separate unresolved concern.
+4. How `Bredde` requiredness should handle polygon delineation once applicability is known; the current GMI-only model cannot establish the exception.
 
 ## 10. Approved decisions and future domain-owner review
 
 ### Already approved
 
 1. `KUM`, `SAN`, `SLS`, and `SLU` are `APPLICABLE` for each of `Byggemetode`, `Kumform`, `Kjegle`, and `Bredde`.
-2. `LOK` is `APPLICABLE` for `Byggemetode` and `Bredde`, and remains `UNKNOWN` for `Kumform` and `Kjegle`.
+2. `LOK` is `APPLICABLE` for `Byggemetode` and `Bredde`, and is explicitly `NOT_APPLICABLE` for `Kumform` and `Kjegle` by the superseding revision recorded below.
 3. The batch approval covers all four fields for the 13 Tema listed in section 6; `STR` is `NOT_APPLICABLE` for the first three fields and `APPLICABLE` for `Bredde`; `KRN` is `NOT_APPLICABLE` for all four fields.
 
 ### Still requiring future owner review
 
 The following decisions remain open:
 
-1. Resolve `LOK` for `Kumform` and `Kjegle`.
-2. Review `KMR` and `SUMP`, retaining `UNKNOWN` unless the domain owner makes an explicit positive decision; do not infer policy from their names.
-3. Confirm field-specific requiredness separately; applicability alone creates no missing-field finding.
-4. Confirm that no omitted Tema is automatically `NOT_APPLICABLE` and that supplied values on `UNKNOWN` objects are not unexpected merely because applicability is unknown.
+1. Review `KMR` and `SUMP`, retaining `UNKNOWN` unless the domain owner makes an explicit positive decision; do not infer policy from their names.
+2. Confirm field-specific requiredness separately; applicability alone creates no missing-field finding.
+3. Confirm how `Bredde` polygon-requiredness handling should work where relevant; the current GMI-only model cannot establish the exception.
 
 ## 11. Decision and audit history
 
@@ -235,19 +235,17 @@ The following decisions remain open:
 - **Batch decision:** the domain owner approved all four fields for `KUMI`, `SANI`, `SLI`, `SLG`, `KOTREKUM`, `MKS`, `MKV`, `PMK`, `PMKAF`, `PMKOV`, `PMKSP`, `PMKVL`, and `RED`; approved `STR` as `NOT_APPLICABLE` for the first three fields and `APPLICABLE` for `Bredde`; and approved `KRN` as `NOT_APPLICABLE` for all four fields.
 - **Batch authority:** explicit `PROJECT/DOMAIN POLICY`, not STANDARD Innmålingsinstruks mapping. This is the first approved `NOT_APPLICABLE` policy set. Historical STR and KRN population remains PRAKSIS evidence and does not override these decisions.
 
-## 12. Recommended next implementation slice
+### Later refinement — policy revision 2026-09-04.3
 
-Choose **A: explicit point-field applicability metadata only**:
+The domain owner explicitly decided that LOK has no `Kumform` or `Kjegle`. These two cells are now positive `NOT_APPLICABLE` PROJECT/DOMAIN POLICY decisions, superseding the earlier `UNKNOWN` state; they are not inferred from absent fields, legacy behavior, or a complement of `APPLICABLE`. KMR and SUMP remain `UNKNOWN` for all four fields.
 
-- store exact current v3.2 Tema values only;
-- store every approved cell explicitly as `APPLICABLE`, `NOT_APPLICABLE`, or `UNKNOWN` with authority and rationale;
-- default unlisted/unsupported combinations to an explicit `UNKNOWN` result, never inferred `NOT_APPLICABLE`;
-- version the project policy independently from the STANDARD registry;
-- do not alter the three optional-if-present allowed-value rules;
-- do not add missing-field findings or requiredness rules; and
-- do not restore warnings for values supplied on `UNKNOWN` Tema merely because applicability is unresolved.
+## 12. Current metadata state and future work
 
-Do not start with **B**, a generic reusable point-applicability helper. A frozen policy table and direct lookup are sufficient for the first metadata-only slice. Extract a reusable helper only when a second approved policy family or evaluator demonstrates shared state/provenance behavior. Do not choose **C** until field-specific requiredness, severity, exception behavior, and `UNKNOWN` handling have separately approved authority.
+The explicit, versioned point-field applicability metadata slice is complete at policy revision `2026-09-04.3`: 88 explicit cells comprising 71 `APPLICABLE`, 9 `NOT_APPLICABLE`, and 8 `UNKNOWN` states. The frozen policy table and exact lookup preserve the historical architecture decision **A: metadata only**, with omitted or unapproved combinations defaulting to `UNKNOWN` and no inference of `NOT_APPLICABLE`.
+
+Future work, if approved, would consume the completed applicability metadata or address separate requiredness and representation concerns. Do not wire applicability into validation casually. Do not add missing-field findings, requiredness behavior, or other consumers without separate authority and an explicit design for severity, exceptions, and `UNKNOWN` handling. `APPLICABLE` is not `REQUIRED`, and `NOT_APPLICABLE` remains an explicit positive policy state only.
+
+The existing optional-if-present allowed-value rules remain unchanged. Applicability remains metadata-only, with no validation consumer, requiredness consumer, or result-row impact; registry counts remain **29 active / 22 point / 21 line**.
 
 ## 13. Expected registry and count impact
 
@@ -259,7 +257,7 @@ Extending the existing versioned applicability metadata only adds no active vali
 
 A pure lookup/helper extracted later would also have `+0 / +0 / +0` impact. No requiredness count is assigned because no requiredness rule is authorized or designed. Any future active advisory or requiredness slice must state its actual evaluator/rule shape and recalculate counts from the 29/22/21 baseline rather than treating metadata cells as rules.
 
-The approved table contains **71 `APPLICABLE` cells, 7 `NOT_APPLICABLE` cells, and 10 `UNKNOWN` cells** across the explicitly listed Tema rows (88 cells total). The `UNKNOWN` total includes the deliberately reviewed-but-unresolved `KMR` and `SUMP` cells plus the two existing `LOK` `UNKNOWN` cells. These are metadata cells, not executable rules. Future active advisory or requiredness work must recalculate counts from the 29/22/21 baseline.
+The approved table contains **71 `APPLICABLE` cells, 9 `NOT_APPLICABLE` cells, and 8 `UNKNOWN` cells** across the explicitly listed Tema rows (88 cells total). The `UNKNOWN` total consists of the deliberately reviewed-but-unresolved `KMR` and `SUMP` cells. These are metadata cells, not executable rules. Future active advisory or requiredness work must recalculate counts from the 29/22/21 baseline.
 
 ## 14. Final recommendation
 
