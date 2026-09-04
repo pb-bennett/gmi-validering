@@ -8,7 +8,7 @@ import {
 import { createGmiObjectRefs } from './objectRef.js';
 import { extractGmiObjectFieldValue } from './objectFieldValue.js';
 import { resolveGmiTemaIdentity } from './temaIdentity.js';
-import { evaluateRequiredAllowedValue } from './ruleEvaluation.js';
+import { evaluateAllowedValue, evaluateRequiredAllowedValue } from './ruleEvaluation.js';
 import { getValidationRule } from './registry/rules.js';
 import { getDatasetRevision } from './datasetRevision.js';
 import { isCurrentValidationV2Result } from './uiIntegration.js';
@@ -126,8 +126,14 @@ function getInterpretation(record) {
 }
 
 function getRuleAcceptance(record, rule) {
-  if (rule.evaluatorKind !== RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE) return null;
-  const evaluation = evaluateRequiredAllowedValue(
+  if (
+    rule.evaluatorKind !== RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE &&
+    rule.evaluatorKind !== RuleEvaluatorKind.ALLOWED_VALUE
+  ) return null;
+  const evaluate = rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE
+    ? evaluateAllowedValue
+    : evaluateRequiredAllowedValue;
+  const evaluation = evaluate(
     record.evidence,
     rule.allowedValues,
     rule.valueComparison,

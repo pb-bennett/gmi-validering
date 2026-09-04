@@ -31,6 +31,66 @@
     ]
   },
   {
+    "canonicalFieldId": "manholeShape",
+    "displayName": "Kumform",
+    "description": "Point-only field; optional for this automated validation slice. Only exact current v3.2 codes are accepted automatically.",
+    "appliesTo": ["point"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmaling instruction Appendix A",
+      "version": "3.2 / 01.08.2026",
+      "pages": "4, 14",
+      "auditSourceRuleIds": ["innmaling.point.manhole-shape.valid"]
+    }]
+  },
+  {
+    "canonicalFieldId": "constructionMethod",
+    "displayName": "Byggemetode",
+    "description": "Point-only field; optional for this automated validation slice. Only exact current v3.2 codes are accepted automatically.",
+    "appliesTo": ["point"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmaling instruction Appendix A",
+      "version": "3.2 / 01.08.2026",
+      "pages": "5, 15",
+      "auditSourceRuleIds": ["innmaling.point.construction-method.valid"]
+    }]
+  },
+  {
+    "canonicalFieldId": "cone",
+    "displayName": "Kjegle",
+    "description": "Point-only field; optional for this automated validation slice. Only exact current v3.2 codes are accepted automatically.",
+    "appliesTo": ["point"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmaling instruction Appendix A",
+      "version": "3.2 / 01.08.2026",
+      "pages": "5, 15",
+      "auditSourceRuleIds": ["innmaling.point.cone.valid"]
+    }]
+  },
+  {
     "canonicalFieldId": "heightReference",
     "displayName": "Høydereferanse",
     "description": "Høyden på objektet er knyttet til en angitt referanse.",

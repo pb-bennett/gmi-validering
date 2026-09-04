@@ -4,6 +4,9 @@ import {
   HEIGHT_MEASUREMENT_METHOD_VALUES,
   LINE_TEMA_VALUES,
   MATERIAL_VALUES,
+  CONE_VALUES,
+  CONSTRUCTION_METHOD_VALUES,
+  MANHOLE_SHAPE_VALUES,
   MEASUREMENT_METHOD_VALUES,
   POINT_TEMA_VALUES,
   TYPE_TEMA_COMPATIBILITY_BY_TYPE,
@@ -53,6 +56,23 @@ const TYPE_VALUE_INFO = Object.fromEntries(
     sources: [{ documentId: 'appendix-a', pages: '12–14' }],
   }]),
 );
+const POINT_CODE_LIST_INFORMATION = {
+  manholeShape: {
+    values: MANHOLE_SHAPE_VALUES,
+    pages: '14',
+    ruleId: 'innmaling.point.manhole-shape.valid',
+  },
+  constructionMethod: {
+    values: CONSTRUCTION_METHOD_VALUES,
+    pages: '15',
+    ruleId: 'innmaling.point.construction-method.valid',
+  },
+  cone: {
+    values: CONE_VALUES,
+    pages: '15',
+    ruleId: 'innmaling.point.cone.valid',
+  },
+};
 const TYPE_TEMA_COMPATIBILITY_SOURCE = {
   documentId: 'appendix-a',
   pages: '12–14',
@@ -163,6 +183,27 @@ const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry
           'innmaling.point.type.valid',
           'innmaling.point.type-tema.compatible',
         ],
+      })),
+    };
+  }
+  const pointCodeList = POINT_CODE_LIST_INFORMATION[entry.canonicalFieldId];
+  if (pointCodeList) {
+    const valueInfo = Object.fromEntries(pointCodeList.values.map((value) => [value, {
+      label: value,
+      sources: [{ documentId: 'appendix-a', pages: pointCodeList.pages }],
+    }]));
+    return {
+      ...entry,
+      documentationStatus: 'COMPLETE',
+      qualifications: [
+        { text: 'Feltet er punkt-only og valgfritt i denne automatiske valideringen; manglende verdi er ikke et kravbrudd.', validationStatus: 'INFORMATIONAL' },
+        { text: 'Kun eksakte aktuelle v3.2-koder passerer automatisk kodevalidering; andre leverte verdier flagges for manuell validering.', validationStatus: 'INFORMATIONAL' },
+      ],
+      valueInfo,
+      sources: entry.sources.map((source) => ({
+        ...source,
+        pages: pointCodeList.pages,
+        auditSourceRuleIds: [pointCodeList.ruleId],
       })),
     };
   }

@@ -46,3 +46,11 @@ export const EXPECTED_TYPE_VALUES = [
   'KTRY', 'KUMINLØP', 'KUMPEILGRV', 'KUMUTJEV', 'KUMUTLØP', 'KVIPP', 'XLOK', 'PSNK',
   'PTOR', 'RBIO', 'RMEK', 'RMKJ', 'RSDM', 'SLAPUMP', 'SMIN', 'SSTA', 'TTAN',
 ];
+
+// Independently transcribed from Vedlegg A v3.2 pp. 14–15. These literals
+// intentionally do not import or derive from the executable rule registry.
+export const EXPECTED_KUMFORM_VALUES = ['AN', 'F', 'FK', 'FR', 'N', 'R', 'X'];
+export const EXPECTED_BYGGEMETODE_VALUES = [
+  'B', 'BU', 'E', 'E0', 'E1', 'G', 'K', 'M', 'MU', 'P', 'S', 'SU', 'UK', 'V', 'W',
+];
+export const EXPECTED_KJEGLE_VALUES = ['E', 'R', 'S', 'T', 'U'];

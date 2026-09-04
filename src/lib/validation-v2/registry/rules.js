@@ -45,6 +45,9 @@ const POSITIONING_CAUSE_VALUES = [
 const INSIDE_OUTSIDE_VALUES = ['ID', 'OD'];
 const NETWORK_TYPE_VALUES = ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7'];
 const PIPE_SHAPE_VALUES = ['A', 'E', 'F', 'R', 'S', 'T', 'X'];
+export const MANHOLE_SHAPE_VALUES = ['AN', 'F', 'FK', 'FR', 'N', 'R', 'X'];
+export const CONSTRUCTION_METHOD_VALUES = ['B', 'BU', 'E', 'E0', 'E1', 'G', 'K', 'M', 'MU', 'P', 'S', 'SU', 'UK', 'V', 'W'];
+export const CONE_VALUES = ['E', 'R', 'S', 'T', 'U'];
 export const MEASUREMENT_METHOD_VALUES = [
   '10', '11', '12', '13', '14', '15', '18', '19', '20', '21', '22', '23', '24',
   '30', '31', '32', '33', '34', '35', '36', '37', '38', '40', '41', '42', '43',
@@ -436,6 +439,48 @@ export const VALIDATION_RULES = deepFreeze([
     provenance: RuleProvenance.STANDARD,
     source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 12–14' },
     allowedValues: TYPE_VALUES,
+    valueComparison: ValueComparisonPolicy.EXACT,
+  },
+  {
+    ruleId: 'innmaling.point.manhole-shape.valid',
+    canonicalFieldId: 'manholeShape',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.ALLOWED_VALUE,
+    category: RuleCategory.ALLOWED_VALUE,
+    title: 'Kumform er gyldig når den er oppgitt',
+    description: 'Oppgitt Kumform for punktobjekt skal være en gyldig v3.2-kode; feltet er valgfritt i denne automatiske valideringen.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 14' },
+    allowedValues: MANHOLE_SHAPE_VALUES,
+    valueComparison: ValueComparisonPolicy.EXACT,
+  },
+  {
+    ruleId: 'innmaling.point.construction-method.valid',
+    canonicalFieldId: 'constructionMethod',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.ALLOWED_VALUE,
+    category: RuleCategory.ALLOWED_VALUE,
+    title: 'Byggemetode er gyldig når den er oppgitt',
+    description: 'Oppgitt Byggemetode for punktobjekt skal være en gyldig v3.2-kode; feltet er valgfritt i denne automatiske valideringen.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 15' },
+    allowedValues: CONSTRUCTION_METHOD_VALUES,
+    valueComparison: ValueComparisonPolicy.EXACT,
+  },
+  {
+    ruleId: 'innmaling.point.cone.valid',
+    canonicalFieldId: 'cone',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.ALLOWED_VALUE,
+    category: RuleCategory.ALLOWED_VALUE,
+    title: 'Kjegle er gyldig når den er oppgitt',
+    description: 'Oppgitt Kjegle for punktobjekt skal være en gyldig v3.2-kode; feltet er valgfritt i denne automatiske valideringen.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 15' },
+    allowedValues: CONE_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
   },
   {
