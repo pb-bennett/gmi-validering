@@ -7,8 +7,10 @@ export const PointFieldApplicabilityState = Object.freeze({
 });
 
 const POLICY_AUTHORITY = 'PROJECT/DOMAIN POLICY';
-const POLICY_RATIONALE =
-  'Explicit domain-owner approval for the current v3.2 Tema identity; legacy subset behavior is retained as PRAKSIS evidence, not STANDARD behavior.';
+const LEGACY_POLICY_RATIONALE =
+  'Approved PROJECT/DOMAIN POLICY for the exact current v3.2 Tema/field combination; legacy subset behavior and delivery evidence are retained as PRAKSIS evidence, not STANDARD Innmålingsinstruks behavior.';
+const NEW_POLICY_RATIONALE =
+  'Explicit domain-owner approval for the exact current v3.2 Tema/field combination under PROJECT/DOMAIN POLICY; no legacy PRAKSIS evidence or STANDARD Innmålingsinstruks applicability is asserted.';
 
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -19,17 +21,43 @@ function deepFreeze(value) {
 }
 
 const CELL_KEYS = ['constructionMethod', 'manholeShape', 'cone', 'width'];
-const APPROVED_APPLICABLE_TEMAS = ['KUM', 'SAN', 'SLS', 'SLU'];
+const LEGACY_APPLICABLE_TEMAS = ['KUM', 'SAN', 'SLS', 'SLU'];
+const NEW_APPLICABLE_TEMAS = [
+  'KUMI',
+  'SANI',
+  'SLI',
+  'SLG',
+  'KOTREKUM',
+  'MKS',
+  'MKV',
+  'PMK',
+  'PMKAF',
+  'PMKOV',
+  'PMKSP',
+  'PMKVL',
+  'RED',
+];
 
 const cells = [];
-for (const tema of APPROVED_APPLICABLE_TEMAS) {
+for (const tema of LEGACY_APPLICABLE_TEMAS) {
   for (const canonicalFieldId of CELL_KEYS) {
     cells.push({
       tema,
       canonicalFieldId,
       state: PointFieldApplicabilityState.APPLICABLE,
       authority: POLICY_AUTHORITY,
-      rationale: POLICY_RATIONALE,
+      rationale: LEGACY_POLICY_RATIONALE,
+    });
+  }
+}
+for (const tema of NEW_APPLICABLE_TEMAS) {
+  for (const canonicalFieldId of CELL_KEYS) {
+    cells.push({
+      tema,
+      canonicalFieldId,
+      state: PointFieldApplicabilityState.APPLICABLE,
+      authority: POLICY_AUTHORITY,
+      rationale: NEW_POLICY_RATIONALE,
     });
   }
 }
@@ -55,10 +83,53 @@ for (const canonicalFieldId of ['manholeShape', 'cone']) {
   });
 }
 
+for (const canonicalFieldId of ['constructionMethod', 'manholeShape', 'cone']) {
+  cells.push({
+    tema: 'STR',
+    canonicalFieldId,
+    state: PointFieldApplicabilityState.NOT_APPLICABLE,
+    authority: POLICY_AUTHORITY,
+    rationale:
+      'Explicit domain-owner PROJECT/DOMAIN POLICY decision for the exact current v3.2 Tema/field combination; historical STR field population is PRAKSIS evidence only and does not establish applicability; not STANDARD Innmålingsinstruks behavior.',
+  });
+}
+cells.push({
+  tema: 'STR',
+  canonicalFieldId: 'width',
+  state: PointFieldApplicabilityState.APPLICABLE,
+  authority: POLICY_AUTHORITY,
+  rationale:
+    'Explicit domain-owner PROJECT/DOMAIN POLICY decision for the exact current v3.2 Tema/field combination; historical STR Bredde population is PRAKSIS evidence only and does not establish applicability; not STANDARD Innmålingsinstruks behavior.',
+});
+
+for (const canonicalFieldId of CELL_KEYS) {
+  cells.push({
+    tema: 'KRN',
+    canonicalFieldId,
+    state: PointFieldApplicabilityState.NOT_APPLICABLE,
+    authority: POLICY_AUTHORITY,
+    rationale:
+      'Explicit domain-owner PROJECT/DOMAIN POLICY decision for the exact current v3.2 Tema/field combination; historical KRN field population, including Byggemetode, is PRAKSIS evidence only and does not establish applicability; not STANDARD Innmålingsinstruks behavior.',
+  });
+}
+
+for (const tema of ['KMR', 'SUMP']) {
+  for (const canonicalFieldId of CELL_KEYS) {
+    cells.push({
+      tema,
+      canonicalFieldId,
+      state: PointFieldApplicabilityState.UNKNOWN,
+      authority: POLICY_AUTHORITY,
+      rationale:
+        'Explicitly unresolved by the approved policy; no positive applicability or non-applicability decision has been established, and no state is inferred from the Tema name.',
+    });
+  }
+}
+
 export const POINT_FIELD_APPLICABILITY_POLICY = deepFreeze({
   policyId: 'validator-2-point-field-applicability',
   policyVersion: '3.2.0',
-  policyRevision: '2026-09-04.1',
+  policyRevision: '2026-09-04.2',
   effectiveDate: '2026-09-04',
   decisionDate: '2026-09-04',
   authority: POLICY_AUTHORITY,
