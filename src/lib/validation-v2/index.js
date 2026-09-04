@@ -41,6 +41,11 @@ export {
   validateCanonicalRegistry,
 } from './registry/registry.js';
 export {
+  POINT_FIELD_APPLICABILITY_POLICY,
+  PointFieldApplicabilityState,
+  getPointFieldApplicability,
+} from './registry/pointFieldApplicability.js';
+export {
   FIELD_INFORMATION,
   composeFieldInformation,
   getFieldInformation,
