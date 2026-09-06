@@ -131,6 +131,62 @@ export function evaluateRequiredAllowedValue(
   }
 }
 
+const INTEGER_LEXEME_PATTERN = /^[+-]?[0-9]+$/;
+
+/**
+ * Evaluate an optional supplied value as an exact integer representation.
+ * Original source lexemes are authoritative and are never normalized.
+ *
+ * @param {Object} value
+ * @returns {{state: string, reasonCode: string|null}}
+ */
+export function evaluateIntegerFormat(value) {
+  switch (value.state) {
+    case ObjectValueState.VALUE_PRESENT: {
+      const hasSourceLexeme = typeof value.sourceLexeme === 'string' &&
+        value.sourceLexeme !== 'UNAVAILABLE';
+      if (hasSourceLexeme) {
+        const valid = INTEGER_LEXEME_PATTERN.test(value.sourceLexeme);
+        return {
+          state: valid ? EvaluationState.PASS : EvaluationState.FAIL,
+          reasonCode: valid ? null : RuleReasonCode.VALUE_NOT_INTEGER,
+        };
+      }
+      if (typeof value.sourceValue === 'string') {
+        const valid = INTEGER_LEXEME_PATTERN.test(value.sourceValue);
+        return {
+          state: valid ? EvaluationState.PASS : EvaluationState.FAIL,
+          reasonCode: valid ? null : RuleReasonCode.VALUE_NOT_INTEGER,
+        };
+      }
+      if (typeof value.sourceValue === 'number') {
+        if (!Number.isFinite(value.sourceValue) || !Number.isInteger(value.sourceValue)) {
+          return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_INTEGER };
+        }
+        if (!Number.isSafeInteger(value.sourceValue)) {
+          return {
+            state: EvaluationState.INDETERMINATE,
+            reasonCode: RuleReasonCode.NUMERIC_PRECISION_UNAVAILABLE,
+          };
+        }
+        return { state: EvaluationState.PASS, reasonCode: null };
+      }
+      return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_INTEGER };
+    }
+    case ObjectValueState.FIELD_ABSENT:
+    case ObjectValueState.VALUE_MISSING:
+      return { state: EvaluationState.NOT_EVALUATED, reasonCode: null };
+    case ObjectValueState.BINDING_AMBIGUOUS:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.BINDING_AMBIGUOUS };
+    case ObjectValueState.UNRESOLVED_SOURCE:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.UNRESOLVED_SOURCE };
+    case ObjectValueState.SCHEMA_UNAVAILABLE:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.SCHEMA_UNAVAILABLE };
+    default:
+      throw new Error('unsupported ObjectFieldValue state for integer-format evaluator');
+  }
+}
+
 /**
  * Evaluate a strict allowed-value set against the existing Tema identity
  * result. Resolution remains owned by temaIdentity.js; this only validates

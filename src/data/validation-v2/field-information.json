@@ -91,6 +91,90 @@
     }]
   },
   {
+    "canonicalFieldId": "width",
+    "displayName": "Bredde",
+    "description": "Levert bredde eller diameter for et punktobjekt, oppgitt i millimeter.",
+    "appliesTo": ["point"],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Når Bredde er levert, validerer den automatiske regelen heltallsformatet. Regelen gjør ikke feltet globalt påkrevd.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Polygonunntaket og polygonavhengig requiredness evalueres ikke i denne kontrollen.",
+        "validationStatus": "PENDING"
+      },
+      {
+        "text": "Bare den kanoniske GMI-egenskapen Bredde eller en unik variant som kun avviker i bokstavstørrelse kan bindes; aliaser som DIAMETER godtas ikke.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 9",
+        "auditSourceRuleIds": ["innmaling.point.width.integer"]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "14–15",
+        "auditSourceRuleIds": ["innmaling.point.width.integer"]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "length",
+    "displayName": "Lengde",
+    "description": "Levert Lengde for et punktobjekt, oppgitt i millimeter; verdien beregnes ikke fra geometri.",
+    "appliesTo": ["point"],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Når Lengde er levert, validerer den automatiske regelen heltallsformatet. Regelen gjør ikke feltet globalt påkrevd.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Representasjonsvalg og polygonavhengig requiredness evalueres ikke i denne kontrollen.",
+        "validationStatus": "PENDING"
+      },
+      {
+        "text": "Lengde er en direkte punktobjektegenskap og utledes aldri fra punkt-, linje- eller polygongeometri.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 9",
+        "auditSourceRuleIds": ["innmaling.point.length.integer"]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "15",
+        "auditSourceRuleIds": ["innmaling.point.length.integer"]
+      }
+    ]
+  },
+  {
     "canonicalFieldId": "heightReference",
     "displayName": "Høydereferanse",
     "description": "Høyden på objektet er knyttet til en angitt referanse.",

@@ -228,6 +228,8 @@ const REQUIRED_FIELD_INFORMATION = Object.freeze([
   'tema',
   'insideOutside',
   'wallThickness',
+  'width',
+  'length',
   'material',
   'dimension',
   'networkType',

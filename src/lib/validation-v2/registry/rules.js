@@ -524,6 +524,30 @@ export const VALIDATION_RULES = deepFreeze([
     valueComparison: ValueComparisonPolicy.EXACT,
   },
   {
+    ruleId: 'innmaling.point.width.integer',
+    canonicalFieldId: 'width',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.INTEGER_FORMAT,
+    category: RuleCategory.VALUE_FORMAT,
+    title: 'Bredde er et heltall når den er oppgitt',
+    description: 'Oppgitt Bredde for punktobjekt skal være et heltall i millimeter; feltet er valgfritt i denne automatiske valideringen.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 9' },
+  },
+  {
+    ruleId: 'innmaling.point.length.integer',
+    canonicalFieldId: 'length',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.INTEGER_FORMAT,
+    category: RuleCategory.VALUE_FORMAT,
+    title: 'Lengde er et heltall når den er oppgitt',
+    description: 'Oppgitt Lengde for punktobjekt skal være et heltall i millimeter; feltet er valgfritt i denne automatiske valideringen.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 9' },
+  },
+  {
     ruleId: 'innmaling.point.wall-thickness.required',
     canonicalFieldId: 'wallThickness',
     geometryScopes: [GeometryScope.POINT],
@@ -682,6 +706,7 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
       (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED && rule.category === RuleCategory.REQUIRED_FIELD) ||
         (rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE && rule.category === RuleCategory.ALLOWED_VALUE) ||
         (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE && rule.category === RuleCategory.REQUIRED_ALLOWED_VALUE) ||
+        (rule.evaluatorKind === RuleEvaluatorKind.INTEGER_FORMAT && rule.category === RuleCategory.VALUE_FORMAT) ||
         (rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP && rule.category === RuleCategory.FIELD_COMPATIBILITY),
       `${rule.ruleId} has an evaluator/category mismatch`
     );
@@ -768,6 +793,11 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
 
     assertInvariant(!Object.hasOwn(rule, 'relationship'), `${rule.ruleId} must not define a relationship`);
     assertInvariant(!Object.hasOwn(rule, 'inputFieldIds'), `${rule.ruleId} must not define relationship inputs`);
+    if (rule.evaluatorKind === RuleEvaluatorKind.INTEGER_FORMAT) {
+      assertInvariant(!Object.hasOwn(rule, 'allowedValues'), `${rule.ruleId} must not define allowedValues`);
+      assertInvariant(!Object.hasOwn(rule, 'valueComparison'), `${rule.ruleId} must not define valueComparison`);
+      continue;
+    }
     assertInvariant(Array.isArray(rule.allowedValues), `${rule.ruleId} needs allowedValues`);
     assertInvariant(new Set(rule.allowedValues).size === rule.allowedValues.length, `${rule.ruleId} has duplicate allowed values`);
     assertInvariant(

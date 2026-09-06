@@ -13,6 +13,7 @@ import { resolveGmiTemaIdentity } from './temaIdentity.js';
 import {
   evaluateAllowedValue,
   evaluateFieldRelationship,
+  evaluateIntegerFormat,
   evaluateRequiredAllowedValue,
   evaluateRequiredField,
   evaluateTemaRequiredAllowedValue,
@@ -181,6 +182,9 @@ function evaluateRule({ rule, evidence, rulesById }) {
     return rule.canonicalFieldId === 'tema'
       ? evaluateTemaRequired(evidence)
       : evaluateRequiredField(evidence);
+  }
+  if (rule.evaluatorKind === RuleEvaluatorKind.INTEGER_FORMAT) {
+    return evaluateIntegerFormat(evidence);
   }
   return evaluateAllowedValue(evidence, rule.allowedValues);
 }

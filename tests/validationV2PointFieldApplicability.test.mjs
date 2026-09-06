@@ -241,8 +241,8 @@ test('policy, cells collection, and canonical cells remain immutable', () => {
 
 test('metadata-only slice adds no active rule or result row and preserves counts', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 29);
-  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 22);
+  assert.equal(rules.length, 31);
+  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 24);
   assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('line')).length, 21);
   assert.equal(rules.some(({ ruleId }) => ruleId.includes('applicability')), false);
 
@@ -252,6 +252,6 @@ test('metadata-only slice adds no active rule or result row and preserves counts
     datasetRevision: 'applicability-metadata-revision',
     sourceFormat: 'gmi',
   });
-  assert.equal(result.ruleResults.length, 29);
+  assert.equal(result.ruleResults.length, 31);
   assert.equal(result.ruleResults.some(({ rule }) => rule.ruleId.includes('applicability')), false);
 });

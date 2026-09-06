@@ -262,6 +262,8 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
     'innmaling.point.cone.valid',
     'innmaling.point.type-tema.compatible',
     'innmaling.point.inside-outside.valid',
+    'innmaling.point.width.integer',
+    'innmaling.point.length.integer',
     'innmaling.point.wall-thickness.required',
   ]);
   assert.deepEqual(lineView.ruleResults.map((rule) => rule.rule.ruleId), [

@@ -129,6 +129,8 @@ test('v3.2 Field Info has the reviewed field and per-value provenance', () => {
     tema: [['appendix-a', '4, 10–12; line 16–19']],
     insideOutside: [['appendix-a', '4, 14; line 21']],
     wallThickness: [['appendix-a', '5, 9; line 16']],
+    width: [['appendix-a', '4, 9'], ['main-instruction', '14–15']],
+    length: [['appendix-a', '4, 9'], ['main-instruction', '15']],
     material: [['appendix-a', '5, 19–21']],
     type: [['appendix-a', '4, 12–14']],
     nobbVavvsNumber: [['appendix-a', '5, 10; line 16']],

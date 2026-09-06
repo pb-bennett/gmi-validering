@@ -53,8 +53,8 @@ function resultFor(result, ruleId) {
 
 test('registry has exactly three optional point code-list rules and expected counts', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 29);
-  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 22);
+  assert.equal(rules.length, 31);
+  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 24);
   assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('line')).length, 21);
   for (const [, , ruleId, values] of CASES) {
     const rule = rules.find(({ ruleId: candidate }) => candidate === ruleId);

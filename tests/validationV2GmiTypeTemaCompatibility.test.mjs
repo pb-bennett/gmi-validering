@@ -533,9 +533,9 @@ test('ordinary single-field Fildata rejects the compatibility row', () => {
   }), /disabled for relationship rules/);
 });
 
-test('registry and presentation totals are exactly 26 / 19 / 21', () => {
+test('registry and presentation totals are exactly 31 / 24 / 21', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 29);
-  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 22);
+  assert.equal(rules.length, 31);
+  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 24);
   assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('line')).length, 21);
 });
