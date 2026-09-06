@@ -387,9 +387,15 @@ export function extractGmiObjectFieldValue(input) {
     });
   }
 
-  const firstValue = presentCandidates[0].rawValue;
+  // Compare original owned spellings when available; never reconcile
+  // disagreement through the parser's trimmed/converted representation.
+  const comparisonValue = (candidate) =>
+    typeof candidate.sourceLexeme === 'string' && candidate.sourceLexeme !== 'UNAVAILABLE'
+      ? candidate.sourceLexeme
+      : candidate.rawValue;
+  const firstValue = comparisonValue(presentCandidates[0]);
   const valuesAgree = presentCandidates.every((candidate) =>
-    Object.is(candidate.rawValue, firstValue)
+    Object.is(comparisonValue(candidate), firstValue)
   );
   if (!valuesAgree) {
     return createResult({

@@ -220,6 +220,7 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @property {boolean} propertyPresent Whether the object owns this source key.
  * @property {'VALUE_PRESENT'|'VALUE_MISSING'} valueState
  * @property {*} rawValue Unmodified value, when present.
+ * @property {string} sourceLexeme Original owned lexical value or 'UNAVAILABLE'.
  */
 
 /**
@@ -232,6 +233,7 @@ export const GMI_SOURCE_FORMAT = 'gmi';
  * @property {'BOUND'|'MULTIPLE_ACCEPTED'|'FIELD_ABSENT'|'UNRESOLVED_SOURCE'} bindingState
  * @property {'RESOLVED'|'MISSING'|'CONFLICT'|'UNRESOLVED_SOURCE'} state
  * @property {*} resolvedValue Present only as a usable resolved identity value.
+ * @property {string} sourceLexeme Original owned lexical value of the preferred observation or 'UNAVAILABLE'.
  * @property {string|null} preferredSourceKey
  * @property {'DIRECT'|'CASE_NORMALIZED'|'ACCEPTED_FALLBACK'|null} mappingKind
  * @property {Array<TemaCandidateObservation>} observations

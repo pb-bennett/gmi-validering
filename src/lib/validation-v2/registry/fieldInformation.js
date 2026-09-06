@@ -1,6 +1,8 @@
 import fieldInformationData from '../../../data/validation-v2/field-information.json' with { type: 'json' };
 import { getCanonicalField } from './registry.js';
 import {
+  ACCESS_VALUES,
+  OWNER_VALUES,
   HEIGHT_MEASUREMENT_METHOD_VALUES,
   LINE_TEMA_VALUES,
   MATERIAL_VALUES,
@@ -57,6 +59,16 @@ const TYPE_VALUE_INFO = Object.fromEntries(
   }]),
 );
 const POINT_CODE_LIST_INFORMATION = {
+  owner: {
+    values: OWNER_VALUES,
+    pages: '4, 8–9',
+    ruleId: 'innmaling.point.owner.valid',
+  },
+  access: {
+    values: ACCESS_VALUES,
+    pages: '5, 15',
+    ruleId: 'innmaling.point.access.valid',
+  },
   manholeShape: {
     values: MANHOLE_SHAPE_VALUES,
     pages: '14',
@@ -196,7 +208,9 @@ const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry
       ...entry,
       documentationStatus: 'COMPLETE',
       qualifications: [
-        { text: 'Feltet er punkt-only og valgfritt i denne automatiske valideringen; manglende verdi er ikke et kravbrudd.', validationStatus: 'INFORMATIONAL' },
+        { text: entry.appliesTo.includes('line')
+          ? 'Kilde-feltet gjelder punkt og ledning; den aktive regelen er punkt-only og valgfri i denne automatiske valideringen.'
+          : 'Feltet er punkt-only og valgfritt i denne automatiske valideringen; manglende verdi er ikke et kravbrudd.', validationStatus: 'INFORMATIONAL' },
         { text: 'Kun eksakte aktuelle v3.2-koder passerer automatisk kodevalidering; andre leverte verdier flagges for manuell validering.', validationStatus: 'INFORMATIONAL' },
       ],
       valueInfo,
@@ -211,6 +225,11 @@ const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry
 });
 
 const REQUIRED_FIELD_INFORMATION = Object.freeze([
+  'externalHeight',
+  'owner',
+  'access',
+  'nobbVavvsNumber',
+  'nobbVavvsFrameNumber',
   'heightReference',
   'measurementMethod',
   'heightMeasurementMethod',

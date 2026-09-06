@@ -1,5 +1,97 @@
 [
   {
+    "canonicalFieldId": "externalHeight",
+    "displayName": "Utvendig_høyde",
+    "description": "Levert utvendig høyde fra topplokk til bunn utvendig kontrolleres som heltall i mm.",
+    "appliesTo": [
+      "point"
+    ],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Bare levert heltallsformat kontrolleres. Manglende verdi blir ikke evaluert; regelen avgjør ikke om feltet er påkrevd.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "SOURCE_CONFLICT: Vedlegg A side 5 sier valgfritt, mens side 9 sier obligatorisk for ikke-sirkulære prefabrikkerte installasjoner. Requiredness er fortsatt uavklart.",
+        "validationStatus": "PENDING"
+      },
+      {
+        "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Ingen min/maks, positivitet, geometriavledning eller enhetskonvertering.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 9",
+        "auditSourceRuleIds": [
+          "innmaling.point.external-height.integer"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "owner",
+    "displayName": "Eier",
+    "description": "Valgfri eierkode. Kilden gjelder punkt og ledning; den aktive automatiske kontrollen innmaling.point.owner.valid gjelder bare punkt.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 8–9",
+        "auditSourceRuleIds": [
+          "innmaling.point.owner.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "access",
+    "displayName": "Adkomst",
+    "description": "Valgfri adkomstkode for punktobjekt; ønskes utfylt, men kreves ikke av denne regelen.",
+    "appliesTo": [
+      "point"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 15",
+        "auditSourceRuleIds": [
+          "innmaling.point.access.valid"
+        ]
+      }
+    ]
+  },
+  {
     "canonicalFieldId": "type",
     "displayName": "Type",
     "description": "Type-kode for punktobjekt når den er tilgjengelig. Automatisk validering godtar nøyaktig v3.2-listen på 72 verdier.",
@@ -428,7 +520,42 @@
           "innmaling.common.horizontal-accuracy.required"
         ]
       }
-    ]
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert Nøyaktighet på punktobjekt kontrolleres som heltall i cm.",
+        "documentedFormat": "Heltall",
+        "units": "cm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Avtalte nøyaktighetsgrenser og faktisk målekvalitet kontrolleres ikke av formatregelen.",
+            "validationStatus": "PENDING"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "4, 6",
+            "auditSourceRuleIds": [
+              "innmaling.common.horizontal-accuracy.required",
+              "innmaling.point.horizontal-accuracy.integer"
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "canonicalFieldId": "verticalAccuracy",
@@ -469,7 +596,42 @@
           "innmaling.common.vertical-accuracy.required"
         ]
       }
-    ]
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert NøyaktighetHøyde på punktobjekt kontrolleres som heltall i cm.",
+        "documentedFormat": "Heltall",
+        "units": "cm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Avtalte nøyaktighetsgrenser og faktisk målekvalitet kontrolleres ikke av formatregelen.",
+            "validationStatus": "PENDING"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "4, 6",
+            "auditSourceRuleIds": [
+              "innmaling.common.vertical-accuracy.required",
+              "innmaling.point.vertical-accuracy.integer"
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "canonicalFieldId": "maxHorizontalDeviation",
@@ -510,7 +672,42 @@
           "innmaling.common.max-horizontal-deviation.required"
         ]
       }
-    ]
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert MaksAvvikHorisontalt på punktobjekt kontrolleres som heltall i cm.",
+        "documentedFormat": "Heltall",
+        "units": "cm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "LAGS-grenser og faktisk avvik fra ytre avgrensning kontrolleres ikke av formatregelen.",
+            "validationStatus": "PENDING"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "4, 6",
+            "auditSourceRuleIds": [
+              "innmaling.common.max-horizontal-deviation.required",
+              "innmaling.point.max-horizontal-deviation.integer"
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "canonicalFieldId": "maxVerticalDeviation",
@@ -551,7 +748,42 @@
           "innmaling.common.max-vertical-deviation.required"
         ]
       }
-    ]
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert MaksAvvikVertikalt på punktobjekt kontrolleres som heltall i cm.",
+        "documentedFormat": "Heltall",
+        "units": "cm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "LAGS-grenser og faktisk avvik fra ytre avgrensning kontrolleres ikke av formatregelen.",
+            "validationStatus": "PENDING"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "4, 6",
+            "auditSourceRuleIds": [
+              "innmaling.common.max-vertical-deviation.required",
+              "innmaling.point.max-vertical-deviation.integer"
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "canonicalFieldId": "positioningCondition",
@@ -955,7 +1187,33 @@
     ],
     "byGeometry": {
       "point": {
-        "description": "Tykkelsen på punktobjektets vegg; heltall i mm."
+        "description": "Levert Tykkelse på punktobjekt kontrolleres som heltall i mm.",
+        "documentedFormat": "Heltall",
+        "units": "mm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "5, 9",
+            "auditSourceRuleIds": [
+              "innmaling.point.wall-thickness.required",
+              "innmaling.point.wall-thickness.integer"
+            ]
+          }
+        ]
       },
       "line": {
         "description": "Tykkelsen på ledningen; tall i mm med én desimal.",
@@ -1022,12 +1280,46 @@
         "pages": "5, 10; line 16",
         "auditSourceRuleIds": []
       }
-    ]
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert NOBB-VAVVS-nr på punktobjekt kontrolleres som heltall.",
+        "documentedFormat": "Heltall",
+        "units": null,
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Feltet er valgfritt i v3.2. Vanlig antall siffer er ikke en eksakt lengderegel; produktregister og produktidentitet kontrolleres ikke.",
+            "validationStatus": "INFORMATIONAL"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "5, 10",
+            "auditSourceRuleIds": [
+              "innmaling.point.nobb-vavvs-number.integer"
+            ]
+          }
+        ]
+      }
+    }
   },
   {
     "canonicalFieldId": "nobbVavvsFrameNumber",
     "displayName": "NOBB/VAVVS-nummer ramme",
-    "description": "Produktets NOBB/VAVVS-nummer for ramme, valgfritt i v3.2.",
+    "description": "Levert NOBB-VAVVS-nr-ramme på punktobjekt kontrolleres som heltall.",
     "appliesTo": [
       "point"
     ],
@@ -1036,7 +1328,15 @@
     "range": null,
     "qualifications": [
       {
-        "text": "Feltet er valgfritt i v3.2 og har ingen aktiv valideringsregel i dette steget.",
+        "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Feltet er valgfritt i v3.2. Vanlig antall siffer er ikke en eksakt lengderegel; produktregister og produktidentitet kontrolleres ikke.",
         "validationStatus": "INFORMATIONAL"
       }
     ],
@@ -1049,7 +1349,9 @@
         "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
         "version": "3.2 / 01.08.2026",
         "pages": "5, 10",
-        "auditSourceRuleIds": []
+        "auditSourceRuleIds": [
+          "innmaling.point.nobb-vavvs-frame-number.integer"
+        ]
       }
     ]
   },

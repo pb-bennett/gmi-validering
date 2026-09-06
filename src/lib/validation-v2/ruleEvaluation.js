@@ -67,15 +67,15 @@ export function evaluateRequiredField(value) {
  */
 export function evaluateAllowedValue(value, allowedValues) {
   switch (value.state) {
-    case ObjectValueState.VALUE_PRESENT:
+    case ObjectValueState.VALUE_PRESENT: {
+      const allowed = isAllowedValue(
+        value.sourceValue, value.sourceLexeme, allowedValues, ValueComparisonPolicy.EXACT,
+      );
       return {
-        state: allowedValues.some((allowedValue) => Object.is(allowedValue, value.sourceValue))
-          ? EvaluationState.PASS
-          : EvaluationState.FAIL,
-        reasonCode: allowedValues.some((allowedValue) => Object.is(allowedValue, value.sourceValue))
-          ? null
-          : RuleReasonCode.VALUE_NOT_ALLOWED,
+        state: allowed ? EvaluationState.PASS : EvaluationState.FAIL,
+        reasonCode: allowed ? null : RuleReasonCode.VALUE_NOT_ALLOWED,
       };
+    }
     case ObjectValueState.FIELD_ABSENT:
     case ObjectValueState.VALUE_MISSING:
       return { state: EvaluationState.NOT_EVALUATED, reasonCode: null };
@@ -190,7 +190,7 @@ export function evaluateIntegerFormat(value) {
 /**
  * Evaluate a strict allowed-value set against the existing Tema identity
  * result. Resolution remains owned by temaIdentity.js; this only validates
- * its resolved raw value without normalization.
+ * its owned source lexeme (or resolved raw value when unavailable) without normalization.
  */
 export function evaluateTemaRequiredAllowedValue(identity, allowedValues) {
   if (identity.bindingState === BindingState.SCHEMA_UNAVAILABLE) {
@@ -201,8 +201,9 @@ export function evaluateTemaRequiredAllowedValue(identity, allowedValues) {
   }
   switch (identity.state) {
     case TemaIdentityState.RESOLVED: {
-      const allowed = allowedValues.some((allowedValue) =>
-        Object.is(allowedValue, identity.resolvedValue));
+      const allowed = isAllowedValue(
+        identity.resolvedValue, identity.sourceLexeme, allowedValues, ValueComparisonPolicy.EXACT,
+      );
       return {
         state: allowed ? EvaluationState.PASS : EvaluationState.FAIL,
         reasonCode: allowed ? null : RuleReasonCode.VALUE_NOT_ALLOWED,
@@ -279,6 +280,9 @@ export function evaluateRelationshipPrerequisite(rule, evidence) {
 }
 
 function getResolvedRelationshipValue(evidence) {
+  if (typeof evidence.sourceLexeme === 'string' && evidence.sourceLexeme !== 'UNAVAILABLE') {
+    return evidence.sourceLexeme;
+  }
   return evidence.canonicalFieldId === 'tema' || evidence.state === TemaIdentityState.RESOLVED
     ? evidence.resolvedValue
     : evidence.sourceValue;

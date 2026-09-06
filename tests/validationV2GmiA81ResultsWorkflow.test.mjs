@@ -67,6 +67,7 @@ test('aggregate status follows the approved truth table without mutation', () =>
 
 test('all active rules resolve exact canonical short labels', () => {
   const expected = [
+    'Adkomst', 'Eier', 'Utvendig_høyde', 'NOBB/VAVVS-nummer', 'NOBB/VAVVS-nummer ramme',
     'Målemetode', 'MålemetodeHøyde', 'Vertikalnivå',
     'Høydereferanse', 'Anleggsår', 'Datafangstdato', 'Innmålt av', 'Saksnummer',
     'Nøyaktighet XY', 'Nøyaktighet høyde Z', 'Maksavvik horisontalt',
@@ -132,7 +133,7 @@ test('point and line presentation universes are the reviewed active counts', () 
     counts({ passCount: 1 }),
     rule.geometryScopes,
   ));
-  assert.equal(getValidationV2PresentationRules(results, 'point').length, 24);
+  assert.equal(getValidationV2PresentationRules(results, 'point').length, 34);
   assert.equal(getValidationV2PresentationRules(results, 'line').length, 21);
 });
 

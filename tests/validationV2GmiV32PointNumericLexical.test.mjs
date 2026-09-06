@@ -110,10 +110,10 @@ function parsePoint(field, sourceLexeme) {
   return parsed;
 }
 
-test('registry exposes exactly two point-only integer-format rules and 31/24/21 totals', () => {
+test('registry exposes Bredde/Lengde point-only integer contracts and 41/34/21 totals', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 31);
-  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 24);
+  assert.equal(rules.length, 41);
+  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 34);
   assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('line')).length, 21);
   for (const field of FIELDS) {
     const rule = getValidationRule(field.ruleId);
@@ -337,7 +337,7 @@ test('findings retain exact rule, field, layer, revision and point ObjectRef own
     assert.equal(finding.objectRef.geometryScope, 'point');
     assert.equal(finding.objectRef.sourceIndex, 0);
   }
-  assert.equal(result.ruleResults.length, 31);
+  assert.equal(result.ruleResults.length, 41);
 });
 
 for (const field of FIELDS) {

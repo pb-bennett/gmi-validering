@@ -173,7 +173,13 @@ function extractRecord({ layerId, dataset, datasetRevision, result, geometryScop
     if (identity?.state === 'CONFLICT') conflict = true;
     evidence = extractGmiObjectFieldValue(commonInput);
     if (identity?.state === 'RESOLVED') {
-      evidence = { ...evidence, state: ObjectValueState.VALUE_PRESENT, sourceValue: identity.resolvedValue };
+      evidence = {
+        ...evidence,
+        state: ObjectValueState.VALUE_PRESENT,
+        sourceValue: identity.resolvedValue,
+        sourceLexeme: identity.sourceLexeme,
+        sourceKey: identity.preferredSourceKey,
+      };
     } else if (identity?.state === 'MISSING') {
       evidence = { ...evidence, state: ObjectValueState.VALUE_MISSING, sourceValue: undefined };
     } else if (identity?.state === 'CONFLICT') {

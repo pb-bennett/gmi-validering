@@ -118,7 +118,7 @@ function isSafeObservedValue(value) {
 function copyObservedCandidate(candidate) {
   const copy = {};
   for (const [key, value] of Object.entries(candidate)) {
-    if (key !== 'rawValue') {
+    if (key !== 'rawValue' && key !== 'sourceLexeme') {
       copy[key] = Array.isArray(value) ? [...value] : value;
     }
   }

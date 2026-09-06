@@ -8,6 +8,7 @@ import {
 import { assertObjectRefOwnership } from './objectRef.js';
 import { getCanonicalField } from './registry/registry.js';
 import { isMissingValue } from './valueSemantics.js';
+import { GMI_SOURCE_LEXEMES } from '../parsing/gmiLexicalEvidence.js';
 
 const ACCEPTED_MAPPING_KINDS = new Set([
   MappingKind.DIRECT,
@@ -125,6 +126,10 @@ function observeCandidate(attributes, candidate) {
     candidate.sourceKey
   );
   const rawValue = propertyPresent ? attributes[candidate.sourceKey] : undefined;
+  const lexemes = attributes[GMI_SOURCE_LEXEMES];
+  const sourceLexeme = lexemes && Object.prototype.hasOwnProperty.call(lexemes, candidate.sourceKey)
+    ? lexemes[candidate.sourceKey]
+    : 'UNAVAILABLE';
   return {
     sourceKey: candidate.sourceKey,
     mappingKind: candidate.mappingKind,
@@ -137,6 +142,7 @@ function observeCandidate(attributes, candidate) {
       ? ObjectValueState.VALUE_MISSING
       : ObjectValueState.VALUE_PRESENT,
     rawValue,
+    sourceLexeme,
   };
 }
 
@@ -166,6 +172,7 @@ function createResult({
   bindingState,
   state,
   resolvedValue = null,
+  sourceLexeme = 'UNAVAILABLE',
   preferredSourceKey = null,
   mappingKind = null,
   observations = [],
@@ -181,6 +188,7 @@ function createResult({
     bindingState,
     state,
     resolvedValue,
+    sourceLexeme,
     preferredSourceKey,
     mappingKind,
     observations,
@@ -310,9 +318,15 @@ export function resolveGmiTemaIdentity(input) {
     });
   }
 
-  const firstValue = presentObservations[0].rawValue;
+  // Compare original owned spellings when available; never reconcile disagreement
+  // through the parser's trimmed/converted representation.
+  const comparisonValue = (observation) =>
+    typeof observation.sourceLexeme === 'string' && observation.sourceLexeme !== 'UNAVAILABLE'
+      ? observation.sourceLexeme
+      : observation.rawValue;
+  const firstValue = comparisonValue(presentObservations[0]);
   const valuesAgree = presentObservations.every((observation) =>
-    Object.is(observation.rawValue, firstValue)
+    Object.is(comparisonValue(observation), firstValue)
   );
   if (!valuesAgree) {
     return createResult({
@@ -335,6 +349,7 @@ export function resolveGmiTemaIdentity(input) {
     bindingState: binding.state,
     state: TemaIdentityState.RESOLVED,
     resolvedValue: preferred.rawValue,
+    sourceLexeme: preferred.sourceLexeme,
     preferredSourceKey: preferred.sourceKey,
     mappingKind: preferred.mappingKind,
     observations,
