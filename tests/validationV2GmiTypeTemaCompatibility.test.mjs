@@ -535,7 +535,7 @@ test('ordinary single-field Fildata rejects the compatibility row', () => {
 
 test('registry and presentation totals are exactly 41 / 34 / 21', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 41);
-  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 34);
+  assert.equal(rules.length, 45);
+  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 38);
   assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('line')).length, 21);
 });

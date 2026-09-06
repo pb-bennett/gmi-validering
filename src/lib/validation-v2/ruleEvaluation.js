@@ -132,6 +132,158 @@ export function evaluateRequiredAllowedValue(
 }
 
 const INTEGER_LEXEME_PATTERN = /^[+-]?[0-9]+$/;
+const DECIMAL_LEXEME_PATTERN = /^[+-]?[0-9]+(?:[.,][0-9]+)?$/;
+const DECIMAL_EXPONENT_PATTERN = /^[+-]?(?:(?:[0-9]+(?:[.,][0-9]+)?)|(?:[.,][0-9]+)|(?:[0-9]+[.,]))[eE][+-]?[0-9]+$/;
+const DECIMAL_LEADING_SEPARATOR_PATTERN = /^[+-]?[.,][0-9]+$/;
+const DECIMAL_TRAILING_SEPARATOR_PATTERN = /^[+-]?[0-9]+[.,]$/;
+const DECIMAL_COMMA_GROUPING_PATTERN = /^[+-]?[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?$/;
+const DECIMAL_DOT_GROUPING_PATTERN = /^[+-]?[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]+)?$/;
+const YEAR_LEXEME_PATTERN = /^[0-9]{4}$/;
+const DATE_LEXEME_PATTERN = /^[0-9]{2}\.[0-9]{2}\.[0-9]{4}$/;
+
+function evaluateMissingOrStructural(value, evaluatorName) {
+  switch (value.state) {
+    case ObjectValueState.FIELD_ABSENT:
+    case ObjectValueState.VALUE_MISSING:
+      return { state: EvaluationState.NOT_EVALUATED, reasonCode: null };
+    case ObjectValueState.BINDING_AMBIGUOUS:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.BINDING_AMBIGUOUS };
+    case ObjectValueState.UNRESOLVED_SOURCE:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.UNRESOLVED_SOURCE };
+    case ObjectValueState.SCHEMA_UNAVAILABLE:
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.SCHEMA_UNAVAILABLE };
+    default:
+      throw new Error(`unsupported ObjectFieldValue state for ${evaluatorName}`);
+  }
+}
+
+function getLexicalValue(value) {
+  if (typeof value.sourceLexeme === 'string' && value.sourceLexeme !== 'UNAVAILABLE') {
+    return { available: true, value: value.sourceLexeme };
+  }
+  if (typeof value.sourceValue === 'string') {
+    return { available: true, value: value.sourceValue };
+  }
+  return { available: false, value: undefined };
+}
+
+function getTextLexicalEvidence(value) {
+  const lexical = getLexicalValue(value);
+  if (value.state !== ObjectValueState.VALUE_MISSING) {
+    return { lexical, ambiguous: false };
+  }
+  const suppliedLexemes = Array.isArray(value.candidates)
+    ? value.candidates
+      .map((entry) => entry.sourceLexeme)
+      .filter((sourceLexeme) =>
+        typeof sourceLexeme === 'string' &&
+        sourceLexeme !== 'UNAVAILABLE' &&
+        sourceLexeme !== ''
+      )
+    : [];
+  if (suppliedLexemes.length === 0) {
+    return { lexical, ambiguous: false };
+  }
+  const firstLexeme = suppliedLexemes[0];
+  return {
+    lexical: { available: true, value: firstLexeme },
+    ambiguous: suppliedLexemes.some((sourceLexeme) => sourceLexeme !== firstLexeme),
+  };
+}
+
+function isUnresolvedDecimalNotation(lexeme) {
+  const candidate = lexeme.trim();
+  if (candidate.length === 0 || candidate !== lexeme && !DECIMAL_LEXEME_PATTERN.test(candidate)) {
+    return false;
+  }
+  return DECIMAL_EXPONENT_PATTERN.test(candidate) ||
+    DECIMAL_LEADING_SEPARATOR_PATTERN.test(candidate) ||
+    DECIMAL_TRAILING_SEPARATOR_PATTERN.test(candidate) ||
+    DECIMAL_COMMA_GROUPING_PATTERN.test(candidate) ||
+    DECIMAL_DOT_GROUPING_PATTERN.test(candidate) ||
+    (candidate !== lexeme && DECIMAL_LEXEME_PATTERN.test(candidate));
+}
+
+/**
+ * Evaluate the conservative source-backed decimal spelling policy. Exact
+ * plain signed decimals pass; numeric-looking but unspecified notation stays
+ * unresolved rather than being asserted invalid.
+ */
+export function evaluateDecimalFormat(value) {
+  if (value.state !== ObjectValueState.VALUE_PRESENT) {
+    return evaluateMissingOrStructural(value, 'decimal-format evaluator');
+  }
+  const lexical = getLexicalValue(value);
+  if (lexical.available) {
+    if (DECIMAL_LEXEME_PATTERN.test(lexical.value)) {
+      return { state: EvaluationState.PASS, reasonCode: null };
+    }
+    if (isUnresolvedDecimalNotation(lexical.value)) {
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.DECIMAL_NOTATION_UNRESOLVED };
+    }
+    return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_DECIMAL };
+  }
+  if (typeof value.sourceValue === 'number') {
+    if (!Number.isFinite(value.sourceValue)) {
+      return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_DECIMAL };
+    }
+    return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.LEXICAL_FORMAT_UNAVAILABLE };
+  }
+  return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_DECIMAL };
+}
+
+export function evaluateYearFormat(value) {
+  if (value.state !== ObjectValueState.VALUE_PRESENT) {
+    return evaluateMissingOrStructural(value, 'year-format evaluator');
+  }
+  const lexical = getLexicalValue(value);
+  if (lexical.available) {
+    return YEAR_LEXEME_PATTERN.test(lexical.value)
+      ? { state: EvaluationState.PASS, reasonCode: null }
+      : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.YEAR_FORMAT_INVALID };
+  }
+  if (typeof value.sourceValue === 'number') {
+    if (!Number.isFinite(value.sourceValue) || !Number.isInteger(value.sourceValue)) {
+      return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.LEXICAL_FORMAT_UNAVAILABLE };
+    }
+    const fallback = String(value.sourceValue);
+    return YEAR_LEXEME_PATTERN.test(fallback)
+      ? { state: EvaluationState.PASS, reasonCode: null }
+      : { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.LEXICAL_FORMAT_UNAVAILABLE };
+  }
+  return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.LEXICAL_FORMAT_UNAVAILABLE };
+}
+
+export function evaluateDateFormat(value) {
+  if (value.state !== ObjectValueState.VALUE_PRESENT) {
+    return evaluateMissingOrStructural(value, 'date-format evaluator');
+  }
+  const lexical = getLexicalValue(value);
+  if (!lexical.available) {
+    return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.LEXICAL_FORMAT_UNAVAILABLE };
+  }
+  return DATE_LEXEME_PATTERN.test(lexical.value)
+    ? { state: EvaluationState.PASS, reasonCode: null }
+    : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.DATE_FORMAT_INVALID };
+}
+
+export function evaluateTextMaxLength(value, maximumLength = 255) {
+  const evidence = getTextLexicalEvidence(value);
+  if (evidence.ambiguous) {
+    return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.BINDING_AMBIGUOUS };
+  }
+  const { lexical } = evidence;
+  const hasSuppliedTextLexeme = value.state === ObjectValueState.VALUE_MISSING && lexical.available;
+  if (value.state !== ObjectValueState.VALUE_PRESENT && !hasSuppliedTextLexeme) {
+    return evaluateMissingOrStructural(value, 'text-max-length evaluator');
+  }
+  if (!lexical.available) {
+    return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.LEXICAL_FORMAT_UNAVAILABLE };
+  }
+  return [...lexical.value].length <= maximumLength
+    ? { state: EvaluationState.PASS, reasonCode: null }
+    : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.TEXT_LENGTH_EXCEEDED };
+}
 
 /**
  * Evaluate an optional supplied value as an exact integer representation.

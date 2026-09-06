@@ -14,6 +14,10 @@ import {
   evaluateAllowedValue,
   evaluateFieldRelationship,
   evaluateIntegerFormat,
+  evaluateDecimalFormat,
+  evaluateYearFormat,
+  evaluateDateFormat,
+  evaluateTextMaxLength,
   evaluateRequiredAllowedValue,
   evaluateRequiredField,
   evaluateTemaRequiredAllowedValue,
@@ -185,6 +189,18 @@ function evaluateRule({ rule, evidence, rulesById }) {
   }
   if (rule.evaluatorKind === RuleEvaluatorKind.INTEGER_FORMAT) {
     return evaluateIntegerFormat(evidence);
+  }
+  if (rule.evaluatorKind === RuleEvaluatorKind.DECIMAL_FORMAT) {
+    return evaluateDecimalFormat(evidence);
+  }
+  if (rule.evaluatorKind === RuleEvaluatorKind.YEAR_FORMAT) {
+    return evaluateYearFormat(evidence);
+  }
+  if (rule.evaluatorKind === RuleEvaluatorKind.DATE_FORMAT) {
+    return evaluateDateFormat(evidence);
+  }
+  if (rule.evaluatorKind === RuleEvaluatorKind.TEXT_MAX_LENGTH) {
+    return evaluateTextMaxLength(evidence, rule.maximumLength);
   }
   return evaluateAllowedValue(evidence, rule.allowedValues);
 }

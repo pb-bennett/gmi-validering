@@ -275,6 +275,10 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
     'innmaling.point.nobb-vavvs-frame-number.integer',
     'innmaling.point.owner.valid',
     'innmaling.point.access.valid',
+    'innmaling.point.bottom-distance.decimal',
+    'innmaling.point.installation-year.format',
+    'innmaling.point.capture-date.format',
+    'innmaling.point.note.max-length',
   ]);
   assert.deepEqual(lineView.ruleResults.map((rule) => rule.rule.ruleId), [
     HEIGHT_VALID,

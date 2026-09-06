@@ -688,6 +688,55 @@ export const VALIDATION_RULES = deepFreeze([
     valueComparison: ValueComparisonPolicy.EXACT,
   },
   {
+    ruleId: 'innmaling.point.bottom-distance.decimal',
+    canonicalFieldId: 'innerBottomToOuterUndersideDistance',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.DECIMAL_FORMAT,
+    category: RuleCategory.VALUE_FORMAT,
+    title: 'Avst_BunnInnvUnderUtv er et desimaltall når den er oppgitt',
+    description: 'Oppgitt Avst_BunnInnvUnderUtv skal følge et helt eller desimaltallformat i meter; regelen avgjør ikke requiredness, fortegn, presisjon eller avstandens faglige riktighet.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 9' },
+  },
+  {
+    ruleId: 'innmaling.point.installation-year.format',
+    canonicalFieldId: 'installationYear',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.YEAR_FORMAT,
+    category: RuleCategory.VALUE_FORMAT,
+    title: 'Anleggsår følger YYYY-format når det er oppgitt',
+    description: 'Oppgitt Anleggsår skal ha nøyaktig fire ASCII-sifre (YYYY); regelen avgjør ikke historisk plausibilitet eller requiredness.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6' },
+  },
+  {
+    ruleId: 'innmaling.point.capture-date.format',
+    canonicalFieldId: 'captureDate',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.DATE_FORMAT,
+    category: RuleCategory.VALUE_FORMAT,
+    title: 'Datafangstdato følger DD.MM.YYYY-format når den er oppgitt',
+    description: 'Oppgitt Datafangstdato skal ha format DD.MM.YYYY; regelen kontrollerer ikke kalendergyldighet, tidssone, kronologi eller requiredness.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6' },
+  },
+  {
+    ruleId: 'innmaling.point.note.max-length',
+    canonicalFieldId: 'note',
+    geometryScopes: [GeometryScope.POINT],
+    evaluatorKind: RuleEvaluatorKind.TEXT_MAX_LENGTH,
+    category: RuleCategory.VALUE_FORMAT,
+    title: 'Merknad er høyst 255 tegn når den er oppgitt',
+    description: 'Oppgitt Merknad kan ha maksimalt 255 Unicode-kodepunkter. Whitespace telles; regelen trimmer eller normaliserer ikke og kontrollerer ikke innhold.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6' },
+    maximumLength: 255,
+  },
+  {
     ruleId: 'innmaling.line.wall-thickness.required',
     canonicalFieldId: 'wallThickness',
     geometryScopes: [GeometryScope.LINE],
@@ -832,7 +881,13 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
       (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED && rule.category === RuleCategory.REQUIRED_FIELD) ||
         (rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE && rule.category === RuleCategory.ALLOWED_VALUE) ||
         (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE && rule.category === RuleCategory.REQUIRED_ALLOWED_VALUE) ||
-        (rule.evaluatorKind === RuleEvaluatorKind.INTEGER_FORMAT && rule.category === RuleCategory.VALUE_FORMAT) ||
+      ([
+        RuleEvaluatorKind.INTEGER_FORMAT,
+        RuleEvaluatorKind.DECIMAL_FORMAT,
+        RuleEvaluatorKind.YEAR_FORMAT,
+        RuleEvaluatorKind.DATE_FORMAT,
+        RuleEvaluatorKind.TEXT_MAX_LENGTH,
+      ].includes(rule.evaluatorKind) && rule.category === RuleCategory.VALUE_FORMAT) ||
         (rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP && rule.category === RuleCategory.FIELD_COMPATIBILITY),
       `${rule.ruleId} has an evaluator/category mismatch`
     );
@@ -919,9 +974,20 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
 
     assertInvariant(!Object.hasOwn(rule, 'relationship'), `${rule.ruleId} must not define a relationship`);
     assertInvariant(!Object.hasOwn(rule, 'inputFieldIds'), `${rule.ruleId} must not define relationship inputs`);
-    if (rule.evaluatorKind === RuleEvaluatorKind.INTEGER_FORMAT) {
+    if ([
+      RuleEvaluatorKind.INTEGER_FORMAT,
+      RuleEvaluatorKind.DECIMAL_FORMAT,
+      RuleEvaluatorKind.YEAR_FORMAT,
+      RuleEvaluatorKind.DATE_FORMAT,
+      RuleEvaluatorKind.TEXT_MAX_LENGTH,
+    ].includes(rule.evaluatorKind)) {
       assertInvariant(!Object.hasOwn(rule, 'allowedValues'), `${rule.ruleId} must not define allowedValues`);
       assertInvariant(!Object.hasOwn(rule, 'valueComparison'), `${rule.ruleId} must not define valueComparison`);
+      if (rule.evaluatorKind === RuleEvaluatorKind.TEXT_MAX_LENGTH) {
+        assertInvariant(Number.isInteger(rule.maximumLength) && rule.maximumLength > 0, `${rule.ruleId} needs a positive maximumLength`);
+      } else {
+        assertInvariant(!Object.hasOwn(rule, 'maximumLength'), `${rule.ruleId} must not define maximumLength`);
+      }
       continue;
     }
     assertInvariant(Array.isArray(rule.allowedValues), `${rule.ruleId} needs allowedValues`);

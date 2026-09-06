@@ -11,6 +11,10 @@ import { resolveGmiTemaIdentity } from './temaIdentity.js';
 import {
   evaluateAllowedValue,
   evaluateIntegerFormat,
+  evaluateDecimalFormat,
+  evaluateYearFormat,
+  evaluateDateFormat,
+  evaluateTextMaxLength,
   evaluateRequiredAllowedValue,
 } from './ruleEvaluation.js';
 import { getValidationRule } from './registry/rules.js';
@@ -133,18 +137,32 @@ function getRuleAcceptance(record, rule) {
   if (
     rule.evaluatorKind !== RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE &&
     rule.evaluatorKind !== RuleEvaluatorKind.ALLOWED_VALUE &&
-    rule.evaluatorKind !== RuleEvaluatorKind.INTEGER_FORMAT
+    rule.evaluatorKind !== RuleEvaluatorKind.INTEGER_FORMAT &&
+    rule.evaluatorKind !== RuleEvaluatorKind.DECIMAL_FORMAT &&
+    rule.evaluatorKind !== RuleEvaluatorKind.YEAR_FORMAT &&
+    rule.evaluatorKind !== RuleEvaluatorKind.DATE_FORMAT &&
+    rule.evaluatorKind !== RuleEvaluatorKind.TEXT_MAX_LENGTH
   ) return null;
   const evaluate = rule.evaluatorKind === RuleEvaluatorKind.INTEGER_FORMAT
     ? evaluateIntegerFormat
-    : rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE
-      ? evaluateAllowedValue
-      : evaluateRequiredAllowedValue;
-  const evaluation = evaluate(
-    record.evidence,
-    rule.allowedValues,
-    rule.valueComparison,
-  );
+    : rule.evaluatorKind === RuleEvaluatorKind.DECIMAL_FORMAT
+      ? evaluateDecimalFormat
+      : rule.evaluatorKind === RuleEvaluatorKind.YEAR_FORMAT
+        ? evaluateYearFormat
+        : rule.evaluatorKind === RuleEvaluatorKind.DATE_FORMAT
+          ? evaluateDateFormat
+          : rule.evaluatorKind === RuleEvaluatorKind.TEXT_MAX_LENGTH
+            ? evaluateTextMaxLength
+            : rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE
+              ? evaluateAllowedValue
+              : evaluateRequiredAllowedValue;
+  const evaluation = rule.evaluatorKind === RuleEvaluatorKind.TEXT_MAX_LENGTH
+    ? evaluate(record.evidence, rule.maximumLength)
+    : evaluate(
+      record.evidence,
+      rule.allowedValues,
+      rule.valueComparison,
+    );
   if (evaluation.state === EvaluationState.PASS) return 'Gyldig';
   if (evaluation.state === EvaluationState.FAIL) return 'Ugyldig';
   if (evaluation.state === EvaluationState.INDETERMINATE) return 'Må vurderes';

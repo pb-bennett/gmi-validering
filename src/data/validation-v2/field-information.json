@@ -374,17 +374,65 @@
     ]
   },
   {
-    "canonicalFieldId": "installationYear",
-    "displayName": "Anleggsår",
-    "description": "Året objektet ble etablert.",
+    "canonicalFieldId": "innerBottomToOuterUndersideDistance",
+    "displayName": "Avst_BunnInnvUnderUtv",
+    "description": "Levert avstand mellom innvendig bunn og utvendig underside, oppgitt i meter.",
+    "appliesTo": [
+      "point"
+    ],
+    "units": "m",
+    "documentedFormat": "Desimaltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Oppgitt verdi valideres som et helt eller desimaltall med valgfritt fortegn og punktum eller komma som desimalskilletegn. Manglende verdi er ikke evaluert.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Kilden avklarer ikke desimalskilletegn, presisjon eller alternativ notasjon. Derfor blir eksponentform, ufullstendig desimal, gruppering og polstret numerisk tekst Må vurderes; regelen avgjør ikke requiredness, positivitet, avstandens herkomst eller faglige plausibilitet.",
+        "validationStatus": "PENDING"
+      },
+      {
+        "text": "Vedlegg A side 5 og 9 har ulikt/overlappende scope for når feltet er obligatorisk; denne punktregelen løser ikke konflikten.",
+        "validationStatus": "PENDING"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 9",
+        "auditSourceRuleIds": [
+          "innmaling.point.bottom-distance.decimal"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "note",
+    "displayName": "Merknad",
+    "description": "Valgfri tekstmerknad.",
     "appliesTo": [
       "point",
       "line"
     ],
     "units": null,
-    "documentedFormat": "YYYY",
+    "documentedFormat": "Tekst, maksimalt 255 tegn",
     "range": null,
-    "qualifications": [],
+    "qualifications": [
+      {
+        "text": "Oppgitt punkt-Merknad kan ha maksimalt 255 Unicode-kodepunkter. Whitespace telles, og teksten trimmes eller normaliseres ikke; tom tekst følger eksisterende parser-/missing-semantikk.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Lengdebegrensningen er en teknisk kontroll av levert tekst, ikke en innholds-, navne- eller lagringskodingstest. Runtime-verdier uten original tekstlig evidens vurderes.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
     "documentationStatus": "PARTIAL",
     "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
     "valueInfo": {},
@@ -395,7 +443,44 @@
         "version": "3.2 / 01.08.2026",
         "pages": "4, 6",
         "auditSourceRuleIds": [
-          "innmaling.common.installation-year.required"
+          "innmaling.point.note.max-length"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "installationYear",
+    "displayName": "Anleggsår",
+    "description": "Året objektet ble etablert.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "YYYY",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Oppgitt Anleggsår valideres som YYYY med fire ASCII-sifre. Manglende verdi håndteres fortsatt av den separate required-regelen; dette er ikke en plausibilitetskontroll.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Teknisk formatkontrakt: ^[0-9]{4}$ uten trimming, årsgrense eller kronologisjekk. En runtime-verdi 2026 uten originalt lexeme kan godtas som etablert fire-sifret fallback; annen manglende bredde vurderes.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.installation-year.required",
+          "innmaling.point.installation-year.format"
         ]
       }
     ]
@@ -411,7 +496,16 @@
     "units": null,
     "documentedFormat": "DD.MM.YYYY",
     "range": null,
-    "qualifications": [],
+    "qualifications": [
+      {
+        "text": "Oppgitt Datafangstdato valideres kun som DD.MM.YYYY med faste punktum og feltbredder. Manglende verdi håndteres fortsatt av den separate required-regelen.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Formatregelen avgjør ikke om datoen er en kalendergyldig dato: 31.02.2026 og 00.00.0000 kan derfor passere formatet. Tid, tidssone, Date.parse og kronologi kontrolleres ikke.",
+        "validationStatus": "PENDING"
+      }
+    ],
     "documentationStatus": "PARTIAL",
     "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
     "valueInfo": {},
@@ -422,7 +516,8 @@
         "version": "3.2 / 01.08.2026",
         "pages": "4, 6",
         "auditSourceRuleIds": [
-          "innmaling.common.capture-date.required"
+          "innmaling.common.capture-date.required",
+          "innmaling.point.capture-date.format"
         ]
       }
     ]

@@ -63,8 +63,8 @@ function identity(dataset, result, geometryScope = 'point') {
 
 test('exact ten new rule contracts, registry/result/geometry counts and no new evaluator kind', () => {
   const rules = api.getValidationRules();
-  assert.equal(rules.length, 41);
-  assert.equal(rules.filter(x => x.geometryScopes.includes('point')).length, 34);
+  assert.equal(rules.length, 45);
+  assert.equal(rules.filter(x => x.geometryScopes.includes('point')).length, 38);
   assert.equal(rules.filter(x => x.geometryScopes.includes('line')).length, 21);
   assert.equal(rules.filter(x => x.evaluatorKind === 'INTEGER_FORMAT').length, 10);
   for (const [id, field, , , pages, values] of ALL_NEW) {
@@ -81,8 +81,8 @@ test('exact ten new rule contracts, registry/result/geometry counts and no new e
     assert.equal(r.inputFieldIds, undefined);
   }
   const empty = run({ points: [], lines: [], fieldAnalysis: { points: {}, lines: {} } });
-  assert.equal(empty.ruleResults.length, 41);
-  assert.equal(getValidationV2GeometryView(empty, 'point').ruleResults.length, 34);
+  assert.equal(empty.ruleResults.length, 45);
+  assert.equal(getValidationV2GeometryView(empty, 'point').ruleResults.length, 38);
   assert.equal(getValidationV2GeometryView(empty, 'line').ruleResults.length, 21);
   for (const r of empty.ruleResults) assert.equal(r.evaluatedObjectCount, 0);
 });
@@ -374,6 +374,6 @@ test('tab selection reuses completed results; summaries contain no source lexeme
   assert.equal(controller.selectGeometry('line').result, completed);
   assert.equal(controller.selectGeometry('point').result, completed);
   assert.equal(calls, 1);
-  assert.equal(completed.ruleResults.length, 41);
+  assert.equal(completed.ruleResults.length, 45);
   assert.doesNotMatch(JSON.stringify(completed.summary), /sourceLexeme| KUM | AN |1000\.0/);
 });
