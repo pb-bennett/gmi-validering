@@ -24,6 +24,26 @@ function parse(attributes, lineAttributes = null) {
   return data;
 }
 
+function parsePointRecords(fieldNames, records) {
+  const featureText = records.flatMap((attributes, index) => [
+    `:P ${index + 1}`,
+    `_FIELDVALUES ${fieldNames.map((name) => attributes[name] ?? '').join(';')}`,
+    '/XYZ',
+    `${index + 1} ${index + 2} ${index + 3}`,
+  ]);
+  const text = [
+    '[GMIFILE_ASCII]',
+    '[P_]',
+    `_FIELDNAMES ${fieldNames.join(';')}`,
+    '[+P_]',
+    ...featureText,
+    '',
+  ].join('\n');
+  const data = new GMIParser(text).toObject();
+  assert.deepEqual(data.errors, []);
+  return data;
+}
+
 function runtime(attributes, lineAttributes = null) {
   return {
     format: 'GMI',
@@ -179,6 +199,57 @@ test('note length counts Unicode code points, whitespace, and original lexemes',
       fildata(conflictingWhitespace, conflictingResult, ruleId, 'note').rows[0].ruleAcceptance,
       'Må vurderes',
     );
+  }
+});
+
+test('real-parser note evidence keeps cross-object whitespace outcomes distinct and reconciled', () => {
+  const ruleId = BATCH2_RULES[3][0];
+  const records = [
+    { Merknad: ' '.repeat(255) },
+    { Merknad: ' '.repeat(256) },
+  ];
+  const reverseRecords = [...records].reverse();
+  const inspect = (dataset) => {
+    const result = run(dataset);
+    const ruleResult = resultFor(result, ruleId);
+    const summary = fildata(dataset, result, ruleId, 'note');
+    return {
+      counts: [ruleResult.passCount, ruleResult.failCount, ruleResult.notEvaluatedCount, ruleResult.indeterminateCount],
+      rows: summary.rows.map((row) => [row.deliveredValue, row.ruleAcceptance, row.count]),
+      summaryCounts: [summary.withValueCount, summary.missingCount, summary.unresolvedCount],
+    };
+  };
+
+  const first = inspect(parsePointRecords(['Merknad'], records));
+  const reversed = inspect(parsePointRecords(['Merknad'], reverseRecords));
+  assert.deepEqual(first.counts, [1, 1, 0, 0]);
+  assert.deepEqual(first.summaryCounts, [2, 0, 0]);
+  assert.deepEqual(first.rows.map((row) => row[1]), ['Gyldig', 'Ugyldig']);
+  assert.deepEqual(first.rows.map((row) => row[2]), [1, 1]);
+  assert.deepEqual(reversed, first);
+
+  const withEmpty = inspect(parsePointRecords(['Merknad'], [
+    ...records,
+    { Merknad: '' },
+  ]));
+  assert.deepEqual(withEmpty.counts, [1, 1, 1, 0]);
+  assert.deepEqual(withEmpty.summaryCounts, [2, 1, 0]);
+  assert.deepEqual(withEmpty.rows.map((row) => row[1]), ['Gyldig', 'Ugyldig', '-']);
+});
+
+test('real-parser mixed ordinary and whitespace note candidates remain ambiguous in either order', () => {
+  const ruleId = BATCH2_RULES[3][0];
+  for (const attributes of [
+    { Merknad: 'ok', MERKNAD: ' '.repeat(256) },
+    { Merknad: ' '.repeat(256), MERKNAD: 'ok' },
+  ]) {
+    const dataset = parse(attributes);
+    const result = run(dataset);
+    outcome(result, ruleId, 'INDETERMINATE', 'BINDING_AMBIGUOUS');
+    const summary = fildata(dataset, result, ruleId, 'note');
+    assert.equal(summary.withValueCount, 0);
+    assert.equal(summary.unresolvedCount, 1);
+    assert.equal(summary.rows[0].ruleAcceptance, 'Må vurderes');
   }
 });
 

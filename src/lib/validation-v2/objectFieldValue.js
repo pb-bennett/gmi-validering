@@ -158,6 +158,12 @@ function observeCandidate(attributes, candidate) {
   };
 }
 
+function hasSuppliedTextLexeme(candidate) {
+  return typeof candidate.sourceLexeme === 'string' &&
+    candidate.sourceLexeme !== 'UNAVAILABLE' &&
+    candidate.sourceLexeme !== '';
+}
+
 function deepFreeze(value, propertyName) {
   if (
     !value ||
@@ -360,8 +366,9 @@ export function extractGmiObjectFieldValue(input) {
   const candidates = acceptedCandidates.map((candidate) =>
     observeCandidate(attributes, candidate)
   );
-  const presentCandidates = candidates.filter(
-    (candidate) => candidate.valueState === ObjectValueState.VALUE_PRESENT
+  const presentCandidates = candidates.filter((candidate) =>
+    candidate.valueState === ObjectValueState.VALUE_PRESENT ||
+    (canonicalField.canonicalFieldId === 'note' && hasSuppliedTextLexeme(candidate))
   );
 
   if (presentCandidates.length === 0) {
