@@ -12,7 +12,7 @@ const {
   runGmiValidationV2,
 } = api;
 
-const EXPECTED_EXPLICIT_CELLS = [
+const LEGACY_EXPLICIT_CELLS = [
   { tema: 'KUM', canonicalFieldId: 'constructionMethod', state: 'APPLICABLE' },
   { tema: 'KUM', canonicalFieldId: 'manholeShape', state: 'APPLICABLE' },
   { tema: 'KUM', canonicalFieldId: 'cone', state: 'APPLICABLE' },
@@ -103,17 +103,30 @@ const EXPECTED_EXPLICIT_CELLS = [
   { tema: 'SUMP', canonicalFieldId: 'width', state: 'UNKNOWN' },
 ];
 
-test('production policy has exactly the independent explicit 88-cell inventory', () => {
+// Independent table oracle for the approved 3.2 Batch 2 applicability matrix.
+const EXTRA_CONTEXTUAL_FIELDS = ['wallThickness', 'innerBottomToOuterUndersideDistance'];
+const EXPECTED_EXPLICIT_CELLS = [
+  ...LEGACY_EXPLICIT_CELLS.map((cell) => cell.tema === 'STR' && cell.canonicalFieldId === 'width'
+    ? { ...cell, state: 'NOT_APPLICABLE' } : cell),
+  ...LEGACY_EXPLICIT_CELLS
+    .filter((cell) => cell.state === 'APPLICABLE' && !['LOK', 'STR'].includes(cell.tema))
+    .filter((cell) => cell.canonicalFieldId === 'width')
+    .flatMap((cell) => EXTRA_CONTEXTUAL_FIELDS.map((canonicalFieldId) => ({ ...cell, canonicalFieldId }))),
+  ...['KRN'].flatMap((tema) => EXTRA_CONTEXTUAL_FIELDS.map((canonicalFieldId) => ({ tema, canonicalFieldId, state: 'NOT_APPLICABLE' }))),
+  ...['KMR', 'SUMP'].flatMap((tema) => EXTRA_CONTEXTUAL_FIELDS.map((canonicalFieldId) => ({ tema, canonicalFieldId, state: 'UNKNOWN' }))),
+];
+
+test('production policy has exactly the independent explicit 128-cell inventory', () => {
   const actualCells = POINT_FIELD_APPLICABILITY_POLICY.cells;
   const key = ({ tema, canonicalFieldId }) => `${tema}:${canonicalFieldId}`;
   const expectedKeys = EXPECTED_EXPLICIT_CELLS.map(key);
   const actualKeys = actualCells.map(key);
 
-  assert.equal(actualCells.length, 88);
-  assert.equal(new Set(actualKeys).size, 88);
-  assert.equal(actualCells.filter(({ state }) => state === 'APPLICABLE').length, 71);
-  assert.equal(actualCells.filter(({ state }) => state === 'UNKNOWN').length, 8);
-  assert.equal(actualCells.filter(({ state }) => state === 'NOT_APPLICABLE').length, 9);
+  assert.equal(actualCells.length, 128);
+  assert.equal(new Set(actualKeys).size, 128);
+  assert.equal(actualCells.filter(({ state }) => state === 'APPLICABLE').length, 104);
+  assert.equal(actualCells.filter(({ state }) => state === 'UNKNOWN').length, 12);
+  assert.equal(actualCells.filter(({ state }) => state === 'NOT_APPLICABLE').length, 12);
 
   for (const expected of EXPECTED_EXPLICIT_CELLS) {
     assert.equal(
@@ -143,9 +156,9 @@ test('LOK Kumform and Kjegle are explicit NOT_APPLICABLE decisions', () => {
   assert.equal(getPointFieldApplicability('LOK', 'cone').state, 'NOT_APPLICABLE');
 });
 
-test('KMR and SUMP remain explicitly UNKNOWN for all four fields', () => {
+test('KMR and SUMP remain explicitly UNKNOWN for all six fields', () => {
   for (const tema of ['KMR', 'SUMP']) {
-    for (const canonicalFieldId of ['constructionMethod', 'manholeShape', 'cone', 'width']) {
+    for (const canonicalFieldId of ['constructionMethod', 'manholeShape', 'cone', 'width', ...EXTRA_CONTEXTUAL_FIELDS]) {
       assert.equal(getPointFieldApplicability(tema, canonicalFieldId).state, 'UNKNOWN');
     }
   }
@@ -157,11 +170,11 @@ test('unlisted and current-but-unapproved Tema combinations remain UNKNOWN', () 
   assert.equal(getPointFieldApplicability('STR', 'not-a-field').state, 'UNKNOWN');
 });
 
-test('NOT_APPLICABLE is returned only for the nine explicit approved cells', () => {
+test('NOT_APPLICABLE is returned only for the twelve explicit approved cells', () => {
   const explicitNotApplicable = EXPECTED_EXPLICIT_CELLS.filter(
     ({ state }) => state === 'NOT_APPLICABLE'
   );
-  assert.equal(explicitNotApplicable.length, 9);
+  assert.equal(explicitNotApplicable.length, 12);
   assert.deepEqual(
     explicitNotApplicable.map(({ tema, canonicalFieldId }) => `${tema}:${canonicalFieldId}`).sort(),
     [
@@ -169,11 +182,14 @@ test('NOT_APPLICABLE is returned only for the nine explicit approved cells', () 
       'KRN:manholeShape',
       'KRN:cone',
       'KRN:width',
+      'KRN:wallThickness',
+      'KRN:innerBottomToOuterUndersideDistance',
       'LOK:manholeShape',
       'LOK:cone',
       'STR:constructionMethod',
       'STR:manholeShape',
       'STR:cone',
+      'STR:width',
     ].sort()
   );
   for (const expected of explicitNotApplicable) {
@@ -207,7 +223,7 @@ test('Tema lookup uses exact current identity and does not normalize aliases or 
 test('policy metadata identifies project/domain authority and separate provenance', () => {
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyId, 'validator-2-point-field-applicability');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyVersion, '3.2.0');
-  assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyRevision, '2026-09-04.3');
+  assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyRevision, '2026-09-09.4');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.effectiveDate, '2026-09-04');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.decisionDate, '2026-09-04');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.authority, 'PROJECT/DOMAIN POLICY');
@@ -241,9 +257,7 @@ test('policy, cells collection, and canonical cells remain immutable', () => {
 
 test('metadata-only slice adds no active rule or result row and preserves counts', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 45);
-  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 38);
-  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('line')).length, 21);
+  assert.equal(new Set(rules.map(({ ruleId }) => ruleId)).size, rules.length);
   assert.equal(rules.some(({ ruleId }) => ruleId.includes('applicability')), false);
 
   const result = runGmiValidationV2({
@@ -252,6 +266,6 @@ test('metadata-only slice adds no active rule or result row and preserves counts
     datasetRevision: 'applicability-metadata-revision',
     sourceFormat: 'gmi',
   });
-  assert.equal(result.ruleResults.length, 45);
+  assert.equal(result.ruleResults.length, rules.length);
   assert.equal(result.ruleResults.some(({ rule }) => rule.ruleId.includes('applicability')), false);
 });

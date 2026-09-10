@@ -133,7 +133,9 @@ function getInterpretation(record) {
   return formatTypedValue(record.sourceValue);
 }
 
-function getRuleAcceptance(record, rule) {
+function getRuleAcceptance(record, rule, result, objectRef) {
+  const completed = result.outcomes?.find((outcome) => outcome.ruleId === rule.ruleId && outcome.objectRef.key === objectRef.key);
+  if (completed) return ({ PASS: 'Pass', CHECK: 'Sjekk', FAIL: 'Feil', INDETERMINATE: 'Sjekk' })[completed.state] || '-';
   if (
     rule.evaluatorKind !== RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE &&
     rule.evaluatorKind !== RuleEvaluatorKind.ALLOWED_VALUE &&
@@ -163,9 +165,9 @@ function getRuleAcceptance(record, rule) {
       rule.allowedValues,
       rule.valueComparison,
     );
-  if (evaluation.state === EvaluationState.PASS) return 'Gyldig';
-  if (evaluation.state === EvaluationState.FAIL) return 'Ugyldig';
-  if (evaluation.state === EvaluationState.INDETERMINATE) return 'Må vurderes';
+  if (evaluation.state === EvaluationState.PASS) return 'Pass';
+  if (evaluation.state === EvaluationState.FAIL) return 'Feil';
+  if (evaluation.state === EvaluationState.CHECK || evaluation.state === EvaluationState.INDETERMINATE) return 'Sjekk';
   return '-';
 }
 
@@ -264,18 +266,20 @@ function scanFieldData(input, rule, binding, datasetRevision) {
         deliveredValue: getDeliveredValue(record),
         interpretedValue: getInterpretation(record),
         count: 0,
-        ruleAcceptance: getRuleAcceptance(record, rule),
+        outcomeBreakdown: { Pass: 0, Sjekk: 0, Feil: 0 },
       };
       buckets.set(key, bucket);
     }
     bucket.count += 1;
+    const acceptance = getRuleAcceptance(record, rule, input.result, objectRef) || 'Sjekk';
+    if (bucket.outcomeBreakdown[acceptance] !== undefined) bucket.outcomeBreakdown[acceptance] += 1;
   }
 
   const objectCount = refs.length;
   const rows = [...buckets.values()]
     .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key))
     .map((bucket) => ({
-      ...bucket,
+      ...bucket, ruleAcceptance: bucket.outcomeBreakdown.Feil ? 'Feil' : bucket.outcomeBreakdown.Sjekk ? 'Sjekk' : 'Pass',
       percentage: objectCount > 0 ? (bucket.count / objectCount) * 100 : 0,
     }));
   const sourceColumns = getSourceColumns(binding);

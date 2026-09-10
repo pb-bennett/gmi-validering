@@ -73,3 +73,4 @@ export {
   getValidationV2FieldDataCacheStats,
   getValidationV2FieldDataSummary,
 } from './fieldData.js';
+export { getNobbItemHref } from './nobbLink.js';

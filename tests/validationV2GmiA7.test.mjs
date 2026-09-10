@@ -82,7 +82,8 @@ test('active beta registry retains A7 rules and the combined Høydereferanse rul
   assert.equal(rules.some((rule) => rule.ruleId.endsWith('.allowed-value') && rule.canonicalFieldId === 'heightReference'), false);
 
   const heightRule = rules[0];
-  assert.equal(heightRule.category, RuleCategory.REQUIRED_ALLOWED_VALUE);
+  assert.equal(heightRule.evaluatorKind, 'FIELD_POLICY');
+  assert.equal(heightRule.policy, 'heightReference');
   assert.equal(heightRule.provenance, RuleProvenance.STANDARD);
   assert.equal(heightRule.severity, RuleSeverity.ERROR);
   assert.deepEqual(heightRule.allowedValues, allowedValues);
@@ -97,7 +98,7 @@ test('combined Høydereferanse semantics keep missing and invalid FAIL reasons d
   }));
   assert.equal(ruleResult(absent, HEIGHT_VALID).failCount, 2);
   assert(ruleResult(absent, HEIGHT_VALID).findings.every(
-    (finding) => finding.reasonCode === RuleReasonCode.REQUIRED_FIELD_ABSENT,
+    (finding) => finding.reasonCode === RuleReasonCode.REQUIRED_VALUE_MISSING,
   ));
 
   const missing = resultFor(makeLayer('missing', {
@@ -148,6 +149,7 @@ test('common Høydereferanse and geometry-specific Tema results reconcile by geo
     point: {
       evaluatedCount: 2,
       passCount: 1,
+      checkCount: 0,
       failCount: 1,
       notEvaluatedCount: 0,
       indeterminateCount: 0,
@@ -156,6 +158,7 @@ test('common Høydereferanse and geometry-specific Tema results reconcile by geo
     line: {
       evaluatedCount: 1,
       passCount: 1,
+      checkCount: 0,
       failCount: 0,
       notEvaluatedCount: 0,
       indeterminateCount: 0,
@@ -171,8 +174,8 @@ test('common Høydereferanse and geometry-specific Tema results reconcile by geo
   const lineTema = ruleResult(result, LINE_TEMA_REQUIRED);
   assert.equal(pointTema.geometryBreakdown.line.evaluatedCount, 0);
   assert.equal(lineTema.geometryBreakdown.point.evaluatedCount, 0);
-  assert.equal(getValidationV2GeometryRuleStatus(lineTema, 'point').label, 'Delvis oppfylt');
-  assert.equal(getValidationV2GeometryRuleStatus(pointTema, 'line').label, 'Delvis oppfylt');
+  assert.equal(getValidationV2GeometryRuleStatus(lineTema, 'point').label, 'Sjekk');
+  assert.equal(getValidationV2GeometryRuleStatus(pointTema, 'line').label, 'Sjekk');
 
   const indeterminate = resultFor(makeLayer('indeterminate', {
     pointSchema: { HREF: {}, Tema: {} },
@@ -183,24 +186,27 @@ test('common Høydereferanse and geometry-specific Tema results reconcile by geo
     point: {
       evaluatedCount: 1,
       passCount: 0,
+      checkCount: 1,
       failCount: 0,
       notEvaluatedCount: 0,
-      indeterminateCount: 1,
+      indeterminateCount: 0,
       findingCount: 1,
     },
     line: {
       evaluatedCount: 1,
       passCount: 1,
+      checkCount: 0,
       failCount: 0,
       notEvaluatedCount: 0,
       indeterminateCount: 0,
       findingCount: 0,
     },
   });
-  assert.equal(indeterminateHeight.indeterminateCount, 1);
+  assert.equal(indeterminateHeight.checkCount, 1);
   const wholeRuleCounts = {
     evaluatedCount: indeterminateHeight.evaluatedObjectCount,
     passCount: indeterminateHeight.passCount,
+    checkCount: indeterminateHeight.checkCount,
     failCount: indeterminateHeight.failCount,
     notEvaluatedCount: indeterminateHeight.notEvaluatedCount,
     indeterminateCount: indeterminateHeight.indeterminateCount,
@@ -240,69 +246,13 @@ test('one result drives both geometry tabs without rerunning and uses geometry-s
   assert.equal(lineView.result, result);
   assert.equal(pointView.ruleResults[0], result.ruleResults[0]);
   assert.equal(pointView.ruleResults[0].findings[0].objectRef, result.ruleResults[0].findings[0].objectRef);
-  assert.deepEqual(pointView.ruleResults.map((rule) => rule.rule.ruleId), [
-    HEIGHT_VALID,
-    'innmaling.common.installation-year.required',
-    'innmaling.common.measurement-method.required',
-    'innmaling.common.height-measurement-method.required',
-    'innmaling.common.vertical-level.required',
-    'innmaling.common.capture-date.required',
-    'innmaling.common.surveyed-by.required',
-    'innmaling.common.case-number.required',
-    'innmaling.common.horizontal-accuracy.required',
-    'innmaling.common.vertical-accuracy.required',
-    'innmaling.common.max-horizontal-deviation.required',
-    'innmaling.common.max-vertical-deviation.required',
-    'innmaling.common.positioning-condition.valid',
-    'innmaling.common.positioning-cause.valid',
-    POINT_TEMA_REQUIRED,
-    'innmaling.point.type.valid',
-    'innmaling.point.manhole-shape.valid',
-    'innmaling.point.construction-method.valid',
-    'innmaling.point.cone.valid',
-    'innmaling.point.type-tema.compatible',
-    'innmaling.point.inside-outside.valid',
-    'innmaling.point.width.integer',
-    'innmaling.point.length.integer',
-    'innmaling.point.wall-thickness.required',
-    'innmaling.point.horizontal-accuracy.integer',
-    'innmaling.point.vertical-accuracy.integer',
-    'innmaling.point.max-horizontal-deviation.integer',
-    'innmaling.point.max-vertical-deviation.integer',
-    'innmaling.point.wall-thickness.integer',
-    'innmaling.point.external-height.integer',
-    'innmaling.point.nobb-vavvs-number.integer',
-    'innmaling.point.nobb-vavvs-frame-number.integer',
-    'innmaling.point.owner.valid',
-    'innmaling.point.access.valid',
-    'innmaling.point.bottom-distance.decimal',
-    'innmaling.point.installation-year.format',
-    'innmaling.point.capture-date.format',
-    'innmaling.point.note.max-length',
-  ]);
-  assert.deepEqual(lineView.ruleResults.map((rule) => rule.rule.ruleId), [
-    HEIGHT_VALID,
-    'innmaling.common.installation-year.required',
-    'innmaling.common.measurement-method.required',
-    'innmaling.common.height-measurement-method.required',
-    'innmaling.common.vertical-level.required',
-    'innmaling.common.capture-date.required',
-    'innmaling.common.surveyed-by.required',
-    'innmaling.common.case-number.required',
-    'innmaling.common.horizontal-accuracy.required',
-    'innmaling.common.vertical-accuracy.required',
-    'innmaling.common.max-horizontal-deviation.required',
-    'innmaling.common.max-vertical-deviation.required',
-    'innmaling.common.positioning-condition.valid',
-    'innmaling.common.positioning-cause.valid',
-    'innmaling.line.wall-thickness.required',
-    LINE_TEMA_REQUIRED,
-    'innmaling.line.dimension.required',
-    'innmaling.line.material.required',
-    'innmaling.line.network-type.valid',
-    'innmaling.line.inside-outside.valid',
-    'innmaling.line.pipe-shape.valid',
-  ]);
+  for (const [scope, view] of [['point', pointView], ['line', lineView]]) {
+    assert.deepEqual(
+      view.ruleResults.map((rule) => rule.rule.ruleId),
+      getValidationRules().filter((rule) => rule.geometryScopes.includes(scope)).map((rule) => rule.ruleId),
+    );
+    assert(view.ruleResults.every(({ rule }) => rule.geometryScopes.includes(scope)));
+  }
   assert.equal(input.datasetRevision, result.datasetRevision);
   assert.equal(getDefaultValidationV2Geometry(layer), 'point');
   const linesOnly = makeLayer('lines-only', { points: [], lines: [{}] });

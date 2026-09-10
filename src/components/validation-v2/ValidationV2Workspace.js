@@ -116,7 +116,7 @@ export default function ValidationV2Workspace() {
     [activeRuleResults, activeGeometry, presentationState],
   );
   const attentionCount = searchPresentations.filter((presentation) =>
-    presentation.status.enum !== 'MET'
+    presentation.status.enum !== 'PASS'
   ).length;
   const filtersActive = presentationState.searchQuery !== '' ||
     presentationState.statusFilter !== ValidationV2StatusFilter.ALL;
@@ -307,8 +307,13 @@ export default function ValidationV2Workspace() {
             {result && geometrySummary && (
               <div id="validation-v2-geometry-panel" role="tabpanel" className="py-2 text-[11px] text-gray-600">
                 <div className="mb-2">
-                  {geometrySummary.objectCount} {activeGeometry === 'point' ? 'punkter' : 'ledninger'} · {geometrySummary.failCount} må rettes · {geometrySummary.indeterminateCount} må vurderes
+                  {geometrySummary.objectCount} {activeGeometry === 'point' ? 'punkter' : 'ledninger'} · {geometrySummary.failCount} feil · {(geometrySummary.checkCount || 0) + geometrySummary.indeterminateCount} sjekk
                 </div>
+                {geometryView.schemaFindings.some((finding) => finding.reasonCode === 'SCHEMA_TEMA_SFCODE_COEXISTENCE') && (
+                  <div role="status" className="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-900">
+                    <strong>Sjekk:</strong> Både Tema og S_FCODE finnes i skjemaet. Feltene beskriver samme identitet, og sameksistensen bør kontrolleres.
+                  </div>
+                )}
                 <div className="relative mb-2" data-validation-v2-controls>
                   <div className="flex items-center justify-end gap-1">
                     <button
@@ -397,9 +402,9 @@ export default function ValidationV2Workspace() {
                         {[
                           [ValidationV2StatusFilter.ALL, `Alle ${searchPresentations.length}`],
                           [ValidationV2StatusFilter.ATTENTION, `Krever oppmerksomhet ${attentionCount}`],
-                          [ValidationV2StatusFilter.NOT_MET, 'Ikke oppfylt'],
-                          [ValidationV2StatusFilter.PARTIALLY_MET, 'Delvis oppfylt'],
-                          [ValidationV2StatusFilter.MET, 'Oppfylt'],
+                          [ValidationV2StatusFilter.FAIL, 'Feil'],
+                          [ValidationV2StatusFilter.CHECK, 'Sjekk'],
+                          [ValidationV2StatusFilter.PASS, 'Pass'],
                         ].map(([filter, label]) => (
                           <button
                             key={filter}

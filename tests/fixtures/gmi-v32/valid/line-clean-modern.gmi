@@ -1,0 +1,15 @@
+[GMIFILE_ASCII]
+_VERSION 2
+[L_]
+_FIELDNAMES S_FCODE;Anleggsår;Datafangstdato;Innmålt_av;Høydereferanse;Målemetode;Nøyaktighet;MålemetodeHøyde;NøyaktighetHøyde;Stedfestingsforhold;Stedfestingsårsak;Eier;Vertikalnivå;MaksAvvikVertikalt;MaksAvvikHorisontalt;Nett_type;Material;Dimensjon;VertikalDimensjon;Rørform;InnvendigUtvendig;Tykkelse;SDR;Ringstivhet;Trykklasse;NOBB-VAVVS-nr
+[+L_]
+:L 1
+_FIELDVALUES VL;2026;09.09.2026;SYNTHETIC_SURVEYOR;SENTER;96;2;96;3;ÅPEN_GRØ;NYTT;K;UNDER_GRUNN;10;10;F;PE100;160;;S;ID;10;11.0;;PN10;10001
+/XYZ
+1400 2400 10
+1401 2401 10
+:L 2
+_FIELDVALUES AF;2026;09.09.2026;SYNTHETIC_SURVEYOR;BUNN_INNVENDIG;96;1;96;1;ÅPEN_KUM;NYTT;K;UNDER_GRUNN;1;1;S;PVC;200;;S;OD;8;;SN8;;
+/XYZ
+1402 2402 10
+1403 2403 10

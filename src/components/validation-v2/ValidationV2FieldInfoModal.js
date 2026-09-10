@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { getValidationV2FieldDataSummary } from '@/lib/validation-v2/fieldData';
+import { getNobbItemHref } from '@/lib/validation-v2/nobbLink';
 
 const MISSING_INFORMATION = 'Ikke dokumentert i kontrollert kildemateriale';
 const TABS = Object.freeze({ INSTRUCTION: 'instruction', DATA: 'data' });
@@ -40,7 +41,9 @@ function InstructionPanel({ field, rule }) {
           {field.appliesTo.join(' og ')}
         </InformationRow>
         <InformationRow label="Denne regelen">
-          {field.required ? 'Påkrevd' : 'Ikke påkrevd'}
+          {field.requiredness === 'CONDITIONAL'
+            ? 'Betinget'
+            : field.required ? 'Påkrevd' : 'Ikke påkrevd'}
         </InformationRow>
       </dl>
 
@@ -151,6 +154,7 @@ function FieldDataPanel({ summary, isLoading, error, onRetry }) {
     ? `Flere: ${summary.sourceColumns.join(', ')}`
     : MISSING_INFORMATION);
   const hasRuleAcceptance = summary.rows.some((row) => row.ruleAcceptance !== null);
+  const prominentText = summary.canonicalFieldId === 'note';
   return (
     <div className="space-y-3">
       <dl>
@@ -177,7 +181,13 @@ function FieldDataPanel({ summary, isLoading, error, onRetry }) {
             <tbody className="divide-y divide-gray-100 bg-white">
               {summary.rows.map((row) => (
                 <tr key={row.key}>
-                  <td className="max-w-32 break-all px-2 py-1.5 font-medium text-gray-900">{row.deliveredValue}</td>
+                  <td className={`${prominentText ? 'min-w-64 whitespace-pre-wrap break-words bg-amber-50' : 'max-w-32 break-all'} px-2 py-1.5 font-medium text-gray-900`}>
+                    {getNobbItemHref(summary.canonicalFieldId, row.deliveredValue) ? (
+                      <a className="text-blue-700 underline hover:text-blue-900" href={getNobbItemHref(summary.canonicalFieldId, row.deliveredValue)} target="_blank" rel="noreferrer">
+                        {row.deliveredValue}
+                      </a>
+                    ) : row.deliveredValue}
+                  </td>
                   <td className="max-w-24 break-all px-2 py-1.5 text-gray-500">{row.interpretedValue}</td>
                   <td className="px-2 py-1.5 text-right font-mono text-gray-700">{row.count}</td>
                   <td className="px-2 py-1.5 text-right font-mono text-gray-500">{row.percentage.toFixed(1)}%</td>

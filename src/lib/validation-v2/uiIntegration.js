@@ -57,6 +57,7 @@ export function getValidationV2RuleStatus(ruleResult) {
     evaluatedCount: ruleResult.evaluatedObjectCount,
     passCount: ruleResult.passCount,
     failCount: ruleResult.failCount,
+    checkCount: ruleResult.checkCount,
     notEvaluatedCount: ruleResult.notEvaluatedCount,
     indeterminateCount: ruleResult.indeterminateCount,
   });
@@ -69,7 +70,7 @@ export function getValidationV2GeometryRuleStatus(ruleResult, geometryScope) {
       passCount: 0,
       failCount: 0,
       notEvaluatedCount: 0,
-      indeterminateCount: 0,
+      indeterminateCount: 0, checkCount: 0,
     },
   );
 }
@@ -81,16 +82,24 @@ export function getValidationV2GeometrySummary(result, geometryScope) {
   const rules = result.ruleResults.filter((ruleResult) =>
     ruleResult.rule.geometryScopes.includes(geometryScope)
   );
-  return rules.reduce(
+  const summary = rules.reduce(
     (summary, ruleResult) => {
       const counts = ruleResult.geometryBreakdown[geometryScope];
       summary.failCount += counts.failCount;
       summary.indeterminateCount += counts.indeterminateCount;
+      summary.checkCount = (summary.checkCount || 0) + (counts.checkCount || 0);
       summary.findingCount += counts.findingCount;
       return summary;
     },
-    { objectCount, failCount: 0, indeterminateCount: 0, findingCount: 0 },
+    { objectCount, failCount: 0, checkCount: 0, indeterminateCount: 0, findingCount: 0 },
   );
+  const schemaCheckCount = (result.schemaFindings || []).filter(
+    (finding) => finding.geometryScope === geometryScope && finding.state === 'CHECK'
+  ).length;
+  summary.checkCount += schemaCheckCount;
+  summary.findingCount += schemaCheckCount;
+  summary.schemaCheckCount = schemaCheckCount;
+  return summary;
 }
 
 function isSafeGroupValue(value) {
@@ -167,6 +176,9 @@ export function getValidationV2GeometryView(result, geometryScope) {
     result,
     geometryScope,
     summary: getValidationV2GeometrySummary(result, geometryScope),
+    schemaFindings: (result.schemaFindings || []).filter((finding) =>
+      finding.geometryScope === geometryScope
+    ),
     ruleResults: result.ruleResults.filter((ruleResult) =>
       ruleResult.rule.geometryScopes.includes(geometryScope)
     ),

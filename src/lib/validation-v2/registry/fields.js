@@ -497,7 +497,7 @@ export const CANONICAL_FIELDS = deepFreeze([
     recognizedUnresolvedKeys: ['.P_TEMA', '.L_TEMA'],
     sourceAuthority: 'INNMALINGSINSTRUKS_APPENDIX_A_WITH_ACCEPTED_GMI_PRACTICE_FALLBACK',
     mappingEvidenceConfidence: 'HIGH',
-    notes: 'Direct Tema wins; S_FCODE is the sole accepted fallback.',
+    notes: 'Tema and S_FCODE are interchangeable identity sources; agreeing values resolve and disagreement remains unresolved.',
   },
   {
     canonicalFieldId: 'type',

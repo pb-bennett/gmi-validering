@@ -41,6 +41,7 @@ yarn-error.log*
 next-env.d.ts
 .next
 REF_FILES/
+/local-research/
 node_modules/
 .next/
 

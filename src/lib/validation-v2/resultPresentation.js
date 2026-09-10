@@ -1,17 +1,13 @@
 import { getFieldInformation } from './registry/fieldInformation.js';
 
 export const ValidationV2AggregateStatus = Object.freeze({
-  NOT_MET: 'NOT_MET',
-  PARTIALLY_MET: 'PARTIALLY_MET',
-  MET: 'MET',
+  FAIL: 'FAIL', CHECK: 'CHECK', PASS: 'PASS',
 });
 
 export const ValidationV2StatusFilter = Object.freeze({
   ALL: 'ALL',
   ATTENTION: 'ATTENTION',
-  NOT_MET: 'NOT_MET',
-  PARTIALLY_MET: 'PARTIALLY_MET',
-  MET: 'MET',
+  FAIL: 'FAIL', CHECK: 'CHECK', PASS: 'PASS',
 });
 
 export const ValidationV2SortMode = Object.freeze({
@@ -25,25 +21,26 @@ const EMPTY_COUNTS = Object.freeze({
   evaluatedCount: 0,
   passCount: 0,
   failCount: 0,
+  checkCount: 0,
   notEvaluatedCount: 0,
   indeterminateCount: 0,
 });
 
 const STATUS_DETAILS = Object.freeze({
-  [ValidationV2AggregateStatus.NOT_MET]: Object.freeze({
-    label: 'Ikke oppfylt',
+  [ValidationV2AggregateStatus.FAIL]: Object.freeze({
+    label: 'Feil',
     attentionRank: 0,
     visualToken: 'red',
     reasonCode: 'FAILURES_WITHOUT_PASS',
   }),
-  [ValidationV2AggregateStatus.PARTIALLY_MET]: Object.freeze({
-    label: 'Delvis oppfylt',
+  [ValidationV2AggregateStatus.CHECK]: Object.freeze({
+    label: 'Sjekk',
     attentionRank: 1,
     visualToken: 'amber',
     reasonCode: 'HAS_FAILURE_OR_INDETERMINATE',
   }),
-  [ValidationV2AggregateStatus.MET]: Object.freeze({
-    label: 'Oppfylt',
+  [ValidationV2AggregateStatus.PASS]: Object.freeze({
+    label: 'Pass',
     attentionRank: 2,
     visualToken: 'green',
     reasonCode: 'ALL_APPLICABLE_PASS',
@@ -53,9 +50,9 @@ const STATUS_DETAILS = Object.freeze({
 const STATUS_FILTER_LABELS = Object.freeze({
   [ValidationV2StatusFilter.ALL]: 'Alle',
   [ValidationV2StatusFilter.ATTENTION]: 'Krever oppmerksomhet',
-  [ValidationV2StatusFilter.NOT_MET]: 'Ikke oppfylt',
-  [ValidationV2StatusFilter.PARTIALLY_MET]: 'Delvis oppfylt',
-  [ValidationV2StatusFilter.MET]: 'Oppfylt',
+  [ValidationV2StatusFilter.FAIL]: 'Feil',
+  [ValidationV2StatusFilter.CHECK]: 'Sjekk',
+  [ValidationV2StatusFilter.PASS]: 'Pass',
 });
 
 const SORT_MODE_LABELS = Object.freeze({
@@ -81,22 +78,22 @@ function getCount(counts, key) {
 export function getValidationV2AggregateStatus(counts = EMPTY_COUNTS) {
   const passCount = getCount(counts, 'passCount');
   const failCount = getCount(counts, 'failCount');
-  const indeterminateCount = getCount(counts, 'indeterminateCount');
-  const applicableCount = passCount + failCount + indeterminateCount;
+  const checkCount = getCount(counts, 'checkCount') + getCount(counts, 'indeterminateCount');
+  const applicableCount = passCount + failCount + checkCount;
 
   let statusEnum;
   let reasonCode;
-  if (failCount > 0 && passCount === 0) {
-    statusEnum = ValidationV2AggregateStatus.NOT_MET;
+  if (failCount > 0) {
+    statusEnum = ValidationV2AggregateStatus.FAIL;
     reasonCode = 'FAILURES_WITHOUT_PASS';
-  } else if (failCount > 0 || indeterminateCount > 0) {
-    statusEnum = ValidationV2AggregateStatus.PARTIALLY_MET;
+  } else if (checkCount > 0) {
+    statusEnum = ValidationV2AggregateStatus.CHECK;
     reasonCode = 'HAS_FAILURE_OR_INDETERMINATE';
   } else if (passCount > 0) {
-    statusEnum = ValidationV2AggregateStatus.MET;
+    statusEnum = ValidationV2AggregateStatus.PASS;
     reasonCode = 'ALL_APPLICABLE_PASS';
   } else {
-    statusEnum = ValidationV2AggregateStatus.PARTIALLY_MET;
+    statusEnum = ValidationV2AggregateStatus.CHECK;
     reasonCode = applicableCount === 0
       ? 'NO_APPLICABLE_EVALUATIONS'
       : 'HAS_FAILURE_OR_INDETERMINATE';
@@ -121,8 +118,8 @@ export function getValidationV2SortModeLabel(sortMode) {
 export function matchesValidationV2Status(status, filter = ValidationV2StatusFilter.ALL) {
   if (filter === ValidationV2StatusFilter.ALL) return true;
   if (filter === ValidationV2StatusFilter.ATTENTION) {
-    return status.enum === ValidationV2AggregateStatus.NOT_MET ||
-      status.enum === ValidationV2AggregateStatus.PARTIALLY_MET;
+    return status.enum === ValidationV2AggregateStatus.FAIL ||
+      status.enum === ValidationV2AggregateStatus.CHECK;
   }
   return status.enum === filter;
 }

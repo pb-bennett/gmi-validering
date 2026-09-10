@@ -43,8 +43,8 @@ const POSITIONING_CAUSE_VALUES = [
 ];
 
 const INSIDE_OUTSIDE_VALUES = ['ID', 'OD'];
-const NETWORK_TYPE_VALUES = ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7'];
-const PIPE_SHAPE_VALUES = ['A', 'E', 'F', 'R', 'S', 'T', 'X'];
+export const NETWORK_TYPE_VALUES = ['F', 'H', 'O', 'O1', 'O2', 'S', 'S6', 'S7'];
+export const PIPE_SHAPE_VALUES = ['A', 'E', 'F', 'R', 'S', 'T', 'X'];
 export const MANHOLE_SHAPE_VALUES = ['AN', 'F', 'FK', 'FR', 'N', 'R', 'X'];
 export const CONSTRUCTION_METHOD_VALUES = ['B', 'BU', 'E', 'E0', 'E1', 'G', 'K', 'M', 'MU', 'P', 'S', 'SU', 'UK', 'V', 'W'];
 export const CONE_VALUES = ['E', 'R', 'S', 'T', 'U'];
@@ -79,6 +79,9 @@ export const MATERIAL_VALUES = [
   'PVC', 'PVC-O', 'PVC-U', 'RDEL', 'SJ', 'SJG', 'SJK', 'STA', 'STF', 'STG', 'TEG',
   'TNA', 'TRE', 'UK',
 ];
+export const SDR_VALUES = ['6.0','7.4','7.5','9.0','11.0','13.6','17.0','17.6','21.0','26.0','33.0','34.0','41.0'];
+export const RING_STIFFNESS_VALUES = ['SN2','SN4','SN5','SN6','SN8','SN10','SN16'];
+export const PRESSURE_CLASS_VALUES = ['PN1','PN2','PN2.5','PN3.2','PN4','PN5','PN6','PN6.3','PN8','PN10','PN12','PN12.5','PN16','PN20','PN25'];
 export const POINT_TEMA_VALUES = [
   'ANB', 'BAS', 'BERGROM', 'BFD', 'BRN', 'DAM', 'DIV', 'DRO', 'FET', 'FNT',
   'FORAKONSTR', 'GRN', 'GRØKONSTR', 'GUT', 'GVT', 'HFO', 'HYD', 'I2B', 'I2C',
@@ -212,7 +215,7 @@ function deepFreeze(value) {
  * Combined required/value rules remain one practical rule so missing fields and
  * invalid present values retain distinct findings.
  */
-export const VALIDATION_RULES = deepFreeze([
+const BASE_VALIDATION_RULES = [
   {
     ruleId: 'innmaling.common.height-reference.valid',
     canonicalFieldId: 'heightReference',
@@ -782,6 +785,20 @@ export const VALIDATION_RULES = deepFreeze([
     valueComparison: ValueComparisonPolicy.NONE,
   },
   {
+    ruleId: 'innmaling.line.vertical-dimension.valid',
+    canonicalFieldId: 'verticalDimension',
+    geometryScopes: [GeometryScope.LINE],
+    evaluatorKind: RuleEvaluatorKind.REQUIRED,
+    category: RuleCategory.REQUIRED_FIELD,
+    title: 'Ledningens vertikale dimensjon følger rørform',
+    description: 'VertikalDimensjon kontrolleres kontekstuelt mot gyldig Rørform.',
+    severity: RuleSeverity.ERROR,
+    provenance: RuleProvenance.STANDARD,
+    source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 21' },
+    allowedValues: [],
+    valueComparison: ValueComparisonPolicy.NONE,
+  },
+  {
     ruleId: 'innmaling.line.material.required',
     canonicalFieldId: 'material',
     geometryScopes: [GeometryScope.LINE],
@@ -837,7 +854,104 @@ export const VALIDATION_RULES = deepFreeze([
     allowedValues: PIPE_SHAPE_VALUES,
     valueComparison: ValueComparisonPolicy.EXACT,
   },
+  { ruleId: 'innmaling.line.sdr.valid', canonicalFieldId: 'sdr', geometryScopes: [GeometryScope.LINE], evaluatorKind: RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, category: RuleCategory.REQUIRED_ALLOWED_VALUE, title: 'SDR følger hydraulisk kontekst', description: 'SDR vurderes mot Tema og Material.', severity: RuleSeverity.ERROR, provenance: RuleProvenance.STANDARD, source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 21' }, allowedValues: SDR_VALUES, valueComparison: ValueComparisonPolicy.EXACT },
+  { ruleId: 'innmaling.line.ring-stiffness.valid', canonicalFieldId: 'ringStiffness', geometryScopes: [GeometryScope.LINE], evaluatorKind: RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, category: RuleCategory.REQUIRED_ALLOWED_VALUE, title: 'Ringstivhet følger hydraulisk kontekst', description: 'Ringstivhet vurderes mot Tema og Material.', severity: RuleSeverity.ERROR, provenance: RuleProvenance.STANDARD, source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 21' }, allowedValues: RING_STIFFNESS_VALUES, valueComparison: ValueComparisonPolicy.EXACT },
+  { ruleId: 'innmaling.line.pressure-class.valid', canonicalFieldId: 'pressureClass', geometryScopes: [GeometryScope.LINE], evaluatorKind: RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE, category: RuleCategory.REQUIRED_ALLOWED_VALUE, title: 'Trykklasse følger hydraulisk kontekst', description: 'Trykklasse vurderes mot Tema.', severity: RuleSeverity.ERROR, provenance: RuleProvenance.STANDARD, source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 21' }, allowedValues: PRESSURE_CLASS_VALUES, valueComparison: ValueComparisonPolicy.EXACT },
+];
+
+// Batch 1 deliberately activates only independent common controls.  The omitted
+// baseline controls are point applicability/history and line/hydraulic work
+// scheduled for later batches; retaining them here would present unfinished
+// policy as current validation.
+const BATCH1_POLICY_BY_RULE_ID = Object.freeze({
+  'innmaling.common.height-reference.valid': 'heightReference',
+  'innmaling.common.measurement-method.required': 'measurementMethod',
+  'innmaling.common.height-measurement-method.required': 'heightMeasurementMethod',
+  'innmaling.common.vertical-level.required': 'verticalLevel',
+  'innmaling.common.surveyed-by.required': 'surveyedBy',
+  'innmaling.common.case-number.required': 'caseNumber',
+  'innmaling.common.horizontal-accuracy.required': 'horizontalAccuracy',
+  'innmaling.common.vertical-accuracy.required': 'verticalAccuracy',
+  'innmaling.common.max-horizontal-deviation.required': 'maxHorizontalDeviation',
+  'innmaling.common.max-vertical-deviation.required': 'maxVerticalDeviation',
+  'innmaling.common.positioning-condition.valid': 'positioningCondition',
+  'innmaling.point.owner.valid': 'owner',
+  'innmaling.point.inside-outside.valid': 'insideOutside',
+  'innmaling.line.inside-outside.valid': 'insideOutside',
+  'innmaling.point.note.max-length': 'optionalText',
+  'innmaling.point.nobb-vavvs-number.integer': 'nobb',
+});
+const BATCH1_RULE_IDS = new Set([
+  ...Object.keys(BATCH1_POLICY_BY_RULE_ID),
+  'innmaling.point.tema.required', 'innmaling.line.tema.required',
 ]);
+const BATCH1_SCOPE_BOTH = new Set([
+  'innmaling.point.owner.valid',
+  'innmaling.point.note.max-length',
+  'innmaling.point.nobb-vavvs-number.integer',
+]);
+const BATCH2_POLICY_BY_RULE_ID = Object.freeze({
+  'innmaling.common.installation-year.required': 'installationYear',
+  'innmaling.common.capture-date.required': 'captureDate',
+  'innmaling.common.positioning-cause.valid': 'positioningCause',
+  'innmaling.point.type.valid': 'type',
+  'innmaling.point.manhole-shape.valid': 'manholeShape',
+  'innmaling.point.construction-method.valid': 'constructionMethod',
+  'innmaling.point.cone.valid': 'cone',
+  'innmaling.point.width.integer': 'width',
+  'innmaling.point.length.integer': 'length',
+  'innmaling.point.wall-thickness.integer': 'wallThickness',
+  'innmaling.point.external-height.integer': 'externalHeight',
+  'innmaling.point.nobb-vavvs-frame-number.integer': 'frameNobb',
+  'innmaling.point.access.valid': 'access',
+  'innmaling.point.bottom-distance.decimal': 'bottomDistance',
+});
+const BATCH2_RULE_IDS = new Set([...Object.keys(BATCH2_POLICY_BY_RULE_ID), 'innmaling.point.type-tema.compatible']);
+const BATCH3_POLICY_BY_RULE_ID = Object.freeze({
+  'innmaling.line.material.required': 'material',
+  'innmaling.line.network-type.valid': 'networkType',
+  'innmaling.line.dimension.required': 'dimension',
+  'innmaling.line.wall-thickness.required': 'lineWallThickness',
+  'innmaling.line.pipe-shape.valid': 'pipeShape',
+  'innmaling.line.vertical-dimension.valid': 'verticalDimension',
+});
+const BATCH3_RULE_IDS = new Set(Object.keys(BATCH3_POLICY_BY_RULE_ID));
+const BATCH4_POLICY_BY_RULE_ID = Object.freeze({'innmaling.line.sdr.valid':'sdr','innmaling.line.ring-stiffness.valid':'ringStiffness','innmaling.line.pressure-class.valid':'pressureClass'});
+const BATCH4_RULE_IDS = new Set(Object.keys(BATCH4_POLICY_BY_RULE_ID));
+const batch1Rules = BASE_VALIDATION_RULES
+  .filter((rule) => BATCH1_RULE_IDS.has(rule.ruleId) || BATCH2_RULE_IDS.has(rule.ruleId) || BATCH3_RULE_IDS.has(rule.ruleId) || BATCH4_RULE_IDS.has(rule.ruleId))
+  .filter((rule) => rule.ruleId !== 'innmaling.point.wall-thickness.required' && rule.ruleId !== 'innmaling.point.installation-year.format' && rule.ruleId !== 'innmaling.point.capture-date.format')
+  .map((rule) => BATCH1_POLICY_BY_RULE_ID[rule.ruleId] || BATCH2_POLICY_BY_RULE_ID[rule.ruleId] || BATCH3_POLICY_BY_RULE_ID[rule.ruleId] || BATCH4_POLICY_BY_RULE_ID[rule.ruleId]
+    ? { ...rule, evaluatorKind: RuleEvaluatorKind.FIELD_POLICY, category: RuleCategory.VALUE_FORMAT,
+      policy: BATCH1_POLICY_BY_RULE_ID[rule.ruleId] || BATCH2_POLICY_BY_RULE_ID[rule.ruleId] || BATCH3_POLICY_BY_RULE_ID[rule.ruleId] || BATCH4_POLICY_BY_RULE_ID[rule.ruleId],
+      allowedValues: rule.allowedValues || [], valueComparison: rule.valueComparison || ValueComparisonPolicy.NONE,
+      geometryScopes: BATCH1_SCOPE_BOTH.has(rule.ruleId) ? [GeometryScope.POINT, GeometryScope.LINE] : rule.geometryScopes }
+    : rule.ruleId === 'innmaling.point.type-tema.compatible'
+      ? { ...rule, policy: 'typeCompatibility', allowedPairs: TYPE_TEMA_ALLOWED_PAIRS }
+      : { ...rule, evaluatorKind: RuleEvaluatorKind.FIELD_POLICY, category: RuleCategory.REQUIRED_ALLOWED_VALUE, policy: 'tema',
+      allowedValues: rule.allowedValues || [], valueComparison: rule.valueComparison || ValueComparisonPolicy.NONE });
+
+batch1Rules.push({
+  ruleId: 'innmaling.common.visibility.retired', canonicalFieldId: 'visibility',
+  geometryScopes: [GeometryScope.POINT, GeometryScope.LINE], evaluatorKind: RuleEvaluatorKind.FIELD_POLICY,
+  category: RuleCategory.VALUE_FORMAT, policy: 'visibility', title: 'Synbarhet er ikke lenger validert',
+  description: 'Synbarhet vises som levert, men er utgått fra v3.2-valideringen.',
+  severity: RuleSeverity.ERROR, provenance: RuleProvenance.STANDARD,
+  source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 6' }, allowedValues: [],
+  valueComparison: ValueComparisonPolicy.NONE,
+});
+batch1Rules.push(
+  { ruleId: 'innmaling.point.facility-id.informational', canonicalFieldId: 'facilityId', geometryScopes: [GeometryScope.POINT], evaluatorKind: RuleEvaluatorKind.FIELD_POLICY, category: RuleCategory.VALUE_FORMAT, policy: 'facilityId', title: 'AnleggsID er fremhevet når den er oppgitt', description: 'Oppgitt AnleggsID vises for kontroll. Sjekk er kun informativt og betyr ikke at verdien er feil.', severity: RuleSeverity.ERROR, provenance: RuleProvenance.STANDARD, source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 9' }, allowedValues: [], valueComparison: ValueComparisonPolicy.NONE },
+  { ruleId: 'innmaling.point.attachment-link.policy', canonicalFieldId: 'attachmentLink', geometryScopes: [GeometryScope.POINT], evaluatorKind: RuleEvaluatorKind.FIELD_POLICY, category: RuleCategory.VALUE_FORMAT, policy: 'attachmentLink', title: 'S_HYPERLINK følger objektpolicy', description: 'Vedlegg forventes på aktuelle kumobjekt. Gemini VA støtter ikke vedlegg på LOK eller TOP.', severity: RuleSeverity.ERROR, provenance: RuleProvenance.STANDARD, source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 15' }, allowedValues: [], valueComparison: ValueComparisonPolicy.NONE },
+);
+
+const attachmentLinkRule = batch1Rules.find(
+  (rule) => rule.ruleId === 'innmaling.point.attachment-link.policy'
+);
+attachmentLinkRule.geometryScopes = [GeometryScope.POINT, GeometryScope.LINE];
+attachmentLinkRule.description = 'Vedlegg forventes på aktuelle kumobjekt. Gemini VA støtter ikke vedlegg på kumlokk (LOK/TOP); en levert lenke skal da fjernes.';
+
+export const VALIDATION_RULES = deepFreeze(batch1Rules);
 
 function assertInvariant(condition, message) {
   if (!condition) {
@@ -888,7 +1002,9 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
         RuleEvaluatorKind.DATE_FORMAT,
         RuleEvaluatorKind.TEXT_MAX_LENGTH,
       ].includes(rule.evaluatorKind) && rule.category === RuleCategory.VALUE_FORMAT) ||
-        (rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP && rule.category === RuleCategory.FIELD_COMPATIBILITY),
+        (rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP && rule.category === RuleCategory.FIELD_COMPATIBILITY) ||
+        (rule.evaluatorKind === RuleEvaluatorKind.FIELD_POLICY &&
+          [RuleCategory.VALUE_FORMAT, RuleCategory.REQUIRED_ALLOWED_VALUE].includes(rule.category)),
       `${rule.ruleId} has an evaluator/category mismatch`
     );
     assertInvariant(typeof rule.title === 'string' && rule.title.length > 0, `${rule.ruleId} needs a title`);
@@ -1010,9 +1126,10 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
     }
     if (
       rule.evaluatorKind === RuleEvaluatorKind.ALLOWED_VALUE ||
-      rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE
+      rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE ||
+      rule.evaluatorKind === RuleEvaluatorKind.FIELD_POLICY
     ) {
-      assertInvariant(rule.allowedValues.length > 0, `${rule.ruleId} needs allowed values`);
+      assertInvariant(rule.evaluatorKind === RuleEvaluatorKind.FIELD_POLICY || rule.allowedValues.length > 0, `${rule.ruleId} needs allowed values`);
     } else {
       assertInvariant(rule.allowedValues.length === 0, `${rule.ruleId} must not define allowed values`);
     }

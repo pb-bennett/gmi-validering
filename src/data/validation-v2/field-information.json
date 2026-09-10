@@ -389,7 +389,7 @@
         "validationStatus": "INFORMATIONAL"
       },
       {
-        "text": "Kilden avklarer ikke desimalskilletegn, presisjon eller alternativ notasjon. Derfor blir eksponentform, ufullstendig desimal, gruppering og polstret numerisk tekst Må vurderes; regelen avgjør ikke requiredness, positivitet, avstandens herkomst eller faglige plausibilitet.",
+        "text": "Eksponentform, ufullstendig desimal, gruppering og polstret numerisk tekst gir Feil; regelen bruker vanlig tallformat med punktum eller komma.",
         "validationStatus": "PENDING"
       },
       {
@@ -1745,5 +1745,30 @@
       "pages": "4, 9",
       "auditSourceRuleIds": ["innmaling.common.vertical-level.required"]
     }]
-  }
+  },
+  {
+    "canonicalFieldId": "verticalDimension",
+    "displayName": "VertikalDimensjon",
+    "description": "Ledningens vertikale dimensjon, vurdert sammen med Rørform.",
+    "appliesTo": ["line"],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+      "version": "3.2 / 01.08.2026",
+      "pages": "5, 21",
+      "auditSourceRuleIds": ["innmaling.line.vertical-dimension.valid"]
+    }]
+  },
+  {"canonicalFieldId":"sdr","displayName":"SDR","description":"SDR vurderes mot hydraulisk Tema og Material.","appliesTo":["line"],"units":null,"documentedFormat":"Desimaltall","range":null,"qualifications":[{"text":"Trykkledning med godkjent plastmateriale krever SDR. Andre hydrauliske kontekster vises som Pass eller Sjekk etter ferdig kontekstkontroll.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"5, 21","auditSourceRuleIds":["innmaling.line.sdr.valid"]}]},
+  {"canonicalFieldId":"ringStiffness","displayName":"Ringstivhet","description":"Ringstivhet vurderes mot hydraulisk Tema og Material.","appliesTo":["line"],"units":null,"documentedFormat":"Kode","range":null,"qualifications":[{"text":"Gravity-ledning med godkjent polymermateriale krever gyldig SN-verdi.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"5, 21","auditSourceRuleIds":["innmaling.line.ring-stiffness.valid"]}]},
+  {"canonicalFieldId":"pressureClass","displayName":"Trykklasse","description":"Trykklasse vurderes mot hydraulisk Tema.","appliesTo":["line"],"units":null,"documentedFormat":"Kode","range":null,"qualifications":[{"text":"Gyldig PN-verdi passerer for trykk-Tema; øvrige kontekster markeres Sjekk ved levering.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"5, 21","auditSourceRuleIds":["innmaling.line.pressure-class.valid"]}]},
+  {"canonicalFieldId":"facilityId","displayName":"AnleggsID","description":"Valgfri anleggsidentifikator som fremheves informativt når den er levert.","appliesTo":["point"],"units":null,"documentedFormat":"Tekst","range":null,"qualifications":[{"text":"En levert verdi gir Sjekk som informativ fremheving; det betyr ikke at verdien mistenkes å være feil.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"4, 9","auditSourceRuleIds":["innmaling.point.facility-id.informational"]}]},
+  {"canonicalFieldId":"attachmentLink","displayName":"S_HYPERLINK","description":"Vedleggsreferanse som vurderes ut fra objektets Tema; innholdet URL-valideres ikke.","appliesTo":["point","line"],"units":null,"documentedFormat":"Tekst","range":null,"qualifications":[{"text":"Vedlegg forventes for Byggemetode-aktuelle Tema. Gemini VA støtter ikke vedlegg på kumlokk (LOK/TOP); en levert lenke skal da fjernes.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"5, 15","auditSourceRuleIds":["innmaling.point.attachment-link.policy"]}]}
 ]

@@ -334,7 +334,7 @@ test('direct Tema, S_FCODE fallback, agreement, and conflict reuse the existing 
     [{ Type: 'DB11', S_FCODE: 'DIV' }, { Type: {}, S_FCODE: {} }, EvaluationState.PASS, null],
     [{ Type: 'DB11', S_FCODE: 'BAS' }, { Type: {}, S_FCODE: {} }, EvaluationState.FAIL, RuleReasonCode.TYPE_TEMA_INCOMPATIBLE],
     [{ Type: 'DB11', Tema: 'DIV', S_FCODE: 'DIV' }, { Type: {}, Tema: {}, S_FCODE: {} }, EvaluationState.PASS, null],
-    [{ Type: 'DB11', Tema: 'DIV', S_FCODE: 'BAS' }, { Type: {}, Tema: {}, S_FCODE: {} }, EvaluationState.INDETERMINATE, RuleReasonCode.TEMA_CONFLICT],
+    [{ Type: 'DB11', Tema: 'DIV', S_FCODE: 'BAS' }, { Type: {}, Tema: {}, S_FCODE: {} }, EvaluationState.NOT_EVALUATED, RuleReasonCode.DEPENDENT_TEMA_UNRESOLVED],
   ];
   for (const [attributes, pointSchema, expectedState, expectedReason] of cases) {
     const compatibility = relationshipResult(run(makeDataset({
@@ -343,8 +343,9 @@ test('direct Tema, S_FCODE fallback, agreement, and conflict reuse the existing 
     }), `tema-${Object.keys(attributes).join('-')}-${attributes.Tema || attributes.S_FCODE}`));
     assert.equal(compatibility.passCount, expectedState === EvaluationState.PASS ? 1 : 0);
     assert.equal(compatibility.failCount, expectedState === EvaluationState.FAIL ? 1 : 0);
-    assert.equal(compatibility.indeterminateCount, expectedState === EvaluationState.INDETERMINATE ? 1 : 0);
-    if (expectedReason) assert.equal(compatibility.findings[0].reasonCode, expectedReason);
+    assert.equal(compatibility.indeterminateCount, 0);
+    assert.equal(compatibility.notEvaluatedCount, expectedState === EvaluationState.NOT_EVALUATED ? 1 : 0);
+    if (expectedReason && compatibility.findings.length) assert.equal(compatibility.findings[0].reasonCode, expectedReason);
     assertReconciles(compatibility);
   }
 
@@ -384,8 +385,9 @@ test('runner preserves ambiguous, unresolved, and schema-unavailable input evide
   ];
   for (const [dataset, reasonCode] of runnerCases) {
     const compatibility = relationshipResult(run(dataset, `structural-${reasonCode}`));
-    assert.equal(compatibility.indeterminateCount, 1, reasonCode);
-    assert.equal(compatibility.findings[0].reasonCode, reasonCode);
+    assert.equal(compatibility.indeterminateCount, 0, reasonCode);
+    assert.equal(compatibility.notEvaluatedCount, 1, reasonCode);
+    assert.equal(compatibility.findings.length, 0, reasonCode);
     assertReconciles(compatibility);
   }
 });
@@ -533,9 +535,10 @@ test('ordinary single-field Fildata rejects the compatibility row', () => {
   }), /disabled for relationship rules/);
 });
 
-test('registry and presentation totals are exactly 41 / 34 / 21', () => {
+test('registry has one point-scoped Type owner and one point-scoped compatibility owner', () => {
   const rules = getValidationRules();
-  assert.equal(rules.length, 45);
-  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('point')).length, 38);
-  assert.equal(rules.filter(({ geometryScopes }) => geometryScopes.includes('line')).length, 21);
+  assert.equal(rules.filter(({ ruleId }) => ruleId === TYPE_VALID).length, 1);
+  assert.equal(rules.filter(({ ruleId }) => ruleId === COMPATIBLE).length, 1);
+  assert.deepEqual(getValidationRule(TYPE_VALID).geometryScopes, ['point']);
+  assert.deepEqual(getValidationRule(COMPATIBLE).geometryScopes, ['point']);
 });

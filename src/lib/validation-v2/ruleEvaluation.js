@@ -415,6 +415,11 @@ export function evaluateTemaRequired(identity) {
  * results or depend on registry execution order.
  */
 export function evaluateRelationshipPrerequisite(rule, evidence) {
+  if (rule.evaluatorKind === RuleEvaluatorKind.FIELD_POLICY) {
+    return rule.canonicalFieldId === 'tema'
+      ? evaluateTemaRequiredAllowedValue(evidence, rule.allowedValues)
+      : evaluateAllowedValue(evidence, rule.allowedValues);
+  }
   if (rule.evaluatorKind === RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE) {
     return rule.canonicalFieldId === 'tema'
       ? evaluateTemaRequiredAllowedValue(evidence, rule.allowedValues)

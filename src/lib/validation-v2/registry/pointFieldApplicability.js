@@ -20,7 +20,7 @@ function deepFreeze(value) {
   return value;
 }
 
-const CELL_KEYS = ['constructionMethod', 'manholeShape', 'cone', 'width'];
+const CELL_KEYS = ['constructionMethod', 'manholeShape', 'cone', 'width', 'wallThickness', 'innerBottomToOuterUndersideDistance'];
 const LEGACY_APPLICABLE_TEMAS = ['KUM', 'SAN', 'SLS', 'SLU'];
 const NEW_APPLICABLE_TEMAS = [
   'KUMI',
@@ -97,7 +97,7 @@ for (const canonicalFieldId of ['constructionMethod', 'manholeShape', 'cone']) {
 cells.push({
   tema: 'STR',
   canonicalFieldId: 'width',
-  state: PointFieldApplicabilityState.APPLICABLE,
+  state: PointFieldApplicabilityState.NOT_APPLICABLE,
   authority: POLICY_AUTHORITY,
   rationale:
     'Explicit domain-owner PROJECT/DOMAIN POLICY decision for the exact current v3.2 Tema/field combination; historical STR Bredde population is PRAKSIS evidence only and does not establish applicability; not STANDARD Innmålingsinstruks behavior.',
@@ -130,7 +130,7 @@ for (const tema of ['KMR', 'SUMP']) {
 export const POINT_FIELD_APPLICABILITY_POLICY = deepFreeze({
   policyId: 'validator-2-point-field-applicability',
   policyVersion: '3.2.0',
-  policyRevision: '2026-09-04.3',
+  policyRevision: '2026-09-09.4',
   effectiveDate: '2026-09-04',
   decisionDate: '2026-09-04',
   authority: POLICY_AUTHORITY,

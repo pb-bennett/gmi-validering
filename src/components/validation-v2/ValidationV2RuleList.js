@@ -85,9 +85,9 @@ export default function ValidationV2RuleList({
                 </div>
                 <dl className="grid grid-cols-2 gap-x-4 sm:grid-cols-3">
                   <SummaryCount label="Objekter i grunnlaget" value={counts.evaluatedCount} />
-                  <SummaryCount label="Bestått" value={counts.passCount} />
-                  <SummaryCount label="Må rettes" value={counts.failCount} />
-                  <SummaryCount label="Må vurderes" value={counts.indeterminateCount} />
+                  <SummaryCount label="Pass" value={counts.passCount} />
+                  <SummaryCount label="Feil" value={counts.failCount} />
+                  <SummaryCount label="Sjekk" value={(counts.checkCount || 0) + counts.indeterminateCount} />
                   {counts.notEvaluatedCount > 0 && (
                     <SummaryCount label="Ikke kontrollert" value={counts.notEvaluatedCount} />
                   )}

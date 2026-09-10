@@ -24,6 +24,8 @@ import {
   evaluateTemaRequired,
 } from './ruleEvaluation.js';
 import { getValidationRules } from './registry/rules.js';
+import { evaluateFieldPolicy, evaluateValidatedTema } from './fieldPolicy.js';
+import { classifyHydraulicTema } from './registry/hydraulicTemaClassification.js';
 
 function deepFreeze(value, propertyName) {
   if (
@@ -167,7 +169,12 @@ function copyConflictEvidence(conflicts = []) {
   });
 }
 
-function evaluateRule({ rule, evidence, rulesById }) {
+function evaluateRule({ rule, evidence, rulesById, policyContext }) {
+  if (rule.evaluatorKind === RuleEvaluatorKind.FIELD_POLICY) {
+    return rule.canonicalFieldId === 'tema'
+      ? evaluateValidatedTema(evidence, rule.allowedValues)
+      : evaluateFieldPolicy(evidence, rule.policy, rule, policyContext);
+  }
   if (rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP) {
     return evaluateFieldRelationship({
       inputFieldIds: rule.inputFieldIds,
@@ -275,8 +282,10 @@ export function createFinding({ rule, ref, evidence, evaluation }) {
 
 function createRuleResult(rule, refs, context) {
   const findings = [];
+  const outcomes = [];
   let passCount = 0;
   let failCount = 0;
+  let checkCount = 0;
   let notEvaluatedCount = 0;
   let indeterminateCount = 0;
   const geometryBreakdown = {
@@ -302,22 +311,29 @@ function createRuleResult(rule, refs, context) {
       }
       return [canonicalFieldId, fieldEvidence];
     }));
-    const evidence = rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP
+    const evidence = rule.policy === 'typeCompatibility' ? evidenceByField.type : rule.evaluatorKind === RuleEvaluatorKind.FIELD_RELATIONSHIP
       ? evidenceByField
       : evidenceByField[rule.canonicalFieldId];
-    const evaluation = evaluateRule({ rule, evidence, rulesById: context.rulesById });
+    const evaluation = rule.policy === 'typeCompatibility'
+      ? evaluateFieldPolicy(evidence, rule.policy, rule, context.policyContexts.get(ref.key))
+      : evaluateRule({ rule, evidence, rulesById: context.rulesById, policyContext: context.policyContexts.get(ref.key) });
+    outcomes.push({ objectRef: ref, canonicalFieldId: rule.canonicalFieldId, ruleId: rule.ruleId,
+      state: evaluation.state, reasonCode: evaluation.reasonCode || null,
+      suppression: evaluation.details?.suppression || null });
     const geometryCounts = geometryBreakdown[ref.geometryScope];
     geometryCounts.evaluatedCount += 1;
     if (evaluation.state === EvaluationState.PASS) passCount += 1;
     if (evaluation.state === EvaluationState.PASS) geometryCounts.passCount += 1;
     if (evaluation.state === EvaluationState.FAIL) failCount += 1;
     if (evaluation.state === EvaluationState.FAIL) geometryCounts.failCount += 1;
+    if (evaluation.state === EvaluationState.CHECK) checkCount += 1;
+    if (evaluation.state === EvaluationState.CHECK) geometryCounts.checkCount += 1;
     if (evaluation.state === EvaluationState.NOT_EVALUATED) notEvaluatedCount += 1;
     if (evaluation.state === EvaluationState.NOT_EVALUATED) geometryCounts.notEvaluatedCount += 1;
     if (evaluation.state === EvaluationState.INDETERMINATE) indeterminateCount += 1;
     if (evaluation.state === EvaluationState.INDETERMINATE) geometryCounts.indeterminateCount += 1;
-    if (evaluation.state === EvaluationState.FAIL || evaluation.state === EvaluationState.INDETERMINATE) {
-      findings.push(createFinding({ rule, ref, evidence, evaluation }));
+    if (evaluation.state === EvaluationState.FAIL || evaluation.state === EvaluationState.CHECK || evaluation.state === EvaluationState.INDETERMINATE) {
+      findings.push(createFinding({ rule, ref, evidence: rule.policy === 'typeCompatibility' ? evidenceByField : evidence, evaluation }));
       geometryCounts.findingCount += 1;
     }
   }
@@ -327,10 +343,12 @@ function createRuleResult(rule, refs, context) {
     evaluatedObjectCount: refs.length,
     passCount,
     failCount,
+    checkCount,
     notEvaluatedCount,
     indeterminateCount,
     geometryBreakdown,
     findings,
+    outcomes,
     affectedObjectRefs: findings.map((finding) => finding.objectRef),
   };
 }
@@ -340,6 +358,7 @@ function createGeometryCounts() {
     evaluatedCount: 0,
     passCount: 0,
     failCount: 0,
+    checkCount: 0,
     notEvaluatedCount: 0,
     indeterminateCount: 0,
     findingCount: 0,
@@ -356,6 +375,7 @@ export function runGmiValidationV2(input) {
   const schemaBinding = bindGmiLayerSchema(input);
   const objectRefs = createGmiObjectRefs(input);
   const rules = getValidationRules();
+  const referenceDate = input.referenceDate ? new Date(`${input.referenceDate}T00:00:00Z`) : new Date();
   const context = {
     layerId: input.layerId,
     dataset: input.dataset,
@@ -363,11 +383,46 @@ export function runGmiValidationV2(input) {
     schemaBinding,
     evidenceCache: new Map(),
     rulesById: new Map(rules.map((rule) => [rule.ruleId, rule])),
+    policyContexts: new Map(),
+    referenceDate,
+    currentYear: referenceDate.getUTCFullYear(),
   };
+  const allRefs = [...objectRefs.pointRefs, ...objectRefs.lineRefs];
+  const evidenceFor = (ref, canonicalFieldId) => {
+    const key = `${canonicalFieldId}|${ref.key}`;
+    if (!context.evidenceCache.has(key)) context.evidenceCache.set(key, getFieldEvidence({ canonicalFieldId, ref, dataset: context.dataset, datasetRevision: context.datasetRevision, schemaBinding: context.schemaBinding, layerId: context.layerId }));
+    return context.evidenceCache.get(key);
+  };
+  const raw = (evidence) => typeof evidence?.sourceLexeme === 'string' && evidence.sourceLexeme !== 'UNAVAILABLE' ? evidence.sourceLexeme : evidence?.sourceValue;
+  const causeValues = ['FJERN', 'FLYTT_DELV', 'FLYTT_HELT', 'NYTT', 'PÅVI', 'UENDR'];
+  const nyttYears = new Set();
+  for (const ref of allRefs) {
+    const cause = evidenceFor(ref, 'positioningCause'); const year = evidenceFor(ref, 'installationYear'); const y = raw(year);
+    if (raw(cause) === 'NYTT' && typeof y === 'string' && /^[0-9]{4}$/.test(y) && Number(y) > 0 && Number(y) <= context.currentYear) nyttYears.add(Number(y));
+  }
+  const typeRelationship = rules.find((rule) => rule.ruleId === 'innmaling.point.type-tema.compatible');
+  const pipeShapeRule = rules.find((rule) => rule.ruleId === 'innmaling.line.pipe-shape.valid');
+  const materialRule = rules.find((rule) => rule.ruleId === 'innmaling.line.material.required');
+  const typeTemas = new Set(typeRelationship?.relationship.allowedPairs.map(([, tema]) => tema) || []);
+  const typeValues = new Set(typeRelationship?.relationship.allowedPairs.map(([type]) => type) || []);
+  for (const ref of allRefs) context.policyContexts.set(ref.key, {
+    tema: evidenceFor(ref, 'tema'),
+    temaValid: (() => { const identity = evidenceFor(ref, 'tema'); return identity.state === 'RESOLVED' && (ref.geometryScope === 'point' ? rules.find((r) => r.ruleId === 'innmaling.point.tema.required') : rules.find((r) => r.ruleId === 'innmaling.line.tema.required'))?.allowedValues.includes(identity.resolvedValue); })(),
+    positioningCause: evidenceFor(ref, 'positioningCause'), installationYear: evidenceFor(ref, 'installationYear'),
+    pipeShape: evidenceFor(ref, 'pipeShape'), pipeShapeValues: pipeShapeRule?.allowedValues || [],
+    material: evidenceFor(ref, 'material'), materialValid: (() => { const material = evidenceFor(ref, 'material'); return material?.state === 'VALUE_PRESENT' && materialRule?.allowedValues.includes(raw(material)); })(), hydraulicClass: (() => { const identity = evidenceFor(ref, 'tema'); return identity.state === 'RESOLVED' && (ref.geometryScope === 'line') ? classifyHydraulicTema(identity.resolvedValue, rules.find((r) => r.ruleId === 'innmaling.line.tema.required')?.allowedValues || []) : null; })(),
+    nyttYears, typeTemas, typeValues, referenceDate, currentYear: context.currentYear,
+  });
   const ruleResults = rules.map((rule) =>
     createRuleResult(rule, getRefsForRule(rule, objectRefs), context)
   );
   const findings = ruleResults.flatMap((result) => result.findings);
+  const outcomes = ruleResults.flatMap((result) => result.outcomes);
+  const schemaFindings = ['point', 'line'].flatMap((geometryScope) => {
+    const binding = schemaBinding.bindings.find((item) => item.geometryScope === geometryScope && item.canonicalFieldId === 'tema');
+    const keys = binding?.candidates?.filter((item) => item.mappingKind !== MappingKind.UNSUPPORTED_CANDIDATE).map((item) => item.sourceKey) || [];
+    return keys.includes('Tema') && keys.includes('S_FCODE') ? [{ layerId: input.layerId, datasetRevision: input.datasetRevision, geometryScope, canonicalFieldId: 'tema', state: EvaluationState.CHECK, reasonCode: RuleReasonCode.SCHEMA_TEMA_SFCODE_COEXISTENCE }] : [];
+  });
 
   return deepFreeze({
     layerId: input.layerId,
@@ -376,10 +431,14 @@ export function runGmiValidationV2(input) {
     schemaBinding,
     sourceFieldDiagnostics: schemaBinding.sourceFieldDiagnostics,
     ruleResults,
+    outcomes,
+    schemaFindings,
+    runContext: { referenceDate: referenceDate.toISOString().slice(0, 10) },
     summary: {
       totalRules: ruleResults.length,
       rulesWithFailures: ruleResults.filter((result) => result.failCount > 0).length,
       failFindingCount: findings.filter((finding) => finding.state === EvaluationState.FAIL).length,
+      checkFindingCount: findings.filter((finding) => finding.state === EvaluationState.CHECK).length + schemaFindings.length,
       indeterminateFindingCount: findings.filter((finding) => finding.state === EvaluationState.INDETERMINATE).length,
       evaluatedPointCount: objectRefs.pointRefs.length,
       evaluatedLineCount: objectRefs.lineRefs.length,
