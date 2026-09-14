@@ -360,27 +360,34 @@ test('compact rule rows expose summaries without individual object metadata', as
   assert.doesNotMatch(source, /finding\.objectRef\.key|Objekt 1|Vis alle|FindingGroups/);
 });
 
-test('field details derive Resultat on open and reset by selected field identity', async () => {
+test('field details keep the model shared and reset Resultat by selected field identity', async () => {
   const modalSource = await readFile(
     new URL('../src/components/validation-v2/ValidationV2FieldInfoModal.js', import.meta.url),
+    'utf8',
+  );
+  const contentSource = await readFile(
+    new URL('../src/components/validation-v2/ValidationV2FieldDetailContent.js', import.meta.url),
     'utf8',
   );
   const workspaceSource = await readFile(
     new URL('../src/components/validation-v2/ValidationV2Workspace.js', import.meta.url),
     'utf8',
   );
-  assert.match(modalSource, /const \[activeTab, setActiveTab\] = useState\(TABS\.RESULT\)/);
-  assert.match(modalSource, /const fieldDataState = useMemo\(\(\) => \{/);
-  assert.match(modalSource, /const fieldDataState = useMemo[\s\S]*?getValidationV2FieldDataSummary/);
-  assert.doesNotMatch(modalSource.slice(modalSource.indexOf('const selectTab')), /getValidationV2FieldDataSummary/);
-  assert.match(modalSource, /\[\s*isOpen,[\s\S]*?field,[\s\S]*?rule,[\s\S]*?dataset,[\s\S]*?result,[\s\S]*?geometryScope,/);
+  assert.match(modalSource, /const \[activeTab, setActiveTab\] = useState\('result'\)/);
+  assert.match(contentSource, /export function useValidationV2FieldDetailModel/);
+  assert.match(contentSource, /const fieldDataState = useMemo\(\(\) => \{/);
+  assert.match(contentSource, /const fieldDataState = useMemo[\s\S]*?getValidationV2FieldDataSummary/);
+  assert.match(contentSource, /buildFieldDiagnosticsForRules/);
+  assert.match(contentSource, /export function ValidationV2FieldDetailContent\([\s\S]*?activeTab,[\s\S]*?onTabChange/);
+  assert.match(contentSource, /onClick=\{\(\) => selectTab\(tab\)\}/);
+  assert.doesNotMatch(modalSource, /getValidationV2FieldDataSummary|buildFieldDiagnosticsForRules/);
   assert.match(workspaceSource, /<ValidationV2FieldInfoModal\s+key=\{`\$\{fieldInfoContext\.geometryScope\}:\$\{fieldInfoContext\.field\.canonicalFieldId\}`\}/);
-  assert.doesNotMatch(modalSource, /setTimeout\(/);
+  assert.doesNotMatch(contentSource, /setTimeout\(/);
 });
 
 test('Resultat presents neutral contextual coverage before diagnostics', async () => {
   const modalSource = await readFile(
-    new URL('../src/components/validation-v2/ValidationV2FieldInfoModal.js', import.meta.url),
+    new URL('../src/components/validation-v2/ValidationV2FieldDetailContent.js', import.meta.url),
     'utf8',
   );
   assert.match(modalSource, /function CoverageSummary\(\{ coverage, field \}\)/);

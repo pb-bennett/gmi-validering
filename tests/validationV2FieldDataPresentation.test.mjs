@@ -140,7 +140,7 @@ test('contextual line failures expose only explanatory Tema, Material and RÃ¸r
 });
 
 test('context explanation control supports hover, focus and click without a permanent column', async () => {
-  const modal = await readFile(new URL('../src/components/validation-v2/ValidationV2FieldInfoModal.js', import.meta.url), 'utf8');
+  const modal = await readFile(new URL('../src/components/validation-v2/ValidationV2FieldDetailContent.js', import.meta.url), 'utf8');
   assert.match(modal, /role="tooltip"/);
   assert.match(modal, /onMouseEnter=.*setHovered/);
   assert.match(modal, /onFocus=.*setFocused/);
@@ -167,8 +167,8 @@ test('parser transformations stay accessible on demand instead of becoming a def
   assert.deepEqual(presentation.columns, ['Levert verdi', 'Antall', 'Andel', 'Resultat']);
   assert.equal(presentation.rows[0].deliveredValue, '"001"');
   assert.equal(presentation.rows[0].interpretedValue, '1');
-  const modal = await readFile(new URL('../src/components/validation-v2/ValidationV2FieldInfoModal.js', import.meta.url), 'utf8');
-  const detailsPanel = modal.slice(modal.indexOf('function DiagnosticResultPanel'), modal.indexOf('export default function ValidationV2FieldInfoModal'));
+  const modal = await readFile(new URL('../src/components/validation-v2/ValidationV2FieldDetailContent.js', import.meta.url), 'utf8');
+  const detailsPanel = modal.slice(modal.indexOf('function DiagnosticResultPanel'), modal.indexOf('export function useValidationV2FieldDetailModel'));
   assert.match(detailsPanel, /Tolket verdi/);
   assert.doesNotMatch(detailsPanel, /<th[^>]*>Parserverdi<\/th>/);
 });

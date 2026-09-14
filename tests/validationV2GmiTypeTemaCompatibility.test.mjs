@@ -514,7 +514,7 @@ test('Field Info keeps Type canonical and exposes exact compatibility/provenance
   assert.equal(presentations.some(({ displayName }) => displayName === 'Type passer til Tema'), false);
 
   const modalSource = await readFile(
-    new URL('../src/components/validation-v2/ValidationV2FieldInfoModal.js', import.meta.url),
+    new URL('../src/components/validation-v2/ValidationV2FieldDetailContent.js', import.meta.url),
     'utf8',
   );
   assert.match(modalSource, /fieldDataEnabled/);

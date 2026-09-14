@@ -169,7 +169,7 @@ test('Type Regel uses one source-backed table with the original order, wording, 
 });
 
 test('Type source table has no nested vertical scroller and Resultat remains untouched', () => {
-  const modal = readFileSync(new URL('../src/components/validation-v2/ValidationV2FieldInfoModal.js', import.meta.url), 'utf8');
+  const modal = readFileSync(new URL('../src/components/validation-v2/ValidationV2FieldDetailContent.js', import.meta.url), 'utf8');
   const tableComponent = modal.match(/function SourceValueTable\([\s\S]*?\n}\n\nfunction ModernRulePanel/);
   assert(tableComponent, 'source-table renderer is present');
   assert.match(modal, /compactType=\{field\.canonicalFieldId === 'type'\}/);
