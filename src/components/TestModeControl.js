@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import useStore from '@/lib/store';
 import { isTestModeEnabled } from '@/lib/telemetry/uploadTelemetry.mjs';
-import { isTestModeActivation } from '@/lib/testModeActivation.mjs';
 import { GearSixIcon } from '@phosphor-icons/react';
 import DevDiagnosticsPanel from './DevDiagnosticsPanel';
 
@@ -13,23 +12,10 @@ export default function TestModeControl() {
   const updateSettings = useStore((state) => state.updateSettings);
   const [developerToolsOpen, setDeveloperToolsOpen] = useState(false);
 
-  useEffect(() => {
-    if (!hydrated || typeof window === 'undefined') return;
-
-    const params = new URLSearchParams(window.location.search);
-    if (!isTestModeActivation(params)) return;
-
-    updateSettings({ testMode: true });
-    params.delete('testmodus');
-    const query = params.toString();
-    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
-    window.history.replaceState(window.history.state, '', nextUrl);
-  }, [hydrated, updateSettings]);
-
   if (!hydrated || !testMode) return null;
 
   return (
-    <div className="relative flex max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-amber-950 shadow-sm">
+    <div className="relative flex w-max max-w-full flex-nowrap items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-amber-950 shadow-sm">
       <span className="text-xs font-semibold" title="Testmodus er aktiv – opplastinger registreres ikke i bruksstatistikken.">
         Testmodus
       </span>

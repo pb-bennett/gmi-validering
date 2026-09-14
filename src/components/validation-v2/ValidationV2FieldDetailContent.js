@@ -163,7 +163,9 @@ const VALUE_COLUMN_LABELS = {
 function SourceValueTable({ columns, rows, source, compactType = false }) {
   const visibleColumns = [...columns, ...(rows.some((row) => row.validator) ? ['validator'] : [])];
   const tableClass = 'min-w-full text-xs';
-  const wrapperClass = compactType ? 'relative rounded border border-slate-200' : 'overflow-hidden rounded border border-slate-200';
+  const wrapperClass = compactType
+    ? 'relative max-w-full overflow-x-auto overflow-y-clip rounded border border-slate-200'
+    : 'max-w-full overflow-x-auto overflow-y-clip rounded border border-slate-200';
   return <><div className={wrapperClass}><table className={tableClass}><thead className={`${compactType ? 'sticky top-0 z-10 ' : ''}bg-slate-50 text-left text-[11px] text-slate-500`}><tr>{visibleColumns.map((column) => <th key={column} className={`px-2 ${compactType ? 'py-1' : 'py-1.5'} ${compactType && column === 'tema' ? 'w-32' : ''}`}>{column === 'validator' ? 'Vurdering' : VALUE_COLUMN_LABELS[column]}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.code}>{visibleColumns.map((column) => <td key={column} className={`px-2 ${compactType ? 'py-1' : 'py-1.5'} align-top ${column === 'code' ? 'font-mono font-semibold text-slate-800' : column === 'validator' ? 'font-medium text-orange-700' : 'whitespace-pre-line break-words text-slate-700'} ${compactType && column === 'code' ? 'whitespace-nowrap' : ''}`}>{row[column] || ''}</td>)}</tr>)}</tbody></table></div>{source && <p className="mt-1 text-[11px] text-slate-500">Kilde: {source.document}, {source.section}, side {source.page}</p>}</>;
 }
 
@@ -175,7 +177,7 @@ function ModernRulePanel({ field, rule }) {
       {presentation.summary && <RuleSection title="Kort forklart"><p className="text-xs leading-5 text-slate-700">{presentation.summary}</p></RuleSection>}
       {presentation.evaluationGuidance.length > 0 && <RuleSection title="Hvordan vurderes feltet?"><StatusGuidance rows={presentation.evaluationGuidance} /></RuleSection>}
       {applicability && <RuleSection title="Når er feltet aktuelt?"><p className="text-xs leading-5 text-slate-700">{applicability.text}</p>{applicability.values && <div className="flex flex-wrap gap-1.5 pt-1">{applicability.values.map((value) => <code key={value} className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">{value}</code>)}</div>}</RuleSection>}
-      {presentation.compatibility && <RuleSection title="Type passer til Tema"><p className="text-xs leading-5 text-slate-700">Type vurderes mot Tema. Tabellen viser de godkjente kombinasjonene.</p><div className="max-h-56 overflow-auto rounded border border-slate-200"><table className="min-w-full text-xs"><tbody className="divide-y divide-slate-100">{Object.entries(presentation.compatibility.byType).map(([type, relationship]) => <tr key={type}><td className="px-2 py-1.5 font-mono font-semibold text-slate-800">{type}</td><td className="px-2 py-1.5 text-slate-600">{relationship.temaValues.join(', ')}</td></tr>)}</tbody></table></div></RuleSection>}
+      {presentation.compatibility && <RuleSection title="Type passer til Tema"><p className="text-xs leading-5 text-slate-700">Type vurderes mot Tema. Tabellen viser de godkjente kombinasjonene.</p><div className="max-w-full overflow-x-auto overflow-y-clip rounded border border-slate-200"><table className="min-w-full text-xs"><tbody className="divide-y divide-slate-100">{Object.entries(presentation.compatibility.byType).map(([type, relationship]) => <tr key={type}><td className="px-2 py-1.5 font-mono font-semibold text-slate-800">{type}</td><td className="px-2 py-1.5 text-slate-600">{relationship.temaValues.join(', ')}</td></tr>)}</tbody></table></div></RuleSection>}
       {presentation.allowedValues && <RuleSection title={presentation.allowedValues.heading}><SourceValueTable columns={presentation.allowedValues.columns} rows={presentation.allowedValues.rows} source={presentation.allowedValues.source} compactType={field.canonicalFieldId === 'type'} />{presentation.allowedValues.validatorCodesMatch === false && <p className="text-[11px] text-amber-800">Kildetabellen samsvarer ikke med aktive validatorverdier.</p>}{presentation.allowedValues.groups?.map((group) => <div key={group.heading} className="space-y-1.5 pt-2"><h4 className="text-xs font-semibold text-slate-700">{group.heading}</h4><SourceValueTable columns={group.columns} rows={group.rows} source={group.source} /></div>)}</RuleSection>}
       {presentation.source && <RuleSection title="Kilde"><ul className="space-y-1 text-xs text-slate-600">{presentation.source.map((source) => <li key={`${source.title}-${source.pages}`}>{source.title}{source.pages ? `, side ${source.pages}` : ''}{source.version ? ` (${source.version})` : ''}</li>)}</ul></RuleSection>}
       {presentation.technicalDetails.length > 0 && <details className="border-t border-slate-200 pt-3"><summary className="cursor-pointer text-sm font-semibold text-slate-700">Tekniske detaljer</summary><dl className="mt-2">{presentation.technicalDetails.map((detail) => <InformationRow key={detail.label} label={detail.label}>{detail.code ? <code>{detail.value}</code> : detail.value}</InformationRow>)}</dl></details>}
@@ -391,7 +393,7 @@ function DiagnosticResultPanel({ summary, diagnostics, isLoading, error, onRetry
     </details>
   ) : null;
   return (
-    <div className="space-y-3 px-2.5">
+    <div className="space-y-3">
       <h3 className="text-sm font-semibold text-gray-900">{renderValidationV2ResultHeading({ field, ...model })}</h3>
       <CoverageSummary coverage={model.coverage} field={field} />
       {model.diagnostics.map((diagnostic) => <DiagnosticBlock key={diagnostic.diagnosticId} diagnostic={diagnostic} />)}
@@ -512,6 +514,7 @@ export function ValidationV2FieldDetailContent({
       ))}
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div className="mx-auto w-full max-w-2xl px-2.5">
       {activeTab === TABS.RESULT ? (
         <div id={`validation-v2-field-panel-${TABS.RESULT}`} role="tabpanel" aria-labelledby={`validation-v2-field-tab-${TABS.RESULT}`}>
           <DiagnosticResultPanel summary={fieldDataState.summary} diagnostics={diagnostics} isLoading={fieldDataState.loading} error={fieldDataState.error} onRetry={retryFieldData} field={field} />
@@ -521,6 +524,7 @@ export function ValidationV2FieldDetailContent({
           <ModernRulePanel field={field} rule={rule} />
         </div>
       )}
+      </div>
     </div>
   </div>;
 }

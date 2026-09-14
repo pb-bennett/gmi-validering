@@ -173,7 +173,7 @@ test('Type source table has no nested vertical scroller and Resultat remains unt
   const tableComponent = modal.match(/function SourceValueTable\([\s\S]*?\n}\n\nfunction ModernRulePanel/);
   assert(tableComponent, 'source-table renderer is present');
   assert.match(modal, /compactType=\{field\.canonicalFieldId === 'type'\}/);
-  assert.match(tableComponent[0], /compactType \? 'relative rounded border border-slate-200'/);
+  assert.match(tableComponent[0], /compactType\s*\? 'relative max-w-full overflow-x-auto overflow-y-clip rounded border border-slate-200'/);
   assert.doesNotMatch(tableComponent[0], /overflow-(?:auto|y-auto)|max-h-/);
   assert.equal(api.getValidationV2AggregateStatus({ passCount: 1, failCount: 0, checkCount: 0, indeterminateCount: 0 }).label, 'Pass');
   const activeTypeCodes = api.getValidationRule('innmaling.point.type.valid').allowedValues;

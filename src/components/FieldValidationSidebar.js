@@ -366,56 +366,16 @@ function LegacyFieldValidationSidebar() {
   );
 }
 
-function ValidationModeSelector({ mode, onChange }) {
-  return (
-    <div
-      className="flex-none border-b bg-white p-2"
-      role="group"
-      aria-label="Valideringsmodus"
-    >
-      <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1">
-        <button
-          type="button"
-          aria-pressed={mode === 'legacy'}
-          onClick={() => onChange('legacy')}
-          className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${
-            mode === 'legacy'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-600 hover:bg-white/70'
-          }`}
-        >
-          Validator 1.0
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === 'v2'}
-          onClick={() => onChange('v2')}
-          className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${
-            mode === 'v2'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-gray-600 hover:bg-white/70'
-          }`}
-        >
-          Validator 2.0 (beta)
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default function FieldValidationSidebar() {
-  const [mode, setMode] = useState('legacy');
-
+export default function FieldValidationSidebar({ sidebarWidth, canDockInspector, onDockedInspectorChange }) {
   return (
     <div className="h-full flex flex-col">
-      <ValidationModeSelector mode={mode} onChange={setMode} />
-      {mode === 'v2' ? (
-        <ValidationV2ErrorBoundary>
-          <ValidationV2Workspace />
-        </ValidationV2ErrorBoundary>
-      ) : (
-        <LegacyFieldValidationSidebar />
-      )}
+      <ValidationV2ErrorBoundary>
+        <ValidationV2Workspace
+          sidebarWidth={sidebarWidth}
+          canDockInspector={canDockInspector}
+          onDockedInspectorChange={onDockedInspectorChange}
+        />
+      </ValidationV2ErrorBoundary>
     </div>
   );
 }

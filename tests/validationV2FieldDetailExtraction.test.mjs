@@ -16,14 +16,15 @@ test('shared field detail renders controlled Resultat and Regel tabs', async () 
   assert.doesNotMatch(content, /useState\(TABS\.RESULT\)/);
 });
 
-test('current modal defaults to Resultat and retains its dialog and focus behavior', async () => {
+test('fallback modal defaults to Resultat and retains its dialog and focus behavior', async () => {
   const modal = await readFile(modalUrl, 'utf8');
-  assert.match(modal, /useState\('result'\)/);
+  assert.match(modal, /activeTab = 'result'/);
   assert.match(modal, /role="dialog"/);
   assert.match(modal, /aria-modal="true"/);
   assert.match(modal, /aria-labelledby="validation-v2-field-info-title"/);
   assert.match(modal, /fixed inset-0 z-\[10003\].*bg-black\/40/);
-  assert.match(modal, /max-h-\[720px\] w-full max-w-\[44rem\]/);
+  assert.match(modal, /max-h-\[720px\] w-full flex-col/);
+  assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_DETAIL_WIDTH/);
   assert.match(modal, /event\.target === event\.currentTarget && onClose\(\)/);
   assert.match(modal, /aria-label="Lukk feltinformasjon"[\s\S]*?onClick=\{onClose\}/);
   assert.match(modal, /closeButtonRef\.current\?\.focus\(\)/);
@@ -31,7 +32,7 @@ test('current modal defaults to Resultat and retains its dialog and focus behavi
   assert.match(modal, /getFocusableElements\(dialog\)/);
   assert.match(modal, /first\.focus\(\)/);
   assert.match(modal, /last\.focus\(\)/);
-  assert.match(modal, /activeTab=\{activeTab\}[\s\S]*?onTabChange=\{setActiveTab\}/);
+  assert.match(modal, /activeTab=\{activeTab\}[\s\S]*?onTabChange=\{onTabChange\}/);
 });
 
 test('shared model and presentation retain diagnostics, qualifiers, details, and authoritative tables', async () => {

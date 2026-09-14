@@ -90,7 +90,8 @@ test('tracking fails closed around persisted Testmodus hydration', () => {
 
 test('Testmodus exposes one developer control only while active', async () => {
   const control = await readFile(new URL('../src/components/TestModeControl.js', import.meta.url), 'utf8');
-  const toolbar = await readFile(new URL('../src/components/TabSwitcher.js', import.meta.url), 'utf8');
+  const toolbar = await readFile(new URL('../src/components/MapPaneToolbar.js', import.meta.url), 'utf8');
+  const modeControls = await readFile(new URL('../src/components/TabSwitcher.js', import.meta.url), 'utf8');
   const page = await readFile(new URL('../src/app/page.js', import.meta.url), 'utf8');
   assert.match(control, /aria-label="Slå av testmodus"/);
   assert.match(control, /Utviklerverkt/);
@@ -102,7 +103,9 @@ test('Testmodus exposes one developer control only while active', async () => {
   assert.doesNotMatch(control, />DEV</);
   assert.doesNotMatch(control, /fixed left-4 bottom-4/);
   assert.match(toolbar, /<TestModeControl \/>/);
-  assert.match(toolbar, /viewer3DOpen && data/);
-  assert.doesNotMatch(page, /<TestModeControl \/>/);
+  assert.match(modeControls, /viewer3DOpen && data/);
+  assert.equal((page.match(/<TestModeControl \/>/g) || []).length, 1);
+  assert.match(page, /parsingStatus !== 'done'[\s\S]*?<TestModeControl \/>/);
+  assert.match(page, /parsingStatus === 'done'[\s\S]*?<MapPaneToolbar/);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);
 });

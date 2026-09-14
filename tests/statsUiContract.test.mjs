@@ -13,6 +13,7 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   const detailed = read('src/components/DetailedStatsSection.js');
   const testMode = read('src/components/TestModeControl.js');
   const tabSwitcher = read('src/components/TabSwitcher.js');
+  const mapToolbar = read('src/components/MapPaneToolbar.js');
   const page = read('src/app/page.js');
   const activation = read('src/lib/testModeActivation.mjs');
 
@@ -54,10 +55,12 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.doesNotMatch(testMode, /Aktiver testmodus/);
   assert.match(testMode, /aria-label="Slå av testmodus"/);
   assert.doesNotMatch(testMode, /fixed left-4 bottom-4/);
-  assert.match(tabSwitcher, /<TestModeControl \/>/);
+  assert.match(mapToolbar, /<TestModeControl \/>/);
   assert.match(tabSwitcher, /Kartoversikt/);
   assert.match(tabSwitcher, /3D-visning/);
-  assert.doesNotMatch(page, /<TestModeControl \/>/);
+  assert.equal((page.match(/<TestModeControl \/>/g) || []).length, 1);
+  assert.match(page, /parsingStatus !== 'done'[\s\S]*?<TestModeControl \/>/);
+  assert.match(page, /parsingStatus === 'done'[\s\S]*?<MapPaneToolbar/);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);
   assert.match(modal, /Opplastinger uten registrert kommune/);
   assert.match(modal, /Statistikk fra/);

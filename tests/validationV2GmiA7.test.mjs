@@ -373,7 +373,7 @@ test('field details keep the model shared and reset Resultat by selected field i
     new URL('../src/components/validation-v2/ValidationV2Workspace.js', import.meta.url),
     'utf8',
   );
-  assert.match(modalSource, /const \[activeTab, setActiveTab\] = useState\('result'\)/);
+  assert.match(workspaceSource, /const \[activeFieldTab, setActiveFieldTab\] = useState\('result'\)/);
   assert.match(contentSource, /export function useValidationV2FieldDetailModel/);
   assert.match(contentSource, /const fieldDataState = useMemo\(\(\) => \{/);
   assert.match(contentSource, /const fieldDataState = useMemo[\s\S]*?getValidationV2FieldDataSummary/);
@@ -381,7 +381,10 @@ test('field details keep the model shared and reset Resultat by selected field i
   assert.match(contentSource, /export function ValidationV2FieldDetailContent\([\s\S]*?activeTab,[\s\S]*?onTabChange/);
   assert.match(contentSource, /onClick=\{\(\) => selectTab\(tab\)\}/);
   assert.doesNotMatch(modalSource, /getValidationV2FieldDataSummary|buildFieldDiagnosticsForRules/);
-  assert.match(workspaceSource, /<ValidationV2FieldInfoModal\s+key=\{`\$\{fieldInfoContext\.geometryScope\}:\$\{fieldInfoContext\.field\.canonicalFieldId\}`\}/);
+  assert.match(workspaceSource, /selectedValidatorField\.datasetRevision === selectedRevision/);
+  assert.match(workspaceSource, /<ValidationV2FieldInspector/);
+  assert.match(workspaceSource, /activeTab=\{activeFieldTab\}[\s\S]*?onTabChange=\{setActiveFieldTab\}/);
+  assert.doesNotMatch(workspaceSource, /key=\{`\$\{selectedValidatorField/);
   assert.doesNotMatch(contentSource, /setTimeout\(/);
 });
 
@@ -400,7 +403,8 @@ test('Resultat presents neutral contextual coverage before diagnostics', async (
   const coverageSource = modalSource.slice(modalSource.indexOf('function CoverageSummary'), modalSource.indexOf('function DiagnosticResultPanel'));
   assert.doesNotMatch(coverageSource, /style=\{\{\s*width:/);
   assert.doesNotMatch(coverageSource, /h-1\.5|bg-slate-500/);
-  assert.match(modalSource, /<div className="space-y-3 px-2\.5">\s*<h3/);
+  assert.match(modalSource, /<div className="space-y-3">\s*<h3/);
+  assert.match(modalSource, /mx-auto w-full max-w-2xl px-2\.5/);
   assert(modalSource.indexOf('<CoverageSummary coverage={model.coverage}') < modalSource.indexOf('{model.diagnostics.map'));
   assert.match(modalSource, /<details className="rounded border border-gray-200">/);
   assert.doesNotMatch(modalSource.slice(modalSource.indexOf('function CoverageSummary'), modalSource.indexOf('function DiagnosticResultPanel')), /Feil|Sjekk|Pass/);
@@ -415,7 +419,7 @@ test('Validator exposes only the automatic V2 workflow', async () => {
     new URL('../src/components/validation-v2/ValidationV2Workspace.js', import.meta.url),
     'utf8',
   );
-  assert.match(source, /<ValidationV2Workspace \/>/);
+  assert.match(source, /<ValidationV2Workspace\s+sidebarWidth=\{sidebarWidth\}/);
   assert.doesNotMatch(source, /ValidationModeSelector|Validator 1\.0|Validator 2\.0/);
   assert.match(workspaceSource, /<h2[^>]*>Validator<\/h2>/);
   assert.doesNotMatch(workspaceSource, />Kj.r<\/button>/);

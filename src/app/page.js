@@ -11,13 +11,21 @@ import FieldValidationSidebar from '@/components/FieldValidationSidebar';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
-import TabSwitcher from '@/components/TabSwitcher';
+import MapPaneToolbar from '@/components/MapPaneToolbar';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
+import WorkspaceShell from '@/components/WorkspaceShell';
+import { VALIDATION_V2_FIELD_DETAIL_WIDTH_REM } from '@/components/validation-v2/fieldDetailLayout';
 import { getTerrainStats } from '@/lib/analysis/terrain';
 import { claimStatisticsCue } from '@/lib/statisticsCue.mjs';
+import { isTestModeActivation } from '@/lib/testModeActivation.mjs';
+import {
+  getActiveBottomSurface,
+  mapOwnsWorkspaceBottomRight,
+} from '@/lib/workspace/mapPanePresentation.mjs';
+import TestModeControl from '@/components/TestModeControl';
 import useStore from '@/lib/store';
 
 const DEV_RUNTIME_SNAPSHOTS_KEY = 'gmi:dev:runtime:snapshots';
@@ -58,6 +66,8 @@ export default function Home() {
   const updateLastActive = useStore(
     (state) => state.updateLastActive,
   );
+  const hydrated = useStore((state) => state.hydrated === true);
+  const updateSettings = useStore((state) => state.updateSettings);
   const analysisOpen = useStore((state) => state.analysis.isOpen);
   const layerDataTableOpen = useStore(
     (state) => state.ui.layerDataTable?.isOpen,
@@ -67,6 +77,9 @@ export default function Home() {
   );
   const viewer3DOpen = useStore((state) => state.ui.viewer3DOpen);
   const activeViewTab = useStore((state) => state.ui.activeViewTab);
+  const [sidebarWidth, setSidebarWidth] = useState(430);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [dockedInspectorOpen, setDockedInspectorOpen] = useState(false);
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
@@ -74,8 +87,33 @@ export default function Home() {
     (state) => state.closeDataInspector,
   );
   const [zoomLevel, setZoomLevel] = useState(13);
-  const primaryViewHeight =
-    layerDataTableOpen || analysisOpen ? '55%' : '100%';
+  const primaryViewHeight = analysisOpen ? '55%' : '100%';
+  const activeBottomSurface = getActiveBottomSurface({ layerDataTableOpen, analysisOpen });
+  const mapOwnsBottomRight = mapOwnsWorkspaceBottomRight({
+    rightSurfaceOpen: dockedInspectorOpen,
+    bottomSurface: activeBottomSurface,
+  });
+  const inspectorWidthPx = VALIDATION_V2_FIELD_DETAIL_WIDTH_REM * 16;
+  const canDockInspector =
+    viewportWidth - sidebarWidth >= 480 + inspectorWidthPx;
+
+  useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (!isTestModeActivation(params)) return;
+    updateSettings({ testMode: true });
+    params.delete('testmodus');
+    const query = params.toString();
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+    window.history.replaceState(window.history.state, '', nextUrl);
+  }, [hydrated, updateSettings]);
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth);
+    updateViewportWidth();
+    window.addEventListener('resize', updateViewportWidth);
+    return () => window.removeEventListener('resize', updateViewportWidth);
+  }, []);
 
   // State for "Add Layer" modal
   const [showAddLayerModal, setShowAddLayerModal] = useState(false);
@@ -241,192 +279,9 @@ export default function Home() {
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
 
-      {/* Floating Stats Button - Always visible */}
-      <button
-        className={
-          statisticsCueActive
-            ? 'statistics-button statistics-button--cue'
-            : 'statistics-button'
-        }
-        onClick={() => setShowStats(true)}
-        aria-label="Vis bruksstatistikk"
-        title="Vis bruksstatistikk"
-        onAnimationEnd={(event) => {
-          if (event.animationName === 'statistics-button-entrance') {
-            setStatisticsCueActive(false);
-          }
-        }}
-        style={{
-          position: 'fixed',
-          bottom: '16px',
-          right: '16px',
-          zIndex: 10002,
-          padding: '10px 16px',
-          borderRadius: '12px',
-          backgroundColor: '#db2777',
-          color: '#ffffff',
-          border: '1px solid #be185d',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          boxShadow: '0 6px 18px rgba(190,24,93,0.28)',
-          fontSize: '13px',
-          fontWeight: 500,
-          backdropFilter: 'blur(8px)',
-          transition: 'all 0.15s ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#be185d';
-          e.currentTarget.style.borderColor = '#9d174d';
-          e.currentTarget.style.boxShadow =
-            '0 6px 20px rgba(190,24,93,0.38)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor =
-            '#db2777';
-          e.currentTarget.style.borderColor = '#be185d';
-          e.currentTarget.style.boxShadow =
-            '0 6px 18px rgba(190,24,93,0.28)';
-        }}
-      >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-          />
-        </svg>
-           <span className="statistics-button__badge">Ny</span>
-           <span>Statistikk</span>
-      </button>
-
       {/* Stats Modal */}
-      <StatsModal
-        isOpen={showStats}
-        onClose={() => setShowStats(false)}
-      />
+      <StatsModal isOpen={showStats} onClose={() => setShowStats(false)} />
 
-      {/* Share QR button */}
-      {parsingStatus === 'done' && (
-        <button
-          onClick={() => setShowShareModal(true)}
-          aria-label="Del app"
-          title="Vis QR-koder for app og GitHub"
-          style={{
-            position: 'fixed',
-            top: '10px',
-            right: '240px',
-            padding: '8px 12px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            color: '#2563eb',
-            border: '1px solid #2563eb',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            zIndex: 10002,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            fontSize: '12px',
-            lineHeight: 1.2,
-            fontWeight: 500,
-            backdropFilter: 'blur(8px)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#eff6ff';
-            e.currentTarget.style.borderColor = '#1d4ed8';
-            e.currentTarget.style.color = '#1d4ed8';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor =
-              'rgba(255, 255, 255, 0.95)';
-            e.currentTarget.style.borderColor = '#2563eb';
-            e.currentTarget.style.color = '#2563eb';
-          }}
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M8.684 13.342A3 3 0 019 12c0-.483-.118-.938-.316-1.342m0 2.684a3 3 0 010-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.368-2.684 3 3 0 00-5.368 2.684zm0 12a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-            />
-          </svg>
-          Del
-        </button>
-      )}
-
-      {/* Floating Reset Button - Always visible when data is loaded */}
-      {parsingStatus === 'done' && (
-        <button
-          onClick={handleReset}
-          aria-label="Last inn ny fil"
-          title="Nullstill appen og last inn en ny GMI-fil"
-          style={{
-            position: 'fixed',
-            top: '10px',
-            right: '10px',
-            padding: '8px 12px',
-            width: '220px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            color: '#2563eb',
-            border: '1px solid #2563eb',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'row',
-            gap: '8px',
-            zIndex: 10002,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            fontSize: '13px',
-            lineHeight: 1.2,
-            fontWeight: 500,
-            backdropFilter: 'blur(8px)',
-            whiteSpace: 'nowrap',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#eff6ff';
-            e.currentTarget.style.borderColor = '#1d4ed8';
-            e.currentTarget.style.color = '#1d4ed8';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor =
-              'rgba(255, 255, 255, 0.95)';
-            e.currentTarget.style.borderColor = '#2563eb';
-            e.currentTarget.style.color = '#2563eb';
-          }}
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          <span>Nullstill og last opp ny</span>
-        </button>
-      )}
       {/* Initial Upload Screen */}
       {parsingStatus !== 'done' && (
         <div className="flex-1 flex items-center justify-center">
@@ -438,6 +293,9 @@ export default function Home() {
               <p className="mt-2 text-gray-600">
                 Last opp og valider GMI-filer
               </p>
+              <div className="mt-4 flex justify-center empty:hidden">
+                <TestModeControl />
+              </div>
             </div>
 
             {/* Error Display */}
@@ -488,31 +346,84 @@ export default function Home() {
           {/* Background terrain fetcher - runs in background */}
           <TerrainFetcher />
 
-          {/* Sidebar - Hidden when field validation is open */}
-          {!fieldValidationOpen && (
-            <Sidebar
-              onReset={handleReset}
-              onAddFile={() => setShowAddLayerModal(true)}
-            />
-          )}
-
-          {/* Field Validation Sidebar - 33% width */}
-          {fieldValidationOpen && (
-            <div className="w-1/3 h-full flex-none">
-              <FieldValidationSidebar />
-            </div>
-          )}
-
-          {/* Map Area */}
-          <div
-            className={`relative flex flex-col h-full ${
-              fieldValidationOpen ? 'w-2/3 flex-none' : 'flex-1'
-            }`}
-          >
+          <WorkspaceShell
+            sidebarWidth={sidebarWidth}
+            sidebar={fieldValidationOpen ? (
+              <FieldValidationSidebar
+                sidebarWidth={sidebarWidth}
+                canDockInspector={canDockInspector}
+                onDockedInspectorChange={setDockedInspectorOpen}
+              />
+            ) : (
+              <Sidebar
+                onReset={handleReset}
+                onAddFile={() => setShowAddLayerModal(true)}
+                width={sidebarWidth}
+                onWidthChange={setSidebarWidth}
+              />
+            )}
+            bottomDockOpen={layerDataTableOpen}
+            bottomDock={<LayerDataTable />}
+            primary={(
+              <div className="flex h-full min-h-0 min-w-0 flex-1">
+                <div data-map-pane="true" className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                <MapPaneToolbar
+                  onReset={handleReset}
+                  onShare={() => setShowShareModal(true)}
+                  showShare={parsingStatus === 'done'}
+                />
+                {mapOwnsBottomRight && (
+                  <button
+                    className={statisticsCueActive ? 'statistics-button statistics-button--cue' : 'statistics-button'}
+                    onClick={() => setShowStats(true)}
+                    aria-label="Vis bruksstatistikk"
+                    title="Vis bruksstatistikk"
+                    onAnimationEnd={(event) => {
+                      if (event.animationName === 'statistics-button-entrance') setStatisticsCueActive(false);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      bottom: '16px',
+                      right: '16px',
+                      zIndex: 1002,
+                      padding: '10px 16px',
+                      borderRadius: '12px',
+                      backgroundColor: '#db2777',
+                      color: '#ffffff',
+                      border: '1px solid #be185d',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: '0 6px 18px rgba(190,24,93,0.28)',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      backdropFilter: 'blur(8px)',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(event) => {
+                      event.currentTarget.style.backgroundColor = '#be185d';
+                      event.currentTarget.style.borderColor = '#9d174d';
+                      event.currentTarget.style.boxShadow = '0 6px 20px rgba(190,24,93,0.38)';
+                    }}
+                    onMouseLeave={(event) => {
+                      event.currentTarget.style.backgroundColor = '#db2777';
+                      event.currentTarget.style.borderColor = '#be185d';
+                      event.currentTarget.style.boxShadow = '0 6px 18px rgba(190,24,93,0.28)';
+                    }}
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <span className="statistics-button__badge">Ny</span>
+                    <span>Statistikk</span>
+                  </button>
+                )}
+                <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
             {/* Show Map view when activeViewTab is 'map' or 3D viewer is not open */}
             {(!viewer3DOpen || activeViewTab === 'map') && (
               <>
-                {/* Map - Full height or 67% when table open, or 55% when analysis open */}
+                {/* Map fills the upper row, or leaves room for profile analysis */}
                 <div
                   className="relative"
                   style={{
@@ -630,29 +541,20 @@ export default function Home() {
               </div>
             )}
 
-            {layerDataTableOpen && (
-              <div
-                style={{
-                  height: '45%',
-                  transition: 'height 0.2s ease',
-                }}
-              >
-                <LayerDataTable />
-              </div>
-            )}
-
             {/* Profile analysis modal - overlays both 2D and 3D views */}
             <InclineAnalysisModal />
           </div>
+                </div>
+          <div id="validation-v2-field-inspector-root" className="contents" />
+        </div>
+            )}
+          />
         </>
       )}
 
       {/* Data Inspector Modal */}
       <DataDisplayModal />
       <ZValidationModal />
-
-      {/* Tab Switcher - Shows when 3D viewer is open */}
-      <TabSwitcher />
 
       {/* Add Layer Modal */}
       {showAddLayerModal && (

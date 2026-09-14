@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { runGmiValidationV2 } from '@/lib/validation-v2';
@@ -23,6 +24,7 @@ import {
 import { composeFieldInformation } from '@/lib/validation-v2/registry/fieldInformation';
 import ValidationV2RuleList from './ValidationV2RuleList';
 import ValidationV2FieldInfoModal from './ValidationV2FieldInfoModal';
+import ValidationV2FieldInspector from './ValidationV2FieldInspector';
 
 const EMPTY_RULE_RESULTS = Object.freeze([]);
 
@@ -48,7 +50,7 @@ function UnknownFields({ diagnostics }) {
   );
 }
 
-export default function ValidationV2Workspace() {
+export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, onDockedInspectorChange }) {
   const layers = useStore((state) => state.layers);
   const layerOrder = useStore((state) => state.layerOrder);
   const toggleFieldValidation = useStore((state) => state.toggleFieldValidation);
@@ -70,7 +72,9 @@ export default function ValidationV2Workspace() {
   const [runError, setRunError] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState(null);
-  const [fieldInfoContext, setFieldInfoContext] = useState(null);
+  const [selectedValidatorField, setSelectedValidatorField] = useState(null);
+  const [activeFieldTab, setActiveFieldTab] = useState('result');
+  const [inspectorHost, setInspectorHost] = useState(null);
   const fieldInfoOpenerRef = useRef(null);
   const [presentationState, dispatchPresentation] = useReducer(
     reduceValidationV2PresentationState,
@@ -100,6 +104,18 @@ export default function ValidationV2Workspace() {
   const pointCount = selectedLayer?.data?.points?.length || 0;
   const lineCount = selectedLayer?.data?.lines?.length || 0;
   const activeGeometry = viewState.geometryTab;
+  const workspaceIdentity = JSON.stringify({
+    layer: selectedLayerId,
+    geometry: activeGeometry,
+    revision: selectedRevision,
+  });
+  const dockedInspectorVisible = Boolean(
+    canDockInspector && inspectorHost && selectedValidatorField &&
+    selectedValidatorField.layerId === selectedLayerId &&
+    selectedValidatorField.datasetRevision === selectedRevision &&
+    selectedValidatorField.geometryScope === activeGeometry
+  );
+  const previousWorkspaceIdentityRef = useRef(workspaceIdentity);
   const geometryView = result ? viewState.geometryView : null;
   const activeRuleResults = geometryView?.ruleResults || EMPTY_RULE_RESULTS;
   const geometrySummary = geometryView?.summary || null;
@@ -122,6 +138,22 @@ export default function ValidationV2Workspace() {
     presentationState.statusFilter !== ValidationV2StatusFilter.ALL;
   const presentationStateIsDefault = !filtersActive &&
     presentationState.sortMode === ValidationV2SortMode.ATTENTION;
+
+  useEffect(() => {
+    setInspectorHost(document.getElementById('validation-v2-field-inspector-root'));
+  }, []);
+
+  useEffect(() => {
+    onDockedInspectorChange?.(dockedInspectorVisible);
+    return () => onDockedInspectorChange?.(false);
+  }, [dockedInspectorVisible, onDockedInspectorChange]);
+
+  useEffect(() => {
+    if (previousWorkspaceIdentityRef.current === workspaceIdentity) return;
+    previousWorkspaceIdentityRef.current = workspaceIdentity;
+    setSelectedValidatorField(null);
+    setActiveFieldTab('result');
+  }, [workspaceIdentity]);
 
   useEffect(() => {
     if (!filterPanelOpen && !openMenu) return undefined;
@@ -188,7 +220,7 @@ export default function ValidationV2Workspace() {
 
   const openFieldInfo = (presentation, opener) => {
     fieldInfoOpenerRef.current = opener;
-    setFieldInfoContext({
+    setSelectedValidatorField({
       field: composeFieldInformation({
         canonicalFieldId: presentation.rule.canonicalFieldId,
         geometryScope: activeGeometry,
@@ -197,11 +229,13 @@ export default function ValidationV2Workspace() {
       rule: presentation.rule,
       rules: presentation.rules,
       geometryScope: activeGeometry,
+      layerId: selectedLayerId,
+      datasetRevision: selectedRevision,
     });
   };
 
-  const closeFieldInfo = () => {
-    setFieldInfoContext(null);
+  const closeFieldInspector = () => {
+    setSelectedValidatorField(null);
     requestAnimationFrame(() => fieldInfoOpenerRef.current?.focus());
   };
 
@@ -213,7 +247,8 @@ export default function ValidationV2Workspace() {
     setRunTarget(null);
     setRunState('idle');
     setRunError(false);
-    setFieldInfoContext(null);
+    setSelectedValidatorField(null);
+    setActiveFieldTab('result');
     dispatchPresentation({ type: 'LAYER_CHANGED' });
   };
 
@@ -223,7 +258,8 @@ export default function ValidationV2Workspace() {
     setRunState('running');
     setRunError(false);
     setRunTarget({ layerId: input.layerId, datasetRevision: input.datasetRevision });
-    setFieldInfoContext(null);
+    setSelectedValidatorField(null);
+    setActiveFieldTab('result');
     dispatchPresentation({ type: 'NEW_RESULT' });
     try {
       setViewState(controller.run(input));
@@ -246,7 +282,8 @@ export default function ValidationV2Workspace() {
   }, [selectedLayerId, selectedRevision, isGmi]);
 
   const selectGeometry = (scope) => {
-    setFieldInfoContext(null);
+    setSelectedValidatorField(null);
+    setActiveFieldTab('result');
     dispatchPresentation({ type: 'GEOMETRY_CHANGED' });
     setViewState(controller.selectGeometry(getValidationV2GeometrySelection(selectedLayer, scope)));
   };
@@ -447,20 +484,42 @@ export default function ValidationV2Workspace() {
           </>
         )}
       </div>
-      {fieldInfoContext && (
-        <ValidationV2FieldInfoModal
-          key={`${fieldInfoContext.geometryScope}:${fieldInfoContext.field.canonicalFieldId}`}
-          isOpen
-          field={fieldInfoContext.field}
-          rule={fieldInfoContext.rule}
-          rules={fieldInfoContext.rules}
-          geometryScope={fieldInfoContext.geometryScope}
-          layerId={selectedLayerId}
-          dataset={selectedLayer?.data}
-          result={result}
-          onClose={closeFieldInfo}
-        />
-      )}
+      {selectedValidatorField &&
+        selectedValidatorField.layerId === selectedLayerId &&
+        selectedValidatorField.datasetRevision === selectedRevision &&
+        selectedValidatorField.geometryScope === activeGeometry && (
+          canDockInspector ? (
+            inspectorHost && createPortal(
+              <ValidationV2FieldInspector
+                field={selectedValidatorField.field}
+                rule={selectedValidatorField.rule}
+                rules={selectedValidatorField.rules}
+                geometryScope={selectedValidatorField.geometryScope}
+                layerId={selectedValidatorField.layerId}
+                dataset={selectedLayer?.data}
+                result={result}
+                activeTab={activeFieldTab}
+                onTabChange={setActiveFieldTab}
+                onClose={closeFieldInspector}
+              />,
+              inspectorHost,
+            )
+          ) : (
+            <ValidationV2FieldInfoModal
+              isOpen
+              field={selectedValidatorField.field}
+              rule={selectedValidatorField.rule}
+              rules={selectedValidatorField.rules}
+              geometryScope={selectedValidatorField.geometryScope}
+              layerId={selectedValidatorField.layerId}
+              dataset={selectedLayer?.data}
+              result={result}
+              activeTab={activeFieldTab}
+              onTabChange={setActiveFieldTab}
+              onClose={closeFieldInspector}
+            />
+          )
+        )}
     </div>
   );
 }

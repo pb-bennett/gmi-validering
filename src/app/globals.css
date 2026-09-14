@@ -131,7 +131,7 @@
   cursor: default !important;
 }
 
-/* Keep the background selector below the reset button */
+/* Reserve the map toolbar row above the Leaflet base-layer selector. */
 .leaflet-top.leaflet-right .leaflet-control-layers {
   margin-top: 58px;
 }
