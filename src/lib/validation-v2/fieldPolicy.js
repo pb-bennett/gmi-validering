@@ -81,8 +81,12 @@ function validYear(value, currentYear) {
   const year = Number(raw); return year <= currentYear ? year : null;
 }
 function parseDate(value) {
-  const raw = lexeme(value); const match = typeof raw === 'string' && /^([0-9]{2})\.([0-9]{2})\.([0-9]{4})$/.exec(raw);
-  if (!match) return null; const [,,] = match; const day = Number(match[1]); const month = Number(match[2]); const year = Number(match[3]);
+  const raw = lexeme(value);
+  const match = typeof raw === 'string' && (/^([0-9]{2})\.([0-9]{2})\.([0-9]{4})$/.exec(raw) || /^([0-9]{4})([0-9]{2})([0-9]{2})$/.exec(raw));
+  if (!match) return null;
+  const day = Number(match[1].length === 4 ? match[3] : match[1]);
+  const month = Number(match[1].length === 4 ? match[2] : match[2]);
+  const year = Number(match[1].length === 4 ? match[1] : match[3]);
   const date = new Date(Date.UTC(year, month - 1, day)); return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? { date, year } : null;
 }
 function anniversary(reference, years) {

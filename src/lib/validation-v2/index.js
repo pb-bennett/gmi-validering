@@ -48,6 +48,8 @@ export {
 export {
   FIELD_INFORMATION,
   composeFieldInformation,
+  composeFieldRulePresentation,
+  getAuthoritativeValueTable,
   getFieldInformation,
   getFieldInformationRegistry,
   validateFieldInformationRegistry,
@@ -73,4 +75,21 @@ export {
   getValidationV2FieldDataCacheStats,
   getValidationV2FieldDataSummary,
 } from './fieldData.js';
+export { buildValidationV2FieldDataPresentation } from './fieldDataPresentation.js';
 export { getNobbItemHref } from './nobbLink.js';
+export {
+  DIAGNOSTIC_REASON_MAPPING,
+  ValidationV2DiagnosticState,
+  ValidationV2DiagnosticType,
+  buildFieldDiagnostics,
+  buildFieldDiagnosticsForRules,
+  getDiagnosticMappingCoverage,
+  getValidationV2DependencyPresentation,
+  getValidationV2DiagnosticPresentation,
+  getValidationV2CoveragePresentation,
+  renderValidationV2DependencyNote,
+  renderValidationV2Coverage,
+  renderValidationV2Diagnostic,
+  renderValidationV2DiagnosticBreakdown,
+  renderValidationV2ResultHeading,
+} from './diagnostics.js';

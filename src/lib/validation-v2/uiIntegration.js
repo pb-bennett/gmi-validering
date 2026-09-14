@@ -59,20 +59,25 @@ export function getValidationV2RuleStatus(ruleResult) {
     failCount: ruleResult.failCount,
     checkCount: ruleResult.checkCount,
     notEvaluatedCount: ruleResult.notEvaluatedCount,
+    dependencyReviewCount: ruleResult.dependencyReviewCount,
     indeterminateCount: ruleResult.indeterminateCount,
   });
 }
 
 export function getValidationV2GeometryRuleStatus(ruleResult, geometryScope) {
-  return getValidationV2AggregateStatus(
-    ruleResult.geometryBreakdown?.[geometryScope] || {
+  const counts = ruleResult.geometryBreakdown?.[geometryScope] || {
       evaluatedCount: 0,
       passCount: 0,
       failCount: 0,
       notEvaluatedCount: 0,
       indeterminateCount: 0, checkCount: 0,
-    },
-  );
+    };
+  const dependencyReviewCount = (ruleResult.outcomes || []).filter((outcome) =>
+    outcome.state === 'NOT_EVALUATED' &&
+    outcome.objectRef?.geometryScope === geometryScope &&
+    (outcome.reasonCode === 'DEPENDENT_TEMA_UNRESOLVED' || outcome.suppression)
+  ).length;
+  return getValidationV2AggregateStatus({ ...counts, dependencyReviewCount });
 }
 
 export function getValidationV2GeometrySummary(result, geometryScope) {

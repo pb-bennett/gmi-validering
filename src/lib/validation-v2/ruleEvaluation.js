@@ -139,7 +139,19 @@ const DECIMAL_TRAILING_SEPARATOR_PATTERN = /^[+-]?[0-9]+[.,]$/;
 const DECIMAL_COMMA_GROUPING_PATTERN = /^[+-]?[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?$/;
 const DECIMAL_DOT_GROUPING_PATTERN = /^[+-]?[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]+)?$/;
 const YEAR_LEXEME_PATTERN = /^[0-9]{4}$/;
-const DATE_LEXEME_PATTERN = /^[0-9]{2}\.[0-9]{2}\.[0-9]{4}$/;
+const DATE_LEXEME_PATTERN = /^(?:[0-9]{2}\.[0-9]{2}\.[0-9]{4}|[0-9]{8})$/;
+
+function isCalendarDateLexeme(lexeme) {
+  const dotted = /^([0-9]{2})\.([0-9]{2})\.([0-9]{4})$/.exec(lexeme);
+  const compact = /^([0-9]{4})([0-9]{2})([0-9]{2})$/.exec(lexeme);
+  const match = dotted || compact;
+  if (!match) return false;
+  const day = Number(dotted ? match[1] : match[3]);
+  const month = Number(match[2]);
+  const year = Number(dotted ? match[3] : match[1]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
 
 function evaluateMissingOrStructural(value, evaluatorName) {
   switch (value.state) {
@@ -262,7 +274,7 @@ export function evaluateDateFormat(value) {
   if (!lexical.available) {
     return { state: EvaluationState.INDETERMINATE, reasonCode: RuleReasonCode.LEXICAL_FORMAT_UNAVAILABLE };
   }
-  return DATE_LEXEME_PATTERN.test(lexical.value)
+  return DATE_LEXEME_PATTERN.test(lexical.value) && isCalendarDateLexeme(lexical.value)
     ? { state: EvaluationState.PASS, reasonCode: null }
     : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.DATE_FORMAT_INVALID };
 }

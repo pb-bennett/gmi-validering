@@ -30,15 +30,13 @@ function makeLayer(id, format = 'GMI') {
   };
 }
 
-test('mode integration keeps Validator 1.0 as the default and isolates V2', async () => {
+test('normal validator host exposes V2 only while retaining legacy implementation', async () => {
   const source = await readFile(
     new URL('../src/components/FieldValidationSidebar.js', import.meta.url),
     'utf8',
   );
 
-  assert.match(source, /useState\('legacy'\)/);
-  assert.match(source, /Validator 1\.0/);
-  assert.match(source, /Validator 2\.0 \(beta\)/);
+  assert.doesNotMatch(source, /useState\('legacy'\)|Validator 1\.0|Validator 2\.0 \(beta\)/);
   assert.match(source, /LegacyFieldValidationSidebar/);
   assert.match(source, /ValidationV2Workspace/);
   assert.match(source, /validateFields/);
@@ -134,7 +132,7 @@ test('V2 workspace consumes A5 only and has no map, table, legacy, or all-layer 
   assert.match(workspaceSource, /runGmiValidationV2/);
   assert.match(workspaceSource, /selectedLayerId/);
   assert.match(workspaceSource, /sourceFieldDiagnostics/);
-  assert.doesNotMatch(workspaceSource, /validateFields|fieldValidation|legacy validator/i);
+  assert.doesNotMatch(workspaceSource, /validateFields|legacy validator/i);
   assert.doesNotMatch(workspaceSource, /getVisibleLayersData|viewObjectInMap|LayerDataTable/);
   assert.doesNotMatch(workspaceSource, /Valider alle lag/);
   assert.doesNotMatch(workspaceSource, /error\.message/);
@@ -167,11 +165,8 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
     (ruleResult) => ruleResult.rule.ruleId === 'innmaling.point.tema.required',
   );
   assert.equal(pointTemaNoPoints.evaluatedObjectCount, 0);
-  assert.deepEqual(
-    getValidationV2RuleStatus(pointTemaNoPoints).label,
-    'Sjekk',
-  );
-  assert.notEqual(getValidationV2RuleStatus(pointTemaNoPoints).label, 'Pass');
+  assert.equal(getValidationV2RuleStatus(pointTemaNoPoints).label, null);
+  assert.equal(getValidationV2RuleStatus(pointTemaNoPoints).reasonCode, 'NO_APPLICABLE_EVALUATIONS');
 
   const noLines = makeLayer('no-lines');
   noLines.data.lines = [];
@@ -180,7 +175,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
     (ruleResult) => ruleResult.rule.ruleId === 'innmaling.line.tema.required',
   );
   assert.equal(lineTemaNoLines.evaluatedObjectCount, 0);
-  assert.equal(getValidationV2RuleStatus(lineTemaNoLines).label, 'Sjekk');
+  assert.equal(getValidationV2RuleStatus(lineTemaNoLines).label, null);
 
   const empty = makeLayer('empty');
   empty.data.points = [];
@@ -188,7 +183,7 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   const emptyResult = runGmiValidationV2(createValidationV2Input(empty));
   assert(emptyResult.ruleResults.every((ruleResult) => {
     return ruleResult.evaluatedObjectCount === 0 &&
-      getValidationV2RuleStatus(ruleResult).label === 'Sjekk';
+      getValidationV2RuleStatus(ruleResult).label === null;
   }));
 
   const normalPass = runGmiValidationV2(createValidationV2Input(makeLayer('pass')));
@@ -245,13 +240,13 @@ test('zero-applicable rules are not passed, while A5 status precedence and neutr
   );
   const presentationSource = `${source}\n${integrationSource}`;
   for (const label of [
-    'Beta · GMI ·',
+    'Validator',
     'Punkter',
     'Ledninger',
   ]) {
     assert.match(presentationSource, new RegExp(label));
   }
-  assert.match(source, /getValidationRules/);
+  assert.match(source, /Kontrollerer…/);
   assert.match(source, /createValidationV2ViewController/);
   assert.match(source, /geometryView/);
   assert.match(source, /ruleResults/);

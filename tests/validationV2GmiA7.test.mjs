@@ -174,8 +174,8 @@ test('common Høydereferanse and geometry-specific Tema results reconcile by geo
   const lineTema = ruleResult(result, LINE_TEMA_REQUIRED);
   assert.equal(pointTema.geometryBreakdown.line.evaluatedCount, 0);
   assert.equal(lineTema.geometryBreakdown.point.evaluatedCount, 0);
-  assert.equal(getValidationV2GeometryRuleStatus(lineTema, 'point').label, 'Sjekk');
-  assert.equal(getValidationV2GeometryRuleStatus(pointTema, 'line').label, 'Sjekk');
+  assert.equal(getValidationV2GeometryRuleStatus(lineTema, 'point').label, null);
+  assert.equal(getValidationV2GeometryRuleStatus(pointTema, 'line').label, null);
 
   const indeterminate = resultFor(makeLayer('indeterminate', {
     pointSchema: { HREF: {}, Tema: {} },
@@ -340,20 +340,82 @@ test('compact rule rows expose summaries without individual object metadata', as
     new URL('../src/components/validation-v2/ValidationV2RuleList.js', import.meta.url),
     'utf8',
   );
-  assert.match(source, /Objekter i grunnlaget/);
+  assert.match(source, /Objekter/);
+  assert.match(source, /<span>Vis<\/span>/);
+  assert.match(source, /title="Vis"/);
+  assert.equal((source.match(/<svg/g) || []).length, 1);
+  assert.match(source, /gap-x-3/);
+  assert.match(source, /items-baseline gap-1 whitespace-nowrap/);
   assert.match(source, /aria-expanded/);
   assert.match(source, /aria-controls/);
+  assert.equal((source.match(/onClick=\{\(\) => onToggle\(presentation\.expansionKey\)\}/g) || []).length, 1);
+  assert.match(source, /isExpanded && \(\s*<section/);
+  assert.match(source, /flex flex-wrap items-center gap-x-3 gap-y-1/);
+  assert.match(source, /focus-visible:ring-2/);
+  assert.match(source, /onClick=\{\(event\) => onInfo\?\.\(presentation, event\.currentTarget\)\}/);
+  assert.doesNotMatch(source, /hidden sm:inline/);
+  assert.doesNotMatch(source, /<button[\s\S]*<button[\s\S]*<\/button>[\s\S]*<\/button>/);
+  assert(source.indexOf('onInfo?.') > source.indexOf('<dl'));
   assert.match(source, /<button/);
   assert.doesNotMatch(source, /finding\.objectRef\.key|Objekt 1|Vis alle|FindingGroups/);
 });
 
-test('legacy mode is visibly Validator 1.0 and remains the default host choice', async () => {
+test('field details derive Resultat on open and reset by selected field identity', async () => {
+  const modalSource = await readFile(
+    new URL('../src/components/validation-v2/ValidationV2FieldInfoModal.js', import.meta.url),
+    'utf8',
+  );
+  const workspaceSource = await readFile(
+    new URL('../src/components/validation-v2/ValidationV2Workspace.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(modalSource, /const \[activeTab, setActiveTab\] = useState\(TABS\.RESULT\)/);
+  assert.match(modalSource, /const fieldDataState = useMemo\(\(\) => \{/);
+  assert.match(modalSource, /const fieldDataState = useMemo[\s\S]*?getValidationV2FieldDataSummary/);
+  assert.doesNotMatch(modalSource.slice(modalSource.indexOf('const selectTab')), /getValidationV2FieldDataSummary/);
+  assert.match(modalSource, /\[\s*isOpen,[\s\S]*?field,[\s\S]*?rule,[\s\S]*?dataset,[\s\S]*?result,[\s\S]*?geometryScope,/);
+  assert.match(workspaceSource, /<ValidationV2FieldInfoModal\s+key=\{`\$\{fieldInfoContext\.geometryScope\}:\$\{fieldInfoContext\.field\.canonicalFieldId\}`\}/);
+  assert.doesNotMatch(modalSource, /setTimeout\(/);
+});
+
+test('Resultat presents neutral contextual coverage before diagnostics', async () => {
+  const modalSource = await readFile(
+    new URL('../src/components/validation-v2/ValidationV2FieldInfoModal.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(modalSource, /function CoverageSummary\(\{ coverage, field \}\)/);
+  assert.match(modalSource, /aria-label="Dekning"/);
+  assert.match(modalSource, /getValidationV2CoveragePresentation/);
+  assert.match(modalSource, /getValidationV2DiagnosticPresentation/);
+  assert.match(modalSource, /presentation\.detailLines\.map/);
+  assert.match(modalSource, /presentation\.guidance/);
+  assert.match(modalSource, /getValidationV2DependencyPresentation/);
+  const coverageSource = modalSource.slice(modalSource.indexOf('function CoverageSummary'), modalSource.indexOf('function DiagnosticResultPanel'));
+  assert.doesNotMatch(coverageSource, /style=\{\{\s*width:/);
+  assert.doesNotMatch(coverageSource, /h-1\.5|bg-slate-500/);
+  assert.match(modalSource, /<div className="space-y-3 px-2\.5">\s*<h3/);
+  assert(modalSource.indexOf('<CoverageSummary coverage={model.coverage}') < modalSource.indexOf('{model.diagnostics.map'));
+  assert.match(modalSource, /<details className="rounded border border-gray-200">/);
+  assert.doesNotMatch(modalSource.slice(modalSource.indexOf('function CoverageSummary'), modalSource.indexOf('function DiagnosticResultPanel')), /Feil|Sjekk|Pass/);
+});
+
+test('Validator exposes only the automatic V2 workflow', async () => {
   const source = await readFile(
     new URL('../src/components/FieldValidationSidebar.js', import.meta.url),
     'utf8',
   );
-  assert.match(source, /useState\('legacy'\)/);
-  assert.match(source, /Validator 1\.0/);
-  assert.match(source, /Validator 2\.0 \(beta\)/);
-  assert.doesNotMatch(source, /Dagens validator/);
+  const workspaceSource = await readFile(
+    new URL('../src/components/validation-v2/ValidationV2Workspace.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /<ValidationV2Workspace \/>/);
+  assert.doesNotMatch(source, /ValidationModeSelector|Validator 1\.0|Validator 2\.0/);
+  assert.match(workspaceSource, /<h2[^>]*>Validator<\/h2>/);
+  assert.doesNotMatch(workspaceSource, />Kj.r<\/button>/);
+  assert.match(workspaceSource, /aria-label="Lukk Validator"/);
+  assert.match(workspaceSource, /toggleFieldValidation\(false\)/);
+  assert.doesNotMatch(workspaceSource, /resetAll|clearAll|setData\(/);
+  assert.match(workspaceSource, /useEffect\(\(\) => \{[\s\S]*?runValidation\(\);[\s\S]*?\}, \[selectedLayerId, selectedRevision, isGmi\]\)/);
+  assert.doesNotMatch(workspaceSource, /\[.*activeGeometry.*selectedRevision.*\]/);
+  assert.match(workspaceSource, /id="validation-v2-layer"/);
 });

@@ -133,9 +133,20 @@ function getInterpretation(record) {
   return formatTypedValue(record.sourceValue);
 }
 
-function getRuleAcceptance(record, rule, result, objectRef) {
+function getLookupValue(record) {
+  if (record.category !== 'present') return null;
+  const value = record.sourceLexeme !== 'UNAVAILABLE' ? record.sourceLexeme : record.sourceValue;
+  if (typeof value === 'string') return value.length <= 64 && !/[\u0000-\u001f\u007f]/.test(value) ? value : null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function getRuleOutcome(record, rule, result, objectRef) {
   const completed = result.outcomes?.find((outcome) => outcome.ruleId === rule.ruleId && outcome.objectRef.key === objectRef.key);
-  if (completed) return ({ PASS: 'Pass', CHECK: 'Sjekk', FAIL: 'Feil', INDETERMINATE: 'Sjekk' })[completed.state] || '-';
+  if (completed) return {
+    acceptance: ({ PASS: 'Pass', CHECK: 'Sjekk', FAIL: 'Feil', INDETERMINATE: 'Sjekk' })[completed.state] || '-',
+    diagnosticFacts: completed.diagnosticFacts || null,
+    reasonCode: completed.reasonCode || null,
+  };
   if (
     rule.evaluatorKind !== RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE &&
     rule.evaluatorKind !== RuleEvaluatorKind.ALLOWED_VALUE &&
@@ -144,7 +155,7 @@ function getRuleAcceptance(record, rule, result, objectRef) {
     rule.evaluatorKind !== RuleEvaluatorKind.YEAR_FORMAT &&
     rule.evaluatorKind !== RuleEvaluatorKind.DATE_FORMAT &&
     rule.evaluatorKind !== RuleEvaluatorKind.TEXT_MAX_LENGTH
-  ) return null;
+  ) return { acceptance: null, diagnosticFacts: null, reasonCode: null };
   const evaluate = rule.evaluatorKind === RuleEvaluatorKind.INTEGER_FORMAT
     ? evaluateIntegerFormat
     : rule.evaluatorKind === RuleEvaluatorKind.DECIMAL_FORMAT
@@ -165,10 +176,27 @@ function getRuleAcceptance(record, rule, result, objectRef) {
       rule.allowedValues,
       rule.valueComparison,
     );
-  if (evaluation.state === EvaluationState.PASS) return 'Pass';
-  if (evaluation.state === EvaluationState.FAIL) return 'Feil';
-  if (evaluation.state === EvaluationState.CHECK || evaluation.state === EvaluationState.INDETERMINATE) return 'Sjekk';
-  return '-';
+  const acceptance = evaluation.state === EvaluationState.PASS ? 'Pass'
+    : evaluation.state === EvaluationState.FAIL ? 'Feil'
+      : evaluation.state === EvaluationState.CHECK || evaluation.state === EvaluationState.INDETERMINATE ? 'Sjekk' : '-';
+  return { acceptance, diagnosticFacts: null, reasonCode: evaluation.reasonCode || null };
+}
+
+function safeOutcomeContext(diagnosticFacts) {
+  if (!diagnosticFacts) return null;
+  const applicability = diagnosticFacts.coverageApplicability || diagnosticFacts.applicability || null;
+  const allowed = Array.isArray(diagnosticFacts.explanationContextFieldIds)
+    ? diagnosticFacts.explanationContextFieldIds : [];
+  const context = (applicability === 'NOT_APPLICABLE' ? [] : (diagnosticFacts.context || [])).filter((item) =>
+    allowed.includes(item.fieldId) &&
+    typeof item.value === 'string' && item.value.length <= 64 &&
+    !/[\u0000-\u001f\u007f]/.test(item.value)
+  ).map(({ fieldId, value }) => ({ fieldId, value }));
+  return {
+    context,
+    applicability,
+    requirement: diagnosticFacts.requirement || null,
+  };
 }
 
 function extractRecord({ layerId, dataset, datasetRevision, result, geometryScope, canonicalFieldId, objectRef }) {
@@ -265,21 +293,31 @@ function scanFieldData(input, rule, binding, datasetRevision) {
         key,
         deliveredValue: getDeliveredValue(record),
         interpretedValue: getInterpretation(record),
+        lookupValue: getLookupValue(record),
+        isMissing: record.category === 'missing',
+        isUnresolved: record.category === 'unresolved',
         count: 0,
         outcomeBreakdown: { Pass: 0, Sjekk: 0, Feil: 0 },
+        outcomeGroups: new Map(),
       };
       buckets.set(key, bucket);
     }
     bucket.count += 1;
-    const acceptance = getRuleAcceptance(record, rule, input.result, objectRef) || 'Sjekk';
+    const outcome = getRuleOutcome(record, rule, input.result, objectRef);
+    const acceptance = outcome.acceptance || 'Sjekk';
     if (bucket.outcomeBreakdown[acceptance] !== undefined) bucket.outcomeBreakdown[acceptance] += 1;
+    const context = safeOutcomeContext(outcome.diagnosticFacts);
+    const groupKey = JSON.stringify({ acceptance, context });
+    const group = bucket.outcomeGroups.get(groupKey) || { status: acceptance, count: 0, context, reasonCode: outcome.reasonCode };
+    group.count += 1;
+    bucket.outcomeGroups.set(groupKey, group);
   }
 
   const objectCount = refs.length;
   const rows = [...buckets.values()]
     .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key))
     .map((bucket) => ({
-      ...bucket, ruleAcceptance: bucket.outcomeBreakdown.Feil ? 'Feil' : bucket.outcomeBreakdown.Sjekk ? 'Sjekk' : 'Pass',
+      ...bucket, outcomeGroups: [...bucket.outcomeGroups.values()], ruleAcceptance: bucket.outcomeBreakdown.Feil ? 'Feil' : bucket.outcomeBreakdown.Sjekk ? 'Sjekk' : 'Pass',
       percentage: objectCount > 0 ? (bucket.count / objectCount) * 100 : 0,
     }));
   const sourceColumns = getSourceColumns(binding);

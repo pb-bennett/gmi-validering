@@ -25,7 +25,8 @@ import {
 } from './ruleEvaluation.js';
 import { getValidationRules } from './registry/rules.js';
 import { evaluateFieldPolicy, evaluateValidatedTema } from './fieldPolicy.js';
-import { classifyHydraulicTema } from './registry/hydraulicTemaClassification.js';
+import { classifyHydraulicTema, isRingStiffnessMaterial, isSdrMaterial } from './registry/hydraulicTemaClassification.js';
+import { getPointFieldApplicability, PointFieldApplicabilityState } from './registry/pointFieldApplicability.js';
 
 function deepFreeze(value, propertyName) {
   if (
@@ -219,6 +220,9 @@ function getObservedEvidence(evidence) {
       bindingState: evidence.bindingState,
       sourceKey: evidence.preferredSourceKey ?? null,
       mappingKind: evidence.mappingKind ?? null,
+      ...(typeof evidence.sourceLexeme === 'string' && evidence.sourceLexeme.length <= 64
+        ? { sourceLexeme: evidence.sourceLexeme }
+        : {}),
       ...(isSafeObservedValue(evidence.resolvedValue)
         ? { resolvedValue: evidence.resolvedValue }
         : {}),
@@ -233,6 +237,9 @@ function getObservedEvidence(evidence) {
     bindingState: evidence.bindingState,
     sourceKey: evidence.sourceKey ?? null,
     mappingKind: evidence.mappingKind ?? null,
+    ...(typeof evidence.sourceLexeme === 'string' && evidence.sourceLexeme.length <= 64
+      ? { sourceLexeme: evidence.sourceLexeme }
+      : {}),
     ...(isSafeObservedValue(evidence.sourceValue)
       ? { sourceValue: evidence.sourceValue }
       : {}),
@@ -280,6 +287,113 @@ export function createFinding({ rule, ref, evidence, evaluation }) {
   };
 }
 
+function evidencePresence(evidence) {
+  if (!evidence) return 'UNRESOLVED';
+  if (evidence.state === 'VALUE_PRESENT' || evidence.state === 'RESOLVED') return 'PRESENT';
+  if (['FIELD_ABSENT', 'VALUE_MISSING'].includes(evidence.state)) return 'MISSING';
+  return 'UNRESOLVED';
+}
+
+function sourceValue(evidence) {
+  if (!evidence) return null;
+  if (typeof evidence.resolvedValue === 'string') return evidence.resolvedValue;
+  if (typeof evidence.sourceLexeme === 'string' && evidence.sourceLexeme !== 'UNAVAILABLE') return evidence.sourceLexeme;
+  return evidence.sourceValue;
+}
+
+function getDiagnosticApplicability(rule, policyContext, evaluation) {
+  if (evaluation?.state === EvaluationState.NOT_EVALUATED) return 'UNRESOLVED';
+  const tema = sourceValue(policyContext?.tema);
+  if (rule.policy === 'access') return tema === 'KUM' ? 'EXPECTED' : 'NOT_APPLICABLE';
+  if (rule.policy === 'attachmentLink') {
+    if (['LOK', 'TOP'].includes(tema)) return 'NOT_APPLICABLE';
+    return getPointFieldApplicability(tema, 'constructionMethod').state === PointFieldApplicabilityState.APPLICABLE
+      ? 'EXPECTED' : 'NOT_APPLICABLE';
+  }
+  if (['manholeShape', 'constructionMethod', 'cone', 'width', 'wallThickness', 'bottomDistance'].includes(rule.policy)) {
+    const applicabilityFieldId = rule.policy === 'bottomDistance' ? rule.canonicalFieldId : rule.policy;
+    const state = getPointFieldApplicability(tema, applicabilityFieldId).state;
+    return state === PointFieldApplicabilityState.APPLICABLE ? 'APPLICABLE'
+      : state === PointFieldApplicabilityState.UNKNOWN ? 'UNRESOLVED' : 'NOT_APPLICABLE';
+  }
+  if (rule.policy === 'verticalDimension') {
+    const shape = sourceValue(policyContext?.pipeShape);
+    return shape ? (shape === 'S' ? 'NOT_APPLICABLE' : 'APPLICABLE') : 'UNRESOLVED';
+  }
+  if (['sdr', 'ringStiffness', 'pressureClass'].includes(rule.policy)) {
+    const hydraulicClass = policyContext?.hydraulicClass;
+    if (!hydraulicClass) return 'UNRESOLVED';
+    if (rule.policy === 'pressureClass') return hydraulicClass === 'PRESSURE' ? 'APPLICABLE' : hydraulicClass === 'SPECIAL' ? 'EXPECTED' : 'NOT_APPLICABLE';
+    const material = sourceValue(policyContext?.material);
+    if (!policyContext?.materialValid) return 'UNRESOLVED';
+    const materialMatches = rule.policy === 'sdr' ? isSdrMaterial(material) : isRingStiffnessMaterial(material);
+    if (hydraulicClass === 'SPECIAL') return 'EXPECTED';
+    if (rule.policy === 'sdr') return hydraulicClass === 'PRESSURE' && materialMatches ? 'APPLICABLE' : 'NOT_APPLICABLE';
+    return hydraulicClass === 'GRAVITY' && materialMatches ? 'APPLICABLE' : 'NOT_APPLICABLE';
+  }
+  return 'ALL';
+}
+
+function createDiagnosticFacts(rule, policyContext, evaluation, evidence) {
+  if (!policyContext) return null;
+  const value = (evidence) => {
+    if (!evidence) return null;
+    const candidate = typeof evidence.resolvedValue === 'string' || typeof evidence.resolvedValue === 'number'
+      ? evidence.resolvedValue
+      : typeof evidence.sourceLexeme === 'string' && evidence.sourceLexeme !== 'UNAVAILABLE'
+        ? evidence.sourceLexeme
+        : evidence.sourceValue;
+    if (typeof candidate !== 'string' && typeof candidate !== 'number') return null;
+    const text = String(candidate);
+    return text.length <= 64 && !/[\u0000-\u001f\u007f]/.test(text) ? candidate : null;
+  };
+  const context = [
+    ['tema', policyContext.tema?.state === 'RESOLVED' && policyContext.temaValid ? policyContext.tema.resolvedValue : null],
+    ['material', policyContext.materialValid ? value(policyContext.material) : null],
+    ['pipeShape', policyContext.pipeShapeValues?.includes(value(policyContext.pipeShape)) ? value(policyContext.pipeShape) : null],
+    ['positioningCause', policyContext.positioningCauseValid ? value(policyContext.positioningCause) : null],
+  ].filter(([, contextValue]) => contextValue !== null && contextValue !== undefined)
+    .map(([fieldId, contextValue]) => ({ fieldId, value: contextValue }));
+  const explanationContextFieldIds = {
+    access: ['tema'],
+    attachmentLink: ['tema'],
+    constructionMethod: ['tema'],
+    cone: ['tema'],
+    manholeShape: ['tema'],
+    width: ['tema'],
+    wallThickness: ['tema'],
+    bottomDistance: ['tema'],
+    type: ['tema'],
+    verticalDimension: ['pipeShape'],
+    sdr: ['tema', 'material'],
+    ringStiffness: ['tema', 'material'],
+    pressureClass: ['tema'],
+    installationYear: ['positioningCause'],
+    captureDate: ['installationYear'],
+  }[rule.policy] || [];
+  return {
+    context,
+    explanationContextFieldIds,
+    classification: policyContext.hydraulicClass || null,
+    applicability: ['width', 'wallThickness', 'bottomDistance', 'manholeShape', 'constructionMethod', 'cone', 'access', 'attachmentLink', 'verticalDimension', 'sdr', 'ringStiffness', 'pressureClass', 'type'].includes(rule.policy)
+      ? 'CONDITIONAL' : null,
+    requirement: [
+      RuleReasonCode.REQUIRED_VALUE_MISSING,
+      RuleReasonCode.OPTIONAL_TYPE_NOT_SUPPLIED,
+      RuleReasonCode.APPLICABILITY_REQUIRED_MISSING,
+    ].includes(evaluation?.reasonCode) && evaluation.state !== EvaluationState.FAIL
+      ? 'EXPECTED'
+      : 'REQUIRED',
+    coverageApplicability: getDiagnosticApplicability(rule, policyContext, evaluation),
+    presence: evidencePresence(evidence),
+    expectation: {
+      allowedValueCount: Array.isArray(rule.allowedValues) ? rule.allowedValues.length : null,
+      maximumLength: rule.maximumLength || null,
+      referenceDate: policyContext.referenceDate?.toISOString?.().slice(0, 10) || null,
+    },
+  };
+}
+
 function createRuleResult(rule, refs, context) {
   const findings = [];
   const outcomes = [];
@@ -287,6 +401,7 @@ function createRuleResult(rule, refs, context) {
   let failCount = 0;
   let checkCount = 0;
   let notEvaluatedCount = 0;
+  let dependencyReviewCount = 0;
   let indeterminateCount = 0;
   const geometryBreakdown = {
     point: createGeometryCounts(),
@@ -317,9 +432,11 @@ function createRuleResult(rule, refs, context) {
     const evaluation = rule.policy === 'typeCompatibility'
       ? evaluateFieldPolicy(evidence, rule.policy, rule, context.policyContexts.get(ref.key))
       : evaluateRule({ rule, evidence, rulesById: context.rulesById, policyContext: context.policyContexts.get(ref.key) });
+    const diagnosticFacts = createDiagnosticFacts(rule, context.policyContexts.get(ref.key), evaluation, evidence);
     outcomes.push({ objectRef: ref, canonicalFieldId: rule.canonicalFieldId, ruleId: rule.ruleId,
       state: evaluation.state, reasonCode: evaluation.reasonCode || null,
-      suppression: evaluation.details?.suppression || null });
+      suppression: evaluation.details?.suppression || null,
+      diagnosticFacts });
     const geometryCounts = geometryBreakdown[ref.geometryScope];
     geometryCounts.evaluatedCount += 1;
     if (evaluation.state === EvaluationState.PASS) passCount += 1;
@@ -329,11 +446,24 @@ function createRuleResult(rule, refs, context) {
     if (evaluation.state === EvaluationState.CHECK) checkCount += 1;
     if (evaluation.state === EvaluationState.CHECK) geometryCounts.checkCount += 1;
     if (evaluation.state === EvaluationState.NOT_EVALUATED) notEvaluatedCount += 1;
+    if (evaluation.state === EvaluationState.NOT_EVALUATED && (
+      evaluation.reasonCode === RuleReasonCode.DEPENDENT_TEMA_UNRESOLVED ||
+      evaluation.details?.suppression
+    )) {
+      dependencyReviewCount += 1;
+    }
     if (evaluation.state === EvaluationState.NOT_EVALUATED) geometryCounts.notEvaluatedCount += 1;
     if (evaluation.state === EvaluationState.INDETERMINATE) indeterminateCount += 1;
     if (evaluation.state === EvaluationState.INDETERMINATE) geometryCounts.indeterminateCount += 1;
     if (evaluation.state === EvaluationState.FAIL || evaluation.state === EvaluationState.CHECK || evaluation.state === EvaluationState.INDETERMINATE) {
-      findings.push(createFinding({ rule, ref, evidence: rule.policy === 'typeCompatibility' ? evidenceByField : evidence, evaluation }));
+      findings.push(createFinding({
+        rule,
+        ref,
+        evidence: rule.policy === 'typeCompatibility' ? evidenceByField : evidence,
+        evaluation: diagnosticFacts
+          ? { ...evaluation, details: { ...(evaluation.details || {}), diagnosticFacts } }
+          : evaluation,
+      }));
       geometryCounts.findingCount += 1;
     }
   }
@@ -345,6 +475,7 @@ function createRuleResult(rule, refs, context) {
     failCount,
     checkCount,
     notEvaluatedCount,
+    dependencyReviewCount,
     indeterminateCount,
     geometryBreakdown,
     findings,
@@ -405,10 +536,11 @@ export function runGmiValidationV2(input) {
   const materialRule = rules.find((rule) => rule.ruleId === 'innmaling.line.material.required');
   const typeTemas = new Set(typeRelationship?.relationship.allowedPairs.map(([, tema]) => tema) || []);
   const typeValues = new Set(typeRelationship?.relationship.allowedPairs.map(([type]) => type) || []);
+  const positioningCauseRule = rules.find((rule) => rule.ruleId === 'innmaling.common.positioning-cause.valid');
   for (const ref of allRefs) context.policyContexts.set(ref.key, {
     tema: evidenceFor(ref, 'tema'),
     temaValid: (() => { const identity = evidenceFor(ref, 'tema'); return identity.state === 'RESOLVED' && (ref.geometryScope === 'point' ? rules.find((r) => r.ruleId === 'innmaling.point.tema.required') : rules.find((r) => r.ruleId === 'innmaling.line.tema.required'))?.allowedValues.includes(identity.resolvedValue); })(),
-    positioningCause: evidenceFor(ref, 'positioningCause'), installationYear: evidenceFor(ref, 'installationYear'),
+    positioningCause: evidenceFor(ref, 'positioningCause'), positioningCauseValid: (() => { const cause = evidenceFor(ref, 'positioningCause'); return cause?.state === 'VALUE_PRESENT' && positioningCauseRule?.allowedValues.includes(raw(cause)); })(), installationYear: evidenceFor(ref, 'installationYear'),
     pipeShape: evidenceFor(ref, 'pipeShape'), pipeShapeValues: pipeShapeRule?.allowedValues || [],
     material: evidenceFor(ref, 'material'), materialValid: (() => { const material = evidenceFor(ref, 'material'); return material?.state === 'VALUE_PRESENT' && materialRule?.allowedValues.includes(raw(material)); })(), hydraulicClass: (() => { const identity = evidenceFor(ref, 'tema'); return identity.state === 'RESOLVED' && (ref.geometryScope === 'line') ? classifyHydraulicTema(identity.resolvedValue, rules.find((r) => r.ruleId === 'innmaling.line.tema.required')?.allowedValues || []) : null; })(),
     nyttYears, typeTemas, typeValues, referenceDate, currentYear: context.currentYear,

@@ -502,21 +502,23 @@ test('Field Info keeps Type canonical and exposes exact compatibility/provenance
   const presentations = getValidationV2PresentationRules(getValidationRules().map((rule) => ({
     rule,
     geometryBreakdown: {
-      point: { evaluatedCount: 0, passCount: 0, failCount: 0, notEvaluatedCount: 0, indeterminateCount: 0 },
-      line: { evaluatedCount: 0, passCount: 0, failCount: 0, notEvaluatedCount: 0, indeterminateCount: 0 },
+      point: { evaluatedCount: 1, passCount: 1, failCount: 0, notEvaluatedCount: 0, indeterminateCount: 0 },
+      line: { evaluatedCount: 1, passCount: 1, failCount: 0, notEvaluatedCount: 0, indeterminateCount: 0 },
     },
   })), 'point');
-  const presentation = presentations.find(({ rule }) => rule.ruleId === COMPATIBLE);
-  assert.equal(presentation.displayName, 'Type passer til Tema');
+  const presentation = presentations.find(({ displayName }) => displayName === 'Type');
+  assert.equal(presentation.displayName, 'Type');
   assert.equal(presentation.rule.canonicalFieldId, 'type');
-  assert.equal(presentation.fieldDataEnabled, false);
+  assert.equal(presentation.fieldDataEnabled, true);
+  assert.deepEqual(presentation.rules.map(({ ruleId }) => ruleId), [TYPE_VALID, COMPATIBLE]);
+  assert.equal(presentations.some(({ displayName }) => displayName === 'Type passer til Tema'), false);
 
   const modalSource = await readFile(
     new URL('../src/components/validation-v2/ValidationV2FieldInfoModal.js', import.meta.url),
     'utf8',
   );
   assert.match(modalSource, /fieldDataEnabled/);
-  assert.match(modalSource, /disabled=\{tab === TABS\.DATA && !fieldDataEnabled\}/);
+  assert.doesNotMatch(modalSource, /disabled=\{tab === TABS\.RESULT && !fieldDataEnabled\}/);
 });
 
 test('ordinary single-field Fildata rejects the compatibility row', () => {

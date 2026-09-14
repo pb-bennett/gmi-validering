@@ -1,5 +1,7 @@
 'use client';
 
+import { ArrowSquareOutIcon } from '@phosphor-icons/react';
+
 const STATUS_DOT_CLASSES = Object.freeze({
   red: 'bg-red-600',
   amber: 'bg-amber-500',
@@ -10,11 +12,11 @@ function getRowId(presentation) {
   return `validation-v2-rule-${presentation.expansionKey.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 }
 
-function SummaryCount({ label, value }) {
+function SummaryCount({ label, value, className = 'text-slate-700' }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 border-b border-gray-100 py-1">
-      <dt className="text-[10px] text-gray-500">{label}</dt>
-      <dd className="text-xs font-semibold text-gray-900">{value}</dd>
+    <div className={`inline-flex items-baseline gap-1 whitespace-nowrap ${className}`}>
+      <dt className="text-[13px] font-medium">{label}</dt>
+      <dd className="text-sm font-bold">{value}</dd>
     </div>
   );
 }
@@ -31,11 +33,6 @@ export default function ValidationV2RuleList({
         const rowId = getRowId(presentation);
         const panelId = `${rowId}-summary`;
         const isExpanded = expandedRuleKey === presentation.expansionKey;
-        const statusClass = presentation.status.visualToken === 'red'
-          ? 'bg-red-50 text-red-800'
-          : presentation.status.visualToken === 'green'
-            ? 'bg-green-50 text-green-800'
-            : 'bg-amber-50 text-amber-900';
         const { counts } = presentation;
         return (
           <div key={presentation.expansionKey}>
@@ -46,7 +43,7 @@ export default function ValidationV2RuleList({
               aria-controls={panelId}
               aria-label={`${presentation.displayName}: ${presentation.status.label} for denne kontrollen for valgt geometri`}
               onClick={() => onToggle(presentation.expansionKey)}
-              className="flex min-h-10 w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+              className="flex min-h-10 w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
             >
               <span
                 role="img"
@@ -70,28 +67,26 @@ export default function ValidationV2RuleList({
                 aria-labelledby={rowId}
                 className="border-t border-gray-100 px-2 pb-2 pt-2"
               >
-                <div className="mb-1 flex items-center justify-end">
+                <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <dl className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                    <SummaryCount label="Objekter" value={counts.evaluatedCount} />
+                    {counts.failCount > 0 && <SummaryCount label="Feil" value={counts.failCount} className="text-red-700" />}
+                    {(counts.checkCount || 0) + counts.indeterminateCount > 0 && (
+                      <SummaryCount label="Sjekk" value={(counts.checkCount || 0) + counts.indeterminateCount} className="text-amber-700" />
+                    )}
+                    {counts.passCount > 0 && <SummaryCount label="Pass" value={counts.passCount} className="text-green-700" />}
+                  </dl>
                   <button
                     type="button"
-                    aria-label={`Feltinformasjon: ${presentation.displayName}`}
-                    title="Feltinformasjon"
+                    aria-label={`Vis detaljer: ${presentation.displayName}`}
+                    title="Vis"
                     onClick={(event) => onInfo?.(presentation, event.currentTarget)}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded text-xs ${statusClass} hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600"
                   >
-                    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm0 3.25a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM8.75 9h2.5v5h-2.5V9Z" />
-                    </svg>
+                    <ArrowSquareOutIcon aria-hidden="true" size={16} weight="bold" />
+                    <span>Vis</span>
                   </button>
                 </div>
-                <dl className="grid grid-cols-2 gap-x-4 sm:grid-cols-3">
-                  <SummaryCount label="Objekter i grunnlaget" value={counts.evaluatedCount} />
-                  <SummaryCount label="Pass" value={counts.passCount} />
-                  <SummaryCount label="Feil" value={counts.failCount} />
-                  <SummaryCount label="Sjekk" value={(counts.checkCount || 0) + counts.indeterminateCount} />
-                  {counts.notEvaluatedCount > 0 && (
-                    <SummaryCount label="Ikke kontrollert" value={counts.notEvaluatedCount} />
-                  )}
-                </dl>
               </section>
             )}
           </div>

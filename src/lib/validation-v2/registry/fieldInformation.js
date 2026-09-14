@@ -1,5 +1,9 @@
 import fieldInformationData from '../../../data/validation-v2/field-information.json' with { type: 'json' };
 import { getCanonicalField } from './registry.js';
+import { getPointFieldApplicability, PointFieldApplicabilityState } from './pointFieldApplicability.js';
+import { getAuthoritativeValueTable } from '../../../data/validation-v2/authoritative-value-tables.js';
+
+export { getAuthoritativeValueTable };
 import {
   ACCESS_VALUES,
   OWNER_VALUES,
@@ -400,6 +404,155 @@ const POLICY_METADATA = Object.freeze({
   facilityId: ['AnleggsID er valgfritt. En levert verdi fremheves med informativ Sjekk og mistenkes ikke derfor å være feil.', []],
   attachmentLink: ['S_HYPERLINK vurderes ut fra løst Tema, uten URL-syntakskontroll.', ['Vedlegg forventes for Byggemetode-aktuelle Tema. Gemini VA støtter ikke vedlegg på kumlokk (LOK/TOP); en levert lenke gir Feil og skal fjernes.']],
 });
+
+const RULE_EVALUATION_GUIDANCE = Object.freeze({
+  constructionMethod: {
+    fail: 'Feltet mangler når Byggemetode er aktuelt, eller verdien er ugyldig.',
+    check: 'UK er en gyldig verdi, men bør kontrolleres.',
+    pass: 'En godkjent verdi er oppgitt når feltet er aktuelt.',
+  },
+  access: {
+    fail: 'En ugyldig Adkomst-kode gir Feil.',
+    check: 'Adkomst er ønsket for kummer og bør kontrolleres.',
+    pass: 'En gyldig Adkomst-kode er oppgitt når den er relevant.',
+  },
+  attachmentLink: {
+    fail: 'En levert lenke på LOK eller TOP gir Feil og skal fjernes.',
+    check: 'Manglende bildehenvisning på et aktuelt objekt gir Sjekk.',
+    pass: 'Bildehenvisningen følger objektets Tema.',
+  },
+  type: {
+    fail: 'Ugyldig eller inkompatibel Type gir Feil.',
+    check: 'Type vurderes sammen med objektets Tema.',
+    pass: 'Type er en godkjent kode som passer til Tema.',
+  },
+});
+
+const USER_SUMMARIES = Object.freeze({
+  constructionMethod: 'Byggemetode brukes for relevante punktobjekter. Om feltet er påkrevd avhenger av Tema.',
+  access: 'Adkomst beskriver tilkomst til punktobjektet. Feltet er ønsket for kummer, men er ikke et generelt krav.',
+  attachmentLink: 'S_HYPERLINK brukes til å referere til bilder for relevante objekter. Hva som forventes avhenger av Tema.',
+  type: 'Type beskriver punktobjektet. Verdien må være en godkjent kode som passer til objektets Tema.',
+});
+
+const APPLICABILITY_POLICIES = new Set([
+  'constructionMethod', 'manholeShape', 'cone', 'width', 'wallThickness',
+  'bottomDistance',
+]);
+
+function geometryLabel(scope) {
+  return { point: 'Punkt', line: 'Ledning' }[scope] || scope;
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter((value) => value !== null && value !== undefined && value !== ''))];
+}
+
+function buildAllowedValuePresentation(field, rule) {
+  const authoritativeTable = getAuthoritativeValueTable(field.canonicalFieldId, field.geometryScope);
+  if (authoritativeTable && rule.evaluatorKind !== 'FIELD_RELATIONSHIP') {
+    const validatorChecks = field.canonicalFieldId === 'constructionMethod'
+      ? { UK: 'Sjekk' }
+      : {};
+    const tableCodes = authoritativeTable.rows.map((row) => row.code);
+    const validatorCodes = uniqueValues(rule.allowedValues || field.allowedValues || []);
+    const validatorCodesMatch = tableCodes.length === validatorCodes.length
+      && (field.canonicalFieldId === 'type'
+        ? tableCodes.every((code) => validatorCodes.includes(code))
+        : tableCodes.every((code, index) => code === validatorCodes[index]));
+    return {
+      heading: field.canonicalFieldId === 'type' ? 'Gyldige Type-koder' : validatorCodesMatch
+        ? authoritativeTable.rows.some((row) => row.meaning)
+          ? (authoritativeTable.columns.includes('longMeaning') ? 'Gyldige koder' : 'Gyldige verdier')
+          : 'Gyldige koder'
+        : 'Koder i instruksen',
+      columns: authoritativeTable.columns,
+      rows: authoritativeTable.rows.map((row) => ({ ...row, validator: validatorChecks[row.code] || null })),
+      source: authoritativeTable.source,
+      validatorCodesMatch,
+      groups: authoritativeTable.groups?.map((group) => ({
+        heading: group.heading,
+        columns: group.columns,
+        rows: group.rows.map((row) => ({ ...row, validator: validatorChecks[row.code] || null })),
+        source: group.source,
+      })) || null,
+    };
+  }
+  const values = uniqueValues(rule.allowedValues || field.allowedValues || []);
+  if (!values.length || rule.evaluatorKind === 'FIELD_RELATIONSHIP') return null;
+  const rows = values.map((value) => {
+    const valueInfo = field.valueInfo?.[value];
+    const description = valueInfo?.description || null;
+    const label = valueInfo?.label && valueInfo.label !== value ? valueInfo.label : null;
+    return { value, label, description };
+  });
+  return {
+    heading: field.documentedFormat === 'Kode' ? 'Gyldige koder' : 'Gyldige verdier',
+    columns: ['code', ...(rows.some((row) => row.label || row.description) ? ['meaning'] : [])],
+    rows: rows.map((row) => ({ code: row.value, meaning: row.label || row.description || null })),
+    source: null,
+  };
+}
+
+function buildApplicabilityPresentation(field, rule) {
+  if (APPLICABILITY_POLICIES.has(rule.policy) && field.geometryScope === 'point') {
+    const temas = POINT_TEMA_VALUES.filter((tema) => (
+      getPointFieldApplicability(tema, rule.policy).state === PointFieldApplicabilityState.APPLICABLE
+    ));
+    if (temas.length) return { text: 'Feltet er aktuelt for disse Tema:', values: temas };
+  }
+  if (rule.policy === 'access') return { text: 'Feltet vurderes særskilt for Tema KUM.' };
+  if (rule.policy === 'verticalDimension') return { text: 'Feltet avhenger av Rørform: det er valgfritt for S og påkrevd for andre godkjente former.' };
+  if (['sdr', 'ringStiffness', 'pressureClass'].includes(rule.policy)) {
+    return { text: field.description };
+  }
+  if (rule.policy === 'attachmentLink') return { text: 'Feltet vurderes ut fra objektets Tema og forventes der Byggemetode er aktuelt.' };
+  if ((rule.evaluatorKind === 'FIELD_RELATIONSHIP' || rule.policy === 'type') && field.compatibility) {
+    return { text: 'Feltet vurderes sammen med Tema. En levert Type må være tillatt for objektets Tema.' };
+  }
+  return null;
+}
+
+function buildEvaluationPresentation(field, rule) {
+  const special = RULE_EVALUATION_GUIDANCE[field.canonicalFieldId] || {};
+  const guidanceText = [field.description, ...(field.qualifications || []).map((item) => item.text)].join(' ');
+  const canFail = !['caseNumber', 'surveyedBy', 'facilityId', 'length', 'externalHeight', 'optionalText', 'visibility'].includes(rule.policy)
+    && (field.requiredness !== 'NOT_REQUIRED' || (rule.allowedValues || []).length > 0 || rule.evaluatorKind === 'FIELD_RELATIONSHIP');
+  const canCheck = Boolean(special.check) || /Sjekk|kontrolleres|kontroll/i.test(guidanceText);
+  const canPass = rule.policy !== 'facilityId' && rule.policy !== 'optionalText' && rule.policy !== 'visibility';
+  const statuses = [];
+  if (canFail) statuses.push({ status: 'Feil', text: special.fail || 'Feltet mangler når det er påkrevd, eller verdien er ugyldig.' });
+  if (canCheck) statuses.push({ status: 'Sjekk', text: special.check || 'Verdien er tillatt, men bør kontrolleres.' });
+  if (canPass) statuses.push({ status: 'Pass', text: special.pass || 'En gyldig verdi er oppgitt når feltet er aktuelt.' });
+  return statuses;
+}
+
+/** Build user-facing Regel content without changing the active validation policy. */
+export function composeFieldRulePresentation({ field, rule }) {
+  if (!field || !rule) return null;
+  const technicalDetails = [
+    field.canonicalFieldId && { label: 'Felt-ID', value: field.canonicalFieldId, code: true },
+    field.directGmiSourceKey && { label: 'Kildekolonne', value: field.directGmiSourceKey, code: true },
+    field.geometryScope && { label: 'Gjelder', value: geometryLabel(field.geometryScope) },
+    field.requiredness && { label: 'Krav', value: field.requiredness === 'CONDITIONAL' ? 'Betinget' : field.required ? 'Påkrevd' : 'Ikke påkrevd' },
+    field.documentedFormat && { label: 'Format', value: field.documentedFormat },
+    field.units && { label: 'Enhet', value: field.units },
+    field.range && { label: 'Område', value: field.range },
+  ].filter(Boolean);
+  return {
+    summary: USER_SUMMARIES[field.canonicalFieldId] || field.description || null,
+    evaluationGuidance: buildEvaluationPresentation(field, rule),
+    applicabilityGuidance: buildApplicabilityPresentation(field, rule),
+    allowedValues: buildAllowedValuePresentation(field, rule),
+    source: field.sources?.length ? field.sources.map((source) => ({
+      title: source.documentId === 'appendix-a' ? 'Innmålingsinstruks Vedlegg A' : (source.title || source.documentId),
+      pages: source.pages,
+      version: source.version,
+    })) : null,
+    technicalDetails,
+    compatibility: field.canonicalFieldId === 'type' ? null : (field.compatibility || null),
+  };
+}
 
 export function getFieldInformation(canonicalFieldId) {
   return byId.get(canonicalFieldId);

@@ -72,6 +72,14 @@ function getCount(counts, key) {
   return Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
+function getDependencyReviewCount(ruleResult, geometryScope = null) {
+  return (ruleResult?.outcomes || []).filter((outcome) =>
+    outcome.state === 'NOT_EVALUATED' &&
+    (!geometryScope || outcome.objectRef?.geometryScope === geometryScope) &&
+    (outcome.reasonCode === 'DEPENDENT_TEMA_UNRESOLVED' || outcome.suppression)
+  ).length;
+}
+
 /**
  * Derive the user-facing state of one control without changing engine state.
  */
@@ -79,6 +87,7 @@ export function getValidationV2AggregateStatus(counts = EMPTY_COUNTS) {
   const passCount = getCount(counts, 'passCount');
   const failCount = getCount(counts, 'failCount');
   const checkCount = getCount(counts, 'checkCount') + getCount(counts, 'indeterminateCount');
+  const dependencyReviewCount = getCount(counts, 'dependencyReviewCount');
   const applicableCount = passCount + failCount + checkCount;
 
   let statusEnum;
@@ -89,14 +98,21 @@ export function getValidationV2AggregateStatus(counts = EMPTY_COUNTS) {
   } else if (checkCount > 0) {
     statusEnum = ValidationV2AggregateStatus.CHECK;
     reasonCode = 'HAS_FAILURE_OR_INDETERMINATE';
+  } else if (dependencyReviewCount > 0) {
+    statusEnum = ValidationV2AggregateStatus.CHECK;
+    reasonCode = 'HAS_UNRESOLVED_DEPENDENCY';
   } else if (passCount > 0) {
     statusEnum = ValidationV2AggregateStatus.PASS;
     reasonCode = 'ALL_APPLICABLE_PASS';
   } else {
-    statusEnum = ValidationV2AggregateStatus.CHECK;
-    reasonCode = applicableCount === 0
-      ? 'NO_APPLICABLE_EVALUATIONS'
-      : 'HAS_FAILURE_OR_INDETERMINATE';
+    return Object.freeze({
+      enum: null,
+      label: null,
+      attentionRank: 3,
+      visualToken: 'gray',
+      reasonCode: 'NO_APPLICABLE_EVALUATIONS',
+      applicableCount,
+    });
   }
 
   return Object.freeze({
@@ -131,7 +147,10 @@ export function getValidationV2RulePresentation(ruleResult, geometryScope, regis
     fieldInformation?.displayName ||
     ruleResult?.rule?.canonicalFieldId ||
     'Ukjent kontroll';
-  const status = getValidationV2AggregateStatus(counts);
+  const status = getValidationV2AggregateStatus({
+    ...counts,
+    dependencyReviewCount: getDependencyReviewCount(ruleResult, geometryScope),
+  });
   return {
     ruleResult,
     rule: ruleResult?.rule,
@@ -145,12 +164,61 @@ export function getValidationV2RulePresentation(ruleResult, geometryScope, regis
 }
 
 export function getValidationV2RulePresentations(ruleResults = [], geometryScope) {
-  return ruleResults.flatMap((ruleResult, index) => {
+  const groups = new Map();
+  ruleResults.forEach((ruleResult, index) => {
     const scopes = ruleResult?.rule?.geometryScopes;
     if (geometryScope && Array.isArray(scopes) && !scopes.includes(geometryScope)) {
-      return [];
+      return;
     }
-    return [getValidationV2RulePresentation(ruleResult, geometryScope, index)];
+    const fieldId = ruleResult?.rule?.canonicalFieldId || `rule:${index}`;
+    if (!groups.has(fieldId)) groups.set(fieldId, { fieldId, registryIndex: index, ruleResults: [] });
+    groups.get(fieldId).ruleResults.push(ruleResult);
+  });
+  return [...groups.values()].flatMap((group) => {
+    const primaryRuleResult = group.ruleResults.find((item) => item.rule?.fieldDataEnabled !== false)
+      || group.ruleResults[0];
+    const objectStates = new Map();
+    group.ruleResults.forEach((item) => (item.outcomes || []).forEach((outcome) => {
+      if (outcome.objectRef?.geometryScope !== geometryScope) return;
+      const state = outcome.state === 'FAIL' ? 'Feil'
+        : outcome.state === 'CHECK' || outcome.state === 'INDETERMINATE' ? 'Sjekk'
+          : outcome.state === 'PASS' ? 'Pass'
+            : outcome.state === 'NOT_EVALUATED' && (outcome.reasonCode === 'DEPENDENT_TEMA_UNRESOLVED' || outcome.suppression) ? 'Sjekk' : null;
+      if (!state) return;
+      const key = outcome.objectRef.key;
+      const previous = objectStates.get(key);
+      if (!previous || ['Pass', 'Sjekk', 'Feil'].indexOf(state) > ['Pass', 'Sjekk', 'Feil'].indexOf(previous)) objectStates.set(key, state);
+    }));
+    let counts = {
+      evaluatedCount: objectStates.size,
+      failCount: [...objectStates.values()].filter((state) => state === 'Feil').length,
+      checkCount: [...objectStates.values()].filter((state) => state === 'Sjekk').length,
+      passCount: [...objectStates.values()].filter((state) => state === 'Pass').length,
+      notEvaluatedCount: 0,
+      indeterminateCount: 0,
+    };
+    if (objectStates.size === 0) {
+      const ownerCounts = group.ruleResults.map((item) => item.geometryBreakdown?.[geometryScope] || EMPTY_COUNTS);
+      const evaluatedCount = Math.max(0, ...ownerCounts.map((item) => getCount(item, 'evaluatedCount')));
+      const failCount = Math.max(0, ...ownerCounts.map((item) => getCount(item, 'failCount')));
+      const checkCount = Math.max(0, ...ownerCounts.map((item) => getCount(item, 'checkCount') + getCount(item, 'indeterminateCount')));
+      counts = { evaluatedCount, failCount, checkCount, passCount: Math.max(0, evaluatedCount - failCount - checkCount), notEvaluatedCount: 0, indeterminateCount: 0 };
+    }
+    const status = getValidationV2AggregateStatus(counts);
+    if (status.enum === null) return [];
+    const fieldInformation = getFieldInformation(group.fieldId);
+    return [{
+      ruleResult: primaryRuleResult,
+      ruleResults: group.ruleResults,
+      rule: primaryRuleResult.rule,
+      rules: group.ruleResults.map((item) => item.rule),
+      counts,
+      displayName: fieldInformation?.displayName || group.fieldId,
+      status,
+      fieldDataEnabled: primaryRuleResult.rule?.fieldDataEnabled !== false,
+      registryIndex: group.registryIndex,
+      expansionKey: `${geometryScope}:${group.fieldId}`,
+    }];
   });
 }
 

@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { runGmiValidationV2 } from '@/lib/validation-v2';
-import { getValidationRules } from '@/lib/validation-v2/registry/rules';
 import { getDatasetRevision } from '@/lib/validation-v2/datasetRevision';
 import { createValidationV2ViewController } from '@/lib/validation-v2/validationViewController';
 import {
@@ -51,6 +51,7 @@ function UnknownFields({ diagnostics }) {
 export default function ValidationV2Workspace() {
   const layers = useStore((state) => state.layers);
   const layerOrder = useStore((state) => state.layerOrder);
+  const toggleFieldValidation = useStore((state) => state.toggleFieldValidation);
   const expandedLayerId = useStore((state) => state.ui.expandedLayerId);
   const availableLayerIds = useMemo(
     () => layerOrder.filter((layerId) => layers[layerId]?.data),
@@ -102,7 +103,6 @@ export default function ValidationV2Workspace() {
   const geometryView = result ? viewState.geometryView : null;
   const activeRuleResults = geometryView?.ruleResults || EMPTY_RULE_RESULTS;
   const geometrySummary = geometryView?.summary || null;
-  const visibleRuleCount = result?.summary?.totalRules ?? getValidationRules().length;
   const searchPresentations = useMemo(
     () => getValidationV2PresentationRules(activeRuleResults, activeGeometry, {
       searchQuery: presentationState.searchQuery,
@@ -195,6 +195,7 @@ export default function ValidationV2Workspace() {
         rule: presentation.rule,
       }),
       rule: presentation.rule,
+      rules: presentation.rules,
       geometryScope: activeGeometry,
     });
   };
@@ -228,12 +229,21 @@ export default function ValidationV2Workspace() {
       setViewState(controller.run(input));
       setRunState('success');
     } catch (error) {
-      console.error('Validator 2.0 beta could not run', error);
+      console.error('Validator could not run', error);
       setViewState(controller.clearResult());
       setRunState('error');
       setRunError(true);
     }
   };
+
+  // Validation is derived from the selected layer and its immutable dataset
+  // revision. Presentation-only changes do not participate in this effect.
+  useEffect(() => {
+    if (!selectedLayer || !isGmi) return;
+    setViewState(controller.selectLayer(selectedLayer));
+    runValidation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLayerId, selectedRevision, isGmi]);
 
   const selectGeometry = (scope) => {
     setFieldInfoContext(null);
@@ -245,8 +255,16 @@ export default function ValidationV2Workspace() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gray-50">
       <div className="flex-none border-b bg-white px-2 py-2">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold text-gray-900">Validator 2.0</h2>
-          <span className="text-[10px] font-medium text-blue-700">Beta · GMI · {visibleRuleCount} regler</span>
+          <h2 className="text-sm font-bold text-gray-900">Validator</h2>
+          <button
+            type="button"
+            onClick={() => toggleFieldValidation(false)}
+            aria-label="Lukk Validator"
+            title="Lukk Validator"
+            className="inline-flex h-8 w-8 items-center justify-center rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <XIcon aria-hidden="true" size={18} weight="bold" />
+          </button>
         </div>
         <div className="mt-2 flex items-center gap-1.5">
           <label className="text-[11px] font-medium text-gray-700" htmlFor="validation-v2-layer">Lag</label>
@@ -262,21 +280,13 @@ export default function ValidationV2Workspace() {
               <option key={layerId} value={layerId}>{layers[layerId].name || layerId}</option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={runValidation}
-            disabled={!isGmi || (runState === 'running' && isCurrentRun)}
-            className="shrink-0 rounded border border-blue-700 bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {runState === 'running' && isCurrentRun ? 'Validerer ...' : 'Kjør'}
-          </button>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {!selectedLayer && <p className="text-xs text-gray-600">Velg et lag for å starte.</p>}
         {selectedLayer && !isGmi && (
-          <p className="text-xs text-gray-700">Validator 2.0 beta støtter foreløpig GMI-data.</p>
+          <p className="text-xs text-gray-700">Validator støtter foreløpig bare GMI-data.</p>
         )}
         {selectedLayer && isGmi && (
           <>
@@ -301,7 +311,7 @@ export default function ValidationV2Workspace() {
 
             {!result && (
               <p className="py-3 text-[11px] text-gray-500">
-                Velg geometri og kjør kontrollen for å se resultatene.
+                Kontrollerer…
               </p>
             )}
             {result && geometrySummary && (
@@ -431,7 +441,7 @@ export default function ValidationV2Workspace() {
             )}
             {runError && isCurrentRun && (
               <div className="mt-2 border-t border-red-200 pt-2 text-xs text-red-800">
-                Validator 2.0 kunne ikke kjøres for dette laget. Prøv å laste inn datasettet på nytt, eller bruk Validator 1.0.
+                Validator kunne ikke kjøres for dette laget. Prøv å laste inn datasettet på nytt.
               </div>
             )}
           </>
@@ -439,10 +449,11 @@ export default function ValidationV2Workspace() {
       </div>
       {fieldInfoContext && (
         <ValidationV2FieldInfoModal
-          key={`${fieldInfoContext.geometryScope}:${fieldInfoContext.rule.ruleId}`}
+          key={`${fieldInfoContext.geometryScope}:${fieldInfoContext.field.canonicalFieldId}`}
           isOpen
           field={fieldInfoContext.field}
           rule={fieldInfoContext.rule}
+          rules={fieldInfoContext.rules}
           geometryScope={fieldInfoContext.geometryScope}
           layerId={selectedLayerId}
           dataset={selectedLayer?.data}
