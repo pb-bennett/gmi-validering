@@ -168,9 +168,10 @@ function schemaCause(finding) {
 }
 
 function createGroup({ finding, type, field, geometryScope, denominator }) {
+  const presentationId = `${finding.canonicalFieldId}|${geometryScope}|${type}|${finding.state}|${finding.ruleId}|${finding.reasonCode}|${contextKey(finding, type)}`;
   return {
-    key: `${finding.canonicalFieldId}|${geometryScope}|${type}|${finding.state}|${finding.reasonCode}|${contextKey(finding, type)}`,
-    diagnosticId: `${finding.canonicalFieldId}:${geometryScope}:${type}:${finding.reasonCode}`,
+    key: presentationId,
+    diagnosticId: presentationId,
     type,
     state: diagnosticState(finding.state),
     field: {
@@ -187,6 +188,7 @@ function createGroup({ finding, type, field, geometryScope, denominator }) {
     contextValues: new Map(),
     relationshipPairs: new Map(),
     objectRefs: [],
+    exactObjectRefs: new Map(),
     contextFacts: finding.details?.diagnosticFacts || null,
     schemaCause: schemaCause(finding),
     expected: finding.expectedValues?.length ? { kind: 'APPROVED_CODES', source: 'active-rule-domain' } : null,
@@ -219,6 +221,9 @@ function addFinding(group, finding) {
   }
   const ref = objectLabel(finding.objectRef);
   if (ref && !group.objectRefs.includes(ref)) group.objectRefs.push(ref);
+  if (finding.objectRef?.key && !group.exactObjectRefs.has(finding.objectRef.key)) {
+    group.exactObjectRefs.set(finding.objectRef.key, finding.objectRef);
+  }
 }
 
 function finalize(group) {
@@ -232,7 +237,7 @@ function finalize(group) {
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count || collator.compare(a.label, b.label))
     : [];
-  const { contextValues, ...presentation } = group;
+  const { contextValues, exactObjectRefs, ...presentation } = group;
   const relationshipPairs = [...group.relationshipPairs.values()]
     .sort((a, b) => b.count - a.count || collator.compare(String(a.type), String(b.type)) || collator.compare(String(a.tema), String(b.tema)));
   return Object.freeze({
@@ -240,6 +245,9 @@ function finalize(group) {
     values: Object.freeze(values.slice(0, MAX_VALUES)),
     additionalValueCount: Math.max(0, values.length - MAX_VALUES),
     affectedObjects: Object.freeze({ total: group.count, sampleRefs, omittedCount: Math.max(0, group.count - sampleRefs.length) }),
+    // Runtime action data only. It is never rendered, persisted, or encoded.
+    exactObjectRefs: Object.freeze([...exactObjectRefs.values()]),
+    hasCompleteExactObjectRefs: exactObjectRefs.size === group.count,
     percentage: group.denominator > 0 ? Number(((group.count / group.denominator) * 100).toFixed(1)) : null,
     contextBreakdown: Object.freeze(contextBreakdown),
     relationshipPairs: Object.freeze(relationshipPairs.slice(0, MAX_RELATIONSHIP_PAIRS).map((pair) => Object.freeze(pair))),

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { ValidationV2FieldDetailContent } from './ValidationV2FieldDetailContent';
-import { VALIDATION_V2_FIELD_DETAIL_WIDTH } from './fieldDetailLayout';
+import { VALIDATION_V2_FIELD_MODAL_MAX_WIDTH } from './fieldDetailLayout';
 
 function getFocusableElements(container) {
   return [...container.querySelectorAll(
@@ -21,6 +21,7 @@ export default function ValidationV2FieldInfoModal({
   result,
   activeTab = 'result',
   onTabChange,
+  onOpenObjects,
   onClose,
 }) {
   const dialogRef = useRef(null);
@@ -68,7 +69,7 @@ export default function ValidationV2FieldInfoModal({
         aria-modal="true"
         aria-labelledby="validation-v2-field-info-title"
         className="flex h-[calc(100vh-1.5rem)] max-h-[720px] w-full flex-col overflow-hidden rounded-lg bg-white shadow-xl sm:h-[min(720px,calc(100vh-3rem))]"
-        style={{ maxWidth: VALIDATION_V2_FIELD_DETAIL_WIDTH }}
+        style={{ maxWidth: VALIDATION_V2_FIELD_MODAL_MAX_WIDTH }}
       >
         <header className="flex items-start justify-between gap-3 border-b border-gray-200 px-3 py-2.5">
           <div>
@@ -95,6 +96,7 @@ export default function ValidationV2FieldInfoModal({
           result={result}
           activeTab={activeTab}
           onTabChange={onTabChange}
+          onOpenObjects={onOpenObjects}
         />
       </div>
     </div>

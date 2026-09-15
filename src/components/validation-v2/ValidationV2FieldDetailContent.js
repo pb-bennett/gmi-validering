@@ -276,19 +276,31 @@ function LegacyResultPanel({ summary, isLoading, error, onRetry, result, geometr
   );
 }
 
-function DiagnosticBlock({ diagnostic }) {
+function DiagnosticBlock({ diagnostic, onOpenObjects }) {
   const isFail = diagnostic.state === ValidationV2DiagnosticState.FAIL;
   const presentation = getValidationV2DiagnosticPresentation(diagnostic);
   return (
-    <section className={`rounded border px-2.5 py-2 ${isFail ? 'border-red-200 bg-red-50/60' : 'border-amber-200 bg-amber-50/60'}`}>
-      <div className={`mb-1 text-[10px] font-bold uppercase tracking-wide ${isFail ? 'text-red-700' : 'text-amber-700'}`}>
+    <section className={`rounded border px-2 py-1.5 ${isFail ? 'border-red-200 bg-red-50/60' : 'border-amber-200 bg-amber-50/60'}`}>
+      <div className="flex items-start justify-between gap-2">
+      <div className={`text-[10px] font-bold uppercase tracking-wide ${isFail ? 'text-red-700' : 'text-amber-700'}`}>
         {isFail ? 'Feil' : 'Sjekk'} · {diagnostic.count} {diagnostic.count === 1 ? 'objekt' : 'objekter'}
       </div>
-      <p className="text-xs leading-5 text-gray-800">{presentation.summary}</p>
-      {presentation.detailLines.map((line) => <p key={line} className="mt-1 text-[11px] leading-4 text-gray-700">{line}</p>)}
-      {presentation.guidance && <p className="mt-2 text-[11px] leading-4 text-gray-600">{presentation.guidance}</p>}
+      {diagnostic.hasCompleteExactObjectRefs && onOpenObjects && (
+        <button
+          type="button"
+          onClick={() => onOpenObjects(diagnostic)}
+          aria-label={`Vis ${diagnostic.exactObjectRefs.length} objekter i tabell: ${presentation.summary}`}
+          className="-mt-0.5 shrink-0 rounded border border-blue-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          Vis {diagnostic.exactObjectRefs.length} {diagnostic.exactObjectRefs.length === 1 ? 'objekt' : 'objekter'}
+        </button>
+      )}
+      </div>
+      <p className="mt-0.5 text-xs leading-4 text-gray-800">{presentation.summary}</p>
+      {presentation.detailLines.map((line) => <p key={line} className="mt-0.5 text-[11px] leading-4 text-gray-700">{line}</p>)}
+      {presentation.guidance && <p className="mt-1 text-[11px] leading-4 text-gray-600">{presentation.guidance}</p>}
       {renderValidationV2DiagnosticBreakdown(diagnostic) && (
-        <p className="mt-1 text-[11px] font-medium text-gray-600">{renderValidationV2DiagnosticBreakdown(diagnostic)}</p>
+        <p className="mt-0.5 text-[11px] font-medium text-gray-600">{renderValidationV2DiagnosticBreakdown(diagnostic)}</p>
       )}
     </section>
   );
@@ -333,7 +345,7 @@ function ContextQualifier({ qualifier, status }) {
   );
 }
 
-function DiagnosticResultPanel({ summary, diagnostics, isLoading, error, onRetry, field }) {
+function DiagnosticResultPanel({ summary, diagnostics, isLoading, error, onRetry, field, onOpenObjects }) {
   if (isLoading) return <p className="py-6 text-center text-xs text-gray-500">Laster resultat ...</p>;
   if (error) {
     return (
@@ -396,7 +408,7 @@ function DiagnosticResultPanel({ summary, diagnostics, isLoading, error, onRetry
     <div className="space-y-3">
       <h3 className="text-sm font-semibold text-gray-900">{renderValidationV2ResultHeading({ field, ...model })}</h3>
       <CoverageSummary coverage={model.coverage} field={field} />
-      {model.diagnostics.map((diagnostic) => <DiagnosticBlock key={diagnostic.diagnosticId} diagnostic={diagnostic} />)}
+      {model.diagnostics.map((diagnostic) => <DiagnosticBlock key={diagnostic.diagnosticId} diagnostic={diagnostic} onOpenObjects={onOpenObjects} />)}
       {model.unresolved.map((note) => {
         const presentation = getValidationV2DependencyPresentation(note);
         return (
@@ -469,6 +481,7 @@ export function ValidationV2FieldDetailContent({
   result,
   activeTab,
   onTabChange,
+  onOpenObjects,
 }) {
   const tabRefs = useRef({});
   const { fieldDataState, diagnostics, retryFieldData } = useValidationV2FieldDetailModel({
@@ -517,7 +530,7 @@ export function ValidationV2FieldDetailContent({
       <div className="mx-auto w-full max-w-2xl px-2.5">
       {activeTab === TABS.RESULT ? (
         <div id={`validation-v2-field-panel-${TABS.RESULT}`} role="tabpanel" aria-labelledby={`validation-v2-field-tab-${TABS.RESULT}`}>
-          <DiagnosticResultPanel summary={fieldDataState.summary} diagnostics={diagnostics} isLoading={fieldDataState.loading} error={fieldDataState.error} onRetry={retryFieldData} field={field} />
+          <DiagnosticResultPanel summary={fieldDataState.summary} diagnostics={diagnostics} isLoading={fieldDataState.loading} error={fieldDataState.error} onRetry={retryFieldData} field={field} onOpenObjects={onOpenObjects} />
         </div>
       ) : (
         <div id={`validation-v2-field-panel-${TABS.RULE}`} role="tabpanel" aria-labelledby={`validation-v2-field-tab-${TABS.RULE}`}>

@@ -7,8 +7,9 @@ import {
   ShareNetworkIcon,
 } from '@phosphor-icons/react';
 import { isTestModeEnabled } from '@/lib/telemetry/uploadTelemetry.mjs';
-import { getMapToolbarMode, MapToolbarMode } from '@/lib/workspace/mapPanePresentation.mjs';
+import { MapToolbarMode } from '@/lib/workspace/mapPanePresentation.mjs';
 import useStore from '@/lib/store';
+import { useMapPanePresentation } from './MapPanePresentationProvider';
 import TabSwitcher from './TabSwitcher';
 import TestModeControl from './TestModeControl';
 
@@ -29,24 +30,14 @@ export default function MapPaneToolbar({ onReset, onShare, showShare }) {
   const toolbarRef = useRef(null);
   const overflowTriggerRef = useRef(null);
   const resetButtonRef = useRef(null);
-  const [paneMode, setPaneMode] = useState('normal');
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const { mode: paneMode } = useMapPanePresentation();
   const settings = useStore((state) => state.settings);
   const hydrated = useStore((state) => state.hydrated === true);
   const showTestModeControls = hydrated && isTestModeEnabled(settings);
   const hasOverflow = paneMode !== MapToolbarMode.NORMAL &&
     (paneMode === MapToolbarMode.NARROW || showTestModeControls);
   const compact = paneMode === MapToolbarMode.NARROW;
-
-  useEffect(() => {
-    const pane = toolbarRef.current?.closest('[data-map-pane]');
-    if (!pane) return undefined;
-    const updateMode = () => setPaneMode(getMapToolbarMode(pane.getBoundingClientRect().width));
-    updateMode();
-    const observer = new ResizeObserver(updateMode);
-    observer.observe(pane);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     if (!overflowOpen) return undefined;

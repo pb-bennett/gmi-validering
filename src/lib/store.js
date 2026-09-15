@@ -3,6 +3,7 @@ import { devtools, persist } from 'zustand/middleware';
 import { detectOutliers } from './analysis/outliers';
 import { analyzeIncline } from './analysis/incline';
 import { analyzeZValues } from './analysis/zValidation';
+import { createContextualObjectInspection, createExactObjectInspection } from './objectTableInspection';
 
 const STORAGE_VERSION = 3;
 let storeApi = null;
@@ -144,6 +145,8 @@ const useStore = create(
             mapUpdateNonce: 0,
             multiLayerModeEnabled: false,
           },
+          // Runtime-only: never persist source identities or inspection context.
+          objectTableInspection: null,
           // Initial layer state template for creating new layers
           layerTemplate: {
             id: null,
@@ -1512,6 +1515,7 @@ const useStore = create(
         openLayerDataTable: (layerId) =>
           set(
             (state) => ({
+              objectTableInspection: null,
               analysis: {
                 ...state.analysis,
                 isOpen: false,
@@ -1530,9 +1534,70 @@ const useStore = create(
             'ui/openLayerDataTable',
           ),
 
+        openObjectTable: (request) => {
+          const state = get();
+          const layerId = request?.scope?.layerId;
+          let inspection;
+          try {
+            inspection = request?.scope?.kind === 'contextual-object-set'
+              ? createContextualObjectInspection({
+                layer: layerId ? state.layers[layerId] : null,
+                request,
+              })
+              : createExactObjectInspection({
+                layer: layerId ? state.layers[layerId] : null,
+                request,
+              });
+          } catch {
+            return false;
+          }
+          set(
+            (current) => ({
+              objectTableInspection: inspection,
+              analysis: { ...current.analysis, isOpen: false, layerId: null },
+              ui: {
+                ...current.ui,
+                layerDataTable: {
+                  ...(current.ui.layerDataTable || {}),
+                  isOpen: true,
+                  layerId: inspection.layerId,
+                },
+              },
+            }),
+            false,
+            'ui/openObjectTable',
+          );
+          return true;
+        },
+
+        setObjectTableInspectionView: (activeView) =>
+          set((state) => {
+            const inspection = state.objectTableInspection;
+            if (inspection?.kind !== 'contextual-object-set' || !['focus', 'scope'].includes(activeView)) return state;
+            return { objectTableInspection: Object.freeze({ ...inspection, activeView }) };
+          }, false, 'ui/setObjectTableInspectionView'),
+
+        closeValidatorOwnedObjectTable: () =>
+          set((state) => {
+            const inspection = state.objectTableInspection;
+            if (!inspection?.context?.source?.startsWith('validation-v2-')) return state;
+            return {
+              objectTableInspection: null,
+              ui: {
+                ...state.ui,
+                layerDataTable: {
+                  ...(state.ui.layerDataTable || {}),
+                  isOpen: false,
+                  layerId: null,
+                },
+              },
+            };
+          }, false, 'ui/closeValidatorOwnedObjectTable'),
+
         closeLayerDataTable: () =>
           set(
             (state) => ({
+              objectTableInspection: null,
               ui: {
                 ...state.ui,
                 layerDataTable: {
@@ -1948,6 +2013,10 @@ const useStore = create(
               const baseState = {
                 layers: remainingLayers,
                 layerOrder: nextLayerOrder,
+                objectTableInspection:
+                  state.objectTableInspection?.layerId === layerId
+                    ? null
+                    : state.objectTableInspection,
                 ui: {
                   ...state.ui,
                   expandedLayerId:
@@ -2854,7 +2923,16 @@ const useStore = create(
         // Credentials should NEVER be stored in localStorage
         partialize: (state) => ({
           settings: state.settings,
-          ui: state.ui,
+          ui: {
+            ...state.ui,
+            // A persisted open table cannot safely recreate an exact runtime
+            // scope after reload. Preserve preferences but never reopen it.
+            layerDataTable: {
+              ...(state.ui.layerDataTable || {}),
+              isOpen: false,
+              layerId: null,
+            },
+          },
           lastActive: state.lastActive,
         }),
         migrate: (persistedState, version) => {

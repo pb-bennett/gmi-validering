@@ -12,12 +12,13 @@ import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
 import MapPaneToolbar from '@/components/MapPaneToolbar';
+import { MapPanePresentationProvider } from '@/components/MapPanePresentationProvider';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
 import WorkspaceShell from '@/components/WorkspaceShell';
-import { VALIDATION_V2_FIELD_DETAIL_WIDTH_REM } from '@/components/validation-v2/fieldDetailLayout';
+import { VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM } from '@/components/validation-v2/fieldDetailLayout';
 import { getTerrainStats } from '@/lib/analysis/terrain';
 import { claimStatisticsCue } from '@/lib/statisticsCue.mjs';
 import { isTestModeActivation } from '@/lib/testModeActivation.mjs';
@@ -77,7 +78,7 @@ export default function Home() {
   );
   const viewer3DOpen = useStore((state) => state.ui.viewer3DOpen);
   const activeViewTab = useStore((state) => state.ui.activeViewTab);
-  const [sidebarWidth, setSidebarWidth] = useState(430);
+  const [sidebarWidth, setSidebarWidth] = useState(380);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [dockedInspectorOpen, setDockedInspectorOpen] = useState(false);
   const openDataInspector = useStore(
@@ -93,7 +94,7 @@ export default function Home() {
     rightSurfaceOpen: dockedInspectorOpen,
     bottomSurface: activeBottomSurface,
   });
-  const inspectorWidthPx = VALIDATION_V2_FIELD_DETAIL_WIDTH_REM * 16;
+  const inspectorWidthPx = VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM * 16;
   const canDockInspector =
     viewportWidth - sidebarWidth >= 480 + inspectorWidthPx;
 
@@ -366,7 +367,7 @@ export default function Home() {
             bottomDock={<LayerDataTable />}
             primary={(
               <div className="flex h-full min-h-0 min-w-0 flex-1">
-                <div data-map-pane="true" className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                <MapPanePresentationProvider className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 <MapPaneToolbar
                   onReset={handleReset}
                   onShare={() => setShowShareModal(true)}
@@ -544,7 +545,7 @@ export default function Home() {
             {/* Profile analysis modal - overlays both 2D and 3D views */}
             <InclineAnalysisModal />
           </div>
-                </div>
+                </MapPanePresentationProvider>
           <div id="validation-v2-field-inspector-root" className="contents" />
         </div>
             )}

@@ -75,10 +75,39 @@ test('builder groups equal causes, keeps status separate, orders Feil first, and
   assert.equal(model.diagnostics.length, 2);
   assert.equal(model.diagnostics[0].type, ValidationV2DiagnosticType.INVALID_VALUE);
   assert.equal(model.diagnostics[0].count, 2);
+  assert.equal(model.diagnostics[0].hasCompleteExactObjectRefs, true);
+  assert.deepEqual(model.diagnostics[0].exactObjectRefs.map((item) => item.sourceIndex), [0, 1]);
+  assert.equal(model.diagnostics[0].exactObjectRefs.length, model.diagnostics[0].affectedObjects.total);
   assert.equal(model.diagnostics[1].type, ValidationV2DiagnosticType.VALID_VALUE_REVIEW);
   assert.equal(model.diagnostics[0].values[0].supplied, 'underGrunnen');
   assert.match(renderValidationV2Diagnostic(model.diagnostics[0]), /ikke er godkjente/);
   assert.match(renderValidationV2ResultHeading({ field, ...model }), /Feil i Vertikalnivå/);
+});
+
+test('contextual Type diagnostics retain stable semantic presentation IDs per Tema context', () => {
+  const typeRule = { ruleId: 'innmaling.point.type.required', canonicalFieldId: 'type', geometryScopes: ['point'], evaluatorKind: 'REQUIRED' };
+  const contextualFinding = (sourceIndex, tema) => ({
+    ruleId: typeRule.ruleId,
+    rule: typeRule,
+    state: 'CHECK',
+    objectRef: ref(sourceIndex),
+    canonicalFieldId: 'type',
+    geometryScope: 'point',
+    reasonCode: 'OPTIONAL_TYPE_NOT_SUPPLIED',
+    observed: { sourceValue: null },
+    details: { diagnosticFacts: { context: [{ fieldId: 'tema', value: tema }], explanationContextFieldIds: ['tema'], requirement: 'EXPECTED' } },
+  });
+  const model = buildFieldDiagnostics({
+    result: { ruleResults: [{ rule: typeRule, geometryBreakdown: { point: { evaluatedCount: 2 } }, findings: [contextualFinding(0, 'DIV'), contextualFinding(1, 'KUM')] }], outcomes: [], schemaFindings: [] },
+    rule: typeRule,
+    field: { canonicalFieldId: 'type', displayName: 'Type', geometryScope: 'point' },
+    geometryScope: 'point',
+    summary: { objectCount: 2 },
+  });
+  assert.equal(model.diagnostics.length, 2);
+  assert.equal(new Set(model.diagnostics.map((diagnostic) => diagnostic.diagnosticId)).size, 2);
+  assert.deepEqual(model.diagnostics.map((diagnostic) => diagnostic.exactObjectRefs[0].sourceIndex), [0, 1]);
+  assert(model.diagnostics.every((diagnostic) => diagnostic.hasCompleteExactObjectRefs));
 });
 
 test('Type/Tema incompatibility exposes bounded pair evidence and guidance', () => {

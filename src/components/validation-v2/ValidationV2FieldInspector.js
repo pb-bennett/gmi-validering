@@ -2,7 +2,7 @@
 
 import { XIcon } from '@phosphor-icons/react';
 import { ValidationV2FieldDetailContent } from './ValidationV2FieldDetailContent';
-import { VALIDATION_V2_FIELD_DETAIL_WIDTH } from './fieldDetailLayout';
+import { VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH } from './fieldDetailLayout';
 
 export default function ValidationV2FieldInspector({
   field,
@@ -14,6 +14,7 @@ export default function ValidationV2FieldInspector({
   result,
   activeTab,
   onTabChange,
+  onOpenObjects,
   onClose,
 }) {
   return (
@@ -21,7 +22,7 @@ export default function ValidationV2FieldInspector({
       role="complementary"
       aria-labelledby="validation-v2-field-inspector-title"
       className="flex h-full min-h-0 flex-none flex-col border-l border-gray-200 bg-white shadow-sm"
-      style={{ width: VALIDATION_V2_FIELD_DETAIL_WIDTH }}
+      style={{ width: VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH }}
     >
       <header className="flex flex-none items-start justify-between gap-3 border-b border-gray-200 px-3 py-2.5">
         <div className="min-w-0">
@@ -48,6 +49,7 @@ export default function ValidationV2FieldInspector({
         result={result}
         activeTab={activeTab}
         onTabChange={onTabChange}
+        onOpenObjects={onOpenObjects}
       />
     </aside>
   );

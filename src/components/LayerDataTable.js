@@ -16,6 +16,8 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
+import { getContextualColumnWidth, getContextualOrdinaryColumnWidth } from '@/lib/objectTablePresentation';
 
 const ROW_HEIGHT = 28;
 const MAX_COLUMN_WIDTH = 180;
@@ -47,12 +49,11 @@ function normalizeColumnOrder(fields, savedOrder) {
 }
 
 // Memoized cell component to prevent re-renders
-const DataCell = React.memo(function DataCell({ value }) {
-  const displayValue =
-    value === null || value === undefined || value === ''
-      ? '-'
-      : String(value);
-  const isMissing = displayValue === '-';
+const DataCell = React.memo(function DataCell({ value, missingLabel = '-' }) {
+  const displayValue = value === null || value === undefined || value === ''
+    ? missingLabel
+    : String(value);
+  const isMissing = displayValue === missingLabel;
   const needsTooltip = displayValue.length > 25;
 
   return (
@@ -99,6 +100,7 @@ const ZoomButton = React.memo(function ZoomButton({ onClick }) {
 export default function LayerDataTable() {
   const layers = useStore((state) => state.layers);
   const layerDataTable = useStore((state) => state.ui.layerDataTable);
+  const inspection = useStore((state) => state.objectTableInspection);
   const setLayerDataTableTab = useStore(
     (state) => state.setLayerDataTableTab,
   );
@@ -111,6 +113,7 @@ export default function LayerDataTable() {
   const closeLayerDataTable = useStore(
     (state) => state.closeLayerDataTable,
   );
+  const setObjectTableInspectionView = useStore((state) => state.setObjectTableInspectionView);
   const viewObjectInMap = useStore((state) => state.viewObjectInMap);
   const setHighlightedFeature = useStore(
     (state) => state.setHighlightedFeature,
@@ -127,6 +130,9 @@ export default function LayerDataTable() {
   const isOpen = layerDataTable?.isOpen;
   const layerId = layerDataTable?.layerId;
   const layer = layerId ? layers[layerId] : null;
+  const isExactInspection = ['exact-object-set', 'contextual-object-set'].includes(inspection?.kind);
+  const isContextualInspection = inspection?.kind === 'contextual-object-set';
+  const [contextualSorting, setContextualSorting] = useState([]);
 
   // Get filter state for this layer (memoized to prevent re-renders)
   const hiddenCodes = useMemo(
@@ -146,11 +152,24 @@ export default function LayerDataTable() {
     hiddenTypes.length > 0 ||
     feltHiddenValues.length > 0;
 
+  const exactRows = useMemo(
+    () => isExactInspection ? resolveExactObjectInspectionRows({ layer, inspection }) : null,
+    [isExactInspection, layer, inspection],
+  );
+  const contextualScopeRows = useMemo(
+    () => isContextualInspection
+      ? resolveExactObjectInspectionRows({ layer, inspection: { ...inspection, activeView: 'scope' } }) || []
+      : [],
+    [isContextualInspection, layer, inspection],
+  );
+
   useEffect(() => {
-    if (isOpen && !layer) {
+    if (isOpen && (!layer || (isExactInspection && exactRows === null))) {
       closeLayerDataTable();
     }
-  }, [isOpen, layer, closeLayerDataTable]);
+  }, [isOpen, layer, isExactInspection, exactRows, closeLayerDataTable]);
+
+  useEffect(() => setContextualSorting([]), [inspection?.id]);
 
   useEffect(() => {
     return () => {
@@ -158,18 +177,20 @@ export default function LayerDataTable() {
     };
   }, [setHighlightedFeatureIds]);
 
-  const activeTab =
-    layerId && layerDataTable?.activeTabByLayer?.[layerId]
+  const activeTab = isExactInspection
+    ? inspection.geometryScope === 'point' ? 'punkter' : 'ledninger'
+    : layerId && layerDataTable?.activeTabByLayer?.[layerId]
       ? layerDataTable.activeTabByLayer[layerId]
       : 'punkter';
 
   // Memoize raw items with stable reference
   const rawItems = useMemo(() => {
+    if (isExactInspection) return exactRows || [];
     if (!layer?.data) return [];
     return activeTab === 'punkter'
       ? layer.data.points || []
       : layer.data.lines || [];
-  }, [layer?.data, activeTab]);
+  }, [layer?.data, activeTab, isExactInspection, exactRows]);
 
   // Helper to check if an item is hidden by filters
   const isItemHidden = useCallback(
@@ -253,7 +274,7 @@ export default function LayerDataTable() {
   }, [layer?.data, hasActiveFilters, isItemHidden]);
 
   useEffect(() => {
-    if (!isOpen || !layerId || !hasActiveFilters) return;
+    if (isExactInspection || !isOpen || !layerId || !hasActiveFilters) return;
 
     const activeCount = visibleCountByTab[activeTab] || 0;
     if (activeCount > 0) return;
@@ -272,25 +293,27 @@ export default function LayerDataTable() {
     activeTab,
     visibleCountByTab,
     setLayerDataTableTab,
+    isExactInspection,
   ]);
 
   // Add __index and filter hidden items
   const allItemsWithIndex = useMemo(() => {
+    if (isExactInspection) return rawItems;
     return rawItems.map((item, index) => ({
       ...item,
       __index: index,
     }));
-  }, [rawItems]);
+  }, [rawItems, isExactInspection]);
 
   // Filtered items (respecting sidebar filters)
   const items = useMemo(() => {
-    if (!hasActiveFilters) {
+    if (isExactInspection || !hasActiveFilters) {
       return allItemsWithIndex;
     }
     return allItemsWithIndex.filter(
       (item) => !isItemHidden(item, activeTab),
     );
-  }, [allItemsWithIndex, hasActiveFilters, isItemHidden, activeTab]);
+  }, [allItemsWithIndex, hasActiveFilters, isItemHidden, activeTab, isExactInspection]);
 
   const totalCount = allItemsWithIndex.length;
   const filteredCount = items.length;
@@ -298,7 +321,10 @@ export default function LayerDataTable() {
 
   // Defer field calculation for large datasets
   const fields = useMemo(() => {
-    if (items.length === 0) return [];
+    const requiredFields = isContextualInspection
+      ? [inspection.presentation.temaColumn, inspection.presentation.fieldColumn]
+      : [];
+    if (items.length === 0) return [...new Set(requiredFields)];
 
     const fieldSet = new Set();
     const fieldHasData = {};
@@ -339,8 +365,8 @@ export default function LayerDataTable() {
       presentFields.unshift('S_FCODE');
     }
 
-    return presentFields;
-  }, [items]);
+    return [...new Set([...presentFields, ...requiredFields])];
+  }, [items, isContextualInspection, inspection]);
 
   const savedOrder = useMemo(() => {
     return layerId &&
@@ -349,13 +375,15 @@ export default function LayerDataTable() {
       : [];
   }, [layerId, layerDataTable?.columnOrderByLayer, activeTab]);
 
-  const orderedFields = useMemo(
-    () => normalizeColumnOrder(fields, savedOrder),
-    [fields, savedOrder],
-  );
+  const orderedFields = useMemo(() => {
+    if (!isContextualInspection) return normalizeColumnOrder(fields, savedOrder);
+    const { temaColumn, fieldColumn } = inspection.presentation;
+    const contextual = temaColumn === fieldColumn ? [temaColumn] : [temaColumn, fieldColumn];
+    return [...contextual, '__validator_resultat', ...fields.filter((field) => !contextual.includes(field))];
+  }, [fields, savedOrder, isContextualInspection, inspection]);
 
   useEffect(() => {
-    if (!layerId || fields.length === 0) return;
+    if (isExactInspection || !layerId || fields.length === 0) return;
     const normalized = normalizeColumnOrder(fields, savedOrder);
     const sameLength = normalized.length === savedOrder.length;
     const sameOrder =
@@ -369,25 +397,26 @@ export default function LayerDataTable() {
     fields,
     layerId,
     savedOrder,
-    setLayerDataTableColumnOrder,
+    setLayerDataTableColumnOrder, isExactInspection,
   ]);
 
   const sorting = useMemo(() => {
+    if (isContextualInspection) return contextualSorting;
     return layerId &&
       layerDataTable?.sortingByLayer?.[layerId]?.[activeTab]
       ? layerDataTable.sortingByLayer[layerId][activeTab]
       : [];
-  }, [layerId, layerDataTable?.sortingByLayer, activeTab]);
+  }, [layerId, layerDataTable?.sortingByLayer, activeTab, isContextualInspection, contextualSorting]);
 
   useEffect(() => {
-    if (!layerId) return;
+    if (isExactInspection || !layerId) return;
     const validSorting = Array.isArray(sorting)
       ? sorting.filter((sort) => fields.includes(sort.id))
       : [];
     if (validSorting.length !== sorting.length) {
       setLayerDataTableSorting(layerId, activeTab, validSorting);
     }
-  }, [activeTab, fields, layerId, sorting, setLayerDataTableSorting]);
+  }, [activeTab, fields, layerId, sorting, setLayerDataTableSorting, isExactInspection]);
 
   const [draggedField, setDraggedField] = useState(null);
 
@@ -413,7 +442,7 @@ export default function LayerDataTable() {
 
       nextOrder.splice(draggedIndex, 1);
       nextOrder.splice(targetIndex, 0, draggedField);
-      setLayerDataTableColumnOrder(layerId, activeTab, nextOrder);
+      if (!isExactInspection) setLayerDataTableColumnOrder(layerId, activeTab, nextOrder);
       setDraggedField(null);
     },
     [
@@ -421,7 +450,7 @@ export default function LayerDataTable() {
       layerId,
       orderedFields,
       activeTab,
-      setLayerDataTableColumnOrder,
+      setLayerDataTableColumnOrder, isExactInspection,
     ],
   );
 
@@ -481,11 +510,23 @@ export default function LayerDataTable() {
   const columnWidths = useMemo(() => {
     const widths = { zoom: 36 };
     orderedFields.forEach((field) => {
+      if (field === '__validator_resultat') {
+        widths[field] = 86;
+        return;
+      }
       const label = getFieldLabel(field);
-      widths[field] = estimateColumnWidth(field, label);
+      if (isContextualInspection && field === inspection.presentation.fieldColumn) {
+        widths[field] = getContextualColumnWidth({ label, values: contextualScopeRows.map((row) => row.attributes?.[field]), kind: 'field' });
+      } else if (isContextualInspection && field === inspection.presentation.temaColumn) {
+        widths[field] = getContextualColumnWidth({ label, values: contextualScopeRows.map((row) => row.attributes?.[field]), kind: 'tema' });
+      } else if (isContextualInspection) {
+        widths[field] = getContextualOrdinaryColumnWidth({ values: contextualScopeRows.map((row) => row.attributes?.[field]) });
+      } else {
+        widths[field] = estimateColumnWidth(field, label);
+      }
     });
     return widths;
-  }, [orderedFields]);
+  }, [orderedFields, isContextualInspection, inspection, contextualScopeRows]);
 
   const columns = useMemo(() => {
     const zoomColumn = {
@@ -508,15 +549,22 @@ export default function LayerDataTable() {
 
     const dataColumns = orderedFields.map((field) => ({
       id: field,
-      accessorFn: (row) => row.attributes?.[field],
-      header: getFieldLabel(field),
+      accessorFn: (row) => field === '__validator_resultat' ? row.__contextualResult : row.attributes?.[field],
+      header: field === '__validator_resultat' ? 'Resultat' : getFieldLabel(field),
       size: columnWidths[field] || 80,
-      cell: (info) => <DataCell value={info.getValue()} />,
-      meta: { isFixed: field === 'S_FCODE' },
+      cell: (info) => field === '__validator_resultat'
+        ? <span className={`font-medium ${info.getValue() === 'FAIL' ? 'text-red-700' : info.getValue() === 'CHECK' ? 'text-amber-700' : 'text-green-700'}`}>{info.getValue() === 'FAIL' ? 'Feil' : info.getValue() === 'CHECK' ? 'Sjekk' : 'Pass'}</span>
+        : <DataCell value={info.getValue()} missingLabel={isContextualInspection && field === inspection.presentation.fieldColumn ? 'Mangler' : '-'} />,
+      meta: {
+        isFixed: field === 'S_FCODE',
+        pinned: isContextualInspection && (field === inspection.presentation.temaColumn || field === inspection.presentation.fieldColumn),
+        contextualField: isContextualInspection && field === inspection.presentation.fieldColumn,
+        contextualOrdinary: isContextualInspection && field !== '__validator_resultat' && field !== inspection.presentation.temaColumn && field !== inspection.presentation.fieldColumn,
+      },
     }));
 
     return [zoomColumn, ...dataColumns];
-  }, [activeTab, orderedFields, columnWidths, handleZoomTo]);
+  }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection]);
 
   const table = useReactTable({
     data: items,
@@ -526,10 +574,12 @@ export default function LayerDataTable() {
       if (!layerId) return;
       const nextSorting =
         typeof updater === 'function' ? updater(sorting) : updater;
-      setLayerDataTableSorting(layerId, activeTab, nextSorting);
+      if (isContextualInspection) setContextualSorting(nextSorting);
+      else setLayerDataTableSorting(layerId, activeTab, nextSorting);
     },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getRowId: (row) => `${layerId}:${activeTab}:${row.__index}`,
   });
 
   const { rows } = table.getRowModel();
@@ -552,6 +602,17 @@ export default function LayerDataTable() {
     (a, b) => a + b,
     0,
   );
+  const stickyLeftFor = (columnId) => {
+    if (columnId === 'zoom') return 0;
+    const position = orderedFields.indexOf(columnId);
+    if (position < 0) return undefined;
+    const column = columns.find((entry) => entry.id === columnId);
+    if (!column?.meta?.pinned && !column?.meta?.isFixed) return undefined;
+    if (!isContextualInspection) return 36;
+    return 36 + orderedFields.slice(0, position)
+      .filter((field) => columns.find((entry) => entry.id === field)?.meta?.pinned)
+      .reduce((sum, field) => sum + (columnWidths[field] || 80), 0);
+  };
 
   return (
     <div
@@ -575,6 +636,11 @@ export default function LayerDataTable() {
           >
             Datatabell
           </span>
+          {isExactInspection && (
+            <span className="text-[10px] max-w-72 truncate" style={{ color: 'var(--color-text-secondary)' }} title={inspection.context.reason}>
+              Objektutvalg: {inspection.context.title}{inspection.context.reason ? ` · ${inspection.context.reason}` : ''}
+            </span>
+          )}
           <span
             className="text-[10px] max-w-50 truncate"
             style={{ color: 'var(--color-text-secondary)' }}
@@ -584,7 +650,7 @@ export default function LayerDataTable() {
           </span>
         </div>
 
-        <div className="flex items-center gap-0.5">
+        {!isExactInspection && <div className="flex items-center gap-0.5">
           <button
             onClick={() => setLayerDataTableTab(layerId, 'punkter')}
             className="px-2 py-0.5 text-[10px] font-medium rounded transition-colors"
@@ -618,11 +684,25 @@ export default function LayerDataTable() {
             Ledninger
           </button>
         </div>
+        }
+
+        {isContextualInspection && inspection.focusIndices.length !== inspection.scopeIndices.length && (
+          <div className="flex items-center rounded border border-slate-200 p-0.5 text-[10px]" aria-label="Vis objektutvalg">
+            {[['focus', 'Utvalg', inspection.focusIndices.length], ['scope', 'Alle', inspection.scopeIndices.length]].map(([view, label, count]) => (
+              <button key={view} type="button" onClick={() => setObjectTableInspectionView(view)} aria-pressed={inspection.activeView === view}
+                className="rounded px-1.5 py-0.5 font-medium" style={{ backgroundColor: inspection.activeView === view ? 'var(--color-primary)' : 'transparent', color: inspection.activeView === view ? 'white' : 'var(--color-text-secondary)' }}>
+                {label} {count}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Filter status */}
         <div className="flex items-center gap-1.5 text-[10px]">
           <span style={{ color: 'var(--color-text-secondary)' }}>
-            {hasActiveFilters ? (
+            {isExactInspection ? (
+              <span>{totalCount} {activeTab === 'punkter' ? 'punkter' : 'ledninger'}</span>
+            ) : hasActiveFilters ? (
               <>
                 <span style={{ color: 'var(--color-primary)' }}>
                   {filteredCount}
@@ -640,7 +720,7 @@ export default function LayerDataTable() {
               </span>
             )}
           </span>
-          {hasActiveFilters && (
+          {!isExactInspection && hasActiveFilters && (
             <button
               onClick={() => resetLayerFilters(layerId)}
               className="flex items-center gap-0.5 px-1.5 py-0.5 rounded transition-colors hover:bg-blue-100"
@@ -692,20 +772,16 @@ export default function LayerDataTable() {
             {table.getHeaderGroups().map((headerGroup) =>
               headerGroup.headers.map((header, index) => {
                 const isZoom = index === 0;
-                const isFixed = header.column.columnDef.meta?.isFixed;
+                const isFixed = header.column.columnDef.meta?.isFixed || header.column.columnDef.meta?.pinned;
                 const headerId = header.column.id;
                 const width = columnWidths[headerId] || 80;
-                const stickyLeft = isZoom
-                  ? 0
-                  : isFixed
-                    ? 36
-                    : undefined;
+                const stickyLeft = stickyLeftFor(headerId);
 
                 return (
                   <div
                     key={header.id}
-                    draggable={!isZoom}
-                    onDragStart={() => handleDragStart(headerId)}
+                    draggable={!isZoom && !isContextualInspection}
+                    onDragStart={() => !isContextualInspection && handleDragStart(headerId)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => handleDrop(headerId)}
                     onClick={
@@ -731,8 +807,8 @@ export default function LayerDataTable() {
                         : undefined,
                     }}
                   >
-                    <div className="flex items-center gap-0.5 truncate">
-                      <span className="truncate">
+                    <div className={`flex items-center gap-0.5 ${(header.column.columnDef.meta?.contextualField || header.column.columnDef.meta?.contextualOrdinary) ? 'items-start' : 'truncate'}`}>
+                      <span className={(header.column.columnDef.meta?.contextualField || header.column.columnDef.meta?.contextualOrdinary) ? 'line-clamp-2 leading-3' : 'truncate'} title={(header.column.columnDef.meta?.contextualField || header.column.columnDef.meta?.contextualOrdinary) ? String(header.column.columnDef.header) : undefined}>
                         {flexRender(
                           header.column.columnDef.header,
                           header.getContext(),
@@ -790,15 +866,10 @@ export default function LayerDataTable() {
                 >
                   {row.getVisibleCells().map((cell, index) => {
                     const isZoom = index === 0;
-                    const isFixed =
-                      cell.column.columnDef.meta?.isFixed;
+                    const isFixed = cell.column.columnDef.meta?.isFixed || cell.column.columnDef.meta?.pinned;
                     const cellId = cell.column.id;
                     const width = columnWidths[cellId] || 80;
-                    const stickyLeft = isZoom
-                      ? 0
-                      : isFixed
-                        ? 36
-                        : undefined;
+                    const stickyLeft = stickyLeftFor(cellId);
 
                     return (
                       <div
@@ -807,10 +878,11 @@ export default function LayerDataTable() {
                           isZoom ? 'justify-center' : ''
                         } ${isZoom || isFixed ? 'sticky z-10' : ''}`}
                         style={{
-                          backgroundColor:
-                            isZoom || isFixed
-                              ? 'var(--color-card)'
-                              : 'transparent',
+                          backgroundColor: isZoom || isFixed
+                            ? cell.column.columnDef.meta?.contextualField
+                              ? row.original.__contextualResult === 'FAIL' ? '#fef2f2' : row.original.__contextualResult === 'CHECK' ? '#fffbeb' : '#f0fdf4'
+                              : 'var(--color-card)'
+                            : 'transparent',
                           width,
                           minWidth: width,
                           maxWidth: width,

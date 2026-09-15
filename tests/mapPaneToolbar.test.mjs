@@ -2,25 +2,42 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
+  createMapPanePresentationState,
   getActiveBottomSurface,
   getMapToolbarMode,
+  isMapLegendCompact,
+  isMapPaneConstrained,
+  MAP_LEGEND_COMPACT_WIDTH,
   MapToolbarMode,
   mapOwnsWorkspaceBottomRight,
+  reduceMapPanePresentation,
 } from '../src/lib/workspace/mapPanePresentation.mjs';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('toolbar width modes use the measured map pane and preserve the intended control priority', async () => {
-  const [toolbar, switcher] = await Promise.all([
+  const [provider, toolbar, switcher] = await Promise.all([
+    read('../src/components/MapPanePresentationProvider.js'),
     read('../src/components/MapPaneToolbar.js'),
     read('../src/components/TabSwitcher.js'),
   ]);
   assert.equal(getMapToolbarMode(920), MapToolbarMode.NORMAL);
   assert.equal(getMapToolbarMode(786), MapToolbarMode.CONSTRAINED);
   assert.equal(getMapToolbarMode(579), MapToolbarMode.NARROW);
-  assert.match(toolbar, /new ResizeObserver\(updateMode\)/);
-  assert.match(toolbar, /toolbarRef\.current\?\.closest\('\[data-map-pane\]'\)/);
-  assert.match(toolbar, /getBoundingClientRect\(\)\.width/);
+  assert.equal(isMapPaneConstrained(786), true);
+  assert.equal(isMapPaneConstrained(920), false);
+  assert.equal(MAP_LEGEND_COMPACT_WIDTH, 1100);
+  assert.equal(getMapToolbarMode(970), MapToolbarMode.NORMAL);
+  assert.equal(isMapLegendCompact(970), true);
+  assert.equal(getMapToolbarMode(1100), MapToolbarMode.NORMAL);
+  assert.equal(isMapLegendCompact(1100), false);
+  assert.equal(getMapToolbarMode(700), MapToolbarMode.CONSTRAINED);
+  assert.equal(isMapLegendCompact(700), true);
+  assert.match(provider, /new ResizeObserver\(updateMode\)/);
+  assert.match(provider, /pane\.getBoundingClientRect\(\)\.width/);
+  assert.match(provider, /data-map-pane="true"/);
+  assert.match(toolbar, /useMapPanePresentation\(\)/);
+  assert.doesNotMatch(toolbar, /ResizeObserver|getBoundingClientRect/);
   assert.match(toolbar, /flex-nowrap/);
   assert.match(toolbar, /paneMode === MapToolbarMode\.NORMAL && <TestModeControl \/>/);
   assert.match(toolbar, /showTestModeControls && <TestModeControl \/>/);
@@ -28,6 +45,68 @@ test('toolbar width modes use the measured map pane and preserve the intended co
   assert.match(switcher, /compact \? '3D' : '3D-visning'/);
   assert.match(switcher, /setActiveViewTab\('map'\)/);
   assert.match(switcher, /setActiveViewTab\('3d'\)/);
+});
+
+test('map-pane owner preserves legend state across delayed mounts and compact periods', async () => {
+  const [page, provider, toolbar, mapView, legend] = await Promise.all([
+    read('../src/app/page.js'),
+    read('../src/components/MapPanePresentationProvider.js'),
+    read('../src/components/MapPaneToolbar.js'),
+    read('../src/components/MapView.js'),
+    read('../src/components/MapLegend.js'),
+  ]);
+  const measure = (state, width) => reduceMapPanePresentation(state, {
+    type: 'pane-measured',
+    mode: getMapToolbarMode(width),
+    legendCompact: isMapLegendCompact(width),
+  });
+  const toggleLegend = (state) => reduceMapPanePresentation(state, {
+    type: 'legend-toggled',
+  });
+
+  // The page and toolbar exist first. The pane is already compact before the
+  // data-dependent, dynamically imported legend mounts.
+  let state = createMapPanePresentationState();
+  state = measure(state, 970);
+  assert.equal(state.mode, MapToolbarMode.NORMAL);
+  assert.equal(state.legendCompact, true);
+  assert.equal(state.legendCollapsed, true);
+
+  // The late legend consumes the existing owner state, then a manual reopen
+  // survives ResizeObserver repeats and constrained/narrow changes.
+  state = toggleLegend(state);
+  assert.equal(state.legendCollapsed, false);
+  const sameCompactState = measure(state, 970);
+  assert.strictEqual(sameCompactState, state);
+  state = measure(state, 700);
+  assert.equal(state.legendCollapsed, false);
+  state = measure(state, 500);
+  assert.equal(state.legendCollapsed, false);
+
+  // Inspector-driven width changes end and restart the legend compact period. Neither
+  // a table render nor a MapView/legend remount dispatches a reset action.
+  state = measure(state, 1100);
+  assert.equal(state.mode, MapToolbarMode.NORMAL);
+  assert.equal(state.legendCompact, false);
+  assert.equal(state.legendCollapsed, false);
+  const stateAcrossTableAndLegendRemount = state;
+  assert.strictEqual(stateAcrossTableAndLegendRemount, state);
+  state = measure(state, 970);
+  assert.equal(state.mode, MapToolbarMode.NORMAL);
+  assert.equal(state.legendCompact, true);
+  assert.equal(state.legendCollapsed, true);
+
+  assert.match(page, /<MapPanePresentationProvider[\s\S]*?<MapPaneToolbar[\s\S]*?<MapView/);
+  assert.match(provider, /useReducer\([\s\S]*?reduceMapPanePresentation/);
+  assert.match(provider, /useLayoutEffect/);
+  assert.match(provider, /data-map-pane-mode=\{presentation\.mode \?\? 'unmeasured'\}/);
+  assert.match(provider, /legendCompact: isMapLegendCompact\(width\)/);
+  assert.match(toolbar, /const \{ mode: paneMode \} = useMapPanePresentation\(\)/);
+  assert.match(mapView, /dynamic\(\(\) => import\('\.\/MapLegend'\)/);
+  assert.match(legend, /legendCollapsed: isCollapsed, toggleLegend/);
+  assert.match(legend, /onClick=\{toggleLegend\}/);
+  assert.doesNotMatch(toolbar, /ResizeObserver|getBoundingClientRect/);
+  assert.doesNotMatch(legend, /ResizeObserver|getBoundingClientRect|useState/);
 });
 
 test('overflow is keyboard-dismissible, restores focus, and retains the full reset label', async () => {
@@ -46,8 +125,9 @@ test('overflow is keyboard-dismissible, restores focus, and retains the full res
 });
 
 test('map controls are descendants of the map pane, beside rather than inside the inspector', async () => {
-  const [page, mapView, mapLegend, globals, controls3d, toolbar] = await Promise.all([
+  const [page, provider, mapView, mapLegend, globals, controls3d, toolbar] = await Promise.all([
     read('../src/app/page.js'),
+    read('../src/components/MapPanePresentationProvider.js'),
     read('../src/components/MapView.js'),
     read('../src/components/MapLegend.js'),
     read('../src/app/globals.css'),
@@ -57,9 +137,9 @@ test('map controls are descendants of the map pane, beside rather than inside th
   const primaryStart = page.indexOf('primary={(');
   const inspectorHostPosition = page.indexOf('id="validation-v2-field-inspector-root"', primaryStart);
   const primary = page.slice(primaryStart, inspectorHostPosition + 100);
-  const mapPaneStart = primary.indexOf('<div data-map-pane="true"');
+  const mapPaneStart = primary.indexOf('<MapPanePresentationProvider');
   const inspectorHost = primary.indexOf('<div id="validation-v2-field-inspector-root"');
-  const mapPaneEnd = primary.lastIndexOf('</div>', inspectorHost);
+  const mapPaneEnd = primary.lastIndexOf('</MapPanePresentationProvider>', inspectorHost) + '</MapPanePresentationProvider>'.length;
   const mapPane = primary.slice(mapPaneStart, mapPaneEnd);
   assert.ok(mapPaneStart >= 0 && mapPaneEnd > mapPaneStart);
   assert.match(primary.slice(0, mapPaneStart), /<div className="flex h-full min-h-0 min-w-0 flex-1">/);
@@ -73,9 +153,8 @@ test('map controls are descendants of the map pane, beside rather than inside th
   assert.match(page, /const mapOwnsBottomRight = mapOwnsWorkspaceBottomRight\(/);
   assert.match(page, /rightSurfaceOpen: dockedInspectorOpen/);
   assert.match(page, /<StatsModal isOpen=\{showStats\}/);
-  assert.match(toolbar, /const pane = toolbarRef\.current\?\.closest\('\[data-map-pane\]'\)/);
-  assert.match(toolbar, /observer\.observe\(pane\)/);
-  assert.match(toolbar, /pane\.getBoundingClientRect\(\)\.width/);
+  assert.match(provider, /observer\.observe\(pane\)/);
+  assert.match(provider, /pane\.getBoundingClientRect\(\)\.width/);
   assert.match(toolbar, /className="absolute inset-x-2 top-2/);
   assert.match(page, /position: 'absolute',[\s\S]*?bottom: '16px',[\s\S]*?right: '16px'/);
   assert.match(mapView, /className="relative h-full w-full"/);
@@ -88,13 +167,13 @@ test('map controls are descendants of the map pane, beside rather than inside th
 
 test('inspector width is removed from the map-pane measurement and changes toolbar mode', () => {
   const viewportWidth = 1920;
-  const sidebarWidth = 430;
-  const inspectorWidth = 44 * 16;
+  const sidebarWidth = 380;
+  const inspectorWidth = 38 * 16;
   const mapWidthWithInspector = viewportWidth - sidebarWidth - inspectorWidth;
   const mapWidthWithoutInspector = viewportWidth - sidebarWidth;
 
-  assert.equal(mapWidthWithInspector, 786);
-  assert.equal(getMapToolbarMode(mapWidthWithInspector), MapToolbarMode.CONSTRAINED);
+  assert.equal(mapWidthWithInspector, 932);
+  assert.equal(getMapToolbarMode(mapWidthWithInspector), MapToolbarMode.NORMAL);
   assert.equal(getMapToolbarMode(mapWidthWithoutInspector), MapToolbarMode.NORMAL);
 });
 
@@ -160,7 +239,7 @@ test('Resultat and Regel share a readable width while source tables may scroll h
   assert.match(content, /activeTab === TABS\.RESULT[\s\S]*DiagnosticResultPanel[\s\S]*ModernRulePanel/);
   assert.match(content.slice(content.indexOf('function ModernRulePanel'), content.indexOf('function LegacyResultPanel')), /<div className="space-y-5">/);
   assert.match(content, /overflow-x-auto overflow-y-clip/);
-  assert.match(inspector, /width: VALIDATION_V2_FIELD_DETAIL_WIDTH/);
-  assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_DETAIL_WIDTH/);
+  assert.match(inspector, /width: VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH/);
+  assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_MODAL_MAX_WIDTH/);
   assert.match(content, /compactType=\{field\.canonicalFieldId === 'type'\}/);
 });

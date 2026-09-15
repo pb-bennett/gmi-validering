@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
@@ -22,6 +22,8 @@ import {
   reduceValidationV2PresentationState,
 } from '@/lib/validation-v2/resultPresentation';
 import { composeFieldInformation } from '@/lib/validation-v2/registry/fieldInformation';
+import { getValidationV2DiagnosticPresentation } from '@/lib/validation-v2/diagnostics';
+import { buildValidatorFieldInspectionRequest } from '@/lib/validation-v2/tableInspection';
 import ValidationV2RuleList from './ValidationV2RuleList';
 import ValidationV2FieldInfoModal from './ValidationV2FieldInfoModal';
 import ValidationV2FieldInspector from './ValidationV2FieldInspector';
@@ -54,6 +56,8 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   const layers = useStore((state) => state.layers);
   const layerOrder = useStore((state) => state.layerOrder);
   const toggleFieldValidation = useStore((state) => state.toggleFieldValidation);
+  const openObjectTable = useStore((state) => state.openObjectTable);
+  const closeValidatorOwnedObjectTable = useStore((state) => state.closeValidatorOwnedObjectTable);
   const expandedLayerId = useStore((state) => state.ui.expandedLayerId);
   const availableLayerIds = useMemo(
     () => layerOrder.filter((layerId) => layers[layerId]?.data),
@@ -239,6 +243,37 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     requestAnimationFrame(() => fieldInfoOpenerRef.current?.focus());
   };
 
+  const closeValidator = () => {
+    closeValidatorOwnedObjectTable();
+    toggleFieldValidation(false);
+  };
+
+  const openDiagnosticObjects = useCallback((diagnostic) => {
+    if (!diagnostic?.hasCompleteExactObjectRefs || !selectedLayerId || !selectedRevision || !selectedValidatorField || !result) return;
+    const geometryScope = diagnostic.field.geometryScope;
+    const objects = geometryScope === 'point' ? selectedLayer?.data?.points : selectedLayer?.data?.lines;
+    const inspectionRequest = buildValidatorFieldInspectionRequest({
+      layerId: selectedLayerId,
+      datasetRevision: selectedRevision,
+      geometryScope,
+      objects,
+      rules: selectedValidatorField.rules,
+      result,
+      diagnostic,
+      fieldLabel: diagnostic.field.displayName,
+    });
+    if (!inspectionRequest) return;
+    openObjectTable({
+      ...inspectionRequest,
+      context: {
+        title: diagnostic.field.displayName,
+        reason: getValidationV2DiagnosticPresentation(diagnostic).summary,
+        status: diagnostic.state,
+        source: 'validation-v2-diagnostic',
+      },
+    });
+  }, [openObjectTable, selectedLayerId, selectedRevision, selectedValidatorField, result, selectedLayer]);
+
   const selectLayer = (event) => {
     const nextLayerId = event.target.value;
     const nextLayer = layers[nextLayerId];
@@ -295,7 +330,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
           <h2 className="text-sm font-bold text-gray-900">Validator</h2>
           <button
             type="button"
-            onClick={() => toggleFieldValidation(false)}
+            onClick={closeValidator}
             aria-label="Lukk Validator"
             title="Lukk Validator"
             className="inline-flex h-8 w-8 items-center justify-center rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -500,6 +535,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                 result={result}
                 activeTab={activeFieldTab}
                 onTabChange={setActiveFieldTab}
+                onOpenObjects={openDiagnosticObjects}
                 onClose={closeFieldInspector}
               />,
               inspectorHost,
@@ -516,6 +552,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
               result={result}
               activeTab={activeFieldTab}
               onTabChange={setActiveFieldTab}
+              onOpenObjects={openDiagnosticObjects}
               onClose={closeFieldInspector}
             />
           )

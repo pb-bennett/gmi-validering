@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { FCODE_COLORS, LEGEND_ITEMS, getLegendSvg } from './MapInner';
 import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
+import { useMapPanePresentation } from './MapPanePresentationProvider';
 
 /**
  * MapLegend — Floating legend overlay for the map
@@ -14,7 +15,7 @@ import { useShallow } from 'zustand/react/shallow';
  * In multi-layer mode, merges categories from all visible layers.
  */
 export default function MapLegend() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { legendCollapsed: isCollapsed, toggleLegend } = useMapPanePresentation();
   const data = useStore((state) => state.data);
   const layers = useStore((state) => state.layers);
   const layerOrder = useStore(
@@ -146,7 +147,9 @@ export default function MapLegend() {
   const hasData = isMultiLayerMode
     ? layerOrder.some((id) => layers[id]?.visible && layers[id]?.data)
     : !!data;
-  if (!hasData || visibleLegendItems.length === 0) {
+  const hasVisibleLegend = hasData && visibleLegendItems.length > 0;
+
+  if (!hasVisibleLegend) {
     return null;
   }
 
@@ -161,7 +164,7 @@ export default function MapLegend() {
     >
       {/* Header with collapse toggle */}
       <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={toggleLegend}
         className="w-full flex items-center justify-between px-3 py-2 transition-colors border-b"
         style={{
           backgroundColor: 'var(--color-page-bg)',

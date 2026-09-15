@@ -344,13 +344,13 @@ test('compact rule rows expose summaries without individual object metadata', as
   assert.match(source, /<span>Vis<\/span>/);
   assert.match(source, /title="Vis"/);
   assert.equal((source.match(/<svg/g) || []).length, 1);
-  assert.match(source, /gap-x-3/);
-  assert.match(source, /items-baseline gap-1 whitespace-nowrap/);
+  assert.match(source, /gap-x-2/);
+  assert.match(source, /items-baseline gap-0\.5 whitespace-nowrap/);
   assert.match(source, /aria-expanded/);
   assert.match(source, /aria-controls/);
   assert.equal((source.match(/onClick=\{\(\) => onToggle\(presentation\.expansionKey\)\}/g) || []).length, 1);
   assert.match(source, /isExpanded && \(\s*<section/);
-  assert.match(source, /flex flex-wrap items-center gap-x-3 gap-y-1/);
+  assert.match(source, /flex flex-nowrap items-center gap-1/);
   assert.match(source, /focus-visible:ring-2/);
   assert.match(source, /onClick=\{\(event\) => onInfo\?\.\(presentation, event\.currentTarget\)\}/);
   assert.doesNotMatch(source, /hidden sm:inline/);

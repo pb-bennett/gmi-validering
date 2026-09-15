@@ -24,7 +24,7 @@ test('fallback modal defaults to Resultat and retains its dialog and focus behav
   assert.match(modal, /aria-labelledby="validation-v2-field-info-title"/);
   assert.match(modal, /fixed inset-0 z-\[10003\].*bg-black\/40/);
   assert.match(modal, /max-h-\[720px\] w-full flex-col/);
-  assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_DETAIL_WIDTH/);
+  assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_MODAL_MAX_WIDTH/);
   assert.match(modal, /event\.target === event\.currentTarget && onClose\(\)/);
   assert.match(modal, /aria-label="Lukk feltinformasjon"[\s\S]*?onClick=\{onClose\}/);
   assert.match(modal, /closeButtonRef\.current\?\.focus\(\)/);

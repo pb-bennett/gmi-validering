@@ -14,12 +14,21 @@ test('normal sidebar width is preserved and shared by the Validator and docked i
   ]);
   assert.match(sidebar, /onWidthChange\(newWidth\)/);
   assert.match(sidebar, /width: `\$\{width\}px`/);
-  assert.match(page, /const \[sidebarWidth, setSidebarWidth\] = useState\(430\)/);
+  assert.match(page, /const \[sidebarWidth, setSidebarWidth\] = useState\(380\)/);
   assert.match(page, /width=\{sidebarWidth\}[\s\S]*?onWidthChange=\{setSidebarWidth\}/);
   assert.match(page, /sidebar=\{fieldValidationOpen \? \([\s\S]*?<FieldValidationSidebar[\s\S]*?canDockInspector=\{canDockInspector\}/);
   assert.match(shell, /style=\{\{ width: `\$\{sidebarWidth\}px` \}\}/);
-  assert.match(inspector, /style=\{\{ width: VALIDATION_V2_FIELD_DETAIL_WIDTH \}\}/);
+  assert.match(inspector, /style=\{\{ width: VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH \}\}/);
   assert.match(validatorSidebar, /ValidationV2Workspace[\s\S]*sidebarWidth=\{sidebarWidth\}/);
+});
+
+test('the 380px Validator sidebar keeps its expanded metrics and Vis action on one compact row', async () => {
+  const ruleList = await read('../src/components/validation-v2/ValidationV2RuleList.js');
+  assert.match(ruleList, /flex flex-nowrap items-center gap-1/);
+  assert.match(ruleList, /flex min-w-0 flex-1 flex-nowrap items-center gap-x-2/);
+  assert.match(ruleList, /text-\[10px\] font-medium/);
+  assert.match(ruleList, /text-\[11px\] font-bold/);
+  assert.match(ruleList, /<span>Vis<\/span>/);
 });
 
 test('workspace shell places a full-height left list beside a shared upper row and full-width bottom dock', async () => {
@@ -67,10 +76,10 @@ test('desktop inspector is a non-modal region; constrained widths retain the dia
   assert.match(modal, /role="dialog"[\s\S]*aria-modal="true"/);
   assert.match(modal, /getFocusableElements\(dialog\)/);
   assert.match(page, /viewportWidth - sidebarWidth >= 480 \+ inspectorWidthPx/);
-  assert.match(page, /VALIDATION_V2_FIELD_DETAIL_WIDTH_REM \* 16/);
-  assert.equal(430 + 480 + 44 * 16, 1614);
-  assert.match(inspector, /VALIDATION_V2_FIELD_DETAIL_WIDTH/);
-  assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_DETAIL_WIDTH/);
+  assert.match(page, /VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM \* 16/);
+  assert.equal(380 + 480 + 38 * 16, 1468);
+  assert.match(inspector, /VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH/);
+  assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_MODAL_MAX_WIDTH/);
 });
 
 test('closing the inspector leaves list presentation and the independent bottom dock untouched', async () => {

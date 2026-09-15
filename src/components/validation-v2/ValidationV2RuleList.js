@@ -14,9 +14,9 @@ function getRowId(presentation) {
 
 function SummaryCount({ label, value, className = 'text-slate-700' }) {
   return (
-    <div className={`inline-flex items-baseline gap-1 whitespace-nowrap ${className}`}>
-      <dt className="text-[13px] font-medium">{label}</dt>
-      <dd className="text-sm font-bold">{value}</dd>
+    <div className={`inline-flex items-baseline gap-0.5 whitespace-nowrap ${className}`}>
+      <dt className="text-[10px] font-medium">{label}</dt>
+      <dd className="text-[11px] font-bold">{value}</dd>
     </div>
   );
 }
@@ -51,7 +51,7 @@ export default function ValidationV2RuleList({
                 title={`Status: ${presentation.status.label}`}
                 className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT_CLASSES[presentation.status.visualToken] || STATUS_DOT_CLASSES.amber}`}
               />
-              <span className="min-w-0 flex-1 truncate font-semibold text-gray-900">
+              <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gray-900">
                 {presentation.displayName}
               </span>
               <span aria-hidden="true" className="shrink-0 text-gray-500">
@@ -67,8 +67,8 @@ export default function ValidationV2RuleList({
                 aria-labelledby={rowId}
                 className="border-t border-gray-100 px-2 pb-2 pt-2"
               >
-                <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <dl className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                <div className="mb-1 flex flex-nowrap items-center gap-1">
+                  <dl className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-2">
                     <SummaryCount label="Objekter" value={counts.evaluatedCount} />
                     {counts.failCount > 0 && <SummaryCount label="Feil" value={counts.failCount} className="text-red-700" />}
                     {(counts.checkCount || 0) + counts.indeterminateCount > 0 && (
@@ -81,7 +81,7 @@ export default function ValidationV2RuleList({
                     aria-label={`Vis detaljer: ${presentation.displayName}`}
                     title="Vis"
                     onClick={(event) => onInfo?.(presentation, event.currentTarget)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600"
+                    className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600"
                   >
                     <ArrowSquareOutIcon aria-hidden="true" size={16} weight="bold" />
                     <span>Vis</span>
