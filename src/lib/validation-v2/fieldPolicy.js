@@ -70,6 +70,7 @@ function applicable(value, rule, context, numericKind = 'integer') {
   const state = getPointFieldApplicability(tema, rule.canonicalFieldId).state;
   if (absent) return state === PointFieldApplicabilityState.APPLICABLE
     ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_REQUIRED_MISSING } : { state: EvaluationState.PASS, reasonCode: null };
+  if (state === PointFieldApplicabilityState.OPTIONAL_SUPPORTED) return { state: EvaluationState.PASS, reasonCode: null };
   if (state !== PointFieldApplicabilityState.APPLICABLE) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE };
   if (n === 0) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.NUMERIC_ZERO };
   if (policyFor(rule) === 'width' && n < 20) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.NUMERIC_OUTSIDE_PREFERRED_RANGE };
@@ -104,7 +105,7 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
     }
   }
   const absent = required(value);
-  if (absent && !['type', 'typeCompatibility', 'manholeShape', 'constructionMethod', 'cone', 'width', 'wallThickness', 'bottomDistance', 'length', 'externalHeight', 'frameNobb', 'facilityId', 'access', 'attachmentLink', 'installationYear', 'captureDate', 'positioningCause', 'verticalDimension', 'sdr', 'ringStiffness', 'pressureClass'].includes(policy)) {
+  if (absent && !['type', 'typeCompatibility', 'manholeShape', 'constructionMethod', 'cone', 'width', 'wallThickness', 'bottomDistance', 'length', 'externalHeight', 'frameNobb', 'facilityId', 'access', 'attachmentLink', 'installationYear', 'captureDate', 'positioningCause', 'verticalDimension', 'lineWallThickness', 'sdr', 'ringStiffness', 'pressureClass'].includes(policy)) {
     if (policy === 'optionalText' || policy === 'nobb' || policy === 'visibility' || policy === 'caseNumber') {
       if (absent.state === EvaluationState.CHECK) return absent;
       return { state: EvaluationState.PASS, reasonCode: null };
@@ -159,7 +160,9 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
   }
   if (policy === 'lineWallThickness') {
     const issue = structural(value); if (issue) return issue;
-    if (missing(value)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING };
+    if (missing(value)) return context.positioningCauseValid && lexeme(context.positioningCause) === 'UENDR'
+      ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.EXISTING_INFRASTRUCTURE_VALUE_MISSING }
+      : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING };
     const rawThickness = lexeme(value);
     if (typeof rawThickness !== 'string' || !/^-?[0-9]+(?:[.,][0-9]+)?$/.test(rawThickness)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_DECIMAL };
     const n = Number(rawThickness.replace(',', '.'));
@@ -196,7 +199,11 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
       ? isSdrMaterial(lexeme(context.material))
       : isRingStiffnessMaterial(lexeme(context.material));
     const required = policy === 'sdr' ? context.hydraulicClass === 'PRESSURE' && plastic : context.hydraulicClass === 'GRAVITY' && plastic;
-    if (!supplied) return required ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : context.hydraulicClass === 'SPECIAL' ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : { state: EvaluationState.PASS, reasonCode: null };
+    if (!supplied) return required
+      ? context.positioningCauseValid && lexeme(context.positioningCause) === 'UENDR'
+        ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.EXISTING_INFRASTRUCTURE_VALUE_MISSING }
+        : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING }
+      : context.hydraulicClass === 'SPECIAL' ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : { state: EvaluationState.PASS, reasonCode: null };
     return required ? { state: EvaluationState.PASS, reasonCode: null } : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.UNUSUAL_VALID_VALUE };
   }
   if (policy === 'optionalText') return Array.from(String(raw)).length > 255 ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.TEXT_LENGTH_EXCEEDED } : { state: EvaluationState.PASS, reasonCode: null };
@@ -232,7 +239,7 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
   if (policy === 'length' || policy === 'externalHeight') { const issue = structural(value); if (issue) return issue; if (missing(value)) return { state: EvaluationState.PASS, reasonCode: null }; const n = integer(value); if (n === null) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_INTEGER }; return n < 0 ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.NUMERIC_OUTSIDE_ALLOWED_RANGE } : { state: EvaluationState.CHECK, reasonCode: n === 0 ? RuleReasonCode.NUMERIC_ZERO : RuleReasonCode.UNUSUAL_VALID_VALUE }; }
   if (policy === 'frameNobb') { const issue = structural(value); if (issue) return issue; return missing(value) ? { state: EvaluationState.PASS, reasonCode: null } : integer(value) === null ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_INTEGER } : { state: EvaluationState.PASS, reasonCode: null }; }
   if (policy === 'facilityId') { const issue = structural(value); if (issue) return issue; return missing(value) ? { state: EvaluationState.PASS, reasonCode: null } : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.UNUSUAL_VALID_VALUE }; }
-  if (policy === 'access') { const issue = structural(value); if (issue) return issue; if (!missing(value) && !rule.allowedValues.includes(lexeme(value))) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_ALLOWED }; const tema = resolvedTema(context); if (!tema) return { state: EvaluationState.NOT_EVALUATED, reasonCode: RuleReasonCode.DEPENDENT_TEMA_UNRESOLVED }; if (missing(value)) return tema === 'KUM' ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : { state: EvaluationState.PASS, reasonCode: null }; return tema === 'KUM' ? { state: EvaluationState.PASS, reasonCode: null } : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE }; }
+  if (policy === 'access') { const issue = structural(value); if (issue) return issue; if (!missing(value) && !rule.allowedValues.includes(lexeme(value))) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_ALLOWED }; const tema = resolvedTema(context); if (!tema) return { state: EvaluationState.NOT_EVALUATED, reasonCode: RuleReasonCode.DEPENDENT_TEMA_UNRESOLVED }; if (missing(value)) return tema === 'KUM' ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : { state: EvaluationState.PASS, reasonCode: null }; return ['KUM', 'SLU'].includes(tema) ? { state: EvaluationState.PASS, reasonCode: null } : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE }; }
   if (policy === 'attachmentLink') { const issue = structural(value); if (issue) return issue; const tema = resolvedTema(context); if (!tema) return { state: EvaluationState.NOT_EVALUATED, reasonCode: RuleReasonCode.DEPENDENT_TEMA_UNRESOLVED }; if (['LOK', 'TOP'].includes(tema)) return missing(value) ? { state: EvaluationState.PASS, reasonCode: null } : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE }; if (getPointFieldApplicability(tema, 'constructionMethod').state === PointFieldApplicabilityState.APPLICABLE) return missing(value) ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : { state: EvaluationState.PASS, reasonCode: null }; return { state: EvaluationState.PASS, reasonCode: null }; }
   if (policy === 'installationYear') { const issue = structural(value); if (issue) return issue; const cause = context.positioningCause; const currentYear = context.currentYear; if (missing(value)) return validListed(cause, ['NYTT']) ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING }; const raw = lexeme(value); if (typeof raw !== 'string' || !/^[0-9]{4}$/.test(raw)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.YEAR_FORMAT_INVALID }; const year = Number(raw); if (year > currentYear) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.YEAR_FUTURE }; if (year === 0 || year < 1900 || (validListed(cause, ['NYTT']) && year < currentYear - 5)) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.YEAR_PLAUSIBILITY }; return { state: EvaluationState.PASS, reasonCode: null }; }
   if (policy === 'captureDate') { const issue = structural(value); if (issue) return issue; if (missing(value)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING }; const parsed = parseDate(value); if (!parsed) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.DATE_FORMAT_INVALID }; const reference = context.referenceDate; if (parsed.date > reference) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.DATE_FUTURE }; const year = validYear(context.installationYear, context.currentYear); if (year && year !== 0 && parsed.year < year) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.DATE_BEFORE_INSTALLATION }; return parsed.date < anniversary(reference, 5) ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.DATE_OLDER_THAN_FIVE_YEARS } : { state: EvaluationState.PASS, reasonCode: null }; }

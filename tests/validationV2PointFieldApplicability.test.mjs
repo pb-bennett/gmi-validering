@@ -114,17 +114,19 @@ const EXPECTED_EXPLICIT_CELLS = [
     .flatMap((cell) => EXTRA_CONTEXTUAL_FIELDS.map((canonicalFieldId) => ({ ...cell, canonicalFieldId }))),
   ...['KRN'].flatMap((tema) => EXTRA_CONTEXTUAL_FIELDS.map((canonicalFieldId) => ({ tema, canonicalFieldId, state: 'NOT_APPLICABLE' }))),
   ...['KMR', 'SUMP'].flatMap((tema) => EXTRA_CONTEXTUAL_FIELDS.map((canonicalFieldId) => ({ tema, canonicalFieldId, state: 'UNKNOWN' }))),
+  { tema: 'INR', canonicalFieldId: 'width', state: 'OPTIONAL_SUPPORTED' },
 ];
 
-test('production policy has exactly the independent explicit 128-cell inventory', () => {
+test('production policy has exactly the independent explicit 129-cell inventory', () => {
   const actualCells = POINT_FIELD_APPLICABILITY_POLICY.cells;
   const key = ({ tema, canonicalFieldId }) => `${tema}:${canonicalFieldId}`;
   const expectedKeys = EXPECTED_EXPLICIT_CELLS.map(key);
   const actualKeys = actualCells.map(key);
 
-  assert.equal(actualCells.length, 128);
-  assert.equal(new Set(actualKeys).size, 128);
+  assert.equal(actualCells.length, 129);
+  assert.equal(new Set(actualKeys).size, 129);
   assert.equal(actualCells.filter(({ state }) => state === 'APPLICABLE').length, 104);
+  assert.equal(actualCells.filter(({ state }) => state === 'OPTIONAL_SUPPORTED').length, 1);
   assert.equal(actualCells.filter(({ state }) => state === 'UNKNOWN').length, 12);
   assert.equal(actualCells.filter(({ state }) => state === 'NOT_APPLICABLE').length, 12);
 

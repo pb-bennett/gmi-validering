@@ -39,6 +39,12 @@ function estimateColumnWidth(fieldName, label) {
   );
 }
 
+function visibleHeaderLabel(label, width, multiline = false) {
+  const text = String(label || '');
+  const capacity = Math.max(1, Math.floor((width - 12) / 7) * (multiline ? 2 : 1));
+  return text.length > capacity ? `${text.slice(0, Math.max(0, capacity - 1))}…` : text;
+}
+
 function normalizeColumnOrder(fields, savedOrder) {
   const base = Array.isArray(savedOrder) ? savedOrder : [];
   const filtered = base.filter((field) => fields.includes(field));
@@ -776,6 +782,8 @@ export default function LayerDataTable() {
                 const headerId = header.column.id;
                 const width = columnWidths[headerId] || 80;
                 const stickyLeft = stickyLeftFor(headerId);
+                const multiline = header.column.columnDef.meta?.contextualField || header.column.columnDef.meta?.contextualOrdinary;
+                const fullHeaderLabel = String(header.column.columnDef.header || '');
 
                 return (
                   <div
@@ -807,12 +815,9 @@ export default function LayerDataTable() {
                         : undefined,
                     }}
                   >
-                    <div className={`flex items-center gap-0.5 ${(header.column.columnDef.meta?.contextualField || header.column.columnDef.meta?.contextualOrdinary) ? 'items-start' : 'truncate'}`}>
-                      <span className={(header.column.columnDef.meta?.contextualField || header.column.columnDef.meta?.contextualOrdinary) ? 'line-clamp-2 leading-3' : 'truncate'} title={(header.column.columnDef.meta?.contextualField || header.column.columnDef.meta?.contextualOrdinary) ? String(header.column.columnDef.header) : undefined}>
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
+                    <div className={`flex items-center gap-0.5 ${multiline ? 'items-start' : 'truncate'}`}>
+                      <span className={multiline ? 'line-clamp-2 leading-3' : 'truncate'} title={fullHeaderLabel || undefined}>
+                        {visibleHeaderLabel(fullHeaderLabel, width, multiline)}
                       </span>
                       {header.column.getIsSorted() && (
                         <span

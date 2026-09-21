@@ -72,6 +72,7 @@ export const DIAGNOSTIC_REASON_MAPPING = Object.freeze({
   [RuleReasonCode.DATE_BEFORE_INSTALLATION]: T.RELATIONSHIP_INCONSISTENT,
   [RuleReasonCode.DATE_OLDER_THAN_FIVE_YEARS]: T.VALID_VALUE_REVIEW,
   [RuleReasonCode.POSITIONING_CAUSE_SHARED_NYTT_YEAR]: T.RELATIONSHIP_INCONSISTENT,
+  [RuleReasonCode.EXISTING_INFRASTRUCTURE_VALUE_MISSING]: T.VALID_VALUE_REVIEW,
 });
 
 const MAX_VALUES = 5;
@@ -139,6 +140,11 @@ function evidenceValue(finding) {
 function contextKey(finding, type) {
   const facts = finding.details?.diagnosticFacts || {};
   if (finding.canonicalFieldId === 'attachmentLink'
+    && type === T.CONTEXT_UNEXPECTED_VALUE
+    && finding.reasonCode === RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE) {
+    return JSON.stringify({ policy: 'LOK_TOP_UNSUPPORTED_IMAGES' });
+  }
+  if (finding.canonicalFieldId === 'attachmentLink'
     && type === T.CONTEXT_REQUIRED_MISSING
     && facts.requirement === 'EXPECTED') {
     return JSON.stringify({ requirement: 'EXPECTED' });
@@ -199,11 +205,16 @@ function createGroup({ finding, type, field, geometryScope, denominator }) {
         ? 'POSITIONING_CAUSE_SHARED_NYTT_YEAR'
         : finding.canonicalFieldId === 'attachmentLink' && finding.reasonCode === RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE
           ? 'S_HYPERLINK_LOK_TOP'
-          : null,
+          : finding.reasonCode === RuleReasonCode.EXISTING_INFRASTRUCTURE_VALUE_MISSING
+            ? 'EXISTING_INFRASTRUCTURE_VALUE_MISSING'
+            : null,
   };
 }
 
 function addFinding(group, finding) {
+  if (group.wordingKey === 'S_HYPERLINK_LOK_TOP'
+    && finding.objectRef?.key
+    && group.exactObjectRefs.has(finding.objectRef.key)) return;
   group.count += 1;
   if (finding.reasonCode && !group.reasonCodes.includes(finding.reasonCode)) group.reasonCodes.push(finding.reasonCode);
   if (finding.ruleId && !group.ruleIds.includes(finding.ruleId)) group.ruleIds.push(finding.ruleId);
@@ -408,6 +419,7 @@ export function renderValidationV2Diagnostic(diagnostic) {
     case 'TEMA_SCHEMA_COEXISTENCE': return 'Både Tema og S_FCODE finnes i skjemaet. Kolonnene beskriver samme identitet; kontroller hvorfor begge er levert.';
     case 'POSITIONING_CAUSE_SHARED_NYTT_YEAR': return `${objectCountText(count)} har Stedfestingsårsak som må kontrolleres mot et delt NYTT-år i leveringen.`;
     case 'S_HYPERLINK_LOK_TOP': return `${objectCountText(count)} kumlokk med Tema LOK eller TOP har bilder. Gemini VA støtter ikke bilder på disse objektene. Fjern bildelenken fra de berørte objektene.`;
+    case 'EXISTING_INFRASTRUCTURE_VALUE_MISSING': return `${objectCountText(count)} med Stedfestingsårsak UENDR mangler ${name}. Opplysningen kan være vanskelig eller umulig å fremskaffe for eksisterende infrastruktur og bør kontrolleres.`;
     default: break;
   }
   switch (diagnostic.type) {

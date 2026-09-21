@@ -314,6 +314,7 @@ function getDiagnosticApplicability(rule, policyContext, evaluation) {
     const applicabilityFieldId = rule.policy === 'bottomDistance' ? rule.canonicalFieldId : rule.policy;
     const state = getPointFieldApplicability(tema, applicabilityFieldId).state;
     return state === PointFieldApplicabilityState.APPLICABLE ? 'APPLICABLE'
+      : state === PointFieldApplicabilityState.OPTIONAL_SUPPORTED ? 'NOT_APPLICABLE'
       : state === PointFieldApplicabilityState.UNKNOWN ? 'UNRESOLVED' : 'NOT_APPLICABLE';
   }
   if (rule.policy === 'verticalDimension') {

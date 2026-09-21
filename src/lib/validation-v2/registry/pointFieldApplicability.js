@@ -2,6 +2,7 @@ import { getCanonicalField } from './registry.js';
 
 export const PointFieldApplicabilityState = Object.freeze({
   APPLICABLE: 'APPLICABLE',
+  OPTIONAL_SUPPORTED: 'OPTIONAL_SUPPORTED',
   NOT_APPLICABLE: 'NOT_APPLICABLE',
   UNKNOWN: 'UNKNOWN',
 });
@@ -73,6 +74,13 @@ for (const canonicalFieldId of ['constructionMethod', 'width']) {
         : 'Explicit domain-owner approval; the legacy Byggemetode inclusion is preserved separately as PRAKSIS evidence.',
   });
 }
+cells.push({
+  tema: 'INR',
+  canonicalFieldId: 'width',
+  state: PointFieldApplicabilityState.OPTIONAL_SUPPORTED,
+  authority: POLICY_AUTHORITY,
+  rationale: 'Explicit real-data policy decision: Bredde is supported, but not required, for INR. A supplied value is validated normally.',
+});
 for (const canonicalFieldId of ['manholeShape', 'cone']) {
   cells.push({
     tema: 'LOK',
