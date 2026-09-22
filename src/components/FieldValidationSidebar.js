@@ -6,8 +6,10 @@ import { EnvelopeSimpleIcon } from '@phosphor-icons/react';
 import { validateFields } from '@/lib/validation/fieldValidation';
 import FieldDetailModal from './FieldDetailModal';
 import MissingFieldsReport from './MissingFieldsReport';
+import ValidationV2ErrorBoundary from './validation-v2/ValidationV2ErrorBoundary';
+import ValidationV2Workspace from './validation-v2/ValidationV2Workspace';
 
-export default function FieldValidationSidebar({ onOpenContact }) {
+function LegacyFieldValidationSidebar({ onOpenContact }) {
   const data = useStore((state) => state.data);
   const toggleFieldValidation = useStore(
     (state) => state.toggleFieldValidation
@@ -118,7 +120,7 @@ export default function FieldValidationSidebar({ onOpenContact }) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-white border-r shadow-xl relative z-20">
+    <div className="min-h-0 flex-1 flex flex-col bg-white border-r shadow-xl relative z-20">
       {/* Header */}
       <div className="p-6 border-b bg-gray-50 relative">
         <button
@@ -373,6 +375,24 @@ export default function FieldValidationSidebar({ onOpenContact }) {
         isOpen={!!selectedField}
         onClose={() => setSelectedField(null)}
       />
+    </div>
+  );
+}
+
+export default function FieldValidationSidebar({ sidebarWidth, canDockInspector, onDockedInspectorChange, onOpenAppInfo, onOpenContact, appInfoTriggerRef }) {
+  return (
+    <div className="h-full min-h-0 flex flex-col">
+      <ValidationV2ErrorBoundary>
+        <ValidationV2Workspace
+          sidebarWidth={sidebarWidth}
+          canDockInspector={canDockInspector}
+          onDockedInspectorChange={onDockedInspectorChange}
+        />
+      </ValidationV2ErrorBoundary>
+      <div className="flex flex-none gap-2 border-t bg-white px-2 py-2 text-xs">
+        <button ref={appInfoTriggerRef} type="button" onClick={onOpenAppInfo} aria-haspopup="dialog" className="rounded px-2 py-1 text-blue-700 hover:bg-blue-50">Om appen</button>
+        <button type="button" onClick={onOpenContact} aria-haspopup="dialog" className="rounded px-2 py-1 text-blue-700 hover:bg-blue-50">Kontakt</button>
+      </div>
     </div>
   );
 }

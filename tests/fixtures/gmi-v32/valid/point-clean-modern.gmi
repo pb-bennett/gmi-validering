@@ -1,0 +1,13 @@
+[GMIFILE_ASCII]
+_VERSION 2
+[P_]
+_FIELDNAMES S_FCODE;Anleggsår;Datafangstdato;Innmålt_av;Saksnummer;Høydereferanse;Målemetode;Nøyaktighet;MålemetodeHøyde;NøyaktighetHøyde;Stedfestingsforhold;Stedfestingsårsak;Eier;Vertikalnivå;MaksAvvikVertikalt;MaksAvvikHorisontalt;Kumform;Bredde;InnvendigUtvendig;Tykkelse;Avst_BunnInnvUnderUtv;Byggemetode;Adkomst;Kjegle;S_HYPERLINK;NOBB-VAVVS-nr;NOBB-VAVVS-nr-ramme
+[+P_]
+:P 1
+_FIELDVALUES KUM;2026;09.09.2026;SYNTHETIC_SURVEYOR;CASE-SYN-01;TOPP_UTVENDIG;96;2;96;3;ÅPEN_KUM;NYTT;K;UNDER_GRUNN;10;10;R;1000;ID;120;0.25;B;DO;E;https://synthetic.invalid/asset-01;10001;20001
+/XYZ
+1000 2000 10
+:P 2
+_FIELDVALUES LOK;2021;09.09.2026;SYNTHETIC_SURVEYOR;;PÅ_BAKKEN;96;1;96;1;ÅPEN_GRØ;UENDR;K;PÅ_GRUNN_VANNOVERF;1;1;;;OD;;;B;DO;E;;;;
+/XYZ
+1001 2001 11

@@ -1,0 +1,1774 @@
+[
+  {
+    "canonicalFieldId": "externalHeight",
+    "displayName": "Utvendig_høyde",
+    "description": "Levert utvendig høyde fra topplokk til bunn utvendig kontrolleres som heltall i mm.",
+    "appliesTo": [
+      "point"
+    ],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Bare levert heltallsformat kontrolleres. Manglende verdi blir ikke evaluert; regelen avgjør ikke om feltet er påkrevd.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "SOURCE_CONFLICT: Vedlegg A side 5 sier valgfritt, mens side 9 sier obligatorisk for ikke-sirkulære prefabrikkerte installasjoner. Requiredness er fortsatt uavklart.",
+        "validationStatus": "PENDING"
+      },
+      {
+        "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Ingen min/maks, positivitet, geometriavledning eller enhetskonvertering.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 9",
+        "auditSourceRuleIds": [
+          "innmaling.point.external-height.integer"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "owner",
+    "displayName": "Eier",
+    "description": "Valgfri eierkode. Kilden gjelder punkt og ledning; den aktive automatiske kontrollen innmaling.point.owner.valid gjelder bare punkt.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 8–9",
+        "auditSourceRuleIds": [
+          "innmaling.point.owner.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "access",
+    "displayName": "Adkomst",
+    "description": "Valgfri adkomstkode for punktobjekt; ønskes utfylt, men kreves ikke av denne regelen.",
+    "appliesTo": [
+      "point"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 15",
+        "auditSourceRuleIds": [
+          "innmaling.point.access.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "type",
+    "displayName": "Type",
+    "description": "Type-kode for punktobjekt når den er tilgjengelig. Automatisk validering godtar nøyaktig v3.2-listen på 72 verdier.",
+    "appliesTo": [
+      "point"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Feltet er valgfritt når Type ikke er tilgjengelig; oppgitt verdi må være en aktuell v3.2-kode.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 12–14",
+        "auditSourceRuleIds": [
+          "innmaling.point.type.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "manholeShape",
+    "displayName": "Kumform",
+    "description": "Point-only field; optional for this automated validation slice. Only exact current v3.2 codes are accepted automatically.",
+    "appliesTo": ["point"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmaling instruction Appendix A",
+      "version": "3.2 / 01.08.2026",
+      "pages": "4, 14",
+      "auditSourceRuleIds": ["innmaling.point.manhole-shape.valid"]
+    }]
+  },
+  {
+    "canonicalFieldId": "constructionMethod",
+    "displayName": "Byggemetode",
+    "description": "Point-only field; optional for this automated validation slice. Only exact current v3.2 codes are accepted automatically.",
+    "appliesTo": ["point"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmaling instruction Appendix A",
+      "version": "3.2 / 01.08.2026",
+      "pages": "5, 15",
+      "auditSourceRuleIds": ["innmaling.point.construction-method.valid"]
+    }]
+  },
+  {
+    "canonicalFieldId": "cone",
+    "displayName": "Kjegle",
+    "description": "Point-only field; optional for this automated validation slice. Only exact current v3.2 codes are accepted automatically.",
+    "appliesTo": ["point"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmaling instruction Appendix A",
+      "version": "3.2 / 01.08.2026",
+      "pages": "5, 15",
+      "auditSourceRuleIds": ["innmaling.point.cone.valid"]
+    }]
+  },
+  {
+    "canonicalFieldId": "width",
+    "displayName": "Bredde",
+    "description": "Levert bredde eller diameter for et punktobjekt, oppgitt i millimeter.",
+    "appliesTo": ["point"],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Når Bredde er levert, validerer den automatiske regelen heltallsformatet. Regelen gjør ikke feltet globalt påkrevd.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Polygonunntaket og polygonavhengig requiredness evalueres ikke i denne kontrollen.",
+        "validationStatus": "PENDING"
+      },
+      {
+        "text": "Bare den kanoniske GMI-egenskapen Bredde eller en unik variant som kun avviker i bokstavstørrelse kan bindes; aliaser som DIAMETER godtas ikke.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 9",
+        "auditSourceRuleIds": ["innmaling.point.width.integer"]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "14–15",
+        "auditSourceRuleIds": ["innmaling.point.width.integer"]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "length",
+    "displayName": "Lengde",
+    "description": "Levert Lengde for et punktobjekt, oppgitt i millimeter; verdien beregnes ikke fra geometri.",
+    "appliesTo": ["point"],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Når Lengde er levert, validerer den automatiske regelen heltallsformatet. Regelen gjør ikke feltet globalt påkrevd.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Representasjonsvalg og polygonavhengig requiredness evalueres ikke i denne kontrollen.",
+        "validationStatus": "PENDING"
+      },
+      {
+        "text": "Lengde er en direkte punktobjektegenskap og utledes aldri fra punkt-, linje- eller polygongeometri.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 9",
+        "auditSourceRuleIds": ["innmaling.point.length.integer"]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "15",
+        "auditSourceRuleIds": ["innmaling.point.length.integer"]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "heightReference",
+    "displayName": "Høydereferanse",
+    "description": "Høyden på objektet er knyttet til en angitt referanse.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {
+      "BUNN_INNVENDIG": {
+        "label": "Bunn innvendig",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "main-instruction",
+            "pages": "10, 13–18"
+          }
+        ]
+      },
+      "PÅ_BAKKEN": {
+        "label": "På bakken",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "main-instruction",
+            "pages": "10, 13–18"
+          }
+        ]
+      },
+      "SENTER": {
+        "label": "Senter",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "main-instruction",
+            "pages": "10, 13–18"
+          }
+        ]
+      },
+      "TOPP_INNVENDIG": {
+        "label": "Topp innvendig",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "main-instruction",
+            "pages": "10, 13–18"
+          }
+        ]
+      },
+      "TOPP_UTVENDIG": {
+        "label": "Topp utvendig",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "main-instruction",
+            "pages": "10, 13–18"
+          }
+        ]
+      },
+      "UKJENT": {
+        "label": "Ukjent",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "main-instruction",
+            "pages": "10, 13–18"
+          }
+        ]
+      },
+      "UNDERKANT_UTVENDIG": {
+        "label": "Underkant utvendig",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "main-instruction",
+            "pages": "10, 13–18"
+          }
+        ]
+      }
+    },
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.height-reference.valid"
+        ]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "10, 13–18",
+        "auditSourceRuleIds": [
+          "innmaling.common.height-reference.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "innerBottomToOuterUndersideDistance",
+    "displayName": "Avst_BunnInnvUnderUtv",
+    "description": "Levert avstand mellom innvendig bunn og utvendig underside, oppgitt i meter.",
+    "appliesTo": [
+      "point"
+    ],
+    "units": "m",
+    "documentedFormat": "Desimaltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Oppgitt verdi valideres som et helt eller desimaltall med valgfritt fortegn og punktum eller komma som desimalskilletegn. Manglende verdi er ikke evaluert.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Eksponentform, ufullstendig desimal, gruppering og polstret numerisk tekst gir Feil; regelen bruker vanlig tallformat med punktum eller komma.",
+        "validationStatus": "PENDING"
+      },
+      {
+        "text": "Vedlegg A side 5 og 9 har ulikt/overlappende scope for når feltet er obligatorisk; denne punktregelen løser ikke konflikten.",
+        "validationStatus": "PENDING"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 9",
+        "auditSourceRuleIds": [
+          "innmaling.point.bottom-distance.decimal"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "note",
+    "displayName": "Merknad",
+    "description": "Valgfri tekstmerknad.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Tekst, maksimalt 255 tegn",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Oppgitt punkt-Merknad kan ha maksimalt 255 Unicode-kodepunkter. Whitespace telles, og teksten trimmes eller normaliseres ikke; tom tekst følger eksisterende parser-/missing-semantikk.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Lengdebegrensningen er en teknisk kontroll av levert tekst, ikke en innholds-, navne- eller lagringskodingstest. Runtime-verdier uten original tekstlig evidens vurderes.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.point.note.max-length"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "installationYear",
+    "displayName": "Anleggsår",
+    "description": "Året objektet ble etablert.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "YYYY",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Oppgitt Anleggsår valideres som YYYY med fire ASCII-sifre. Manglende verdi håndteres fortsatt av den separate required-regelen; dette er ikke en plausibilitetskontroll.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Teknisk formatkontrakt: ^[0-9]{4}$ uten trimming, årsgrense eller kronologisjekk. En runtime-verdi 2026 uten originalt lexeme kan godtas som etablert fire-sifret fallback; annen manglende bredde vurderes.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.installation-year.required",
+          "innmaling.point.installation-year.format"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "captureDate",
+    "displayName": "Datafangstdato",
+    "description": "Datoen objektet ble målt inn.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "DD.MM.YYYY",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Oppgitt Datafangstdato valideres kun som DD.MM.YYYY med faste punktum og feltbredder. Manglende verdi håndteres fortsatt av den separate required-regelen.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Formatregelen avgjør ikke om datoen er en kalendergyldig dato: 31.02.2026 og 00.00.0000 kan derfor passere formatet. Tid, tidssone, Date.parse og kronologi kontrolleres ikke.",
+        "validationStatus": "PENDING"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.capture-date.required",
+          "innmaling.point.capture-date.format"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "surveyedBy",
+    "displayName": "Innmålt av",
+    "description": "Navn på entreprenør eller person som målte inn objektet.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Tekst/navn",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.surveyed-by.required"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "caseNumber",
+    "displayName": "Saksnummer",
+    "description": "Kommunens saksnummer for anlegget.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Tekst",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.case-number.required"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "horizontalAccuracy",
+    "displayName": "Nøyaktighet XY",
+    "description": "Horisontal usikkerhet ved innmålingen.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": "cm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Eventuell avtalt avvikende grense er ikke kontrollert av denne regelen.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.horizontal-accuracy.required"
+        ]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "10",
+        "auditSourceRuleIds": [
+          "innmaling.common.horizontal-accuracy.required"
+        ]
+      }
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert Nøyaktighet på punktobjekt kontrolleres som heltall i cm.",
+        "documentedFormat": "Heltall",
+        "units": "cm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Avtalte nøyaktighetsgrenser og faktisk målekvalitet kontrolleres ikke av formatregelen.",
+            "validationStatus": "PENDING"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "4, 6",
+            "auditSourceRuleIds": [
+              "innmaling.common.horizontal-accuracy.required",
+              "innmaling.point.horizontal-accuracy.integer"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "canonicalFieldId": "verticalAccuracy",
+    "displayName": "Nøyaktighet høyde Z",
+    "description": "Vertikal usikkerhet ved innmålingen.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": "cm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Eventuell avtalt avvikende grense er ikke kontrollert av denne regelen.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.vertical-accuracy.required"
+        ]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "10",
+        "auditSourceRuleIds": [
+          "innmaling.common.vertical-accuracy.required"
+        ]
+      }
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert NøyaktighetHøyde på punktobjekt kontrolleres som heltall i cm.",
+        "documentedFormat": "Heltall",
+        "units": "cm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Avtalte nøyaktighetsgrenser og faktisk målekvalitet kontrolleres ikke av formatregelen.",
+            "validationStatus": "PENDING"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "4, 6",
+            "auditSourceRuleIds": [
+              "innmaling.common.vertical-accuracy.required",
+              "innmaling.point.vertical-accuracy.integer"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "canonicalFieldId": "maxHorizontalDeviation",
+    "displayName": "Maksavvik horisontalt",
+    "description": "Største registrerte horisontale avvik.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": "cm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Range- og LAGS-vurdering er ikke kontrollert av denne regelen.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.max-horizontal-deviation.required"
+        ]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "5, 10",
+        "auditSourceRuleIds": [
+          "innmaling.common.max-horizontal-deviation.required"
+        ]
+      }
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert MaksAvvikHorisontalt på punktobjekt kontrolleres som heltall i cm.",
+        "documentedFormat": "Heltall",
+        "units": "cm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "LAGS-grenser og faktisk avvik fra ytre avgrensning kontrolleres ikke av formatregelen.",
+            "validationStatus": "PENDING"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "4, 6",
+            "auditSourceRuleIds": [
+              "innmaling.common.max-horizontal-deviation.required",
+              "innmaling.point.max-horizontal-deviation.integer"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "canonicalFieldId": "maxVerticalDeviation",
+    "displayName": "Maksavvik vertikalt",
+    "description": "Største registrerte vertikale avvik.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": "cm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Range- og LAGS-vurdering er ikke kontrollert av denne regelen.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 6",
+        "auditSourceRuleIds": [
+          "innmaling.common.max-vertical-deviation.required"
+        ]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "5, 10",
+        "auditSourceRuleIds": [
+          "innmaling.common.max-vertical-deviation.required"
+        ]
+      }
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert MaksAvvikVertikalt på punktobjekt kontrolleres som heltall i cm.",
+        "documentedFormat": "Heltall",
+        "units": "cm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "LAGS-grenser og faktisk avvik fra ytre avgrensning kontrolleres ikke av formatregelen.",
+            "validationStatus": "PENDING"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "4, 6",
+            "auditSourceRuleIds": [
+              "innmaling.common.max-vertical-deviation.required",
+              "innmaling.point.max-vertical-deviation.integer"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "canonicalFieldId": "positioningCondition",
+    "displayName": "Stedfestingsforhold",
+    "description": "Forholdene da objektet ble stedfestet.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {
+      "DELV_LUKK_GRØ": {
+        "label": "Delvis lukket grøft",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      },
+      "I_TUNNEL": {
+        "label": "I tunnel",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      },
+      "I_VANN": {
+        "label": "I vann",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      },
+      "IKKE_STEDF": {
+        "label": "Ikke stedfestet",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      },
+      "LUKK_GRØ": {
+        "label": "Lukket grøft",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      },
+      "OVERFL_VANN": {
+        "label": "Overflate vann",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      },
+      "POS_FRA_KUM": {
+        "label": "Posisjon fra kum/stasjon",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      },
+      "PÅVI": {
+        "label": "Påvist",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      },
+      "ÅPEN_GRØ": {
+        "label": "Åpen grøft",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      },
+      "ÅPEN_KUM": {
+        "label": "Åpen kum/stasjon",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "7–8"
+          }
+        ]
+      }
+    },
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 7–8",
+        "auditSourceRuleIds": [
+          "innmaling.common.positioning-condition.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "positioningCause",
+    "displayName": "Stedfestingsårsak",
+    "description": "Årsaken til at objektet ble stedfestet.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {
+      "FJERN": {
+        "label": "Fjernet",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      },
+      "FLYTT_DELV": {
+        "label": "Flyttet delvis avdekket",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      },
+      "FLYTT_HELT": {
+        "label": "Flyttet helt",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      },
+      "NYTT": {
+        "label": "Nytt",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      },
+      "PÅVI": {
+        "label": "Påvist",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      },
+      "UENDR": {
+        "label": "Uendret",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      }
+    },
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 8",
+        "auditSourceRuleIds": [
+          "innmaling.common.positioning-cause.valid"
+        ]
+      },
+      {
+        "documentId": "main-instruction",
+        "title": "Innmålingsinstruks 2026",
+        "version": "3.2 / august 2026",
+        "pages": "9–10, 18",
+        "auditSourceRuleIds": [
+          "innmaling.common.positioning-cause.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "visibility",
+    "displayName": "Synbarhet",
+    "description": "Utgått – Ikke relevant for VA.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode 0–3",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "COMPLETE",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {
+      "0": {
+        "label": "Fullt ut synlig/gjenfinnbar i terrenget",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      },
+      "1": {
+        "label": "Dårlig gjenfinnbar i terreng",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      },
+      "2": {
+        "label": "Middels synlig i flybilde/modell",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      },
+      "3": {
+        "label": "Dårlig/ikke synlig i flybilde/modell",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "8"
+          }
+        ]
+      }
+    },
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 8",
+        "auditSourceRuleIds": []
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "tema",
+    "displayName": "Tema",
+    "description": null,
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Tema-verdisett og klassifisering er ikke lukket i dette steget.",
+        "validationStatus": "PENDING"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 10–12; line 16–19",
+        "auditSourceRuleIds": [
+          "innmaling.point.tema.required",
+          "innmaling.line.tema.required"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "insideOutside",
+    "displayName": "Innvendig/utvendig",
+    "description": "Angir om dimensjon eller måling er innvendig eller utvendig.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {
+      "ID": {
+        "label": "Innvendig dimensjon",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "14, 21"
+          }
+        ]
+      },
+      "OD": {
+        "label": "Utvendig dimensjon",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "14, 21"
+          }
+        ]
+      }
+    },
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "4, 14; line 21",
+        "auditSourceRuleIds": [
+          "innmaling.point.inside-outside.valid",
+          "innmaling.line.inside-outside.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "wallThickness",
+    "displayName": "Tykkelse",
+    "description": "Tykkelsen på punktobjektets vegg.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 9; line 16",
+        "auditSourceRuleIds": [
+          "innmaling.point.wall-thickness.required",
+          "innmaling.line.wall-thickness.required"
+        ]
+      }
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert Tykkelse på punktobjekt kontrolleres som heltall i mm.",
+        "documentedFormat": "Heltall",
+        "units": "mm",
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "5, 9",
+            "auditSourceRuleIds": [
+              "innmaling.point.wall-thickness.required",
+              "innmaling.point.wall-thickness.integer"
+            ]
+          }
+        ]
+      },
+      "line": {
+        "description": "Tykkelsen på ledningen; tall i mm med én desimal.",
+        "documentedFormat": "Tall"
+      }
+    }
+  },
+  {
+    "canonicalFieldId": "material",
+    "displayName": "Material",
+    "description": "Materialet på ledningen.",
+    "appliesTo": [
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Materialets kodeverdier håndheves ikke i dette steget.",
+        "validationStatus": "PENDING"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 19",
+        "auditSourceRuleIds": [
+          "innmaling.line.material.required"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "nobbVavvsNumber",
+    "displayName": "NOBB/VAVVS-nummer",
+    "description": "Produktets NOBB/VAVVS-nummer, valgfritt i v3.2.",
+    "appliesTo": [
+      "point",
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Feltet er valgfritt i v3.2 og har ingen aktiv valideringsregel i dette steget.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 10; line 16",
+        "auditSourceRuleIds": []
+      }
+    ],
+    "byGeometry": {
+      "point": {
+        "description": "Levert NOBB-VAVVS-nr på punktobjekt kontrolleres som heltall.",
+        "documentedFormat": "Heltall",
+        "units": null,
+        "range": null,
+        "documentationStatus": "PARTIAL",
+        "qualifications": [
+          {
+            "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+            "validationStatus": "INFORMATIONAL"
+          },
+          {
+            "text": "Feltet er valgfritt i v3.2. Vanlig antall siffer er ikke en eksakt lengderegel; produktregister og produktidentitet kontrolleres ikke.",
+            "validationStatus": "INFORMATIONAL"
+          }
+        ],
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+            "version": "3.2 / 01.08.2026",
+            "pages": "5, 10",
+            "auditSourceRuleIds": [
+              "innmaling.point.nobb-vavvs-number.integer"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "canonicalFieldId": "nobbVavvsFrameNumber",
+    "displayName": "NOBB/VAVVS-nummer ramme",
+    "description": "Levert NOBB-VAVVS-nr-ramme på punktobjekt kontrolleres som heltall.",
+    "appliesTo": [
+      "point"
+    ],
+    "units": null,
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [
+      {
+        "text": "Punktregelen kontrollerer bare levert heltallsformat; manglende verdi blir ikke evaluert av formatregelen. Eventuelle eksisterende krav om tilstedeværelse kontrolleres separat.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Teknisk formatkontrakt: ^[+-]?[0-9]+$, uten trimming. Fortegn, null og ledende nuller godtas. Ingen min/maks, positivitet eller enhetskonvertering kontrolleres.",
+        "validationStatus": "INFORMATIONAL"
+      },
+      {
+        "text": "Feltet er valgfritt i v3.2. Vanlig antall siffer er ikke en eksakt lengderegel; produktregister og produktidentitet kontrolleres ikke.",
+        "validationStatus": "INFORMATIONAL"
+      }
+    ],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 10",
+        "auditSourceRuleIds": [
+          "innmaling.point.nobb-vavvs-frame-number.integer"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "dimension",
+    "displayName": "Dimensjon",
+    "description": "Ledningens nominelle dimensjon.",
+    "appliesTo": [
+      "line"
+    ],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 16",
+        "auditSourceRuleIds": [
+          "innmaling.line.dimension.required"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "networkType",
+    "displayName": "Nett-type",
+    "description": "Nettets funksjonelle type. v3.2 verdier: F, H, O, O1, O2, S, S6 og S7.",
+    "appliesTo": [
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {
+      "F": {
+        "label": "Fordelingsnett",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "19"
+          }
+        ]
+      },
+      "H": {
+        "label": "Hovednett",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "19"
+          }
+        ]
+      },
+      "O": {
+        "label": "Overføringsnett",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "19"
+          }
+        ]
+      },
+      "S": {
+        "label": "Stikkledningsnett",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "19"
+          }
+        ]
+      },
+      "S6": {
+        "label": "Sprinklerledningsnett",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "19"
+          }
+        ]
+      },
+      "O1": {
+        "label": "Overføringsnett, variant O1",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "19"
+          }
+        ]
+      },
+      "O2": {
+        "label": "Overføringsnett, variant O2",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "19"
+          }
+        ]
+      },
+      "S7": {
+        "label": "Stikkledningsnett, variant S7",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "19"
+          }
+        ]
+      }
+    },
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 19",
+        "auditSourceRuleIds": [
+          "innmaling.line.network-type.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "pipeShape",
+    "displayName": "Rørform",
+    "description": "Tverrsnittsformen på ledningen.",
+    "appliesTo": [
+      "line"
+    ],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {
+      "A": {
+        "label": "Annet",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "21"
+          }
+        ]
+      },
+      "E": {
+        "label": "Eggformet",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "21"
+          }
+        ]
+      },
+      "F": {
+        "label": "Firkant",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "21"
+          }
+        ]
+      },
+      "R": {
+        "label": "Firkant med renne",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "21"
+          }
+        ]
+      },
+      "S": {
+        "label": "Sirkulær",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "21"
+          }
+        ]
+      },
+      "T": {
+        "label": "Sirkulær med renne",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "21"
+          }
+        ]
+      },
+      "X": {
+        "label": "Spesiell form",
+        "description": null,
+        "sources": [
+          {
+            "documentId": "appendix-a",
+            "pages": "21"
+          }
+        ]
+      }
+    },
+    "sources": [
+      {
+        "documentId": "appendix-a",
+        "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+        "version": "3.2 / 01.08.2026",
+        "pages": "5, 21",
+        "auditSourceRuleIds": [
+          "innmaling.line.pipe-shape.valid"
+        ]
+      }
+    ]
+  },
+  {
+    "canonicalFieldId": "measurementMethod",
+    "displayName": "Målemetode",
+    "description": "Metoden som ble brukt ved innmåling.",
+    "appliesTo": ["point", "line"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {"text": "Kun autoritative v3.2-koder passerer automatisk kodevalidering; andre leverte verdier flagges for manuell validering.", "sources": [{"documentId": "appendix-a", "pages": "23–25"}]}
+    ],
+    "documentationStatus": "COMPLETE",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+      "version": "3.2 / 01.08.2026",
+      "pages": "4, 6–7",
+      "auditSourceRuleIds": ["innmaling.common.measurement-method.required"]
+    }]
+  },
+  {
+    "canonicalFieldId": "heightMeasurementMethod",
+    "displayName": "MålemetodeHøyde",
+    "description": "Metoden som ble brukt ved høydemåling.",
+    "appliesTo": ["point", "line"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {"text": "Kun autoritative v3.2-koder passerer automatisk kodevalidering; andre leverte verdier flagges for manuell validering.", "sources": [{"documentId": "appendix-a", "pages": "25–27"}]}
+    ],
+    "documentationStatus": "COMPLETE",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+      "version": "3.2 / 01.08.2026",
+      "pages": "4, 7, 25–27",
+      "auditSourceRuleIds": ["innmaling.common.height-measurement-method.required"]
+    }]
+  },
+  {
+    "canonicalFieldId": "verticalLevel",
+    "displayName": "Vertikalnivå",
+    "description": "Vertikalnivået objektet tilhører.",
+    "appliesTo": ["point", "line"],
+    "units": null,
+    "documentedFormat": "Kode",
+    "range": null,
+    "qualifications": [
+      {"text": "Kun autoritative v3.2-koder passerer automatisk kodevalidering; andre leverte verdier flagges for manuell validering.", "sources": [{"documentId": "appendix-a", "pages": "4, 9"}]}
+    ],
+    "documentationStatus": "COMPLETE",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+      "version": "3.2 / 01.08.2026",
+      "pages": "4, 9",
+      "auditSourceRuleIds": ["innmaling.common.vertical-level.required"]
+    }]
+  },
+  {
+    "canonicalFieldId": "verticalDimension",
+    "displayName": "VertikalDimensjon",
+    "description": "Ledningens vertikale dimensjon, vurdert sammen med Rørform.",
+    "appliesTo": ["line"],
+    "units": "mm",
+    "documentedFormat": "Heltall",
+    "range": null,
+    "qualifications": [],
+    "documentationStatus": "PARTIAL",
+    "sourceStatus": "VERIFIED_SOURCE_REFERENCE",
+    "valueInfo": {},
+    "sources": [{
+      "documentId": "appendix-a",
+      "title": "Innmålingsinstruks Vedlegg A – Spesifikasjon innmålingsfil",
+      "version": "3.2 / 01.08.2026",
+      "pages": "5, 21",
+      "auditSourceRuleIds": ["innmaling.line.vertical-dimension.valid"]
+    }]
+  },
+  {"canonicalFieldId":"sdr","displayName":"SDR","description":"SDR vurderes mot hydraulisk Tema og Material.","appliesTo":["line"],"units":null,"documentedFormat":"Desimaltall","range":null,"qualifications":[{"text":"Trykkledning med godkjent plastmateriale krever SDR. Andre hydrauliske kontekster vises som Pass eller Sjekk etter ferdig kontekstkontroll.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"5, 21","auditSourceRuleIds":["innmaling.line.sdr.valid"]}]},
+  {"canonicalFieldId":"ringStiffness","displayName":"Ringstivhet","description":"Ringstivhet vurderes mot hydraulisk Tema og Material.","appliesTo":["line"],"units":null,"documentedFormat":"Kode","range":null,"qualifications":[{"text":"Gravity-ledning med godkjent polymermateriale krever gyldig SN-verdi.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"5, 21","auditSourceRuleIds":["innmaling.line.ring-stiffness.valid"]}]},
+  {"canonicalFieldId":"pressureClass","displayName":"Trykklasse","description":"Trykklasse vurderes mot hydraulisk Tema.","appliesTo":["line"],"units":null,"documentedFormat":"Kode","range":null,"qualifications":[{"text":"Gyldig PN-verdi passerer for trykk-Tema; øvrige kontekster markeres Sjekk ved levering.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"5, 21","auditSourceRuleIds":["innmaling.line.pressure-class.valid"]}]},
+  {"canonicalFieldId":"facilityId","displayName":"AnleggsID","description":"Valgfri anleggsidentifikator som fremheves informativt når den er levert.","appliesTo":["point"],"units":null,"documentedFormat":"Tekst","range":null,"qualifications":[{"text":"En levert verdi gir Sjekk som informativ fremheving; det betyr ikke at verdien mistenkes å være feil.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"4, 9","auditSourceRuleIds":["innmaling.point.facility-id.informational"]}]},
+  {"canonicalFieldId":"attachmentLink","displayName":"S_HYPERLINK","description":"Vedleggsreferanse som vurderes ut fra objektets Tema; innholdet URL-valideres ikke.","appliesTo":["point","line"],"units":null,"documentedFormat":"Tekst","range":null,"qualifications":[{"text":"Vedlegg forventes for Byggemetode-aktuelle Tema. Gemini VA støtter ikke vedlegg på kumlokk (LOK/TOP); en levert lenke skal da fjernes.","validationStatus":"INFORMATIONAL"}],"documentationStatus":"COMPLETE","sourceStatus":"VERIFIED_SOURCE_REFERENCE","valueInfo":{},"sources":[{"documentId":"appendix-a","title":"Innmålingsinstruks Vedlegg A","version":"3.2 / 01.08.2026","pages":"5, 15","auditSourceRuleIds":["innmaling.point.attachment-link.policy"]}]}
+]

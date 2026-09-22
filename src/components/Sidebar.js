@@ -795,7 +795,7 @@ function FieldSubSection({
   );
 }
 
-export default function Sidebar({ onReset, onAddFile, onOpenAppInfo, onOpenContact, appInfoTriggerRef }) {
+export default function Sidebar({ onReset, onAddFile, onOpenAppInfo, onOpenContact, appInfoTriggerRef, width, onWidthChange }) {
   const file = useStore((state) => state.file);
   const data = useStore((state) => state.data);
   const layerOrder = useStore((state) => state.layerOrder);
@@ -843,7 +843,6 @@ export default function Sidebar({ onReset, onAddFile, onOpenAppInfo, onOpenConta
   );
 
   // State for sidebar width and resizing
-  const [width, setWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef(null);
 
@@ -898,7 +897,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenAppInfo, onOpenConta
       if (!isResizing) return;
       const newWidth = e.clientX;
       if (newWidth > 200 && newWidth < 800) {
-        setWidth(newWidth);
+        onWidthChange(newWidth);
       }
     };
 
@@ -925,7 +924,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenAppInfo, onOpenConta
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
+  }, [isResizing, onWidthChange]);
 
   const stats = useMemo(() => {
     if (!data) return null;

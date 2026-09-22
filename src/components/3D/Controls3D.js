@@ -11,7 +11,7 @@ export default function Controls3D() {
   return (
     <>
       {/* Top-left controls panel */}
-      <div className="absolute top-4 left-4 z-50 bg-white/95 backdrop-blur-sm text-gray-800 rounded-xl shadow-lg border border-gray-200/50 overflow-hidden min-w-[160px]">
+      <div className="absolute top-14 left-4 z-50 bg-white/95 backdrop-blur-sm text-gray-800 rounded-xl shadow-lg border border-gray-200/50 overflow-hidden min-w-[160px]">
         {/* Header with minimize toggle */}
         <div
           className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-100"
@@ -84,7 +84,7 @@ export default function Controls3D() {
       {showLegend && <Legend3D />}
 
       {/* Instructions - more subtle */}
-      <div className="absolute bottom-4 right-4 z-50 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl shadow-lg border border-gray-200/50 p-3 text-xs max-w-xs">
+      <div className="absolute bottom-20 right-4 z-50 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl shadow-lg border border-gray-200/50 p-3 text-xs max-w-xs">
         <p className="font-semibold mb-1.5 text-gray-800">
           Navigasjon:
         </p>

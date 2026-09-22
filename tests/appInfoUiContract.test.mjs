@@ -57,7 +57,9 @@ test('loaded-state AppInfo and persistent Kontakt actions use the existing modal
   assert.match(pageSource, /setAppInfoInitialTab\(tab\)/);
   assert.match(fieldValidationSidebarSource, /<EnvelopeSimpleIcon\b/);
   assert.match(fieldValidationSidebarSource, /onClick=\{onOpenContact\}/);
-  assert.match(pageSource, /<FieldValidationSidebar onOpenContact=\{\(\) => openAppInfo\('contact'\)\} \/>/);
+  assert.match(pageSource, /<FieldValidationSidebar[\s\S]*?onOpenContact=\{\(\) => openAppInfo\('contact'\)\}/);
+  assert.match(fieldValidationSidebarSource, /onClick=\{onOpenAppInfo\}/);
+  assert.match(fieldValidationSidebarSource, /onClick=\{onOpenContact\}/);
   assert.match(pageSource, /<EnvelopeSimpleIcon\b/);
   assert.match(pageSource, /onClick=\{\(\) => openAppInfo\('contact'\)\}/);
 });

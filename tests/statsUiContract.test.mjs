@@ -13,6 +13,7 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   const detailed = read('src/components/DetailedStatsSection.js');
   const testMode = read('src/components/TestModeControl.js');
   const tabSwitcher = read('src/components/TabSwitcher.js');
+  const mapToolbar = read('src/components/MapPaneToolbar.js');
   const page = read('src/app/page.js');
   const activation = read('src/lib/testModeActivation.mjs');
 
@@ -54,15 +55,15 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.doesNotMatch(testMode, /Aktiver testmodus/);
   assert.match(testMode, /aria-label="Slå av testmodus"/);
   assert.doesNotMatch(testMode, /fixed left-4 bottom-4/);
-  assert.match(tabSwitcher, /<TestModeControl \/>/);
-  assert.match(tabSwitcher, /const testModeVisible = useStore/);
-  assert.match(tabSwitcher, /state\.hydrated === true && isTestModeEnabled\(state\.settings\)/);
-  assert.match(tabSwitcher, /const showTabs = viewer3DOpen && data/);
-  assert.match(tabSwitcher, /if \(!showTabs && !testModeVisible\) return null/);
-  assert.match(tabSwitcher, /showTabs && \(/);
+  assert.match(mapToolbar, /<TestModeControl \/>/);
   assert.match(tabSwitcher, /Kartoversikt/);
   assert.match(tabSwitcher, /3D-visning/);
-  assert.doesNotMatch(page, /<TestModeControl \/>/);
+  assert.match(page, /<TestModeActivation \/>/);
+  assert.match(page, /parsingStatus !== 'done'[\s\S]*?<TestModeControl \/>/);
+  assert.match(page, /parsingStatus === 'done'[\s\S]*?<MapPaneToolbar/);
+  assert.match(page, /<StatsModal/);
+  assert.match(page, /aria-label="Vis bruksstatistikk"[\s\S]*?\{parsingStatus !== 'done' &&/);
+  assert.equal((page.match(/aria-label="Vis bruksstatistikk"/g) || []).length, 1);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);
   assert.match(modal, /Opplastinger uten registrert kommune/);
   assert.match(modal, /Statistikk fra/);

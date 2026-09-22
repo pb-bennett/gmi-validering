@@ -1,0 +1,26 @@
+[GMIFILE_ASCII]
+_VERSION 2
+[P_]
+_FIELDNAMES Tema;S_FCODE;Anleggsår;Datafangstdato;Innmålt_av;Høydereferanse;Målemetode;Nøyaktighet;MålemetodeHøyde;NøyaktighetHøyde;Stedfestingsforhold;Stedfestingsårsak;Eier;Vertikalnivå;MaksAvvikVertikalt;MaksAvvikHorisontalt;Kumform;Bredde;InnvendigUtvendig;Tykkelse;Avst_BunnInnvUnderUtv;Byggemetode;Adkomst;Kjegle
+[L_]
+_FIELDNAMES Tema;Material;Nett_type;Dimensjon;VertikalDimensjon;Rørform;InnvendigUtvendig;Tykkelse;SDR;Ringstivhet;Trykklasse
+[+P_]
+:P 1
+_FIELDVALUES KUM;LOK;bad;31.02.2026; ;BAD;999;-1;999;-1;BAD;NYTT;BAD;BAD;31;21;BAD;-1;BAD;-1;bad;BAD;BAD;BAD
+/XYZ
+1700 2700 10
+:P 2
+_FIELDVALUES ;;; ;;;;;;;; ;;;;;;;;
+/XYZ
+1701 2701 10
+[+L_]
+:L 1
+_FIELDVALUES VL;BAD;BAD;1;bad;BAD;BAD;1.5;BAD;BAD;BAD
+/XYZ
+1702 2702 10
+1703 2703 10
+:L 2
+_FIELDVALUES AFS;PE100;;bad;;S;ID;-1;BAD;BAD;BAD
+/XYZ
+1704 2704 10
+1705 2705 10

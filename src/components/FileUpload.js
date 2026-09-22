@@ -6,6 +6,7 @@ import { getDatasetCoordinate } from '@/lib/tracking/datasetCoordinate';
 import { GMIParser } from '@/lib/parsing/gmiParser';
 import { SOSIParser } from '@/lib/parsing/sosiParser';
 import { KOFParser } from '@/lib/parsing/kofParser';
+import { decodeGmiBytes } from '@/lib/parsing/gmiDecoding';
 import {
   classifyCrs,
 } from '@/lib/telemetry/classifiers.mjs';
@@ -57,7 +58,7 @@ export function useFileLoader({ onComplete } = {}) {
       const bytes = new Uint8Array(arrayBuffer);
       const slice = bytes.slice(0, 2000);
       // Best-effort: for sniffing only.
-      return new TextDecoder('iso-8859-1').decode(slice);
+      return decodeGmiBytes(slice);
     } catch {
       return '';
     }
@@ -65,9 +66,7 @@ export function useFileLoader({ onComplete } = {}) {
 
   const decodeAll = (arrayBuffer) => {
     try {
-      return new TextDecoder('iso-8859-1').decode(
-        new Uint8Array(arrayBuffer),
-      );
+      return decodeGmiBytes(new Uint8Array(arrayBuffer));
     } catch {
       return '';
     }

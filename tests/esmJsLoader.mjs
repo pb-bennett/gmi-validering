@@ -5,7 +5,8 @@ export async function resolve(specifier, context, nextResolve) {
     specifier.startsWith('.') &&
     context.parentURL?.includes('/src/') &&
     !specifier.endsWith('.js') &&
-    !specifier.endsWith('.mjs')
+    !specifier.endsWith('.mjs') &&
+    !specifier.endsWith('.json')
   ) {
     return nextResolve(`${specifier}.js`, context);
   }

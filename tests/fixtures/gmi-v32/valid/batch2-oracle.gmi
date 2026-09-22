@@ -1,0 +1,37 @@
+[GMIFILE_ASCII]
+_VERSION 2
+[P_]
+_FIELDNAMES Tema;S_FCODE;Type;Bredde;S_HYPERLINK
+[+P_]
+:P 1
+_FIELDVALUES ;KUM;KBRE;20;https://synthetic.invalid/a
+/XYZ
+1400 2400 10
+:P 2
+_FIELDVALUES KUM;KUM;KBRE;20;https://synthetic.invalid/b
+/XYZ
+1401 2401 10
+:P 3
+_FIELDVALUES KUM;LOK;BAD;20;https://synthetic.invalid/c
+/XYZ
+1402 2402 10
+:P 4
+_FIELDVALUES BAD;BAD;;20;
+/XYZ
+1403 2403 10
+:P 5
+_FIELDVALUES ;;;20;
+/XYZ
+1404 2404 10
+:P 6
+_FIELDVALUES LOK;;XLOK;20;https://synthetic.invalid/lok
+/XYZ
+1405 2405 10
+:P 7
+_FIELDVALUES TOP;;;20;https://synthetic.invalid/top
+/XYZ
+1406 2406 10
+:P 8
+_FIELDVALUES KMR;;;20;https://synthetic.invalid/kmr
+/XYZ
+1407 2407 10

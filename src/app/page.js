@@ -12,7 +12,8 @@ import FieldValidationSidebar from '@/components/FieldValidationSidebar';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
-import TabSwitcher from '@/components/TabSwitcher';
+import MapPaneToolbar from '@/components/MapPaneToolbar';
+import { MapPanePresentationProvider } from '@/components/MapPanePresentationProvider';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import ShareQrModal from '@/components/ShareQrModal';
@@ -21,8 +22,11 @@ import AppInfoModal from '@/components/AppInfoModal';
 import { TestModeActivation } from '@/components/TestModeControl';
 import { CURRENT_APP_VERSION, LATEST_ANNOUNCED_RELEASE } from '@/data/appReleases.mjs';
 import { decideAutomaticAppInfo } from '@/lib/appInfoState.mjs';
+import WorkspaceShell from '@/components/WorkspaceShell';
+import { VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM } from '@/components/validation-v2/fieldDetailLayout';
 import { getTerrainStats } from '@/lib/analysis/terrain';
 import { claimStatisticsCue } from '@/lib/statisticsCue.mjs';
+import TestModeControl from '@/components/TestModeControl';
 import useStore from '@/lib/store';
 
 const DEV_RUNTIME_SNAPSHOTS_KEY = 'gmi:dev:runtime:snapshots';
@@ -72,6 +76,9 @@ export default function Home() {
   );
   const viewer3DOpen = useStore((state) => state.ui.viewer3DOpen);
   const activeViewTab = useStore((state) => state.ui.activeViewTab);
+  const [sidebarWidth, setSidebarWidth] = useState(380);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [, setDockedInspectorOpen] = useState(false);
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
@@ -79,8 +86,17 @@ export default function Home() {
     (state) => state.closeDataInspector,
   );
   const [zoomLevel, setZoomLevel] = useState(13);
-  const primaryViewHeight =
-    layerDataTableOpen || analysisOpen ? '55%' : '100%';
+  const primaryViewHeight = analysisOpen ? '55%' : '100%';
+  const inspectorWidthPx = VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM * 16;
+  const canDockInspector =
+    viewportWidth - sidebarWidth >= 480 + inspectorWidthPx;
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth);
+    updateViewportWidth();
+    window.addEventListener('resize', updateViewportWidth);
+    return () => window.removeEventListener('resize', updateViewportWidth);
+  }, []);
 
   // State for "Add Layer" modal
   const [showAddLayerModal, setShowAddLayerModal] = useState(false);
@@ -357,120 +373,6 @@ export default function Home() {
         openerRef={appInfoTriggerRef}
       />
 
-      {/* Share QR button */}
-      {parsingStatus === 'done' && (
-        <button
-          onClick={() => setShowShareModal(true)}
-          aria-label="Del app"
-          title="Vis QR-koder for app og GitHub"
-          style={{
-            position: 'fixed',
-            top: '10px',
-            right: '240px',
-            padding: '8px 12px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            color: '#2563eb',
-            border: '1px solid #2563eb',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            zIndex: 10002,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            fontSize: '12px',
-            lineHeight: 1.2,
-            fontWeight: 500,
-            backdropFilter: 'blur(8px)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#eff6ff';
-            e.currentTarget.style.borderColor = '#1d4ed8';
-            e.currentTarget.style.color = '#1d4ed8';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor =
-              'rgba(255, 255, 255, 0.95)';
-            e.currentTarget.style.borderColor = '#2563eb';
-            e.currentTarget.style.color = '#2563eb';
-          }}
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M8.684 13.342A3 3 0 019 12c0-.483-.118-.938-.316-1.342m0 2.684a3 3 0 010-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.368-2.684 3 3 0 00-5.368 2.684zm0 12a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-            />
-          </svg>
-          Del
-        </button>
-      )}
-
-      {/* Floating Reset Button - Always visible when data is loaded */}
-      {parsingStatus === 'done' && (
-        <button
-          onClick={handleReset}
-          aria-label="Last inn ny fil"
-          title="Nullstill appen og last inn en ny GMI-fil"
-          style={{
-            position: 'fixed',
-            top: '10px',
-            right: '10px',
-            padding: '8px 12px',
-            width: '220px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            color: '#2563eb',
-            border: '1px solid #2563eb',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'row',
-            gap: '8px',
-            zIndex: 10002,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            fontSize: '13px',
-            lineHeight: 1.2,
-            fontWeight: 500,
-            backdropFilter: 'blur(8px)',
-            whiteSpace: 'nowrap',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#eff6ff';
-            e.currentTarget.style.borderColor = '#1d4ed8';
-            e.currentTarget.style.color = '#1d4ed8';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor =
-              'rgba(255, 255, 255, 0.95)';
-            e.currentTarget.style.borderColor = '#2563eb';
-            e.currentTarget.style.color = '#2563eb';
-          }}
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          <span>Nullstill og last opp ny</span>
-        </button>
-      )}
       {/* Initial Upload Screen */}
       {parsingStatus !== 'done' && (
         <div className="flex-1 flex items-center justify-center">
@@ -482,6 +384,9 @@ export default function Home() {
               <p className="mt-2 text-gray-600">
                 Last opp og valider GMI-filer
               </p>
+              <div className="mt-4 flex justify-center empty:hidden">
+                <TestModeControl />
+              </div>
             </div>
 
             {/* Error Display */}
@@ -555,34 +460,43 @@ export default function Home() {
           {/* Background terrain fetcher - runs in background */}
           <TerrainFetcher />
 
-          {/* Sidebar - Hidden when field validation is open */}
-          {!fieldValidationOpen && (
-            <Sidebar
-              onReset={handleReset}
-              onAddFile={() => setShowAddLayerModal(true)}
-              onOpenAppInfo={() => openAppInfo('about')}
-              onOpenContact={() => openAppInfo('contact')}
-              appInfoTriggerRef={appInfoTriggerRef}
-            />
-          )}
-
-          {/* Field Validation Sidebar - 33% width */}
-          {fieldValidationOpen && (
-            <div className="w-1/3 h-full flex-none">
-              <FieldValidationSidebar onOpenContact={() => openAppInfo('contact')} />
-            </div>
-          )}
-
-          {/* Map Area */}
-          <div
-            className={`relative flex flex-col h-full ${
-              fieldValidationOpen ? 'w-2/3 flex-none' : 'flex-1'
-            }`}
-          >
+          <WorkspaceShell
+            sidebarWidth={sidebarWidth}
+            sidebar={fieldValidationOpen ? (
+              <FieldValidationSidebar
+                sidebarWidth={sidebarWidth}
+                canDockInspector={canDockInspector}
+                onDockedInspectorChange={setDockedInspectorOpen}
+                onOpenAppInfo={() => openAppInfo('about')}
+                onOpenContact={() => openAppInfo('contact')}
+                appInfoTriggerRef={appInfoTriggerRef}
+              />
+            ) : (
+              <Sidebar
+                onReset={handleReset}
+                onAddFile={() => setShowAddLayerModal(true)}
+                onOpenAppInfo={() => openAppInfo('about')}
+                onOpenContact={() => openAppInfo('contact')}
+                appInfoTriggerRef={appInfoTriggerRef}
+                width={sidebarWidth}
+                onWidthChange={setSidebarWidth}
+              />
+            )}
+            bottomDockOpen={layerDataTableOpen}
+            bottomDock={<LayerDataTable />}
+            primary={(
+              <div className="flex h-full min-h-0 min-w-0 flex-1">
+                <MapPanePresentationProvider className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                <MapPaneToolbar
+                  onReset={handleReset}
+                  onShare={() => setShowShareModal(true)}
+                  showShare={parsingStatus === 'done'}
+                />
+                <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
             {/* Show Map view when activeViewTab is 'map' or 3D viewer is not open */}
             {(!viewer3DOpen || activeViewTab === 'map') && (
               <>
-                {/* Map - Full height or 67% when table open, or 55% when analysis open */}
+                {/* Map fills the upper row, or leaves room for profile analysis */}
                 <div
                   className="relative"
                   style={{
@@ -700,29 +614,20 @@ export default function Home() {
               </div>
             )}
 
-            {layerDataTableOpen && (
-              <div
-                style={{
-                  height: '45%',
-                  transition: 'height 0.2s ease',
-                }}
-              >
-                <LayerDataTable />
-              </div>
-            )}
-
             {/* Profile analysis modal - overlays both 2D and 3D views */}
             <InclineAnalysisModal />
           </div>
+                </MapPanePresentationProvider>
+          <div id="validation-v2-field-inspector-root" className="contents" />
+        </div>
+            )}
+          />
         </>
       )}
 
       {/* Data Inspector Modal */}
       <DataDisplayModal />
       <ZValidationModal />
-
-      {/* Tab Switcher - Shows when 3D viewer is open */}
-      <TabSwitcher />
 
       {/* Add Layer Modal */}
       {showAddLayerModal && (
