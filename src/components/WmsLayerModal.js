@@ -249,14 +249,14 @@ export default function WmsLayerModal({ isOpen, onClose }) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4"
+        className="gmi-elevated-surface rounded-lg max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center justify-between p-4 border-b border-gmi-border">
           <div className="flex items-center gap-2">
             <svg
-              className="w-5 h-5 text-blue-600"
+              className="w-5 h-5 text-gmi-interactive"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -268,17 +268,17 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                 d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
               />
             </svg>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-gmi-navy">
               Legg til Gemini WMS
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-100 transition-colors"
+            className="gmi-compact-button gmi-focus-ring p-1"
             title="Lukk"
           >
             <svg
-              className="w-5 h-5 text-gray-500"
+              className="w-5 h-5 text-gmi-text-subtle"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -329,7 +329,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
           <div>
             <label
               htmlFor="wms-url"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gmi-text mb-1"
             >
               WMS URL
             </label>
@@ -342,7 +342,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://eksempel.kommune.no/gemini/wms"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="gmi-compact-field w-full px-3 py-2 text-sm"
               required
             />
           </div>
@@ -351,7 +351,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
           <div>
             <label
               htmlFor="wms-username"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gmi-text mb-1"
             >
               Brukernavn
             </label>
@@ -363,7 +363,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Ditt brukernavn"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="gmi-compact-field w-full px-3 py-2 text-sm"
               required
             />
           </div>
@@ -372,7 +372,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
           <div>
             <label
               htmlFor="wms-password"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gmi-text mb-1"
             >
               Passord
             </label>
@@ -384,7 +384,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Ditt passord"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="gmi-compact-field w-full px-3 py-2 text-sm"
               required
             />
           </div>
@@ -393,7 +393,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            className="gmi-focus-ring rounded-lg flex items-center gap-1 text-sm text-gmi-interactive hover:underline"
           >
             <svg
               className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
@@ -413,11 +413,11 @@ export default function WmsLayerModal({ isOpen, onClose }) {
 
           {/* Advanced options */}
           {showAdvanced && (
-            <div className="pl-4 border-l-2 border-gray-200">
+            <div className="pl-4 border-l-2 border-gmi-border">
               <div>
                 <label
                   htmlFor="wms-layers"
-                  className="block text-sm font-medium text-gray-700 mb-1"
+                  className="block text-sm font-medium text-gmi-text mb-1"
                 >
                   WMS Lag (påkrevd)
                 </label>
@@ -428,9 +428,9 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                   value={layers}
                   onChange={(e) => setLayers(e.target.value)}
                   placeholder="f.eks. va_ledninger,va_kummer"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="gmi-compact-field w-full px-3 py-2 text-sm"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gmi-text-subtle">
                   Kommaseparert liste over lag. Bruk knappen under for
                   å hente lagliste.
                 </p>
@@ -439,7 +439,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                     type="button"
                     onClick={handleFetchLayers}
                     disabled={isFetchingLayers}
-                    className="px-3 py-1.5 text-xs font-medium rounded border bg-white hover:bg-gray-50 disabled:bg-gray-100"
+                    className="gmi-elevated-surface gmi-compact-button gmi-focus-ring px-3 py-1.5 text-xs font-medium disabled:opacity-60"
                   >
                     {isFetchingLayers
                       ? 'Henter lag...'
@@ -453,8 +453,8 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                 </div>
 
                 {availableLayers.length > 0 && (
-                  <div className="mt-3 max-h-40 overflow-auto border rounded bg-gray-50">
-                    <div className="text-xs text-gray-600 px-2 py-1 border-b bg-gray-100">
+                  <div className="gmi-elevated-surface mt-3 max-h-40 overflow-auto rounded-lg bg-gmi-surface-soft">
+                    <div className="border-b border-gmi-border bg-gmi-surface-soft px-2 py-1 text-xs text-gmi-text-muted">
                       Klikk for å velge lag
                     </div>
                     <ul className="divide-y">
@@ -470,10 +470,10 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                               onClick={() =>
                                 toggleLayerSelection(layerName)
                               }
-                              className={`w-full text-left px-2 py-1 text-xs hover:bg-blue-50 ${
+                              className={`gmi-focus-ring w-full rounded-lg px-2 py-1 text-left text-xs ${
                                 isSelected
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'text-gray-700'
+                                  ? 'gmi-selected-control'
+                                  : 'text-gmi-text hover:bg-gmi-surface-soft'
                               }`}
                             >
                               {layerName}
@@ -512,14 +512,14 @@ export default function WmsLayerModal({ isOpen, onClose }) {
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                className="gmi-elevated-surface gmi-compact-button gmi-focus-ring px-4 py-2 text-sm"
               >
                 Avbryt
               </button>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 rounded-md transition-colors flex items-center gap-2"
+                className="gmi-primary-control gmi-focus-ring flex items-center gap-2 px-4 py-2 text-sm"
               >
                 {isLoading && (
                   <svg

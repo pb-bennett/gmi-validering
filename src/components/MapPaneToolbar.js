@@ -18,7 +18,7 @@ const ToolbarButton = forwardRef(function ToolbarButton({ children, className = 
     <button
       ref={ref}
       type="button"
-      className={`inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white/95 px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm backdrop-blur-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-700 ${className}`}
+      className={`gmi-elevated-surface gmi-compact-button gmi-focus-ring inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 bg-gmi-surface/95 px-2.5 py-1.5 text-xs font-medium backdrop-blur-sm ${className}`}
       {...props}
     >
       {children}
@@ -118,7 +118,7 @@ export default function MapPaneToolbar({ onReset, onShare, showShare }) {
       </div>
       {hasOverflow && overflowOpen && (
         <div
-          className="pointer-events-auto absolute left-0 top-full z-[1300] mt-2 flex w-max min-w-[min(15rem,100%)] max-w-full flex-col gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-xl"
+          className="gmi-elevated-surface pointer-events-auto absolute left-0 top-full z-[1300] mt-2 flex w-max min-w-[min(15rem,100%)] max-w-full flex-col gap-2 overflow-y-auto rounded-lg p-2"
           role="group"
           aria-label="Flere kartverktøy"
         >

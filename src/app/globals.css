@@ -38,6 +38,45 @@
   --gmi-interactive: #007595;
 }
 
+@layer components {
+  /* S2 shared recipes: compact proof controls keep their existing footprints. */
+  .gmi-elevated-surface {
+    @apply border border-gmi-border bg-gmi-surface shadow-sm;
+  }
+
+  .gmi-compact-button {
+    @apply rounded-lg text-gmi-text transition-colors;
+  }
+
+  .gmi-compact-button:hover:not(:disabled) {
+    @apply bg-gmi-surface-soft;
+  }
+
+  .gmi-focus-ring {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-gmi-interactive focus-visible:ring-offset-2 focus-visible:ring-offset-gmi-surface;
+  }
+
+  .gmi-compact-field {
+    @apply rounded-lg border border-gmi-border-strong bg-gmi-surface text-gmi-text shadow-sm focus:outline-none focus:border-gmi-interactive focus:ring-2 focus:ring-gmi-interactive;
+  }
+
+  .gmi-selected-control {
+    @apply bg-gmi-border text-gmi-navy ring-1 ring-gmi-border-strong;
+  }
+
+  .gmi-primary-control {
+    @apply rounded-lg bg-gmi-navy text-gmi-surface shadow-sm transition-opacity;
+  }
+
+  .gmi-primary-control:hover:not(:disabled) {
+    @apply opacity-90;
+  }
+
+  .gmi-primary-control:disabled {
+    @apply opacity-60;
+  }
+}
+
 /* Theme: Modern Blue (Default) */
 :root,
 [data-theme='blue'] {
