@@ -130,7 +130,7 @@ test('Testmodus exposes one developer control only while active', async () => {
   assert.match(control, /DevDiagnosticsPanel isOpen=\{developerToolsOpen\}/);
   const diagnostics = await readFile(new URL('../src/components/DevDiagnosticsPanel.js', import.meta.url), 'utf8');
   assert.match(diagnostics, /if \(!isOpen \|\| !stats\) return null/);
-  assert.match(diagnostics, /top-full[\s\S]*bg-gray-900/);
+  assert.match(diagnostics, /top-full[\s\S]*bg-gmi-ink/);
   assert.doesNotMatch(diagnostics, /fixed bottom-2 right-2/);
   assert.doesNotMatch(control, />DEV</);
   assert.doesNotMatch(control, /fixed left-4 bottom-4/);

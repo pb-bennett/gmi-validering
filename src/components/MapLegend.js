@@ -155,33 +155,19 @@ export default function MapLegend() {
 
   return (
     <div
-      className="absolute bottom-20 right-4 rounded-lg shadow-lg z-1000 border overflow-hidden"
+      className="gmi-elevated-surface absolute bottom-20 right-4 z-1000 overflow-hidden rounded-lg text-gmi-text"
       style={{
         maxWidth: '200px',
-        backgroundColor: 'var(--color-card)',
-        borderColor: 'var(--color-border)',
       }}
     >
       {/* Header with collapse toggle */}
       <button
         onClick={toggleLegend}
-        className="w-full flex items-center justify-between px-3 py-2 transition-colors border-b"
-        style={{
-          backgroundColor: 'var(--color-page-bg)',
-          borderColor: 'var(--color-border)',
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-sidebar-hover)')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-page-bg)')
-        }
+        className="gmi-focus-ring flex w-full items-center justify-between border-b border-gmi-border bg-gmi-surface-soft px-3 py-2 text-left transition-colors hover:bg-gmi-border"
+        aria-expanded={!isCollapsed}
       >
         <span
-          className="text-sm font-semibold"
-          style={{ color: 'var(--color-text)' }}
+          className="text-sm font-semibold text-gmi-navy"
         >
           Tegnforklaring
         </span>
@@ -193,7 +179,7 @@ export default function MapLegend() {
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
-          style={{ color: 'var(--color-text-secondary)' }}
+          style={{ color: 'var(--gmi-text-muted)' }}
         >
           <path
             strokeLinecap="round"
@@ -206,15 +192,15 @@ export default function MapLegend() {
 
       {/* Legend items */}
       {!isCollapsed && (
-        <div className="p-2 max-h-80 overflow-y-auto">
-          <div className="text-xs text-gray-500 mb-2 px-1">
+        <div className="max-h-80 overflow-y-auto p-2">
+          <div className="mb-2 px-1 text-xs font-semibold text-gmi-text-muted">
             Punktsymboler
           </div>
           <div className="space-y-1">
             {visibleLegendItems.map((item) => (
               <div
                 key={item.category}
-                className="flex items-center gap-2 px-1 py-0.5"
+                className="flex items-center gap-2 rounded px-1 py-0.5"
               >
                 <div
                   className="shrink-0"
@@ -226,7 +212,7 @@ export default function MapLegend() {
                     ),
                   }}
                 />
-                <span className="text-xs text-gray-700 truncate">
+                <span className="truncate text-xs text-gmi-text" title={item.label}>
                   {item.label}
                 </span>
               </div>
@@ -234,7 +220,7 @@ export default function MapLegend() {
           </div>
 
           {/* Line legend */}
-          <div className="text-xs text-gray-500 mt-3 mb-2 px-1 border-t pt-2">
+          <div className="mt-3 mb-2 border-t border-gmi-border px-1 pt-2 text-xs font-semibold text-gmi-text-muted">
             Linjer
           </div>
           <div className="space-y-1">
@@ -243,7 +229,7 @@ export default function MapLegend() {
                 className="w-5 h-0.5 shrink-0"
                 style={{ backgroundColor: FCODE_COLORS.AF }}
               ></div>
-              <span className="text-xs text-gray-700">
+              <span className="text-xs text-gmi-text">
                 Avløp Felles (AF)
               </span>
             </div>
@@ -252,7 +238,7 @@ export default function MapLegend() {
                 className="w-5 h-0.5 shrink-0"
                 style={{ backgroundColor: FCODE_COLORS.VL }}
               ></div>
-              <span className="text-xs text-gray-700">
+              <span className="text-xs text-gmi-text">
                 Vannledning
               </span>
             </div>
@@ -261,14 +247,14 @@ export default function MapLegend() {
                 className="w-5 h-0.5 shrink-0"
                 style={{ backgroundColor: FCODE_COLORS.SP }}
               ></div>
-              <span className="text-xs text-gray-700">Spillvann</span>
+              <span className="text-xs text-gmi-text">Spillvann</span>
             </div>
             <div className="flex items-center gap-2 px-1 py-0.5">
               <div
                 className="w-5 h-0.5 shrink-0"
                 style={{ backgroundColor: FCODE_COLORS.OV }}
               ></div>
-              <span className="text-xs text-gray-700">Overvann</span>
+              <span className="text-xs text-gmi-text">Overvann</span>
             </div>
             <div className="flex items-center gap-2 px-1 py-0.5">
               <div
@@ -278,17 +264,17 @@ export default function MapLegend() {
                   height: '2px',
                 }}
               ></div>
-              <span className="text-xs text-gray-700">Drenering</span>
+              <span className="text-xs text-gmi-text">Drenering</span>
             </div>
           </div>
 
           {/* Highlight indicator */}
-          <div className="text-xs text-gray-500 mt-3 mb-2 px-1 border-t pt-2">
+          <div className="mt-3 mb-2 border-t border-gmi-border px-1 pt-2 text-xs font-semibold text-gmi-text-muted">
             Markering
           </div>
           <div className="flex items-center gap-2 px-1 py-0.5">
             <div className="w-4 h-4 border-2 border-[#00FFFF] rounded-full bg-white shrink-0"></div>
-            <span className="text-xs text-gray-700">
+            <span className="text-xs text-gmi-text">
               Markert objekt
             </span>
           </div>

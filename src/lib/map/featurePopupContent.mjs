@@ -20,16 +20,16 @@ const createButton = ({ className, featureId, featureType, index, layerId, label
 export const createFeaturePopupContent = (props, featureId, color, fcode) => {
   const content = document.createElement('div');
   content.className =
-    'text-[11px] leading-tight max-h-72 flex flex-col gap-1 p-1';
+    'gmi-feature-popup flex max-h-72 flex-col gap-1.5 p-1 text-[11px] leading-snug text-gmi-text';
 
   const header = document.createElement('div');
   header.className =
-    'font-semibold flex items-center gap-1 whitespace-nowrap';
+    'flex flex-wrap items-center gap-x-1 gap-y-0.5 pr-5 font-semibold text-gmi-navy';
   appendText(header, 'Type:');
   appendText(header, props.featureType);
 
   if (fcode) {
-    appendText(header, '•', 'text-gray-400');
+    appendText(header, '•', 'text-gmi-text-subtle');
     appendText(header, 'Code:');
     const code = appendText(header, fcode);
     code.style.color = color;
@@ -38,7 +38,7 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
   content.appendChild(header);
 
   const attributes = document.createElement('div');
-  attributes.className = 'mt-1 border-t pt-1 flex-1 overflow-auto';
+  attributes.className = 'min-h-0 flex-1 overflow-auto border-t border-gmi-border pt-1.5 break-words';
   Object.entries(props).forEach(([key, value]) => {
     if (
       key !== 'featureType' &&
@@ -48,6 +48,7 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
       value !== ''
     ) {
       const label = document.createElement('strong');
+      label.className = 'font-medium text-gmi-text-muted';
       label.textContent = key;
       attributes.appendChild(label);
       attributes.appendChild(document.createTextNode(': '));
@@ -58,7 +59,7 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
   content.appendChild(attributes);
 
   const actions = document.createElement('div');
-  actions.className = 'mt-1 pt-2 border-t grid grid-cols-2 gap-2';
+  actions.className = 'grid grid-cols-2 gap-1.5 border-t border-gmi-border pt-2';
   const buttonOptions = {
     featureId,
     featureType: props.featureType,
@@ -69,7 +70,7 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
     createButton({
       ...buttonOptions,
       className:
-        'vis-i-3d-btn px-2 py-1 text-[11px] bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors',
+        'vis-i-3d-btn gmi-focus-ring rounded-md border border-gmi-border-strong bg-gmi-surface-soft px-2 py-1 text-[11px] font-medium text-gmi-text hover:bg-gmi-border',
       label: 'Vis i 3D',
     }),
   );
@@ -77,7 +78,7 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
     createButton({
       ...buttonOptions,
       className:
-        'inspect-data-btn px-2 py-1 text-[11px] bg-gray-700 hover:bg-gray-800 text-white rounded transition-colors',
+        'inspect-data-btn gmi-focus-ring rounded-md bg-gmi-navy px-2 py-1 text-[11px] font-medium text-white hover:opacity-90',
       label: 'Inspiser data',
     }),
   );
@@ -87,7 +88,7 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
       createButton({
         ...buttonOptions,
         className:
-          'show-profile-btn col-span-2 px-2 py-1 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors',
+          'show-profile-btn gmi-focus-ring col-span-2 rounded-md border border-gmi-border-strong bg-gmi-surface-soft px-2 py-1 text-[11px] font-medium text-gmi-text hover:bg-gmi-border',
         label: 'Vis profilanalyse',
       }),
     );

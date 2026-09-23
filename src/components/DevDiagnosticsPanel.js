@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
+import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import {
   getTerrainStats,
   resetTerrainStats,
@@ -283,7 +284,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
   if (!isOpen || !stats) return null;
 
   return (
-    <div className="absolute top-full left-1/2 z-[3000] mt-2 w-72 max-h-96 -translate-x-1/2 overflow-auto rounded bg-gray-900 p-3 text-xs text-white shadow-lg">
+    <div className="absolute top-full left-1/2 z-[3000] mt-2 max-h-96 w-72 -translate-x-1/2 overflow-auto rounded-lg border border-gmi-border-strong bg-gmi-ink p-3 text-xs text-white shadow-lg">
       {/* Legacy toggle removed; the Testmodus control owns this action. */}
       {/* {false && <button
         onClick={() => setIsOpen(!isOpen)}
@@ -314,44 +315,44 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
 
       {/* Panel */}
       <div className="contents">
-          <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
+          <div className="mb-2 flex items-center justify-between border-b border-gmi-text-muted pb-2">
             <h3 className="font-bold">Terrain API Stats</h3>
             <button
               onClick={() => {
                 resetTerrainStats();
                 setStats(getTerrainStats());
               }}
-              className="text-gray-400 hover:text-white px-1"
+              className="gmi-focus-ring flex items-center gap-1 rounded px-1 py-0.5 text-gmi-text-on-dark hover:bg-gmi-navy hover:text-white"
               title="Reset stats"
             >
-              Reset
+              <ArrowCounterClockwiseIcon size={13} weight="regular" aria-hidden="true" /> Reset
             </button>
           </div>
 
           {/* Store Memory Usage */}
-          <div className="mb-2 p-2 bg-gray-800 rounded">
-            <div className="font-semibold text-gray-400 mb-1">
+          <div className="mb-2 p-2 rounded-md border border-gmi-text-muted/30 bg-gmi-navy">
+            <div className="font-semibold text-gmi-text-on-dark mb-1">
               Store Memory
             </div>
             <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-              <span className="text-gray-400">Data:</span>
+              <span className="text-gmi-text-on-dark">Data:</span>
               <span className="font-mono">
                 {formatBytes(storeSize.data)}
               </span>
 
-              <span className="text-gray-400">
+              <span className="text-gmi-text-on-dark">
                 Layers ({layerOrder?.length || 0}):
               </span>
               <span className="font-mono">
                 {formatBytes(storeSize.layers)}
               </span>
 
-              <span className="text-gray-400">Terrain:</span>
+              <span className="text-gmi-text-on-dark">Terrain:</span>
               <span className="font-mono">
                 {formatBytes(storeSize.terrain)}
               </span>
 
-              <span className="text-gray-400 font-semibold">
+              <span className="text-gmi-text-on-dark font-semibold">
                 Total:
               </span>
               <span className="font-mono text-cyan-400 font-semibold">
@@ -362,22 +363,22 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
 
           {/* Browser Heap */}
           {heapStats.used !== null && heapStats.limit !== null && (
-            <div className="mb-2 p-2 bg-gray-800 rounded">
-              <div className="font-semibold text-gray-400 mb-1">
+            <div className="mb-2 p-2 rounded-md border border-gmi-text-muted/30 bg-gmi-navy">
+              <div className="font-semibold text-gmi-text-on-dark mb-1">
                 Browser Heap
               </div>
               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                <span className="text-gray-400">Used:</span>
+                <span className="text-gmi-text-on-dark">Used:</span>
                 <span className="font-mono">
                   {formatBytes(heapStats.used)}
                 </span>
 
-                <span className="text-gray-400">Limit:</span>
+                <span className="text-gmi-text-on-dark">Limit:</span>
                 <span className="font-mono">
                   {formatBytes(heapStats.limit)}
                 </span>
 
-                <span className="text-gray-400">Usage:</span>
+                <span className="text-gmi-text-on-dark">Usage:</span>
                 <span
                   className={`font-mono ${
                     heapStats.pct >= 80
@@ -390,7 +391,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
                   {heapStats.pct?.toFixed(1)}%
                 </span>
 
-                <span className="text-gray-400">Max seen:</span>
+                <span className="text-gmi-text-on-dark">Max seen:</span>
                 <span className="font-mono text-cyan-400">
                   {heapStats.maxSeen !== null
                     ? formatBytes(heapStats.maxSeen)
@@ -401,57 +402,57 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
           )}
 
           {/* Queue Status */}
-          <div className="mb-2 p-2 bg-gray-800 rounded">
-            <div className="font-semibold text-gray-400 mb-1">
+          <div className="mb-2 p-2 rounded-md border border-gmi-text-muted/30 bg-gmi-navy">
+            <div className="font-semibold text-gmi-text-on-dark mb-1">
               Queue Status
             </div>
             <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-              <span className="text-gray-400">Queue Length:</span>
+              <span className="text-gmi-text-on-dark">Queue Length:</span>
               <span className="font-mono">{fetchQueue.length}</span>
 
-              <span className="text-gray-400">
+              <span className="text-gmi-text-on-dark">
                 Currently Fetching:
               </span>
               <span className="font-mono">
                 {currentlyFetching ?? 'None'}
               </span>
 
-              <span className="text-gray-400">Total Loaded:</span>
+              <span className="text-gmi-text-on-dark">Total Loaded:</span>
               <span className="font-mono text-green-400">
                 {dataStats.done}
               </span>
 
-              <span className="text-gray-400">Loading:</span>
+              <span className="text-gmi-text-on-dark">Loading:</span>
               <span className="font-mono text-yellow-400">
                 {dataStats.loading}
               </span>
 
-              <span className="text-gray-400">Errors:</span>
+              <span className="text-gmi-text-on-dark">Errors:</span>
               <span className="font-mono text-red-400">
                 {dataStats.error}
               </span>
 
-              <span className="text-gray-400">Layer Queue:</span>
+              <span className="text-gmi-text-on-dark">Layer Queue:</span>
               <span className="font-mono">
                 {layerTerrainStats.totalQueue}
               </span>
 
-              <span className="text-gray-400">Layer Loading:</span>
+              <span className="text-gmi-text-on-dark">Layer Loading:</span>
               <span className="font-mono text-yellow-400">
                 {layerTerrainStats.loading}
               </span>
 
-              <span className="text-gray-400">Layer Done:</span>
+              <span className="text-gmi-text-on-dark">Layer Done:</span>
               <span className="font-mono text-green-400">
                 {layerTerrainStats.done}
               </span>
 
-              <span className="text-gray-400">Layer Errors:</span>
+              <span className="text-gmi-text-on-dark">Layer Errors:</span>
               <span className="font-mono text-red-400">
                 {layerTerrainStats.error}
               </span>
 
-              <span className="text-gray-400">
+              <span className="text-gmi-text-on-dark">
                 Overcover Warnings:
               </span>
               <span className="font-mono text-orange-400">
@@ -461,29 +462,29 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
           </div>
 
           {(lastSnapshot || lastEvent) && (
-            <div className="mb-2 p-2 bg-gray-800 rounded">
-              <div className="font-semibold text-gray-400 mb-1">
+            <div className="mb-2 p-2 rounded-md border border-gmi-text-muted/30 bg-gmi-navy">
+              <div className="font-semibold text-gmi-text-on-dark mb-1">
                 Last Persisted Runtime
               </div>
 
               {lastSnapshot && (
                 <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mb-2">
-                  <span className="text-gray-400">Timestamp:</span>
+                  <span className="text-gmi-text-on-dark">Timestamp:</span>
                   <span className="font-mono text-[10px]">
                     {lastSnapshot.ts}
                   </span>
 
-                  <span className="text-gray-400">Reason:</span>
+                  <span className="text-gmi-text-on-dark">Reason:</span>
                   <span className="font-mono">
                     {lastSnapshot.reason || '-'}
                   </span>
 
-                  <span className="text-gray-400">Layer Count:</span>
+                  <span className="text-gmi-text-on-dark">Layer Count:</span>
                   <span className="font-mono">
                     {lastSnapshot.layerCount ?? '-'}
                   </span>
 
-                  <span className="text-gray-400">
+                  <span className="text-gmi-text-on-dark">
                     Base/Layer Queue:
                   </span>
                   <span className="font-mono">
@@ -491,7 +492,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
                     {lastSnapshot.layerQueueTotal ?? 0}
                   </span>
 
-                  <span className="text-gray-400">Cache:</span>
+                  <span className="text-gmi-text-on-dark">Cache:</span>
                   <span className="font-mono">
                     {lastSnapshot.terrainCacheSize ?? '-'}
                     {lastSnapshot.terrainCacheLimit
@@ -499,7 +500,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
                       : ''}
                   </span>
 
-                  <span className="text-gray-400">Heap used:</span>
+                  <span className="text-gmi-text-on-dark">Heap used:</span>
                   <span className="font-mono">
                     {lastSnapshot.heap?.used
                       ? formatBytes(lastSnapshot.heap.used)
@@ -509,8 +510,8 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
               )}
 
               {lastEvent && (
-                <div className="border-t border-gray-700 pt-2">
-                  <div className="text-gray-400">Last Event:</div>
+                <div className="border-t border-gmi-text-muted pt-2">
+                  <div className="text-gmi-text-on-dark">Last Event:</div>
                   <div className="font-mono text-[10px] break-all">
                     {lastEvent.ts} • {lastEvent.type} •{' '}
                     {lastEvent.message}
@@ -546,7 +547,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
                     );
                   }
                 }}
-                className="mt-2 text-[10px] text-gray-300 hover:text-white"
+                className="mt-2 text-[10px] text-gmi-text-on-dark hover:text-white"
               >
                 Log persisted runtime history
               </button>
@@ -555,25 +556,25 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
 
           {/* Selected Line Overcover */}
           {selectedPipeIndex !== null && (
-            <div className="mb-2 p-2 bg-gray-800 rounded">
-              <div className="font-semibold text-gray-400 mb-1">
+            <div className="mb-2 p-2 rounded-md border border-gmi-text-muted/30 bg-gmi-navy">
+              <div className="font-semibold text-gmi-text-on-dark mb-1">
                 Selected Line
               </div>
               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                <span className="text-gray-400">Line Index:</span>
+                <span className="text-gmi-text-on-dark">Line Index:</span>
                 <span className="font-mono">{selectedPipeIndex}</span>
 
-                <span className="text-gray-400">Terrain Status:</span>
+                <span className="text-gmi-text-on-dark">Terrain Status:</span>
                 <span className="font-mono">
                   {selectedTerrain?.status || 'idle'}
                 </span>
 
-                <span className="text-gray-400">Warnings:</span>
+                <span className="text-gmi-text-on-dark">Warnings:</span>
                 <span className="font-mono text-orange-400">
                   {selectedWarnings.length}
                 </span>
 
-                <span className="text-gray-400">Min Overcover:</span>
+                <span className="text-gmi-text-on-dark">Min Overcover:</span>
                 <span className="font-mono">
                   {selectedTerrain?.overcover?.minOvercover !==
                     null &&
@@ -586,15 +587,15 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
 
               {terrainJumpStats && (
                 <div className="mt-2">
-                  <div className="text-gray-400 mb-1">
+                  <div className="text-gmi-text-on-dark mb-1">
                     Terrain jumps (ΔZ between samples):
                   </div>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                    <span className="text-gray-400">Max ΔZ:</span>
+                    <span className="text-gmi-text-on-dark">Max ΔZ:</span>
                     <span className="font-mono text-yellow-300">
                       {terrainJumpStats.maxJump.abs.toFixed(2)}m
                     </span>
-                    <span className="text-gray-400">≥1m jumps:</span>
+                    <span className="text-gmi-text-on-dark">≥1m jumps:</span>
                     <span className="font-mono">
                       {terrainJumpStats.largeJumps.length}
                     </span>
@@ -621,7 +622,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
                         terrainJumpStats,
                       )
                     }
-                    className="mt-2 text-[10px] text-gray-300 hover:text-white"
+                    className="mt-2 text-[10px] text-gmi-text-on-dark hover:text-white"
                   >
                     Log terrain jumps
                   </button>
@@ -630,7 +631,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
 
               {selectedWarnings.length > 0 && (
                 <div className="mt-2">
-                  <div className="text-gray-400 mb-1">
+                  <div className="text-gmi-text-on-dark mb-1">
                     Warning points (dist / overcover):
                   </div>
                   <div className="max-h-24 overflow-auto">
@@ -648,7 +649,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
                       </div>
                     ))}
                     {selectedWarnings.length > 10 && (
-                      <div className="text-gray-500">
+                      <div className="text-gmi-text-on-dark">
                         +{selectedWarnings.length - 10} more
                       </div>
                     )}
@@ -660,7 +661,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
                         selectedWarnings,
                       )
                     }
-                    className="mt-2 text-[10px] text-gray-300 hover:text-white"
+                    className="mt-2 text-[10px] text-gmi-text-on-dark hover:text-white"
                   >
                     Log warnings to console
                   </button>
@@ -670,60 +671,60 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
           )}
 
           {/* API Stats */}
-          <div className="mb-2 p-2 bg-gray-800 rounded">
-            <div className="font-semibold text-gray-400 mb-1">
+          <div className="mb-2 p-2 rounded-md border border-gmi-text-muted/30 bg-gmi-navy">
+            <div className="font-semibold text-gmi-text-on-dark mb-1">
               API Stats
             </div>
             <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-              <span className="text-gray-400">Requests:</span>
+              <span className="text-gmi-text-on-dark">Requests:</span>
               <span className="font-mono">{stats.requestCount}</span>
 
-              <span className="text-gray-400">Points Requested:</span>
+              <span className="text-gmi-text-on-dark">Points Requested:</span>
               <span className="font-mono">
                 {stats.pointsRequested}
               </span>
 
-              <span className="text-gray-400">
+              <span className="text-gmi-text-on-dark">
                 Points from Cache:
               </span>
               <span className="font-mono text-green-400">
                 {stats.pointsFromCache}
               </span>
 
-              <span className="text-gray-400">Cache Hit Rate:</span>
+              <span className="text-gmi-text-on-dark">Cache Hit Rate:</span>
               <span className="font-mono text-cyan-400">
                 {stats.cacheHitRate}
               </span>
 
-              <span className="text-gray-400">Avg Request Time:</span>
+              <span className="text-gmi-text-on-dark">Avg Request Time:</span>
               <span className="font-mono">
                 {stats.avgRequestTimeMs}
               </span>
 
-              <span className="text-gray-400">Cache Size:</span>
+              <span className="text-gmi-text-on-dark">Cache Size:</span>
               <span className="font-mono">{stats.cacheSize}</span>
 
-              <span className="text-gray-400">Max Cache Size:</span>
+              <span className="text-gmi-text-on-dark">Max Cache Size:</span>
               <span className="font-mono text-cyan-400">
                 {stats.maxCacheSize ?? '-'}
               </span>
 
-              <span className="text-gray-400">API Queue:</span>
+              <span className="text-gmi-text-on-dark">API Queue:</span>
               <span className="font-mono">
                 {stats.requestQueueLength ?? '-'}
               </span>
 
-              <span className="text-gray-400">API Queue Max:</span>
+              <span className="text-gmi-text-on-dark">API Queue Max:</span>
               <span className="font-mono text-yellow-300">
                 {stats.maxRequestQueueLength ?? '-'}
               </span>
 
-              <span className="text-gray-400">Active Requests:</span>
+              <span className="text-gmi-text-on-dark">Active Requests:</span>
               <span className="font-mono">
                 {stats.activeRequests ?? '-'}
               </span>
 
-              <span className="text-gray-400">Errors:</span>
+              <span className="text-gmi-text-on-dark">Errors:</span>
               <span className="font-mono text-red-400">
                 {stats.errors}
               </span>
@@ -732,8 +733,8 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
 
           {/* Terrain Types */}
           {Object.keys(stats.terrainTypes).length > 0 && (
-            <div className="p-2 bg-gray-800 rounded">
-              <div className="font-semibold text-gray-400 mb-1">
+            <div className="p-2 rounded-md border border-gmi-text-muted/30 bg-gmi-navy">
+              <div className="font-semibold text-gmi-text-on-dark mb-1">
                 Terrain Types
               </div>
               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
@@ -742,7 +743,7 @@ export default function DevDiagnosticsPanel({ isOpen = false }) {
                   .map(([type, count]) => (
                     <div key={type} className="contents">
                       <span
-                        className="text-gray-400 truncate"
+                        className="text-gmi-text-on-dark truncate"
                         title={type}
                       >
                         {type}:

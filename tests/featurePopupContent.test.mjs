@@ -139,9 +139,10 @@ test('ordinary point and line popups preserve their structure and actions', () =
   assert.equal(linePopup.querySelectorAll('button').length, 3);
   assert.equal(linePopup.querySelectorAll('strong').length, 1);
   assert.equal(linePopup.querySelectorAll('button')[2].textContent, 'Vis profilanalyse');
-  assert.equal(linePopup.children[0].className, 'font-semibold flex items-center gap-1 whitespace-nowrap');
-  assert.equal(linePopup.children[1].className, 'mt-1 border-t pt-1 flex-1 overflow-auto');
-  assert.equal(linePopup.children[2].className, 'mt-1 pt-2 border-t grid grid-cols-2 gap-2');
+  assert.match(linePopup.className, /gmi-feature-popup/);
+  assert.match(linePopup.children[0].className, /font-semibold text-gmi-navy/);
+  assert.match(linePopup.children[1].className, /overflow-auto border-t border-gmi-border/);
+  assert.match(linePopup.children[2].className, /grid grid-cols-2 gap-1\.5 border-t/);
 });
 
 test('MapInner passes a DOM popup element instead of an interpolated HTML string', () => {

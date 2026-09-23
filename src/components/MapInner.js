@@ -34,6 +34,7 @@ import {
   projectCoordinateToWgs84,
 } from '@/lib/map/coordinateProjection';
 import { createFeaturePopupContent } from '@/lib/map/featurePopupContent.mjs';
+import { RulerIcon, XIcon } from '@phosphor-icons/react';
 
 // Fix for default Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -1178,16 +1179,15 @@ function MeasureTool() {
 
       {/* Control panel */}
       <div
+        className="gmi-elevated-surface text-gmi-text"
         style={{
           position: 'absolute',
           bottom: '20px',
           left: '50%',
           transform: 'translateX(-50%)',
           zIndex: 1000,
-          backgroundColor: 'white',
           padding: '12px 16px',
           borderRadius: '8px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
           display: 'flex',
           alignItems: 'flex-start',
           gap: '16px',
@@ -1195,11 +1195,11 @@ function MeasureTool() {
       >
         <div style={{ minWidth: '280px' }}>
           <div className="text-sm">
-            <span className="text-gray-600">Total avstand: </span>
-            <span className="font-bold text-blue-600">
+            <span className="text-gmi-text-muted">Total avstand: </span>
+            <span className="font-bold text-gmi-navy">
               {formatDistance(totalDistance)}
             </span>
-            <span className="text-gray-400 ml-2">
+            <span className="ml-2 text-gmi-text-subtle">
               ({measurePoints.length}{' '}
               {measurePoints.length === 1 ? 'punkt' : 'punkter'})
             </span>
@@ -1207,7 +1207,7 @@ function MeasureTool() {
 
           {measurePoints.length >= 2 && (
             <div
-              className="mt-2 text-xs text-gray-700"
+              className="mt-2 border-t border-gmi-border pt-1.5 text-xs text-gmi-text"
               style={{ maxHeight: '110px', overflowY: 'auto' }}
             >
               {measurePoints.slice(1).map((point, i) => {
@@ -1221,7 +1221,7 @@ function MeasureTool() {
                     key={`seg-list-${i}`}
                     className="flex justify-between gap-4 py-0.5"
                   >
-                    <span className="text-gray-500">
+                    <span className="text-gmi-text-muted">
                       Linje {i + 1}
                     </span>
                     <span className="font-semibold">
@@ -1243,7 +1243,7 @@ function MeasureTool() {
         >
           <button
             onClick={() => clearMeasurePoints()}
-            className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+            className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong bg-gmi-surface-soft px-3 py-1 text-xs"
             title="Nullstill måling"
           >
             Nullstill
@@ -1251,10 +1251,10 @@ function MeasureTool() {
 
           <button
             onClick={() => toggleMeasureMode(false)}
-            className="px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors"
+            className="gmi-compact-button gmi-focus-ring flex items-center gap-1 border border-gmi-border-strong bg-gmi-surface px-3 py-1 text-xs"
             title="Lukk måleverktøy"
           >
-            ✕ Lukk
+            <XIcon size={14} weight="regular" aria-hidden="true" /> Lukk
           </button>
         </div>
       </div>
@@ -1283,41 +1283,20 @@ function MeasureToolButton() {
       <button
         onClick={() => toggleMeasureMode(true)}
         title="Måleverktøy - Mål avstander på kartet"
+        aria-label="Måleverktøy - Mål avstander på kartet"
+        className="gmi-focus-ring bg-gmi-surface text-gmi-text hover:bg-gmi-surface-soft"
         style={{
           width: '34px',
           height: '34px',
-          backgroundColor: 'white',
-          border: '2px solid rgba(0,0,0,0.2)',
+          border: '2px solid var(--gmi-border-strong)',
           borderRadius: '4px',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 1px 5px rgba(0,0,0,0.15)',
         }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor = '#f4f4f4')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor = 'white')
-        }
       >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0z" />
-          <path d="m14.5 12.5 2-2" />
-          <path d="m11.5 9.5 2-2" />
-          <path d="m8.5 6.5 2-2" />
-          <path d="m17.5 15.5 2-2" />
-        </svg>
+        <RulerIcon size={18} weight="regular" aria-hidden="true" />
       </button>
     </div>
   );
