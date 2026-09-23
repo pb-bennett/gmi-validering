@@ -379,7 +379,7 @@ function LegacyFieldValidationSidebar({ onOpenContact }) {
   );
 }
 
-export default function FieldValidationSidebar({ sidebarWidth, canDockInspector, onDockedInspectorChange, onOpenAppInfo, onOpenContact, appInfoTriggerRef }) {
+export default function FieldValidationSidebar({ sidebarWidth, canDockInspector, onDockedInspectorChange, onOpenContact }) {
   return (
     <div className="h-full min-h-0 flex flex-col">
       <ValidationV2ErrorBoundary>
@@ -390,7 +390,6 @@ export default function FieldValidationSidebar({ sidebarWidth, canDockInspector,
         />
       </ValidationV2ErrorBoundary>
       <div className="flex flex-none gap-2 border-t bg-white px-2 py-2 text-xs">
-        <button ref={appInfoTriggerRef} type="button" onClick={onOpenAppInfo} aria-haspopup="dialog" className="rounded px-2 py-1 text-blue-700 hover:bg-blue-50">Om appen</button>
         <button type="button" onClick={onOpenContact} aria-haspopup="dialog" className="rounded px-2 py-1 text-blue-700 hover:bg-blue-50">Kontakt</button>
       </div>
     </div>

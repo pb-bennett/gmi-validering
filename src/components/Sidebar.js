@@ -7,8 +7,7 @@ import { analyzeIncline } from '@/lib/analysis/incline';
 import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
-import { EnvelopeSimpleIcon, InfoIcon } from '@phosphor-icons/react';
-import { CURRENT_APP_VERSION } from '@/data/appReleases.mjs';
+import { EnvelopeSimpleIcon } from '@phosphor-icons/react';
 import LayerManager from './LayerManager';
 
 const MISSING_TEMA_VALUE = '(Ingen verdi)';
@@ -795,7 +794,7 @@ function FieldSubSection({
   );
 }
 
-export default function Sidebar({ onReset, onAddFile, onOpenAppInfo, onOpenContact, appInfoTriggerRef, width, onWidthChange }) {
+export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWidthChange }) {
   const file = useStore((state) => state.file);
   const data = useStore((state) => state.data);
   const layerOrder = useStore((state) => state.layerOrder);
@@ -1142,7 +1141,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenAppInfo, onOpenConta
     >
       {/* Resize Handle */}
       <div
-        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors z-30"
+        className="absolute right-0 -top-[76px] bottom-0 w-1 cursor-col-resize transition-colors z-30"
         style={{
           backgroundColor: 'transparent',
           userSelect: 'none',
@@ -1158,74 +1157,15 @@ export default function Sidebar({ onReset, onAddFile, onOpenAppInfo, onOpenConta
         onMouseDown={() => setIsResizing(true)}
       />
 
-      {/* Header */}
-      <div
-        className="px-3 py-3 border-b"
-        style={{
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-sidebar-bg)',
-        }}
-      >
-        <div className="flex items-center gap-2.5">
-          {/* Logo Icon */}
-          <div
-            className="flex items-center justify-center w-9 h-9 rounded-lg shadow-sm"
-            style={{
-              backgroundColor: 'var(--color-primary)',
-              background:
-                'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)',
-            }}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-5 h-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 11a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
-              <path d="M17.657 16.657l-4.243 4.243a2 2 0 0 1 -2.827 0l-4.244 -4.243a8 8 0 1 1 11.314 0z" />
-            </svg>
-          </div>
-          {/* Title */}
-          <div className="flex flex-col">
-            <h1
-              className="text-base font-bold leading-tight tracking-tight"
-              style={{ color: 'var(--color-primary)' }}
-            >
-              GMI Validator
-            </h1>
-            <span
-              className="text-[10px] font-medium leading-tight tracking-wide uppercase"
-              style={{ color: 'var(--color-text-secondary)' }}
-            >
-              Innmålingskontroll
-            </span>
-          <button
-            ref={appInfoTriggerRef}
-            type="button"
-            onClick={onOpenAppInfo}
-            aria-haspopup="dialog"
-            aria-label={`Om appen, versjon ${CURRENT_APP_VERSION}`}
-            className="mt-1 inline-flex min-h-7 max-w-full items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600"
-          >
-            <InfoIcon size={14} weight="regular" aria-hidden="true" />
-            <span className="whitespace-nowrap">Om appen · v{CURRENT_APP_VERSION}</span>
-          </button>
-          </div>
-        </div>
-      </div>
-
       {/* Content - Scrollable */}
       {isMultiLayerMode ? (
         /* Multi-layer mode: show LayerManager */
-        <LayerManager onAddFile={onAddFile} />
+        <div className="min-h-0 flex-1">
+          <LayerManager onAddFile={onAddFile} />
+        </div>
       ) : (
         /* Legacy single-file mode */
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {/* Oversikt */}
           <SidebarSection
             title="Oversikt"

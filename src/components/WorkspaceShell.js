@@ -1,14 +1,21 @@
+import ProductHeader from './ProductHeader';
+
 export default function WorkspaceShell({
   sidebar,
   sidebarWidth,
+  onOpenAppInfo,
+  appInfoTriggerRef,
   primary,
   bottomDock,
   bottomDockOpen,
 }) {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
-      <div className="h-full flex-none overflow-hidden" style={{ width: `${sidebarWidth}px` }}>
-        {sidebar}
+      <div className="flex h-full flex-none flex-col overflow-hidden" style={{ width: `${sidebarWidth}px` }}>
+        <ProductHeader onOpenAppInfo={onOpenAppInfo} appInfoTriggerRef={appInfoTriggerRef} />
+        <div className="min-h-0 flex-1">
+          {sidebar}
+        </div>
       </div>
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <section

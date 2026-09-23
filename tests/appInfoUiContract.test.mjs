@@ -6,7 +6,7 @@ import * as phosphorIcons from '@phosphor-icons/react';
 const readSource = (path) =>
   readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-const [pageSource, modalSource, contactFormSource, stateSource, catalogSource, globalCssSource, packageJsonSource, sidebarSource, fieldValidationSidebarSource] = await Promise.all([
+const [pageSource, modalSource, contactFormSource, stateSource, catalogSource, globalCssSource, packageJsonSource, sidebarSource, fieldValidationSidebarSource, shellSource, headerSource, wordmarkSource] = await Promise.all([
   readSource('src/app/page.js'),
   readSource('src/components/AppInfoModal.js'),
   readSource('src/components/ContactForm.js'),
@@ -16,6 +16,9 @@ const [pageSource, modalSource, contactFormSource, stateSource, catalogSource, g
   readSource('package.json'),
   readSource('src/components/Sidebar.js'),
   readSource('src/components/FieldValidationSidebar.js'),
+  readSource('src/components/WorkspaceShell.js'),
+  readSource('src/components/ProductHeader.js'),
+  readSource('src/components/BrandWordmark.js'),
 ]);
 
 test('start-state AppInfo actions stay in the upload card while popup decision remains independent', () => {
@@ -26,42 +29,70 @@ test('start-state AppInfo actions stay in the upload card while popup decision r
   assert.ok(initialUpload > 0);
   assert.doesNotMatch(pageSource, /fixed bottom-4 left-4/);
   assert.match(pageSource.slice(initialUpload), /ref=\{appInfoTriggerRef\}/);
-  assert.match(pageSource.slice(initialUpload), /openAppInfo\('about'\)/);
-  assert.match(pageSource.slice(initialUpload), /openAppInfo\('contact'\)/);
+  assert.match(pageSource.slice(initialUpload), /openAppInfo\('about', event\.currentTarget\)/);
+  assert.match(pageSource.slice(initialUpload), /openAppInfo\('contact', event\.currentTarget\)/);
+  assert.match(pageSource.slice(initialUpload), /<BrandWordmark large \/>/);
   assert.match(pageSource.slice(initialUpload), /flex flex-wrap items-center justify-center gap-2/);
   assert.match(pageSource.slice(initialUpload), /Om appen · v\{CURRENT_APP_VERSION\}/);
   assert.match(pageSource.slice(initialUpload), /<EnvelopeSimpleIcon\b/);
-  assert.match(pageSource, /onClick=\{\(\) => openAppInfo\('about'\)\}/);
+  assert.match(pageSource, /onClick=\{\(event\) => openAppInfo\('about', event\.currentTarget\)\}/);
   assert.ok(pageSource.includes('ref={appInfoTriggerRef}'));
   assert.match(pageSource, /CURRENT_APP_VERSION/);
   assert.doesNotMatch(pageSource, /Om appen[^\n]*1\.1\.0/);
-  assert.match(pageSource, /openAppInfo\('about'\)/);
+  assert.match(pageSource, /openAppInfo\('about', event\.currentTarget\)/);
   assert.match(pageSource, /setShowAppInfo\(true\)/);
   assert.ok(decision > 0 && decision < heartbeat);
   assert.match(pageSource, /appInfoAutoCheckedRef/);
 });
 
-test('loaded-state AppInfo and persistent Kontakt actions use the existing modal', () => {
-  assert.match(sidebarSource, /<InfoIcon\b/);
-  assert.match(sidebarSource, /Om appen · v\{CURRENT_APP_VERSION\}/);
-  assert.match(sidebarSource, /onClick=\{onOpenAppInfo\}/);
+test('shared working header and both Kontakt actions use the one page-owned modal', () => {
+  assert.match(shellSource, /<ProductHeader onOpenAppInfo=\{onOpenAppInfo\} appInfoTriggerRef=\{appInfoTriggerRef\} \/>/);
+  assert.match(headerSource, /<BrandWordmark \/>/);
+  assert.match(headerSource, /<InfoIcon\b/);
+  assert.match(headerSource, /items-center justify-between gap-2/);
+  assert.match(headerSource, /aria-label=\{`Om appen, versjon \$\{CURRENT_APP_VERSION\}`\}/);
+  assert.match(headerSource, /title=\{`Om appen, versjon \$\{CURRENT_APP_VERSION\}`\}/);
+  assert.match(headerSource, /text-gmi-text-subtle hover:bg-gmi-surface-soft hover:text-gmi-navy/);
+  assert.match(headerSource, /gmi-focus-ring/);
+  assert.doesNotMatch(headerSource, /Om appen · v\{CURRENT_APP_VERSION\}|text-gmi-interactive/);
+  assert.match(headerSource, /ref=\{appInfoTriggerRef\}/);
+  assert.match(headerSource, /onClick=\{onOpenAppInfo\}/);
+  assert.doesNotMatch(sidebarSource, /Om appen|<InfoIcon\b|appInfoTriggerRef/);
+  assert.doesNotMatch(fieldValidationSidebarSource, /Om appen|appInfoTriggerRef/);
+  assert.match(wordmarkSource, /src="\/brand\/gmi-validator-logo\.svg"/);
+  assert.match(wordmarkSource, /alt=""[\s\S]*?aria-hidden="true"/);
+  assert.match(wordmarkSource, /aria-label="GMI Validator"/);
+  assert.match(wordmarkSource, /<span aria-hidden="true">MI Validator<\/span>/);
+  assert.match(wordmarkSource, /Innmålingskontroll/);
+  assert.doesNotMatch(wordmarkSource, /!large &&/);
+  assert.equal((pageSource.match(/<AppInfoModal\b/g) || []).length, 1);
   assert.match(sidebarSource, /<EnvelopeSimpleIcon\b/);
   assert.match(sidebarSource, /Kontakt/);
   assert.match(sidebarSource, /onClick=\{onOpenContact\}/);
   assert.match(sidebarSource, /mt-auto border-t px-4 py-3/);
   assert.match(sidebarSource, /items-center justify-center gap-2 rounded-lg/);
-  assert.match(pageSource, /onOpenAppInfo=\{\(\) => openAppInfo\('about'\)\}/);
-  assert.match(pageSource, /onOpenContact=\{\(\) => openAppInfo\('contact'\)\}/);
+  assert.match(pageSource, /onOpenAppInfo=\{\(event\) => openAppInfo\('about', event\.currentTarget\)\}/);
+  assert.match(pageSource, /onOpenContact=\{\(event\) => openAppInfo\('contact', event\.currentTarget\)\}/);
   assert.match(pageSource, /initialTab=\{appInfoInitialTab\}/);
-  assert.match(pageSource, /openAppInfo = \(tab = 'about'\)/);
+  assert.match(pageSource, /openAppInfo = \(tab = 'about', opener = null\)/);
+  assert.match(pageSource, /appInfoTriggerRef\.current = opener;[\s\S]*?opener\.focus\(\)/);
   assert.match(pageSource, /setAppInfoInitialTab\(tab\)/);
   assert.match(fieldValidationSidebarSource, /<EnvelopeSimpleIcon\b/);
   assert.match(fieldValidationSidebarSource, /onClick=\{onOpenContact\}/);
-  assert.match(pageSource, /<FieldValidationSidebar[\s\S]*?onOpenContact=\{\(\) => openAppInfo\('contact'\)\}/);
-  assert.match(fieldValidationSidebarSource, /onClick=\{onOpenAppInfo\}/);
+  assert.match(pageSource, /<FieldValidationSidebar[\s\S]*?onOpenContact=\{\(event\) => openAppInfo\('contact', event\.currentTarget\)\}/);
   assert.match(fieldValidationSidebarSource, /onClick=\{onOpenContact\}/);
   assert.match(pageSource, /<EnvelopeSimpleIcon\b/);
-  assert.match(pageSource, /onClick=\{\(\) => openAppInfo\('contact'\)\}/);
+  assert.match(pageSource, /onClick=\{\(event\) => openAppInfo\('contact', event\.currentTarget\)\}/);
+});
+
+test('working header stays above one conditional feature branch with full-height normal resize reach', () => {
+  assert.match(shellSource, /flex h-full flex-none flex-col overflow-hidden/);
+  assert.match(shellSource, /<ProductHeader[\s\S]*?<div className="min-h-0 flex-1">[\s\S]*?\{sidebar\}/);
+  assert.match(pageSource, /sidebar=\{fieldValidationOpen \? \([\s\S]*?<FieldValidationSidebar[\s\S]*?\) : \([\s\S]*?<Sidebar/);
+  assert.match(sidebarSource, /-top-\[76px\] bottom-0 w-1 cursor-col-resize/);
+  assert.match(sidebarSource, /newWidth > 200 && newWidth < 800/);
+  assert.match(sidebarSource, /<div className="min-h-0 flex-1">\s*<LayerManager/);
+  assert.match(fieldValidationSidebarSource, /<ValidationV2Workspace[\s\S]*?<div className="flex flex-none gap-2 border-t/);
 });
 
 test('modal source has a stable accessible dialog and tab shell', () => {

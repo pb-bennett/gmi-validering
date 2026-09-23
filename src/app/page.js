@@ -23,6 +23,7 @@ import { TestModeActivation } from '@/components/TestModeControl';
 import { CURRENT_APP_VERSION, LATEST_ANNOUNCED_RELEASE } from '@/data/appReleases.mjs';
 import { decideAutomaticAppInfo } from '@/lib/appInfoState.mjs';
 import WorkspaceShell from '@/components/WorkspaceShell';
+import BrandWordmark from '@/components/BrandWordmark';
 import { VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM } from '@/components/validation-v2/fieldDetailLayout';
 import { getTerrainStats } from '@/lib/analysis/terrain';
 import { claimStatisticsCue } from '@/lib/statisticsCue.mjs';
@@ -286,7 +287,11 @@ export default function Home() {
     resetAll();
   };
 
-  const openAppInfo = (tab = 'about') => {
+  const openAppInfo = (tab = 'about', opener = null) => {
+    if (opener) {
+      appInfoTriggerRef.current = opener;
+      opener.focus();
+    }
     setAppInfoInitialTab(tab);
     setShowAppInfo(true);
   };
@@ -380,9 +385,7 @@ export default function Home() {
         <div className="flex-1 flex items-center justify-center">
           <div className="max-w-xl w-full px-4">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-gray-900">
-                GMI Validering
-              </h1>
+              <BrandWordmark large />
               <p className="mt-2 text-gray-600">
                 Last opp og valider GMI-filer
               </p>
@@ -432,7 +435,7 @@ export default function Home() {
                 <button
                   ref={appInfoTriggerRef}
                   type="button"
-                  onClick={() => openAppInfo('about')}
+                  onClick={(event) => openAppInfo('about', event.currentTarget)}
                   aria-haspopup="dialog"
                   aria-label={`Om appen, versjon ${CURRENT_APP_VERSION}`}
                   title="Informasjon om appen og versjonshistorikk"
@@ -443,7 +446,7 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => openAppInfo('contact')}
+                  onClick={(event) => openAppInfo('contact', event.currentTarget)}
                   aria-haspopup="dialog"
                   className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                 >
@@ -464,22 +467,20 @@ export default function Home() {
 
           <WorkspaceShell
             sidebarWidth={sidebarWidth}
+            onOpenAppInfo={(event) => openAppInfo('about', event.currentTarget)}
+            appInfoTriggerRef={appInfoTriggerRef}
             sidebar={fieldValidationOpen ? (
               <FieldValidationSidebar
                 sidebarWidth={sidebarWidth}
                 canDockInspector={canDockInspector}
                 onDockedInspectorChange={setDockedInspectorOpen}
-                onOpenAppInfo={() => openAppInfo('about')}
-                onOpenContact={() => openAppInfo('contact')}
-                appInfoTriggerRef={appInfoTriggerRef}
+                onOpenContact={(event) => openAppInfo('contact', event.currentTarget)}
               />
             ) : (
               <Sidebar
                 onReset={handleReset}
                 onAddFile={() => setShowAddLayerModal(true)}
-                onOpenAppInfo={() => openAppInfo('about')}
-                onOpenContact={() => openAppInfo('contact')}
-                appInfoTriggerRef={appInfoTriggerRef}
+                onOpenContact={(event) => openAppInfo('contact', event.currentTarget)}
                 width={sidebarWidth}
                 onWidthChange={setSidebarWidth}
               />
