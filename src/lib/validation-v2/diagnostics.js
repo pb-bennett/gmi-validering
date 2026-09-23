@@ -431,6 +431,9 @@ export function renderValidationV2Diagnostic(diagnostic) {
     case T.CONSTRAINT_VIOLATION: return `${objectCountText(count)} har ${name} som bryter en grense eller begrensning${suffix}.`;
     case T.VALID_VALUE_REVIEW: return `${objectCountText(count)} har en gyldig verdi for ${name} som bør kontrolleres${suffix}.`;
     case T.CONTEXT_REQUIRED_MISSING:
+      if (diagnostic.reasonCodes?.includes(RuleReasonCode.OPTIONAL_TYPE_NOT_SUPPLIED)) {
+        return `${objectCountText(count)}${contextText(diagnostic)} mangler ${name}. Feltet er ikke påkrevd. Kontroller om en relevant Type finnes for objektet. Hvis ikke, kan feltet stå tomt.`;
+      }
       if (diagnostic.contextFacts?.requirement === 'EXPECTED') {
         const expectedPhrase = EXPECTED_WORDING[diagnostic.field.canonicalFieldId];
         return `${objectCountText(count)}${contextText(diagnostic)} mangler ${name}. ${expectedPhrase || 'Feltet er ønskelig i denne konteksten og bør kontrolleres.'}`;

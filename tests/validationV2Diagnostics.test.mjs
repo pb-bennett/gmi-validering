@@ -504,10 +504,11 @@ test('Type required-missing wording retains the resolved Tema DIV context withou
   assert.equal((renderValidationV2Diagnostic(required).match(/med Tema/g) || []).length, 1);
   const checks = model.diagnostics.filter((diagnostic) => diagnostic.state === 'CHECK');
   assert.deepEqual(checks.map((diagnostic) => renderValidationV2Diagnostic(diagnostic)), [
-    '64 objekter med Tema `KUM` mangler Type. Feltet er ønskelig i denne konteksten og bør kontrolleres.',
-    '16 objekter med Tema `SAN` mangler Type. Feltet er ønskelig i denne konteksten og bør kontrolleres.',
-    '3 objekter med Tema `SLU` mangler Type. Feltet er ønskelig i denne konteksten og bør kontrolleres.',
+    '64 objekter med Tema `KUM` mangler Type. Feltet er ikke påkrevd. Kontroller om en relevant Type finnes for objektet. Hvis ikke, kan feltet stå tomt.',
+    '16 objekter med Tema `SAN` mangler Type. Feltet er ikke påkrevd. Kontroller om en relevant Type finnes for objektet. Hvis ikke, kan feltet stå tomt.',
+    '3 objekter med Tema `SLU` mangler Type. Feltet er ikke påkrevd. Kontroller om en relevant Type finnes for objektet. Hvis ikke, kan feltet stå tomt.',
   ]);
+  assert.ok(checks.every((diagnostic) => !renderValidationV2Diagnostic(diagnostic).includes('Feltet er ønskelig i denne konteksten og bør kontrolleres.')));
 });
 
 test('context wording groups values and includes only the applicable dimensions', () => {
