@@ -41,11 +41,11 @@ function UnknownFields({ diagnostics }) {
     (diagnostic) => diagnostic.classification === 'UNKNOWN_SOURCE_FIELD',
   ).length;
   return (
-    <details className="mt-2 border-t border-gray-200 pt-2 text-[11px]">
-      <summary className="cursor-pointer font-medium text-gray-600">
+    <details className="mt-2 border-t border-gmi-border pt-2 text-[11px]">
+      <summary className="cursor-pointer font-medium text-gmi-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-gmi-interactive">
         Andre felt i datasettet · {diagnostics.length}
       </summary>
-      <div className="mt-1 text-gray-500">
+      <div className="mt-1 text-gmi-text-subtle">
         {unknownCount} ukjente · {diagnostics.length - unknownCount} kjente, men ikke støttede
       </div>
     </details>
@@ -324,28 +324,28 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gray-50">
-      <div className="flex-none border-b bg-white px-2 py-2">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gmi-surface-soft">
+      <div className="flex-none border-b border-gmi-border bg-gmi-surface px-2 py-2">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold text-gray-900">Validator</h2>
+          <h2 className="text-sm font-bold text-gmi-navy">Validator</h2>
           <button
             type="button"
             onClick={closeValidator}
             aria-label="Lukk Validator"
             title="Lukk Validator"
-            className="inline-flex h-8 w-8 items-center justify-center rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="gmi-compact-button gmi-focus-ring inline-flex h-8 w-8 items-center justify-center text-gmi-text-muted hover:text-gmi-navy"
           >
             <XIcon aria-hidden="true" size={18} weight="bold" />
           </button>
         </div>
         <div className="mt-2 flex items-center gap-1.5">
-          <label className="text-[11px] font-medium text-gray-700" htmlFor="validation-v2-layer">Lag</label>
+          <label className="text-[11px] font-medium text-gmi-text" htmlFor="validation-v2-layer">Lag</label>
           <select
             id="validation-v2-layer"
             value={selectedLayerId}
             onChange={selectLayer}
             disabled={availableLayerIds.length === 0}
-            className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="gmi-compact-field min-w-0 flex-1 px-1.5 py-1 text-xs disabled:cursor-default disabled:opacity-60"
           >
             {availableLayerIds.length === 0 && <option value="">Ingen lag tilgjengelig</option>}
             {availableLayerIds.map((layerId) => (
@@ -356,13 +356,13 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {!selectedLayer && <p className="text-xs text-gray-600">Velg et lag for å starte.</p>}
+        {!selectedLayer && <p className="text-xs text-gmi-text-muted">Velg et lag for å starte.</p>}
         {selectedLayer && !isGmi && (
-          <p className="text-xs text-gray-700">Validator støtter foreløpig bare GMI-data.</p>
+          <p className="text-xs text-gmi-text">Validator støtter foreløpig bare GMI-data.</p>
         )}
         {selectedLayer && isGmi && (
           <>
-            <div className="flex border-b border-gray-200" role="tablist" aria-label="Geometri">
+            <div className="flex gap-1 border-b border-gmi-border" role="tablist" aria-label="Geometri">
               {[
                 ['point', 'Punkter', pointCount],
                 ['line', 'Ledninger', lineCount],
@@ -374,7 +374,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                   aria-selected={activeGeometry === scope}
                   aria-controls="validation-v2-geometry-panel"
                   onClick={() => selectGeometry(scope)}
-                  className={`flex-1 px-2 py-1.5 text-xs font-medium ${activeGeometry === scope ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
+                  className={`gmi-compact-button gmi-focus-ring flex-1 px-2 py-1.5 text-xs font-medium ${activeGeometry === scope ? 'gmi-selected-control' : 'text-gmi-text-subtle hover:text-gmi-navy'}`}
                 >
                   {label} {count}
                 </button>
@@ -382,12 +382,12 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
             </div>
 
             {!result && (
-              <p className="py-3 text-[11px] text-gray-500">
+              <p className="py-3 text-[11px] text-gmi-text-subtle">
                 Kontrollerer…
               </p>
             )}
             {result && geometrySummary && (
-              <div id="validation-v2-geometry-panel" role="tabpanel" className="py-2 text-[11px] text-gray-600">
+              <div id="validation-v2-geometry-panel" role="tabpanel" className="py-2 text-[11px] text-gmi-text-muted">
                 <div className="mb-2">
                   {geometrySummary.objectCount} {activeGeometry === 'point' ? 'punkter' : 'ledninger'} · {geometrySummary.failCount} feil · {(geometrySummary.checkCount || 0) + geometrySummary.indeterminateCount} sjekk
                 </div>
@@ -408,12 +408,12 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                         setFilterPanelOpen((open) => !open);
                         setOpenMenu(null);
                       }}
-                      className={`relative inline-flex h-8 w-8 items-center justify-center rounded border text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${filtersActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+                      className={`gmi-compact-button gmi-focus-ring relative inline-flex h-8 w-8 items-center justify-center border ${filtersActive ? 'gmi-selected-control' : 'gmi-elevated-surface'}`}
                     >
                       <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M3 4h14v2H3V4Zm3 5h8v2H6V9Zm3 5h2v2H9v-2Z" />
                       </svg>
-                      {filtersActive && <span aria-hidden="true" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-blue-600" />}
+                      {filtersActive && <span aria-hidden="true" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gmi-interactive" />}
                     </button>
                     <div className="relative">
                       <button
@@ -426,14 +426,14 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                           setOpenMenu((menu) => menu === 'sort' ? null : 'sort');
                           setFilterPanelOpen(false);
                         }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="gmi-elevated-surface gmi-compact-button gmi-focus-ring inline-flex h-8 w-8 items-center justify-center"
                       >
                         <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                           <path d="M5 3h2v14H5V3Zm4 0h2v14H9V3Zm4 0h2v14h-2V3ZM3 5h6v2H3V5Zm4 4h6v2H7V9Zm3 4h7v2h-7v-2Z" />
                         </svg>
                       </button>
                       {openMenu === 'sort' && (
-                        <div id="validation-v2-sort-menu" role="menu" className="absolute right-0 z-20 mt-1 min-w-52 rounded border border-gray-200 bg-white p-1 shadow-lg">
+                        <div id="validation-v2-sort-menu" role="menu" className="gmi-elevated-surface absolute right-0 z-20 mt-1 min-w-52 rounded-lg p-1 shadow-lg">
                           {[
                             [ValidationV2SortMode.ATTENTION, 'Status – krever oppmerksomhet'],
                             [ValidationV2SortMode.NAME_ASC, 'Navn A–Å'],
@@ -446,7 +446,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                               role="menuitemradio"
                               aria-checked={presentationState.sortMode === sortMode}
                               onClick={() => chooseSortMode(sortMode)}
-                              className="block min-h-9 w-full rounded px-2 text-left text-xs text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className={`gmi-compact-button gmi-focus-ring block min-h-9 w-full px-2 text-left text-xs ${presentationState.sortMode === sortMode ? 'gmi-selected-control font-semibold' : 'text-gmi-text'}`}
                             >
                               {label}
                             </button>
@@ -460,7 +460,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                       title="Nullstill filter og sortering"
                       disabled={presentationStateIsDefault}
                       onClick={resetPresentation}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-default disabled:opacity-40"
+                      className="gmi-elevated-surface gmi-compact-button gmi-focus-ring inline-flex h-8 w-8 items-center justify-center disabled:cursor-default disabled:opacity-40"
                     >
                       <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M4 4h4v2H6.4a5 5 0 1 1-.65 6H3.6A7 7 0 1 0 4 4Zm0 0V2l-3 3 3 3V6h2V4H4Z" />
@@ -468,7 +468,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                     </button>
                   </div>
                   {filterPanelOpen && (
-                    <div id="validation-v2-filter-panel" className="mt-1 rounded border border-gray-200 bg-white p-1.5 shadow-sm">
+                    <div id="validation-v2-filter-panel" className="gmi-elevated-surface mt-1 rounded-lg p-1.5">
                       <label className="block">
                         <span className="sr-only">Søk i kontroller</span>
                         <input
@@ -477,7 +477,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                           onChange={updateSearch}
                           placeholder="Søk i kontroller"
                           aria-label="Søk i kontroller"
-                          className="min-h-9 w-full rounded border border-gray-300 bg-white px-2 text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="gmi-compact-field min-h-9 w-full px-2 text-xs placeholder:text-gmi-text-subtle"
                         />
                       </label>
                       <div className="mt-1 grid grid-cols-2 gap-1" role="group" aria-label="Statusfilter">
@@ -493,7 +493,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                             type="button"
                             aria-pressed={presentationState.statusFilter === filter}
                             onClick={() => chooseStatusFilter(filter)}
-                            className={`min-h-8 rounded px-1.5 text-left text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500 ${presentationState.statusFilter === filter ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                            className={`gmi-compact-button gmi-focus-ring min-h-8 min-w-0 px-1.5 text-left text-[11px] ${presentationState.statusFilter === filter ? 'gmi-selected-control font-semibold' : 'text-gmi-text'}`}
                           >
                             {label}
                           </button>
@@ -512,7 +512,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
               </div>
             )}
             {runError && isCurrentRun && (
-              <div className="mt-2 border-t border-red-200 pt-2 text-xs text-red-800">
+              <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-2 text-xs text-red-800 shadow-sm">
                 Validator kunne ikke kjøres for dette laget. Prøv å laste inn datasettet på nytt.
               </div>
             )}

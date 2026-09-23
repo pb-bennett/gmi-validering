@@ -389,8 +389,8 @@ export default function FieldValidationSidebar({ sidebarWidth, canDockInspector,
           onDockedInspectorChange={onDockedInspectorChange}
         />
       </ValidationV2ErrorBoundary>
-      <div className="flex flex-none gap-2 border-t bg-white px-2 py-2 text-xs">
-        <button type="button" onClick={onOpenContact} aria-haspopup="dialog" className="rounded px-2 py-1 text-blue-700 hover:bg-blue-50">Kontakt</button>
+      <div className="flex flex-none gap-2 border-t border-gmi-border bg-gmi-surface px-2 py-2 text-xs">
+        <button type="button" onClick={onOpenContact} aria-haspopup="dialog" className="gmi-compact-button gmi-focus-ring px-2 py-1 font-medium text-gmi-interactive">Kontakt</button>
       </div>
     </div>
   );

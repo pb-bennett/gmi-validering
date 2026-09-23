@@ -16,7 +16,7 @@ export default class ValidationV2ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="m-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">
           <h2 className="font-semibold">
             Validator kunne ikke kjøres for dette laget.
           </h2>
