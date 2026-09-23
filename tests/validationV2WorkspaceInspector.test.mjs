@@ -62,11 +62,12 @@ test('selected field and active tab stay local to the Validator workspace and su
 });
 
 test('desktop inspector is a non-modal region; constrained widths retain the dialog fallback', async () => {
-  const [workspace, inspector, modal, page] = await Promise.all([
+  const [workspace, inspector, modal, page, layout] = await Promise.all([
     read('../src/components/validation-v2/ValidationV2Workspace.js'),
     read('../src/components/validation-v2/ValidationV2FieldInspector.js'),
     read('../src/components/validation-v2/ValidationV2FieldInfoModal.js'),
     read('../src/app/page.js'),
+    read('../src/components/validation-v2/fieldDetailLayout.js'),
   ]);
   assert.match(inspector, /<aside[\s\S]*role="complementary"[\s\S]*aria-labelledby=/);
   assert.match(inspector, /aria-label="Lukk feltinspektør"/);
@@ -77,8 +78,12 @@ test('desktop inspector is a non-modal region; constrained widths retain the dia
   assert.match(modal, /getFocusableElements\(dialog\)/);
   assert.match(page, /viewportWidth - sidebarWidth >= 480 \+ inspectorWidthPx/);
   assert.match(page, /VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM \* 16/);
-  assert.equal(380 + 480 + 38 * 16, 1468);
+  assert.match(layout, /VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM = 28;/);
+  assert.match(layout, /VALIDATION_V2_FIELD_MODAL_MAX_WIDTH = '44rem';/);
+  assert.equal(380 + 480 + 28 * 16, 1308);
   assert.match(inspector, /VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH/);
+  assert.match(inspector, /compactTopArea/);
+  assert.match(inspector, /px-3 py-2/);
   assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_MODAL_MAX_WIDTH/);
 });
 

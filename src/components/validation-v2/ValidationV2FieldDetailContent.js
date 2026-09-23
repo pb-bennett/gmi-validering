@@ -482,6 +482,7 @@ export function ValidationV2FieldDetailContent({
   activeTab,
   onTabChange,
   onOpenObjects,
+  compactTopArea = false,
 }) {
   const tabRefs = useRef({});
   const { fieldDataState, diagnostics, retryFieldData } = useValidationV2FieldDetailModel({
@@ -522,11 +523,11 @@ export function ValidationV2FieldDetailContent({
             if (event.key === 'Home') moveTabTo(event, TABS.RESULT);
             if (event.key === 'End') moveTabTo(event, TABS.RULE);
           }}
-          className={`gmi-compact-button min-h-9 border-b-2 px-3 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gmi-interactive disabled:cursor-not-allowed disabled:opacity-40 ${activeTab === tab ? 'gmi-selected-control border-gmi-border-strong' : 'border-transparent text-gmi-text-subtle hover:text-gmi-navy'}`}
+          className={`gmi-compact-button ${compactTopArea ? 'min-h-8' : 'min-h-9'} border-b-2 px-3 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gmi-interactive disabled:cursor-not-allowed disabled:opacity-40 ${activeTab === tab ? 'gmi-selected-control border-gmi-border-strong' : 'border-transparent text-gmi-text-subtle hover:text-gmi-navy'}`}
         >{label}</button>
       ))}
     </div>
-    <div className="min-h-0 flex-1 overflow-y-auto bg-gmi-surface px-3 py-3">
+    <div className={`min-h-0 flex-1 overflow-y-auto bg-gmi-surface px-3 ${compactTopArea ? 'py-2' : 'py-3'}`}>
       <div className="mx-auto w-full max-w-2xl px-2.5">
       {activeTab === TABS.RESULT ? (
         <div id={`validation-v2-field-panel-${TABS.RESULT}`} role="tabpanel" aria-labelledby={`validation-v2-field-tab-${TABS.RESULT}`}>
