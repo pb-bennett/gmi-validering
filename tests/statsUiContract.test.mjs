@@ -62,7 +62,22 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(page, /parsingStatus !== 'done'[\s\S]*?<TestModeControl \/>/);
   assert.match(page, /parsingStatus === 'done'[\s\S]*?<MapPaneToolbar/);
   assert.match(page, /<StatsModal/);
-  assert.match(page, /aria-label="Vis bruksstatistikk"[\s\S]*?\{parsingStatus !== 'done' &&/);
+  assert.match(page, /const \[dockedInspectorOpen, setDockedInspectorOpen\] = useState\(false\)/);
+  assert.match(
+    page,
+    /\{!\(layerDataTableOpen \|\| dockedInspectorOpen\) && \(\s*<button[\s\S]*?aria-label="Vis bruksstatistikk"/,
+  );
+  const statsTriggerStart = page.indexOf('aria-label="Vis bruksstatistikk"');
+  const statsTriggerConditionStart = page.lastIndexOf(
+    '{!(layerDataTableOpen || dockedInspectorOpen) && (',
+    statsTriggerStart,
+  );
+  const statsTriggerEnd = page.indexOf('</button>', statsTriggerStart) + '</button>'.length;
+  const statsTrigger = page.slice(statsTriggerConditionStart, statsTriggerEnd);
+  assert.ok(statsTriggerConditionStart >= 0);
+  assert.ok(statsTriggerEnd > statsTriggerStart);
+  assert.doesNotMatch(statsTrigger, /parsingStatus === 'done'/);
+  assert.ok(statsTriggerStart < page.indexOf("{parsingStatus === 'done' &&"));
   assert.equal((page.match(/aria-label="Vis bruksstatistikk"/g) || []).length, 1);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);
   assert.match(modal, /Opplastinger uten registrert kommune/);

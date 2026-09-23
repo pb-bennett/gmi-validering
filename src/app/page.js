@@ -78,7 +78,7 @@ export default function Home() {
   const activeViewTab = useStore((state) => state.ui.activeViewTab);
   const [sidebarWidth, setSidebarWidth] = useState(380);
   const [viewportWidth, setViewportWidth] = useState(0);
-  const [, setDockedInspectorOpen] = useState(false);
+  const [dockedInspectorOpen, setDockedInspectorOpen] = useState(false);
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
@@ -295,7 +295,8 @@ export default function Home() {
     <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
       <TestModeActivation />
-      {/* Floating Stats Button - Always visible */}
+      {/* Floating Stats Button */}
+      {!(layerDataTableOpen || dockedInspectorOpen) && (
       <button
         className={
           statisticsCueActive
@@ -360,6 +361,7 @@ export default function Home() {
            <span className="statistics-button__badge">Ny</span>
            <span>Statistikk</span>
       </button>
+      )}
 
       {/* Stats Modal */}
       <StatsModal
