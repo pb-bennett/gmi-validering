@@ -62,26 +62,26 @@ export default function ValidationV2FieldInfoModal({
   if (!isOpen || !field || !rule) return null;
 
   return (
-    <div className="fixed inset-0 z-[10003] flex items-center justify-center bg-black/40 p-3" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-[10003] flex items-center justify-center bg-gmi-ink/40 p-3 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="validation-v2-field-info-title"
-        className="flex h-[calc(100vh-1.5rem)] max-h-[720px] w-full flex-col overflow-hidden rounded-lg bg-white shadow-xl sm:h-[min(720px,calc(100vh-3rem))]"
+        className="gmi-elevated-surface flex h-[calc(100vh-1.5rem)] max-h-[720px] w-full flex-col overflow-hidden rounded-2xl shadow-xl sm:h-[min(720px,calc(100vh-3rem))]"
         style={{ maxWidth: VALIDATION_V2_FIELD_MODAL_MAX_WIDTH }}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-gray-200 px-3 py-2.5">
-          <div>
-            <h2 id="validation-v2-field-info-title" className="text-sm font-bold text-gray-900">{field.displayName}</h2>
-            <p className="mt-0.5 text-[11px] text-gray-500">Feltinformasjon for valgt geometri</p>
+        <header className="flex items-start justify-between gap-3 border-b border-gmi-border bg-gmi-surface px-3 py-2.5">
+          <div className="min-w-0">
+            <h2 id="validation-v2-field-info-title" className="truncate text-sm font-bold text-gmi-navy">{field.displayName}</h2>
+            <p className="mt-0.5 text-[11px] text-gmi-text-subtle">Feltinformasjon for valgt geometri</p>
           </div>
           <button
             ref={closeButtonRef}
             type="button"
             aria-label="Lukk feltinformasjon"
             onClick={onClose}
-            className="inline-flex h-8 w-8 items-center justify-center rounded text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="gmi-compact-button inline-flex h-8 w-8 flex-none items-center justify-center text-gmi-text-muted hover:text-gmi-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gmi-interactive"
           >
             <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="m5.5 5.5 9 9-1 1-9-9 1-1Zm8 0 1 1-9 9-1-1 9-9Z" /></svg>
           </button>

@@ -406,7 +406,7 @@ test('Resultat presents neutral contextual coverage before diagnostics', async (
   assert.match(modalSource, /<div className="space-y-3">\s*<h3/);
   assert.match(modalSource, /mx-auto w-full max-w-2xl px-2\.5/);
   assert(modalSource.indexOf('<CoverageSummary coverage={model.coverage}') < modalSource.indexOf('{model.diagnostics.map'));
-  assert.match(modalSource, /<details className="rounded border border-gray-200">/);
+  assert.match(modalSource, /<details className="rounded-lg border border-gmi-border bg-gmi-surface">/);
   assert.doesNotMatch(modalSource.slice(modalSource.indexOf('function CoverageSummary'), modalSource.indexOf('function DiagnosticResultPanel')), /Feil|Sjekk|Pass/);
 });
 

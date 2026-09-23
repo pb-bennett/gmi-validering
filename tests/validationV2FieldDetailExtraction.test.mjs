@@ -22,7 +22,7 @@ test('fallback modal defaults to Resultat and retains its dialog and focus behav
   assert.match(modal, /role="dialog"/);
   assert.match(modal, /aria-modal="true"/);
   assert.match(modal, /aria-labelledby="validation-v2-field-info-title"/);
-  assert.match(modal, /fixed inset-0 z-\[10003\].*bg-black\/40/);
+  assert.match(modal, /fixed inset-0 z-\[10003\].*bg-gmi-ink\/40.*backdrop-blur-sm/);
   assert.match(modal, /max-h-\[720px\] w-full flex-col/);
   assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_MODAL_MAX_WIDTH/);
   assert.match(modal, /event\.target === event\.currentTarget && onClose\(\)/);
@@ -45,7 +45,7 @@ test('shared model and presentation retain diagnostics, qualifiers, details, and
   assert.match(content, /onMouseEnter=.*setHovered/);
   assert.match(content, /onFocus=.*setFocused/);
   assert.match(content, /onClick=.*setClickedOpen/);
-  assert.match(content, /<summary className="cursor-pointer px-2\.5 py-2 text-xs font-semibold text-gray-700">Detaljer<\/summary>/);
+  assert.match(content, /<summary className="cursor-pointer px-2\.5 py-2 text-xs font-semibold text-gmi-text[^>]*>Detaljer<\/summary>/);
   assert.match(content, /Tolket verdi/);
   assert.match(content, /function SourceValueTable/);
   assert.match(content, /composeFieldRulePresentation\(\{ field, rule \}\)/);
