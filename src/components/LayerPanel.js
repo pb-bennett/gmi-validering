@@ -7,6 +7,13 @@ import { analyzeIncline } from '@/lib/analysis/incline';
 import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
+import {
+  ArrowCounterClockwiseIcon,
+  CaretDownIcon,
+  CornersOutIcon,
+  TableIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 
 const MISSING_TEMA_VALUE = '(Ingen verdi)';
 
@@ -484,11 +491,12 @@ function LayerTemaSection({
             </span>
           )}
         </div>
-        <span
-          className={`ml-auto transform text-xs text-gmi-text-subtle transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-        >
-          ▼
-        </span>
+        <CaretDownIcon
+          size={12}
+          weight="regular"
+          aria-hidden="true"
+          className={`ml-auto transform text-gmi-text-subtle transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {isOpen && (
@@ -813,11 +821,12 @@ function LayerFeltValueSection({
             {sortedValues.length === 1 ? 'verdi' : 'verdier'}
           </div>
         </div>
-        <span
-          className={`transform text-xs text-gmi-text-subtle transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-        >
-          ▼
-        </span>
+        <CaretDownIcon
+          size={12}
+          weight="regular"
+          aria-hidden="true"
+          className={`transform text-gmi-text-subtle transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+        />
       </button>
       {isExpanded && sortedValues.length > 0 && (
         <div className="bg-gmi-surface-soft/60">
@@ -1041,11 +1050,12 @@ function LayerFeltSection({
             </span>
           )}
         </div>
-        <span
-          className={`ml-auto transform text-xs text-gmi-text-subtle transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-        >
-          ▼
-        </span>
+        <CaretDownIcon
+          size={12}
+          weight="regular"
+          aria-hidden="true"
+          className={`ml-auto transform text-gmi-text-subtle transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {isOpen && (
@@ -1249,26 +1259,9 @@ export default function LayerPanel({ layerId, codeLookups }) {
               }}
               className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
               title="Zoom til lag"
+              aria-label="Zoom til lag"
             >
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 7h10v10H7z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v4M4 4h4M20 4h-4M20 4v4M4 20v-4M4 20h4M20 20h-4M20 20v-4"
-                />
-              </svg>
+              <CornersOutIcon size={14} weight="regular" aria-hidden="true" />
             </button>
 
             {/* Remove button */}
@@ -1279,28 +1272,18 @@ export default function LayerPanel({ layerId, codeLookups }) {
               }}
               className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle transition-colors hover:bg-red-100 hover:text-red-600"
               title="Fjern lag"
+              aria-label="Fjern lag"
             >
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <TrashIcon size={14} weight="regular" aria-hidden="true" />
             </button>
 
             {/* Expand indicator */}
-            <span
-              className={`transform text-xs text-gmi-text-subtle transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-            >
-              ▼
-            </span>
+            <CaretDownIcon
+              size={12}
+              weight="regular"
+              aria-hidden="true"
+              className={`transform text-gmi-text-subtle transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+            />
           </div>
         </div>
 
@@ -1353,39 +1336,17 @@ export default function LayerPanel({ layerId, codeLookups }) {
                   onClick={() => resetLayerFilters(layerId)}
                   className="gmi-focus-ring rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface hover:text-gmi-navy"
                   title="Nullstill filtre"
+                  aria-label="Nullstill filtre"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 12a9 9 0 1 0 3-6.708M3 5v4h4"
-                    />
-                  </svg>
+                  <ArrowCounterClockwiseIcon size={16} weight="regular" aria-hidden="true" />
                 </button>
                 <button
                   onClick={() => openLayerDataTable(layerId)}
                   className="gmi-focus-ring rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface hover:text-gmi-navy"
                   title="Åpne datatabell"
+                  aria-label="Åpne datatabell"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 6h16M4 10h16M4 14h16M4 18h16"
-                    />
-                  </svg>
+                  <TableIcon size={16} weight="regular" aria-hidden="true" />
                 </button>
                 <LayerAnalysisButtons
                   layerId={layerId}

@@ -5,6 +5,7 @@ import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import LayerPanel from './LayerPanel';
 import fieldsData from '@/data/fields.json';
+import { CaretDownIcon, PlusIcon } from '@phosphor-icons/react';
 
 /**
  * LayerManager - Manages multiple file layers
@@ -155,12 +156,18 @@ export default function LayerManager({ onAddFile }) {
                       ? 'Skjul innstillinger'
                       : 'Vis innstillinger'
                   }
+                  aria-label={
+                    isWmsExpanded
+                      ? 'Skjul innstillinger'
+                      : 'Vis innstillinger'
+                  }
                 >
-                  <span
-                    className={`text-xs inline-block transition-transform ${isWmsExpanded ? 'rotate-180' : ''}`}
-                  >
-                    ▼
-                  </span>
+                  <CaretDownIcon
+                    size={12}
+                    weight="regular"
+                    aria-hidden="true"
+                    className={`inline-block transition-transform ${isWmsExpanded ? 'rotate-180' : ''}`}
+                  />
                 </button>
               </div>
 
@@ -213,19 +220,7 @@ export default function LayerManager({ onAddFile }) {
           onClick={onAddFile}
           className="gmi-compact-button gmi-focus-ring flex w-full items-center justify-center gap-2 border border-gmi-border-strong bg-gmi-surface px-3 py-2 text-xs font-medium"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
+          <PlusIcon size={16} weight="regular" aria-hidden="true" />
           Legg til fil
         </button>
       </div>

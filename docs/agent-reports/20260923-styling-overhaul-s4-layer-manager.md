@@ -40,6 +40,29 @@ The known Kartoversikt/3D-visning overlap with Leaflet zoom controls remains def
 
 No browser harness is configured in this repository, so visual acceptance remains pending. Check the normal loaded workspace with several layers; selected and unselected layer rows; visible and hidden layers; expanded/collapsed Tema and Felt sections; WMS row; long layer names; removal confirmation; legacy single-file Overview/Tema/Felt; normal Kontakt; sidebar resize near 200px, 380px, and 800px; and normal-to-Validator switching. Confirm the existing Leaflet overlap is no worse than baseline.
 
+## Icon-convergence amendment — 2026-09-23
+
+This narrowly scoped follow-up normalizes ordinary action icons in the three S4 sidebar components using the already-installed `@phosphor-icons/react`, consistently at `weight="regular"`:
+
+| Previous icon | Phosphor replacement | Use |
+|---|---|---|
+| Hand-authored plus SVG | `PlusIcon` | Add file |
+| Text `▼` disclosure glyphs | `CaretDownIcon` | WMS settings, layer Tema/Felt sections and rows, and legacy sidebar sections/value rows |
+| Hand-authored zoom-to-layer corners SVG | `CornersOutIcon` | Zoom to layer |
+| Hand-authored X/removal SVG | `TrashIcon` | Remove layer (destructive semantics) |
+| Hand-authored reset arrow SVG | `ArrowCounterClockwiseIcon` | Reset layer filters |
+| Hand-authored horizontal-lines SVG | `TableIcon` | Open data table |
+
+All replacement icons retain their prior nominal dimensions (12, 14, or 16px as applicable), color inheritance, rotation classes, and existing button/layout classes. Existing button titles remain; the WMS disclosure, zoom, removal, filter-reset, and data-table icon-only buttons now also state matching `aria-label` values. Replacement glyphs are `aria-hidden="true"` because their controls carry the name.
+
+The star/highlight, profile chart, elevation chart, checklist/field-validation, and topplok geometry SVGs remain intentionally unchanged: they communicate analysis/domain meaning and are not generic actions. Layer visibility remains native checkboxes. Text-only “Vis alle”/“Skjul alle” and confirmation controls need no icon. No handlers, state, event propagation, disabled state, focus classes, dimensions, spacing, wording, ordering, confirmation, or data behavior changed. Source diff review was limited to icon nodes, imports, and accessible labels; browser visual acceptance remains pending as above.
+
+Verification for this amendment:
+
+- `git diff --check` — passed (Git reported existing LF-to-CRLF working-copy normalization warnings).
+- `node --test tests/appInfoUiContract.test.mjs tests/statsUiContract.test.mjs tests/testMode.test.mjs tests/validationV2WorkspaceInspector.test.mjs tests/validationV2GmiA6.test.mjs tests/validationV2GmiA7.test.mjs` — passed, 43/43.
+- `npm.cmd run build` — passed. Next.js reported stale local Browserslist data; dependencies were not updated.
+
 ## Final status
 
 No commit, push, deploy, branch switch, dependency update, or S5+ work was made. Final `git status --short`:

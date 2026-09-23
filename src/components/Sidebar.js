@@ -7,7 +7,7 @@ import { analyzeIncline } from '@/lib/analysis/incline';
 import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
-import { EnvelopeSimpleIcon } from '@phosphor-icons/react';
+import { CaretDownIcon, EnvelopeSimpleIcon } from '@phosphor-icons/react';
 import LayerManager from './LayerManager';
 
 const MISSING_TEMA_VALUE = '(Ingen verdi)';
@@ -543,13 +543,14 @@ function SidebarSection({ title, children, isOpen, onToggle }) {
         >
           {title}
         </span>
-        <span
-          className={`transform text-xs text-gmi-text-subtle transition-transform duration-200 ${
+        <CaretDownIcon
+          size={12}
+          weight="regular"
+          aria-hidden="true"
+          className={`transform text-gmi-text-subtle transition-transform duration-200 ${
             isOpen ? 'rotate-180' : ''
           }`}
-        >
-          ▼
-        </span>
+        />
       </button>
       {isOpen && (
         <div className="bg-gmi-surface p-3">
@@ -657,13 +658,14 @@ function FieldSubSection({
             {sortedValues.length === 1 ? 'verdi' : 'verdier'}
           </div>
         </div>
-        <span
-          className={`transform text-xs text-gmi-text-subtle transition-transform duration-200 ${
+        <CaretDownIcon
+          size={12}
+          weight="regular"
+          aria-hidden="true"
+          className={`transform text-gmi-text-subtle transition-transform duration-200 ${
             isExpanded ? 'rotate-180' : ''
           }`}
-        >
-          ▼
-        </span>
+        />
       </button>
       {isExpanded && hasData && (
         <div className="bg-gmi-surface-soft/60">
