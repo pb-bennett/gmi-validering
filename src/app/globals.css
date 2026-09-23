@@ -1,6 +1,43 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+/*
+ * Additive S1 semantic palette. Legacy --color-* consumers remain on their
+ * existing theme variables until their scoped migration slices.
+ */
+@theme inline {
+  --color-gmi-ink: var(--gmi-ink);
+  --color-gmi-navy: var(--gmi-navy);
+  --color-gmi-text: var(--gmi-text);
+  --color-gmi-text-muted: var(--gmi-text-muted);
+  --color-gmi-text-subtle: var(--gmi-text-subtle);
+  --color-gmi-text-on-dark: var(--gmi-text-on-dark);
+  --color-gmi-border-strong: var(--gmi-border-strong);
+  --color-gmi-border: var(--gmi-border);
+  --color-gmi-surface-soft: var(--gmi-surface-soft);
+  --color-gmi-surface: var(--gmi-surface);
+  --color-gmi-brand-cyan: var(--gmi-brand-cyan);
+  --color-gmi-cyan-soft: var(--gmi-cyan-soft);
+  --color-gmi-interactive: var(--gmi-interactive);
+}
+
+/* Canonical semantic palette; reference contract for later scoped adoption. */
+:root {
+  --gmi-ink: #020618;
+  --gmi-navy: #0F172B;
+  --gmi-text: #314158;
+  --gmi-text-muted: #45556C;
+  --gmi-text-subtle: #62748E;
+  --gmi-text-on-dark: #CBD5E1;
+  --gmi-border-strong: #CAD5E2;
+  --gmi-border: #E2E8F0;
+  --gmi-surface-soft: #F8FAFC;
+  --gmi-surface: #FFFFFF;
+  --gmi-brand-cyan: #53EAFD;
+  --gmi-cyan-soft: #CEFAFE;
+  --gmi-interactive: #007595;
+}
+
 /* Theme: Modern Blue (Default) */
 :root,
 [data-theme='blue'] {
