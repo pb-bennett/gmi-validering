@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 512 512"
+     role="img"
+     aria-labelledby="title desc">
+  <title id="title">GMI Validator logo</title>
+  <desc id="desc">Stylized G formed from pipeline and network geometry with a cyan validation checkmark.</desc>
+
+  <!-- Canonical GMI Validator palette
+       Navy:   #0F172B
+       Cyan:   #53EAFD
+       Offwhite:#F8FAFC
+  -->
+
+  <!-- Main G / network structure -->
+  <path
+    d="M 130 245
+       C 130 145, 200 85, 300 85
+       L 390 85"
+    fill="none"
+    stroke="#0F172B"
+    stroke-width="58"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+
+  <path
+    d="M 300 247
+       L 384 247
+       C 406 247, 421 262, 421 284
+       L 421 347
+       C 421 386, 389 418, 350 418
+       L 269 418"
+    fill="none"
+    stroke="#0F172B"
+    stroke-width="58"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+
+  <!-- Cyan highlighted lower-left arc -->
+  <path
+    d="M 126 271
+       C 140 355, 198 414, 276 418"
+    fill="none"
+    stroke="#53EAFD"
+    stroke-width="58"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+
+  <!-- Network nodes -->
+  <g>
+    <circle cx="130" cy="245" r="47" fill="#0F172B"/>
+    <circle cx="130" cy="245" r="22" fill="#F8FAFC"/>
+
+    <circle cx="300" cy="85" r="47" fill="#0F172B"/>
+    <circle cx="300" cy="85" r="22" fill="#F8FAFC"/>
+
+    <circle cx="269" cy="418" r="47" fill="#0F172B"/>
+    <circle cx="269" cy="418" r="22" fill="#F8FAFC"/>
+  </g>
+
+  <!-- Validation check -->
+  <path
+    d="M 283 324
+       L 323 364
+       L 383 298"
+    fill="none"
+    stroke="#53EAFD"
+    stroke-width="36"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+</svg>
