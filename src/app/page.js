@@ -301,7 +301,7 @@ export default function Home() {
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
       <TestModeActivation />
       {/* Floating Stats Button */}
-      {!(layerDataTableOpen || dockedInspectorOpen) && (
+      {!(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
       <button
         className={
           statisticsCueActive

@@ -9,6 +9,13 @@ import {
   useLayoutEffect,
 } from 'react';
 import StandardsInfoModal from './StandardsInfoModal';
+import {
+  ArrowClockwiseIcon,
+  ArrowCounterClockwiseIcon,
+  GearSixIcon,
+  MountainsIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 
 const formatNumber = (num, decimals = 2) => {
   if (num === null || num === undefined) return '-';
@@ -180,13 +187,13 @@ export default function InclineAnalysisModal() {
   if (!isOpen) return null;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-2000 h-[45vh] bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex flex-col border-t border-gray-200">
+    <div className="absolute bottom-0 left-0 right-0 z-2000 h-[45vh] bg-gmi-surface text-gmi-text shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex flex-col border-t border-gmi-border-strong">
       {/* Header */}
-      <div className="flex-none p-3 border-b flex justify-between items-center bg-gray-50">
+      <div className="flex-none p-3 border-b border-gmi-border flex justify-between items-center bg-gmi-surface-soft">
         <div>
-          <h2 className="text-base font-semibold flex items-center gap-2">
+          <h2 className="text-base font-semibold text-gmi-navy flex items-center gap-2">
             Profilanalyse
-            <span className="text-xs font-normal text-gray-500">
+            <span className="text-xs font-normal text-gmi-text-subtle">
               ({filteredResults.length} av {results.length} ledninger)
             </span>
           </h2>
@@ -205,7 +212,7 @@ export default function InclineAnalysisModal() {
               }
             }}
             disabled={selectedPipeIndex === null}
-            className="text-xs bg-white text-gray-700 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="gmi-compact-button gmi-focus-ring inline-flex items-center gap-1 text-xs bg-gmi-surface px-2 py-1 border border-gmi-border-strong disabled:opacity-50 disabled:cursor-not-allowed"
             title="Hent terrengdata på nytt for valgt ledning"
           >
             {selectedTerrainStatus === 'loading' ? (
@@ -233,10 +240,17 @@ export default function InclineAnalysisModal() {
                 Henter terreng…
               </span>
             ) : (
-              'Oppdater terreng'
+              <>
+                <ArrowClockwiseIcon
+                  size={12}
+                  weight="regular"
+                  aria-hidden="true"
+                />
+                Oppdater terreng
+              </>
             )}
           </button>
-          <label className="flex items-center gap-2 text-xs text-gray-700">
+          <label className="flex items-center gap-2 text-xs text-gmi-text">
             <span className="font-medium">Overdekning (m)</span>
             <input
               type="number"
@@ -251,64 +265,41 @@ export default function InclineAnalysisModal() {
                 if (!Number.isFinite(parsed)) return;
                 handleOvercoverChange(parsed);
               }}
-              className="w-20 rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-400 focus:ring-blue-400"
+              className="gmi-compact-field w-20 px-2 py-1 text-xs"
               aria-label="Minstekrav til overdekning"
               title="Minstekrav til overdekning (m)"
             />
           </label>
           <button
             onClick={() => setShowStandardsModal(true)}
-            className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 border border-blue-200 flex items-center gap-1"
+            className="gmi-compact-button gmi-focus-ring text-xs bg-gmi-surface text-gmi-interactive px-2 py-1 border border-gmi-border-strong flex items-center gap-1"
             title="Innstillinger"
           >
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <GearSixIcon size={12} weight="regular" aria-hidden="true" />
             Innstillinger
           </button>
           <button
             onClick={() => toggleModal(false)}
-            className="text-gray-500 hover:text-gray-700 p-1.5 hover:bg-gray-200 rounded"
+            className="gmi-compact-button gmi-focus-ring p-1.5 text-gmi-text-muted"
             title="Lukk analyse"
+            aria-label="Lukk analyse"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <XIcon size={20} weight="regular" aria-hidden="true" />
           </button>
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar List */}
-        <div className="w-80 border-r flex flex-col bg-gray-50 flex-none">
+        <div className="w-80 border-r border-gmi-border flex flex-col bg-gmi-surface-soft flex-none">
           {/* Type Tabs */}
-          <div className="flex border-b overflow-x-auto scrollbar-hide">
+          <div className="flex border-b border-gmi-border overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setSelectedType('ALL')}
-              className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
+              className={`gmi-focus-ring px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
                 selectedType === 'ALL'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-gmi-interactive text-gmi-navy'
+                  : 'border-transparent text-gmi-text-muted hover:text-gmi-navy'
               }`}
             >
               Alle
@@ -317,10 +308,10 @@ export default function InclineAnalysisModal() {
               <button
                 key={type}
                 onClick={() => setSelectedType(type)}
-                className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
+                className={`gmi-focus-ring px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
                   selectedType === type
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-gmi-interactive text-gmi-navy'
+                    : 'border-transparent text-gmi-text-muted hover:text-gmi-navy'
                 }`}
               >
                 {type}
@@ -329,24 +320,24 @@ export default function InclineAnalysisModal() {
           </div>
 
           {/* Status Checkboxes */}
-          <div className="p-2 border-b flex space-x-3 bg-gray-50">
+          <div className="p-2 border-b border-gmi-border flex space-x-3 bg-gmi-surface-soft">
             <label className="flex items-center space-x-1 cursor-pointer">
               <input
                 type="checkbox"
                 checked={showWarning}
                 onChange={(e) => setShowWarning(e.target.checked)}
-                className="rounded text-yellow-600 focus:ring-yellow-500 h-3 w-3"
+                className="rounded accent-gmi-interactive focus:ring-gmi-interactive h-3 w-3"
               />
-              <span className="text-xs text-gray-700">Advarsel</span>
+              <span className="text-xs text-gmi-text">Advarsel</span>
             </label>
             <label className="flex items-center space-x-1 cursor-pointer">
               <input
                 type="checkbox"
                 checked={showOk}
                 onChange={(e) => setShowOk(e.target.checked)}
-                className="rounded text-green-600 focus:ring-green-500 h-3 w-3"
+                className="rounded accent-gmi-interactive focus:ring-gmi-interactive h-3 w-3"
               />
-              <span className="text-xs text-gray-700">OK</span>
+              <span className="text-xs text-gmi-text">OK</span>
             </label>
           </div>
 
@@ -366,28 +357,28 @@ export default function InclineAnalysisModal() {
         </div>
 
         {/* Main Content - Visualization */}
-        <div className="flex-1 p-4 overflow-hidden bg-white flex flex-col min-h-0">
+        <div className="flex-1 p-4 overflow-hidden bg-gmi-surface flex flex-col min-h-0">
           {selectedResult ? (
             <div className="space-y-4 flex-1 flex flex-col">
-              <div className="flex items-center justify-between flex-none bg-gray-50 border rounded px-2 py-1 text-xs">
+              <div className="flex items-center justify-between flex-none bg-gmi-surface-soft border border-gmi-border rounded px-2 py-1 text-xs">
                 <div className="flex items-center gap-2 flex-wrap overflow-hidden">
                   <span className="font-semibold">
                     Ledning #{selectedResult.lineIndex}
                   </span>
-                  <span className="text-gray-500">•</span>
-                  <span className="text-gray-700">
+                  <span className="text-gmi-text-subtle">•</span>
+                  <span className="text-gmi-text">
                     {selectedResult.attributes.Nett_type || 'Ukjent'}
                   </span>
-                  <span className="text-gray-500">•</span>
-                  <span className="text-gray-700">
+                  <span className="text-gmi-text-subtle">•</span>
+                  <span className="text-gmi-text">
                     {selectedResult.attributes.Dimensjon ||
                       selectedResult.attributes.Dim ||
                       '?'}
                     mm
                   </span>
-                  <span className="text-gray-500">•</span>
+                  <span className="text-gmi-text-subtle">•</span>
                   <span
-                    className="text-gray-700 truncate max-w-45"
+                    className="text-gmi-text truncate max-w-45"
                     title={
                       selectedResult.attributes.Materiale ||
                       selectedResult.attributes.Mat ||
@@ -405,24 +396,24 @@ export default function InclineAnalysisModal() {
                       selectedResult.attributes.MAT ||
                       '-'}
                   </span>
-                  <span className="text-gray-500">•</span>
-                  <span className="text-gray-700">
+                  <span className="text-gmi-text-subtle">•</span>
+                  <span className="text-gmi-text">
                     Fall:{' '}
                     {formatNumber(selectedResult.details.incline, 2)}‰
                   </span>
-                  <span className="text-gray-500">•</span>
-                  <span className="text-gray-700">
+                  <span className="text-gmi-text-subtle">•</span>
+                  <span className="text-gmi-text">
                     L:{' '}
                     {formatNumber(selectedResult.details.length, 2)} m
                   </span>
-                  <span className="text-gray-500">•</span>
-                  <span className="text-gray-700">
+                  <span className="text-gmi-text-subtle">•</span>
+                  <span className="text-gmi-text">
                     ΔZ:{' '}
                     {formatNumber(selectedResult.details.deltaZ, 3)} m
                   </span>
                   {(selectedTerrainStatus === 'loading' ||
                     selectedTerrainQueued) && (
-                    <span className="text-gray-500 flex items-center gap-1">
+                    <span className="text-gmi-text-subtle flex items-center gap-1">
                       <svg
                         className="animate-spin h-3 w-3"
                         xmlns="http://www.w3.org/2000/svg"
@@ -461,7 +452,6 @@ export default function InclineAnalysisModal() {
                         >
                           Overdekning:{' '}
                           {formatNumber(oc.minOvercover, 2)} m
-                          {hasWarning && ' ⚠'}
                         </span>
                       );
                     })()}
@@ -475,7 +465,7 @@ export default function InclineAnalysisModal() {
                         layerId: analysisLayerId || null,
                       })
                     }
-                    className="px-2 py-1 text-[11px] rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                    className="gmi-compact-button gmi-focus-ring px-2 py-1 text-[11px] border border-gmi-border-strong bg-gmi-surface text-gmi-interactive"
                   >
                     Inspiser data
                   </button>
@@ -485,7 +475,7 @@ export default function InclineAnalysisModal() {
 
               {/* Cross Section Visualization */}
               <div
-                className="border rounded-lg p-2 bg-white shadow-sm flex-1 flex flex-col min-h-0"
+                className="border border-gmi-border-strong rounded-lg p-2 bg-gmi-surface shadow-sm flex-1 flex flex-col min-h-0"
                 style={{ minHeight: '300px' }}
               >
                 <div className="flex-1 min-h-0 w-full">
@@ -497,7 +487,7 @@ export default function InclineAnalysisModal() {
               </div>
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+            <div className="h-full flex items-center justify-center text-gmi-text-subtle text-sm">
               Velg en ledning fra listen for å se detaljer
             </div>
           )}
@@ -749,7 +739,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
 
   if (startZ === null || endZ === null) {
     return (
-      <div className="h-full flex items-center justify-center bg-gray-100 rounded text-gray-500">
+      <div className="h-full flex items-center justify-center bg-gmi-surface-soft rounded text-gmi-text-subtle">
         Kan ikke vise profil: Mangler Z-koordinater
       </div>
     );
@@ -973,21 +963,26 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
       <div className="absolute top-2 right-2 z-10 flex gap-1">
         <button
           onClick={() => setTransform({ x: 0, y: 0, k: 1 })}
-          className="bg-white border rounded px-2 py-1 text-xs shadow hover:bg-gray-50"
+          className="gmi-compact-button gmi-focus-ring inline-flex items-center gap-1 bg-gmi-surface border border-gmi-border-strong px-2 py-1 text-xs shadow"
           title="Nullstill visning"
         >
+          <ArrowCounterClockwiseIcon
+            size={12}
+            weight="regular"
+            aria-hidden="true"
+          />
           Reset
         </button>
       </div>
 
       {/* Legend */}
-      <div className="absolute top-2 left-2 z-10 bg-white/90 border rounded px-2 py-1.5 text-xs shadow flex gap-3 items-center">
+      <div className="absolute top-2 left-2 z-10 bg-gmi-surface/90 border border-gmi-border rounded px-2 py-1.5 text-xs shadow flex gap-3 items-center">
         <div className="flex items-center gap-1">
           <div
             className="w-4 h-1 rounded"
             style={{ backgroundColor: pipeColor }}
           ></div>
-          <span className="text-gray-600">Ledning</span>
+          <span className="text-gmi-text-muted">Ledning</span>
         </div>
         {terrainLinePoints.length > 0 && (
           <div className="flex items-center gap-1">
@@ -995,7 +990,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
               className="w-4 h-0.5 rounded"
               style={{ backgroundColor: '#8B4513', opacity: 0.8 }}
             ></div>
-            <span className="text-gray-600">Terreng</span>
+            <span className="text-gmi-text-muted">Terreng</span>
           </div>
         )}
         {(overcoverData.some((oc) => oc.warning) ||
@@ -1023,9 +1018,9 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
 
       {isTerrainPending && (
         <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-          <div className="bg-white/95 border border-gray-200 rounded-lg px-5 py-4 shadow-md flex flex-col items-center gap-2">
+          <div className="bg-gmi-surface/95 border border-gmi-border rounded-lg px-5 py-4 shadow-md flex flex-col items-center gap-2">
             <svg
-              className="animate-spin h-9 w-9 text-blue-600"
+              className="animate-spin h-9 w-9 text-gmi-interactive"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -1044,7 +1039,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               ></path>
             </svg>
-            <span className="text-xs text-gray-600 font-medium">
+            <span className="text-xs text-gmi-text-muted font-medium">
               {terrainStatus === 'loading'
                 ? 'Henter terrengdata...'
                 : 'Venter på terrengdata...'}
@@ -1056,7 +1051,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
       <svg
         width={width}
         height={height}
-        className="border bg-gray-50 rounded cursor-move"
+        className="border border-gmi-border bg-gmi-surface-soft rounded cursor-move"
       >
         <g
           transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}
@@ -1504,7 +1499,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
       {tooltip && (
         <div
           ref={tooltipRef}
-          className="absolute z-50 bg-white text-gray-900 text-xs p-2 rounded shadow-lg pointer-events-none whitespace-nowrap border border-gray-200"
+          className="absolute z-50 bg-gmi-surface text-gmi-navy text-xs p-2 rounded shadow-lg pointer-events-none whitespace-nowrap border border-gmi-border-strong"
           style={(() => {
             if (tooltip.type === 'terrain') {
               const anchorX =
@@ -1541,116 +1536,112 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
         >
           {tooltip.type === 'point' ? (
             <>
-              <div className="font-bold mb-1 border-b border-gray-700 pb-1">
+              <div className="font-bold mb-1 border-b border-gmi-border pb-1">
                 Punkt
               </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                <span className="text-gray-400">Avstand:</span>
+                <span className="text-gmi-text-subtle">Avstand:</span>
                 <span className="font-mono">
                   {formatNumber(tooltip.data.dist, 1)}m
                 </span>
 
-                <span className="text-gray-400">Ledning Z:</span>
+                <span className="text-gmi-text-subtle">Ledning Z:</span>
                 <span className="font-mono">
                   {formatNumber(tooltip.data.pipeZ, 2)}m
                 </span>
 
-                <span className="text-gray-400">Terreng Z:</span>
+                <span className="text-gmi-text-subtle">Terreng Z:</span>
                 <span className="font-mono">
                   {formatNumber(tooltip.data.terrainZ, 2)}m
                 </span>
 
-                <span className="text-gray-400">Overdekning:</span>
+                <span className="text-gmi-text-subtle">Overdekning:</span>
                 <span
                   className={`font-mono font-bold ${
                     tooltip.data.warning
-                      ? 'text-red-400'
-                      : 'text-green-400'
+                      ? 'text-red-700'
+                      : 'text-green-700'
                   }`}
                 >
                   {formatNumber(tooltip.data.overcover, 2)}m
-                  {tooltip.data.warning && ' ⚠'}
                 </span>
               </div>
               {tooltip.data.warning && (
-                <div className="mt-1 pt-1 border-t border-gray-700 text-red-400 text-[10px]">
+                <div className="mt-1 pt-1 border-t border-gmi-border text-red-700 text-[10px]">
                   Under minstekrav ({formatNumber(minOvercover, 1)}m)
                 </div>
               )}
             </>
           ) : tooltip.type === 'terrain' ? (
             <>
-              <div className="font-bold mb-1 border-b border-gray-700 pb-1">
+              <div className="font-bold mb-1 border-b border-gmi-border pb-1">
                 Terrengpunkt
               </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                <span className="text-gray-400">Avstand:</span>
+                <span className="text-gmi-text-subtle">Avstand:</span>
                 <span className="font-mono">
                   {formatNumber(tooltip.data.dist, 1)}m
                 </span>
 
-                <span className="text-gray-400">Terreng Z:</span>
+                <span className="text-gmi-text-subtle">Terreng Z:</span>
                 <span className="font-mono">
                   {formatNumber(tooltip.data.terrainZ, 2)}m
                 </span>
 
-                <span className="text-gray-400">
+                <span className="text-gmi-text-subtle">
                   Ledning Z (interp):
                 </span>
                 <span className="font-mono">
                   {formatNumber(tooltip.data.pipeZ, 2)}m
                 </span>
 
-                <span className="text-gray-400">Overdekning:</span>
+                <span className="text-gmi-text-subtle">Overdekning:</span>
                 <span
                   className={`font-mono font-bold ${
                     tooltip.data.overcover !== null &&
                     tooltip.data.overcover < minOvercover
-                      ? 'text-red-400'
-                      : 'text-green-400'
+                      ? 'text-red-700'
+                      : 'text-green-700'
                   }`}
                 >
                   {formatNumber(tooltip.data.overcover, 2)}m
-                  {tooltip.data.overcover !== null &&
-                    tooltip.data.overcover < minOvercover &&
-                    ' ⚠'}
                 </span>
 
-                <span className="text-gray-400">Punkt:</span>
+                <span className="text-gmi-text-subtle">Punkt:</span>
                 <span className="font-mono">
                   {tooltip.data.isVertex ? 'Målt' : 'Interpolert'}
                 </span>
               </div>
               {tooltip.data.terreng && (
-                <div className="mt-1 pt-1 border-t border-gray-700 text-[10px] text-gray-300">
+                <div className="mt-1 pt-1 border-t border-gmi-border text-[10px] text-gmi-text-muted">
                   Terrengtype: {tooltip.data.terreng}
                 </div>
               )}
             </>
           ) : (
             <>
-              <div className="font-bold mb-1 border-b border-gray-700 pb-1">
+              <div className="font-bold mb-1 border-b border-gmi-border pb-1">
                 Seksjon
               </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                <span className="text-gray-400">Fall:</span>
+                <span className="text-gmi-text-subtle">Fall:</span>
                 <span
                   className={`font-mono font-bold ${
                     tooltip.data.incline < 0 &&
                     result.pipeType !== 'pressure'
-                      ? 'text-red-400'
-                      : 'text-green-400'
+                      ? 'text-red-700'
+                      : 'text-green-700'
                   }`}
                 >
                   {formatNumber(tooltip.data.incline, 2)}‰
                 </span>
 
-                <span className="text-gray-400">Lengde:</span>
+                <span className="text-gmi-text-subtle">Lengde:</span>
                 <span className="font-mono">
                   {formatNumber(tooltip.data.length, 2)}m
                 </span>
 
-                <span className="text-gray-400">Høydeforskjell:</span>
+                <span className="text-gmi-text-subtle">Høydeforskjell:</span>
                 <span className="font-mono">
                   {formatNumber(tooltip.data.drop, 3)}m
                 </span>
@@ -1693,21 +1684,29 @@ function AnalysisResultRow({
     (terrain?.overcover?.warnings?.length || 0) > 0;
   const fcode =
     result.attributes.Tema || result.attributes.S_FCODE || 'Ukjent';
-  const color = getColorByFCode(fcode);
-
+  const typeTextClassByDomainColor = {
+    '#0101ff': 'text-blue-700',
+    '#02d902': 'text-green-700',
+    '#2a2a2a': 'text-gmi-text',
+    '#ff0000': 'text-red-700',
+    '#808080': 'text-gmi-text-muted',
+  };
+  const typeTextClass =
+    typeTextClassByDomainColor[getColorByFCode(fcode).toLowerCase()] ||
+    'text-gmi-text-muted';
   return (
     <div
       onClick={onSelect}
-      className={`p-3 border-b cursor-pointer hover:bg-gray-100 ${
-        isSelected ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+      className={`p-3 border-b border-gmi-border cursor-pointer hover:bg-gmi-surface-soft ${
+        isSelected ? 'bg-gmi-border border-l-4 border-l-gmi-interactive' : ''
       }`}
     >
       <div className="flex justify-between items-start">
         <div className="flex flex-col">
-          <span className="font-bold text-sm" style={{ color }}>
+          <span className={`font-bold text-sm ${typeTextClass}`}>
             {fcode}
           </span>
-          <span className="text-xs text-gray-700">
+          <span className="text-xs text-gmi-text">
             {result.attributes.Nett_type
               ? `${result.attributes.Nett_type} - `
               : ''}
@@ -1720,7 +1719,7 @@ function AnalysisResultRow({
         <div className="flex items-center gap-1">
           {isTerrainPending && (
             <span
-              className="inline-flex items-center px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded"
+              className="inline-flex items-center px-1.5 py-0.5 text-[10px] bg-gmi-surface-soft text-gmi-text-muted rounded"
               title={
                 terrainStatus === 'loading'
                   ? 'Henter terrengdata...'
@@ -1755,7 +1754,11 @@ function AnalysisResultRow({
               className="inline-flex items-center px-1.5 py-0.5 text-[10px] bg-green-50 text-green-700 rounded"
               title="Terrengdata OK"
             >
-              ⛰️
+              <MountainsIcon
+                size={12}
+                weight="regular"
+                aria-hidden="true"
+              />
             </span>
           )}
 
@@ -1764,7 +1767,12 @@ function AnalysisResultRow({
               className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] bg-red-50 text-red-700 rounded font-medium"
               title={`${terrain.overcover.warnings.length} punkt med lav overdekning`}
             >
-              ⛰️ {terrain.overcover.warnings.length}⚠
+              <MountainsIcon
+                size={12}
+                weight="regular"
+                aria-hidden="true"
+              />
+              {terrain.overcover.warnings.length}
             </span>
           )}
 
@@ -1773,11 +1781,11 @@ function AnalysisResultRow({
       </div>
 
       {result.message !== 'OK' && (
-        <div className="text-xs text-gray-500 mt-1">
+        <div className="text-xs text-gmi-text-muted mt-1">
           {result.message}
         </div>
       )}
-      <div className="text-xs text-gray-400 mt-1">
+      <div className="text-xs text-gmi-text-subtle mt-1">
         ID: {result.lineIndex}
       </div>
     </div>

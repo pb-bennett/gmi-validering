@@ -16,6 +16,7 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   const mapToolbar = read('src/components/MapPaneToolbar.js');
   const page = read('src/app/page.js');
   const activation = read('src/lib/testModeActivation.mjs');
+  const validationSidebar = read('src/components/FieldValidationSidebar.js');
 
   for (const label of [
     'Utvikling over tid',
@@ -62,24 +63,29 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(page, /parsingStatus !== 'done'[\s\S]*?<TestModeControl \/>/);
   assert.match(page, /parsingStatus === 'done'[\s\S]*?<MapPaneToolbar/);
   assert.match(page, /<StatsModal/);
+  assert.match(page, /<StatsModal[\s\S]*?isOpen=\{showStats\}[\s\S]*?onClose=\{\(\) => setShowStats\(false\)\}/);
   assert.match(page, /const \[dockedInspectorOpen, setDockedInspectorOpen\] = useState\(false\)/);
+  assert.match(page, /const analysisOpen = useStore\(\(state\) => state\.analysis\.isOpen\)/);
   assert.match(
     page,
-    /\{!\(layerDataTableOpen \|\| dockedInspectorOpen\) && \(\s*<button[\s\S]*?aria-label="Vis bruksstatistikk"/,
+    /\{!\(layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen\) && \(\s*<button[\s\S]*?aria-label="Vis bruksstatistikk"/,
   );
   const statsTriggerStart = page.indexOf('aria-label="Vis bruksstatistikk"');
-  const statsTriggerConditionStart = page.lastIndexOf(
-    '{!(layerDataTableOpen || dockedInspectorOpen) && (',
-    statsTriggerStart,
+  const statsTriggerCondition = page.match(
+    /\{!\((layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen)\)\s*&&/,
   );
+  const statsTriggerConditionStart = page.lastIndexOf('{!', statsTriggerStart);
   const statsTriggerEnd = page.indexOf('</button>', statsTriggerStart) + '</button>'.length;
   const statsTrigger = page.slice(statsTriggerConditionStart, statsTriggerEnd);
+  assert.ok(statsTriggerCondition);
   assert.ok(statsTriggerConditionStart >= 0);
   assert.ok(statsTriggerEnd > statsTriggerStart);
   assert.doesNotMatch(statsTrigger, /parsingStatus === 'done'/);
   assert.ok(statsTriggerStart < page.indexOf("{parsingStatus === 'done' &&"));
   assert.equal((page.match(/aria-label="Vis bruksstatistikk"/g) || []).length, 1);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);
+  assert.match(validationSidebar, /<FieldDetailModal[\s\S]*?isOpen=\{!!selectedField\}/);
+  assert.doesNotMatch(statsTrigger, /selectedField|FieldDetailModal/);
   assert.match(modal, /Opplastinger uten registrert kommune/);
   assert.match(modal, /Statistikk fra/);
   assert.match(modal, /formatAnalyticsStartDate/);
@@ -108,4 +114,25 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(map, /shouldAutoFitViewport/);
   assert.match(legacyStats, /ANALYTICS_START_DATE = '2026-02-19'/);
   assert.match(statsRoute, /analyticsStartDate: ANALYTICS_START_DATE/);
+});
+
+test('Stats trigger visibility follows table, docked inspector, and profile ownership only', async () => {
+  const page = await read('src/app/page.js');
+  const predicate = page.match(
+    /\{!\((layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen)\)\s*&&/,
+  );
+  assert.ok(predicate, 'trigger excludes all three suppressing workspace surfaces');
+
+  const shouldShowStatsTrigger = new Function(
+    'layerDataTableOpen',
+    'dockedInspectorOpen',
+    'analysisOpen',
+    `return !(${predicate[1]});`,
+  );
+
+  assert.equal(shouldShowStatsTrigger(false, false, false), true, 'visible on initial/upload and normal workspace');
+  assert.equal(shouldShowStatsTrigger(true, false, false), false, 'table suppresses Stats');
+  assert.equal(shouldShowStatsTrigger(false, true, false), false, 'docked inspector suppresses Stats');
+  assert.equal(shouldShowStatsTrigger(false, false, true), false, 'profile analysis suppresses Stats');
+  assert.equal(shouldShowStatsTrigger(false, false, false), true, 'Stats returns after the suppressing surface closes');
 });

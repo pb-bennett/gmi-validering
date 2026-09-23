@@ -1,5 +1,6 @@
 import useStore from '@/lib/store';
 import { analyzeIncline } from '@/lib/analysis/incline';
+import { XIcon } from '@phosphor-icons/react';
 
 export default function StandardsInfoModal({ isOpen, onClose }) {
   const data = useStore((state) => state.data);
@@ -25,81 +26,71 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-[2100] flex items-center justify-center bg-black bg-opacity-50"
+      className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-xl max-w-2xl w-full m-4 p-6"
+        className="bg-gmi-surface border border-gmi-border-strong rounded-lg shadow-xl max-w-2xl w-full m-4 p-6 text-gmi-text"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-start mb-4 border-b pb-2">
-          <h2 className="text-xl font-bold text-gray-800">
+        <div className="flex justify-between items-start mb-4 border-b border-gmi-border pb-2">
+          <h2 className="text-xl font-bold text-gmi-navy">
             Krav til selvfall (Norsk Vann)
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="gmi-compact-button gmi-focus-ring text-gmi-text-muted"
+            aria-label="Lukk krav til selvfall"
+            title="Lukk"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <XIcon size={24} weight="regular" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="space-y-4 text-sm text-gray-700">
+        <div className="space-y-4 text-sm text-gmi-text">
           <p>
             Analysen baserer seg på Norsk Vanns standarder for
             minimumsfall på selvfallsledninger. Kravene varierer
             basert på rørdimensjon for å sikre selvrensing.
           </p>
 
-          <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
-            <h3 className="font-semibold text-blue-800 mb-2">
+          <div className="bg-gmi-surface-soft p-4 rounded-md border border-gmi-border">
+            <h3 className="font-semibold text-gmi-navy mb-2">
               Minimumskrav til fall:
             </h3>
             <div className="space-y-3 mb-3">
-              <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+              <label className="flex items-start gap-2 text-sm text-gmi-text cursor-pointer">
                 <input
                   type="radio"
                   name="inclineRequirement"
                   value="fixed10"
                   checked={inclineRequirementMode === 'fixed10'}
                   onChange={() => handleModeChange('fixed10')}
-                  className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                  className="mt-0.5 accent-gmi-interactive focus:ring-gmi-interactive"
                 />
                 <div>
                   <div className="font-medium">
                     Fast krav til fall: 10‰ for alle dimensjoner
                   </div>
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-gmi-text-muted">
                     Dette er standard og vil være valgt ved lasting.
                   </div>
                 </div>
               </label>
-              <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+              <label className="flex items-start gap-2 text-sm text-gmi-text cursor-pointer">
                 <input
                   type="radio"
                   name="inclineRequirement"
                   value="variable"
                   checked={inclineRequirementMode === 'variable'}
                   onChange={() => handleModeChange('variable')}
-                  className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                  className="mt-0.5 accent-gmi-interactive focus:ring-gmi-interactive"
                 />
                 <div>
                   <div className="font-medium">
                     Variabelt krav til fall basert på dimensjon
                   </div>
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-gmi-text-muted">
                     Dimensjon &lt; 200 mm: 10 ‰ (1:100) · Dimensjon
                     200 - 315 mm: 4 ‰ (1:250) · Dimensjon &gt; 315 mm:
                     2 ‰ (1:500)
@@ -133,13 +124,13 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
             <h3 className="font-semibold text-amber-800 mb-2">
               Krav til overdekning:
             </h3>
-            <p className="text-sm text-gray-700 mb-3">
+            <p className="text-sm text-gmi-text mb-3">
               Overdekning er avstanden fra topp rør til
               terrengoverflaten. Minimumskrav sikrer at ledninger har
               tilstrekkelig beskyttelse mot frost og mekaniske
               påkjenninger.
             </p>
-            <div className="text-xs text-gray-600 mb-3">
+            <div className="text-xs text-gmi-text-muted mb-3">
               Innstillingen for minstekrav til overdekning justeres nå
               direkte i profilanalysen.
             </div>
@@ -151,16 +142,16 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
           </div>
 
           <div className="space-y-2">
-            <h3 className="font-semibold text-gray-800">
+            <h3 className="font-semibold text-gmi-navy">
               Kilder og referanser:
             </h3>
-            <ul className="list-disc list-inside text-blue-600">
+            <ul className="list-disc list-inside text-gmi-interactive">
               <li>
                 <a
                   href="https://va-norm.no/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:underline"
+                  className="gmi-focus-ring hover:underline"
                 >
                   VA-Norm (Norsk Vann)
                 </a>
@@ -170,7 +161,7 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
                   href="https://www.norskvann.no/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:underline"
+                  className="gmi-focus-ring hover:underline"
                 >
                   Norsk Vann Rapporter
                 </a>
@@ -178,7 +169,7 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
             </ul>
           </div>
 
-          <div className="mt-4 text-xs text-gray-500 border-t pt-2">
+          <div className="mt-4 text-xs text-gmi-text-subtle border-t border-gmi-border pt-2">
             <p>
               Merk: Analysen markerer ledninger med "Advarsel" (Gult)
               dersom fallet er under minimumskravet, men over 0.
@@ -191,7 +182,7 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
         <div className="mt-6 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            className="gmi-primary-control gmi-focus-ring px-4 py-2"
           >
             Lukk
           </button>
