@@ -69,8 +69,8 @@ test('shared working header and both Kontakt actions use the one page-owned moda
   assert.match(sidebarSource, /<EnvelopeSimpleIcon\b/);
   assert.match(sidebarSource, /Kontakt/);
   assert.match(sidebarSource, /onClick=\{onOpenContact\}/);
-  assert.match(sidebarSource, /mt-auto border-t px-4 py-3/);
-  assert.match(sidebarSource, /items-center justify-center gap-2 rounded-lg/);
+  assert.match(sidebarSource, /mt-auto border-t border-gmi-border bg-gmi-surface px-4 py-3/);
+  assert.match(sidebarSource, /gmi-compact-button gmi-focus-ring flex min-h-9 w-full items-center justify-center gap-2/);
   assert.match(pageSource, /onOpenAppInfo=\{\(event\) => openAppInfo\('about', event\.currentTarget\)\}/);
   assert.match(pageSource, /onOpenContact=\{\(event\) => openAppInfo\('contact', event\.currentTarget\)\}/);
   assert.match(pageSource, /initialTab=\{appInfoInitialTab\}/);

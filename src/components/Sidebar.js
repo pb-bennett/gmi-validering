@@ -533,45 +533,26 @@ function OutlierControl() {
 
 function SidebarSection({ title, children, isOpen, onToggle }) {
   return (
-    <div
-      className="border-b last:border-0"
-      style={{ borderColor: 'var(--color-border)' }}
-    >
+    <div className="border-b border-gmi-border last:border-0">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-3 transition-colors text-left"
-        style={{
-          backgroundColor: 'var(--color-sidebar-bg)',
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-sidebar-hover)')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-sidebar-bg)')
-        }
+        className="gmi-focus-ring flex w-full items-center justify-between bg-gmi-surface p-3 text-left transition-colors hover:bg-gmi-surface-soft"
       >
         <span
-          className="font-semibold text-sm"
-          style={{ color: 'var(--color-text)' }}
+          className="text-sm font-semibold text-gmi-navy"
         >
           {title}
         </span>
         <span
-          className={`transform transition-transform duration-200 text-xs ${
+          className={`transform text-xs text-gmi-text-subtle transition-transform duration-200 ${
             isOpen ? 'rotate-180' : ''
           }`}
-          style={{ color: 'var(--color-text-secondary)' }}
         >
           ▼
         </span>
       </button>
       {isOpen && (
-        <div
-          className="p-3"
-          style={{ backgroundColor: 'var(--color-card)' }}
-        >
+        <div className="bg-gmi-surface p-3">
           {children}
         </div>
       )}
@@ -647,21 +628,17 @@ function FieldSubSection({
   };
 
   return (
-    <div
-      className="border-b last:border-0"
-      style={{ borderColor: 'var(--color-border)' }}
-    >
+    <div className="border-b border-gmi-border last:border-0">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-2 transition-colors text-left hover:bg-gray-50"
+        className="gmi-focus-ring flex w-full items-center justify-between p-2 text-left transition-colors hover:bg-gmi-surface-soft"
       >
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <div
-              className={`text-xs font-semibold ${
+              className={`text-xs font-semibold text-gmi-text ${
                 someHidden ? 'opacity-60' : ''
               }`}
-              style={{ color: 'var(--color-text)' }}
             >
               {fieldLabel || fieldName}
             </div>
@@ -675,36 +652,32 @@ function FieldSubSection({
               </span>
             )}
           </div>
-          <div
-            className="text-[10px]"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
+          <div className="text-[10px] text-gmi-text-subtle">
             {sortedValues.length}{' '}
             {sortedValues.length === 1 ? 'verdi' : 'verdier'}
           </div>
         </div>
         <span
-          className={`transform transition-transform duration-200 text-xs ${
+          className={`transform text-xs text-gmi-text-subtle transition-transform duration-200 ${
             isExpanded ? 'rotate-180' : ''
           }`}
-          style={{ color: 'var(--color-text-secondary)' }}
         >
           ▼
         </span>
       </button>
       {isExpanded && hasData && (
-        <div className="bg-gray-50/50">
+        <div className="bg-gmi-surface-soft/60">
           {/* Toggle all button */}
-          <div className="px-2 py-1 flex justify-end border-b border-gray-200">
+          <div className="flex justify-end border-b border-gmi-border px-2 py-1">
             <button
               onClick={toggleAllValues}
-              className="text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
+              className="gmi-focus-ring rounded text-[10px] text-gmi-interactive hover:text-gmi-navy hover:underline"
             >
               {allHidden ? 'Vis alle' : 'Skjul alle'}
             </button>
           </div>
           <table className="w-full text-xs">
-            <thead className="bg-gray-100">
+            <thead className="bg-gmi-surface-soft">
               <tr>
                 <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-600 uppercase w-6">
                   Vis
@@ -720,7 +693,7 @@ function FieldSubSection({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gmi-border">
               {filteredValues.map(([value, count]) => {
                 const percentage = (
                   (count / totalCount) *
@@ -741,7 +714,7 @@ function FieldSubSection({
                 return (
                   <tr
                     key={value}
-                    className={`hover:bg-gray-100 cursor-pointer ${
+                    className={`cursor-pointer hover:bg-gmi-surface-soft ${
                       isHidden ? 'opacity-50' : ''
                     }`}
                     onClick={() =>
@@ -765,22 +738,22 @@ function FieldSubSection({
                         type="checkbox"
                         checked={!isHidden}
                         onChange={() => {}}
-                        className="h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="h-3 w-3 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
                       />
                     </td>
                     <td
                       className={`px-2 py-1 ${
                         isMissing
                           ? 'text-red-600 italic'
-                          : 'text-gray-700'
+                          : 'text-gmi-text'
                       }`}
                     >
                       {displayValue}
                     </td>
-                    <td className="px-2 py-1 text-right text-gray-700 font-medium">
+                    <td className="px-2 py-1 text-right font-medium text-gmi-text">
                       {count}
                     </td>
-                    <td className="px-2 py-1 text-right text-gray-600">
+                    <td className="px-2 py-1 text-right text-gmi-text-muted">
                       {percentage}%
                     </td>
                   </tr>
@@ -1134,10 +1107,10 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
       ref={sidebarRef}
       style={{
         width: `${width}px`,
-        backgroundColor: 'var(--color-card)',
-        borderRightColor: 'var(--color-border)',
+        backgroundColor: 'var(--gmi-surface)',
+        borderRightColor: 'var(--gmi-border)',
       }}
-      className="h-full border-r flex flex-col shadow-xl z-[10000] relative flex-shrink-0"
+      className="relative z-[10000] flex h-full flex-shrink-0 flex-col border-r shadow-xl"
     >
       {/* Resize Handle */}
       <div
@@ -1149,7 +1122,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
         }}
         onMouseEnter={(e) =>
           (e.currentTarget.style.backgroundColor =
-            'var(--color-primary-light)')
+            'var(--gmi-interactive)')
         }
         onMouseLeave={(e) =>
           (e.currentTarget.style.backgroundColor = 'transparent')
@@ -1174,28 +1147,28 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
           >
             <div className="space-y-3">
               {/* File Info */}
-              <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100">
+              <div className="rounded-lg border border-gmi-border bg-gmi-surface p-2.5 shadow-sm">
                 <div className="mb-2">
-                  <span className="text-xs text-gray-500 block mb-1">
+                  <span className="mb-1 block text-xs text-gmi-text-subtle">
                     Filnavn
                   </span>
-                  <span className="font-medium text-gray-900 break-all block text-sm">
+                  <span className="block break-all text-sm font-medium text-gmi-text">
                     {file?.name}
                   </span>
                 </div>
                 <div className="mb-2">
-                  <span className="text-xs text-gray-500 block mb-1">
+                  <span className="mb-1 block text-xs text-gmi-text-subtle">
                     Filtype
                   </span>
-                  <span className="font-medium text-gray-900 text-sm">
+                  <span className="text-sm font-medium text-gmi-text">
                     {data?.format || file?.format || 'Ukjent'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-500 block mb-1">
+                  <span className="mb-1 block text-xs text-gmi-text-subtle">
                     Størrelse
                   </span>
-                  <span className="font-medium text-gray-900 text-sm">
+                  <span className="text-sm font-medium text-gmi-text">
                     {(file?.size / 1024).toFixed(1)} KB
                   </span>
                 </div>
@@ -1203,29 +1176,29 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
 
               {/* Stats */}
               <div className="grid grid-cols-1 gap-2">
-                <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
-                  <span className="text-gray-600 text-xs">
+                <div className="flex items-center justify-between rounded-lg border border-gmi-border bg-gmi-surface p-2.5 shadow-sm">
+                  <span className="text-xs text-gmi-text-muted">
                     Punkter
                   </span>
-                  <span className="font-bold text-primary text-sm">
+                  <span className="text-sm font-bold text-gmi-navy">
                     {stats.pointCount}
                   </span>
                 </div>
-                <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
-                  <span className="text-gray-600 text-xs">
+                <div className="flex items-center justify-between rounded-lg border border-gmi-border bg-gmi-surface p-2.5 shadow-sm">
+                  <span className="text-xs text-gmi-text-muted">
                     Ledninger
                   </span>
-                  <span className="font-bold text-primary text-sm">
+                  <span className="text-sm font-bold text-gmi-navy">
                     {stats.lineCount}
                   </span>
                 </div>
-                <div className="bg-white p-2.5 rounded-lg shadow-sm border border-gray-100">
-                  <span className="text-gray-600 text-xs block mb-1">
+                <div className="rounded-lg border border-gmi-border bg-gmi-surface p-2.5 shadow-sm">
+                  <span className="mb-1 block text-xs text-gmi-text-muted">
                     Total lengde
                   </span>
-                  <span className="font-bold text-primary text-sm">
+                  <span className="text-sm font-bold text-gmi-navy">
                     {stats.totalLength.toLocaleString('nb-NO')}{' '}
-                    <span className="text-xs font-normal text-gray-500">
+                    <span className="text-xs font-normal text-gmi-text-subtle">
                       meter
                     </span>
                   </span>
@@ -1244,7 +1217,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
               {/* Points Table */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gmi-text-muted">
                     Punkter
                   </h3>
                   {Object.keys(stats.temaStats.points).length > 0 && (
@@ -1272,7 +1245,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                           });
                         }
                       }}
-                      className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                      className="gmi-focus-ring rounded-lg px-2 py-1 text-xs font-medium text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
                     >
                       {Object.keys(stats.temaStats.points).every(
                         (code) => hiddenCodes.includes(code),
@@ -1283,19 +1256,19 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                   )}
                 </div>
                 {Object.keys(stats.temaStats.points).length > 0 ? (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-hidden rounded-lg border border-gmi-border bg-gmi-surface shadow-sm">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gmi-surface-soft">
                         <tr>
-                          <th className="px-2.5 py-1.5 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-2.5 py-1.5 text-left text-xs font-medium uppercase text-gmi-text-muted">
                             Kode / Beskrivelse
                           </th>
-                          <th className="px-2.5 py-1.5 text-right text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-2.5 py-1.5 text-right text-xs font-medium uppercase text-gmi-text-muted">
                             Antall
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gmi-border">
                         {Object.entries(stats.temaStats.points)
                           .sort(([, a], [, b]) => b.count - a.count)
                           .map(([code, data]) => {
@@ -1316,7 +1289,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                             return (
                               <React.Fragment key={code}>
                                 <tr
-                                  className={`hover:bg-gray-50 cursor-pointer transition-colors ${
+                                  className={`cursor-pointer transition-colors hover:bg-gmi-surface-soft ${
                                     isHidden ? 'opacity-50' : ''
                                   }`}
                                   onMouseEnter={() =>
@@ -1335,14 +1308,14 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                           e.stopPropagation();
                                           toggleHiddenCode(code);
                                         }}
-                                        className="mt-1 h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        className="mt-1 h-3 w-3 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
                                       />
                                       <div>
                                         <div
                                           className={`font-mono text-xs font-bold ${
                                             isUnknown
                                               ? 'text-red-600'
-                                              : 'text-gray-900'
+                                              : 'text-gmi-text'
                                           }`}
                                         >
                                           {code}
@@ -1351,7 +1324,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                           className={`text-xs ${
                                             isUnknown
                                               ? 'text-red-500 italic'
-                                              : 'text-gray-500'
+                                              : 'text-gmi-text-subtle'
                                           }`}
                                         >
                                           {isMissingTema
@@ -1361,17 +1334,17 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="px-3 py-2 text-right text-gray-600 font-medium align-top">
+                                  <td className="px-3 py-2 text-right font-medium text-gmi-text-muted align-top">
                                     {data.count}
                                   </td>
                                 </tr>
                                 {hasTypes && (
-                                  <tr className="bg-gray-50/50">
+                                  <tr className="bg-gmi-surface-soft/60">
                                     <td
                                       colSpan="2"
                                       className="px-3 py-1 pb-2"
                                     >
-                                      <div className="ml-8 text-xs border-l-2 border-gray-200 pl-2 space-y-1">
+                                      <div className="ml-8 space-y-1 border-l-2 border-gmi-border pl-2 text-xs">
                                         {Object.entries(data.types)
                                           .sort(
                                             ([, a], [, b]) => b - a,
@@ -1391,7 +1364,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                               return (
                                                 <div
                                                   key={typeVal}
-                                                  className={`flex justify-between items-center text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors ${
+                                                  className={`-mx-1 flex cursor-pointer items-center justify-between rounded px-1 text-gmi-text-subtle transition-colors hover:bg-gmi-surface-soft ${
                                                     isTypeHidden
                                                       ? 'opacity-50'
                                                       : ''
@@ -1424,7 +1397,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                                           code,
                                                         );
                                                       }}
-                                                      className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                      className="h-2.5 w-2.5 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
                                                     />
                                                     <span
                                                       className={
@@ -1437,7 +1410,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                                       {typeVal}
                                                     </span>
                                                   </div>
-                                                  <span className="font-mono text-gray-400">
+                                                  <span className="font-mono text-gmi-text-subtle">
                                                     {typeCount}
                                                   </span>
                                                 </div>
@@ -1464,7 +1437,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
               {/* Lines Table - LEDNINGER SECTION */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gmi-text-muted">
                     Ledninger
                   </h3>
                   {Object.keys(stats.temaStats.lines).length > 0 && (
@@ -1492,7 +1465,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                           });
                         }
                       }}
-                      className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                      className="gmi-focus-ring rounded-lg px-2 py-1 text-xs font-medium text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
                     >
                       {Object.keys(stats.temaStats.lines).every(
                         (code) => hiddenCodes.includes(code),
@@ -1503,19 +1476,19 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                   )}
                 </div>
                 {Object.keys(stats.temaStats.lines).length > 0 ? (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-hidden rounded-lg border border-gmi-border bg-gmi-surface shadow-sm">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gmi-surface-soft">
                         <tr>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gmi-text-muted">
                             Kode / Beskrivelse
                           </th>
-                          <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-3 py-2 text-right text-xs font-medium uppercase text-gmi-text-muted">
                             Antall
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gmi-border">
                         {Object.entries(stats.temaStats.lines)
                           .sort(([, a], [, b]) => b.count - a.count)
                           .map(([code, data]) => {
@@ -1536,7 +1509,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                             return (
                               <React.Fragment key={code}>
                                 <tr
-                                  className={`hover:bg-gray-50 cursor-pointer transition-colors ${
+                                  className={`cursor-pointer transition-colors hover:bg-gmi-surface-soft ${
                                     isHidden ? 'opacity-50' : ''
                                   }`}
                                   onMouseEnter={() =>
@@ -1555,14 +1528,14 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                           e.stopPropagation();
                                           toggleHiddenCode(code);
                                         }}
-                                        className="mt-1 h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        className="mt-1 h-3 w-3 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
                                       />
                                       <div>
                                         <div
                                           className={`font-mono text-xs font-bold ${
                                             isUnknown
                                               ? 'text-red-600'
-                                              : 'text-gray-900'
+                                              : 'text-gmi-text'
                                           }`}
                                         >
                                           {code}
@@ -1571,7 +1544,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                           className={`text-xs ${
                                             isUnknown
                                               ? 'text-red-500 italic'
-                                              : 'text-gray-500'
+                                              : 'text-gmi-text-subtle'
                                           }`}
                                         >
                                           {isMissingTema
@@ -1581,17 +1554,17 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="px-3 py-2 text-right text-gray-600 font-medium align-top">
+                                  <td className="px-3 py-2 text-right font-medium text-gmi-text-muted align-top">
                                     {data.count}
                                   </td>
                                 </tr>
                                 {hasTypes && (
-                                  <tr className="bg-gray-50/50">
+                                  <tr className="bg-gmi-surface-soft/60">
                                     <td
                                       colSpan="2"
                                       className="px-3 py-1 pb-2"
                                     >
-                                      <div className="ml-8 text-xs border-l-2 border-gray-200 pl-2 space-y-1">
+                                      <div className="ml-8 space-y-1 border-l-2 border-gmi-border pl-2 text-xs">
                                         {Object.entries(data.types)
                                           .sort(
                                             ([, a], [, b]) => b - a,
@@ -1611,7 +1584,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                               return (
                                                 <div
                                                   key={typeVal}
-                                                  className={`flex justify-between items-center text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors ${
+                                                  className={`-mx-1 flex cursor-pointer items-center justify-between rounded px-1 text-gmi-text-subtle transition-colors hover:bg-gmi-surface-soft ${
                                                     isTypeHidden
                                                       ? 'opacity-50'
                                                       : ''
@@ -1644,7 +1617,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                                           code,
                                                         );
                                                       }}
-                                                      className="h-2.5 w-2.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                      className="h-2.5 w-2.5 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
                                                     />
                                                     <span
                                                       className={
@@ -1657,7 +1630,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                                                       {typeVal}
                                                     </span>
                                                   </div>
-                                                  <span className="font-mono text-gray-400">
+                                                  <span className="font-mono text-gmi-text-subtle">
                                                     {typeCount}
                                                   </span>
                                                 </div>
@@ -1692,25 +1665,14 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
             {stats?.fieldAnalysis ? (
               <div className="space-y-2">
                 {/* Tabs */}
-                <div
-                  className="flex border-b"
-                  style={{ borderColor: 'var(--color-border)' }}
-                >
+                <div className="flex border-b border-gmi-border">
                   <button
                     onClick={() => setFeltTab('punkter')}
-                    className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                      feltTab === 'punkter' ? 'border-b-2' : ''
+                    className={`gmi-focus-ring flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                      feltTab === 'punkter'
+                        ? 'border-b-2 border-gmi-interactive text-gmi-navy'
+                        : 'text-gmi-text-subtle hover:bg-gmi-surface-soft'
                     }`}
-                    style={{
-                      color:
-                        feltTab === 'punkter'
-                          ? 'var(--color-primary)'
-                          : 'var(--color-text-secondary)',
-                      borderColor:
-                        feltTab === 'punkter'
-                          ? 'var(--color-primary)'
-                          : 'transparent',
-                    }}
                   >
                     Punkter (
                     {stats.fieldAnalysis.points.fieldOrder.length}{' '}
@@ -1718,19 +1680,11 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                   </button>
                   <button
                     onClick={() => setFeltTab('ledninger')}
-                    className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                      feltTab === 'ledninger' ? 'border-b-2' : ''
+                    className={`gmi-focus-ring flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                      feltTab === 'ledninger'
+                        ? 'border-b-2 border-gmi-interactive text-gmi-navy'
+                        : 'text-gmi-text-subtle hover:bg-gmi-surface-soft'
                     }`}
-                    style={{
-                      color:
-                        feltTab === 'ledninger'
-                          ? 'var(--color-primary)'
-                          : 'var(--color-text-secondary)',
-                      borderColor:
-                        feltTab === 'ledninger'
-                          ? 'var(--color-primary)'
-                          : 'transparent',
-                    }}
                   >
                     Ledninger (
                     {stats.fieldAnalysis.lines.fieldOrder.length}{' '}
@@ -1747,12 +1701,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                     onChange={(e) =>
                       setFeltSearchText(e.target.value)
                     }
-                    className="w-full px-3 py-2 text-xs rounded border focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={{
-                      backgroundColor: 'var(--color-bg)',
-                      borderColor: 'var(--color-border)',
-                      color: 'var(--color-text)',
-                    }}
+                    className="gmi-compact-field w-full px-3 py-2 text-xs"
                   />
                   {feltHiddenValues &&
                     feltHiddenValues.length > 0 && (
@@ -1766,7 +1715,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                         </span>
                         <button
                           onClick={clearFeltFilter}
-                          className="text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
+                          className="gmi-focus-ring rounded text-[10px] text-gmi-interactive hover:text-gmi-navy hover:underline"
                         >
                           Tilbakestill filter
                         </button>
@@ -1811,7 +1760,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                       },
                     )
                   ) : feltTab === 'punkter' ? (
-                    <p className="text-xs text-gray-500 italic pt-2">
+                    <p className="pt-2 text-xs italic text-gmi-text-subtle">
                       Ingen punktfelt tilgjengelig.
                     </p>
                   ) : null}
@@ -1849,14 +1798,14 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                       },
                     )
                   ) : feltTab === 'ledninger' ? (
-                    <p className="text-xs text-gray-500 italic pt-2">
+                    <p className="pt-2 text-xs italic text-gmi-text-subtle">
                       Ingen ledningfelt tilgjengelig.
                     </p>
                   ) : null}
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-gray-500 italic">
+              <p className="text-xs italic text-gmi-text-subtle">
                 Ingen feltdata tilgjengelig.
               </p>
             )}
@@ -1971,19 +1920,12 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
         </div>
       )}
 
-      <div
-        className="mt-auto border-t px-4 py-3"
-        style={{
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-sidebar-bg)',
-        }}
-      >
+      <div className="mt-auto border-t border-gmi-border bg-gmi-surface px-4 py-3">
         <button
           type="button"
           onClick={onOpenContact}
           aria-haspopup="dialog"
-          className="flex min-h-9 w-full items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-          style={{ color: 'var(--color-primary)' }}
+          className="gmi-compact-button gmi-focus-ring flex min-h-9 w-full items-center justify-center gap-2 px-2.5 py-2 text-sm font-medium"
         >
           <EnvelopeSimpleIcon size={17} weight="regular" aria-hidden="true" />
           Kontakt

@@ -100,13 +100,13 @@ function LayerAnalysisButtons({
       {/* Layer highlight toggle */}
       <button
         onClick={() => toggleLayerHighlightAll(layerId)}
-        className={`p-1.5 rounded transition-colors hover:bg-blue-100 relative group ${highlightAll ? 'bg-blue-100' : ''}`}
+        className={`gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy ${highlightAll ? 'gmi-selected-control' : ''}`}
         title={
           highlightAll ? 'Skru av laghighlight' : 'Marker alt i laget'
         }
       >
         <svg
-          className={`w-4 h-4 ${highlightAll ? 'text-blue-700' : 'text-blue-600'}`}
+          className="h-4 w-4"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -132,7 +132,7 @@ function LayerAnalysisButtons({
               }
             : runInclineAnalysis
         }
-        className="p-1.5 rounded transition-colors hover:bg-blue-100 relative group"
+        className="gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy disabled:cursor-not-allowed disabled:opacity-50"
         disabled={isKof}
         title={
           isKof
@@ -143,7 +143,7 @@ function LayerAnalysisButtons({
         }
       >
         <svg
-          className="w-4 h-4 text-blue-600"
+          className="h-4 w-4"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -174,7 +174,7 @@ function LayerAnalysisButtons({
               }
             : runZValidation
         }
-        className="p-1.5 rounded transition-colors hover:bg-blue-100 relative group"
+        className="gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
         title={
           zValidationResults
             ? 'Åpne høydekontroll'
@@ -182,7 +182,7 @@ function LayerAnalysisButtons({
         }
       >
         <svg
-          className="w-4 h-4 text-blue-600"
+          className="h-4 w-4"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -202,12 +202,12 @@ function LayerAnalysisButtons({
       {/* Feltvalidering */}
       <button
         onClick={() => toggleFieldValidation(true)}
-        className="p-1.5 rounded transition-colors hover:bg-blue-100 relative group"
+        className="gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy disabled:cursor-not-allowed disabled:opacity-50"
         disabled={isKof}
         title={isKof ? 'Ikke tilgjengelig for KOF' : 'Feltvalidering'}
       >
         <svg
-          className="w-4 h-4 text-blue-600"
+          className="h-4 w-4"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -224,7 +224,7 @@ function LayerAnalysisButtons({
       {/* Topplok kontroll */}
       <button
         onClick={onTopplokClick}
-        className={`p-1.5 rounded transition-colors hover:bg-blue-100 relative group ${topplokOpen ? 'bg-blue-100' : ''}`}
+        className={`gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy disabled:cursor-not-allowed disabled:opacity-50 ${topplokOpen ? 'gmi-selected-control' : ''}`}
         disabled={isKof}
         title={
           isKof
@@ -235,7 +235,7 @@ function LayerAnalysisButtons({
         }
       >
         <svg
-          className="w-4 h-4 text-blue-600"
+          className="h-4 w-4"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -466,22 +466,16 @@ function LayerTemaSection({
   const totalHidden = hiddenCodes.length;
 
   return (
-    <div
-      className="border-b last:border-0"
-      style={{ borderColor: 'var(--color-border)' }}
-    >
+    <div className="border-b border-gmi-border last:border-0">
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-2 p-2 transition-colors text-left hover:bg-gray-50"
+        className="gmi-focus-ring flex w-full items-center gap-2 p-2 text-left transition-colors hover:bg-gmi-surface-soft"
       >
         <div className="flex items-center gap-2">
-          <span
-            className="text-xs font-medium"
-            style={{ color: 'var(--color-text)' }}
-          >
+          <span className="text-xs font-medium text-gmi-text">
             Tema
           </span>
-          <span className="text-[10px] text-gray-500">
+          <span className="text-[10px] text-gmi-text-subtle">
             {pointCount} punkt, {lineCount} linje
           </span>
           {totalHidden > 0 && (
@@ -491,19 +485,18 @@ function LayerTemaSection({
           )}
         </div>
         <span
-          className={`ml-auto transform transition-transform duration-200 text-xs ${isOpen ? 'rotate-180' : ''}`}
-          style={{ color: 'var(--color-text-secondary)' }}
+          className={`ml-auto transform text-xs text-gmi-text-subtle transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
         >
           ▼
         </span>
       </button>
 
       {isOpen && (
-        <div className="p-2 bg-gray-50/50 space-y-3">
+        <div className="space-y-3 bg-gmi-surface-soft/60 p-2">
           {/* Points */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <h4 className="text-[10px] font-bold text-gray-500 uppercase">
+              <h4 className="text-[10px] font-bold uppercase text-gmi-text-muted">
                 Punkter
               </h4>
               {pointCount > 0 && (
@@ -523,7 +516,7 @@ function LayerTemaSection({
                       }
                     });
                   }}
-                  className="text-[10px] text-blue-600 hover:underline"
+                  className="gmi-focus-ring rounded text-[10px] text-gmi-interactive hover:text-gmi-navy hover:underline"
                 >
                   {Object.keys(temaStats.points).every((c) =>
                     hiddenCodes.includes(c),
@@ -552,7 +545,7 @@ function LayerTemaSection({
                     return (
                       <React.Fragment key={code}>
                         <div
-                          className={`flex items-center justify-between px-1 py-0.5 rounded text-[11px] cursor-pointer hover:bg-gray-100 ${isHidden ? 'opacity-50' : ''}`}
+                          className={`flex cursor-pointer items-center justify-between rounded px-1 py-0.5 text-[11px] hover:bg-gmi-surface-soft ${isHidden ? 'opacity-50' : ''}`}
                           onMouseEnter={() =>
                             setHighlightedCode(code)
                           }
@@ -568,23 +561,23 @@ function LayerTemaSection({
                               type="checkbox"
                               checked={!isHidden}
                               onChange={() => {}}
-                              className="h-2.5 w-2.5"
+                              className="h-2.5 w-2.5 accent-gmi-interactive"
                             />
                             <span className="font-mono font-bold">
                               {code}
                             </span>
-                            <span className="text-gray-500 truncate max-w-20">
+                            <span className="max-w-20 truncate text-gmi-text-subtle">
                               {code === MISSING_TEMA_VALUE
                                 ? 'Mangler Tema'
                                 : label || 'Ukjent'}
                             </span>
                           </div>
-                          <span className="text-gray-500">
+                          <span className="text-gmi-text-subtle">
                             {data.count}
                           </span>
                         </div>
                         {hasTypes && (
-                          <div className="ml-5 border-l border-gray-200 pl-2 space-y-0.5">
+                          <div className="ml-5 space-y-0.5 border-l border-gmi-border pl-2">
                             {typeEntries
                               .sort(([, a], [, b]) => b - a)
                               .map(([typeVal, typeCount]) => {
@@ -596,7 +589,7 @@ function LayerTemaSection({
                                 return (
                                   <div
                                     key={`${code}-${typeVal}`}
-                                    className={`flex items-center justify-between text-[10px] text-gray-500 cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 ${isTypeHidden ? 'opacity-50' : ''}`}
+                                    className={`-mx-1 flex cursor-pointer items-center justify-between rounded px-1 text-[10px] text-gmi-text-subtle hover:bg-gmi-surface-soft ${isTypeHidden ? 'opacity-50' : ''}`}
                                     onMouseEnter={() =>
                                       setHighlightedType(
                                         typeVal,
@@ -619,7 +612,7 @@ function LayerTemaSection({
                                         type="checkbox"
                                         checked={!isTypeHidden}
                                         onChange={() => {}}
-                                        className="h-2.5 w-2.5"
+                                        className="h-2.5 w-2.5 accent-gmi-interactive"
                                       />
                                       <span
                                         className={
@@ -631,7 +624,7 @@ function LayerTemaSection({
                                         {typeVal}
                                       </span>
                                     </div>
-                                    <span className="font-mono text-gray-400">
+                                    <span className="font-mono text-gmi-text-subtle">
                                       {typeCount}
                                     </span>
                                   </div>
@@ -644,7 +637,7 @@ function LayerTemaSection({
                   })}
               </div>
             ) : (
-              <p className="text-[10px] text-gray-500 italic">
+              <p className="text-[10px] italic text-gmi-text-subtle">
                 Ingen punkter
               </p>
             )}
@@ -653,7 +646,7 @@ function LayerTemaSection({
           {/* Lines */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <h4 className="text-[10px] font-bold text-gray-500 uppercase">
+              <h4 className="text-[10px] font-bold uppercase text-gmi-text-muted">
                 Ledninger
               </h4>
               {lineCount > 0 && (
@@ -673,7 +666,7 @@ function LayerTemaSection({
                       }
                     });
                   }}
-                  className="text-[10px] text-blue-600 hover:underline"
+                  className="gmi-focus-ring rounded text-[10px] text-gmi-interactive hover:text-gmi-navy hover:underline"
                 >
                   {Object.keys(temaStats.lines).every((c) =>
                     hiddenCodes.includes(c),
@@ -693,7 +686,7 @@ function LayerTemaSection({
                     return (
                       <div
                         key={code}
-                        className={`flex items-center justify-between px-1 py-0.5 rounded text-[11px] cursor-pointer hover:bg-gray-100 ${isHidden ? 'opacity-50' : ''}`}
+                        className={`flex cursor-pointer items-center justify-between rounded px-1 py-0.5 text-[11px] hover:bg-gmi-surface-soft ${isHidden ? 'opacity-50' : ''}`}
                         onMouseEnter={() => setHighlightedCode(code)}
                         onMouseLeave={() => setHighlightedCode(null)}
                         onClick={() =>
@@ -705,18 +698,18 @@ function LayerTemaSection({
                             type="checkbox"
                             checked={!isHidden}
                             onChange={() => {}}
-                            className="h-2.5 w-2.5"
+                            className="h-2.5 w-2.5 accent-gmi-interactive"
                           />
                           <span className="font-mono font-bold">
                             {code}
                           </span>
-                          <span className="text-gray-500 truncate max-w-20">
+                          <span className="max-w-20 truncate text-gmi-text-subtle">
                             {code === MISSING_TEMA_VALUE
                               ? 'Mangler Tema'
                               : label || 'Ukjent'}
                           </span>
                         </div>
-                        <span className="text-gray-500">
+                        <span className="text-gmi-text-subtle">
                           {data.count}
                         </span>
                       </div>
@@ -724,7 +717,7 @@ function LayerTemaSection({
                   })}
               </div>
             ) : (
-              <p className="text-[10px] text-gray-500 italic">
+              <p className="text-[10px] italic text-gmi-text-subtle">
                 Ingen ledninger
               </p>
             )}
@@ -793,19 +786,15 @@ function LayerFeltValueSection({
   };
 
   return (
-    <div
-      className="border-b last:border-0"
-      style={{ borderColor: 'var(--color-border)' }}
-    >
+    <div className="border-b border-gmi-border last:border-0">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between px-2 py-1 transition-colors text-left hover:bg-gray-50"
+        className="gmi-focus-ring flex w-full items-center justify-between px-2 py-1 text-left transition-colors hover:bg-gmi-surface-soft"
       >
         <div className="flex-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <div
-              className={`text-[11px] font-semibold truncate ${someHidden ? 'opacity-60' : ''}`}
-              style={{ color: 'var(--color-text)' }}
+              className={`truncate text-[11px] font-semibold text-gmi-text ${someHidden ? 'opacity-60' : ''}`}
             >
               {fieldName}
             </div>
@@ -819,49 +808,45 @@ function LayerFeltValueSection({
               </span>
             )}
           </div>
-          <div
-            className="text-[10px] whitespace-nowrap"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
+          <div className="whitespace-nowrap text-[10px] text-gmi-text-subtle">
             {sortedValues.length}{' '}
             {sortedValues.length === 1 ? 'verdi' : 'verdier'}
           </div>
         </div>
         <span
-          className={`transform transition-transform duration-200 text-xs ${isExpanded ? 'rotate-180' : ''}`}
-          style={{ color: 'var(--color-text-secondary)' }}
+          className={`transform text-xs text-gmi-text-subtle transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
         >
           ▼
         </span>
       </button>
       {isExpanded && sortedValues.length > 0 && (
-        <div className="bg-gray-50/50">
-          <div className="px-2 py-1 flex justify-end border-b border-gray-200">
+        <div className="bg-gmi-surface-soft/60">
+          <div className="flex justify-end border-b border-gmi-border px-2 py-1">
             <button
               onClick={toggleAllValues}
-              className="text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
+              className="gmi-focus-ring rounded text-[10px] text-gmi-interactive hover:text-gmi-navy hover:underline"
             >
               {allHidden ? 'Vis alle' : 'Skjul alle'}
             </button>
           </div>
           <table className="w-full text-xs">
-            <thead className="bg-gray-100">
+            <thead className="bg-gmi-surface-soft">
               <tr>
-                <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-600 uppercase w-6">
+                <th className="w-6 px-2 py-1 text-left text-[10px] font-medium uppercase text-gmi-text-muted">
                   Vis
                 </th>
-                <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-600 uppercase">
+                <th className="px-2 py-1 text-left text-[10px] font-medium uppercase text-gmi-text-muted">
                   Verdi
                 </th>
-                <th className="px-2 py-1 text-right text-[10px] font-medium text-gray-600 uppercase">
+                <th className="px-2 py-1 text-right text-[10px] font-medium uppercase text-gmi-text-muted">
                   Antall
                 </th>
-                <th className="px-2 py-1 text-right text-[10px] font-medium text-gray-600 uppercase">
+                <th className="px-2 py-1 text-right text-[10px] font-medium uppercase text-gmi-text-muted">
                   %
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gmi-border">
               {sortedValues.map(([value, count]) => {
                 const percentage = (
                   (count / totalCount) *
@@ -882,7 +867,7 @@ function LayerFeltValueSection({
                 return (
                   <tr
                     key={value}
-                    className={`hover:bg-gray-100 cursor-pointer ${isHidden ? 'opacity-50' : ''}`}
+                    className={`cursor-pointer hover:bg-gmi-surface-soft ${isHidden ? 'opacity-50' : ''}`}
                     onClick={() =>
                       toggleLayerFeltHiddenValue(
                         layerId,
@@ -905,18 +890,18 @@ function LayerFeltValueSection({
                         type="checkbox"
                         checked={!isHidden}
                         onChange={() => {}}
-                        className="h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="h-3 w-3 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
                       />
                     </td>
                     <td
-                      className={`px-2 py-1 ${isMissing ? 'text-red-600 italic' : 'text-gray-700'}`}
+                      className={`px-2 py-1 ${isMissing ? 'text-red-600 italic' : 'text-gmi-text'}`}
                     >
                       {displayValue}
                     </td>
-                    <td className="px-2 py-1 text-right text-gray-700 font-medium">
+                    <td className="px-2 py-1 text-right font-medium text-gmi-text">
                       {count}
                     </td>
-                    <td className="px-2 py-1 text-right text-gray-600">
+                    <td className="px-2 py-1 text-right text-gmi-text-muted">
                       {percentage}%
                     </td>
                   </tr>
@@ -1041,16 +1026,13 @@ function LayerFeltSection({
           onToggle();
           setGlobalFeltActive(true);
         }}
-        className="w-full flex items-center gap-2 p-2 transition-colors text-left hover:bg-gray-50"
+        className="gmi-focus-ring flex w-full items-center gap-2 p-2 text-left transition-colors hover:bg-gmi-surface-soft"
       >
         <div className="flex items-center gap-2">
-          <span
-            className="text-xs font-medium"
-            style={{ color: 'var(--color-text)' }}
-          >
+          <span className="text-xs font-medium text-gmi-text">
             Felt
           </span>
-          <span className="text-[10px] text-gray-500">
+          <span className="text-[10px] text-gmi-text-subtle">
             {pointFieldCount + lineFieldCount} felt
           </span>
           {hiddenCount > 0 && (
@@ -1060,29 +1042,27 @@ function LayerFeltSection({
           )}
         </div>
         <span
-          className={`ml-auto transform transition-transform duration-200 text-xs ${isOpen ? 'rotate-180' : ''}`}
-          style={{ color: 'var(--color-text-secondary)' }}
+          className={`ml-auto transform text-xs text-gmi-text-subtle transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
         >
           ▼
         </span>
       </button>
 
       {isOpen && (
-        <div className="p-2 bg-gray-50/50 space-y-2">
+        <div className="space-y-2 bg-gmi-surface-soft/60 p-2">
           {/* Tabs */}
           <div
-            className="flex border-b"
-            style={{ borderColor: 'var(--color-border)' }}
+            className="flex border-b border-gmi-border"
           >
             <button
               onClick={() => setTab('punkter')}
-              className={`flex-1 px-2 py-1 text-[10px] font-medium transition-colors ${tab === 'punkter' ? 'border-b-2 text-blue-600 border-blue-600' : 'text-gray-500'}`}
+              className={`gmi-focus-ring flex-1 px-2 py-1 text-[10px] font-medium transition-colors ${tab === 'punkter' ? 'border-b-2 border-gmi-interactive text-gmi-navy' : 'text-gmi-text-subtle hover:bg-gmi-surface-soft'}`}
             >
               Punkter ({pointFieldCount})
             </button>
             <button
               onClick={() => setTab('ledninger')}
-              className={`flex-1 px-2 py-1 text-[10px] font-medium transition-colors ${tab === 'ledninger' ? 'border-b-2 text-blue-600 border-blue-600' : 'text-gray-500'}`}
+              className={`gmi-focus-ring flex-1 px-2 py-1 text-[10px] font-medium transition-colors ${tab === 'ledninger' ? 'border-b-2 border-gmi-interactive text-gmi-navy' : 'text-gmi-text-subtle hover:bg-gmi-surface-soft'}`}
             >
               Ledninger ({lineFieldCount})
             </button>
@@ -1229,12 +1209,11 @@ export default function LayerPanel({ layerId, codeLookups }) {
   return (
     <div className="py-1">
       <div
-        className={`border-b-2 transition-colors ${!layer.visible ? 'opacity-60' : ''}`}
-        style={{ borderColor: 'var(--color-border)' }}
+      className={`border-b-2 border-gmi-border transition-colors ${!layer.visible ? 'opacity-60' : ''}`}
       >
         {/* Layer header */}
         <div
-          className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-50"
+          className="flex cursor-pointer items-center gap-2 p-2 transition-colors hover:bg-gmi-surface-soft"
           onClick={() => setExpandedLayer(layerId)}
         >
           {/* Visibility toggle */}
@@ -1245,19 +1224,18 @@ export default function LayerPanel({ layerId, codeLookups }) {
               e.stopPropagation();
               toggleLayerVisibility(layerId);
             }}
-            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="h-3.5 w-3.5 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
             title={layer.visible ? 'Skjul lag' : 'Vis lag'}
           />
 
           {/* Layer name and stats */}
           <div className="flex-1 min-w-0">
             <div
-              className="text-xs font-medium truncate"
-              style={{ color: 'var(--color-text)' }}
+              className="truncate text-xs font-medium text-gmi-text"
             >
               {layer.name}
             </div>
-            <div className="text-[10px] text-gray-500">
+            <div className="text-[10px] text-gmi-text-subtle">
               {pointCount} punkt, {lineCount} ledn.
             </div>
           </div>
@@ -1269,7 +1247,7 @@ export default function LayerPanel({ layerId, codeLookups }) {
                 e.stopPropagation();
                 setLayerFitBoundsTarget(layerId);
               }}
-              className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+              className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
               title="Zoom til lag"
             >
               <svg
@@ -1299,7 +1277,7 @@ export default function LayerPanel({ layerId, codeLookups }) {
                 e.stopPropagation();
                 setShowRemoveConfirm(true);
               }}
-              className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+              className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle transition-colors hover:bg-red-100 hover:text-red-600"
               title="Fjern lag"
             >
               <svg
@@ -1319,8 +1297,7 @@ export default function LayerPanel({ layerId, codeLookups }) {
 
             {/* Expand indicator */}
             <span
-              className={`transform transition-transform duration-200 text-xs ${isExpanded ? 'rotate-180' : ''}`}
-              style={{ color: 'var(--color-text-secondary)' }}
+              className={`transform text-xs text-gmi-text-subtle transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
             >
               ▼
             </span>
@@ -1328,20 +1305,20 @@ export default function LayerPanel({ layerId, codeLookups }) {
         </div>
 
         {showRemoveConfirm && (
-          <div className="fixed inset-0 z-10002 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-sm rounded-lg bg-white shadow-xl border border-gray-200">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-900">
+          <div className="fixed inset-0 z-10002 flex items-center justify-center bg-gmi-ink/50 p-4">
+            <div className="w-full max-w-sm rounded-xl border border-gmi-border bg-gmi-surface shadow-xl">
+              <div className="border-b border-gmi-border px-4 py-3">
+                <h3 className="text-sm font-semibold text-gmi-navy">
                   Fjern lag
                 </h3>
               </div>
-              <div className="px-4 py-3 text-sm text-gray-700">
+              <div className="px-4 py-3 text-sm text-gmi-text">
                 Er du sikker på at du vil fjerne lag “{layer.name}”?
               </div>
-              <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <div className="flex items-center justify-end gap-2 border-t border-gmi-border px-4 py-3">
                 <button
                   onClick={() => setShowRemoveConfirm(false)}
-                  className="px-3 py-1.5 text-sm rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-3 py-1.5 text-sm"
                 >
                   Avbryt
                 </button>
@@ -1362,21 +1339,19 @@ export default function LayerPanel({ layerId, codeLookups }) {
         {/* Expanded content */}
         {isExpanded && (
           <div
-            className="border-t bg-gray-50/30"
-            style={{ borderColor: 'var(--color-border)' }}
+            className="border-t border-gmi-border bg-gmi-surface-soft/60"
           >
             {/* Analysis buttons row */}
             <div
-              className="px-3 py-2 border-b flex items-center justify-between"
-              style={{ borderColor: 'var(--color-border)' }}
+              className="flex items-center justify-between border-b border-gmi-border px-3 py-2"
             >
-              <span className="text-[10px] text-gray-500">
+              <span className="text-[10px] text-gmi-text-subtle">
                 Analyse
               </span>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => resetLayerFilters(layerId)}
-                  className="p-1.5 rounded transition-colors hover:bg-blue-100 text-blue-600 hover:text-blue-700"
+                  className="gmi-focus-ring rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface hover:text-gmi-navy"
                   title="Nullstill filtre"
                 >
                   <svg
@@ -1395,7 +1370,7 @@ export default function LayerPanel({ layerId, codeLookups }) {
                 </button>
                 <button
                   onClick={() => openLayerDataTable(layerId)}
-                  className="p-1.5 rounded transition-colors hover:bg-blue-100 text-blue-600 hover:text-blue-700"
+                  className="gmi-focus-ring rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface hover:text-gmi-navy"
                   title="Åpne datatabell"
                 >
                   <svg

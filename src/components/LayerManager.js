@@ -63,24 +63,12 @@ export default function LayerManager({ onAddFile }) {
   if (totalCount === 0) {
     return (
       <div className="p-3 text-center">
-        <p className="text-sm text-gray-500 mb-3">
+        <p className="mb-3 text-sm text-gmi-text-muted">
           Ingen filer lastet opp ennå.
         </p>
         <button
           onClick={onAddFile}
-          className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-          style={{
-            backgroundColor: 'var(--color-primary)',
-            color: 'white',
-          }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor =
-              'var(--color-primary-dark)')
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.backgroundColor =
-              'var(--color-primary)')
-          }
+          className="gmi-primary-control gmi-focus-ring px-4 py-2 text-sm font-medium"
         >
           Last opp fil
         </button>
@@ -92,34 +80,29 @@ export default function LayerManager({ onAddFile }) {
     <div className="flex flex-col h-full">
       {/* Layer controls header */}
       <div
-        className="px-3 py-2 border-b flex items-center justify-between"
-        style={{
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-sidebar-bg)',
-        }}
+        className="flex items-center justify-between border-b border-gmi-border bg-gmi-surface px-3 py-2"
       >
         <div className="flex items-center gap-2">
           <span
-            className="text-xs font-semibold"
-            style={{ color: 'var(--color-text)' }}
+            className="text-xs font-semibold text-gmi-navy"
           >
             Lag
           </span>
-          <span className="text-[10px] text-gray-500">
+          <span className="text-[10px] text-gmi-text-subtle">
             ({visibleCount}/{totalCount} synlige)
           </span>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={showAllLayers}
-            className="px-2 py-1 text-[10px] text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            className="gmi-focus-ring rounded-lg px-2 py-1 text-[10px] font-medium text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
             title="Vis alle lag"
           >
             Vis alle
           </button>
           <button
             onClick={hideAllLayers}
-            className="px-2 py-1 text-[10px] text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            className="gmi-focus-ring rounded-lg px-2 py-1 text-[10px] font-medium text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
             title="Skjul alle lag"
           >
             Skjul alle
@@ -139,11 +122,8 @@ export default function LayerManager({ onAddFile }) {
 
         {customWmsConfig?.url && (
           <div className="py-1">
-            <div
-              className="border-b-2"
-              style={{ borderColor: 'var(--color-border)' }}
-            >
-              <div className="flex items-center gap-2 p-2 hover:bg-gray-50">
+            <div className="border-b-2 border-gmi-border">
+              <div className="flex items-center gap-2 p-2 hover:bg-gmi-surface-soft">
                 <input
                   type="checkbox"
                   checked={mapOverlayVisibility?.geminiWms !== false}
@@ -153,24 +133,23 @@ export default function LayerManager({ onAddFile }) {
                       mapOverlayVisibility?.geminiWms === false,
                     )
                   }
-                  className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="h-3.5 w-3.5 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
                   title="Vis/skjul Gemini WMS"
                 />
                 <div className="flex-1 min-w-0">
                   <div
-                    className="text-xs font-medium truncate"
-                    style={{ color: 'var(--color-text)' }}
+                    className="truncate text-xs font-medium text-gmi-text"
                   >
                     Gemini WMS
                   </div>
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-[10px] text-gmi-text-subtle">
                     Eksternt WMS-lag
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsWmsExpanded((prev) => !prev)}
-                  className="p-1 rounded hover:bg-gray-100 text-gray-500"
+                  className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle hover:bg-gmi-surface-soft hover:text-gmi-navy"
                   title={
                     isWmsExpanded
                       ? 'Skjul innstillinger'
@@ -187,12 +166,12 @@ export default function LayerManager({ onAddFile }) {
 
               {isWmsExpanded && (
                 <div className="px-2 pb-2">
-                  <div className="ml-5 pl-2 border-l border-gray-200">
+                  <div className="ml-5 border-l border-gmi-border pl-2">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-gray-600">
+                      <span className="text-[10px] text-gmi-text-muted">
                         Opasitet
                       </span>
-                      <span className="text-[10px] text-gray-500 font-mono">
+                      <span className="font-mono text-[10px] text-gmi-text-subtle">
                         {Math.round(
                           (customWmsConfig?.opacity ?? 1) * 100,
                         )}
@@ -215,7 +194,7 @@ export default function LayerManager({ onAddFile }) {
                           opacity: nextOpacity,
                         });
                       }}
-                      className="w-full h-1.5 accent-blue-600"
+                      className="h-1.5 w-full accent-gmi-interactive"
                       title="Juster opasitet for Gemini WMS"
                     />
                   </div>
@@ -228,30 +207,11 @@ export default function LayerManager({ onAddFile }) {
 
       {/* Add file button */}
       <div
-        className="px-3 py-2 border-t"
-        style={{
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-sidebar-bg)',
-        }}
+        className="border-t border-gmi-border bg-gmi-surface px-3 py-2"
       >
         <button
           onClick={onAddFile}
-          className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border flex items-center justify-center gap-2"
-          style={{
-            backgroundColor: 'var(--color-card)',
-            color: 'var(--color-primary)',
-            borderColor: 'var(--color-primary)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor =
-              'var(--color-primary)';
-            e.currentTarget.style.color = 'white';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor =
-              'var(--color-card)';
-            e.currentTarget.style.color = 'var(--color-primary)';
-          }}
+          className="gmi-compact-button gmi-focus-ring flex w-full items-center justify-center gap-2 border border-gmi-border-strong bg-gmi-surface px-3 py-2 text-xs font-medium"
         >
           <svg
             className="w-4 h-4"
