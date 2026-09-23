@@ -360,18 +360,18 @@ export default function FileUpload({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={`
-        border-2 border-dashed rounded-lg p-12 text-center transition-colors
+        border-2 border-dashed rounded-xl p-12 text-center transition-colors
         ${
           isDragging
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
+            ? 'border-gmi-interactive bg-gmi-cyan-soft'
+            : 'border-gmi-border-strong bg-gmi-surface-soft hover:border-gmi-interactive'
         }
       `}
     >
       <div className="flex flex-col items-center justify-center gap-4">
         <svg
           className={`w-12 h-12 ${
-            isDragging ? 'text-blue-500' : 'text-gray-400'
+            isDragging ? 'text-gmi-interactive' : 'text-gmi-text-subtle'
           }`}
           fill="none"
           stroke="currentColor"
@@ -385,13 +385,13 @@ export default function FileUpload({
           />
         </svg>
 
-        <div className="text-lg font-medium text-gray-700">
+        <div className="text-lg font-medium text-gmi-navy">
           {isDragging ? 'Slipp filen her' : 'Dra og slipp fil her'}
         </div>
 
-        <div className="text-sm text-gray-500">eller</div>
+        <div className="text-sm text-gmi-text-subtle">eller</div>
 
-        <label className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors">
+        <label className="gmi-primary-control cursor-pointer px-6 py-2">
           Velg fil
           <input
             type="file"
@@ -401,7 +401,7 @@ export default function FileUpload({
           />
         </label>
 
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="mt-2 text-xs text-gmi-text-subtle">
           Støtter .gmi, .sos/.sosi og .kof
         </p>
       </div>

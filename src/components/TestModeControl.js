@@ -36,7 +36,7 @@ export default function TestModeControl() {
   if (!hydrated || !testMode) return null;
 
   return (
-    <div className="relative flex max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-amber-950 shadow-sm">
+    <div className="relative flex max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-amber-950 shadow-sm">
       <span
         className="text-xs font-semibold"
         title="Testmodus er aktiv – opplastinger registreres ikke i bruksstatistikken."
@@ -47,7 +47,7 @@ export default function TestModeControl() {
         type="button"
         onClick={() => setDeveloperToolsOpen((open) => !open)}
         aria-expanded={developerToolsOpen}
-        className="flex shrink-0 items-center gap-1 rounded border border-amber-400 bg-white px-2 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600"
+        className="gmi-compact-button gmi-focus-ring flex shrink-0 items-center gap-1 border border-gmi-border-strong bg-gmi-surface px-2 py-1 text-[11px] font-semibold"
       >
         <GearSixIcon aria-hidden="true" size={13} weight="bold" />
         Utviklerverktøy
@@ -59,7 +59,7 @@ export default function TestModeControl() {
         type="button"
         onClick={() => updateSettings({ testMode: false })}
         aria-label="Slå av testmodus"
-        className="shrink-0 rounded border border-amber-400 bg-white px-2 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600"
+        className="gmi-compact-button gmi-focus-ring shrink-0 border border-gmi-border-strong bg-gmi-surface px-2 py-1 text-[11px] font-semibold"
       >
         Slå av testmodus
       </button>

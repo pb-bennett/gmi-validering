@@ -9,7 +9,7 @@ export default function TabSwitcher({ compact = false }) {
   const data = useStore((state) => state.data);
 
   return (
-    <div className="flex w-max max-w-full flex-nowrap items-center gap-0.5 rounded-lg border border-slate-200/80 bg-white/95 p-0.5 shadow-md backdrop-blur-sm empty:hidden">
+    <div className="flex w-max max-w-full flex-nowrap items-center gap-0.5 rounded-lg border border-gmi-border bg-gmi-surface/95 p-0.5 shadow-sm backdrop-blur-sm empty:hidden">
       {viewer3DOpen && data && (
         <>
           <button
@@ -17,10 +17,10 @@ export default function TabSwitcher({ compact = false }) {
             onClick={() => setActiveViewTab('map')}
             aria-label="Kartoversikt"
             title="Kartoversikt"
-            className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-all ${
+            className={`gmi-focus-ring flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
               activeViewTab === 'map'
-                ? 'bg-gray-700 text-white shadow-sm'
-                : 'bg-transparent text-gray-600 hover:bg-gray-100'
+                ? 'gmi-selected-control shadow-sm'
+                : 'bg-transparent text-gmi-text-muted hover:bg-gmi-surface-soft hover:text-gmi-navy'
             }`}
           >
             <svg
@@ -43,10 +43,10 @@ export default function TabSwitcher({ compact = false }) {
             onClick={() => setActiveViewTab('3d')}
             aria-label="3D-visning"
             title="3D-visning"
-            className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-all ${
+            className={`gmi-focus-ring flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
               activeViewTab === '3d'
-                ? 'bg-gray-700 text-white shadow-sm'
-                : 'bg-transparent text-gray-600 hover:bg-gray-100'
+                ? 'gmi-selected-control shadow-sm'
+                : 'bg-transparent text-gmi-text-muted hover:bg-gmi-surface-soft hover:text-gmi-navy'
             }`}
           >
             <svg

@@ -67,11 +67,11 @@ export default function GlobalFileDrop({ enabled = true }) {
   if (!enabled || !isDragging) return null;
 
   return (
-    <div className="fixed inset-0 z-[10005] bg-black/40 backdrop-blur-sm flex items-center justify-center">
-      <div className="bg-white/90 border-2 border-dashed border-blue-400 rounded-xl p-10 w-[90%] max-w-2xl text-center shadow-xl">
+    <div className="fixed inset-0 z-[10005] flex items-center justify-center bg-gmi-ink/40 backdrop-blur-sm">
+      <div className="w-[90%] max-w-2xl rounded-xl border-2 border-dashed border-gmi-interactive bg-gmi-surface/95 p-10 text-center shadow-xl">
         <div className="flex flex-col items-center gap-3">
           <svg
-            className="w-14 h-14 text-blue-500"
+            className="w-14 h-14 text-gmi-interactive"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -83,10 +83,10 @@ export default function GlobalFileDrop({ enabled = true }) {
               d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
             />
           </svg>
-          <div className="text-xl font-semibold text-gray-800">
+          <div className="text-xl font-semibold text-gmi-navy">
             Slipp filen for å laste inn
           </div>
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gmi-text-muted">
             Støtter .gmi, .sos/.sosi og .kof
           </div>
         </div>

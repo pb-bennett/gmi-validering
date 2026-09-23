@@ -10,7 +10,7 @@ export default function WorkspaceShell({
   bottomDockOpen,
 }) {
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen w-screen overflow-hidden bg-gmi-surface-soft">
       <div className="flex h-full flex-none flex-col overflow-hidden" style={{ width: `${sidebarWidth}px` }}>
         <ProductHeader onOpenAppInfo={onOpenAppInfo} appInfoTriggerRef={appInfoTriggerRef} />
         <div className="min-h-0 flex-1">

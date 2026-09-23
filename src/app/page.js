@@ -297,7 +297,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-gray-50">
+    <div className="h-screen w-screen overflow-hidden flex bg-gmi-surface-soft">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
       <TestModeActivation />
       {/* Floating Stats Button */}
@@ -382,11 +382,11 @@ export default function Home() {
 
       {/* Initial Upload Screen */}
       {parsingStatus !== 'done' && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="max-w-xl w-full px-4">
+        <div className="flex-1 flex items-center justify-center overflow-y-auto py-6">
+          <div className="my-auto max-w-xl w-full px-4">
             <div className="text-center mb-8">
               <BrandWordmark large />
-              <p className="mt-2 text-gray-600">
+              <p className="mt-2 text-gmi-text-muted">
                 Last opp og valider GMI-filer
               </p>
               <div className="mt-4 flex justify-center empty:hidden">
@@ -396,7 +396,7 @@ export default function Home() {
 
             {/* Error Display */}
             {parsingStatus === 'error' && parsingError && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
                 <div className="flex items-start gap-3">
                   <svg
                     className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5"
@@ -429,7 +429,7 @@ export default function Home() {
               </div>
             )}
 
-            <div className="bg-white shadow rounded-lg p-6">
+            <div className="rounded-xl border border-gmi-border bg-gmi-surface p-6 shadow-sm">
               <FileUpload />
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <button
@@ -439,7 +439,7 @@ export default function Home() {
                   aria-haspopup="dialog"
                   aria-label={`Om appen, versjon ${CURRENT_APP_VERSION}`}
                   title="Informasjon om appen og versjonshistorikk"
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                  className="gmi-compact-button gmi-focus-ring inline-flex min-h-9 items-center gap-1.5 border border-gmi-border-strong bg-gmi-surface px-3 py-1.5 text-xs font-medium"
                 >
                   <InfoIcon size={15} weight="regular" aria-hidden="true" />
                   <span className="whitespace-nowrap">Om appen · v{CURRENT_APP_VERSION}</span>
@@ -448,7 +448,7 @@ export default function Home() {
                   type="button"
                   onClick={(event) => openAppInfo('contact', event.currentTarget)}
                   aria-haspopup="dialog"
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                  className="gmi-compact-button gmi-focus-ring inline-flex min-h-9 items-center gap-1.5 border border-gmi-border-strong bg-gmi-surface px-3 py-1.5 text-xs font-medium"
                 >
                   <EnvelopeSimpleIcon size={15} weight="regular" aria-hidden="true" />
                   <span className="whitespace-nowrap">Kontakt</span>
@@ -635,23 +635,23 @@ export default function Home() {
       {/* Add Layer Modal */}
       {showAddLayerModal && (
         <div
-          className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-[10001] flex items-center justify-center bg-gmi-ink/50"
           onClick={() => setShowAddLayerModal(false)}
         >
           <div
-            className="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 p-6"
+            className="mx-4 w-full max-w-xl rounded-xl border border-gmi-border bg-gmi-surface p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">
+              <h2 className="text-xl font-bold text-gmi-navy">
                 Legg til nytt lag
               </h2>
               <button
                 onClick={() => setShowAddLayerModal(false)}
-                className="p-1 rounded hover:bg-gray-100 transition-colors"
+                className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
               >
                 <svg
-                  className="w-6 h-6 text-gray-500"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
