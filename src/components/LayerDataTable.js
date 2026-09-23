@@ -16,6 +16,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { ArrowCounterClockwiseIcon, MagnifyingGlassPlusIcon, XIcon } from '@phosphor-icons/react';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
 import { getContextualColumnWidth, getContextualOrdinaryColumnWidth } from '@/lib/objectTablePresentation';
 
@@ -64,7 +65,7 @@ const DataCell = React.memo(function DataCell({ value, missingLabel = '-' }) {
 
   return (
     <span
-      className={`block truncate ${isMissing ? 'text-gray-400 italic' : ''}`}
+      className={`block truncate ${isMissing ? 'text-gmi-text-subtle italic' : ''}`}
       title={needsTooltip ? displayValue : undefined}
     >
       {displayValue}
@@ -77,28 +78,11 @@ const ZoomButton = React.memo(function ZoomButton({ onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-5 h-5 rounded text-sm transition-transform hover:scale-110 flex items-center justify-center"
-      style={{
-        backgroundColor: 'var(--color-page-bg)',
-        color: 'var(--color-primary)',
-      }}
+      className="gmi-focus-ring flex h-5 w-5 items-center justify-center rounded bg-gmi-surface-soft text-gmi-interactive transition-colors hover:bg-gmi-cyan-soft"
       title="Zoom til"
+      aria-label="Zoom til"
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="w-3.5 h-3.5"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
+      <MagnifyingGlassPlusIcon size={14} weight="regular" aria-hidden="true" />
     </button>
   );
 });
@@ -622,34 +606,24 @@ export default function LayerDataTable() {
 
   return (
     <div
-      className="flex flex-col h-full border-t"
-      style={{
-        backgroundColor: 'var(--color-card)',
-        borderColor: 'var(--color-border)',
-      }}
+      className="flex h-full flex-col border-t border-gmi-border-strong bg-gmi-surface text-gmi-text"
     >
       <div
-        className="flex items-center gap-2 px-3 py-1.5 border-b shrink-0"
-        style={{
-          backgroundColor: 'var(--color-page-bg)',
-          borderColor: 'var(--color-border)',
-        }}
+        className="flex shrink-0 items-center gap-2 border-b border-gmi-border bg-gmi-surface-soft px-3 py-1.5"
       >
         <div className="flex items-center gap-1.5">
           <span
-            className="text-[11px] font-semibold"
-            style={{ color: 'var(--color-text)' }}
+            className="text-[11px] font-semibold text-gmi-navy"
           >
             Datatabell
           </span>
           {isExactInspection && (
-            <span className="text-[10px] max-w-72 truncate" style={{ color: 'var(--color-text-secondary)' }} title={inspection.context.reason}>
+            <span className="max-w-72 truncate text-[10px] text-gmi-text-muted" title={inspection.context.reason}>
               Objektutvalg: {inspection.context.title}{inspection.context.reason ? ` · ${inspection.context.reason}` : ''}
             </span>
           )}
           <span
-            className="text-[10px] max-w-50 truncate"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="max-w-50 truncate text-[10px] text-gmi-text-subtle"
             title={layer.name}
           >
             {layer.name}
@@ -659,33 +633,13 @@ export default function LayerDataTable() {
         {!isExactInspection && <div className="flex items-center gap-0.5">
           <button
             onClick={() => setLayerDataTableTab(layerId, 'punkter')}
-            className="px-2 py-0.5 text-[10px] font-medium rounded transition-colors"
-            style={{
-              backgroundColor:
-                activeTab === 'punkter'
-                  ? 'var(--color-primary)'
-                  : 'transparent',
-              color:
-                activeTab === 'punkter'
-                  ? 'white'
-                  : 'var(--color-text-secondary)',
-            }}
+            className={`gmi-compact-button gmi-focus-ring px-2 py-0.5 text-[10px] font-medium ${activeTab === 'punkter' ? 'gmi-selected-control' : 'text-gmi-text-muted'}`}
           >
             Punkter
           </button>
           <button
             onClick={() => setLayerDataTableTab(layerId, 'ledninger')}
-            className="px-2 py-0.5 text-[10px] font-medium rounded transition-colors"
-            style={{
-              backgroundColor:
-                activeTab === 'ledninger'
-                  ? 'var(--color-primary)'
-                  : 'transparent',
-              color:
-                activeTab === 'ledninger'
-                  ? 'white'
-                  : 'var(--color-text-secondary)',
-            }}
+            className={`gmi-compact-button gmi-focus-ring px-2 py-0.5 text-[10px] font-medium ${activeTab === 'ledninger' ? 'gmi-selected-control' : 'text-gmi-text-muted'}`}
           >
             Ledninger
           </button>
@@ -693,10 +647,10 @@ export default function LayerDataTable() {
         }
 
         {isContextualInspection && inspection.focusIndices.length !== inspection.scopeIndices.length && (
-          <div className="flex items-center rounded border border-slate-200 p-0.5 text-[10px]" aria-label="Vis objektutvalg">
+          <div className="flex items-center rounded border border-gmi-border-strong bg-gmi-surface p-0.5 text-[10px]" aria-label="Vis objektutvalg">
             {[['focus', 'Utvalg', inspection.focusIndices.length], ['scope', 'Alle', inspection.scopeIndices.length]].map(([view, label, count]) => (
               <button key={view} type="button" onClick={() => setObjectTableInspectionView(view)} aria-pressed={inspection.activeView === view}
-                className="rounded px-1.5 py-0.5 font-medium" style={{ backgroundColor: inspection.activeView === view ? 'var(--color-primary)' : 'transparent', color: inspection.activeView === view ? 'white' : 'var(--color-text-secondary)' }}>
+                className={`gmi-compact-button gmi-focus-ring px-1.5 py-0.5 font-medium ${inspection.activeView === view ? 'gmi-selected-control' : 'text-gmi-text-muted'}`}>
                 {label} {count}
               </button>
             ))}
@@ -705,16 +659,16 @@ export default function LayerDataTable() {
 
         {/* Filter status */}
         <div className="flex items-center gap-1.5 text-[10px]">
-          <span style={{ color: 'var(--color-text-secondary)' }}>
+          <span className="text-gmi-text-muted">
             {isExactInspection ? (
               <span>{totalCount} {activeTab === 'punkter' ? 'punkter' : 'ledninger'}</span>
             ) : hasActiveFilters ? (
               <>
-                <span style={{ color: 'var(--color-primary)' }}>
+                <span className="font-semibold text-gmi-interactive">
                   {filteredCount}
                 </span>
                 <span> av {totalCount}</span>
-                <span className="text-gray-400">
+                <span className="text-gmi-text-subtle">
                   {' '}
                   ({hiddenCount} skjult)
                 </span>
@@ -729,23 +683,10 @@ export default function LayerDataTable() {
           {!isExactInspection && hasActiveFilters && (
             <button
               onClick={() => resetLayerFilters(layerId)}
-              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded transition-colors hover:bg-blue-100"
-              style={{ color: 'var(--color-primary)' }}
+              className="gmi-compact-button gmi-focus-ring flex items-center gap-0.5 px-1.5 py-0.5 text-gmi-interactive"
               title="Nullstill alle filtre"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-3 h-3"
-              >
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
+              <ArrowCounterClockwiseIcon size={12} weight="regular" aria-hidden="true" />
               <span>Nullstill</span>
             </button>
           )}
@@ -755,12 +696,11 @@ export default function LayerDataTable() {
 
         <button
           onClick={closeLayerDataTable}
-          className="px-2 py-0.5 text-[10px] font-medium rounded transition-colors hover:bg-gray-200"
-          style={{
-            color: 'var(--color-text-secondary)',
-          }}
+          className="gmi-compact-button gmi-focus-ring flex h-[19px] w-[26px] items-center justify-center text-gmi-text-muted hover:text-gmi-navy"
+          title="Lukk datatabell"
+          aria-label="Lukk datatabell"
         >
-          ✕
+          <XIcon size={12} weight="regular" aria-hidden="true" />
         </button>
       </div>
 
@@ -772,8 +712,7 @@ export default function LayerDataTable() {
         <div style={{ width: totalWidth, minWidth: '100%' }}>
           {/* Sticky header */}
           <div
-            className="sticky top-0 z-20 flex"
-            style={{ backgroundColor: 'var(--color-page-bg)' }}
+            className="sticky top-0 z-20 flex bg-gmi-surface-soft"
           >
             {table.getHeaderGroups().map((headerGroup) =>
               headerGroup.headers.map((header, index) => {
@@ -797,21 +736,18 @@ export default function LayerDataTable() {
                         ? undefined
                         : header.column.getToggleSortingHandler()
                     }
-                    className={`px-1.5 py-1 text-left text-[10px] font-medium select-none border-b shrink-0 ${
+                    className={`shrink-0 select-none border-b border-gmi-border-strong bg-gmi-surface-soft px-1.5 py-1 text-left text-[10px] font-medium text-gmi-text-muted ${
                       isZoom
                         ? 'text-center'
-                        : 'cursor-pointer hover:bg-gray-100'
+                        : 'cursor-pointer hover:bg-gmi-border'
                     } ${isZoom || isFixed ? 'sticky z-30' : ''}`}
                     style={{
-                      backgroundColor: 'var(--color-page-bg)',
-                      borderColor: 'var(--color-border)',
-                      color: 'var(--color-text)',
                       width,
                       minWidth: width,
                       maxWidth: width,
                       left: stickyLeft,
                       boxShadow: isFixed
-                        ? '2px 0 4px -2px rgba(0,0,0,0.1)'
+                        ? '2px 0 4px -2px rgba(15,23,43,0.18)'
                         : undefined,
                     }}
                   >
@@ -821,7 +757,7 @@ export default function LayerDataTable() {
                       </span>
                       {header.column.getIsSorted() && (
                         <span
-                          style={{ color: 'var(--color-primary)' }}
+                          className="text-gmi-interactive"
                         >
                           {header.column.getIsSorted() === 'asc'
                             ? '↑'
@@ -858,7 +794,7 @@ export default function LayerDataTable() {
                     )
                   }
                   onMouseLeave={handleRowHoverEnd}
-                  className="flex cursor-pointer hover:bg-blue-50 border-b"
+                  className="group flex cursor-pointer border-b border-gmi-border bg-gmi-surface hover:bg-gmi-surface-soft"
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -866,7 +802,6 @@ export default function LayerDataTable() {
                     width: '100%',
                     height: ROW_HEIGHT,
                     transform: `translateY(${virtualRow.start}px)`,
-                    borderColor: 'var(--color-border)',
                   }}
                 >
                   {row.getVisibleCells().map((cell, index) => {
@@ -879,22 +814,24 @@ export default function LayerDataTable() {
                     return (
                       <div
                         key={cell.id}
-                        className={`px-1.5 flex items-center text-[10px] shrink-0 ${
+                        className={`flex shrink-0 items-center px-1.5 text-[10px] ${
                           isZoom ? 'justify-center' : ''
-                        } ${isZoom || isFixed ? 'sticky z-10' : ''}`}
+                        } ${isZoom || isFixed ? 'sticky z-10' : ''} ${
+                          (isZoom || isFixed) && !cell.column.columnDef.meta?.contextualField
+                            ? 'bg-gmi-surface group-hover:bg-gmi-surface-soft'
+                            : ''
+                        }`}
                         style={{
-                          backgroundColor: isZoom || isFixed
-                            ? cell.column.columnDef.meta?.contextualField
-                              ? row.original.__contextualResult === 'FAIL' ? '#fef2f2' : row.original.__contextualResult === 'CHECK' ? '#fffbeb' : '#f0fdf4'
-                              : 'var(--color-card)'
-                            : 'transparent',
+                          backgroundColor: cell.column.columnDef.meta?.contextualField
+                            ? row.original.__contextualResult === 'FAIL' ? '#fef2f2' : row.original.__contextualResult === 'CHECK' ? '#fffbeb' : '#f0fdf4'
+                            : undefined,
                           width,
                           minWidth: width,
                           maxWidth: width,
                           left: stickyLeft,
                           height: ROW_HEIGHT,
                           boxShadow: isFixed
-                            ? '2px 0 4px -2px rgba(0,0,0,0.1)'
+                            ? '2px 0 4px -2px rgba(15,23,43,0.18)'
                             : undefined,
                         }}
                       >
@@ -913,14 +850,9 @@ export default function LayerDataTable() {
       </div>
 
       <div
-        className="flex items-center justify-end px-3 py-1 border-t text-[9px] shrink-0"
-        style={{
-          borderColor: 'var(--color-border)',
-          color: 'var(--color-text-secondary)',
-          backgroundColor: 'var(--color-page-bg)',
-        }}
+        className="flex shrink-0 items-center justify-end border-t border-gmi-border bg-gmi-surface-soft px-3 py-1 text-[9px] text-gmi-text-subtle"
       >
-        <span className="text-gray-400">
+        <span>
           Dra kolonner for å endre rekkefølge • Klikk for å sortere
         </span>
       </div>
