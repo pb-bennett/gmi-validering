@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { fetchTerrainHeights } from '@/lib/analysis/terrain';
+import { XIcon } from '@phosphor-icons/react';
 
 const formatCoord = (value, decimals = 2) => {
   if (value === null || value === undefined) return '-';
@@ -178,42 +179,42 @@ export default function DataDisplayModal() {
   const renderLinePoints = (coords) => {
     if (!Array.isArray(coords) || coords.length === 0) {
       return (
-        <div className="text-xs text-gray-500">Ingen punkter</div>
+        <div className="text-xs text-gmi-text-subtle">Ingen punkter</div>
       );
     }
 
     return (
-      <div className="max-h-60 overflow-auto border rounded bg-gray-50">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-100 sticky top-0">
+      <div className="max-h-60 overflow-auto border border-gmi-border rounded bg-gmi-surface-soft">
+        <table className="min-w-full divide-y divide-gmi-border">
+          <thead className="bg-gmi-surface-soft sticky top-0">
             <tr>
-              <th className="px-3 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-1 text-left text-[11px] font-medium text-gmi-text-subtle uppercase tracking-wider">
                 #
               </th>
-              <th className="px-3 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-1 text-left text-[11px] font-medium text-gmi-text-subtle uppercase tracking-wider">
                 X
               </th>
-              <th className="px-3 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-1 text-left text-[11px] font-medium text-gmi-text-subtle uppercase tracking-wider">
                 Y
               </th>
-              <th className="px-3 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-1 text-left text-[11px] font-medium text-gmi-text-subtle uppercase tracking-wider">
                 Z
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-gmi-surface divide-y divide-gmi-border">
             {coords.map((coord, idx) => (
               <tr key={`line-point-${idx}`}>
-                <td className="px-3 py-1 text-xs text-gray-500">
+                <td className="px-3 py-1 text-xs text-gmi-text-subtle">
                   {idx + 1}
                 </td>
-                <td className="px-3 py-1 text-xs text-gray-700">
+                <td className="px-3 py-1 text-xs text-gmi-text">
                   {formatCoord(coord.x)}
                 </td>
-                <td className="px-3 py-1 text-xs text-gray-700">
+                <td className="px-3 py-1 text-xs text-gmi-text">
                   {formatCoord(coord.y)}
                 </td>
-                <td className="px-3 py-1 text-xs text-gray-700">
+                <td className="px-3 py-1 text-xs text-gmi-text">
                   {formatCoord(coord.z)}
                 </td>
               </tr>
@@ -227,7 +228,7 @@ export default function DataDisplayModal() {
   const renderTerrainPoints = (terrainEntry) => {
     if (!terrainEntry) {
       return (
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gmi-text-subtle">
           Ingen høydedata funnet ennå.
         </div>
       );
@@ -235,7 +236,7 @@ export default function DataDisplayModal() {
 
     if (terrainEntry.status === 'loading') {
       return (
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gmi-text-subtle">
           Henter høydedata...
         </div>
       );
@@ -252,50 +253,50 @@ export default function DataDisplayModal() {
     const terrainPoints = terrainEntry.points || [];
     if (terrainPoints.length === 0) {
       return (
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gmi-text-subtle">
           Ingen høydedata tilgjengelig.
         </div>
       );
     }
 
     return (
-      <div className="max-h-60 overflow-auto border rounded bg-gray-50">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-100 sticky top-0">
+      <div className="max-h-60 overflow-auto border border-gmi-border rounded bg-gmi-surface-soft">
+        <table className="min-w-full divide-y divide-gmi-border">
+          <thead className="bg-gmi-surface-soft sticky top-0">
             <tr>
-              <th className="px-3 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-1 text-left text-[11px] font-medium text-gmi-text-subtle uppercase tracking-wider">
                 #
               </th>
-              <th className="px-3 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-1 text-left text-[11px] font-medium text-gmi-text-subtle uppercase tracking-wider">
                 Distanse
               </th>
-              <th className="px-3 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-1 text-left text-[11px] font-medium text-gmi-text-subtle uppercase tracking-wider">
                 X
               </th>
-              <th className="px-3 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-1 text-left text-[11px] font-medium text-gmi-text-subtle uppercase tracking-wider">
                 Y
               </th>
-              <th className="px-3 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-1 text-left text-[11px] font-medium text-gmi-text-subtle uppercase tracking-wider">
                 Terreng Z
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-gmi-surface divide-y divide-gmi-border">
             {terrainPoints.map((point, idx) => (
               <tr key={`terrain-point-${idx}`}>
-                <td className="px-3 py-1 text-xs text-gray-500">
+                <td className="px-3 py-1 text-xs text-gmi-text-subtle">
                   {idx + 1}
                 </td>
-                <td className="px-3 py-1 text-xs text-gray-700">
+                <td className="px-3 py-1 text-xs text-gmi-text">
                   {formatCoord(point.dist, 2)}
                 </td>
-                <td className="px-3 py-1 text-xs text-gray-700">
+                <td className="px-3 py-1 text-xs text-gmi-text">
                   {formatCoord(point.x)}
                 </td>
-                <td className="px-3 py-1 text-xs text-gray-700">
+                <td className="px-3 py-1 text-xs text-gmi-text">
                   {formatCoord(point.y)}
                 </td>
-                <td className="px-3 py-1 text-xs text-gray-700">
+                <td className="px-3 py-1 text-xs text-gmi-text">
                   {formatCoord(point.terrainZ ?? point.z)}
                 </td>
               </tr>
@@ -308,20 +309,20 @@ export default function DataDisplayModal() {
 
   return (
     <div className="absolute inset-0 z-2000 flex items-center justify-center bg-black/50 p-1.5 sm:p-2">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl h-[82%] flex flex-col overflow-hidden">
-        <div className="flex-none p-2.5 border-b flex justify-between items-center bg-gray-50">
+      <div className="bg-gmi-surface border border-gmi-border-strong rounded-lg shadow-xl w-full max-w-5xl h-[82%] flex flex-col overflow-hidden text-gmi-text">
+        <div className="flex-none p-2.5 border-b border-gmi-border flex justify-between items-center bg-gmi-surface-soft">
           <div>
-            <h2 className="text-base font-semibold">Datautforsker</h2>
-            <p className="text-xs text-gray-500">
+            <h2 className="text-base font-semibold text-gmi-navy">Datautforsker</h2>
+            <p className="text-xs text-gmi-text-subtle">
               Fil: {activeFile?.name || 'Ukjent fil'}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {!targetLayerId && layerOrder.length > 0 && (
-              <label className="flex items-center gap-2 text-xs text-gray-600">
+              <label className="flex items-center gap-2 text-xs text-gmi-text-muted">
                 <span className="font-medium">Lag</span>
                 <select
-                  className="rounded border border-gray-300 px-2 py-1 text-xs"
+                  className="gmi-compact-field px-2 py-1 text-xs"
                   value={effectiveLayerId || ''}
                   onChange={(e) =>
                     setSelectedLayerId(e.target.value || null)
@@ -338,61 +339,51 @@ export default function DataDisplayModal() {
             {target && (
               <button
                 onClick={() => setDataInspectorTarget(null)}
-                className="text-xs px-3 py-1.5 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                className="gmi-compact-button gmi-focus-ring text-xs px-3 py-1.5 border border-gmi-border-strong bg-gmi-border text-gmi-navy"
               >
                 Vis alle data
               </button>
             )}
             <button
               onClick={handleClose}
-              className="text-gray-500 hover:text-gray-700 p-1.5"
+              className="gmi-compact-button gmi-focus-ring p-1.5 text-gmi-text-muted"
+              aria-label="Lukk datautforsker"
+              title="Lukk"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <XIcon size={20} weight="regular" aria-hidden="true" />
             </button>
           </div>
         </div>
 
         {!target && (
-          <div className="flex-none border-b px-3">
+          <div className="flex-none border-b border-gmi-border px-3 bg-gmi-surface">
             <div className="flex space-x-2">
               <button
                 onClick={() => setActiveTab('header')}
-                className={`py-2 px-2.5 text-sm ${
+                className={`gmi-focus-ring py-2 px-2.5 text-sm ${
                   activeTab === 'header'
-                    ? 'border-b-2 border-blue-500 font-medium text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'border-b-2 border-gmi-interactive font-medium text-gmi-navy'
+                    : 'text-gmi-text-muted hover:text-gmi-navy'
                 }`}
               >
                 Header ({Object.keys(header).length})
               </button>
               <button
                 onClick={() => setActiveTab('points')}
-                className={`py-2 px-2.5 text-sm ${
+                className={`gmi-focus-ring py-2 px-2.5 text-sm ${
                   activeTab === 'points'
-                    ? 'border-b-2 border-blue-500 font-medium text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'border-b-2 border-gmi-interactive font-medium text-gmi-navy'
+                    : 'text-gmi-text-muted hover:text-gmi-navy'
                 }`}
               >
                 Punkter ({points.length})
               </button>
               <button
                 onClick={() => setActiveTab('lines')}
-                className={`py-2 px-2.5 text-sm ${
+                className={`gmi-focus-ring py-2 px-2.5 text-sm ${
                   activeTab === 'lines'
-                    ? 'border-b-2 border-blue-500 font-medium text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'border-b-2 border-gmi-interactive font-medium text-gmi-navy'
+                    : 'text-gmi-text-muted hover:text-gmi-navy'
                 }`}
               >
                 Linjer ({lines.length})
@@ -404,26 +395,26 @@ export default function DataDisplayModal() {
         <div className="flex-1 overflow-auto p-2.5">
           {targetPoint && (
             <div className="space-y-4">
-              <div className="border rounded-lg p-4 bg-gray-50">
-                <h3 className="text-sm font-semibold text-gray-700">
+              <div className="border border-gmi-border rounded-lg p-4 bg-gmi-surface-soft">
+                <h3 className="text-sm font-semibold text-gmi-text">
                   Punkt #{target.index + 1}
                 </h3>
-                <div className="mt-2 text-xs text-gray-600">
+                <div className="mt-2 text-xs text-gmi-text-muted">
                   Koordinater (X, Y, Z):
                 </div>
-                <div className="mt-1 text-sm text-gray-800">
+                <div className="mt-1 text-sm text-gmi-text">
                   {renderPointCoordinates(targetPoint.coordinates)}
                 </div>
               </div>
 
-              <div className="border rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-700">
+              <div className="border border-gmi-border rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gmi-text">
                   Terrenghøyde
                 </h4>
-                <div className="mt-2 text-sm text-gray-800">
+                <div className="mt-2 text-sm text-gmi-text">
                   {fetchingPointTerrain &&
                   !pointTerrainHeights[target.index] ? (
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gmi-text-subtle">
                       Henter terrenghøyde…
                     </span>
                   ) : pointTerrainHeights[target.index]?.z != null ? (
@@ -469,18 +460,18 @@ export default function DataDisplayModal() {
                       )}
                     </div>
                   ) : (
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gmi-text-subtle">
                       Ingen terrenghøyde tilgjengelig
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="border rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-700">
+              <div className="border border-gmi-border rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gmi-text">
                   Attributter
                 </h4>
-                <pre className="text-xs mt-2 bg-gray-50 p-3 rounded border max-h-72 overflow-auto">
+                <pre className="text-xs mt-2 bg-gmi-surface-soft p-3 rounded border border-gmi-border max-h-72 overflow-auto">
                   {JSON.stringify(targetPoint.attributes, null, 2)}
                 </pre>
               </div>
@@ -489,12 +480,12 @@ export default function DataDisplayModal() {
 
           {targetLine && (
             <div className="space-y-4">
-              <div className="border rounded-lg p-4 bg-gray-50">
-                <h3 className="text-sm font-semibold text-gray-700">
+              <div className="border border-gmi-border rounded-lg p-4 bg-gmi-surface-soft">
+                <h3 className="text-sm font-semibold text-gmi-text">
                   Ledning #{target.index}
                 </h3>
                 {targetAnalysis && (
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-gmi-text-subtle mt-1">
                     Fall:{' '}
                     {formatCoord(targetAnalysis.details?.incline, 2)}‰
                     {' • '}Lengde:{' '}
@@ -503,16 +494,16 @@ export default function DataDisplayModal() {
                 )}
               </div>
 
-              <div className="border rounded-lg p-4">
+              <div className="border border-gmi-border rounded-lg p-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-gray-700">
+                  <h4 className="text-sm font-semibold text-gmi-text">
                     Linjepunkter (XYZ)
                   </h4>
                   <button
                     onClick={() =>
                       setExpandedTargetPoints((prev) => !prev)
                     }
-                    className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
+                    className="gmi-compact-button gmi-focus-ring text-xs px-2 py-1 border border-gmi-border bg-gmi-surface"
                   >
                     {expandedTargetPoints ? 'Skjul' : 'Vis'} (
                     {targetLine.coordinates?.length || 0})
@@ -525,16 +516,16 @@ export default function DataDisplayModal() {
                 )}
               </div>
 
-              <div className="border rounded-lg p-4">
+              <div className="border border-gmi-border rounded-lg p-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-gray-700">
+                  <h4 className="text-sm font-semibold text-gmi-text">
                     Høydedata (terrengprofil)
                   </h4>
                   <button
                     onClick={() =>
                       setExpandedTargetTerrain((prev) => !prev)
                     }
-                    className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
+                    className="gmi-compact-button gmi-focus-ring text-xs px-2 py-1 border border-gmi-border bg-gmi-surface"
                   >
                     {expandedTargetTerrain ? 'Skjul' : 'Vis'} (
                     {targetTerrain?.points?.length || 0})
@@ -547,11 +538,11 @@ export default function DataDisplayModal() {
                 )}
               </div>
 
-              <div className="border rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-700">
+              <div className="border border-gmi-border rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gmi-text">
                   Attributter
                 </h4>
-                <pre className="text-xs mt-2 bg-gray-50 p-3 rounded border max-h-72 overflow-auto">
+                <pre className="text-xs mt-2 bg-gmi-surface-soft p-3 rounded border border-gmi-border max-h-72 overflow-auto">
                   {JSON.stringify(targetLine.attributes, null, 2)}
                 </pre>
               </div>
@@ -559,30 +550,30 @@ export default function DataDisplayModal() {
           )}
 
           {target && !targetPoint && !targetLine && (
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gmi-text-subtle">
               Fant ikke valgt objekt i gjeldende datasett.
             </div>
           )}
 
           {!target && activeTab === 'header' && (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0">
+            <table className="min-w-full divide-y divide-gmi-border">
+              <thead className="bg-gmi-surface-soft sticky top-0">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                     Nøkkel
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                     Verdi
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-gmi-surface divide-y divide-gmi-border">
                 {Object.entries(header).map(([key, value]) => (
                   <tr key={key}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gmi-navy">
                       {key}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gmi-text-subtle">
                       {String(value)}
                     </td>
                   </tr>
@@ -593,36 +584,36 @@ export default function DataDisplayModal() {
 
           {!target && activeTab === 'points' && (
             <div>
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0">
+              <table className="min-w-full divide-y divide-gmi-border">
+                <thead className="bg-gmi-surface-soft sticky top-0">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                       ID
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                       Koordinater (X, Y, Z)
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                       Terreng Z
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                       Attributter
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                       Detaljer
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-gmi-surface divide-y divide-gmi-border">
                   {points.slice(0, 100).map((point, idx) => (
                     <tr key={idx}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gmi-text-subtle">
                         {idx + 1}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gmi-text-subtle">
                         {renderPointCoordinates(point.coordinates)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gmi-text-subtle">
                         {fetchingPointTerrain &&
                         pointTerrainHeights[idx] === undefined
                           ? '…'
@@ -631,12 +622,12 @@ export default function DataDisplayModal() {
                               3,
                             )}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gmi-text-subtle">
                         <pre className="text-xs">
                           {JSON.stringify(point.attributes, null, 2)}
                         </pre>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gmi-text-subtle">
                         <button
                           onClick={() =>
                             setDataInspectorTarget({
@@ -644,7 +635,7 @@ export default function DataDisplayModal() {
                               index: idx,
                             })
                           }
-                          className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
+                          className="gmi-compact-button gmi-focus-ring text-xs px-2 py-1 border border-gmi-border bg-gmi-surface"
                         >
                           Vis
                         </button>
@@ -654,7 +645,7 @@ export default function DataDisplayModal() {
                 </tbody>
               </table>
               {points.length > 100 && (
-                <div className="p-4 text-center text-gray-500 text-sm">
+                <div className="p-4 text-center text-gmi-text-subtle text-sm">
                   Viser 100 av {points.length} punkter
                 </div>
               )}
@@ -663,40 +654,40 @@ export default function DataDisplayModal() {
 
           {!target && activeTab === 'lines' && (
             <div>
-              <table className="min-w-full table-fixed divide-y divide-gray-200">
+              <table className="min-w-full table-fixed divide-y divide-gmi-border">
                 <colgroup>
                   <col className="w-16" />
                   <col className="w-32" />
                   <col className="w-28" />
                   <col />
                 </colgroup>
-                <thead className="bg-gray-50 sticky top-0">
+                <thead className="bg-gmi-surface-soft sticky top-0">
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                       ID
                     </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                       Punkter
                     </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                       Detaljer
                     </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gmi-text-subtle uppercase tracking-wider">
                       Attributter
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-gmi-surface divide-y divide-gmi-border">
                   {lines.slice(0, 100).map((line, idx) => (
                     <Fragment key={idx}>
                       <tr>
-                        <td className="px-3 py-2 align-top whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-3 py-2 align-top whitespace-nowrap text-sm text-gmi-text-subtle">
                           {idx + 1}
                         </td>
-                        <td className="px-3 py-2 align-top whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-3 py-2 align-top whitespace-nowrap text-sm text-gmi-text-subtle">
                           {line.coordinates?.length || 0} punkter
                         </td>
-                        <td className="px-3 py-2 align-top text-sm text-gray-500">
+                        <td className="px-3 py-2 align-top text-sm text-gmi-text-subtle">
                           <div className="flex flex-col items-start gap-1">
                             <button
                               onClick={() =>
@@ -705,7 +696,7 @@ export default function DataDisplayModal() {
                                   [idx]: !prev[idx],
                                 }))
                               }
-                              className="text-xs px-1.5 py-0.5 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
+                              className="gmi-compact-button gmi-focus-ring text-xs px-1.5 py-0.5 border border-gmi-border bg-gmi-surface"
                             >
                               {expandedLinePoints[idx]
                                 ? 'Skjul punkter'
@@ -718,7 +709,7 @@ export default function DataDisplayModal() {
                                   [idx]: !prev[idx],
                                 }))
                               }
-                              className="text-xs px-1.5 py-0.5 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
+                              className="gmi-compact-button gmi-focus-ring text-xs px-1.5 py-0.5 border border-gmi-border bg-gmi-surface"
                             >
                               {expandedLineTerrain[idx]
                                 ? 'Skjul høydedata'
@@ -731,13 +722,13 @@ export default function DataDisplayModal() {
                                   index: idx,
                                 })
                               }
-                              className="text-xs px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                              className="gmi-compact-button gmi-focus-ring text-xs px-1.5 py-0.5 border border-gmi-border-strong bg-gmi-border text-gmi-navy"
                             >
                               Fokus
                             </button>
                           </div>
                         </td>
-                        <td className="px-3 py-2 align-top text-sm text-gray-500">
+                        <td className="px-3 py-2 align-top text-sm text-gmi-text-subtle">
                           <pre className="text-xs whitespace-pre-wrap wrap-break-word">
                             {JSON.stringify(
                               line.attributes || {},
@@ -751,7 +742,7 @@ export default function DataDisplayModal() {
                         <tr>
                           <td
                             colSpan={4}
-                            className="px-6 pb-4 text-sm text-gray-500"
+                            className="px-6 pb-4 text-sm text-gmi-text-subtle"
                           >
                             <div className="mt-2">
                               {renderLinePoints(line.coordinates)}
@@ -763,7 +754,7 @@ export default function DataDisplayModal() {
                         <tr>
                           <td
                             colSpan={4}
-                            className="px-6 pb-4 text-sm text-gray-500"
+                            className="px-6 pb-4 text-sm text-gmi-text-subtle"
                           >
                             <div className="mt-2">
                               {renderTerrainPoints(
@@ -778,7 +769,7 @@ export default function DataDisplayModal() {
                 </tbody>
               </table>
               {lines.length > 100 && (
-                <div className="p-4 text-center text-gray-500 text-sm">
+                <div className="p-4 text-center text-gmi-text-subtle text-sm">
                   Viser 100 av {lines.length} linjer
                 </div>
               )}

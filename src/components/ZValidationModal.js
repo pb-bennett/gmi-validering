@@ -1,6 +1,7 @@
 'use client';
 
 import useStore from '@/lib/store';
+import { XIcon } from '@phosphor-icons/react';
 
 const formatIndices = (indices, max = 20) => {
   if (!Array.isArray(indices) || indices.length === 0) return '-';
@@ -39,57 +40,60 @@ export default function ZValidationModal() {
 
   return (
     <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/50 p-2 sm:p-3">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85%] flex flex-col overflow-hidden">
-        <div className="flex-none p-3 border-b flex justify-between items-center bg-gray-50">
+      <div className="bg-gmi-surface border border-gmi-border-strong rounded-lg shadow-xl w-full max-w-4xl max-h-[85%] flex flex-col overflow-hidden text-gmi-text">
+        <div className="flex-none p-3 border-b border-gmi-border flex justify-between items-center bg-gmi-surface-soft">
           <div>
-            <h2 className="text-lg font-semibold">
+            <h2 className="text-lg font-semibold text-gmi-navy">
               Høydekontroll (Z)
             </h2>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gmi-text-muted">
               Kontrollerer at alle objekter har gyldig Z-verdi.
             </p>
           </div>
           <button
             onClick={() => toggleZValidationModal(false)}
-            className="text-gray-500 hover:text-gray-700 p-2"
+            className="gmi-compact-button gmi-focus-ring p-2 text-gmi-text-muted"
             title="Lukk"
+            aria-label="Lukk høydekontroll"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <XIcon size={24} weight="regular" aria-hidden="true" />
           </button>
         </div>
 
         <div className="flex-1 overflow-auto p-3 space-y-3">
           <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="rounded border p-3 bg-gray-50">
-              <div className="font-medium text-gray-700">Punkter</div>
-              <div className="text-gray-600 text-xs mt-1">
-                {summary?.missingPointObjects || 0} av{' '}
+            <div className="rounded border border-gmi-border p-3 bg-gmi-surface-soft">
+              <div className="font-medium text-gmi-navy">Punkter</div>
+              <div className="text-gmi-text-muted text-xs mt-1">
+                <span
+                  className={summary?.missingPointObjects
+                    ? 'font-semibold text-red-700'
+                    : 'font-semibold text-green-700'}
+                >
+                  {summary?.missingPointObjects || 0}
+                </span>{' '}
+                av{' '}
                 {summary?.totalPoints || 0} punkter mangler Z
               </div>
-              <div className="text-gray-500 text-xs">
+              <div className="text-gmi-text-subtle text-xs">
                 {summary?.missingPointCoords || 0} av{' '}
                 {summary?.totalPointCoords || 0} punktkoordinater
               </div>
             </div>
-            <div className="rounded border p-3 bg-gray-50">
-              <div className="font-medium text-gray-700">Linjer</div>
-              <div className="text-gray-600 text-xs mt-1">
-                {summary?.missingLineObjects || 0} av{' '}
+            <div className="rounded border border-gmi-border p-3 bg-gmi-surface-soft">
+              <div className="font-medium text-gmi-navy">Linjer</div>
+              <div className="text-gmi-text-muted text-xs mt-1">
+                <span
+                  className={summary?.missingLineObjects
+                    ? 'font-semibold text-red-700'
+                    : 'font-semibold text-green-700'}
+                >
+                  {summary?.missingLineObjects || 0}
+                </span>{' '}
+                av{' '}
                 {summary?.totalLines || 0} linjer mangler Z
               </div>
-              <div className="text-gray-500 text-xs">
+              <div className="text-gmi-text-subtle text-xs">
                 {summary?.missingLineCoords || 0} av{' '}
                 {summary?.totalLineCoords || 0} linjepunkter
               </div>
@@ -98,42 +102,42 @@ export default function ZValidationModal() {
 
           {missingPoints.length === 0 &&
             missingLines.length === 0 && (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-green-700">
                 Ingen objekter mangler høyde (Z).
               </div>
             )}
 
           {missingPoints.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">
+              <h3 className="text-sm font-semibold text-gmi-text mb-2">
                 Punkter uten Z ({missingPoints.length})
               </h3>
-              <div className="border rounded overflow-auto max-h-64">
-                <table className="min-w-full divide-y divide-gray-200 text-xs">
-                  <thead className="bg-gray-50 sticky top-0">
+              <div className="border border-gmi-border rounded overflow-auto max-h-64">
+                <table className="min-w-full divide-y divide-gmi-border text-xs">
+                  <thead className="bg-gmi-surface-soft sticky top-0">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         #
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         Manglende indeks
                       </th>
                       <th className="px-3 py-2" />
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-gmi-surface divide-y divide-gmi-border">
                     {missingPoints.map((point) => (
                       <tr key={`z-point-${point.index}`}>
-                        <td className="px-3 py-2 text-gray-600">
+                        <td className="px-3 py-2 text-gmi-text-muted">
                           {point.index + 1}
                         </td>
-                        <td className="px-3 py-2 text-gray-700">
+                        <td className="px-3 py-2 text-gmi-text">
                           {point.label}
                         </td>
-                        <td className="px-3 py-2 text-gray-500">
+                        <td className="px-3 py-2 text-gmi-text-subtle">
                           {formatIndices(point.missingIndices)}
                         </td>
                         <td className="px-3 py-2 text-right">
@@ -141,7 +145,7 @@ export default function ZValidationModal() {
                             onClick={() =>
                               handleFocusPoint(point.index)
                             }
-                            className="px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
+                            className="gmi-compact-button gmi-focus-ring px-2 py-1 border border-gmi-border bg-gmi-surface"
                           >
                             Vis i kart
                           </button>
@@ -156,35 +160,35 @@ export default function ZValidationModal() {
 
           {missingLines.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">
+              <h3 className="text-sm font-semibold text-gmi-text mb-2">
                 Linjer uten Z ({missingLines.length})
               </h3>
-              <div className="border rounded overflow-auto max-h-64">
-                <table className="min-w-full divide-y divide-gray-200 text-xs">
-                  <thead className="bg-gray-50 sticky top-0">
+              <div className="border border-gmi-border rounded overflow-auto max-h-64">
+                <table className="min-w-full divide-y divide-gmi-border text-xs">
+                  <thead className="bg-gmi-surface-soft sticky top-0">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         #
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         Manglende indeks
                       </th>
                       <th className="px-3 py-2" />
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-gmi-surface divide-y divide-gmi-border">
                     {missingLines.map((line) => (
                       <tr key={`z-line-${line.index}`}>
-                        <td className="px-3 py-2 text-gray-600">
+                        <td className="px-3 py-2 text-gmi-text-muted">
                           {line.index + 1}
                         </td>
-                        <td className="px-3 py-2 text-gray-700">
+                        <td className="px-3 py-2 text-gmi-text">
                           {line.label}
                         </td>
-                        <td className="px-3 py-2 text-gray-500">
+                        <td className="px-3 py-2 text-gmi-text-subtle">
                           {formatIndices(line.missingIndices)}
                         </td>
                         <td className="px-3 py-2 text-right">
@@ -192,7 +196,7 @@ export default function ZValidationModal() {
                             onClick={() =>
                               handleFocusLine(line.index)
                             }
-                            className="px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100"
+                            className="gmi-compact-button gmi-focus-ring px-2 py-1 border border-gmi-border bg-gmi-surface"
                           >
                             Vis i kart
                           </button>
