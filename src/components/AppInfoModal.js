@@ -340,10 +340,10 @@ function StatisticsMockup() {
   return (
     <div className="space-y-3" aria-hidden="true">
       <div className="flex justify-end">
-        <div className="inline-flex items-center gap-2 rounded-xl border border-pink-700 bg-pink-600 px-3 py-2 text-[10px] font-medium text-white shadow-md shadow-pink-900/20">
-          <ChartBarIcon size={14} weight="regular" aria-hidden="true" />
+        <div className="inline-flex items-center gap-2 rounded-xl border border-gmi-interactive bg-gmi-interactive px-3 py-2 text-[10px] font-medium text-gmi-surface shadow-md shadow-gmi-interactive/20">
+          <ChartBarIcon size={14} weight="regular" className="text-gmi-brand-cyan" aria-hidden="true" />
           <span className="flex items-center gap-1.5">
-            <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[8px] font-bold text-white">
+            <span className="rounded-full bg-gmi-cyan-soft px-1.5 py-0.5 text-[8px] font-bold text-gmi-navy">
               Ny
             </span>
             <span>Statistikk</span>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { CaretDownIcon, CaretUpIcon, XIcon } from '@phosphor-icons/react';
 import { retainKommuneOptions } from '@/lib/stats/kommuneFilterState.mjs';
 import {
   ANALYTICS_START_DATE,
@@ -23,8 +24,8 @@ import {
 const StatsMap = dynamic(() => import('./stats/StatsMap'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full w-full items-center justify-center rounded-lg bg-gray-50">
-      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500" />
+    <div className="flex h-full w-full items-center justify-center rounded-lg bg-gmi-surface-soft">
+      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-gmi-interactive" />
     </div>
   ),
 });
@@ -106,7 +107,7 @@ const formatPeriod = (value, resolution, short = false) => {
 };
 
 const Skeleton = ({ className = '' }) => (
-  <div className={`animate-pulse rounded-lg bg-gray-200 ${className}`} />
+  <div className={`animate-pulse rounded-lg bg-gmi-border ${className}`} />
 );
 
 const UploadStatIcon = () => (
@@ -122,9 +123,9 @@ const MunicipalityStatIcon = () => (
 );
 
 const CompactMetric = ({ icon, value, label }) => (
-  <div className="flex items-center gap-1.5 text-xs text-gray-500">
-    <span className="text-blue-600">{icon}</span>
-    <strong className="text-sm tabular-nums text-gray-900">{value}</strong>
+  <div className="flex items-center gap-1.5 text-xs text-gmi-text-subtle">
+    <span className="text-gmi-interactive">{icon}</span>
+    <strong className="text-sm tabular-nums text-gmi-navy">{value}</strong>
     <span>{label}</span>
   </div>
 );
@@ -133,8 +134,8 @@ const TimeTooltip = ({ active, payload, label, resolution, chartMode }) => {
   if (!active || !payload?.length) return null;
   const visiblePayload = filterActiveTooltipEntries(payload, chartMode);
   return (
-    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-lg">
-      <p className="mb-1 font-medium text-gray-900">
+    <div className="rounded-lg border border-gmi-border bg-gmi-surface px-3 py-2 text-xs shadow-lg">
+      <p className="mb-1 font-medium text-gmi-navy">
         {formatPeriod(label, resolution)}
       </p>
       {visiblePayload.map((entry) => (
@@ -233,6 +234,7 @@ export default function StatsModal({ isOpen, onClose }) {
   const [valueMode, setValueMode] = useState('count');
   const [chartMode, setChartMode] = useState('per');
   const [expandedChart, setExpandedChart] = useState(false);
+  const [chartWidth, setChartWidth] = useState(null);
   const [expandedMap, setExpandedMap] = useState(false);
   const [kommuneSelectorOpen, setKommuneSelectorOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -440,18 +442,18 @@ export default function StatsModal({ isOpen, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-[10003] flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm"
+      className="fixed inset-0 z-[10003] flex items-center justify-center bg-gmi-ink/60 p-2 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="relative flex h-[94vh] w-[96vw] max-w-[1480px] flex-col overflow-hidden rounded-xl bg-gray-50 shadow-2xl"
+        className="stats-dialog relative flex h-[94vh] w-[96vw] max-w-[1480px] flex-col overflow-hidden rounded-xl bg-gmi-surface-soft shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-200 bg-white px-4 py-2.5">
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gmi-border bg-gmi-surface px-4 py-2.5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h2 className="text-base font-bold text-gray-900">Bruksstatistikk</h2>
-              <p className="text-[11px] text-gray-400">
+              <h2 className="text-base font-bold text-gmi-navy">Bruksstatistikk</h2>
+              <p className="text-[11px] text-gmi-text-subtle">
                 Statistikk fra {formatAnalyticsStartDate(analyticsStartDate)}
               </p>
             </div>
@@ -475,28 +477,28 @@ export default function StatsModal({ isOpen, onClose }) {
               aria-expanded={kommuneSelectorOpen}
               aria-haspopup="dialog"
               onClick={() => setKommuneSelectorOpen((current) => !current)}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:border-blue-300 hover:bg-blue-50"
+              className="gmi-focus-ring flex items-center gap-2 rounded-lg border border-gmi-border bg-gmi-surface-soft px-2.5 py-1.5 text-xs font-medium text-gmi-text hover:border-gmi-border-strong hover:bg-gmi-surface-soft"
             >
               <MunicipalityStatIcon />
               <span>Kommuner</span>
-              <span className="tabular-nums text-gray-500">
+              <span className="tabular-nums text-gmi-text-subtle">
                 {selectedKommuneIds.length}/{availableKommuner.length}
               </span>
-              <span aria-hidden="true" className="text-[10px]">{kommuneSelectorOpen ? '▲' : '▼'}</span>
+              {kommuneSelectorOpen ? <CaretUpIcon size={12} weight="regular" aria-hidden="true" /> : <CaretDownIcon size={12} weight="regular" aria-hidden="true" />}
             </button>
 
             {kommuneSelectorOpen && (
               <div
                 role="dialog"
                 aria-label="Velg kommuner"
-                className="absolute right-0 top-full z-[1100] mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-gray-200 bg-white p-3 shadow-xl"
+                className="absolute right-0 top-full z-[1100] mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-gmi-border bg-gmi-surface p-3 shadow-xl"
               >
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-800">Kommuner</h3>
-                    <p className="text-[10px] text-gray-400">Avkryssede inngår</p>
+                    <h3 className="text-sm font-semibold text-gmi-navy">Kommuner</h3>
+                    <p className="text-[10px] text-gmi-text-subtle">Avkryssede inngår</p>
                   </div>
-                  <span className="text-[10px] tabular-nums text-gray-400">
+                  <span className="text-[10px] tabular-nums text-gmi-text-subtle">
                     {selectedKommuneIds.length} av {availableKommuner.length} valgt
                   </span>
                 </div>
@@ -506,14 +508,14 @@ export default function StatsModal({ isOpen, onClose }) {
                   onChange={(event) => setSelectionSearch(event.target.value)}
                   placeholder="Søk kommune"
                   aria-label="Søk kommune"
-                  className="mb-2 w-full rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-blue-500"
+                  className="mb-2 w-full rounded border border-gmi-border-strong px-2 py-1.5 text-xs text-gmi-text outline-none focus:border-gmi-interactive"
                 />
                 <div className="mb-2 flex gap-1">
                   <button
                     type="button"
                     onClick={selectAll}
                     disabled={hasSelectedAll}
-                    className="flex-1 rounded bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 disabled:opacity-40"
+                    className="flex-1 rounded bg-gmi-cyan-soft px-2 py-1 text-[11px] font-medium text-gmi-interactive disabled:opacity-40"
                   >
                     Velg alle
                   </button>
@@ -521,47 +523,47 @@ export default function StatsModal({ isOpen, onClose }) {
                     type="button"
                     onClick={clearAll}
                     disabled={selectedKommuneIds.length === 0}
-                    className="flex-1 rounded bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-600 disabled:opacity-40"
+                    className="flex-1 rounded bg-gmi-surface-soft px-2 py-1 text-[11px] font-medium text-gmi-text-muted disabled:opacity-40"
                   >
                     Fjern alle
                   </button>
                 </div>
-                <div className="max-h-52 overflow-y-auto rounded border border-gray-100">
+                <div className="max-h-52 overflow-y-auto rounded border border-gmi-border">
                   {filteredKommuner.map((kommune) => (
                     <label
                       key={kommune.kommuneNumber}
-                      className="flex cursor-pointer items-center gap-2 border-b border-gray-100 px-2 py-1.5 text-xs last:border-b-0 hover:bg-blue-50"
+                      className="flex cursor-pointer items-center gap-2 border-b border-gmi-border px-2 py-1.5 text-xs last:border-b-0 hover:bg-gmi-surface-soft"
                     >
                       <input
                         type="checkbox"
                         checked={selectedSet.has(kommune.kommuneNumber)}
                         onChange={() => toggleKommune(kommune.kommuneNumber)}
-                        className="accent-blue-600"
+                        className="accent-gmi-interactive"
                       />
-                      <span className="truncate text-gray-700">{kommune.areaName}</span>
+                      <span className="truncate text-gmi-text">{kommune.areaName}</span>
                     </label>
                   ))}
                   {filteredKommuner.length === 0 && (
-                    <p className="px-2 py-3 text-center text-[11px] text-gray-400">
+                    <p className="px-2 py-3 text-center text-[11px] text-gmi-text-subtle">
                       Ingen kommuner å vise
                     </p>
                   )}
                 </div>
                 {unresolvedAvailable && (
-                  <label className="mt-2 flex cursor-pointer items-start gap-2 rounded bg-gray-50 px-2 py-1.5 text-[11px] text-gray-600">
+                  <label className="mt-2 flex cursor-pointer items-start gap-2 rounded bg-gmi-surface-soft px-2 py-1.5 text-[11px] text-gmi-text-muted">
                     <input
                       type="checkbox"
                       checked={includeUnknown}
                       onChange={toggleUnknown}
-                      className="mt-0.5 accent-gray-600"
+                      className="mt-0.5 accent-gmi-interactive"
                     />
                     <span>
                       <span className="block font-medium">Uten registrert kommune</span>
-                      <span className="block text-[10px] text-gray-400">Tas med i totaltall, ikke kart eller kommune-linjer</span>
+                      <span className="block text-[10px] text-gmi-text-subtle">Tas med i totaltall, ikke kart eller kommune-linjer</span>
                     </span>
                   </label>
                 )}
-                <p className="mt-2 text-[10px] leading-4 text-gray-400">
+                <p className="mt-2 text-[10px] leading-4 text-gmi-text-subtle">
                   Opplastinger uten registrert kommune inngår i totaltallene når de er valgt, men kan ikke vises i kommuneoversikten eller på kartet.
                 </p>
               </div>
@@ -571,12 +573,10 @@ export default function StatsModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="gmi-focus-ring rounded-lg p-1.5 text-gmi-text-subtle hover:bg-gmi-surface-soft hover:text-gmi-text"
             aria-label="Lukk"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <XIcon size={20} weight="regular" aria-hidden="true" />
           </button>
         </header>
 
@@ -585,7 +585,7 @@ export default function StatsModal({ isOpen, onClose }) {
             {loading && (
               <div className="flex h-8 items-center gap-2">
                 <Skeleton className="h-2 w-24" />
-                <span className="text-[11px] text-gray-400">Henter statistikk ...</span>
+                <span className="text-[11px] text-gmi-text-subtle">Henter statistikk ...</span>
               </div>
             )}
 
@@ -598,55 +598,55 @@ export default function StatsModal({ isOpen, onClose }) {
             {!loading && !error && displayedStats && (
               <>
                 {!expandedChart && !expandedMap && summary.unresolvedUploads > 0 && (
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-[11px] text-gmi-text-subtle">
                     {summary.unresolvedUploads} opplasting{summary.unresolvedUploads === 1 ? '' : 'er'} uten registrert kommune er med i totaltallet.
                   </p>
                 )}
 
                 {hasData && !expandedMap && (
-                  <section className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                  <section className="rounded-lg border border-gmi-border bg-gmi-surface p-3 shadow-sm">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold text-gray-800">Utvikling over tid</h3>
-                        <p className="text-[10px] text-gray-400">Registrerte filopplastinger</p>
+                        <h3 className="text-sm font-semibold text-gmi-navy">Utvikling over tid</h3>
+                        <p className="text-[10px] text-gmi-text-subtle">Registrerte filopplastinger</p>
                       </div>
                       <div className="flex flex-wrap gap-1 text-[11px]">
-                        <div className="flex rounded border border-gray-200 bg-gray-50 p-0.5">
+                        <div className="flex rounded border border-gmi-border bg-gmi-surface-soft p-0.5">
                           {RESOLUTIONS.map((resolution) => (
                             <button
                               key={resolution.value}
                               type="button"
                               onClick={() => setTimeResolution(resolution.value)}
-                              className={`rounded px-2 py-1 ${timeResolution === resolution.value ? 'bg-white font-semibold text-blue-700 shadow-sm' : 'text-gray-500'}`}
+                              className={`rounded px-2 py-1 ${timeResolution === resolution.value ? 'bg-gmi-border font-semibold text-gmi-navy shadow-sm' : 'text-gmi-text-subtle'}`}
                             >
                               {resolution.label}
                             </button>
                           ))}
                         </div>
-                        <div className="flex rounded border border-gray-200 bg-gray-50 p-0.5">
+                        <div className="flex rounded border border-gmi-border bg-gmi-surface-soft p-0.5">
                           {VALUE_MODES.map((mode) => (
                             <button
                               key={mode.value}
                               type="button"
                               onClick={() => setValueMode(mode.value)}
-                              className={`rounded px-2 py-1 ${valueMode === mode.value ? 'bg-white font-semibold text-blue-700 shadow-sm' : 'text-gray-500'}`}
+                              className={`rounded px-2 py-1 ${valueMode === mode.value ? 'bg-gmi-border font-semibold text-gmi-navy shadow-sm' : 'text-gmi-text-subtle'}`}
                             >
                               {mode.label}
                             </button>
                           ))}
                         </div>
-                        <div className="flex rounded border border-gray-200 bg-gray-50 p-0.5">
+                        <div className="flex rounded border border-gmi-border bg-gmi-surface-soft p-0.5">
                           <button
                             type="button"
                             onClick={() => changeChartMode('total')}
-                            className={`rounded px-2 py-1 ${chartMode === 'total' ? 'bg-white font-semibold text-blue-700 shadow-sm' : 'text-gray-500'}`}
+                            className={`rounded px-2 py-1 ${chartMode === 'total' ? 'bg-gmi-border font-semibold text-gmi-navy shadow-sm' : 'text-gmi-text-subtle'}`}
                           >
                             Totalt
                           </button>
                           <button
                             type="button"
                             onClick={() => changeChartMode('per')}
-                            className={`rounded px-2 py-1 ${chartMode === 'per' ? 'bg-white font-semibold text-blue-700 shadow-sm' : 'text-gray-500'}`}
+                            className={`rounded px-2 py-1 ${chartMode === 'per' ? 'bg-gmi-border font-semibold text-gmi-navy shadow-sm' : 'text-gmi-text-subtle'}`}
                           >
                             Per kommune
                           </button>
@@ -654,7 +654,7 @@ export default function StatsModal({ isOpen, onClose }) {
                         <button
                           type="button"
                           onClick={toggleChartExpansion}
-                          className="rounded border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:border-blue-300 hover:text-blue-700"
+                          className="rounded border border-gmi-border bg-gmi-surface px-2 py-1 text-[11px] font-medium text-gmi-text-muted hover:border-gmi-border-strong hover:text-gmi-interactive"
                           aria-label={expandedChart ? 'Lukk utvidet visning' : 'Utvid diagram'}
                         >
                           {expandedChart ? 'Lukk utvidet visning' : 'Utvid diagram'}
@@ -663,23 +663,23 @@ export default function StatsModal({ isOpen, onClose }) {
                     </div>
 
                     {chartMode === 'per' && comparisonLineIds.length === 0 ? (
-                      <div className="flex h-56 items-center justify-center rounded border border-dashed border-gray-200 px-4 text-center text-sm text-gray-500">
+                      <div className="flex h-56 items-center justify-center rounded border border-dashed border-gmi-border px-4 text-center text-sm text-gmi-text-subtle">
                         Velg minst én kommune eller inkluder uten registrert kommune for å sammenligne utviklingen.
                       </div>
                     ) : (
                       <div className={expandedChart ? 'h-[calc(94vh-8rem)] min-h-[28rem] w-full' : 'h-64 w-full'}>
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" onResize={(width) => setChartWidth(width)}>
                           <LineChart data={chartData} margin={{ top: 5, right: 12, left: 0, bottom: 4 }}>
-                            <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                            <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" vertical={false} />
                             <XAxis
                               dataKey="period"
                               tickFormatter={(value) => formatPeriod(value, timeResolution, true)}
-                              tick={{ fontSize: 10, fill: '#94a3b8' }}
+                              tick={{ fontSize: 10, fill: '#62748E' }}
                               axisLine={false}
                               tickLine={false}
                               minTickGap={24}
                             />
-                            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={34} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#62748E' }} axisLine={false} tickLine={false} width={34} />
                              <Tooltip
                                content={
                                  <TimeTooltip
@@ -689,7 +689,7 @@ export default function StatsModal({ isOpen, onClose }) {
                                }
                              />
                             {chartMode === 'total' ? (
-                              <Line type="monotone" dataKey="total" name="Registrerte opplastinger" stroke="#2563eb" strokeWidth={2.5} dot={chartData.length <= 31} activeDot={{ r: 4 }} />
+                              <Line type="monotone" dataKey="total" name="Registrerte opplastinger" stroke="#007595" strokeWidth={2.5} dot={chartData.length <= 31} activeDot={{ r: 4 }} />
                             ) : (
                               comparisonLineIds.map((id, index) => (
                                 <Line
@@ -707,7 +707,10 @@ export default function StatsModal({ isOpen, onClose }) {
                               ))
                             )}
                             {chartMode === 'per' && (
-                              <Legend wrapperStyle={{ fontSize: 11, maxHeight: 64, overflowY: 'auto' }} />
+                              <Legend
+                                height={chartWidth !== null && chartWidth < 900 ? 64 : undefined}
+                                wrapperStyle={{ fontSize: 11, maxHeight: 64, overflowY: 'auto' }}
+                              />
                             )}
                           </LineChart>
                         </ResponsiveContainer>
@@ -717,24 +720,24 @@ export default function StatsModal({ isOpen, onClose }) {
                 )}
 
                 {!hasData && !expandedMap && (
-                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-10 text-center">
-                    <h3 className="text-sm font-semibold text-gray-700">Ingen registrerte opplastinger i utvalget</h3>
-                    <p className="mt-1 text-xs text-gray-500">Velg kommuner eller inkluder opplastinger uten registrert kommune.</p>
+                  <div className="rounded-lg border border-gmi-border bg-gmi-cyan-soft px-4 py-10 text-center">
+                    <h3 className="text-sm font-semibold text-gmi-text">Ingen registrerte opplastinger i utvalget</h3>
+                    <p className="mt-1 text-xs text-gmi-text-subtle">Velg kommuner eller inkluder opplastinger uten registrert kommune.</p>
                   </div>
                 )}
 
                 {hasData && !expandedChart && (
                   <section className={expandedMap ? 'space-y-2' : ''}>
                     <div className="mb-2 flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-800">Kommuner</h3>
+                      <h3 className="text-sm font-semibold text-gmi-navy">Kommuner</h3>
                       <div className="flex items-center gap-2">
                         {!expandedMap && (
-                          <span className="text-[10px] text-gray-400">Ranking og kart følger samme utvalg</span>
+                          <span className="text-[10px] text-gmi-text-subtle">Ranking og kart følger samme utvalg</span>
                         )}
                         <button
                           type="button"
                           onClick={toggleMapExpansion}
-                          className="rounded border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:border-blue-300 hover:text-blue-700"
+                          className="rounded border border-gmi-border bg-gmi-surface px-2 py-1 text-[11px] font-medium text-gmi-text-muted hover:border-gmi-border-strong hover:text-gmi-interactive"
                           aria-label={expandedMap ? 'Lukk utvidet visning' : 'Utvid kart'}
                         >
                           {expandedMap ? 'Lukk utvidet visning' : 'Utvid kart'}
@@ -742,33 +745,33 @@ export default function StatsModal({ isOpen, onClose }) {
                       </div>
                     </div>
                     <div className={expandedMap
-                      ? 'h-[calc(94vh-9rem)] min-h-[30rem] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm'
+                      ? 'h-[calc(94vh-9rem)] min-h-[30rem] overflow-hidden rounded-lg border border-gmi-border bg-gmi-surface shadow-sm'
                       : 'grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(15rem,1fr)]'}>
                       <div className={expandedMap
                         ? 'h-full w-full'
-                        : 'h-[clamp(20rem,38vw,30rem)] min-h-[20rem] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm'}>
+                        : 'h-[clamp(20rem,38vw,30rem)] min-h-[20rem] overflow-hidden rounded-lg border border-gmi-border bg-gmi-surface shadow-sm'}>
                         <StatsMap
                           byKommune={displayedStats.byKommune}
                           timeline={displayedStats.timeline}
                           expanded={expandedMap}
                         />
                       </div>
-                      {!expandedMap && <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-                        <h4 className="mb-2 text-xs font-semibold text-gray-700">Fordeling</h4>
+                      {!expandedMap && <div className="rounded-lg border border-gmi-border bg-gmi-surface p-3 shadow-sm">
+                        <h4 className="mb-2 text-xs font-semibold text-gmi-text">Fordeling</h4>
                         {ranking.length === 0 ? (
-                          <p className="py-12 text-center text-xs text-gray-400">Ingen kommunedata i utvalget</p>
+                          <p className="py-12 text-center text-xs text-gmi-text-subtle">Ingen kommunedata i utvalget</p>
                         ) : (
                           <div className="space-y-1.5">
                             {ranking.slice(0, 10).map((kommune) => (
                               <div key={kommune.isUnresolved ? UNRESOLVED_SERIES_KEY : kommune.kommuneNumber} className="flex items-center gap-2 text-xs">
-                                <span className="w-28 truncate text-gray-600">{kommune.areaName}</span>
-                                <div className="h-2 min-w-0 flex-1 rounded bg-gray-100">
+                                <span className="w-28 truncate text-gmi-text-muted">{kommune.areaName}</span>
+                                <div className="h-2 min-w-0 flex-1 rounded bg-gmi-surface-soft">
                                   <div
-                                    className="h-2 rounded bg-blue-500"
+                                    className="h-2 rounded bg-gmi-interactive"
                                     style={{ width: `${Math.max(4, (kommune.count / ranking[0].count) * 100)}%` }}
                                   />
                                 </div>
-                                <span className="w-10 text-right tabular-nums text-gray-500">{kommune.count}</span>
+                                <span className="w-10 text-right tabular-nums text-gmi-text-subtle">{kommune.count}</span>
                               </div>
                             ))}
                           </div>
@@ -781,7 +784,7 @@ export default function StatsModal({ isOpen, onClose }) {
             )}
 
             {!loading && !error && !displayedStats && (
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500">
+              <div className="rounded-lg border border-gmi-border bg-gmi-surface px-4 py-10 text-center text-sm text-gmi-text-subtle">
                 Henter statistikk …
               </div>
             )}

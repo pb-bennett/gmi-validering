@@ -48,11 +48,12 @@ Miljøvariabler beskriver formål, ikke verdier:
 - `SUPABASE_SERVICE_ROLE_KEY` – serverhemmelig nøkkel for serverens Supabase-tilgang
 - `TRACKING_KEEPALIVE_SECRET` – serverhemmelig beskyttelse for tracking-keepalive
 - `TRACKING_STORAGE_PATH` – alternativ lagringssti for lokal statistikkfallback
+- `NEXT_PUBLIC_CARTO_BASEMAP_KEY` – offentlig CARTO-basemapnøkkel for Stats-kartets rasterfliser; legges i lokal `.env.local` eller klientens byggemiljø
 - `RESEND_API_KEY` – serverhemmelig API-nøkkel for kontaktlevering via Resend
 - `CONTACT_TO_EMAIL` – konfigurert mottaker for kontaktmeldinger
 - `CONTACT_FROM_EMAIL` – konfigurert avsenderadresse for kontaktmeldinger
 
-Nøkler og andre hemmeligheter skal bare finnes i servermiljøet. De skal ikke legges i kildekoden, sendes til klienten eller plasseres i URL-er eller query-parametere. Verdier som bevisst er offentlige, må holdes adskilt fra serverhemmeligheter.
+Serverhemmeligheter skal bare finnes i servermiljøet. De skal ikke legges i kildekoden, sendes til klienten eller plasseres i URL-er eller query-parametere. `NEXT_PUBLIC_CARTO_BASEMAP_KEY` er derimot bevisst offentlig og sendes som `key`-parameter i nettleserens CARTO-flisforespørsler; hold den adskilt fra serverhemmeligheter.
 
 ## Bruksstatistikk
 

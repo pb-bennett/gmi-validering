@@ -9,11 +9,17 @@ import {
 } from 'react';
 import {
   MapContainer,
+  AttributionControl,
   TileLayer,
   CircleMarker,
   Tooltip,
   useMap,
 } from 'react-leaflet';
+import { PauseIcon, PlayIcon } from '@phosphor-icons/react';
+import {
+  CARTO_BASEMAP_ATTRIBUTION,
+  getCartoBasemapUrl,
+} from '@/lib/stats/cartoBasemap.mjs';
 import {
   getInitialTimelineIndex,
   getNextTimelineIndex,
@@ -24,6 +30,10 @@ import {
   VIEWPORT_MODE_AUTO,
   VIEWPORT_MODE_USER,
 } from '@/lib/stats/mapTimeline.mjs';
+
+const cartoTileUrl = getCartoBasemapUrl(
+  process.env.NEXT_PUBLIC_CARTO_BASEMAP_KEY,
+);
 
 /* ── Fit-bounds helper ──────────────────────────────────────────────────── */
 function ViewportOwnership({ programmaticRef, onUserInteraction }) {
@@ -258,10 +268,15 @@ export default function StatsMap({ byKommune = [], timeline = [], expanded = fal
             programmaticRef={programmaticViewportRef}
             onUserInteraction={markUserControlled}
           />
-          <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-          attribution=""
-        />
+          {cartoTileUrl && (
+            <>
+              <AttributionControl position="topleft" prefix={false} />
+              <TileLayer
+                url={cartoTileUrl}
+                attribution={CARTO_BASEMAP_ATTRIBUTION}
+              />
+            </>
+          )}
 
         <FitBounds
           markers={markers}
@@ -288,7 +303,7 @@ export default function StatsMap({ byKommune = [], timeline = [], expanded = fal
               <Tooltip direction="top" offset={[0, -8]}>
                 <div className="text-center">
                   <div className="font-semibold">{m.areaName}</div>
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-gmi-text-muted">
                     {m.count} opplasting{m.count !== 1 ? 'er' : ''}
                   </div>
                 </div>
@@ -298,11 +313,17 @@ export default function StatsMap({ byKommune = [], timeline = [], expanded = fal
         })}
       </MapContainer>
 
+      {!cartoTileUrl && (
+        <div className="pointer-events-none absolute left-3 top-3 z-[1000] rounded-lg border border-gmi-border bg-gmi-surface/95 px-3 py-2 text-xs text-gmi-text-muted shadow-sm">
+          Kartbakgrunn mangler (NEXT_PUBLIC_CARTO_BASEMAP_KEY). Punktene vises fortsatt.
+        </div>
+      )}
+
       {/* Empty state overlay */}
       {!hasMapData && (
         <div className="absolute inset-0 flex items-center justify-center z-[400] pointer-events-none">
-          <div className="bg-white/80 backdrop-blur rounded-lg px-6 py-4 text-center">
-            <p className="text-gray-500 text-sm">
+          <div className="rounded-lg border border-gmi-border bg-gmi-surface/90 px-6 py-4 text-center shadow-sm backdrop-blur">
+            <p className="text-gmi-text-muted text-sm">
               Ingen kommunedata å vise ennå
             </p>
           </div>
@@ -314,40 +335,27 @@ export default function StatsMap({ byKommune = [], timeline = [], expanded = fal
         onClick={resetViewport}
         disabled={!hasMapData}
         aria-label="Vis alle punkter"
-        className="absolute right-3 top-3 z-[1000] rounded-lg border border-gray-200 bg-white/95 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 shadow-md backdrop-blur-sm hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="gmi-focus-ring absolute right-3 top-3 z-[1000] rounded-lg border border-gmi-border bg-gmi-surface/95 px-2.5 py-1.5 text-[11px] font-medium text-gmi-text-muted shadow-md backdrop-blur-sm hover:border-gmi-border-strong hover:text-gmi-interactive disabled:cursor-not-allowed disabled:opacity-50"
       >
         Vis alle punkter
       </button>
 
       {/* Timeline controls */}
       {uniqueDates.length > 1 && (
-        <div className="absolute bottom-3 left-3 right-3 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg px-4 py-2.5 shadow-md border border-gray-200">
+        <div className="absolute bottom-3 left-3 right-3 z-[1000] rounded-lg border border-gmi-border bg-gmi-surface/95 px-4 py-2.5 shadow-md backdrop-blur-sm">
           <div className="flex items-center gap-3">
             {/* Play / pause button */}
             <button
               type="button"
               onClick={togglePlay}
               aria-label={playing ? 'Pause' : 'Spill av'}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors flex-shrink-0"
+              className="gmi-focus-ring w-8 h-8 flex items-center justify-center rounded-full text-gmi-interactive hover:bg-gmi-surface-soft transition-colors flex-shrink-0"
               title={playing ? 'Pause' : 'Spill av'}
             >
               {playing ? (
-                <svg
-                  className="w-4 h-4 text-gray-700"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
-                </svg>
+                <PauseIcon size={16} weight="regular" aria-hidden="true" />
               ) : (
-                <svg
-                  className="w-4 h-4 text-gray-700 ml-0.5"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
+                <PlayIcon size={16} weight="regular" className="ml-0.5" aria-hidden="true" />
               )}
             </button>
 
@@ -361,17 +369,17 @@ export default function StatsMap({ byKommune = [], timeline = [], expanded = fal
                 setPlaying(false);
                 setDateIdx(Number(event.target.value));
               }}
-              className="flex-1 h-1.5 appearance-none rounded bg-gray-200 accent-blue-500 cursor-pointer"
+              className="flex-1 h-1.5 appearance-none rounded bg-gmi-border accent-gmi-interactive cursor-pointer"
             />
 
             {/* Date label */}
-            <span className="text-xs text-gray-600 font-medium min-w-[100px] text-right tabular-nums">
+            <span className="text-xs text-gmi-text-muted font-medium min-w-[100px] text-right tabular-nums">
               {fmtDate(uniqueDates[displayDateIdx])}
             </span>
           </div>
 
           {/* Date range hint */}
-          <div className="flex justify-between mt-1 text-[10px] text-gray-400 px-11">
+          <div className="flex justify-between mt-1 text-[10px] text-gmi-text-subtle px-11">
             <span>{fmtDate(uniqueDates[0])}</span>
             <span>
               {fmtDate(uniqueDates[uniqueDates.length - 1])}

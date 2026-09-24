@@ -323,35 +323,35 @@ export default function Home() {
           zIndex: 10002,
           padding: '10px 16px',
           borderRadius: '12px',
-          backgroundColor: '#db2777',
+          backgroundColor: '#007595',
           color: '#ffffff',
-          border: '1px solid #be185d',
+          border: '1px solid #007595',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          boxShadow: '0 6px 18px rgba(190,24,93,0.28)',
+          boxShadow: '0 6px 18px rgba(0,117,149,0.28)',
           fontSize: '13px',
           fontWeight: 500,
           backdropFilter: 'blur(8px)',
           transition: 'all 0.15s ease',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#be185d';
-          e.currentTarget.style.borderColor = '#9d174d';
+          e.currentTarget.style.backgroundColor = '#0F172B';
+          e.currentTarget.style.borderColor = '#0F172B';
           e.currentTarget.style.boxShadow =
-            '0 6px 20px rgba(190,24,93,0.38)';
+            '0 6px 20px rgba(0,117,149,0.38)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor =
-            '#db2777';
-          e.currentTarget.style.borderColor = '#be185d';
+            '#007595';
+          e.currentTarget.style.borderColor = '#007595';
           e.currentTarget.style.boxShadow =
-            '0 6px 18px rgba(190,24,93,0.28)';
+            '0 6px 18px rgba(0,117,149,0.28)';
         }}
       >
         <svg
-          className="w-4 h-4"
+          className="w-4 h-4 text-gmi-brand-cyan"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
