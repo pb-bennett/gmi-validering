@@ -20,8 +20,8 @@ export default function Legend3D() {
   ];
 
   return (
-    <div className="absolute bottom-4 left-4 z-50 bg-white/95 backdrop-blur-sm text-gray-800 rounded-xl shadow-lg border border-gray-200/50 p-4 max-h-80 overflow-y-auto">
-      <h3 className="text-sm font-semibold mb-2 text-gray-700">
+    <div className="gmi-elevated-surface absolute bottom-4 left-4 z-50 max-h-80 overflow-y-auto rounded-xl bg-gmi-surface/95 p-4 text-gmi-text backdrop-blur-sm">
+      <h3 className="text-sm font-semibold mb-2 text-gmi-navy">
         Ledninger
       </h3>
       <div className="space-y-1.5 mb-3">
@@ -31,14 +31,14 @@ export default function Legend3D() {
               className="w-6 h-1.5 rounded-full"
               style={{ backgroundColor: item.color }}
             />
-            <span className="text-xs text-gray-600">
+            <span className="text-xs text-gmi-text-muted">
               {item.label}
             </span>
           </div>
         ))}
       </div>
 
-      <h3 className="text-sm font-semibold mb-2 border-t border-gray-200 pt-2 text-gray-700">
+      <h3 className="text-sm font-semibold mb-2 border-t border-gmi-border pt-2 text-gmi-navy">
         Punkter
       </h3>
       <div className="space-y-1.5">
@@ -60,7 +60,7 @@ export default function Legend3D() {
                 style={{ backgroundColor: item.color }}
               />
             )}
-            <span className="text-xs text-gray-600">
+            <span className="text-xs text-gmi-text-muted">
               {item.label}
             </span>
           </div>

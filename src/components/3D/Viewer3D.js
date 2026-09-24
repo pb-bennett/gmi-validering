@@ -187,19 +187,19 @@ export default function Viewer3D() {
         >
           <button
             onClick={() => openDataInspector(null)}
-            className="px-4 py-2 rounded shadow font-medium border transition-colors"
+            className="gmi-compact-button gmi-focus-ring px-4 py-2 shadow font-medium border transition-colors"
             style={{
-              backgroundColor: 'var(--color-card)',
-              color: 'var(--color-text)',
-              borderColor: 'var(--color-border)',
+              backgroundColor: 'var(--gmi-surface)',
+              color: 'var(--gmi-text)',
+              borderColor: 'var(--gmi-border)',
             }}
             onMouseEnter={(e) =>
               (e.currentTarget.style.backgroundColor =
-                'var(--color-page-bg)')
+                'var(--gmi-surface-soft)')
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.backgroundColor =
-                'var(--color-card)')
+                'var(--gmi-surface)')
             }
           >
             Inspiser data

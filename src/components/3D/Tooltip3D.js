@@ -3,6 +3,7 @@
 import useStore from '@/lib/store';
 import { analyzeIncline } from '@/lib/analysis/incline';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { XIcon } from '@phosphor-icons/react';
 
 // Get a human-readable label for point objects based on S_FCODE
 function getPointTypeLabel(fcode) {
@@ -186,7 +187,7 @@ export default function Tooltip3D({ object, position, onClose }) {
   return (
     <div
       ref={tooltipRef}
-      className="fixed z-10002 bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-200/50 p-2.5 min-w-60 max-w-80 text-[11px] leading-tight max-h-[70vh]"
+      className="fixed z-10002 min-w-60 max-w-80 max-h-[70vh] rounded-xl border border-gmi-border-strong bg-gmi-surface/95 p-2.5 text-[11px] leading-tight text-gmi-text shadow-2xl backdrop-blur-sm"
       style={{
         left: `${clampedPos?.x ?? position.x}px`,
         top: `${clampedPos?.y ?? position.y}px`,
@@ -196,35 +197,23 @@ export default function Tooltip3D({ object, position, onClose }) {
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-colors"
+        className="gmi-focus-ring absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full bg-gmi-surface-soft text-gmi-text-subtle transition-colors hover:bg-gmi-border hover:text-gmi-navy"
         title="Lukk"
       >
-        <svg
-          className="w-3.5 h-3.5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
+        <XIcon className="w-3.5 h-3.5" weight="regular" aria-hidden="true" />
       </button>
 
       {/* Object type header */}
-      <div className="mb-1.5 pb-1 border-b border-gray-100 flex items-center gap-1 whitespace-nowrap">
-        <span className="font-semibold text-gray-800">
+      <div className="mb-1.5 pb-1 border-b border-gmi-border flex items-center gap-1 whitespace-nowrap">
+        <span className="font-semibold text-gmi-navy">
           {object.type === 'pipe'
             ? '🔵 Ledning'
             : getPointTypeLabel(object.fcode)}
         </span>
         {object.fcode && (
           <>
-            <span className="text-gray-400">•</span>
-            <span className="text-gray-500 font-semibold">
+            <span className="text-gmi-text-subtle">•</span>
+            <span className="text-gmi-text-muted font-semibold">
               {object.fcode}
             </span>
           </>
@@ -239,10 +228,10 @@ export default function Tooltip3D({ object, position, onClose }) {
             .slice(0, 20)
             .map(([key, value]) => (
               <div key={key} className="flex justify-between gap-2">
-                <span className="font-medium text-gray-500">
+                <span className="font-medium text-gmi-text-muted">
                   {key}:
                 </span>
-                <span className="text-gray-800 font-medium">
+                <span className="text-gmi-text font-medium">
                   {String(value)}
                 </span>
               </div>
@@ -252,7 +241,7 @@ export default function Tooltip3D({ object, position, onClose }) {
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={handleViewInMap}
-          className="px-2 py-1.5 bg-gray-700 hover:bg-gray-800 text-white rounded-md transition-colors font-medium flex items-center justify-center gap-1"
+          className="gmi-focus-ring px-2 py-1.5 bg-gmi-navy hover:opacity-90 text-gmi-surface rounded-md transition-colors font-medium flex items-center justify-center gap-1"
         >
           <svg
             className="w-3.5 h-3.5"
@@ -272,7 +261,7 @@ export default function Tooltip3D({ object, position, onClose }) {
 
         <button
           onClick={handleInspectData}
-          className="px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium flex items-center justify-center gap-1"
+          className="gmi-focus-ring px-2 py-1.5 bg-gmi-interactive hover:opacity-90 text-gmi-surface rounded-md transition-colors font-medium flex items-center justify-center gap-1"
         >
           <svg
             className="w-3.5 h-3.5"
@@ -293,7 +282,7 @@ export default function Tooltip3D({ object, position, onClose }) {
         {object.type === 'pipe' && object.lineIndex !== undefined && (
           <button
             onClick={handleShowProfile}
-            className="col-span-2 px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition-colors font-medium flex items-center justify-center gap-1"
+            className="gmi-focus-ring col-span-2 px-2 py-1.5 bg-gmi-surface-soft hover:bg-gmi-border text-gmi-navy rounded-md transition-colors font-medium flex items-center justify-center gap-1"
           >
             <svg
               className="w-3.5 h-3.5"

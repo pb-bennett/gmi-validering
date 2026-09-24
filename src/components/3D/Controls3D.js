@@ -11,17 +11,17 @@ export default function Controls3D() {
   return (
     <>
       {/* Top-left controls panel */}
-      <div className="absolute top-14 left-4 z-50 bg-white/95 backdrop-blur-sm text-gray-800 rounded-xl shadow-lg border border-gray-200/50 overflow-hidden min-w-[160px]">
+      <div className="gmi-elevated-surface absolute top-14 left-4 z-50 min-w-[160px] overflow-hidden rounded-xl bg-gmi-surface/95 text-gmi-text backdrop-blur-sm">
         {/* Header with minimize toggle */}
         <div
-          className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-100"
+          className="flex items-center justify-between border-b border-gmi-border px-4 py-2.5 cursor-pointer transition-colors hover:bg-gmi-surface-soft"
           onClick={() => setIsMinimized(!isMinimized)}
         >
-          <h3 className="text-sm font-semibold text-gray-700">
+          <h3 className="text-sm font-semibold text-gmi-navy">
             Kontroller
           </h3>
           <svg
-            className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+            className={`w-4 h-4 text-gmi-text-muted transition-transform duration-200 ${
               isMinimized ? '' : 'rotate-180'
             }`}
             fill="none"
@@ -47,7 +47,7 @@ export default function Controls3D() {
                   new CustomEvent('reset3DCamera'),
                 );
               }}
-              className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+              className="gmi-primary-control gmi-focus-ring w-full px-3 py-2 text-sm font-medium"
             >
               Nullstill kamera
             </button>
@@ -58,10 +58,10 @@ export default function Controls3D() {
                 setGridOn(!gridOn);
                 window.dispatchEvent(new CustomEvent('toggle3DGrid'));
               }}
-              className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`gmi-focus-ring w-full rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 gridOn
-                  ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                  : 'bg-gray-300 hover:bg-gray-400 text-gray-600'
+                  ? 'gmi-selected-control'
+                  : 'bg-gmi-surface-soft text-gmi-text-muted hover:bg-gmi-border'
               }`}
             >
               Gitter {gridOn ? '(På)' : '(Av)'}
@@ -72,7 +72,7 @@ export default function Controls3D() {
                 e.stopPropagation();
                 setShowLegend(!showLegend);
               }}
-              className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+              className="gmi-compact-button gmi-focus-ring w-full bg-gmi-surface-soft px-3 py-2 text-sm font-medium"
             >
               {showLegend ? 'Skjul' : 'Vis'} tegnforklaring
             </button>
@@ -84,11 +84,11 @@ export default function Controls3D() {
       {showLegend && <Legend3D />}
 
       {/* Instructions - more subtle */}
-      <div className="absolute bottom-20 right-4 z-50 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl shadow-lg border border-gray-200/50 p-3 text-xs max-w-xs">
-        <p className="font-semibold mb-1.5 text-gray-800">
+      <div className="gmi-elevated-surface absolute bottom-20 right-4 z-50 max-w-xs rounded-xl bg-gmi-surface/90 p-3 text-xs text-gmi-text-muted backdrop-blur-sm">
+        <p className="font-semibold mb-1.5 text-gmi-navy">
           Navigasjon:
         </p>
-        <ul className="space-y-1 text-gray-600">
+        <ul className="space-y-1 text-gmi-text-muted">
           <li>🖱️ Venstre: Roter</li>
           <li>🖱️ Høyre: Panorér</li>
           <li>🖱️ Rull: Zoom</li>
