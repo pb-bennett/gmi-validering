@@ -36,7 +36,7 @@ export default function ValidationV2FieldInspector({
           onClick={onClose}
           className="gmi-compact-button inline-flex h-8 w-8 flex-none items-center justify-center text-gmi-text-muted hover:text-gmi-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gmi-interactive"
         >
-          <XIcon aria-hidden="true" size={18} weight="bold" />
+          <XIcon aria-hidden="true" size={18} weight="regular" />
         </button>
       </header>
       <ValidationV2FieldDetailContent

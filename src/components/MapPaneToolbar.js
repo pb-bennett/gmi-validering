@@ -110,7 +110,7 @@ export default function MapPaneToolbar({ onReset, onShare, showShare }) {
               aria-expanded={overflowOpen}
               title="Flere kartverktøy"
             >
-              <DotsThreeIcon aria-hidden="true" size={20} weight="bold" />
+              <DotsThreeIcon aria-hidden="true" size={20} weight="regular" />
               <span className={compact ? 'sr-only' : ''}>Mer</span>
             </ToolbarButton>
           )}

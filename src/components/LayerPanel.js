@@ -305,9 +305,9 @@ function LayerTopplokSection({
   return (
     <div
       className="px-3 py-2 border-b"
-      style={{ borderColor: 'var(--color-border)' }}
+      style={{ borderColor: 'var(--gmi-border)' }}
     >
-      <div className="text-[10px] text-gray-600 space-y-1">
+      <div className="text-[10px] text-gmi-text-muted space-y-1">
         <div className="flex justify-between">
           <span>{results.summary.total} kontrollert</span>
           <span
@@ -331,24 +331,24 @@ function LayerTopplokSection({
       </div>
 
       {showResults && hasIssues && (
-        <div className="mt-2 border rounded bg-gray-50">
+        <div className="mt-2 border border-gmi-border rounded bg-gmi-surface-soft">
           <div className="flex border-b">
             <button
               onClick={() => setActiveTab('missing')}
-              className={`flex-1 py-1 text-[10px] font-medium transition-colors ${
+              className={`gmi-focus-ring flex-1 py-1 text-[10px] font-medium transition-colors ${
                 activeTab === 'missing'
                   ? 'bg-white border-b-2 border-red-500 text-red-700'
-                  : 'text-gray-500 hover:bg-gray-100'
+                  : 'text-gmi-text-subtle hover:bg-gmi-surface-soft'
               }`}
             >
               Mangler LOK ({results.summary.missing})
             </button>
             <button
               onClick={() => setActiveTab('orphan')}
-              className={`flex-1 py-1 text-[10px] font-medium transition-colors ${
+              className={`gmi-focus-ring flex-1 py-1 text-[10px] font-medium transition-colors ${
                 activeTab === 'orphan'
                   ? 'bg-white border-b-2 border-yellow-500 text-yellow-700'
-                  : 'text-gray-500 hover:bg-gray-100'
+                  : 'text-gmi-text-subtle hover:bg-gmi-surface-soft'
               }`}
             >
               LOK uten eier ({results.summary.orphanLokCount})
@@ -364,12 +364,12 @@ function LayerTopplokSection({
                     <button
                       key={`missing-${r.pointIndex}`}
                       onClick={() => highlightPoint(r.pointIndex)}
-                      className="w-full text-left text-[10px] p-1.5 rounded hover:bg-red-50 border border-transparent hover:border-red-200"
+                      className="gmi-focus-ring w-full text-left text-[10px] p-1.5 rounded hover:bg-red-50 border border-transparent hover:border-red-200"
                     >
                       <span className="text-red-700 font-medium">
                         {r.fcode}
                       </span>
-                      <span className="text-gray-600">
+                      <span className="text-gmi-text-muted">
                         {' '}
                         — {r.message}
                       </span>
@@ -384,12 +384,12 @@ function LayerTopplokSection({
                   <button
                     key={`orphan-${r.pointIndex}`}
                     onClick={() => highlightPoint(r.pointIndex)}
-                    className="w-full text-left text-[10px] p-1.5 rounded hover:bg-yellow-50 border border-transparent hover:border-yellow-200"
+                    className="gmi-focus-ring w-full text-left text-[10px] p-1.5 rounded hover:bg-yellow-50 border border-transparent hover:border-yellow-200"
                   >
                     <span className="text-yellow-700 font-medium">
                       {r.fcode}
                     </span>
-                    <span className="text-gray-600">
+                    <span className="text-gmi-text-muted">
                       {' '}
                       — {r.message}
                     </span>
@@ -1028,7 +1028,7 @@ function LayerFeltSection({
   return (
     <div
       className="border-b last:border-0"
-      style={{ borderColor: 'var(--color-border)' }}
+      style={{ borderColor: 'var(--gmi-border)' }}
     >
       <button
         onClick={() => {

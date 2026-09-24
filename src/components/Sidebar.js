@@ -51,20 +51,7 @@ function InclineAnalysisControl() {
         onClick={
           analysisResults.length > 0 ? openResults : runAnalysis
         }
-        className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
-        style={{
-          backgroundColor: 'var(--color-primary)',
-          color: 'white',
-          borderColor: 'var(--color-primary-dark)',
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary-dark)')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary)')
-        }
+        className="gmi-primary-control gmi-focus-ring w-full px-3 py-2 text-xs font-medium border border-gmi-navy"
       >
         {analysisResults.length > 0
           ? 'Åpne profilanalyse'
@@ -72,7 +59,7 @@ function InclineAnalysisControl() {
       </button>
 
       {analysisResults.length > 0 && (
-        <div className="text-xs text-gray-600 flex justify-between">
+        <div className="text-xs text-gmi-text-muted flex justify-between">
           <span>{analysisResults.length} analysert</span>
           <span>
             <span
@@ -130,20 +117,7 @@ function ZValidationControl() {
     <div className="space-y-2">
       <button
         onClick={zValidationResults ? openResults : runAnalysis}
-        className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
-        style={{
-          backgroundColor: 'var(--color-primary)',
-          color: 'white',
-          borderColor: 'var(--color-primary-dark)',
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary-dark)')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary)')
-        }
+        className="gmi-primary-control gmi-focus-ring w-full px-3 py-2 text-xs font-medium border border-gmi-navy"
       >
         {zValidationResults
           ? 'Åpne høydekontroll'
@@ -151,7 +125,7 @@ function ZValidationControl() {
       </button>
 
       {zValidationResults && (
-        <div className="text-xs text-gray-600 flex justify-between">
+        <div className="text-xs text-gmi-text-muted flex justify-between">
           <span>
             {summary?.totalPoints || 0} punkter,{' '}
             {summary?.totalLines || 0} linjer
@@ -178,20 +152,7 @@ function FieldValidationControl() {
     <div className="space-y-2">
       <button
         onClick={() => toggleFieldValidation(true)}
-        className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
-        style={{
-          backgroundColor: 'var(--color-primary)',
-          color: 'white',
-          borderColor: 'var(--color-primary-dark)',
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary-dark)')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary)')
-        }
+        className="gmi-primary-control gmi-focus-ring w-full px-3 py-2 text-xs font-medium border border-gmi-navy"
       >
         Åpne feltvalidering
       </button>
@@ -244,20 +205,7 @@ function TopplokControl() {
         onClick={
           results ? () => setShowResults(!showResults) : runAnalysis
         }
-        className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
-        style={{
-          backgroundColor: 'var(--color-primary)',
-          color: 'white',
-          borderColor: 'var(--color-primary-dark)',
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary-dark)')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary)')
-        }
+        className="gmi-primary-control gmi-focus-ring w-full px-3 py-2 text-xs font-medium border border-gmi-navy"
       >
         {results
           ? showResults
@@ -267,7 +215,7 @@ function TopplokControl() {
       </button>
 
       {results && (
-        <div className="text-xs text-gray-600 space-y-1">
+        <div className="text-xs text-gmi-text-muted space-y-1">
           <div className="flex justify-between">
             <span>{results.summary.total} kontrollert</span>
             <span>
@@ -294,7 +242,7 @@ function TopplokControl() {
       )}
 
       {showResults && results && hasIssues && (
-        <div className="mt-2 border rounded bg-gray-50">
+        <div className="mt-2 border border-gmi-border rounded bg-gmi-surface-soft">
           {/* Tab buttons */}
           <div className="flex border-b">
             <button
@@ -302,7 +250,7 @@ function TopplokControl() {
               className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
                 activeTab === 'missing'
                   ? 'bg-white border-b-2 border-red-500 text-red-700'
-                  : 'text-gray-500 hover:bg-gray-100'
+                  : 'text-gmi-text-subtle hover:bg-gmi-surface-soft'
               }`}
             >
               Mangler LOK ({results.summary.missing})
@@ -312,7 +260,7 @@ function TopplokControl() {
               className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
                 activeTab === 'orphan'
                   ? 'bg-white border-b-2 border-yellow-500 text-yellow-700'
-                  : 'text-gray-500 hover:bg-gray-100'
+                  : 'text-gmi-text-subtle hover:bg-gmi-surface-soft'
               }`}
             >
               LOK uten eier ({results.summary.orphanLokCount})
@@ -324,7 +272,7 @@ function TopplokControl() {
             {activeTab === 'missing' &&
               results.summary.missing > 0 && (
                 <>
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-gmi-text-subtle mb-2">
                     Klikk for å markere i kart
                   </p>
                   {results.results
@@ -338,7 +286,7 @@ function TopplokControl() {
                         <span className="font-medium text-red-700">
                           {r.fcode}
                         </span>
-                        <span className="text-gray-500 text-right">
+                        <span className="text-gmi-text-subtle text-right">
                           {r.coordinates
                             ? `${r.coordinates.x.toFixed(
                                 0,
@@ -360,7 +308,7 @@ function TopplokControl() {
             {activeTab === 'orphan' &&
               results.orphanLoks.length > 0 && (
                 <>
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-gmi-text-subtle mb-2">
                     LOK som ikke ligger over noen KUM/SLU/SLS/SAN
                   </p>
                   {results.orphanLoks.map((r, i) => (
@@ -372,7 +320,7 @@ function TopplokControl() {
                       <span className="font-medium text-yellow-700">
                         LOK
                       </span>
-                      <span className="text-gray-500 text-right">
+                      <span className="text-gmi-text-subtle text-right">
                         {r.coordinates
                           ? `${r.coordinates.x.toFixed(
                               0,
@@ -442,20 +390,7 @@ function OutlierControl() {
             ? () => setShowResults(!showResults)
             : runAnalysis
         }
-        className="w-full px-3 py-2 text-xs font-medium rounded transition-colors border"
-        style={{
-          backgroundColor: 'var(--color-primary)',
-          color: 'white',
-          borderColor: 'var(--color-primary-dark)',
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary-dark)')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            'var(--color-primary)')
-        }
+        className="gmi-primary-control gmi-focus-ring w-full px-3 py-2 text-xs font-medium border border-gmi-navy"
       >
         {outlierResults
           ? showResults
@@ -465,7 +400,7 @@ function OutlierControl() {
       </button>
 
       {outlierResults && (
-        <div className="text-xs text-gray-600 flex justify-between">
+        <div className="text-xs text-gmi-text-muted flex justify-between">
           <span>{outlierResults.summary.totalObjects} objekter</span>
           <span
             className={
@@ -480,10 +415,10 @@ function OutlierControl() {
       )}
 
       {showResults && outlierResults && hasOutliers && (
-        <div className="mt-2 border rounded bg-gray-50">
+        <div className="mt-2 border border-gmi-border rounded bg-gmi-surface-soft">
           {/* Hide toggle */}
           <div className="p-2 border-b flex items-center justify-between">
-            <span className="text-xs text-gray-600">
+            <span className="text-xs text-gmi-text-muted">
               Skjul avvik i kart
             </span>
             <button
@@ -491,7 +426,7 @@ function OutlierControl() {
               className={`px-2 py-1 text-xs rounded transition-colors ${
                 hideOutliers
                   ? 'bg-orange-500 text-white'
-                  : 'bg-gray-200 text-gray-700'
+                  : 'bg-gmi-border text-gmi-text'
               }`}
             >
               {hideOutliers ? 'På' : 'Av'}
@@ -500,7 +435,7 @@ function OutlierControl() {
 
           {/* Outlier list */}
           <div className="max-h-48 overflow-y-auto p-2">
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs text-gmi-text-subtle mb-2">
               Objekter langt fra hoveddata. Klikk for å markere.
             </p>
             {outlierResults.outliers.map((outlier, i) => (
@@ -512,7 +447,7 @@ function OutlierControl() {
                 <span className="font-medium text-orange-700">
                   {outlier.fcode || outlier.type}
                 </span>
-                <span className="text-gray-500 text-right">
+                <span className="text-gmi-text-subtle text-right">
                   {outlier.distance.toFixed(0)}m fra senter
                 </span>
               </div>
@@ -681,16 +616,16 @@ function FieldSubSection({
           <table className="w-full text-xs">
             <thead className="bg-gmi-surface-soft">
               <tr>
-                <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-600 uppercase w-6">
+                <th className="px-2 py-1 text-left text-[10px] font-medium text-gmi-text-muted uppercase w-6">
                   Vis
                 </th>
-                <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-600 uppercase">
+                <th className="px-2 py-1 text-left text-[10px] font-medium text-gmi-text-muted uppercase">
                   Verdi
                 </th>
-                <th className="px-2 py-1 text-right text-[10px] font-medium text-gray-600 uppercase">
+                <th className="px-2 py-1 text-right text-[10px] font-medium text-gmi-text-muted uppercase">
                   Antall
                 </th>
-                <th className="px-2 py-1 text-right text-[10px] font-medium text-gray-600 uppercase">
+                <th className="px-2 py-1 text-right text-[10px] font-medium text-gmi-text-muted uppercase">
                   %
                 </th>
               </tr>
@@ -1430,7 +1365,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                     </table>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">
+                  <p className="text-sm text-gmi-text-subtle italic">
                     Ingen punkter funnet.
                   </p>
                 )}
@@ -1650,7 +1585,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
                     </table>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">
+                  <p className="text-sm text-gmi-text-subtle italic">
                     Ingen ledninger funnet.
                   </p>
                 )}
@@ -1821,7 +1756,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
           >
             <div className="space-y-4">
               {isKof && (
-                <div className="p-2.5 rounded-lg border bg-white text-sm text-gray-600">
+                <div className="p-2.5 rounded-lg border bg-white text-sm text-gmi-text-muted">
                   Analysefunksjoner er begrenset for KOF-filer (lite
                   attributtdata).
                 </div>
@@ -1830,11 +1765,11 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
               <div>
                 <h4
                   className="text-xs font-semibold uppercase tracking-wider mb-2"
-                  style={{ color: 'var(--color-text-secondary)' }}
+                  style={{ color: 'var(--gmi-text-subtle)' }}
                 >
                   Attributter
                 </h4>
-                <p className="text-sm text-gray-500 italic">
+                <p className="text-sm text-gmi-text-subtle italic">
                   Ingen valideringsfeil funnet.
                 </p>
               </div>
@@ -1843,12 +1778,12 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
               <div>
                 <h4
                   className="text-xs font-semibold uppercase tracking-wider mb-2"
-                  style={{ color: 'var(--color-text-secondary)' }}
+                  style={{ color: 'var(--gmi-text-subtle)' }}
                 >
                   Feltvalidering
                 </h4>
                 {isKof ? (
-                  <p className="text-sm text-gray-500 italic">
+                  <p className="text-sm text-gmi-text-subtle italic">
                     Ikke tilgjengelig for KOF.
                   </p>
                 ) : (
@@ -1860,7 +1795,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
               <div>
                 <h4
                   className="text-xs font-semibold uppercase tracking-wider mb-2"
-                  style={{ color: 'var(--color-text-secondary)' }}
+                  style={{ color: 'var(--gmi-text-subtle)' }}
                 >
                   Høydekontroll (Z)
                 </h4>
@@ -1871,12 +1806,12 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
               <div>
                 <h4
                   className="text-xs font-semibold uppercase tracking-wider mb-2"
-                  style={{ color: 'var(--color-text-secondary)' }}
+                  style={{ color: 'var(--gmi-text-subtle)' }}
                 >
                   Profilanalyse
                 </h4>
                 {isKof ? (
-                  <p className="text-sm text-gray-500 italic">
+                  <p className="text-sm text-gmi-text-subtle italic">
                     Ikke tilgjengelig for KOF.
                   </p>
                 ) : (
@@ -1888,12 +1823,12 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
               <div>
                 <h4
                   className="text-xs font-semibold uppercase tracking-wider mb-2"
-                  style={{ color: 'var(--color-text-secondary)' }}
+                  style={{ color: 'var(--gmi-text-subtle)' }}
                 >
                   Topplok kontroll
                 </h4>
                 {isKof ? (
-                  <p className="text-sm text-gray-500 italic">
+                  <p className="text-sm text-gmi-text-subtle italic">
                     Ikke tilgjengelig for KOF.
                   </p>
                 ) : (
@@ -1905,12 +1840,12 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
               <div>
                 <h4
                   className="text-xs font-semibold uppercase tracking-wider mb-2"
-                  style={{ color: 'var(--color-text-secondary)' }}
+                  style={{ color: 'var(--gmi-text-subtle)' }}
                 >
                   Avviksdeteksjon
                 </h4>
                 {isKof ? (
-                  <p className="text-sm text-gray-500 italic">
+                  <p className="text-sm text-gmi-text-subtle italic">
                     Ikke tilgjengelig for KOF.
                   </p>
                 ) : (

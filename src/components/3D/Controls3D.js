@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { CaretDownIcon, MouseIcon, CrosshairIcon } from '@phosphor-icons/react';
 import Legend3D from './Legend3D';
 
 export default function Controls3D() {
@@ -20,21 +21,12 @@ export default function Controls3D() {
           <h3 className="text-sm font-semibold text-gmi-navy">
             Kontroller
           </h3>
-          <svg
-            className={`w-4 h-4 text-gmi-text-muted transition-transform duration-200 ${
-              isMinimized ? '' : 'rotate-180'
-            }`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
+          <CaretDownIcon
+            size={16}
+            weight="regular"
+            aria-hidden="true"
+            className={`text-gmi-text-muted transition-transform duration-200 ${isMinimized ? '' : 'rotate-180'}`}
+          />
         </div>
 
         {/* Collapsible content */}
@@ -89,10 +81,10 @@ export default function Controls3D() {
           Navigasjon:
         </p>
         <ul className="space-y-1 text-gmi-text-muted">
-          <li>🖱️ Venstre: Roter</li>
-          <li>🖱️ Høyre: Panorér</li>
-          <li>🖱️ Rull: Zoom</li>
-          <li>🎯 Klikk: Sentrer på objekt</li>
+          <li><MouseIcon size={14} weight="regular" aria-hidden="true" className="inline-block align-text-bottom" /> Venstre: Roter</li>
+          <li><MouseIcon size={14} weight="regular" aria-hidden="true" className="inline-block align-text-bottom" /> Høyre: Panorér</li>
+          <li><MouseIcon size={14} weight="regular" aria-hidden="true" className="inline-block align-text-bottom" /> Rull: Zoom</li>
+          <li><CrosshairIcon size={14} weight="regular" aria-hidden="true" className="inline-block align-text-bottom" /> Klikk: Sentrer på objekt</li>
         </ul>
       </div>
     </>

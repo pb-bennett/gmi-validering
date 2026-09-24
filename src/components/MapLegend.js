@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { CaretDownIcon } from '@phosphor-icons/react';
 import { FCODE_COLORS, LEGEND_ITEMS, getLegendSvg } from './MapInner';
 import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
@@ -171,23 +172,12 @@ export default function MapLegend() {
         >
           Tegnforklaring
         </span>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className={`h-4 w-4 transition-transform ${
-            isCollapsed ? 'rotate-180' : ''
-          }`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          style={{ color: 'var(--gmi-text-muted)' }}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        <CaretDownIcon
+          size={16}
+          weight="regular"
+          aria-hidden="true"
+          className={`text-gmi-text-muted transition-transform ${isCollapsed ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {/* Legend items */}

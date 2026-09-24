@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { XIcon } from '@phosphor-icons/react';
+import { XIcon, CaretRightIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 
 /**
@@ -383,21 +383,15 @@ export default function WmsLayerModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
+            aria-expanded={showAdvanced}
             className="gmi-focus-ring rounded-lg flex items-center gap-1 text-sm text-gmi-interactive hover:underline"
           >
-            <svg
-              className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
+            <CaretRightIcon
+              size={12}
+              weight="regular"
+              aria-hidden="true"
+              className={`transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
+            />
             Avanserte innstillinger
           </button>
 

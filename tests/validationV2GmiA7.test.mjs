@@ -343,7 +343,9 @@ test('compact rule rows expose summaries without individual object metadata', as
   assert.match(source, /Objekter/);
   assert.match(source, /<span>Vis<\/span>/);
   assert.match(source, /title="Vis"/);
-  assert.equal((source.match(/<svg/g) || []).length, 1);
+  assert.equal((source.match(/<CaretDownIcon/g) || []).length, 1);
+  assert.match(source, /<CaretDownIcon[^>]*weight="regular"[^>]*aria-hidden="true"/);
+  assert.doesNotMatch(source, /<svg/);
   assert.match(source, /gap-x-2/);
   assert.match(source, /items-baseline gap-0\.5 whitespace-nowrap/);
   assert.match(source, /aria-expanded/);

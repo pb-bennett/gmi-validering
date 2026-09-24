@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { XIcon } from '@phosphor-icons/react';
+import { XIcon, FunnelIcon, ArrowsDownUpIcon, ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { runGmiValidationV2 } from '@/lib/validation-v2';
 import { getDatasetRevision } from '@/lib/validation-v2/datasetRevision';
@@ -335,7 +335,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
             title="Lukk Validator"
             className="gmi-compact-button gmi-focus-ring inline-flex h-8 w-8 items-center justify-center text-gmi-text-muted hover:text-gmi-navy"
           >
-            <XIcon aria-hidden="true" size={18} weight="bold" />
+            <XIcon aria-hidden="true" size={18} weight="regular" />
           </button>
         </div>
         <div className="mt-2 flex items-center gap-1.5">
@@ -410,9 +410,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                       }}
                       className={`gmi-compact-button gmi-focus-ring relative inline-flex h-8 w-8 items-center justify-center border ${filtersActive ? 'gmi-selected-control' : 'gmi-elevated-surface'}`}
                     >
-                      <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M3 4h14v2H3V4Zm3 5h8v2H6V9Zm3 5h2v2H9v-2Z" />
-                      </svg>
+                      <FunnelIcon aria-hidden="true" size={16} weight="regular" />
                       {filtersActive && <span aria-hidden="true" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gmi-interactive" />}
                     </button>
                     <div className="relative">
@@ -428,9 +426,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                         }}
                         className="gmi-elevated-surface gmi-compact-button gmi-focus-ring inline-flex h-8 w-8 items-center justify-center"
                       >
-                        <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M5 3h2v14H5V3Zm4 0h2v14H9V3Zm4 0h2v14h-2V3ZM3 5h6v2H3V5Zm4 4h6v2H7V9Zm3 4h7v2h-7v-2Z" />
-                        </svg>
+                        <ArrowsDownUpIcon aria-hidden="true" size={16} weight="regular" />
                       </button>
                       {openMenu === 'sort' && (
                         <div id="validation-v2-sort-menu" role="menu" className="gmi-elevated-surface absolute right-0 z-20 mt-1 min-w-52 rounded-lg p-1 shadow-lg">
@@ -462,9 +458,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                       onClick={resetPresentation}
                       className="gmi-elevated-surface gmi-compact-button gmi-focus-ring inline-flex h-8 w-8 items-center justify-center disabled:cursor-default disabled:opacity-40"
                     >
-                      <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M4 4h4v2H6.4a5 5 0 1 1-.65 6H3.6A7 7 0 1 0 4 4Zm0 0V2l-3 3 3 3V6h2V4H4Z" />
-                      </svg>
+                      <ArrowCounterClockwiseIcon aria-hidden="true" size={16} weight="regular" />
                     </button>
                   </div>
                   {filterPanelOpen && (

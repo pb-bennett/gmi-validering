@@ -163,8 +163,8 @@
   }
 
   body {
-    background-color: var(--color-page-bg);
-    color: var(--color-text);
+    background-color: var(--gmi-surface-soft);
+    color: var(--gmi-text);
     font-family: var(--font-roboto), system-ui, -apple-system,
       sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;

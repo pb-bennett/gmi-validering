@@ -6,10 +6,10 @@ import useStore from '@/lib/store';
 const MapInner = dynamic(() => import('./MapInner'), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full flex items-center justify-center bg-gray-50">
+    <div className="h-full w-full flex items-center justify-center bg-gmi-surface-soft">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-        <p className="text-gray-500">Laster kart...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gmi-interactive mx-auto mb-4"></div>
+        <p className="text-gmi-text-subtle">Laster kart...</p>
       </div>
     </div>
   ),
@@ -84,12 +84,7 @@ export default function MapView(props) {
                   toggleHideOutliers(true);
                   setOutlierPromptOpen(false);
                 }}
-                className="px-3 py-1.5 text-sm font-medium rounded border"
-                style={{
-                  backgroundColor: 'var(--color-primary)',
-                  color: 'white',
-                  borderColor: 'var(--color-primary-dark)',
-                }}
+                className="gmi-primary-control gmi-focus-ring px-3 py-1.5 text-sm font-medium border border-gmi-navy"
                 title="Skjul avvikere"
               >
                 Ignorer
@@ -99,7 +94,7 @@ export default function MapView(props) {
                   toggleHideOutliers(false);
                   setOutlierPromptOpen(false);
                 }}
-                className="px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                className="gmi-compact-button gmi-focus-ring px-3 py-1.5 text-sm font-medium border border-gmi-border-strong bg-gmi-surface"
                 title="Behold avvikere"
               >
                 Behold
@@ -131,19 +126,14 @@ export default function MapView(props) {
                 toggleZValidationModal(true);
                 setZValidationPromptOpen(false);
               }}
-              className="px-3 py-1.5 text-sm font-medium rounded border"
-              style={{
-                backgroundColor: 'var(--color-primary)',
-                color: 'white',
-                borderColor: 'var(--color-primary-dark)',
-              }}
+              className="gmi-primary-control gmi-focus-ring px-3 py-1.5 text-sm font-medium border border-gmi-navy"
               title="Åpne høydekontroll"
             >
               Åpne kontroll
             </button>
             <button
               onClick={() => setZValidationPromptOpen(false)}
-              className="px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+              className="gmi-compact-button gmi-focus-ring px-3 py-1.5 text-sm font-medium border border-gmi-border-strong bg-gmi-surface"
               title="Senere"
             >
               Senere

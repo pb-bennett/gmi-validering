@@ -49,7 +49,7 @@ export default function TestModeControl() {
         aria-expanded={developerToolsOpen}
         className="gmi-compact-button gmi-focus-ring flex shrink-0 items-center gap-1 border border-gmi-border-strong bg-gmi-surface px-2 py-1 text-[11px] font-semibold"
       >
-        <GearSixIcon aria-hidden="true" size={13} weight="bold" />
+        <GearSixIcon aria-hidden="true" size={13} weight="regular" />
         Utviklerverktøy
       </button>
       <span className="sr-only">

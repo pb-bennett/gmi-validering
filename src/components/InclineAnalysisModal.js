@@ -1410,7 +1410,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
                   y={y + 14 / transform.k}
                   textAnchor="middle"
                   className={`text-[12px] font-bold ${
-                    isHovered ? 'fill-red-600' : 'fill-gray-700'
+                    isHovered ? 'fill-red-600' : 'fill-gmi-text'
                   }`}
                   style={{ fontSize: `${12 / transform.k}px` }}
                 >
@@ -1420,7 +1420,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
                   x={x}
                   y={height - padding + 20 / transform.k}
                   textAnchor="middle"
-                  className="text-[10px] text-gray-400"
+                  className="text-[10px] fill-gmi-text-subtle"
                   style={{ fontSize: `${10 / transform.k}px` }}
                 >
                   {formatNumber(p.dist, 1)}m
@@ -1479,7 +1479,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
             x={padding}
             y={height - 10 / transform.k}
             textAnchor="middle"
-            className="text-[10px] font-bold text-gray-500"
+            className="text-[10px] font-bold fill-gmi-text-subtle"
             style={{ fontSize: `${10 / transform.k}px` }}
           >
             START (Høy)
@@ -1488,7 +1488,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
             x={width - padding}
             y={height - 10 / transform.k}
             textAnchor="middle"
-            className="text-[10px] font-bold text-gray-500"
+            className="text-[10px] font-bold fill-gmi-text-subtle"
             style={{ fontSize: `${10 / transform.k}px` }}
           >
             SLUTT (Lav)

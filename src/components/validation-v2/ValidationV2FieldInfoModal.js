@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { XIcon } from '@phosphor-icons/react';
 import { ValidationV2FieldDetailContent } from './ValidationV2FieldDetailContent';
 import { VALIDATION_V2_FIELD_MODAL_MAX_WIDTH } from './fieldDetailLayout';
 
@@ -83,7 +84,7 @@ export default function ValidationV2FieldInfoModal({
             onClick={onClose}
             className="gmi-compact-button inline-flex h-8 w-8 flex-none items-center justify-center text-gmi-text-muted hover:text-gmi-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gmi-interactive"
           >
-            <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="m5.5 5.5 9 9-1 1-9-9 1-1Zm8 0 1 1-9 9-1-1 9-9Z" /></svg>
+            <XIcon aria-hidden="true" size={16} weight="regular" />
           </button>
         </header>
         <ValidationV2FieldDetailContent

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowSquareOutIcon } from '@phosphor-icons/react';
+import { ArrowSquareOutIcon, CaretDownIcon } from '@phosphor-icons/react';
 
 const STATUS_DOT_CLASSES = Object.freeze({
   red: 'bg-red-600',
@@ -55,9 +55,7 @@ export default function ValidationV2RuleList({
                 {presentation.displayName}
               </span>
               <span aria-hidden="true" className="shrink-0 text-gmi-text-subtle">
-                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path d={isExpanded ? 'M5.5 12.5 10 8l4.5 4.5-1.25 1.25L10 10.5l-3.25 3.25z' : 'm5.5 7.5 1.25-1.25L10 9.5l3.25-3.25 1.25 1.25-4.5 4.5z'} />
-                </svg>
+                <CaretDownIcon size={16} weight="regular" aria-hidden="true" className={isExpanded ? 'rotate-180' : ''} />
               </span>
             </button>
             {isExpanded && (
@@ -83,7 +81,7 @@ export default function ValidationV2RuleList({
                     onClick={(event) => onInfo?.(presentation, event.currentTarget)}
                     className="gmi-compact-button gmi-focus-ring inline-flex shrink-0 items-center gap-1 border border-gmi-border-strong bg-gmi-surface px-1.5 py-1 text-[11px] font-semibold text-gmi-interactive shadow-sm"
                   >
-                    <ArrowSquareOutIcon aria-hidden="true" size={16} weight="bold" />
+                    <ArrowSquareOutIcon aria-hidden="true" size={16} weight="regular" />
                     <span>Vis</span>
                   </button>
                 </div>
