@@ -132,10 +132,10 @@ test('modal source has a stable accessible dialog and tab shell', () => {
   assert.match(modalSource, /app-info-inner focus-visible:outline/);
   assert.match(modalSource, /function AppInfoHero\(\{ title/);
   assert.match(modalSource, /function AppInfoHero\(\{ title, eyebrow = 'GMI Validator', version = CURRENT_APP_VERSION \}\)/);
-  assert.match(modalSource, /bg-slate-950 px-5 py-6 text-white shadow-sm sm:px-7 sm:py-5/);
+  assert.match(modalSource, /bg-gmi-ink px-5 py-6 text-white shadow-sm sm:px-7 sm:py-5/);
   assert.doesNotMatch(modalSource, /compact/);
   assert.equal((modalSource.match(/<AppInfoHero\b/g) || []).length, 5);
-  assert.equal((modalSource.match(/relative overflow-hidden rounded-t-2xl rounded-b-none bg-slate-950/g) || []).length, 1);
+  assert.equal((modalSource.match(/relative overflow-hidden rounded-t-2xl rounded-b-none bg-gmi-ink/g) || []).length, 1);
   assert.match(modalSource, /const APP_INFO_TAB_CONTENT_CLASS = 'space-y-7 \[&>\*:not\(:first-child\)\]:mx-2';/);
   assert.match(modalSource, /const CONTACT_TAB_CONTENT_CLASS = 'space-y-4 \[&>\*:not\(:first-child\)\]:mx-2';/);
   assert.equal((modalSource.match(/className=\{APP_INFO_TAB_CONTENT_CLASS\}/g) || []).length, 4);
@@ -238,6 +238,17 @@ test('Om follows the human-friendly six-section structure', () => {
 test('modal content keeps current branding and places source action on Om only', () => {
   assert.match(modalSource, /GMI Validator/);
   assert.doesNotMatch(modalSource, /GMI Validering/);
+  const headerSource = modalSource.slice(modalSource.indexOf('<header className='), modalSource.indexOf('</header>'));
+  assert.match(headerSource, /<BrandWordmark appInfo \/>/);
+  assert.match(headerSource, /<h2 id="app-info-title" className="sr-only">GMI Validator<\/h2>/);
+  assert.match(headerSource, /v\{CURRENT_APP_VERSION\}/);
+  assert.match(headerSource, /Informasjon, nyheter og versjonshistorikk/);
+  assert.match(headerSource, /lg:flex-row lg:items-center lg:gap-8/);
+  assert.match(headerSource, /pt-14 sm:px-7 sm:pt-4/);
+  assert.match(wordmarkSource, /const APP_INFO_SCALE = 4 \/ 3/);
+  assert.match(wordmarkSource, /fontSize: 12 \* APP_INFO_SCALE/);
+  assert.match(wordmarkSource, /appInfo \? 'min-w-0 text-center' : 'min-w-0'/);
+  assert.doesNotMatch(headerSource, /<InfoIcon\b/);
   assert.match(modalSource, /https:\/\/github\.com\/pb-bennett\/gmi-validering/);
   assert.match(modalSource, /GithubLogoIcon/);
   assert.match(modalSource, /Se kildekoden på GitHub/);
@@ -247,6 +258,8 @@ test('modal content keeps current branding and places source action on Om only',
   const contactStart = modalSource.indexOf('function ContactContent');
   const contactEnd = modalSource.indexOf('function TabContent');
   assert.match(modalSource.slice(aboutStart, contactStart), /SourceCodeLink/);
+  assert.doesNotMatch(modalSource.slice(aboutStart, contactStart), /<BrandWordmark\b/);
+  assert.equal((modalSource.match(/<BrandWordmark\b/g) || []).length, 1);
   assert.doesNotMatch(modalSource.slice(contactStart, contactEnd), /GitHub|github|SourceCodeLink|Kildekode/);
 });
 
@@ -346,9 +359,9 @@ test('contact form keeps the C1 payload boundary and accessible form contract', 
   assert.match(contactSource, /<ContactForm \/>/);
   assert.match(contactSource, /<AppInfoHero title="Kontakt" \/>/);
   assert.match(contactSource, /Har du funnet en feil/);
-  assert.match(contactSource, /flex max-w-\[54rem\] items-start gap-2\.5 rounded-lg border border-cyan-100 bg-cyan-50\/70 px-3 py-2\.5/);
+  assert.match(contactSource, /flex max-w-\[54rem\] items-start gap-2\.5 rounded-lg border border-gmi-cyan-soft bg-gmi-cyan-soft\/40 px-3 py-2\.5/);
   assert.doesNotMatch(contactSource, /<InfoIcon size=\{17\} weight="regular" aria-hidden="true"/);
-  assert.match(contactSource, /<span className="mr-1\.5 inline-flex rounded-md bg-cyan-100 px-1\.5 py-0\.5 text-xs font-semibold leading-5 text-cyan-800">Planlagt<\/span>/);
+  assert.match(contactSource, /<span className="mr-1\.5 inline-flex rounded-md bg-gmi-cyan-soft px-1\.5 py-0\.5 text-xs font-semibold leading-5 text-gmi-interactive">Planlagt<\/span>/);
   assert.match(contactSource, /Mulighet for å legge ved skjermbilder kommer i en senere versjon\./);
   assert.doesNotMatch(contactSource, /GitHub|github|SourceCodeLink|Kildekode/);
   assert.match(contactFormSource, /<form/);

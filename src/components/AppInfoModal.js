@@ -14,6 +14,7 @@ import {
   CURRENT_APP_VERSION,
 } from '@/data/appReleases.mjs';
 import ContactForm from './ContactForm';
+import BrandWordmark from './BrandWordmark';
 
 const PUBLIC_REPO_URL = 'https://github.com/pb-bennett/gmi-validering';
 const APP_INFO_TAB_CONTENT_CLASS = 'space-y-7 [&>*:not(:first-child)]:mx-2';
@@ -51,13 +52,13 @@ const isTabId = (value) => TABS.some((tab) => tab.id === value);
 
 function ReleaseMeta({ release: releaseEntry, current = false, announced = false }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-slate-500">
-      <span className="rounded-md bg-slate-900 px-2 py-1 font-semibold text-white">
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-gmi-text-subtle">
+      <span className="rounded-md bg-gmi-navy px-2 py-1 font-semibold text-white">
         v{releaseEntry.version}
       </span>
       {releaseEntry.releasedOn && <span>{formatReleaseDate(releaseEntry.releasedOn)}</span>}
       {current && (
-        <span className="rounded-full bg-cyan-100 px-2 py-1 text-[11px] font-semibold text-cyan-800">
+        <span className="rounded-full bg-gmi-cyan-soft px-2 py-1 text-[11px] font-semibold text-gmi-interactive">
           Gjeldende versjon
         </span>
       )}
@@ -76,23 +77,23 @@ function SourceCodeLink() {
       href={PUBLIC_REPO_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex min-h-11 items-center gap-2.5 rounded-lg border border-slate-700 bg-slate-700 px-4 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-600 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+      className="inline-flex min-h-11 items-center gap-2.5 rounded-lg border border-gmi-text bg-gmi-text px-4 text-sm font-semibold text-gmi-text-on-dark transition-colors hover:border-gmi-text-muted hover:bg-gmi-text-muted hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gmi-brand-cyan"
     >
       <GithubLogoIcon size={23} weight="regular" aria-hidden="true" />
       Se kildekoden på GitHub
-      <ArrowSquareOutIcon size={15} weight="regular" aria-hidden="true" className="text-slate-400" />
+      <ArrowSquareOutIcon size={15} weight="regular" aria-hidden="true" className="text-gmi-text-on-dark" />
     </a>
   );
 }
 
 function AppInfoHero({ title, eyebrow = 'GMI Validator', version = CURRENT_APP_VERSION }) {
   return (
-      <section className="relative overflow-hidden rounded-t-2xl rounded-b-none bg-slate-950 px-5 py-6 text-white shadow-sm sm:px-7 sm:py-5">
-      <div className="absolute right-0 top-0 h-32 w-32 translate-x-12 -translate-y-12 rounded-full border-[18px] border-cyan-400/20" aria-hidden="true" />
+      <section className="relative overflow-hidden rounded-t-2xl rounded-b-none bg-gmi-ink px-5 py-6 text-white shadow-sm sm:px-7 sm:py-5">
+      <div className="absolute right-0 top-0 h-32 w-32 translate-x-12 -translate-y-12 rounded-full border-[18px] border-gmi-brand-cyan/20" aria-hidden="true" />
       <div className="relative">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-gmi-brand-cyan">
           <span>{eyebrow}</span>
-          <span className="h-1 w-1 rounded-full bg-cyan-300" aria-hidden="true" />
+          <span className="h-1 w-1 rounded-full bg-gmi-brand-cyan" aria-hidden="true" />
           <span>v{version}</span>
         </div>
         <h3 className="app-info-hero-title">{title}</h3>
@@ -107,8 +108,8 @@ function AboutContent() {
       <AppInfoHero title="Et verktøy for kontroll og utforsking av VA-innmålingsleveranser" />
 
       <section aria-labelledby="app-info-what-heading">
-        <h3 id="app-info-what-heading" className="text-xl font-bold tracking-[-0.01em] text-slate-900">Hva er dette?</h3>
-        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-slate-700">
+        <h3 id="app-info-what-heading" className="text-xl font-bold tracking-[-0.01em] text-gmi-navy">Hva er dette?</h3>
+        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-gmi-text">
           <p>
             Dette er et verktøy for å utforske og validere VA-innmålingsfiler. Slike filer leveres typisk av entreprenører til kommuner i sluttfasen av infrastrukturprosjekter.
           </p>
@@ -129,9 +130,9 @@ function AboutContent() {
         </div>
       </section>
 
-      <section className="relative border-t border-slate-200 pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-cyan-300 before:content-['']" aria-labelledby="app-info-why-heading">
-        <h3 id="app-info-why-heading" className="text-xl font-bold tracking-[-0.01em] text-slate-900">Hvorfor finnes det?</h3>
-        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-slate-700">
+      <section className="relative border-t border-gmi-border pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-gmi-brand-cyan before:content-['']" aria-labelledby="app-info-why-heading">
+        <h3 id="app-info-why-heading" className="text-xl font-bold tracking-[-0.01em] text-gmi-navy">Hvorfor finnes det?</h3>
+        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-gmi-text">
           <p>
             Det finnes allerede gode og omfattende verktøy i bransjen, men de er ikke nødvendigvis laget for den konkrete oppgaven med å gå gjennom og kontrollere en innmålingsleveranse. Noen krever mye erfaring og opplæring, andre er kostbare og utviklet for langt flere oppgaver enn dette.
           </p>
@@ -147,9 +148,9 @@ function AboutContent() {
         </div>
       </section>
 
-      <section className="relative border-t border-slate-200 pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-cyan-300 before:content-['']" aria-labelledby="app-info-not-heading">
-        <h3 id="app-info-not-heading" className="text-xl font-bold tracking-[-0.01em] text-slate-900">Hva er dette ikke?</h3>
-        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-slate-700">
+      <section className="relative border-t border-gmi-border pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-gmi-brand-cyan before:content-['']" aria-labelledby="app-info-not-heading">
+        <h3 id="app-info-not-heading" className="text-xl font-bold tracking-[-0.01em] text-gmi-navy">Hva er dette ikke?</h3>
+        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-gmi-text">
           <p>
             GMI Validator er ikke ment å være en fasit på om en leveranse skal godkjennes eller avvises. Automatiske kontroller kan finne mangler, uventede verdier og andre forhold som bør undersøkes nærmere, men resultatene må fortsatt vurderes sammen med fagkunnskap, prosjektkrav og øvrig dokumentasjon.
           </p>
@@ -162,9 +163,9 @@ function AboutContent() {
         </div>
       </section>
 
-      <section className="relative border-t border-slate-200 pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-cyan-300 before:content-['']" aria-labelledby="app-info-who-am-heading">
-        <h3 id="app-info-who-am-heading" className="text-xl font-bold tracking-[-0.01em] text-slate-900">Hvem er jeg?</h3>
-        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-slate-700">
+      <section className="relative border-t border-gmi-border pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-gmi-brand-cyan before:content-['']" aria-labelledby="app-info-who-am-heading">
+        <h3 id="app-info-who-am-heading" className="text-xl font-bold tracking-[-0.01em] text-gmi-navy">Hvem er jeg?</h3>
+        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-gmi-text">
           <p>
             Jeg har jobbet med kommunalteknikk i over seks år, og har blant annet arbeidet med behandling og kontroll av VA-innmålinger i Gemini VA og Portal+. Den siste tiden har jeg også fått arbeide med Gemini Terrain, der jeg virkelig fikk erfare hvor nyttig en god 3D-visning kan være når man skal forstå og kontrollere innmålingsdata.
           </p>
@@ -174,9 +175,9 @@ function AboutContent() {
         </div>
       </section>
 
-      <section className="relative min-h-32 border-t border-slate-200 pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-cyan-300 before:content-['']" aria-labelledby="app-info-who-heading">
-        <h3 id="app-info-who-heading" className="text-xl font-bold tracking-[-0.01em] text-slate-900">Hvem er du?</h3>
-        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-slate-700">
+      <section className="relative min-h-32 border-t border-gmi-border pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-gmi-brand-cyan before:content-['']" aria-labelledby="app-info-who-heading">
+        <h3 id="app-info-who-heading" className="text-xl font-bold tracking-[-0.01em] text-gmi-navy">Hvem er du?</h3>
+        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-gmi-text">
           <p>
             GMI Validator er først og fremst laget for deg som arbeider med innmålingsleveranser innen VA. Det kan være større leveranser fra entreprenører i forbindelse med kommunale infrastrukturprosjekter, der du allerede har god erfaring med Gemini VA eller andre GIS-verktøy og ønsker en raskere måte å få oversikt over og kontrollere dataene på.
           </p>
@@ -189,9 +190,9 @@ function AboutContent() {
         </div>
       </section>
 
-      <section className="relative border-t border-slate-200 pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-cyan-300 before:content-['']" aria-labelledby="app-info-transparency-heading">
-        <h3 id="app-info-transparency-heading" className="text-xl font-bold tracking-[-0.01em] text-slate-900">Nysgjerrig eller bekymret?</h3>
-        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-slate-700">
+      <section className="relative border-t border-gmi-border pt-7 before:absolute before:left-0 before:-top-px before:h-px before:w-12 before:bg-gmi-brand-cyan before:content-['']" aria-labelledby="app-info-transparency-heading">
+        <h3 id="app-info-transparency-heading" className="text-xl font-bold tracking-[-0.01em] text-gmi-navy">Nysgjerrig eller bekymret?</h3>
+        <div className="mt-4 max-w-[54rem] space-y-4 text-base leading-[1.6] text-gmi-text">
           <p>
             Det er sunt å ta sikkerhet og personvern på alvor, særlig i dagens digitale hverdag. Det er derfor helt naturlig å være nysgjerrig på, eller litt skeptisk til, hva som skjer når man åpner en innmålingsfil i et nettbasert verktøy.
           </p>
@@ -230,26 +231,26 @@ function FutureContent() {
     <div className={APP_INFO_TAB_CONTENT_CLASS}>
       <AppInfoHero title="Fremtiden – videre utvikling" />
       <section>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+        <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-700">Planlagt</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Planlagt</span>
           </div>
-          <h4 className="mt-3 text-base font-bold text-slate-900">Bedre tilbakemeldinger</h4>
-          <p className="mt-1.5 text-[15px] leading-[1.6] text-slate-600">
+          <h4 className="mt-3 text-base font-bold text-gmi-navy">Bedre tilbakemeldinger</h4>
+          <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
             Planlagt støtte for å legge ved skjermbilder i Kontakt-skjemaet, slik at feil og visuelle problemer blir enklere å beskrive.
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+        <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-md bg-slate-900 px-2 py-1 text-xs font-semibold text-white">v1.2.0</span>
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-700">Planlagt</span>
+            <span className="rounded-md bg-gmi-navy px-2 py-1 text-xs font-semibold text-white">v1.2.0</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Planlagt</span>
           </div>
-          <h4 className="mt-3 text-base font-bold text-slate-900">Validator 2.0 (beta)</h4>
-          <p className="mt-1.5 text-[15px] leading-[1.6] text-slate-600">
+          <h4 className="mt-3 text-base font-bold text-gmi-navy">Validator 2.0 (beta)</h4>
+          <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
             Neste større steg er planlagt til versjon 1.2.0, der Validator 2.0 introduseres som beta. Den nye valideringslogikken gir tydeligere kontroller, bedre resultatvisning og mer detaljert informasjon om feltene som kontrolleres.
           </p>
         </div>
-        <p className="mt-2 text-sm leading-6 text-slate-400">Planene kan endres etter hvert som funksjonene utvikles og testes.</p>
+        <p className="mt-2 text-sm leading-6 text-gmi-text-subtle">Planene kan endres etter hvert som funksjonene utvikles og testes.</p>
       </section>
     </div>
   );
@@ -257,12 +258,12 @@ function FutureContent() {
 
 function ReleaseDetails({ release: releaseEntry }) {
   return (
-    <div className="mt-6 border-t border-slate-200 pt-5">
-      <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-slate-500">Endringer</h3>
-      <ul className="mt-3 space-y-3 text-[15px] leading-[1.6] text-slate-600">
+    <div className="mt-6 border-t border-gmi-border pt-5">
+      <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-gmi-text-subtle">Endringer</h3>
+      <ul className="mt-3 space-y-3 text-[15px] leading-[1.6] text-gmi-text-muted">
         {releaseEntry.changes.map((change) => (
           <li key={change} className="flex gap-3">
-            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-500" aria-hidden="true" />
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gmi-brand-cyan" aria-hidden="true" />
             <span>{change}</span>
           </li>
         ))}
@@ -291,44 +292,44 @@ const NEWS_HIGHLIGHTS = [
 function InfoModalMockup() {
   return (
     <div
-      className="rounded-xl border border-slate-300 bg-slate-100 p-2 shadow-sm"
+      className="rounded-xl border border-gmi-border-strong bg-gmi-surface-soft p-2 shadow-sm"
       aria-hidden="true"
     >
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-cyan-100 text-cyan-700">
+      <div className="overflow-hidden rounded-lg border border-gmi-border bg-gmi-surface shadow-sm">
+        <div className="flex items-center gap-2 border-b border-gmi-border px-3 py-2">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gmi-cyan-soft text-gmi-interactive">
             <InfoIcon size={12} weight="regular" aria-hidden="true" />
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="truncate text-[10px] font-bold text-slate-900">
+              <span className="truncate text-[10px] font-bold text-gmi-navy">
                 GMI Validator
               </span>
-              <span className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[8px] font-bold text-cyan-800">
+              <span className="rounded-full bg-gmi-cyan-soft px-1.5 py-0.5 text-[8px] font-bold text-gmi-interactive">
                 v1.1.0
               </span>
             </div>
-            <span className="block truncate text-[8px] text-slate-500">
+            <span className="block truncate text-[8px] text-gmi-text-subtle">
               Informasjon, nyheter og versjonshistorikk
             </span>
           </div>
         </div>
-        <div className="flex gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[8px] font-semibold text-slate-500">
-          <span className="rounded bg-slate-200 px-1.5 py-1 text-slate-900">Om</span>
+        <div className="flex gap-1 border-b border-gmi-border bg-gmi-surface-soft px-2 py-1.5 text-[8px] font-semibold text-gmi-text-subtle">
+          <span className="rounded bg-gmi-border px-1.5 py-1 text-gmi-navy">Om</span>
           <span className="rounded px-1.5 py-1">Nytt</span>
           <span className="rounded px-1.5 py-1">Versjonshistorikk</span>
         </div>
-        <div className="bg-slate-950 px-3 py-3 text-white">
-          <div className="h-1 w-8 rounded-full bg-cyan-300" />
-          <div className="mt-2 h-2 w-3/4 rounded bg-white/90" />
-          <div className="mt-1.5 h-1.5 w-full rounded bg-white/25" />
-          <div className="mt-1 h-1.5 w-5/6 rounded bg-white/15" />
+        <div className="bg-gmi-ink px-3 py-3 text-white">
+          <div className="h-1 w-8 rounded-full bg-gmi-brand-cyan" />
+          <div className="mt-2 h-2 w-3/4 rounded bg-gmi-surface/90" />
+          <div className="mt-1.5 h-1.5 w-full rounded bg-gmi-surface/25" />
+          <div className="mt-1 h-1.5 w-5/6 rounded bg-gmi-surface/15" />
         </div>
         <div className="space-y-2 px-3 py-3">
-          <div className="h-2 w-2/3 rounded bg-slate-200" />
-          <div className="h-1.5 w-full rounded bg-slate-100" />
-          <div className="h-1.5 w-5/6 rounded bg-slate-100" />
-          <div className="h-1.5 w-1/2 rounded bg-slate-100" />
+          <div className="h-2 w-2/3 rounded bg-gmi-border" />
+          <div className="h-1.5 w-full rounded bg-gmi-surface-soft" />
+          <div className="h-1.5 w-5/6 rounded bg-gmi-surface-soft" />
+          <div className="h-1.5 w-1/2 rounded bg-gmi-surface-soft" />
         </div>
       </div>
     </div>
@@ -404,15 +405,15 @@ function NewsContent() {
         {NEWS_HIGHLIGHTS.map((highlight) => (
           <article
             key={highlight.id}
-            className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+            className="overflow-hidden rounded-xl border border-gmi-border bg-gmi-surface shadow-sm"
           >
             <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-center">
               <div>
                 <ReleaseMeta release={highlight.release} />
-                <h3 className="mt-3 text-lg font-bold tracking-[-0.01em] text-slate-900">
+                <h3 className="mt-3 text-lg font-bold tracking-[-0.01em] text-gmi-navy">
                   {highlight.title}
                 </h3>
-                <p className="mt-2 max-w-[54rem] text-[15px] leading-[1.6] text-slate-600">
+                <p className="mt-2 max-w-[54rem] text-[15px] leading-[1.6] text-gmi-text-muted">
                   {highlight.body}
                 </p>
               </div>
@@ -430,34 +431,34 @@ function HistoryContent({ expandedVersion, onToggle }) {
     <div className={APP_INFO_TAB_CONTENT_CLASS}>
       <AppInfoHero title="Versjonshistorikk" />
       <div>
-        <p className="text-[15px] leading-[1.6] text-slate-600">Nyeste versjon først. Dette er starten på den formelle historikken for GMI Validator.</p>
+        <p className="text-[15px] leading-[1.6] text-gmi-text-muted">Nyeste versjon først. Dette er starten på den formelle historikken for GMI Validator.</p>
       </div>
-      <ol className="relative space-y-3 border-l border-slate-200 pl-4 sm:pl-5">
+      <ol className="relative space-y-3 border-l border-gmi-border pl-4 sm:pl-5">
         {APP_RELEASES.map((releaseEntry) => {
           const expanded = expandedVersion === releaseEntry.version;
           const changesId = `release-${releaseEntry.version.replaceAll('.', '-')}-changes`;
 
           return (
             <li key={releaseEntry.version} className="relative">
-              <span className="absolute -left-[1.3rem] top-5 h-2.5 w-2.5 rounded-full border-2 border-white bg-cyan-500 ring-1 ring-cyan-200 sm:-left-[1.4rem]" aria-hidden="true" />
-              <article className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <span className="absolute -left-[1.3rem] top-5 h-2.5 w-2.5 rounded-full border-2 border-white bg-gmi-brand-cyan ring-1 ring-gmi-cyan-soft sm:-left-[1.4rem]" aria-hidden="true" />
+              <article className="rounded-xl border border-gmi-border bg-gmi-surface shadow-sm">
                 <button
                   type="button"
                   aria-expanded={expanded}
                   aria-controls={changesId}
                   onClick={() => onToggle(releaseEntry.version)}
-                  className="flex min-h-20 w-full items-start justify-between gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600"
+                  className="flex min-h-20 w-full items-start justify-between gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-gmi-surface-soft focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-gmi-interactive"
                 >
                   <span className="min-w-0">
                     <ReleaseMeta release={releaseEntry} current={releaseEntry.version === CURRENT_APP_VERSION} />
-                    <span className="mt-3 block font-bold text-slate-900">{releaseEntry.title}</span>
-                    <span className="mt-1 block text-[15px] leading-[1.6] text-slate-600">{releaseEntry.summary}</span>
+                    <span className="mt-3 block font-bold text-gmi-navy">{releaseEntry.title}</span>
+                    <span className="mt-1 block text-[15px] leading-[1.6] text-gmi-text-muted">{releaseEntry.summary}</span>
                   </span>
                   <CaretDownIcon
                     size={20}
                     weight="regular"
                     aria-hidden="true"
-                    className={`mt-0.5 shrink-0 text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                    className={`mt-0.5 shrink-0 text-gmi-text-subtle transition-transform ${expanded ? 'rotate-180' : ''}`}
                   />
                 </button>
                 <div id={changesId} hidden={!expanded} className="px-4 pb-4">
@@ -478,12 +479,12 @@ function ContactContent() {
       <AppInfoHero title="Kontakt" />
       <section aria-labelledby="app-info-contact-heading">
         <h3 id="app-info-contact-heading" className="sr-only">Tilbakemeldinger</h3>
-        <p className="max-w-[54rem] text-base leading-[1.6] text-slate-700">
+        <p className="max-w-[54rem] text-base leading-[1.6] text-gmi-text">
           Har du funnet en feil, har en kommentar, et forslag eller en idé til noe som kan gjøres bedre? Jeg vil gjerne høre fra deg.
         </p>
-        <div className="flex max-w-[54rem] items-start gap-2.5 rounded-lg border border-cyan-100 bg-cyan-50/70 px-3 py-2.5 text-sm leading-6 text-slate-700">
+        <div className="flex max-w-[54rem] items-start gap-2.5 rounded-lg border border-gmi-cyan-soft bg-gmi-cyan-soft/40 px-3 py-2.5 text-sm leading-6 text-gmi-text">
           <p>
-            <span className="mr-1.5 inline-flex rounded-md bg-cyan-100 px-1.5 py-0.5 text-xs font-semibold leading-5 text-cyan-800">Planlagt</span>
+            <span className="mr-1.5 inline-flex rounded-md bg-gmi-cyan-soft px-1.5 py-0.5 text-xs font-semibold leading-5 text-gmi-interactive">Planlagt</span>
             Mulighet for å legge ved skjermbilder kommer i en senere versjon.
           </p>
         </div>
@@ -602,7 +603,7 @@ export default function AppInfoModal({
 
   return (
     <div
-      className="fixed inset-0 z-[10050] flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm sm:p-4"
+      className="fixed inset-0 z-[10050] flex items-center justify-center bg-gmi-ink/60 p-2 backdrop-blur-sm sm:p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) event.stopPropagation();
       }}
@@ -615,28 +616,22 @@ export default function AppInfoModal({
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={handleDialogKeyDown}
-        className="app-info-dialog relative flex w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="app-info-dialog relative flex w-full flex-col overflow-hidden rounded-2xl bg-gmi-surface shadow-2xl"
       >
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-5 sm:px-7">
-          <div className="app-info-inner pr-14">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center">
-                <InfoIcon size={32} weight="regular" aria-hidden="true" className="text-cyan-700" />
-              </span>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <h2 id="app-info-title" className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">GMI Validator</h2>
-                  <span className="rounded-full bg-cyan-100 px-2 py-1 text-[11px] font-bold text-cyan-800">v{CURRENT_APP_VERSION}</span>
-                </div>
-                <p className="mt-1 text-sm text-slate-500">Informasjon, nyheter og versjonshistorikk</p>
-              </div>
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-gmi-border bg-gmi-surface px-5 pb-4 pt-14 sm:px-7 sm:pt-4">
+          <div className="app-info-inner flex min-w-0 flex-col gap-3 sm:pr-14 lg:flex-row lg:items-center lg:gap-8">
+            <h2 id="app-info-title" className="sr-only">GMI Validator</h2>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <BrandWordmark appInfo />
+              <span className="rounded-full bg-gmi-cyan-soft px-2 py-1 text-[11px] font-bold text-gmi-interactive">v{CURRENT_APP_VERSION}</span>
             </div>
+            <p className="min-w-0 text-sm leading-5 text-gmi-text-muted">Informasjon, nyheter og versjonshistorikk</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Lukk"
-            className="absolute right-5 top-5 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:right-7"
+            className="absolute right-5 top-5 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-gmi-text-subtle transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gmi-interactive sm:right-7"
           >
             <XIcon size={20} weight="regular" aria-hidden="true" />
           </button>
@@ -645,7 +640,7 @@ export default function AppInfoModal({
         <div
           role="tablist"
           aria-label="Informasjonsseksjoner"
-          className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/80 px-5 py-2 sm:px-7"
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-gmi-border bg-gmi-surface-soft/80 px-5 py-2 sm:px-7"
         >
           <div className="app-info-inner flex gap-1 overflow-x-auto">
             {TABS.map((tab, index) => (
@@ -662,10 +657,10 @@ export default function AppInfoModal({
                 tabIndex={activeTab === tab.id ? 0 : -1}
                 onClick={() => setActiveTab(tab.id)}
                 onKeyDown={(event) => handleTabKeyDown(event, index)}
-                className={`min-h-11 shrink-0 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:px-4 ${
+                className={`min-h-11 shrink-0 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gmi-interactive sm:px-4 ${
                   activeTab === tab.id
-                    ? 'bg-slate-200 text-slate-900 shadow-sm ring-1 ring-slate-300'
-                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                    ? 'gmi-selected-control shadow-sm'
+                    : 'text-gmi-text-muted hover:bg-gmi-surface hover:text-gmi-navy'
                 }`}
               >
                 {tab.label}
@@ -680,7 +675,7 @@ export default function AppInfoModal({
             role="tabpanel"
             aria-labelledby={`app-info-tab-${activeTab}`}
             tabIndex={0}
-            className="app-info-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            className="app-info-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gmi-interactive"
           >
             {activeTab === 'history' ? (
               <HistoryContent

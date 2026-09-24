@@ -20,7 +20,7 @@ const CATEGORIES = Object.freeze([
 ]);
 
 const FIELD_CLASS =
-  'mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100 disabled:bg-slate-100';
+  'gmi-compact-field mt-1 block w-full px-3 py-2.5 text-sm transition disabled:bg-gmi-surface-soft';
 const ERROR_CLASS = 'mt-1 text-sm text-rose-700';
 
 const ERROR_MESSAGES = Object.freeze({
@@ -183,15 +183,15 @@ export default function ContactForm() {
 
   if (status === 'success') {
     return (
-      <div className="mt-6 rounded-xl border border-cyan-200 bg-cyan-50 p-5">
-        <p role="status" aria-live="polite" className="text-sm font-semibold text-slate-900">
+      <div className="mt-6 rounded-xl border border-gmi-cyan-soft bg-gmi-cyan-soft/40 p-5">
+        <p role="status" aria-live="polite" className="text-sm font-semibold text-gmi-navy">
           Takk! Tilbakemeldingen er sendt.
         </p>
         <button
           type="button"
           ref={successActionRef}
           onClick={() => setStatus('idle')}
-          className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-700"
+          className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-gmi-border-strong bg-gmi-surface px-3.5 text-sm font-semibold text-gmi-text transition-colors hover:bg-gmi-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gmi-interactive"
         >
           Send en ny tilbakemelding
         </button>
@@ -207,8 +207,8 @@ export default function ContactForm() {
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="contact-category" className="text-sm font-semibold text-slate-800">
-            Kategori <span className="font-normal text-slate-500">(påkrevd)</span>
+          <label htmlFor="contact-category" className="text-sm font-semibold text-gmi-text">
+            Kategori <span className="font-normal text-gmi-text-subtle">(påkrevd)</span>
           </label>
           <select
             id="contact-category"
@@ -240,8 +240,8 @@ export default function ContactForm() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="contact-name" className="text-sm font-semibold text-slate-800">
-            Navn <span className="font-normal text-slate-500">(valgfritt)</span>
+          <label htmlFor="contact-name" className="text-sm font-semibold text-gmi-text">
+            Navn <span className="font-normal text-gmi-text-subtle">(valgfritt)</span>
           </label>
           <input
             id="contact-name"
@@ -261,8 +261,8 @@ export default function ContactForm() {
         </div>
 
         <div>
-          <label htmlFor="contact-email" className="text-sm font-semibold text-slate-800">
-            E-post <span className="font-normal text-slate-500">(valgfritt)</span>
+          <label htmlFor="contact-email" className="text-sm font-semibold text-gmi-text">
+            E-post <span className="font-normal text-gmi-text-subtle">(valgfritt)</span>
           </label>
           <input
             id="contact-email"
@@ -283,7 +283,7 @@ export default function ContactForm() {
             }
             className={FIELD_CLASS}
           />
-          <p id="contact-email-help" className="mt-1 text-xs text-slate-500">
+          <p id="contact-email-help" className="mt-1 text-xs text-gmi-text-subtle">
             Bare nødvendig hvis du ønsker svar.
           </p>
           {fieldErrors.email && (
@@ -295,8 +295,8 @@ export default function ContactForm() {
       </div>
 
       <div>
-        <label htmlFor="contact-message" className="text-sm font-semibold text-slate-800">
-          Melding <span className="font-normal text-slate-500">(påkrevd)</span>
+        <label htmlFor="contact-message" className="text-sm font-semibold text-gmi-text">
+          Melding <span className="font-normal text-gmi-text-subtle">(påkrevd)</span>
         </label>
         <textarea
           id="contact-message"
@@ -334,7 +334,7 @@ export default function ContactForm() {
         />
       </div>
 
-      <p className="max-w-[54rem] text-xs leading-5 text-slate-500">
+      <p className="max-w-[54rem] text-xs leading-5 text-gmi-text-subtle">
         Navn og e-post huskes lokalt i nettleseren for enkelhets skyld. Bare det du skriver her, og appversjonen som vises over, sendes på e-post via Resend til mottakerens postkasse. E-postadressen er valgfri og brukes bare hvis du ønsker svar. Ingen fil- eller valideringsdata legges ved.
       </p>
 
@@ -342,7 +342,7 @@ export default function ContactForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex min-h-11 items-center justify-center rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-700 disabled:cursor-wait disabled:opacity-60"
+          className="gmi-primary-control inline-flex min-h-11 items-center justify-center px-5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gmi-interactive disabled:cursor-wait disabled:opacity-60"
         >
           {isSubmitting ? 'Sender …' : 'Send tilbakemelding'}
         </button>
