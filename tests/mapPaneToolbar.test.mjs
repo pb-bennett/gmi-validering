@@ -156,6 +156,10 @@ test('map controls are descendants of the map pane, beside rather than inside th
   assert.match(provider, /observer\.observe\(pane\)/);
   assert.match(provider, /pane\.getBoundingClientRect\(\)\.width/);
   assert.match(toolbar, /className="absolute inset-x-2 top-2/);
+  assert.match(toolbar, /pointer-events-auto absolute left-1\/2 top-0 min-w-0 -translate-x-1\/2/);
+  assert.match(toolbar, /className="relative min-h-9"/);
+  assert.match(toolbar, /pointer-events-auto absolute right-0 top-0 flex min-w-0 flex-none flex-nowrap items-center justify-end gap-1\.5/);
+  assert.match(toolbar, /absolute right-0 top-0[\s\S]*?paneMode === MapToolbarMode\.NORMAL && <TestModeControl \/>[\s\S]*?showShare &&[\s\S]*?ref=\{resetButtonRef\}/);
   assert.match(page, /position: 'fixed',[\s\S]*?bottom: '16px',[\s\S]*?right: '16px'/);
   assert.match(mapView, /className="relative h-full w-full"/);
   assert.match(mapLegend, /absolute bottom-20 right-4/);

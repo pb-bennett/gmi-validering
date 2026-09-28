@@ -81,11 +81,11 @@ export default function MapPaneToolbar({ onReset, onShare, showShare }) {
       role="toolbar"
       aria-label="Kartverktøy"
     >
-      <div className="flex min-w-0 flex-nowrap items-start justify-between gap-2">
-        <div className="pointer-events-auto min-w-0">
+      <div className="relative min-h-9">
+        <div className="pointer-events-auto absolute left-1/2 top-0 min-w-0 -translate-x-1/2">
           <TabSwitcher compact={compact} />
         </div>
-        <div className="pointer-events-auto flex min-w-0 flex-none flex-nowrap items-center justify-end gap-1.5">
+        <div className="pointer-events-auto absolute right-0 top-0 flex min-w-0 flex-none flex-nowrap items-center justify-end gap-1.5">
           {paneMode === MapToolbarMode.NORMAL && <TestModeControl />}
           {paneMode !== MapToolbarMode.NARROW && (
             <>
