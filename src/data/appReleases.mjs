@@ -10,6 +10,26 @@ const release = (entry) =>
 
 export const APP_RELEASES = Object.freeze([
   release({
+    version: '1.2.0',
+    releasedOn: null,
+    type: 'minor',
+    title: 'Validator V2 og nytt arbeidsområde',
+    summary:
+      'GMI-validering med tydeligere funn og objektinnsyn er samlet i et oppdatert arbeidsområde for kart, data og analyser.',
+    highlights: [],
+    changes: [
+      'Validator V2 for GMI viser FEIL og SJEKK med detaljer om felt, regel, kilde og verdi der det finnes grunnlag.',
+      'Åpne berørte objekter fra valideringen i en diagnostisk datatabell med relevant feltkontekst.',
+      'Oppdatert arbeidsområde samler lag, kartkontroller, datautforsking, høydekontroll, profil, Standards og 3D.',
+      'Forbedret presentasjon av Stats, deling og QR, WMS og AppInfo.',
+    ],
+    news: [
+      'Validator V2 gir tydeligere GMI-funn og gjør det enklere å undersøke berørte objekter.',
+      'Kart, data, profil og 3D er samlet i et oppdatert arbeidsområde.',
+    ],
+    announce: true,
+  }),
+  release({
     version: '1.1.0',
     releasedOn: null,
     type: 'minor',

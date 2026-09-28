@@ -13,19 +13,21 @@ Behandlingen starter lokalt i nettleseren. Du trenger derfor ingen installasjon 
 ## Hva kan verktøyet gjøre?
 
 - lese og analysere innmålingsfiler
-- kontrollere felt, attributter og verdier mot definerte regler
+- bruke Validator V2 på GMI med FEIL/SJEKK, felt- og regeldetaljer og kilde- og verdiveiledning der den finnes
+- åpne objektene som et valideringsfunn gjelder, direkte i en diagnostisk datatabell
 - finne manglende eller uventede høydeverdier
 - analysere fall, overdekning og terreng der funksjonen trenger høydeinformasjon
-- vise data i 2D-kart og en enkel 3D-visning
+- vise data i 2D-kart og 3D
 - laste inn flere lag og sammenligne dem
 - vise WMS-kartlag fra en konfigurerbar tjeneste
-- undersøke objekter, egenskaper og valideringsresultater i egne visninger
+- undersøke lag, objekter og egenskaper i datatabellen
+- bruke Standards, se aggregert Stats og dele visningen med lenke eller QR-kode
 
 ## Støttede formater
 
-- **GMI** er hovedformatet og har det bredeste kontrollgrunnlaget.
-- **SOSI** (`.sos` og `.sosi`) støttes for innlasting, visning og et mer begrenset kontrollgrunnlag.
-- **KOF** (`.kof`) støttes for innlasting, visning og et mer begrenset kontrollgrunnlag.
+- **GMI** er hovedformatet. Validator V2 kontrollerer utvalgte, kildebaserte GMI-regler; det dekker ikke alle krav i innmålingsinstruksen.
+- **SOSI** (`.sos` og `.sosi`) støttes for innlasting, visning og mer begrensede kontroller, men inngår ikke i Validator V2.
+- **KOF** (`.kof`) støttes for innlasting, visning og mer begrensede kontroller, men inngår ikke i Validator V2.
 
 Støtten er ikke lik på tvers av formatene. Kontroller og visninger kan derfor variere med filformat og innhold.
 
@@ -33,8 +35,9 @@ Støtten er ikke lik på tvers av formatene. Kontroller og visninger kan derfor 
 
 1. Åpne [gmi-validator.no](https://gmi-validator.no).
 2. Velg en fil, eller slipp den i opplastingsområdet.
-3. Se valideringsresultater, kart, lag og analyser.
-4. Undersøk funnene mot prosjektets krav og den øvrige dokumentasjonen.
+3. Gå gjennom FEIL og SJEKK i Validator, og åpne berørte objekter for å se felt og kontekst.
+4. Utforsk lag og data i kartet eller tabellen; bruk høydekontroll, profil, Standards, 3D eller WMS etter behov.
+5. Vurder funnene mot prosjektets krav og øvrig dokumentasjon. Stats og deling med lenke/QR er tilgjengelig fra arbeidsområdet.
 
 ## Personvern og databehandling
 
@@ -43,7 +46,7 @@ Se [detaljert dokumentasjon om personvern og databehandling](docs/privacy.md).
 - Selve innmålingsfilen behandles lokalt i nettleseren og lastes ikke opp til GMI Validators applikasjonsserver.
 - Enkelte funksjoner sender avledede eller valgte koordinater til eksterne tjenester når det trengs for terrengdata, profilberegninger eller kommuneoppslag.
 - Karttjenester kan motta kartområdet eller visningen som nettleseren ber om, slik at kartet kan tegnes.
-- Ved vellykket innlasting samles det inn aggregerte brukstellinger, blant annet per kommune, dato og time. Statistikken lagres ikke som selve innmålingsfilen.
+- Ved vellykket innlasting utenfor Testmodus kan en aggregert brukstelling registreres per dato, time og kommune, eller et grovere/ukjent område når kommune ikke kan bestemmes. Statistikken lagres ikke som selve innmålingsfilen.
 - GMI Validator bruker Vercel Web Analytics for overordnet besøks- og bruksstatistikk.
 - Når du sender en melding gjennom Kontakt, sendes opplysningene du skriver inn, sammen med appversjon og nødvendig servergenerert leveringsmetadata, via Resend til den konfigurerte mottakeren. Navn og e-post tas bare med når du oppgir dem.
 
@@ -55,9 +58,7 @@ GMI Validator er et hjelpemiddel. Resultatene er ikke et offisielt vedtak om at 
 
 ## Status
 
-Løsningen er i produksjon.
-
-Gjeldende versjon er **v1.1.0**.
+Den eksisterende offentlige tjenesten er tilgjengelig. **v1.2.0** er klargjort for utgivelse på denne grenen og er ikke bekreftet publisert i produksjon.
 
 Prosjektet er lite, selvstendig og ikke-kommersielt.
 
@@ -93,7 +94,7 @@ node --test "tests/*.test.mjs"
 
 ### Teknologi
 
-Prosjektet bruker Next.js og React. Kartvisningen bygger på Leaflet, 3D-visningen på Three.js, og tilstand håndteres med Zustand. Valideringsreglene ligger i JSON-filer under `src/data/rules/`.
+Prosjektet bruker Next.js og React. Kartvisningen bygger på Leaflet, 3D-visningen på Three.js, og tilstand håndteres med Zustand. Aktiv GMI Validator V2 har regelregister og evaluator under `src/lib/validation-v2/`; eldre JSON-regler finnes under `src/data/rules/`.
 
 ## Konfigurasjon
 
@@ -101,7 +102,7 @@ Se [utviklerdokumentasjonen](docs/development.md) for prosjektstruktur, testing 
 
 Vanlig bruk av den publiserte løsningen krever ingen lokal konfigurasjon.
 
-Serverfunksjoner kan konfigureres med miljøvariabler for Supabase-basert bruksstatistikk, lokal statistikkfallback, keepalive-beskyttelse og Kontakt-funksjonens e-postlevering. Variablene omfatter blant annet `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TRACKING_KEEPALIVE_SECRET`, `TRACKING_STORAGE_PATH`, `RESEND_API_KEY`, `CONTACT_TO_EMAIL` og `CONTACT_FROM_EMAIL`.
+Serverfunksjoner kan konfigureres med miljøvariabler for Supabase-basert bruksstatistikk, lokal statistikkfallback, keepalive-beskyttelse og Kontakt-funksjonens e-postlevering. Stats-kartets CARTO-bakgrunn krever også en offentlig basemapnøkkel. Se utviklerdokumentasjonen for variabler og miljøoppsett.
 
 Verdier skal settes i det lokale eller deployede miljøet og aldri legges i kildekoden eller committes til Git. Hemmelige verdier skal bare være tilgjengelige på serversiden og skal ikke legges i URL-er eller eksponeres til klientkoden.
 

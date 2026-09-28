@@ -257,18 +257,6 @@
   margin-top: 58px;
 }
 
-.statistics-button__badge {
-  padding: 3px 6px;
-  border-radius: 999px;
-  background: var(--gmi-cyan-soft);
-  color: var(--gmi-navy);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.01em;
-  box-shadow: 0 1px 3px rgba(0, 117, 149, 0.22);
-}
-
 .statistics-button:focus-visible,
 .stats-dialog button:focus-visible,
 .stats-dialog input:focus-visible {
@@ -325,6 +313,47 @@
   .app-info-dialog {
     height: calc(100dvh - 2rem);
     min-height: 0;
+  }
+}
+
+/* Laptop-height desktop viewports: keep the frame and type, reclaim vertical chrome. */
+@media (max-height: 1000px) and (min-width: 1024px) {
+  .app-info-dialog {
+    height: calc(100dvh - 2rem);
+    min-height: 0;
+  }
+
+  .app-info-header {
+    padding-block: 0.75rem;
+  }
+
+  .app-info-tab-bar {
+    padding-block: 0.25rem;
+  }
+
+  .app-info-scroll {
+    padding-top: 0.75rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .app-info-hero {
+    padding-block: 0.75rem;
+  }
+
+  [data-app-info-news] > .app-info-hero {
+    margin-block-end: 1rem;
+  }
+
+  .app-info-news-article {
+    padding-block: 1rem;
+  }
+
+  .app-info-news-body > :not(:last-child) {
+    margin-block-end: 1.25rem;
+  }
+
+  .app-info-news-body > :not(:first-child) {
+    padding-top: 1rem;
   }
 }
 

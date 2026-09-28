@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { LATEST_ANNOUNCED_RELEASE } from '../src/data/appReleases.mjs';
 
 import {
   APP_INFO_SCHEMA,
@@ -11,15 +12,7 @@ import {
   writeAppInfoState,
 } from '../src/lib/appInfoState.mjs';
 
-const latestRelease = {
-  version: '1.1.0',
-  announce: true,
-};
-
-const laterRelease = {
-  version: '1.2.0',
-  announce: true,
-};
+const latestRelease = LATEST_ANNOUNCED_RELEASE;
 
 const makeStorage = (entries = {}) => {
   const values = new Map(Object.entries(entries));
@@ -62,7 +55,7 @@ test('brand-new users open Om and claim the introduction and announcement', () =
   assert.deepEqual(JSON.parse(storage.value(APP_INFO_STORAGE_KEY)), {
     schema: 1,
     introSeen: true,
-    lastSeenAnnouncement: '1.1.0',
+    lastSeenAnnouncement: '1.2.0',
   });
   assert.equal(
     decideAutomaticAppInfo({
@@ -91,9 +84,9 @@ test('pre-feature users open Nytt once using only legacy-key existence', () => {
   );
 });
 
-test('v1.1.0 acknowledgement does not repeat for the unannounced v1.0.2 patch', () => {
+test('v1.2.0 acknowledgement does not repeat for an unannounced patch', () => {
   const storage = makeStorage({
-    [APP_INFO_STORAGE_KEY]: stateJson(true, '1.1.0'),
+    [APP_INFO_STORAGE_KEY]: stateJson(true, '1.2.0'),
   });
   const before = storage.value(APP_INFO_STORAGE_KEY);
   const decision = decideAutomaticAppInfo({
@@ -107,40 +100,31 @@ test('v1.1.0 acknowledgement does not repeat for the unannounced v1.0.2 patch', 
   writeAppInfoState(storage, {
     schema: 1,
     introSeen: true,
-    lastSeenAnnouncement: '1.1.0',
+    lastSeenAnnouncement: '1.2.0',
   });
   assert.equal(storage.value(APP_INFO_STORAGE_KEY), before);
 });
 
-test('later announced releases open Nytt once, while unannounced patches do not', () => {
+test('returning v1.1.0 users open 1.2.0 Nytt once', () => {
   const storage = makeStorage({
     [APP_INFO_STORAGE_KEY]: stateJson(true, '1.1.0'),
   });
   const decision = decideAutomaticAppInfo({
     storage,
-    latestAnnouncedRelease: laterRelease,
+    latestAnnouncedRelease: latestRelease,
   });
 
   assert.equal(decision.tab, 'news');
-  assert.equal(decision.release, laterRelease);
+  assert.equal(decision.release, latestRelease);
   assert.equal(
     decideAutomaticAppInfo({
       storage,
-      latestAnnouncedRelease: laterRelease,
-    }).open,
-    false,
-  );
-
-  const patchStorage = makeStorage({
-    [APP_INFO_STORAGE_KEY]: stateJson(true, '1.1.0'),
-  });
-  assert.equal(
-    decideAutomaticAppInfo({
-      storage: patchStorage,
       latestAnnouncedRelease: latestRelease,
     }).open,
     false,
   );
+
+  assert.equal(JSON.parse(storage.value(APP_INFO_STORAGE_KEY)).lastSeenAnnouncement, '1.2.0');
 });
 
 test('introSeen false is claimed as Om and current announcement is acknowledged', () => {
@@ -156,7 +140,7 @@ test('introSeen false is claimed as Om and current announcement is acknowledged'
   assert.deepEqual(JSON.parse(storage.value(APP_INFO_STORAGE_KEY)), {
     schema: 1,
     introSeen: true,
-    lastSeenAnnouncement: '1.1.0',
+    lastSeenAnnouncement: '1.2.0',
   });
 });
 
@@ -179,7 +163,7 @@ test('malformed state is treated as absent and replaced safely', () => {
     assert.deepEqual(JSON.parse(storage.value(APP_INFO_STORAGE_KEY)), {
       schema: 1,
       introSeen: true,
-    lastSeenAnnouncement: '1.1.0',
+    lastSeenAnnouncement: '1.2.0',
     });
   }
 });

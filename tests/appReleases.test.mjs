@@ -40,7 +40,7 @@ const loadPackageMetadata = async () => {
 test('release catalog is valid, complete, and newest first', () => {
   assert.deepEqual(
     APP_RELEASES.map((release) => release.version),
-    ['1.1.0', '1.0.2', '1.0.1', '1.0.0'],
+    ['1.2.0', '1.1.0', '1.0.2', '1.0.1', '1.0.0'],
   );
   assert.equal(new Set(APP_RELEASES.map((release) => release.version)).size, APP_RELEASES.length);
 
@@ -63,40 +63,31 @@ test('release catalog is valid, complete, and newest first', () => {
   assert.equal(CURRENT_APP_RELEASE, APP_RELEASES[0]);
   assert.equal(CURRENT_APP_VERSION, APP_RELEASES[0].version);
   assert.equal(LATEST_ANNOUNCED_RELEASE, APP_RELEASES.find((release) => release.announce));
-  assert.equal(CURRENT_APP_VERSION, '1.1.0');
+  assert.equal(CURRENT_APP_VERSION, '1.2.0');
   assert.equal(CURRENT_APP_RELEASE.announce, true);
-  assert.equal(APP_RELEASES.length, 4);
+  assert.equal(APP_RELEASES.length, 5);
   assert.equal(APP_RELEASES[0].type, 'minor');
   assert.equal(APP_RELEASES[0].releasedOn, null);
-  assert.equal(APP_RELEASES[0].title, 'Informasjon, nyheter og versjonshistorikk');
+  assert.equal(APP_RELEASES[0].title, 'Validator V2 og nytt arbeidsområde');
   assert.equal(APP_RELEASES[0].announce, true);
-  assert.deepEqual(APP_RELEASES[0].news, [
-    'GMI Validator har fått en ny informasjonsside med mer om hva verktøyet er, hvorfor det finnes og hvem det er laget for.',
-    'Her finner du også nyheter, versjonshistorikk, planer for videre utvikling og informasjon om hvordan data behandles.',
-  ]);
-  assert.deepEqual(APP_RELEASES[0].changes, [
-    'Ny Om-side',
-    'Nyheter og versjonshistorikk direkte i appen',
-    'Oversikt over planlagt videre utvikling',
-    'Bedre informasjon om personvern og databehandling',
-    'Offentlig kildekode lettere tilgjengelig',
-  ]);
-  assert.equal(APP_RELEASES[1].type, 'patch');
-  assert.equal(APP_RELEASES[1].releasedOn, '2026-08-24');
-  assert.equal(APP_RELEASES[1].title, 'Profilanalyse, stabilitetsretting');
-  assert.equal(APP_RELEASES[1].summary, 'Rettet en feil som i enkelte tilfeller kunne føre til at Profilanalyse krasjet under bruk.');
-  assert.equal(APP_RELEASES[1].announce, false);
+  assert.match(APP_RELEASES[0].summary, /GMI-validering/);
+  assert.match(APP_RELEASES[0].changes.join(' '), /FEIL og SJEKK/);
+  assert.match(APP_RELEASES[0].changes.join(' '), /diagnostisk datatabell/);
+  assert.match(APP_RELEASES[0].changes.join(' '), /profil, Standards og 3D/);
+  assert.equal(APP_RELEASES[1].title, 'Informasjon, nyheter og versjonshistorikk');
+  assert.equal(APP_RELEASES[1].announce, true);
   assert.equal(APP_RELEASES[2].type, 'patch');
-  assert.equal(APP_RELEASES[2].releasedOn, '2026-08-19');
-  assert.equal(APP_RELEASES[2].title, 'SOSI, stabilitetsretting');
-  assert.equal(APP_RELEASES[2].summary, 'Rettet en feil som kunne føre til at SOSI-data ble vist feil etter innlasting.');
+  assert.equal(APP_RELEASES[2].releasedOn, '2026-08-24');
+  assert.equal(APP_RELEASES[2].title, 'Profilanalyse, stabilitetsretting');
   assert.equal(APP_RELEASES[2].announce, false);
-  assert.equal(APP_RELEASES[3].releasedOn, null);
-  assert.equal(APP_RELEASES[3].title, 'Ny statistikkvisning');
-  assert.match(APP_RELEASES[3].highlights[0].description, /filopplastinger/);
+  assert.equal(APP_RELEASES[3].type, 'patch');
+  assert.equal(APP_RELEASES[3].releasedOn, '2026-08-19');
+  assert.equal(APP_RELEASES[3].title, 'SOSI, stabilitetsretting');
   assert.equal(APP_RELEASES[3].announce, false);
-  assert.equal(LATEST_ANNOUNCED_RELEASE.version, '1.1.0');
-  assert.doesNotMatch(JSON.stringify(APP_RELEASES), /1\.2\.0/);
+  assert.equal(APP_RELEASES[4].title, 'Ny statistikkvisning');
+  assert.match(APP_RELEASES[4].highlights[0].description, /filopplastinger/);
+  assert.equal(APP_RELEASES[4].announce, false);
+  assert.equal(LATEST_ANNOUNCED_RELEASE.version, '1.2.0');
 });
 
 test('catalog and package metadata agree on the application version', async () => {

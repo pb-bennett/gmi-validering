@@ -42,7 +42,7 @@ Som ved annen drift av en nettjeneste kan Vercels infrastruktur ha vanlig plattf
 
 Kontaktskjemaet lar deg velge kategori og skrive en melding. Navn og e-post er valgfrie; e-post brukes som Reply-To når den er oppgitt og godkjent som gyldig adresse.
 
-Meldingen sendes fra serveren via Resend til den konfigurerte postkassen. Serveren legger til appversjonen den selv kjenner. Kontaktmeldingen og kategorien lagres ikke i den lokale kontaktprofilen. Navn og e-post kan huskes lokalt i nettleseren for å gjøre neste henvendelse enklere.
+Når e-postlevering er konfigurert, sendes meldingen fra serveren via Resend til den konfigurerte postkassen. Serveren legger til appversjonen den selv kjenner. Kontaktmeldingen og kategorien lagres ikke i den lokale kontaktprofilen. Navn og e-post kan huskes lokalt i nettleseren for å gjøre neste henvendelse enklere.
 
 En kontaktmelding får ikke automatisk vedlagt innmålingsfil, koordinater, valideringstilstand, filnavn eller annen vilkårlig applikasjonstilstand.
 

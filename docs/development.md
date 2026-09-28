@@ -36,7 +36,8 @@ npm run build
 - `src/app/` – App Router, layout og API-ruter
 - `src/components/` – brukergrensesnitt, kart, analyser og 3D-visning
 - `src/lib/` – parsing, validering, analyser, tilstand, tracking og kontaktflyt
-- `src/data/rules/` – JSON-regler og domenespesifikk valideringslogikk
+- `src/lib/validation-v2/` – aktivt GMI Validator V2-regelregister, evaluator og diagnostikk
+- `src/data/rules/` – eldre JSON-regler for legacy-valideringsløp, ikke eier av aktive GMI V2-kontroller
 - `tests/` – automatiske Node-tester
 - `src/features/user-tracking/` – SQL/skjema og dokumentasjon for statistikkfunksjonen
 
@@ -89,3 +90,5 @@ WMS-overlegg hentes gjennom en serverrute som fungerer som en begrenset proxy fo
 ## Release og utrulling
 
 `main` er produksjonsgrenen, og produksjonsutrulling skjer på Vercel. Feature-grener skal testes med relevante tester og produksjonsbygg før de merges.
+
+Før publisering av en ny appversjon: kontroller at releasekatalog, npm-versjon og offentlig tekst stemmer; sett faktisk publiseringsdato først når utrullingen skjer; sammenlign Vercel-miljøet med forventet Supabase/fallback-, CARTO- og Resend-konfigurasjon; og kjør en hosted smoke test av hovedflytene.

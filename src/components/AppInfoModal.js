@@ -4,13 +4,12 @@ import { startTransition, useEffect, useRef, useState } from 'react';
 import {
   ArrowSquareOutIcon,
   CaretDownIcon,
-  ChartBarIcon,
   GithubLogoIcon,
-  InfoIcon,
   XIcon,
 } from '@phosphor-icons/react';
 import {
   APP_RELEASES,
+  CURRENT_APP_RELEASE,
   CURRENT_APP_VERSION,
 } from '@/data/appReleases.mjs';
 import ContactForm from './ContactForm';
@@ -88,7 +87,7 @@ function SourceCodeLink() {
 
 function AppInfoHero({ title, eyebrow = 'GMI Validator', version = CURRENT_APP_VERSION }) {
   return (
-      <section className="relative overflow-hidden rounded-t-2xl rounded-b-none bg-gmi-ink px-5 py-6 text-white shadow-sm sm:px-7 sm:py-5">
+      <section className="relative overflow-hidden rounded-t-2xl rounded-b-none bg-gmi-ink px-5 py-6 text-white shadow-sm sm:px-7 sm:py-5 app-info-hero">
       <div className="absolute right-0 top-0 h-32 w-32 translate-x-12 -translate-y-12 rounded-full border-[18px] border-gmi-brand-cyan/20" aria-hidden="true" />
       <div className="relative">
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-gmi-brand-cyan">
@@ -114,7 +113,7 @@ function AboutContent() {
             Dette er et verktøy for å utforske og validere VA-innmålingsfiler. Slike filer leveres typisk av entreprenører til kommuner i sluttfasen av infrastrukturprosjekter.
           </p>
           <p>
-            Hovedfokuset er full støtte for Geminis eget GMI-format, men verktøyet har også begrenset støtte for SOSI- og KOF-formatene.
+            Hovedfokuset er GMI. Validator V2 kontrollerer utvalgte GMI-krav med kildegrunnlag; verktøyet dekker ikke alle mulige krav. SOSI og KOF har mer begrenset støtte og inngår ikke i Validator V2.
           </p>
           <div>
             <p>Blant annet kan man:</p>
@@ -124,7 +123,8 @@ function AboutContent() {
               <li>Filtrere og fremheve objekter etter verdier i datafeltene</li>
               <li>Vise objektene i en tilpassbar datatabell</li>
               <li>Kontrollere og visualisere fall og estimert overdekning for ledninger i profil</li>
-              <li>Validere datafeltene mot kravene i innmålingsinstruksen</li>
+              <li>Se FEIL og SJEKK med felt- og regeldetaljer, og åpne berørte objekter i datatabellen</li>
+              <li>Kontrollere utvalgte GMI-felt mot kildebaserte regler med veiledning om verdier der den finnes</li>
             </ul>
           </div>
         </div>
@@ -203,13 +203,13 @@ function AboutContent() {
             Enkelte funksjoner trenger eksterne data. For terrengprofiler og beregning av overdekning sendes koordinatpunkter langs ledningene automatisk til Kartverket. Kartverket brukes også til enkelte punkt- og kommuneoppslag, og karttjenestene mottar informasjon om området som vises på kartet. Selve innmålingsfilen sendes ikke med disse forespørslene.
           </p>
           <p>
-            Ved en vellykket innlasting beregnes også et punkt som brukes til å finne hvilken kommune leveransen ligger i. Statistikken lagres som aggregerte tellinger per kommune, dato og time, ikke som enkeltleveranser. Filnavn, rå filinnhold, objektdata og koordinater lagres ikke i statistikkdatabasen.
+            Ved en vellykket innlasting utenfor Testmodus kan et avledet punkt brukes til kommuneoppslag. Statistikken lagres som aggregerte tellinger per dato, time og kommune når den kan bestemmes; ellers brukes et grovere område eller ukjent kategori. Filnavn, rå filinnhold, objektdata og koordinater lagres ikke i statistikkaggregatene.
           </p>
           <p>
-            GMI Validator bruker også Vercel Web Analytics til anonym statistikk over sidevisninger og vanlig informasjon om bruken av nettstedet. Appen sender ikke filinnhold eller filrelaterte data til denne tjenesten.
+            GMI Validator bruker også Vercel Web Analytics for overordnet besøks- og bruksstatistikk. Appen sender ikke egne rå fildata eller filattributter til denne tjenesten.
           </p>
           <p>
-            Når du velger å sende tilbakemelding gjennom Kontakt, sendes bare det du skriver i skjemaet gjennom Resend til mottakerens postkasse. En eventuell e-postadresse tas bare med hvis du fyller den ut, og appversjonen legges til av serveren. Ingen innmålingsfil, koordinater, valideringsresultater eller annen fil- og applikasjonstilstand legges ved. Resend oppgir for tiden 30 dagers datalagring, mens mottakerens postkasse kan lagre meldingen lenger. Endelig bekreftelse av innstillinger og lagring gjøres før produksjonssetting.
+            Når du velger å sende tilbakemelding gjennom Kontakt, sendes skjemainnholdet via Resend til konfigurert mottaker når e-postlevering er satt opp. Navn og e-post tas bare med hvis du oppgir dem, og appversjonen legges til av serveren. Ingen innmålingsfil, koordinater, valideringsresultater eller annen fil- og applikasjonstilstand legges ved. Lagring hos e-postleverandør og mottaker avhenger av deres innstillinger.
           </p>
           <p>
             Kildekoden til GMI Validator er offentlig tilgjengelig. Hvis du ønsker det, kan du selv se hvordan filer behandles, hvilke eksterne tjenester som brukes, hvordan kontrollene fungerer og hvordan verktøyet er bygget.
@@ -233,21 +233,11 @@ function FutureContent() {
       <section>
         <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Planlagt</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Mulig</span>
           </div>
           <h4 className="mt-3 text-base font-bold text-gmi-navy">Bedre tilbakemeldinger</h4>
           <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
-            Planlagt støtte for å legge ved skjermbilder i Kontakt-skjemaet, slik at feil og visuelle problemer blir enklere å beskrive.
-          </p>
-        </div>
-        <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-md bg-gmi-navy px-2 py-1 text-xs font-semibold text-white">v1.2.0</span>
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Planlagt</span>
-          </div>
-          <h4 className="mt-3 text-base font-bold text-gmi-navy">Validator 2.0 (beta)</h4>
-          <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
-            Neste større steg er planlagt til versjon 1.2.0, der Validator 2.0 introduseres som beta. Den nye valideringslogikken gir tydeligere kontroller, bedre resultatvisning og mer detaljert informasjon om feltene som kontrolleres.
+            Mulig støtte for å legge ved skjermbilder i Kontakt-skjemaet, slik at feil og visuelle problemer blir enklere å beskrive.
           </p>
         </div>
         <p className="mt-2 text-sm leading-6 text-gmi-text-subtle">Planene kan endres etter hvert som funksjonene utvikles og testes.</p>
@@ -272,156 +262,53 @@ function ReleaseDetails({ release: releaseEntry }) {
   );
 }
 
-const NEWS_HIGHLIGHTS = [
-  {
-    id: 'app-info',
-    release: APP_RELEASES.find((entry) => entry.version === '1.1.0'),
-    title: 'Informasjon, nyheter og versjonshistorikk',
-    body: 'Appen har fått et innebygd informasjonsområde med Om, Nytt, Versjonshistorikk, Fremtiden og Kontakt. Det gjør det enklere å forstå hva verktøyet er, hva som har endret seg, hva som er planlagt, og hvordan data og personvern håndteres.',
-    mockup: 'info',
-  },
-  {
-    id: 'statistics',
-    release: APP_RELEASES.find((entry) => entry.version === '1.0.0'),
-    title: 'Ny statistikkvisning',
-    body: 'Statistikkdelen gir en tydeligere oversikt over bruk og aktivitet, med fordeling per kommune og enklere inspeksjon av utviklingen over tid. Det gjør statistikken lettere å lese og sammenligne.',
-    mockup: 'statistics',
-  },
-].filter((highlight) => highlight.release);
-
-function InfoModalMockup() {
-  return (
-    <div
-      className="rounded-xl border border-gmi-border-strong bg-gmi-surface-soft p-2 shadow-sm"
-      aria-hidden="true"
-    >
-      <div className="overflow-hidden rounded-lg border border-gmi-border bg-gmi-surface shadow-sm">
-        <div className="flex items-center gap-2 border-b border-gmi-border px-3 py-2">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gmi-cyan-soft text-gmi-interactive">
-            <InfoIcon size={12} weight="regular" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="truncate text-[10px] font-bold text-gmi-navy">
-                GMI Validator
-              </span>
-              <span className="rounded-full bg-gmi-cyan-soft px-1.5 py-0.5 text-[8px] font-bold text-gmi-interactive">
-                v1.1.0
-              </span>
-            </div>
-            <span className="block truncate text-[8px] text-gmi-text-subtle">
-              Informasjon, nyheter og versjonshistorikk
-            </span>
-          </div>
-        </div>
-        <div className="flex gap-1 border-b border-gmi-border bg-gmi-surface-soft px-2 py-1.5 text-[8px] font-semibold text-gmi-text-subtle">
-          <span className="rounded bg-gmi-border px-1.5 py-1 text-gmi-navy">Om</span>
-          <span className="rounded px-1.5 py-1">Nytt</span>
-          <span className="rounded px-1.5 py-1">Versjonshistorikk</span>
-        </div>
-        <div className="bg-gmi-ink px-3 py-3 text-white">
-          <div className="h-1 w-8 rounded-full bg-gmi-brand-cyan" />
-          <div className="mt-2 h-2 w-3/4 rounded bg-gmi-surface/90" />
-          <div className="mt-1.5 h-1.5 w-full rounded bg-gmi-surface/25" />
-          <div className="mt-1 h-1.5 w-5/6 rounded bg-gmi-surface/15" />
-        </div>
-        <div className="space-y-2 px-3 py-3">
-          <div className="h-2 w-2/3 rounded bg-gmi-border" />
-          <div className="h-1.5 w-full rounded bg-gmi-surface-soft" />
-          <div className="h-1.5 w-5/6 rounded bg-gmi-surface-soft" />
-          <div className="h-1.5 w-1/2 rounded bg-gmi-surface-soft" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatisticsMockup() {
-  return (
-    <div className="space-y-3" aria-hidden="true">
-      <div className="flex justify-end">
-        <div className="inline-flex items-center gap-2 rounded-xl border border-gmi-interactive bg-gmi-interactive px-3 py-2 text-[10px] font-medium text-gmi-surface shadow-md shadow-gmi-interactive/20">
-          <ChartBarIcon size={14} weight="regular" className="text-gmi-brand-cyan" aria-hidden="true" />
-          <span className="flex items-center gap-1.5">
-            <span className="rounded-full bg-gmi-cyan-soft px-1.5 py-0.5 text-[8px] font-bold text-gmi-navy">
-              Ny
-            </span>
-            <span>Statistikk</span>
-          </span>
-        </div>
-      </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">
-            Utvikling over tid
-          </span>
-          <span className="text-[9px] text-slate-400">Måned</span>
-        </div>
-        <div className="relative h-20 w-full overflow-hidden">
-          <div className="absolute inset-x-0 top-1/4 border-t border-slate-100" />
-          <div className="absolute inset-x-0 top-1/2 border-t border-slate-100" />
-          <div className="absolute inset-x-0 top-3/4 border-t border-slate-100" />
-          <div
-            className="absolute inset-0 bg-cyan-600"
-            style={{
-              clipPath:
-                'polygon(0% 73%, 16% 60%, 32% 66%, 48% 39%, 64% 47%, 80% 24%, 100% 31%, 100% 34%, 80% 28%, 64% 50%, 48% 42%, 32% 69%, 16% 63%, 0% 76%)',
-            }}
-          />
-          <div
-            className="absolute inset-0 bg-slate-500"
-            style={{
-              clipPath:
-                'polygon(0% 85%, 16% 74%, 32% 80%, 48% 62%, 64% 68%, 80% 47%, 100% 53%, 100% 56%, 80% 51%, 64% 71%, 48% 65%, 32% 83%, 16% 77%, 0% 88%)',
-            }}
-          />
-          <div
-            className="absolute inset-0 bg-slate-300"
-            style={{
-              clipPath:
-                'polygon(0% 92%, 16% 88%, 32% 90%, 48% 78%, 64% 83%, 80% 68%, 100% 73%, 100% 76%, 80% 72%, 64% 86%, 48% 81%, 32% 93%, 16% 91%, 0% 95%)',
-            }}
-          />
-        </div>
-        <div className="mt-1 flex gap-3 text-[9px] text-slate-500">
-          <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-cyan-600" />Totalt</span>
-          <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-slate-500" />Kommune</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NewsHighlightMockup({ type }) {
-  return type === 'info' ? <InfoModalMockup /> : <StatisticsMockup />;
-}
-
 function NewsContent() {
   return (
-    <div className={APP_INFO_TAB_CONTENT_CLASS}>
+    <div className={APP_INFO_TAB_CONTENT_CLASS} data-app-info-news>
       <AppInfoHero title="Nytt" />
+      <article className="rounded-xl border border-gmi-border bg-gmi-surface p-4 shadow-sm sm:p-6 app-info-news-article">
+        <div className="max-w-[54rem] space-y-6 app-info-news-body">
+          <div>
+            <ReleaseMeta release={CURRENT_APP_RELEASE} />
+            <h3 className="mt-3 text-xl font-bold tracking-[-0.01em] text-gmi-navy">Ny Validator og oppdatert arbeidsområde</h3>
+            <p className="mt-3 text-[15px] leading-[1.7] text-gmi-text-muted">
+              Versjon 1.2.0 samler en ny arbeidsflyt for GMI-validering med bedre tilgang til objektene bak funnene. Kart, datainnsyn og analyseverktøy er samtidig samlet i et mer sammenhengende arbeidsområde for gjennomgang av innmålingsdata.
+            </p>
+          </div>
 
-      <div className="space-y-5">
-        {NEWS_HIGHLIGHTS.map((highlight) => (
-          <article
-            key={highlight.id}
-            className="overflow-hidden rounded-xl border border-gmi-border bg-gmi-surface shadow-sm"
-          >
-            <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-center">
-              <div>
-                <ReleaseMeta release={highlight.release} />
-                <h3 className="mt-3 text-lg font-bold tracking-[-0.01em] text-gmi-navy">
-                  {highlight.title}
-                </h3>
-                <p className="mt-2 max-w-[54rem] text-[15px] leading-[1.6] text-gmi-text-muted">
-                  {highlight.body}
-                </p>
-              </div>
-              <NewsHighlightMockup type={highlight.mockup} />
-            </div>
-          </article>
-        ))}
-      </div>
+          <section aria-labelledby="app-info-news-validator" className="border-t border-gmi-border pt-5">
+            <h4 id="app-info-news-validator" className="text-base font-bold text-gmi-navy">Validator V2</h4>
+            <p className="mt-2 text-[15px] leading-[1.7] text-gmi-text-muted">
+              GMI-kontrollen har fått en ny arbeidsflyt der FEIL og SJEKK er tydeligere skilt. Funnene viser hvilket felt og hvilken regel de gjelder, med kildehenvisning og veiledning om verdier der dette finnes. For utvalgte manglende opplysninger på eksisterende objekter som ikke er merket NYTT, kan resultatet være SJEKK for faglig vurdering i stedet for automatisk FEIL.
+            </p>
+          </section>
+
+          <section aria-labelledby="app-info-news-objects" className="border-t border-gmi-border pt-5">
+            <h4 id="app-info-news-objects" className="text-base font-bold text-gmi-navy">Fra funn til objekt</h4>
+            <p className="mt-2 text-[15px] leading-[1.7] text-gmi-text-muted">
+              Berørte objekter kan åpnes direkte fra Validator i en diagnostisk datatabell som avgrenser visningen til de aktuelle objektene. Feltet som undersøkes, vises sammen med relevant objektkontekst. Det gjør det enklere å kontrollere et funn uten å lete manuelt gjennom hele datasettet.
+            </p>
+          </section>
+
+          <section aria-labelledby="app-info-news-workspace" className="border-t border-gmi-border pt-5">
+            <h4 id="app-info-news-workspace" className="text-base font-bold text-gmi-navy">Et mer sammenhengende arbeidsområde</h4>
+            <p className="mt-2 text-[15px] leading-[1.7] text-gmi-text-muted">
+              Kart, lag og datatabell gir flere innganger til samme leveranse. Høydekontroll, Profilanalyse, Standards og 3D kan brukes videre i gjennomgangen uten å miste sammenhengen med objektene og kartvisningen. Profilanalyse er også tilpasset vanlige skrivebordsskjermer på 1080p og visninger med begrenset høyde.
+            </p>
+          </section>
+
+          <section aria-labelledby="app-info-news-other" className="border-t border-gmi-border pt-5">
+            <h4 id="app-info-news-other" className="text-base font-bold text-gmi-navy">Andre forbedringer</h4>
+            <p className="mt-2 text-[15px] leading-[1.7] text-gmi-text-muted">
+              Presentasjonen av deling og QR-kode, WMS, Stats og AppInfo-dialogene er forbedret og bedre tilpasset det oppdaterte arbeidsområdet.
+            </p>
+          </section>
+
+          <p className="border-t border-gmi-border pt-5 text-sm leading-[1.7] text-gmi-text-subtle">
+            Validator V2 dekker utvalgte, kildebaserte GMI-kontroller og er et hjelpemiddel i kvalitetskontrollen. Funnene må fortsatt vurderes faglig opp mot kravene til den enkelte leveransen.
+          </p>
+        </div>
+      </article>
     </div>
   );
 }
@@ -484,8 +371,8 @@ function ContactContent() {
         </p>
         <div className="flex max-w-[54rem] items-start gap-2.5 rounded-lg border border-gmi-cyan-soft bg-gmi-cyan-soft/40 px-3 py-2.5 text-sm leading-6 text-gmi-text">
           <p>
-            <span className="mr-1.5 inline-flex rounded-md bg-gmi-cyan-soft px-1.5 py-0.5 text-xs font-semibold leading-5 text-gmi-interactive">Planlagt</span>
-            Mulighet for å legge ved skjermbilder kommer i en senere versjon.
+            <span className="mr-1.5 inline-flex rounded-md bg-gmi-cyan-soft px-1.5 py-0.5 text-xs font-semibold leading-5 text-gmi-interactive">Merk</span>
+            Skjermbilder kan foreløpig ikke legges ved i skjemaet.
           </p>
         </div>
         <ContactForm />
@@ -618,7 +505,7 @@ export default function AppInfoModal({
         onKeyDown={handleDialogKeyDown}
         className="app-info-dialog relative flex w-full flex-col overflow-hidden rounded-2xl bg-gmi-surface shadow-2xl"
       >
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-gmi-border bg-gmi-surface px-5 pb-4 pt-14 sm:px-7 sm:pt-4">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-gmi-border bg-gmi-surface px-5 pb-4 pt-14 sm:px-7 sm:pt-4 app-info-header">
           <div className="app-info-inner flex min-w-0 flex-col gap-3 sm:pr-14 lg:flex-row lg:items-center lg:gap-8">
             <h2 id="app-info-title" className="sr-only">GMI Validator</h2>
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -640,7 +527,7 @@ export default function AppInfoModal({
         <div
           role="tablist"
           aria-label="Informasjonsseksjoner"
-          className="flex shrink-0 gap-1 overflow-x-auto border-b border-gmi-border bg-gmi-surface-soft/80 px-5 py-2 sm:px-7"
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-gmi-border bg-gmi-surface-soft/80 px-5 py-2 sm:px-7 app-info-tab-bar"
         >
           <div className="app-info-inner flex gap-1 overflow-x-auto">
             {TABS.map((tab, index) => (
