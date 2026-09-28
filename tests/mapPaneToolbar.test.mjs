@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   createMapPanePresentationState,
+  didProfileAnalysisOpen,
   getActiveBottomSurface,
   getMapToolbarMode,
   isMapLegendCompact,
@@ -107,6 +108,45 @@ test('map-pane owner preserves legend state across delayed mounts and compact pe
   assert.match(legend, /onClick=\{toggleLegend\}/);
   assert.doesNotMatch(toolbar, /ResizeObserver|getBoundingClientRect/);
   assert.doesNotMatch(legend, /ResizeObserver|getBoundingClientRect|useState/);
+});
+
+test('opening profile collapses the existing legend once and manual reopen persists', async () => {
+  const [page, provider, legend] = await Promise.all([
+    read('../src/app/page.js'),
+    read('../src/components/MapPanePresentationProvider.js'),
+    read('../src/components/MapLegend.js'),
+  ]);
+  let state = createMapPanePresentationState();
+  let wasOpen = false;
+  const profileRender = (isOpen) => {
+    if (didProfileAnalysisOpen(wasOpen, isOpen)) {
+      state = reduceMapPanePresentation(state, { type: 'profile-opened' });
+    }
+    wasOpen = isOpen;
+  };
+
+  profileRender(false);
+  assert.equal(state.legendCollapsed, false, 'normal map starts expanded');
+  state = reduceMapPanePresentation(state, { type: 'legend-toggled' });
+  state = reduceMapPanePresentation(state, { type: 'legend-toggled' });
+  assert.equal(state.legendCollapsed, false, 'normal map toggle is unchanged');
+
+  profileRender(true);
+  assert.equal(state.legendCollapsed, true);
+  state = reduceMapPanePresentation(state, { type: 'legend-toggled' });
+  assert.equal(state.legendCollapsed, false, 'user can reopen it during analysis');
+  profileRender(true);
+  assert.equal(state.legendCollapsed, false, 'later renders do not close it again');
+  profileRender(false);
+  assert.equal(state.legendCollapsed, false, 'closing analysis preserves the choice');
+  profileRender(true);
+  assert.equal(state.legendCollapsed, true, 'the next open is a new transition');
+
+  assert.match(page, /<MapPanePresentationProvider analysisOpen=\{analysisOpen\}/);
+  assert.match(provider, /didProfileAnalysisOpen\(wasAnalysisOpen\.current, analysisOpen\)/);
+  assert.match(provider, /dispatch\(\{ type: 'profile-opened' \}\)/);
+  assert.match(provider, /wasAnalysisOpen\.current = analysisOpen/);
+  assert.match(legend, /legendCollapsed: isCollapsed, toggleLegend/);
 });
 
 test('overflow is keyboard-dismissible, restores focus, and retains the full reset label', async () => {

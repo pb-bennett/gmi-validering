@@ -9,6 +9,7 @@ import {
   useLayoutEffect,
 } from 'react';
 import StandardsInfoModal from './StandardsInfoModal';
+import { positionProfileTooltip } from '@/lib/analysis/profileTooltipPosition.mjs';
 import {
   ArrowClockwiseIcon,
   ArrowCounterClockwiseIcon,
@@ -187,9 +188,9 @@ export default function InclineAnalysisModal() {
   if (!isOpen) return null;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-2000 h-[45vh] bg-gmi-surface text-gmi-text shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex flex-col border-t border-gmi-border-strong">
+    <div className="profile-analysis-panel absolute bottom-0 left-0 right-0 z-2000 bg-gmi-surface text-gmi-text shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex flex-col border-t border-gmi-border-strong">
       {/* Header */}
-      <div className="flex-none p-3 border-b border-gmi-border flex justify-between items-center bg-gmi-surface-soft">
+      <div className="profile-analysis-header flex-none p-3 border-b border-gmi-border flex justify-between items-center bg-gmi-surface-soft">
         <div>
           <h2 className="text-base font-semibold text-gmi-navy flex items-center gap-2">
             Profilanalyse
@@ -289,9 +290,9 @@ export default function InclineAnalysisModal() {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Sidebar List */}
-        <div className="w-80 border-r border-gmi-border flex flex-col bg-gmi-surface-soft flex-none">
+        <div className="w-80 min-h-0 border-r border-gmi-border flex flex-col bg-gmi-surface-soft flex-none">
           {/* Type Tabs */}
           <div className="flex border-b border-gmi-border overflow-x-auto scrollbar-hide">
             <button
@@ -357,9 +358,9 @@ export default function InclineAnalysisModal() {
         </div>
 
         {/* Main Content - Visualization */}
-        <div className="flex-1 p-4 overflow-hidden bg-gmi-surface flex flex-col min-h-0">
+        <div className="profile-analysis-main flex-1 p-4 overflow-hidden bg-gmi-surface flex flex-col min-h-0">
           {selectedResult ? (
-            <div className="space-y-4 flex-1 flex flex-col">
+            <div className="profile-analysis-detail gap-4 flex-1 min-h-0 flex flex-col">
               <div className="flex items-center justify-between flex-none bg-gmi-surface-soft border border-gmi-border rounded px-2 py-1 text-xs">
                 <div className="flex items-center gap-2 flex-wrap overflow-hidden">
                   <span className="font-semibold">
@@ -475,8 +476,7 @@ export default function InclineAnalysisModal() {
 
               {/* Cross Section Visualization */}
               <div
-                className="border border-gmi-border-strong rounded-lg p-2 bg-gmi-surface shadow-sm flex-1 flex flex-col min-h-0"
-                style={{ minHeight: '300px' }}
+                className="profile-analysis-plot border border-gmi-border-strong rounded-lg p-2 bg-gmi-surface shadow-sm flex-1 flex flex-col min-h-0"
               >
                 <div className="flex-1 min-h-0 w-full">
                   <PipeProfileVisualization
@@ -1507,31 +1507,20 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
               const anchorY =
                 getY(tooltip.data.terrainZ) * transform.k +
                 transform.y;
-              const gap = 10;
-
-              const fitsRight =
-                anchorX + gap + tooltipSize.width <= width - 8;
-              const left = fitsRight
-                ? anchorX + gap
-                : Math.max(8, anchorX - gap - tooltipSize.width);
-
-              const top = Math.min(
-                Math.max(8, anchorY - tooltipSize.height / 2),
-                Math.max(8, height - tooltipSize.height - 8),
-              );
-
-              return { left, top };
+              return positionProfileTooltip({
+                anchorX, anchorY, width, height,
+                tooltipWidth: tooltipSize.width,
+                tooltipHeight: tooltipSize.height,
+                preferSide: true,
+              });
             }
-
-            const left = Math.min(
-              Math.max(8, tooltip.x + 15),
-              Math.max(8, width - tooltipSize.width - 8),
-            );
-            const top = Math.min(
-              Math.max(8, tooltip.y + 15),
-              Math.max(8, height - tooltipSize.height - 8),
-            );
-            return { left, top };
+            return positionProfileTooltip({
+              anchorX: tooltip.x,
+              anchorY: tooltip.y,
+              width, height,
+              tooltipWidth: tooltipSize.width,
+              tooltipHeight: tooltipSize.height,
+            });
           })()}
         >
           {tooltip.type === 'point' ? (

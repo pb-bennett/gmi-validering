@@ -87,7 +87,9 @@ export default function Home() {
     (state) => state.closeDataInspector,
   );
   const [zoomLevel, setZoomLevel] = useState(13);
-  const primaryViewHeight = analysisOpen ? '55%' : '100%';
+  const primaryViewHeight = analysisOpen
+    ? 'var(--profile-map-height, 55%)'
+    : '100%';
   const inspectorWidthPx = VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM * 16;
   const canDockInspector =
     viewportWidth - sidebarWidth >= 480 + inspectorWidthPx;
@@ -489,7 +491,7 @@ export default function Home() {
             bottomDock={<LayerDataTable />}
             primary={(
               <div className="flex h-full min-h-0 min-w-0 flex-1">
-                <MapPanePresentationProvider className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                <MapPanePresentationProvider analysisOpen={analysisOpen} className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 <MapPaneToolbar
                   onReset={handleReset}
                   onShare={() => setShowShareModal(true)}

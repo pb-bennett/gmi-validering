@@ -1,6 +1,51 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+/* Default desktop profile split retains the accepted large-height layout. */
+:root {
+  --profile-map-height: 55%;
+  --profile-panel-height: 45vh;
+}
+
+.profile-analysis-panel {
+  height: var(--profile-panel-height);
+}
+
+@media (max-height: 1000px) {
+  /* Laptop CSS viewports lose height to browser chrome and display scaling. */
+  :root {
+    --profile-map-height: 42%;
+    --profile-panel-height: 58%;
+  }
+
+  .profile-analysis-panel {
+    box-shadow: 0 -2px 3px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .profile-analysis-header {
+    padding-block: 0.5rem;
+  }
+
+  .profile-analysis-main {
+    padding-block: 0.5rem;
+  }
+
+  .profile-analysis-detail {
+    gap: 0.5rem;
+  }
+
+  .profile-analysis-plot {
+    padding-block: 0.25rem;
+  }
+}
+
+@media (max-height: 750px) {
+  :root {
+    --profile-map-height: 37%;
+    --profile-panel-height: 63%;
+  }
+}
+
 /*
  * Additive S1 semantic palette. Legacy --color-* consumers remain on their
  * existing theme variables until their scoped migration slices.

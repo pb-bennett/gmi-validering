@@ -11,6 +11,7 @@ import {
 } from 'react';
 import {
   createMapPanePresentationState,
+  didProfileAnalysisOpen,
   getMapToolbarMode,
   isMapLegendCompact,
   MapToolbarMode,
@@ -19,8 +20,9 @@ import {
 
 const MapPanePresentationContext = createContext(null);
 
-export function MapPanePresentationProvider({ children, className }) {
+export function MapPanePresentationProvider({ children, className, analysisOpen = false }) {
   const paneRef = useRef(null);
+  const wasAnalysisOpen = useRef(false);
   const [presentation, dispatch] = useReducer(
     reduceMapPanePresentation,
     undefined,
@@ -45,6 +47,13 @@ export function MapPanePresentationProvider({ children, className }) {
     observer.observe(pane);
     return () => observer.disconnect();
   }, []);
+
+  useLayoutEffect(() => {
+    if (didProfileAnalysisOpen(wasAnalysisOpen.current, analysisOpen)) {
+      dispatch({ type: 'profile-opened' });
+    }
+    wasAnalysisOpen.current = analysisOpen;
+  }, [analysisOpen]);
 
   const toggleLegend = useCallback(() => {
     dispatch({ type: 'legend-toggled' });

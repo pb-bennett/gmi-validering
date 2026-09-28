@@ -30,7 +30,15 @@ export function createMapPanePresentationState() {
   };
 }
 
+export function didProfileAnalysisOpen(wasOpen, isOpen) {
+  return !wasOpen && isOpen;
+}
+
 export function reduceMapPanePresentation(state, action) {
+  if (action.type === 'profile-opened') {
+    return state.legendCollapsed ? state : { ...state, legendCollapsed: true };
+  }
+
   if (action.type === 'legend-toggled') {
     return { ...state, legendCollapsed: !state.legendCollapsed };
   }
