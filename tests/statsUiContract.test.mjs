@@ -81,6 +81,7 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.ok(statsTriggerConditionStart >= 0);
   assert.ok(statsTriggerEnd > statsTriggerStart);
   assert.doesNotMatch(statsTrigger, /parsingStatus === 'done'/);
+  assert.match(statsTrigger, /border: '1px solid var\(--gmi-brand-cyan\)'/);
   assert.ok(statsTriggerStart < page.indexOf("{parsingStatus === 'done' &&"));
   assert.equal((page.match(/aria-label="Vis bruksstatistikk"/g) || []).length, 1);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);

@@ -325,7 +325,7 @@ export default function Home() {
           borderRadius: '12px',
           backgroundColor: '#007595',
           color: '#ffffff',
-          border: '1px solid #007595',
+          border: '1px solid var(--gmi-brand-cyan)',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
