@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createTable, getCoreRowModel } from '@tanstack/react-table';
+import { GMIParser } from '../src/lib/parsing/gmiParser.js';
 import { createObjectRef } from '../src/lib/validation-v2/objectRef.js';
 import { getDatasetRevision } from '../src/lib/validation-v2/datasetRevision.js';
 import {
@@ -8,7 +10,7 @@ import {
   resolveExactObjectInspectionRows,
 } from '../src/lib/objectTableInspection.js';
 import { buildValidatorFieldInspectionRequest } from '../src/lib/validation-v2/tableInspection.js';
-import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getContextualStickyOffsets, hasRealSuppliedValue } from '../src/lib/objectTablePresentation.js';
+import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getContextualStickyOffsets, getDiagnosticColumnOrder, createLayerDataTableColumns, hasRealSuppliedValue } from '../src/lib/objectTablePresentation.js';
 
 function layer(id = 'synthetic-layer') {
   return {
@@ -105,7 +107,7 @@ test('contextual widths use the complete scope, keep normal Type and Tema codes 
   assert.ok(typeWidth >= focusOnlyWidth);
   assert.ok(temaWidth >= 'KOTREKUM'.length * 8 + 24);
   assert.equal(getContextualColumnWidth({ label: 'Merknad', values: ['x'.repeat(5000)], kind: 'field' }), 320);
-  assert.deepEqual(getContextualStickyOffsets({ temaWidth, fieldWidth: typeWidth }), { zoom: 0, tema: 36, field: 36 + temaWidth, result: 36 + temaWidth + typeWidth });
+  assert.deepEqual(getContextualStickyOffsets({ temaWidth, fieldWidth: typeWidth }), { zoom: 0, tema: 36, field: 36 + temaWidth });
 });
 
 test('all-missing contextual fields use a compact stable width while populated complete scopes retain full values', () => {
@@ -118,12 +120,84 @@ test('all-missing contextual fields use a compact stable width while populated c
   assert.equal(getContextualColumnWidth({ label: 'MaksAvvikVertikalt', values: missingScope.slice(0, 1), kind: 'field' }), compactWidth);
   assert.equal(hasRealSuppliedValue([null, 'FORAKLOSS']), true);
   assert.ok(populatedScopeWidth >= 'FORAKLOSS'.length * 8 + 24);
-  assert.deepEqual(getContextualStickyOffsets({ temaWidth: 80, fieldWidth: compactWidth }), { zoom: 0, tema: 36, field: 116, result: 220 });
+  assert.deepEqual(getContextualStickyOffsets({ temaWidth: 80, fieldWidth: compactWidth }), { zoom: 0, tema: 36, field: 116 });
+});
+
+test('diagnostic columns keep technical leaders and place available context immediately after the inspected field', () => {
+  const fields = ['Merknad', 'Type', 'Other', 'Stedfestingsårsak', 'S_FCODE'];
+  assert.deepEqual(getDiagnosticColumnOrder(fields, { temaColumn: 'S_FCODE', fieldColumn: 'Type' }),
+    ['S_FCODE', 'Type', 'Stedfestingsårsak', 'Merknad', 'Other']);
+  assert.deepEqual(getDiagnosticColumnOrder(fields, { temaColumn: 'S_FCODE', fieldColumn: 'Stedfestingsårsak' }),
+    ['S_FCODE', 'Stedfestingsårsak', 'Merknad', 'Type', 'Other']);
+  assert.deepEqual(getDiagnosticColumnOrder(fields, { temaColumn: 'S_FCODE', fieldColumn: 'Merknad' }),
+    ['S_FCODE', 'Merknad', 'Stedfestingsårsak', 'Type', 'Other']);
+  assert.deepEqual(getDiagnosticColumnOrder(['Type', 'Other'], { temaColumn: 'Tema', fieldColumn: 'Type' }),
+    ['Type', 'Other']);
+  assert.deepEqual(getDiagnosticColumnOrder(['Type', 'Merknad', 'Other'], { temaColumn: 'Tema', fieldColumn: 'Type' }),
+    ['Type', 'Merknad', 'Other']);
+  assert.deepEqual(getDiagnosticColumnOrder(['Other', 'Type', 'Stedfestingsårsak'], { temaColumn: 'Tema', fieldColumn: 'Type' }),
+    ['Type', 'Stedfestingsårsak', 'Other']);
+});
+
+test('final normal and diagnostic TanStack columns reject blank parser fields and keep stable unique ids', () => {
+  const parsedAttributes = new GMIParser()._parseFieldValues('KUM;K', ['S_FCODE', 'Type', '']);
+  assert.ok(Object.hasOwn(parsedAttributes, ''));
+  assert.equal(parsedAttributes[''], null);
+  const rejectedTable = createTable({
+    data: [{ attributes: parsedAttributes }],
+    columns: [{ id: '', accessorFn: (row) => row.attributes[''] }],
+    getCoreRowModel: getCoreRowModel(), state: {}, onStateChange: () => {},
+  });
+  assert.throws(() => rejectedTable.getAllColumns(), /Columns require an id when using an accessorFn/);
+  const normalFields = ['S_FCODE', 'Type', 'Name'];
+  const diagnosticFields = getDiagnosticColumnOrder(
+    ['Name', 'Merknad', 'Type', 'Stedfestingsårsak', 'S_FCODE', ''],
+    { temaColumn: 'S_FCODE', fieldColumn: 'Type' },
+  );
+  for (const fields of [normalFields, diagnosticFields]) {
+    const contextual = fields === diagnosticFields;
+    const columns = createLayerDataTableColumns({
+      orderedFields: fields,
+      columnWidths: {},
+      isContextualInspection: contextual,
+      inspection: contextual ? { presentation: { temaColumn: 'S_FCODE', fieldColumn: 'Type' } } : null,
+      getFieldLabel: (field) => field,
+      zoomCell: () => null,
+      dataCell: () => null,
+    });
+    assert.deepEqual(columns.map((column) => column.id), ['zoom', ...fields]);
+    assert.equal(new Set(columns.map((column) => column.id)).size, columns.length);
+    assert.ok(columns.every((column) => typeof column.accessorFn !== 'function' || (typeof column.id === 'string' && column.id.length > 0)));
+    assert.equal(columns[2].accessorFn({ attributes: { [fields[1]]: 'value' } }), 'value');
+    const table = createTable({ data: [{ attributes: parsedAttributes }], columns, getCoreRowModel: getCoreRowModel(), state: {}, onStateChange: () => {} });
+    assert.deepEqual(table.getAllColumns().map((column) => column.id), ['zoom', ...fields]);
+  }
+  assert.deepEqual(diagnosticFields, ['S_FCODE', 'Type', 'Stedfestingsårsak', 'Merknad', 'Name']);
+});
+
+test('diagnostic table keeps result in row metadata, inspected-field colour, movable context, and table geometry', async () => {
+  const source = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/components/LayerDataTable.js', import.meta.url), 'utf8'));
+  assert.doesNotMatch(source, /__validator_resultat/);
+  assert.match(source, /return createLayerDataTableColumns\(\{/);
+  assert.match(source, /getDiagnosticColumnOrder\(fields, inspection\.presentation\)/);
+  assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : items/);
+  assert.match(source, /contextualColumnOrder\?\.inspectionId === inspection\.id/);
+  assert.match(source, /setContextualColumnOrder\(\{ inspectionId: inspection\.id, fields: nextOrder \}\)/);
+  assert.match(source, /draggable=\{!isZoom && \(!isContextualInspection \|\| !isFixed\)\}/);
+  const presentation = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/lib/objectTablePresentation.js', import.meta.url), 'utf8'));
+  assert.match(presentation, /isFixed: id === 'S_FCODE'/);
+  assert.match(presentation, /pinned: isContextualInspection && \(id === inspection\.presentation\.temaColumn \|\| id === inspection\.presentation\.fieldColumn\)/);
+  assert.match(presentation, /contextualField: isContextualInspection && id === inspection\.presentation\.fieldColumn/);
+  assert.match(source, /row\.original\.__contextualResult === 'FAIL' \? '#fef2f2' : row\.original\.__contextualResult === 'CHECK' \? '#fffbeb' : '#f0fdf4'/);
+  assert.match(source, /const ROW_HEIGHT = 28/);
+  assert.match(source, /const widths = \{ zoom: 36 \}/);
+  assert.match(source, /useVirtualizer\(/);
+  assert.match(source, /className="flex-1 overflow-auto"/);
 });
 
 test('contextual missing-field display is presentation-only and whole-layer cell behavior stays unchanged', async () => {
   const source = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/components/LayerDataTable.js', import.meta.url), 'utf8'));
-  assert.match(source, /missingLabel=\{isContextualInspection && field === inspection\.presentation\.fieldColumn \? 'Mangler' : '-'\}/);
+  assert.match(source, /missingLabel=\{isContextualInspection && id === inspection\.presentation\.fieldColumn \? 'Mangler' : '-'\}/);
   assert.match(source, /line-clamp-2/);
   assert.match(source, /title=\{fullHeaderLabel \|\| undefined\}/);
   assert.match(source, /const DataCell = React\.memo\(function DataCell\(\{ value, missingLabel = '-' \}\)/);
@@ -143,7 +217,8 @@ test('ordinary contextual attributes size from complete-scope content rather tha
 test('ordinary contextual headers wrap accessibly without changing special or whole-layer sizing', async () => {
   const source = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/components/LayerDataTable.js', import.meta.url), 'utf8'));
   assert.match(source, /getContextualOrdinaryColumnWidth\(\{ values: contextualScopeRows/);
-  assert.match(source, /contextualOrdinary:/);
+  const presentation = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/lib/objectTablePresentation.js', import.meta.url), 'utf8'));
+  assert.match(presentation, /contextualOrdinary:/);
   assert.match(source, /contextualField \|\| header\.column\.columnDef\.meta\?\.contextualOrdinary/);
   assert.match(source, /line-clamp-2 leading-3/);
   assert.match(source, /else \{\s*widths\[field\] = estimateColumnWidth/);

@@ -18,7 +18,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowCounterClockwiseIcon, MagnifyingGlassPlusIcon, XIcon } from '@phosphor-icons/react';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
-import { getContextualColumnWidth, getContextualOrdinaryColumnWidth } from '@/lib/objectTablePresentation';
+import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns } from '@/lib/objectTablePresentation';
 
 const ROW_HEIGHT = 28;
 const MAX_COLUMN_WIDTH = 180;
@@ -123,6 +123,7 @@ export default function LayerDataTable() {
   const isExactInspection = ['exact-object-set', 'contextual-object-set'].includes(inspection?.kind);
   const isContextualInspection = inspection?.kind === 'contextual-object-set';
   const [contextualSorting, setContextualSorting] = useState([]);
+  const [contextualColumnOrder, setContextualColumnOrder] = useState(null);
 
   // Get filter state for this layer (memoized to prevent re-renders)
   const hiddenCodes = useMemo(
@@ -314,15 +315,16 @@ export default function LayerDataTable() {
     const requiredFields = isContextualInspection
       ? [inspection.presentation.temaColumn, inspection.presentation.fieldColumn]
       : [];
-    if (items.length === 0) return [...new Set(requiredFields)];
+    const fieldItems = isContextualInspection ? contextualScopeRows : items;
+    if (fieldItems.length === 0) return [...new Set(requiredFields)];
 
     const fieldSet = new Set();
     const fieldHasData = {};
 
     // Sample first 100 items for performance, then verify
-    const sampleSize = Math.min(items.length, 100);
+    const sampleSize = Math.min(fieldItems.length, 100);
     for (let i = 0; i < sampleSize; i++) {
-      const attrs = items[i].attributes || {};
+      const attrs = fieldItems[i].attributes || {};
       Object.keys(attrs).forEach((key) => {
         fieldSet.add(key);
         const value = attrs[key];
@@ -333,8 +335,8 @@ export default function LayerDataTable() {
     }
 
     // For remaining items, only check if they have data (not for new fields)
-    for (let i = sampleSize; i < items.length; i++) {
-      const attrs = items[i].attributes || {};
+    for (let i = sampleSize; i < fieldItems.length; i++) {
+      const attrs = fieldItems[i].attributes || {};
       Object.keys(attrs).forEach((key) => {
         if (fieldSet.has(key) && !fieldHasData[key]) {
           const value = attrs[key];
@@ -346,8 +348,15 @@ export default function LayerDataTable() {
     }
 
     const presentFields = Array.from(fieldSet).filter(
-      (field) => fieldHasData[field],
+      (field) => field.length > 0 && (isContextualInspection || fieldHasData[field]),
     );
+    if (isContextualInspection) {
+      for (const field of ['Stedfestingsårsak', 'Merknad']) {
+        if (!fieldSet.has(field) && fieldItems.some((row) => Object.hasOwn(row.attributes || {}, field))) {
+          presentFields.push(field);
+        }
+      }
+    }
 
     const sfcodeIndex = presentFields.indexOf('S_FCODE');
     if (sfcodeIndex > -1) {
@@ -356,7 +365,7 @@ export default function LayerDataTable() {
     }
 
     return [...new Set([...presentFields, ...requiredFields])];
-  }, [items, isContextualInspection, inspection]);
+  }, [items, contextualScopeRows, isContextualInspection, inspection]);
 
   const savedOrder = useMemo(() => {
     return layerId &&
@@ -367,10 +376,11 @@ export default function LayerDataTable() {
 
   const orderedFields = useMemo(() => {
     if (!isContextualInspection) return normalizeColumnOrder(fields, savedOrder);
-    const { temaColumn, fieldColumn } = inspection.presentation;
-    const contextual = temaColumn === fieldColumn ? [temaColumn] : [temaColumn, fieldColumn];
-    return [...contextual, '__validator_resultat', ...fields.filter((field) => !contextual.includes(field))];
-  }, [fields, savedOrder, isContextualInspection, inspection]);
+    const initial = getDiagnosticColumnOrder(fields, inspection.presentation);
+    return contextualColumnOrder?.inspectionId === inspection.id
+      ? normalizeColumnOrder(initial, contextualColumnOrder.fields)
+      : initial;
+  }, [fields, savedOrder, isContextualInspection, inspection, contextualColumnOrder]);
 
   useEffect(() => {
     if (isExactInspection || !layerId || fields.length === 0) return;
@@ -432,7 +442,8 @@ export default function LayerDataTable() {
 
       nextOrder.splice(draggedIndex, 1);
       nextOrder.splice(targetIndex, 0, draggedField);
-      if (!isExactInspection) setLayerDataTableColumnOrder(layerId, activeTab, nextOrder);
+      if (isContextualInspection) setContextualColumnOrder({ inspectionId: inspection.id, fields: nextOrder });
+      else if (!isExactInspection) setLayerDataTableColumnOrder(layerId, activeTab, nextOrder);
       setDraggedField(null);
     },
     [
@@ -440,7 +451,7 @@ export default function LayerDataTable() {
       layerId,
       orderedFields,
       activeTab,
-      setLayerDataTableColumnOrder, isExactInspection,
+      setLayerDataTableColumnOrder, isExactInspection, isContextualInspection, inspection,
     ],
   );
 
@@ -500,10 +511,6 @@ export default function LayerDataTable() {
   const columnWidths = useMemo(() => {
     const widths = { zoom: 36 };
     orderedFields.forEach((field) => {
-      if (field === '__validator_resultat') {
-        widths[field] = 86;
-        return;
-      }
       const label = getFieldLabel(field);
       if (isContextualInspection && field === inspection.presentation.fieldColumn) {
         widths[field] = getContextualColumnWidth({ label, values: contextualScopeRows.map((row) => row.attributes?.[field]), kind: 'field' });
@@ -519,11 +526,13 @@ export default function LayerDataTable() {
   }, [orderedFields, isContextualInspection, inspection, contextualScopeRows]);
 
   const columns = useMemo(() => {
-    const zoomColumn = {
-      id: 'zoom',
-      header: '',
-      size: 36,
-      cell: ({ row }) => (
+    return createLayerDataTableColumns({
+      orderedFields,
+      columnWidths,
+      isContextualInspection,
+      inspection,
+      getFieldLabel,
+      zoomCell: ({ row }) => (
         <ZoomButton
           onClick={(e) => {
             e.stopPropagation();
@@ -535,25 +544,8 @@ export default function LayerDataTable() {
           }}
         />
       ),
-    };
-
-    const dataColumns = orderedFields.map((field) => ({
-      id: field,
-      accessorFn: (row) => field === '__validator_resultat' ? row.__contextualResult : row.attributes?.[field],
-      header: field === '__validator_resultat' ? 'Resultat' : getFieldLabel(field),
-      size: columnWidths[field] || 80,
-      cell: (info) => field === '__validator_resultat'
-        ? <span className={`font-medium ${info.getValue() === 'FAIL' ? 'text-red-700' : info.getValue() === 'CHECK' ? 'text-amber-700' : 'text-green-700'}`}>{info.getValue() === 'FAIL' ? 'Feil' : info.getValue() === 'CHECK' ? 'Sjekk' : 'Pass'}</span>
-        : <DataCell value={info.getValue()} missingLabel={isContextualInspection && field === inspection.presentation.fieldColumn ? 'Mangler' : '-'} />,
-      meta: {
-        isFixed: field === 'S_FCODE',
-        pinned: isContextualInspection && (field === inspection.presentation.temaColumn || field === inspection.presentation.fieldColumn),
-        contextualField: isContextualInspection && field === inspection.presentation.fieldColumn,
-        contextualOrdinary: isContextualInspection && field !== '__validator_resultat' && field !== inspection.presentation.temaColumn && field !== inspection.presentation.fieldColumn,
-      },
-    }));
-
-    return [zoomColumn, ...dataColumns];
+      dataCell: (info, id) => <DataCell value={info.getValue()} missingLabel={isContextualInspection && id === inspection.presentation.fieldColumn ? 'Mangler' : '-'} />,
+    });
   }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection]);
 
   const table = useReactTable({
@@ -600,7 +592,10 @@ export default function LayerDataTable() {
     if (!column?.meta?.pinned && !column?.meta?.isFixed) return undefined;
     if (!isContextualInspection) return 36;
     return 36 + orderedFields.slice(0, position)
-      .filter((field) => columns.find((entry) => entry.id === field)?.meta?.pinned)
+      .filter((field) => {
+        const meta = columns.find((entry) => entry.id === field)?.meta;
+        return meta?.pinned || meta?.isFixed;
+      })
       .reduce((sum, field) => sum + (columnWidths[field] || 80), 0);
   };
 
@@ -727,10 +722,10 @@ export default function LayerDataTable() {
                 return (
                   <div
                     key={header.id}
-                    draggable={!isZoom && !isContextualInspection}
-                    onDragStart={() => !isContextualInspection && handleDragStart(headerId)}
+                    draggable={!isZoom && (!isContextualInspection || !isFixed)}
+                    onDragStart={() => handleDragStart(headerId)}
                     onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => handleDrop(headerId)}
+                    onDrop={() => (!isContextualInspection || !isFixed) && handleDrop(headerId)}
                     onClick={
                       isZoom
                         ? undefined
