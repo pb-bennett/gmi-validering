@@ -48,7 +48,7 @@ Updated public capabilities and the short workflow for GMI V2, FEIL/SJEKK, diagn
 
 ## Stats badge decision
 
-Removed the floating Stats trigger’s long-standing **Ny** badge because Stats predates 1.2.0. Removed its unused CSS rule. The trigger remains visible under the same predicate, opens the same modal, retains the cue animation and reduced-motion behavior, and keeps its cyan border and dark cyan body. The mouse-leave border value now returns to brand cyan so hover does not leave it in the body color.
+The floating Stats trigger has no **Ny** badge; Stats is an established feature. Its existing shared trigger keeps the larger presentation on the upload screen and uses a compact workspace variant after files load, with reduced padding, icon, and gap. The workspace trigger sits 30px above the bottom edge, correcting its crowding of the Leaflet attribution. The first-load attention animation was removed; ordinary hover and keyboard focus remain. Visibility, modal behavior, cyan border, and dark cyan body are unchanged. The mouse-leave border returns to brand cyan.
 
 ## Version metadata synchronized
 

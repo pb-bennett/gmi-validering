@@ -26,7 +26,6 @@ import WorkspaceShell from '@/components/WorkspaceShell';
 import BrandWordmark from '@/components/BrandWordmark';
 import { VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM } from '@/components/validation-v2/fieldDetailLayout';
 import { getTerrainStats } from '@/lib/analysis/terrain';
-import { claimStatisticsCue } from '@/lib/statisticsCue.mjs';
 import TestModeControl from '@/components/TestModeControl';
 import useStore from '@/lib/store';
 
@@ -111,7 +110,6 @@ export default function Home() {
   // State for stats modal
   const [showStats, setShowStats] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [statisticsCueActive, setStatisticsCueActive] = useState(false);
   const [showAppInfo, setShowAppInfo] = useState(false);
   const [appInfoInitialTab, setAppInfoInitialTab] = useState('about');
   const appInfoTriggerRef = useRef(null);
@@ -139,29 +137,6 @@ export default function Home() {
       setAppInfoInitialTab(decision.tab);
       setShowAppInfo(true);
     });
-  }, []);
-
-  useEffect(() => {
-    let sessionStorage;
-    try {
-      sessionStorage = window.sessionStorage;
-    } catch {
-      return;
-    }
-
-    const shouldCue = claimStatisticsCue(sessionStorage);
-    if (!shouldCue) return;
-
-    let reducedMotion = false;
-    try {
-      reducedMotion = window.matchMedia?.(
-        '(prefers-reduced-motion: reduce)',
-      ).matches;
-    } catch {
-      // If motion preference detection fails, keep the cue harmlessly enabled.
-    }
-
-    if (!reducedMotion) setStatisticsCueActive(true);
   }, []);
 
   // Session heartbeat: update lastActive timestamp
@@ -305,25 +280,16 @@ export default function Home() {
       {/* Floating Stats Button */}
       {!(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
       <button
-        className={
-          statisticsCueActive
-            ? 'statistics-button statistics-button--cue'
-            : 'statistics-button'
-        }
+        className={`statistics-button${parsingStatus === 'done' ? ' statistics-button--workspace' : ''}`}
         onClick={() => setShowStats(true)}
         aria-label="Vis bruksstatistikk"
         title="Vis bruksstatistikk"
-        onAnimationEnd={(event) => {
-          if (event.animationName === 'statistics-button-entrance') {
-            setStatisticsCueActive(false);
-          }
-        }}
         style={{
           position: 'fixed',
-          bottom: '16px',
+          bottom: parsingStatus === 'done' ? '30px' : '16px',
           right: '16px',
           zIndex: 10002,
-          padding: '10px 16px',
+          padding: parsingStatus === 'done' ? '8px 14px' : '10px 16px',
           borderRadius: '12px',
           backgroundColor: '#007595',
           color: '#ffffff',
@@ -331,7 +297,7 @@ export default function Home() {
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: parsingStatus === 'done' ? '6px' : '8px',
           boxShadow: '0 6px 18px rgba(0,117,149,0.28)',
           fontSize: '13px',
           fontWeight: 500,
@@ -353,7 +319,7 @@ export default function Home() {
         }}
       >
         <svg
-          className="w-4 h-4 text-gmi-brand-cyan"
+          className={`text-gmi-brand-cyan${parsingStatus === 'done' ? ' h-[15px] w-[15px]' : ' h-4 w-4'}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -365,7 +331,7 @@ export default function Home() {
             d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
           />
         </svg>
-           <span>Statistikk</span>
+        <span>Statistikk</span>
       </button>
       )}
 

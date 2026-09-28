@@ -185,7 +185,7 @@ test('map controls are descendants of the map pane, beside rather than inside th
   assert.match(primary.slice(0, mapPaneStart), /<div className="flex h-full min-h-0 min-w-0 flex-1">/);
   assert.match(mapPane, /className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"/);
   assert.match(mapPane, /<MapPaneToolbar/);
-  assert.match(page, /className=\{[\s\S]*?statisticsCueActive[\s\S]*?aria-label="Vis bruksstatistikk"/);
+  assert.match(page, /statistics-button\$\{parsingStatus === 'done' \? ' statistics-button--workspace' : ''\}[\s\S]*?aria-label="Vis bruksstatistikk"/);
   assert.ok(page.indexOf('aria-label="Vis bruksstatistikk"') < page.indexOf("{parsingStatus !== 'done'"));
   assert.equal((page.match(/aria-label="Vis bruksstatistikk"/g) || []).length, 1);
   assert.match(mapPane, /<MapView onZoomChange=\{setZoomLevel\} \/>/);
@@ -200,7 +200,7 @@ test('map controls are descendants of the map pane, beside rather than inside th
   assert.match(toolbar, /className="relative min-h-9"/);
   assert.match(toolbar, /pointer-events-auto absolute right-0 top-0 flex min-w-0 flex-none flex-nowrap items-center justify-end gap-1\.5/);
   assert.match(toolbar, /absolute right-0 top-0[\s\S]*?paneMode === MapToolbarMode\.NORMAL && <TestModeControl \/>[\s\S]*?showShare &&[\s\S]*?ref=\{resetButtonRef\}/);
-  assert.match(page, /position: 'fixed',[\s\S]*?bottom: '16px',[\s\S]*?right: '16px'/);
+  assert.match(page, /position: 'fixed',[\s\S]*?bottom: parsingStatus === 'done' \? '30px' : '16px',[\s\S]*?right: '16px'/);
   assert.match(mapView, /className="relative h-full w-full"/);
   assert.match(mapLegend, /absolute bottom-20 right-4/);
   assert.match(globals, /\.leaflet-top\.leaflet-right \.leaflet-control-layers/);
