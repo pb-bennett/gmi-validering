@@ -174,7 +174,7 @@ const FIELD_INFORMATION_WITH_MEASUREMENT_LISTS = fieldInformationData.map((entry
       networkType: { qualifications: [{ text: 'Påkrevd for ledning. F, H, O og S er normale; O1, O2, S6 og S7 er gyldige, men markeres Sjekk.', validationStatus: 'INFORMATIONAL' }], valueInfo: NETWORK_TYPE_VALUE_INFO, ruleId: 'innmaling.line.network-type.valid' },
       pipeShape: { qualifications: [{ text: 'Påkrevd for ledning. A og X er gyldige, men uvanlige og markeres Sjekk.', validationStatus: 'INFORMATIONAL' }], valueInfo: PIPE_SHAPE_VALUE_INFO, ruleId: 'innmaling.line.pipe-shape.valid' },
       dimension: { qualifications: [{ text: 'Påkrevd heltall for ledning. Verdier under 32 markeres Sjekk.', validationStatus: 'INFORMATIONAL' }], valueInfo: {}, ruleId: 'innmaling.line.dimension.required' },
-      wallThickness: { qualifications: [{ text: 'For ledning er Tykkelse påkrevd: positivt heltall eller opptil to desimaler passerer; null og flere desimaler markeres Sjekk. Negativ eller feil format er Feil. Punkt-Tykkelse er fortsatt heltall.', validationStatus: 'INFORMATIONAL' }], valueInfo: {}, ruleId: 'innmaling.line.wall-thickness.required' },
+      wallThickness: { qualifications: [{ text: 'For ledning er Tykkelse påkrevd: positivt heltall eller opptil to desimaler passerer; null og flere desimaler markeres Sjekk. Negativ eller feil format er Feil. Punkt-Tykkelse godtar også desimaler.', validationStatus: 'INFORMATIONAL' }], valueInfo: {}, ruleId: 'innmaling.line.wall-thickness.required' },
       verticalDimension: { qualifications: [{ text: 'Avhenger av Rørform: valgfritt for S, påkrevd for annen gyldig form. For annen form er 1–30 Sjekk og minst 31 Pass.', validationStatus: 'INFORMATIONAL' }], valueInfo: {}, ruleId: 'innmaling.line.vertical-dimension.valid' },
     }[entry.canonicalFieldId];
     return { ...entry, documentationStatus: 'COMPLETE', qualifications: details.qualifications, valueInfo: details.valueInfo,
@@ -383,7 +383,7 @@ const POLICY_METADATA = Object.freeze({
   insideOutside: ['InnvendigUtvendig er påkrevd for punkt og ledning. Bare ID og OD er godkjent.', []],
   width: ['Bredde er et kontekstavhengig heltall i mm. Når feltet gjelder, gir minst 20 Pass og 0–19 Sjekk.', []],
   length: ['Lengde er valgfritt. En levert gyldig heltallsverdi fremheves alltid med Sjekk.', []],
-  wallThickness: ['Punkt-Tykkelse er et kontekstavhengig heltall i mm. Positiv verdi gir Pass når feltet gjelder; 0 gir Sjekk.', []],
+  wallThickness: ['Punkt-Tykkelse er et kontekstavhengig tall i mm. Heltall og desimaler med komma eller punktum godtas. Positiv verdi gir Pass når feltet gjelder; 0 gir Sjekk.', []],
   externalHeight: ['Utvendig_høyde er valgfritt. En levert gyldig heltallsverdi fremheves alltid med Sjekk.', []],
   nobb: ['NOBB-VAVVS-nr er valgfritt og kontrolleres bare som heltall. Det gjøres ingen katalog- eller lengdekontroll.', ['Leverte heltall vises som lenker til nobb.no.']],
   frameNobb: ['NOBB-VAVVS-nr-ramme er valgfritt og kontrolleres bare som heltall. Det gjøres ingen katalog- eller lengdekontroll.', ['Leverte heltall vises som lenker til nobb.no.']],

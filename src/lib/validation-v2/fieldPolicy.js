@@ -59,6 +59,15 @@ function plainDecimal(value) {
   if (typeof raw !== 'string' || !/^[+-]?[0-9]+(?:[.,][0-9]+)?$/.test(raw)) return null;
   const n = Number(raw.replace(',', '.')); return Number.isFinite(n) ? n : null;
 }
+function pointThicknessDecimal(value) {
+  const raw = lexeme(value);
+  if (typeof raw === 'number') return Number.isFinite(raw) && Math.abs(raw) <= Number.MAX_SAFE_INTEGER ? raw : null;
+  if (typeof raw !== 'string') return null;
+  if (/^[+-]?[0-9]+$/.test(raw)) return integer(value);
+  if (!/^-?[0-9]+[.,][0-9]+$/.test(raw)) return null;
+  const n = Number(raw.replace(',', '.'));
+  return Number.isFinite(n) && Math.abs(n) <= Number.MAX_SAFE_INTEGER ? n : null;
+}
 function listedPolicy(value, rule, preferredValues = []) {
   const issue = structural(value); if (issue) return issue;
   if (missing(value)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING };
@@ -71,8 +80,8 @@ function applicable(value, rule, context, numericKind = 'integer') {
   const issue = structural(value); if (issue) return issue;
   const absent = missing(value);
   const tema = resolvedTema(context);
-  const n = numericKind === 'decimal' ? plainDecimal(value) : integer(value);
-  if (!absent && n === null) return { state: EvaluationState.FAIL, reasonCode: numericKind === 'decimal' ? RuleReasonCode.VALUE_NOT_DECIMAL : RuleReasonCode.VALUE_NOT_INTEGER };
+  const n = numericKind === 'pointThicknessDecimal' ? pointThicknessDecimal(value) : numericKind === 'decimal' ? plainDecimal(value) : integer(value);
+  if (!absent && n === null) return { state: EvaluationState.FAIL, reasonCode: numericKind === 'integer' ? RuleReasonCode.VALUE_NOT_INTEGER : RuleReasonCode.VALUE_NOT_DECIMAL };
   if (!absent && n < 0) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.NUMERIC_OUTSIDE_ALLOWED_RANGE };
   if (!tema) return { state: EvaluationState.NOT_EVALUATED, reasonCode: RuleReasonCode.DEPENDENT_TEMA_UNRESOLVED };
   const state = getPointFieldApplicability(tema, rule.canonicalFieldId).state;
@@ -81,8 +90,7 @@ function applicable(value, rule, context, numericKind = 'integer') {
       ? constructionValueMissing(context)
       : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_REQUIRED_MISSING })
     : { state: EvaluationState.PASS, reasonCode: null };
-  if (state === PointFieldApplicabilityState.OPTIONAL_SUPPORTED) return { state: EvaluationState.PASS, reasonCode: null };
-  if (state !== PointFieldApplicabilityState.APPLICABLE) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE };
+  if (state !== PointFieldApplicabilityState.APPLICABLE && state !== PointFieldApplicabilityState.OPTIONAL_SUPPORTED) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE };
   if (n === 0) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.NUMERIC_ZERO };
   if (policyFor(rule) === 'width' && n < 20) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.NUMERIC_OUTSIDE_PREFERRED_RANGE };
   return { state: EvaluationState.PASS, reasonCode: null };
@@ -241,10 +249,10 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
     if (missing(value)) return state === PointFieldApplicabilityState.APPLICABLE
       ? policy === 'manholeShape' ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_REQUIRED_MISSING } : constructionValueMissing(context)
       : { state: EvaluationState.PASS, reasonCode: null };
-    if (state !== PointFieldApplicabilityState.APPLICABLE) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE };
+    if (state !== PointFieldApplicabilityState.APPLICABLE && state !== PointFieldApplicabilityState.OPTIONAL_SUPPORTED) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE };
     return policy === 'constructionMethod' && lexeme(value) === 'UK' ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.UNUSUAL_VALID_VALUE } : { state: EvaluationState.PASS, reasonCode: null };
   }
-  if (['width', 'wallThickness', 'bottomDistance'].includes(policy)) return applicable(value, rule, context, policy === 'bottomDistance' ? 'decimal' : 'integer');
+  if (['width', 'wallThickness', 'bottomDistance'].includes(policy)) return applicable(value, rule, context, policy === 'wallThickness' ? 'pointThicknessDecimal' : policy === 'bottomDistance' ? 'decimal' : 'integer');
   if (policy === 'length' || policy === 'externalHeight') { const issue = structural(value); if (issue) return issue; if (missing(value)) return { state: EvaluationState.PASS, reasonCode: null }; const n = integer(value); if (n === null) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_INTEGER }; return n < 0 ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.NUMERIC_OUTSIDE_ALLOWED_RANGE } : { state: EvaluationState.CHECK, reasonCode: n === 0 ? RuleReasonCode.NUMERIC_ZERO : RuleReasonCode.UNUSUAL_VALID_VALUE }; }
   if (policy === 'frameNobb') { const issue = structural(value); if (issue) return issue; return missing(value) ? { state: EvaluationState.PASS, reasonCode: null } : integer(value) === null ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_INTEGER } : { state: EvaluationState.PASS, reasonCode: null }; }
   if (policy === 'facilityId') { const issue = structural(value); if (issue) return issue; return missing(value) ? { state: EvaluationState.PASS, reasonCode: null } : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.UNUSUAL_VALID_VALUE }; }

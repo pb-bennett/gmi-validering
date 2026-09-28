@@ -81,6 +81,15 @@ cells.push({
   authority: POLICY_AUTHORITY,
   rationale: 'Explicit real-data policy decision: Bredde is supported, but not required, for INR. A supplied value is validated normally.',
 });
+for (const canonicalFieldId of ['constructionMethod', 'width']) {
+  cells.push({
+    tema: 'PSP',
+    canonicalFieldId,
+    state: PointFieldApplicabilityState.OPTIONAL_SUPPORTED,
+    authority: POLICY_AUTHORITY,
+    rationale: 'Explicit real-data domain correction: this field may be supplied on PSP and is validated normally, without making it required when missing.',
+  });
+}
 for (const canonicalFieldId of ['manholeShape', 'cone']) {
   cells.push({
     tema: 'LOK',
@@ -138,9 +147,9 @@ for (const tema of ['KMR', 'SUMP']) {
 export const POINT_FIELD_APPLICABILITY_POLICY = deepFreeze({
   policyId: 'validator-2-point-field-applicability',
   policyVersion: '3.2.0',
-  policyRevision: '2026-09-09.4',
-  effectiveDate: '2026-09-04',
-  decisionDate: '2026-09-04',
+  policyRevision: '2026-09-28.1',
+  effectiveDate: '2026-09-28',
+  decisionDate: '2026-09-28',
   authority: POLICY_AUTHORITY,
   standardProvenance: 'NOT_STANDARD_INNMALINGSINSTRUKS_BEHAVIOR',
   legacyProvenance: 'PRAKSIS',
