@@ -57,7 +57,7 @@ test('UENDR Ledning softens only missing Tykkelse, SDR and Ringstivhet requireme
   assert.equal(line('innmaling.line.wall-thickness.required', 0).state, 'FAIL');
   assert.equal(line('innmaling.line.sdr.valid', 0).state, 'FAIL');
   assert.equal(line('innmaling.line.wall-thickness.required', 1).state, 'CHECK');
-  assert.equal(line('innmaling.line.wall-thickness.required', 1).reasonCode, 'EXISTING_INFRASTRUCTURE_VALUE_MISSING');
+  assert.equal(line('innmaling.line.wall-thickness.required', 1).reasonCode, 'NON_NEW_REQUIRED_VALUE_MISSING');
   assert.equal(line('innmaling.line.sdr.valid', 1).state, 'CHECK');
   assert.equal(line('innmaling.line.wall-thickness.required', 2).state, 'PASS');
   assert.equal(line('innmaling.line.sdr.valid', 2).state, 'PASS');

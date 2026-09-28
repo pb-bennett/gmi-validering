@@ -44,6 +44,14 @@ function listed(value, values) {
 }
 
 function validListed(value, values) { return !missing(value) && values.includes(lexeme(value)); }
+function isExplicitlyNew(context) {
+  return context.positioningCauseValid === true && lexeme(context.positioningCause) === 'NYTT';
+}
+function constructionValueMissing(context) {
+  return isExplicitlyNew(context)
+    ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING }
+    : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.NON_NEW_REQUIRED_VALUE_MISSING };
+}
 function resolvedTema(context) { return context?.tema?.state === TemaIdentityState.RESOLVED && context.temaValid ? context.tema.resolvedValue : null; }
 function plainDecimal(value) {
   const raw = lexeme(value);
@@ -69,7 +77,10 @@ function applicable(value, rule, context, numericKind = 'integer') {
   if (!tema) return { state: EvaluationState.NOT_EVALUATED, reasonCode: RuleReasonCode.DEPENDENT_TEMA_UNRESOLVED };
   const state = getPointFieldApplicability(tema, rule.canonicalFieldId).state;
   if (absent) return state === PointFieldApplicabilityState.APPLICABLE
-    ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_REQUIRED_MISSING } : { state: EvaluationState.PASS, reasonCode: null };
+    ? (['wallThickness', 'innerBottomToOuterUndersideDistance'].includes(rule.canonicalFieldId)
+      ? constructionValueMissing(context)
+      : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_REQUIRED_MISSING })
+    : { state: EvaluationState.PASS, reasonCode: null };
   if (state === PointFieldApplicabilityState.OPTIONAL_SUPPORTED) return { state: EvaluationState.PASS, reasonCode: null };
   if (state !== PointFieldApplicabilityState.APPLICABLE) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE };
   if (n === 0) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.NUMERIC_ZERO };
@@ -160,9 +171,7 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
   }
   if (policy === 'lineWallThickness') {
     const issue = structural(value); if (issue) return issue;
-    if (missing(value)) return context.positioningCauseValid && lexeme(context.positioningCause) === 'UENDR'
-      ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.EXISTING_INFRASTRUCTURE_VALUE_MISSING }
-      : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING };
+    if (missing(value)) return constructionValueMissing(context);
     const rawThickness = lexeme(value);
     if (typeof rawThickness !== 'string' || !/^-?[0-9]+(?:[.,][0-9]+)?$/.test(rawThickness)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_DECIMAL };
     const n = Number(rawThickness.replace(',', '.'));
@@ -200,9 +209,7 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
       : isRingStiffnessMaterial(lexeme(context.material));
     const required = policy === 'sdr' ? context.hydraulicClass === 'PRESSURE' && plastic : context.hydraulicClass === 'GRAVITY' && plastic;
     if (!supplied) return required
-      ? context.positioningCauseValid && lexeme(context.positioningCause) === 'UENDR'
-        ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.EXISTING_INFRASTRUCTURE_VALUE_MISSING }
-        : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING }
+      ? constructionValueMissing(context)
       : context.hydraulicClass === 'SPECIAL' ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : { state: EvaluationState.PASS, reasonCode: null };
     return required ? { state: EvaluationState.PASS, reasonCode: null } : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.UNUSUAL_VALID_VALUE };
   }
@@ -231,7 +238,9 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
     if (!missing(value) && !rule.allowedValues.includes(lexeme(value))) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_ALLOWED };
     const tema = resolvedTema(context); if (!tema) return { state: EvaluationState.NOT_EVALUATED, reasonCode: RuleReasonCode.DEPENDENT_TEMA_UNRESOLVED };
     const state = getPointFieldApplicability(tema, rule.canonicalFieldId).state;
-    if (missing(value)) return state === PointFieldApplicabilityState.APPLICABLE ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_REQUIRED_MISSING } : { state: EvaluationState.PASS, reasonCode: null };
+    if (missing(value)) return state === PointFieldApplicabilityState.APPLICABLE
+      ? policy === 'manholeShape' ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_REQUIRED_MISSING } : constructionValueMissing(context)
+      : { state: EvaluationState.PASS, reasonCode: null };
     if (state !== PointFieldApplicabilityState.APPLICABLE) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE };
     return policy === 'constructionMethod' && lexeme(value) === 'UK' ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.UNUSUAL_VALID_VALUE } : { state: EvaluationState.PASS, reasonCode: null };
   }

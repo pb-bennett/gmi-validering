@@ -73,6 +73,7 @@ export const DIAGNOSTIC_REASON_MAPPING = Object.freeze({
   [RuleReasonCode.DATE_OLDER_THAN_FIVE_YEARS]: T.VALID_VALUE_REVIEW,
   [RuleReasonCode.POSITIONING_CAUSE_SHARED_NYTT_YEAR]: T.RELATIONSHIP_INCONSISTENT,
   [RuleReasonCode.EXISTING_INFRASTRUCTURE_VALUE_MISSING]: T.VALID_VALUE_REVIEW,
+  [RuleReasonCode.NON_NEW_REQUIRED_VALUE_MISSING]: T.CONTEXT_REQUIRED_MISSING,
 });
 
 const MAX_VALUES = 5;
@@ -205,8 +206,8 @@ function createGroup({ finding, type, field, geometryScope, denominator }) {
         ? 'POSITIONING_CAUSE_SHARED_NYTT_YEAR'
         : finding.canonicalFieldId === 'attachmentLink' && finding.reasonCode === RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE
           ? 'S_HYPERLINK_LOK_TOP'
-          : finding.reasonCode === RuleReasonCode.EXISTING_INFRASTRUCTURE_VALUE_MISSING
-            ? 'EXISTING_INFRASTRUCTURE_VALUE_MISSING'
+          : finding.reasonCode === RuleReasonCode.NON_NEW_REQUIRED_VALUE_MISSING
+            ? 'NON_NEW_REQUIRED_VALUE_MISSING'
             : null,
   };
 }
@@ -419,7 +420,7 @@ export function renderValidationV2Diagnostic(diagnostic) {
     case 'TEMA_SCHEMA_COEXISTENCE': return 'Både Tema og S_FCODE finnes i skjemaet. Kolonnene beskriver samme identitet; kontroller hvorfor begge er levert.';
     case 'POSITIONING_CAUSE_SHARED_NYTT_YEAR': return `${objectCountText(count)} har Stedfestingsårsak som må kontrolleres mot et delt NYTT-år i leveringen.`;
     case 'S_HYPERLINK_LOK_TOP': return `${objectCountText(count)} kumlokk med Tema LOK eller TOP har bilder. Gemini VA støtter ikke bilder på disse objektene. Fjern bildelenken fra de berørte objektene.`;
-    case 'EXISTING_INFRASTRUCTURE_VALUE_MISSING': return `${objectCountText(count)} med Stedfestingsårsak UENDR mangler ${name}. Opplysningen kan være vanskelig eller umulig å fremskaffe for eksisterende infrastruktur og bør kontrolleres.`;
+    case 'NON_NEW_REQUIRED_VALUE_MISSING': return `${objectCountText(count)}${contextText(diagnostic)} mangler ${name}. Feltet er normalt påkrevd, men objektene er ikke merket NYTT. Den manglende opplysningen bør kontrolleres.`;
     default: break;
   }
   switch (diagnostic.type) {
