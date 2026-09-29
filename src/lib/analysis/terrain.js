@@ -15,6 +15,8 @@ const API_BASE = 'https://ws.geonorge.no/hoydedata/v1';
 const MAX_POINTS_PER_REQUEST = 50;
 const MAX_CONCURRENT_REQUESTS = 3;
 const REQUEST_DELAY_MS = 100; // Minimum delay between requests
+const MAX_RETRIES = 2;
+const RETRY_BACKOFF_MS = [150, 350];
 const MAX_CACHE_ENTRIES = 40000;
 
 // In-memory cache: Map<string, TerrainPoint>
@@ -170,7 +172,6 @@ async function processQueue() {
  */
 async function executeRequest(points, epsg) {
   const startTime = performance.now();
-  stats.requestCount++;
 
   // Format points as [[x,y], [x,y], ...]
   const punkter = points.map((p) => [p.x, p.y]);
@@ -178,16 +179,55 @@ async function executeRequest(points, epsg) {
     JSON.stringify(punkter),
   )}`;
 
-  try {
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      stats.errors++;
-      throw new Error(
-        `Geonorge API error: ${response.status} ${response.statusText}`,
-      );
+  let response;
+  let finalFailure = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    stats.requestCount++;
+    try {
+      response = await fetch(url);
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        return points.map((point) => ({
+          x: point.x, y: point.y, z: null, terreng: null,
+          datakilde: null, error: true, aborted: true,
+        }));
+      }
+      if (!(error instanceof TypeError)) throw error;
+      finalFailure = error;
+      if (attempt === MAX_RETRIES) break;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_BACKOFF_MS[attempt]));
+      continue;
     }
 
+    if (response.ok) break;
+    const retryable = [429, 502, 503, 504].includes(response.status);
+    finalFailure = new Error(`Geonorge API error: ${response.status} ${response.statusText}`);
+    if (!retryable || attempt === MAX_RETRIES) break;
+
+    let delay = RETRY_BACKOFF_MS[attempt];
+    const retryAfter = Number(response.headers?.get?.('Retry-After'));
+    if ((response.status === 429 || response.status === 503) && Number.isFinite(retryAfter) && retryAfter > 0) {
+      delay = Math.min(retryAfter * 1000, 1000);
+    }
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
+  if (!response?.ok) {
+    stats.errors++;
+    stats.totalRequestTimeMs += performance.now() - startTime;
+    // Preserve a failed lookup as missing terrain without rejecting the background queue.
+    return points.map((point) => ({
+      x: point.x,
+      y: point.y,
+      z: null,
+      terreng: null,
+      datakilde: null,
+      error: true,
+      errorMessage: finalFailure?.message || 'Geonorge request failed',
+    }));
+  }
+
+  try {
     const data = await response.json();
     const endTime = performance.now();
     stats.totalRequestTimeMs += endTime - startTime;
@@ -221,7 +261,6 @@ async function executeRequest(points, epsg) {
 
     return results;
   } catch (error) {
-    stats.errors++;
     const endTime = performance.now();
     stats.totalRequestTimeMs += endTime - startTime;
     throw error;
