@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import useStore from '@/lib/store';
+import LayerHighlightPanel from './LayerHighlightPanel';
 
 const MapInner = dynamic(() => import('./MapInner'), {
   ssr: false,
@@ -48,6 +49,7 @@ export default function MapView(props) {
     <div className="relative h-full w-full">
       <MapInner {...props} />
       <MapLegend />
+      <LayerHighlightPanel />
 
       {outlierPromptOpen &&
         outlierResults &&

@@ -4,8 +4,36 @@ import { detectOutliers } from './analysis/outliers';
 import { analyzeIncline } from './analysis/incline';
 import { analyzeZValues } from './analysis/zValidation';
 import { createContextualObjectInspection, createExactObjectInspection } from './objectTableInspection';
+import { moveLayerInOrder } from './map/layerOrder.mjs';
+import {
+  DEFAULT_HIGHLIGHT_OPACITY,
+  DEFAULT_HIGHLIGHT_SPREAD,
+  getFallbackLayerHighlightColor,
+  getLayerHighlightStyle,
+  getNextLayerHighlightColor,
+} from './map/layerHighlight.mjs';
 
 const STORAGE_VERSION = 3;
+const HIGHLIGHT_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+const clampHighlight = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const updateLayerHighlight = (state, layerId, getChanges) => {
+  const layer = state.layers[layerId];
+  if (!layer) return state;
+  const changes = getChanges(layer);
+  if (!changes) return state;
+  return {
+    layers: {
+      ...state.layers,
+      [layerId]: { ...layer, ...changes },
+    },
+    ui: {
+      ...state.ui,
+      mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
+    },
+  };
+};
+
 let storeApi = null;
 let hydrationCompletedDuringInitialization = false;
 
@@ -155,6 +183,8 @@ const useStore = create(
             data: null, // { header, points, lines, format }
             visible: true,
             highlightAll: false,
+            defaultHighlightColor: null,
+            highlightStyle: null,
             // Per-layer filter state
             hiddenCodes: [],
             hiddenTypes: [],
@@ -185,7 +215,7 @@ const useStore = create(
         // LAYERS SLICE — multi-file layer management
         // ============================================
         layers: {}, // { [layerId]: LayerState }
-        layerOrder: [], // Array of layerIds in display order
+        layerOrder: [], // Front-to-back layer IDs, shared by lists and map
         hydrated: false,
 
         // ============================================
@@ -1951,6 +1981,10 @@ const useStore = create(
           const terrainFetchQueue = inclineResults.map(
             (r) => r.lineIndex,
           );
+          const defaultHighlightColor = getNextLayerHighlightColor(
+            get().layers,
+            get().layerOrder,
+          );
 
           const newLayer = {
             ...initial.layerTemplate,
@@ -1959,6 +1993,12 @@ const useStore = create(
             file,
             data,
             visible: true, // Explicitly set visible
+            defaultHighlightColor,
+            highlightStyle: {
+              color: defaultHighlightColor,
+              opacity: DEFAULT_HIGHLIGHT_OPACITY,
+              spread: DEFAULT_HIGHLIGHT_SPREAD,
+            },
             analysis: {
               results: inclineResults,
               isOpen: false,
@@ -1985,7 +2025,7 @@ const useStore = create(
                 ...state.layers,
                 [layerId]: newLayer,
               },
-              layerOrder: [...state.layerOrder, layerId],
+              layerOrder: [layerId, ...state.layerOrder],
               ui: {
                 ...state.ui,
                 expandedLayerId: layerId, // Auto-expand new layer
@@ -2067,6 +2107,26 @@ const useStore = create(
             },
             false,
             'layers/remove',
+          ),
+
+        moveLayerUp: (layerId) =>
+          set(
+            (state) => {
+              const layerOrder = moveLayerInOrder(state.layerOrder, layerId, -1);
+              return layerOrder === state.layerOrder ? state : { layerOrder };
+            },
+            false,
+            'layers/moveUp',
+          ),
+
+        moveLayerDown: (layerId) =>
+          set(
+            (state) => {
+              const layerOrder = moveLayerInOrder(state.layerOrder, layerId, 1);
+              return layerOrder === state.layerOrder ? state : { layerOrder };
+            },
+            false,
+            'layers/moveDown',
           ),
 
         /**
@@ -2195,30 +2255,88 @@ const useStore = create(
             'layers/setHighlighted',
           ),
 
-        /**
-         * Toggle per-layer highlight for all features in a layer
-         */
-        toggleLayerHighlightAll: (layerId) =>
+        setLayerHighlightEnabled: (layerId, enabled) =>
           set(
-            (state) => {
-              const layer = state.layers[layerId];
-              if (!layer) return state;
-              return {
-                layers: {
-                  ...state.layers,
-                  [layerId]: {
-                    ...layer,
-                    highlightAll: !layer.highlightAll,
-                  },
-                },
-                ui: {
-                  ...state.ui,
-                  mapUpdateNonce: (state.ui.mapUpdateNonce || 0) + 1,
-                },
-              };
-            },
+            (state) => updateLayerHighlight(state, layerId, (layer) =>
+              layer.highlightAll === Boolean(enabled)
+                ? null
+                : { highlightAll: Boolean(enabled) },
+            ),
             false,
-            'layers/toggleHighlightAll',
+            'layers/setHighlightEnabled',
+          ),
+
+        // The sidebar quick action and the map panel share the same enabled state.
+        toggleLayerHighlightAll: (layerId) => {
+          const layer = get().layers[layerId];
+          if (layer) get().setLayerHighlightEnabled(layerId, !layer.highlightAll);
+        },
+
+        setLayerHighlightColor: (layerId, color) => {
+          if (typeof color !== 'string' || !HIGHLIGHT_COLOR_PATTERN.test(color)) return;
+          const normalized = color.toUpperCase();
+          set(
+            (state) => updateLayerHighlight(state, layerId, (layer) => {
+              const current = getLayerHighlightStyle(layer, layerId);
+              return current.color.toUpperCase() === normalized
+                ? null
+                : { highlightStyle: { ...current, color: normalized } };
+            }),
+            false,
+            'layers/setHighlightColor',
+          );
+        },
+
+        setLayerHighlightOpacity: (layerId, opacity) => {
+          if (!Number.isFinite(opacity)) return;
+          const value = clampHighlight(opacity, 0.2, 0.8);
+          set(
+            (state) => updateLayerHighlight(state, layerId, (layer) => {
+              const current = getLayerHighlightStyle(layer, layerId);
+              return current.opacity === value
+                ? null
+                : { highlightStyle: { ...current, opacity: value } };
+            }),
+            false,
+            'layers/setHighlightOpacity',
+          );
+        },
+
+        setLayerHighlightSpread: (layerId, spread) => {
+          if (!Number.isFinite(spread)) return;
+          const value = Math.round(clampHighlight(spread, 2, 8));
+          set(
+            (state) => updateLayerHighlight(state, layerId, (layer) => {
+              const current = getLayerHighlightStyle(layer, layerId);
+              return current.spread === value
+                ? null
+                : { highlightStyle: { ...current, spread: value } };
+            }),
+            false,
+            'layers/setHighlightSpread',
+          );
+        },
+
+        resetLayerHighlightStyle: (layerId) =>
+          set(
+            (state) => updateLayerHighlight(state, layerId, (layer) => {
+              const color = HIGHLIGHT_COLOR_PATTERN.test(layer.defaultHighlightColor ?? '')
+                ? layer.defaultHighlightColor
+                : getFallbackLayerHighlightColor(layerId);
+              const style = {
+                color,
+                opacity: DEFAULT_HIGHLIGHT_OPACITY,
+                spread: DEFAULT_HIGHLIGHT_SPREAD,
+              };
+              const current = getLayerHighlightStyle(layer, layerId);
+              return current.color === style.color &&
+                current.opacity === style.opacity &&
+                current.spread === style.spread
+                ? null
+                : { highlightStyle: style };
+            }),
+            false,
+            'layers/resetHighlightStyle',
           ),
 
         /**

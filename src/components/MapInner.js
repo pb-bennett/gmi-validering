@@ -16,6 +16,7 @@ import {
   useMap,
   useMapEvents,
   CircleMarker,
+  Pane,
   Tooltip,
   Polyline,
 } from 'react-leaflet';
@@ -35,6 +36,16 @@ import {
 } from '@/lib/map/coordinateProjection';
 import { createFeaturePopupContent } from '@/lib/map/featurePopupContent.mjs';
 import { getLineStyle } from '@/lib/map/lineStyle.mjs';
+import {
+  getLayerMarkerZIndexOffset,
+  getLayerPaintOrder,
+} from '@/lib/map/layerOrder.mjs';
+import {
+  getLayerHighlightStyle,
+  getLineCasingStyle,
+  getPointHaloSpread,
+  getPointHaloSvg,
+} from '@/lib/map/layerHighlight.mjs';
 import { RulerIcon, XIcon } from '@phosphor-icons/react';
 
 // Fix for default Leaflet icons
@@ -207,25 +218,13 @@ const normalizeFcode = (value) => {
 
 const MISSING_TEMA_VALUE = '(Ingen verdi)';
 
-const LAYER_HIGHLIGHT_COLORS = [
-  '#00E5FF',
-  '#FF6B6B',
-  '#51CF66',
-  '#FFD43B',
-  '#845EF7',
-  '#FF922B',
-  '#20C997',
-  '#339AF0',
-  '#F06595',
-  '#ADB5BD',
-];
-
 // SVG shape generators for point markers
 const createSvgMarker = (
   category,
   color,
   isHighlighted = false,
   highlightColor = '#00FFFF',
+  layerHighlightStyle = null,
 ) => {
   // Adjust base sizes per category
   let baseSize;
@@ -250,6 +249,26 @@ const createSvgMarker = (
   const stroke = isHighlighted ? highlightColor : color;
   const fill = '#FFFFFF';
   const half = size / 2;
+  const renderMarker = (svgPath) => {
+    const padding = layerHighlightStyle
+      ? Math.ceil(strokeWidth / 2 + getPointHaloSpread(layerHighlightStyle.spread) + 2)
+      : 0;
+    const iconSize = size + 2 * padding;
+    const halo = layerHighlightStyle
+      ? getPointHaloSvg(category, size, strokeWidth, layerHighlightStyle)
+      : '';
+    const content = padding
+      ? `<g transform="translate(${padding} ${padding})">${halo}${svgPath}</g>`
+      : svgPath;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${iconSize}" height="${iconSize}" viewBox="0 0 ${iconSize} ${iconSize}">${content}</svg>`;
+    return L.divIcon({
+      html: svg,
+      className: 'custom-div-icon',
+      iconSize: [iconSize, iconSize],
+      iconAnchor: [iconSize / 2, iconSize / 2],
+      popupAnchor: [0, -iconSize / 2],
+    });
+  };
 
   // Special handling for GRØKONSTR - make it larger and rectangular
   if (category === INFRA_CATEGORIES.GROKONSTR) {
@@ -281,14 +300,7 @@ const createSvgMarker = (
         }" y2="${rectY + 14}"/>
       </g>`;
 
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
-    return L.divIcon({
-      html: svg,
-      className: 'custom-div-icon',
-      iconSize: [size, size],
-      iconAnchor: [half, half],
-      popupAnchor: [0, -half],
-    });
+    return renderMarker(svgPath);
   }
 
   let svgPath;
@@ -499,15 +511,7 @@ const createSvgMarker = (
       }" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPath}</svg>`;
-
-  return L.divIcon({
-    html: svg,
-    className: 'custom-div-icon',
-    iconSize: [size, size],
-    iconAnchor: [half, half],
-    popupAnchor: [0, -half],
-  });
+  return renderMarker(svgPath);
 };
 
 // Export legend data for the Legend component
@@ -1574,11 +1578,20 @@ export default function MapInner({ onZoomChange }) {
   const layerOrder = useStore(
     useShallow((state) => state.layerOrder),
   );
+  const paintOrder = useMemo(() => getLayerPaintOrder(layerOrder), [layerOrder]);
+  const visibleLayerOrder = useMemo(
+    () => layerOrder.filter((id) => layers[id]?.visible),
+    [layerOrder, layers],
+  );
+  const markerOffsets = useMemo(() => new Map(visibleLayerOrder.map((id) => [id, {
+    normal: getLayerMarkerZIndexOffset(visibleLayerOrder, id),
+    selected: getLayerMarkerZIndexOffset(visibleLayerOrder, id, true),
+  }])), [visibleLayerOrder]);
 
   // Memoize layer data extraction for GeoJSON - only changes when actual data changes
   const layerDataForGeoJson = useMemo(() => {
     if (layerOrder.length === 0) return null;
-    return layerOrder
+    return paintOrder
       .map((id) => {
         const layer = layers[id];
         if (!layer) return null;
@@ -1594,7 +1607,7 @@ export default function MapInner({ onZoomChange }) {
       .filter(Boolean);
   }, [layers, layerOrder]);
 
-  // Separate memoization for highlight states (changes more frequently, but shouldn't remount GeoJSON)
+  // Layer styles are assigned at upload, so removing another layer cannot recolour them.
   const layerHighlightStates = useMemo(() => {
     const map = new Map();
     layerOrder.forEach((id) => {
@@ -1602,26 +1615,12 @@ export default function MapInner({ onZoomChange }) {
       if (layer) {
         map.set(id, {
           highlightAll: layer.highlightAll || false,
-          color:
-            LAYER_HIGHLIGHT_COLORS[
-              layerOrder.indexOf(id) % LAYER_HIGHLIGHT_COLORS.length
-            ],
+          ...getLayerHighlightStyle(layer, id),
         });
       }
     });
     return map;
-  }, [layers, layerOrder]);
-
-  const layerHighlightColors = useMemo(() => {
-    const map = new Map();
-    layerOrder.forEach((id, idx) => {
-      map.set(
-        id,
-        LAYER_HIGHLIGHT_COLORS[idx % LAYER_HIGHLIGHT_COLORS.length],
-      );
-    });
-    return map;
-  }, [layerOrder]);
+  }, [layers, paintOrder]);
   // Narrow selectors for analysis state to avoid re-renders on unrelated changes
   const analysisIsOpen = useStore((state) => state.analysis.isOpen);
   const analysisSelectedPipeIndex = useStore(
@@ -1839,6 +1838,7 @@ export default function MapInner({ onZoomChange }) {
     return new Set(outlierResults.outliers.map((o) => o.featureId));
   }, [outlierResults]);
 
+  const projectedLayerFeaturesRef = useRef(new Map());
   const geoJsonData = useMemo(() => {
     // Support both legacy single-data mode and multi-layer mode
     const isMultiLayerMode =
@@ -1871,6 +1871,11 @@ export default function MapInner({ onZoomChange }) {
       });
     }
 
+    const liveIds = new Set(layerDataForGeoJson?.map((layer) => layer.layerId) || []);
+    for (const id of projectedLayerFeaturesRef.current.keys()) {
+      if (!liveIds.has(id)) projectedLayerFeaturesRef.current.delete(id);
+    }
+
     if (dataSources.length === 0) {
       // Return empty FeatureCollection instead of null to keep map visible
       return { type: 'FeatureCollection', features: [] };
@@ -1882,8 +1887,15 @@ export default function MapInner({ onZoomChange }) {
     for (const source of dataSources) {
       const { points, lines } = source.data;
       const layerId = source.layerId;
-
-      const sourceProj = getMapSourceProjection(source.data);
+      const cached = layerId && projectedLayerFeaturesRef.current.get(layerId);
+      if (cached && cached.data === source.data &&
+          cached.hiddenCodes === source.hiddenCodes &&
+          cached.hiddenTypes === source.hiddenTypes &&
+          cached.feltHiddenValues === source.feltHiddenValues) {
+        for (const feature of cached.features) features.push(feature);
+        continue;
+      }
+      const sourceFeatures = [];
 
       // Helper to transform coordinate
       const transform = (x, y) => {
@@ -1896,7 +1908,7 @@ export default function MapInner({ onZoomChange }) {
           const coords = line.coordinates.map((c) =>
             transform(c.x, c.y),
           );
-          features.push({
+          sourceFeatures.push({
             type: 'Feature',
             properties: {
               ...line.attributes,
@@ -1920,7 +1932,7 @@ export default function MapInner({ onZoomChange }) {
         if (point.coordinates && point.coordinates.length > 0) {
           const c = point.coordinates[0];
           const coords = transform(c.x, c.y);
-          features.push({
+          sourceFeatures.push({
             type: 'Feature',
             properties: {
               ...point.attributes,
@@ -1938,6 +1950,16 @@ export default function MapInner({ onZoomChange }) {
           });
         }
       });
+      for (const feature of sourceFeatures) features.push(feature);
+      if (layerId) {
+        projectedLayerFeaturesRef.current.set(layerId, {
+          data: source.data,
+          hiddenCodes: source.hiddenCodes,
+          hiddenTypes: source.hiddenTypes,
+          feltHiddenValues: source.feltHiddenValues,
+          features: sourceFeatures,
+        });
+      }
     }
 
     return {
@@ -1973,6 +1995,8 @@ export default function MapInner({ onZoomChange }) {
     if (layerOrder.length > 0) {
       return layerOrder
         .filter((id) => layers[id]?.data)
+        .slice()
+        .sort()
         .map((id) => {
           const layerData = layers[id]?.data;
           const headerName = layerData?.header?.filename || '';
@@ -2029,7 +2053,7 @@ export default function MapInner({ onZoomChange }) {
       measureMode ? 1 : 0,
       // Layer highlight states
       [...layerHighlightStates.entries()]
-        .map(([id, s]) => `${id}:${s.highlightAll ? 1 : 0}`)
+        .map(([id, s]) => `${id}:${s.highlightAll ? 1 : 0}:${s.color}:${s.opacity}:${s.spread}`)
         .join(';'),
       mapUpdateNonce,
     ];
@@ -2149,13 +2173,13 @@ export default function MapInner({ onZoomChange }) {
     return false;
   }, []);
 
-  // Memoized lineStyle function - only recreated when its dependencies change
+  // Resolve the final semantic style once; the casing derives from this exact result.
   const lineStyle = useCallback(
     (feature) => {
       const fcode = normalizeFcode(feature.properties?.S_FCODE);
       const fcodeForFilter = fcode || MISSING_TEMA_VALUE;
       const typeVal = feature.properties?.Type || '(Mangler Type)';
-      const { baseId, layeredId, layerId } = getFeatureIds(
+      const { baseId, layeredId } = getFeatureIds(
         feature,
         'lines',
       );
@@ -2164,13 +2188,6 @@ export default function MapInner({ onZoomChange }) {
         feature.properties?._layerHiddenCodes || [];
       const layerHiddenTypes =
         feature.properties?._layerHiddenTypes || [];
-      // Use pre-computed layer highlight states to avoid closure over entire layers object
-      const layerState = layerId
-        ? layerHighlightStates.get(layerId)
-        : null;
-      const layerHighlightActive = layerState?.highlightAll === true;
-      const layerHighlightColor = layerState?.color || '#00FFFF';
-
       // When field validation filter is active, ignore other filters
       let isHidden = false;
       if (!fieldValidationFilterActive) {
@@ -2229,7 +2246,7 @@ export default function MapInner({ onZoomChange }) {
         isHighlightedByFeature ||
         isHighlightedByFeatures ||
         isHighlightedByFelt;
-      const isHighlighted = hasOtherHighlight || layerHighlightActive;
+      const isHighlighted = hasOtherHighlight;
 
       // Filtered View Logic (Missing Fields Report)
       const isFilteredOut =
@@ -2301,11 +2318,7 @@ export default function MapInner({ onZoomChange }) {
 
       const weight = isHighlighted ? baseWeight + 4 : baseWeight;
       const lineStyle = getLineStyle(fcode, getColorByFCode, weight);
-      const color = isHighlighted
-        ? layerHighlightActive && !hasOtherHighlight
-          ? layerHighlightColor
-          : '#00FFFF'
-        : lineStyle.color;
+      const color = isHighlighted ? '#00FFFF' : lineStyle.color;
       const opacity = isHighlighted ? 1 : 0.9;
 
       return {
@@ -2317,7 +2330,6 @@ export default function MapInner({ onZoomChange }) {
       };
     },
     [
-      layerHighlightStates,
       fieldValidationFilterActive,
       feltFilterActive,
       isHiddenByFeltFilter,
@@ -2339,6 +2351,24 @@ export default function MapInner({ onZoomChange }) {
     ],
   );
 
+  const casingData = useMemo(() => {
+    const features = geoJsonData.features.filter((feature) =>
+      feature.geometry?.type === 'LineString' &&
+      layerHighlightStates.get(feature.properties?._layerId)?.highlightAll,
+    );
+    return features.length ? { type: 'FeatureCollection', features } : null;
+  }, [geoJsonData, layerHighlightStates]);
+
+  const casingStyle = useCallback((feature) => {
+    const layerStyle = layerHighlightStates.get(feature.properties?._layerId);
+    const semanticStyle = lineStyle(feature);
+    return getLineCasingStyle(semanticStyle, layerStyle) ?? {
+      opacity: 0,
+      weight: 0,
+      interactive: false,
+    };
+  }, [layerHighlightStates, lineStyle]);
+
   // Memoized pointToLayer function
   const pointToLayer = useCallback(
     (feature, latlng) => {
@@ -2359,7 +2389,6 @@ export default function MapInner({ onZoomChange }) {
         ? layerHighlightStates.get(layerId)
         : null;
       const layerHighlightActive = layerState?.highlightAll === true;
-      const layerHighlightColor = layerState?.color || '#00FFFF';
 
       // When field validation filter is active, ignore other filters
       let isHidden = false;
@@ -2419,7 +2448,7 @@ export default function MapInner({ onZoomChange }) {
         isHighlightedByFeature ||
         isHighlightedByFeatures ||
         isHighlightedByFelt;
-      const isHighlighted = hasOtherHighlight || layerHighlightActive;
+      const isHighlighted = hasOtherHighlight;
 
       // Filtered View Logic (Missing Fields Report)
       const isFilteredOut =
@@ -2449,15 +2478,20 @@ export default function MapInner({ onZoomChange }) {
         category,
         color,
         isHighlighted,
-        layerHighlightActive && !hasOtherHighlight
-          ? layerHighlightColor
-          : '#00FFFF',
+        '#00FFFF',
+        layerHighlightActive ? layerState : null,
       );
 
-      return L.marker(latlng, { icon });
+      const layerOffsets = markerOffsets.get(layerId);
+      const zIndexOffset = layerOffsets
+        ? (isHighlighted ? layerOffsets.selected : layerOffsets.normal)
+        : getLayerMarkerZIndexOffset(visibleLayerOrder, layerId, isHighlighted);
+      return L.marker(latlng, { icon, zIndexOffset });
     },
     [
       layerHighlightStates,
+      visibleLayerOrder,
+      markerOffsets,
       fieldValidationFilterActive,
       feltFilterActive,
       isHiddenByFeltFilter,
@@ -2580,6 +2614,7 @@ export default function MapInner({ onZoomChange }) {
       style={{ height: '100%', width: '100%' }}
       maxZoom={25} // Allow higher zoom levels globally
     >
+      <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
       <LayersControl
         key={`layers-control-${customWmsConfig?.url ?? 'none'}`}
         position="topright"
@@ -2633,6 +2668,15 @@ export default function MapInner({ onZoomChange }) {
           checked={mapOverlayVisibility.data !== false}
           name="Data"
         >
+          {casingData && (
+            <GeoJSON
+              key={`casing-${geoJsonDataKey}-${styleVersionKey}`}
+              data={casingData}
+              style={casingStyle}
+              pane="layer-highlight-casing"
+              interactive={false}
+            />
+          )}
           <GeoJSON
             key={`geojson-${geoJsonDataKey}-${styleVersionKey}`}
             data={geoJsonData}
