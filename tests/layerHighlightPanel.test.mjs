@@ -81,7 +81,7 @@ test('slider drafts commit on release or keyboard completion, leaving the map fr
 
 test('floating control has bounded stacking and isolates map interactions', () => {
   assert.match(panel, /<PaletteIcon size=\{16\} weight="regular"/);
-  assert.match(panel, /absolute right-4 top-14 z-\[1200\]/);
+  assert.match(panel, /absolute right-\[14rem\] top-14 z-\[1200\]/);
   assert.match(panel, /absolute right-4 top-26 z-\[1250\]/);
   assert.match(panel, /layer-highlight-panel gmi-elevated-surface/);
   assert.match(panel, /overflow-y-auto p-3/);
@@ -94,4 +94,14 @@ test('floating control has bounded stacking and isolates map interactions', () =
   assert.match(panel, /onWheel=\{stopMapEvent\}/);
   assert.match(panel, /event\.key !== 'Escape'/);
   assert.match(mapInner, /interactive=\{false\}/);
+});
+
+test('Lagmarkering trigger sits left of the far-right Leaflet selector at all desktop heights', () => {
+  assert.match(panel, /absolute right-\[14rem\] top-14 z-\[1200\]/);
+  assert.doesNotMatch(panel, /absolute right-4 top-14/);
+  assert.match(mapInner, /<LayersControl[\s\S]*?position="topright"/);
+  assert.match(styles, /\.leaflet-top\.leaflet-right \.leaflet-control-layers \{\s*margin-top: 58px/);
+  const constrainedDesktopStyles = styles.match(/@media \(max-height: 1000px\) and \(min-width: 1024px\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.doesNotMatch(constrainedDesktopStyles, /right-4 top-14|right:\s*1rem/);
+  assert.match(panel, /absolute right-4 top-26 z-\[1250\]/); // Existing useful panel position stays put.
 });

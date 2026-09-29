@@ -18,6 +18,24 @@ test('canonical line labels omit missing data and preserve zero', () => {
   assert.equal(getFeatureHoverLabel(line({ Dimensjon: 32, Material: 'PE' })), null);
 });
 
+test('line labels append the exact canonical cause last and omit missing values', () => {
+  const properties = { S_FCODE: 'VL', Dimensjon: 32, Material: 'PE', ['Anleggs\u00e5r']: 2022 };
+  const base = getFeatureHoverLabel(line(properties));
+  assert.equal(base, 'VL 32 · PE · 2022');
+  const code = 'NYKODE-X';
+  assert.equal(getFeatureHoverLabel(line({ ...properties, ['Stedfestings\u00e5rsak']: code })), base + ' · ' + code);
+  assert.equal(getFeatureHoverLabel(line({ ...properties, ['Stedfestings\u00e5rsak']: '  NYKODE-X  ' })), base + ' ·   NYKODE-X  ');
+  assert.equal(getFeatureHoverLabel(line({ ...properties, ['Stedfestings\u00e5rsak']: '' })), base);
+  assert.equal(getFeatureHoverLabel(line({ ...properties, ['Stedfestings\u00e5rsak']: '-' })), base);
+
+  // Canonical top-level attributes produce the same label regardless of source format.
+  const canonical = { ...properties, ['Stedfestings\u00e5rsak']: code };
+  assert.equal(
+    getFeatureHoverLabel(line({ ...canonical, SOURCE_FORMAT: 'GMI' })),
+    getFeatureHoverLabel(line({ ...canonical, SOURCE_FORMAT: 'SOSI' })),
+  );
+});
+
 test('canonical point labels stay concise and skip redundant identity', () => {
   assert.equal(getFeatureHoverLabel(point({ S_FCODE: 'KUM', Type: 'Kum', Bredde: 1200, Material: 'BET', Anleggsår: 2021 })), 'KUM · 1200 · BET · 2021');
   assert.equal(getFeatureHoverLabel(point({ S_FCODE: 'SLU', Bredde: 650, Anleggsår: 2019 })), 'SLU · 650 · 2019');
@@ -27,6 +45,13 @@ test('canonical point labels stay concise and skip redundant identity', () => {
   assert.equal(getFeatureHoverLabel(point({ S_FCODE: 'KUM', Type: 'KUM', Bredde: 0 })), 'KUM · 0');
   assert.equal(getFeatureHoverLabel(point({ objekttypenavn: 'VAPåskrift', text: 'note' })), null);
   assert.equal(getFeatureHoverLabel(point({ S_FCODE: 'SYM' })), null);
+});
+
+test('point labels append canonical cause after identity while sparse points stay compact', () => {
+  const sparse = point({ S_FCODE: 'SLU', Bredde: 650 });
+  const label = getFeatureHoverLabel(sparse);
+  assert.equal(label, 'SLU · 650');
+  assert.equal(getFeatureHoverLabel(point({ ...sparse.properties, ['Stedfestings\u00e5rsak']: 'EKSISTERENDE' })), label + ' · EKSISTERENDE');
 });
 
 test('colour comes from the current owning layer regardless of highlight or order', () => {

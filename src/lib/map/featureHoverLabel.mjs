@@ -5,6 +5,14 @@ const value = (input) => {
   return text && !/^(?:null|undefined|nan|n\/a|-)$/i.test(text) ? text : null;
 };
 
+const exactValue = (input) => {
+  if (typeof input === 'number') return Number.isFinite(input) ? String(input) : null;
+  if (typeof input !== 'string') return null;
+  const trimmed = input.trim();
+  if (!trimmed || /^(?:null|undefined|nan|n\/a|-)$/i.test(trimmed)) return null;
+  return input;
+};
+
 export function getFeatureHoverParts(feature) {
   const props = feature?.properties ?? feature ?? {};
   const point = feature?.geometry?.type === 'Point' || props.featureType === 'Point';
@@ -19,13 +27,13 @@ export function getFeatureHoverParts(feature) {
     const dimension = value(props.Dimensjon);
     const material = value(props.Material);
     const year = value(props['Anleggsår']);
-    return [`${identity}${dimension === null ? '' : ` ${dimension}`}`, material, year].filter(Boolean);
+    return [`${identity}${dimension === null ? '' : ` ${dimension}`}`, material, year, exactValue(props['Stedfestings\u00e5rsak'])].filter(Boolean);
   }
 
   const pointIdentity = identity ?? type;
   if (!pointIdentity) return [];
   const usefulType = identity && type && type.toLocaleLowerCase() !== identity.toLocaleLowerCase() ? type : null;
-  return [pointIdentity, usefulType, value(props.Bredde), value(props.Material), value(props['Anleggsår'])].filter(Boolean);
+  return [pointIdentity, usefulType, value(props.Bredde), value(props.Material), value(props['Anleggsår']), exactValue(props['Stedfestings\u00e5rsak'])].filter(Boolean);
 }
 
 export function getFeatureHoverLabel(feature) {
