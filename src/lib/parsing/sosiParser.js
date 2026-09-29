@@ -1,6 +1,7 @@
 import sosijs from 'sosijs';
 import { Buffer } from 'buffer';
 import { normalizeFeature } from './normalizeFeature';
+import { mapSosiCanonicalAttributes } from './sosiCanonicalAttributes';
 import { classifyCrs } from '../telemetry/crs.mjs';
 import { createWarningSummary } from '../telemetry/warnings.mjs';
 
@@ -130,17 +131,13 @@ export class SOSIParser {
         const coords = feature?.geometry?.coordinates;
         const props = feature?.properties || {};
 
-        // Provide an S_FCODE-like value for styling/filters.
-        // Prefer mapping from objekttypenavn to existing GMI codes.
+        // Keep object-name inference as the final identity fallback.
         const inferredFcode = inferSosiFcode(geomType, props);
-
-        const attributes = {
-          ...props,
-          ...(inferredFcode
-            ? { S_FCODE: String(inferredFcode) }
-            : {}),
-          SOURCE_FORMAT: 'SOSI',
-        };
+        const { attributes, guid } = mapSosiCanonicalAttributes({
+          geometryType: geomType,
+          properties: props,
+          inferredFcode,
+        });
 
         const id = feature?.id ?? props.OBJID ?? index;
 
@@ -151,6 +148,7 @@ export class SOSIParser {
               type: 'point',
               coordinates: coords,
               attributes,
+              guid,
             })
           );
           return;
@@ -163,6 +161,7 @@ export class SOSIParser {
               type: 'line',
               coordinates: coords,
               attributes,
+              guid,
             })
           );
           return;
@@ -180,6 +179,7 @@ export class SOSIParser {
               type: 'line',
               coordinates: coords[0],
               attributes,
+              guid,
             })
           );
         }

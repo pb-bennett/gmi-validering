@@ -31,6 +31,7 @@ import {
   classifyParserWarnings,
 } from '../src/lib/telemetry/classifiers.mjs';
 import { createWarningSummary } from '../src/lib/telemetry/warnings.mjs';
+const { createValidationV2Input } = await import('../src/lib/validation-v2/uiIntegration.js');
 
 const countSummaryClasses = (summary) =>
   Object.values(summary.classes).reduce((sum, count) => sum + count, 0);
@@ -208,6 +209,38 @@ test('SOSI production coordinates reach the 2D map in the correct CRS and order'
   assert.equal(threeD.pipes[0].start[0], -5);
   assert.ok(Math.abs(threeD.pipes[0].start[1] - 0.05) < 1e-12);
   assert.equal(threeD.pipes[0].start[2], 5);
+});
+
+test('SOSI parser projects line attributes and GUID while Validator V2 stays GMI-only', () => {
+  const sourceDate = new Date('2024-03-02T00:00:00.000Z');
+  const sourceGroup = { L_TEMA: 'SP', MATERIAL: 'PE', DIMENSJON: '315', NETTYPE: 'F', extra: { raw: true } };
+  const properties = {
+    objekttypenavn: 'Vannledning', EGS_LEDNING: sourceGroup,
+    kvalitet: { målemetode: 36, nøyaktighet: Number.NaN },
+    GUID: 'source-line-guid', datafangstdato: sourceDate,
+  };
+  const parsed = new SOSIParser('synthetic-sosi-input', () => ({
+    parse: () => ({ dumps: () => ({
+      features: [{
+        geometry: { type: 'LineString', coordinates: [[1, 2, 3], [4, 5, 6]] },
+        properties,
+      }],
+    }) }),
+  })).parse();
+
+  assert.equal(parsed.errors.length, 0);
+  const feature = parsed.lines[0];
+  assert.equal(feature.attributes.S_FCODE, 'SP');
+  assert.equal(feature.attributes.Material, 'PE');
+  assert.equal(feature.attributes.Dimensjon, 315);
+  assert.equal(feature.attributes.Nett_type, 'F');
+  assert.equal(feature.attributes.Nøyaktighet, null);
+  assert.equal(feature.attributes.Datafangstdato, sourceDate.toISOString());
+  assert.equal(feature.guid, 'source-line-guid');
+  assert.strictEqual(feature.attributes.EGS_LEDNING, sourceGroup);
+  assert.strictEqual(feature.attributes.datafangstdato, sourceDate);
+  assert.ok(Number.isNaN(properties.kvalitet.nøyaktighet));
+  assert.equal(createValidationV2Input({ id: 'sosi-layer', data: parsed }), null);
 });
 
 test('dataset coordinate uses parser-owned shared operational CRS provenance', () => {
