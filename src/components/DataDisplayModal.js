@@ -23,6 +23,33 @@ const formatCoordRow = (coord) =>
     ? `${formatCoord(coord.x)}, ${formatCoord(coord.y)}, ${formatCoord(coord.z)}`
     : '-';
 
+const INSPECTOR_HIGHLIGHT_FIELDS = [
+  'S_FCODE', 'Material', 'Dimensjon', 'InnvendigUtvendig', 'Rørform',
+  'Nett_type', 'Anleggsår', 'Tykkelse', 'Ringstivhet', 'Trykklasse',
+  'Vertikalnivå', 'Høydereferanse', 'Datafangstdato', 'Målemetode',
+  'Nøyaktighet', 'Synbarhet', 'MålemetodeHøyde', 'NøyaktighetHøyde',
+  'Stedfestingsforhold', 'Stedfestingsårsak',
+];
+
+const renderAttributeHighlights = (attributes) => {
+  const fields = INSPECTOR_HIGHLIGHT_FIELDS.filter(
+    (key) => Object.prototype.hasOwnProperty.call(attributes || {}, key) &&
+      (attributes[key] === null || ['string', 'number', 'boolean'].includes(typeof attributes[key])),
+  );
+  if (fields.length === 0) return null;
+
+  return (
+    <dl className="data-inspector-highlights" aria-label="Viktige attributter">
+      {fields.map((key) => (
+        <div key={key} className="min-w-0">
+          <dt className="text-xs font-medium text-gmi-text-muted">{key}</dt>
+          <dd className="break-words text-sm text-gmi-text">{String(attributes[key])}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+};
+
 export default function DataDisplayModal() {
   const data = useStore((state) => state.data);
   const file = useStore((state) => state.file);
@@ -184,7 +211,7 @@ export default function DataDisplayModal() {
     }
 
     return (
-      <div className="max-h-60 overflow-auto border border-gmi-border rounded bg-gmi-surface-soft">
+      <div className="data-inspector-data-table max-h-60 overflow-auto border border-gmi-border rounded bg-gmi-surface-soft">
         <table className="min-w-full divide-y divide-gmi-border">
           <thead className="bg-gmi-surface-soft sticky top-0">
             <tr>
@@ -260,7 +287,7 @@ export default function DataDisplayModal() {
     }
 
     return (
-      <div className="max-h-60 overflow-auto border border-gmi-border rounded bg-gmi-surface-soft">
+      <div className="data-inspector-data-table max-h-60 overflow-auto border border-gmi-border rounded bg-gmi-surface-soft">
         <table className="min-w-full divide-y divide-gmi-border">
           <thead className="bg-gmi-surface-soft sticky top-0">
             <tr>
@@ -308,9 +335,9 @@ export default function DataDisplayModal() {
   };
 
   return (
-    <div className="absolute inset-0 z-2000 flex items-center justify-center bg-black/50 p-1.5 sm:p-2">
-      <div className="bg-gmi-surface border border-gmi-border-strong rounded-lg shadow-xl w-full max-w-5xl h-[82%] flex flex-col overflow-hidden text-gmi-text">
-        <div className="flex-none p-2.5 border-b border-gmi-border flex justify-between items-center bg-gmi-surface-soft">
+    <div className="data-inspector-overlay fixed inset-0 z-[10060] flex items-center justify-center bg-black/50 p-1.5 sm:p-2">
+      <div className="data-inspector-dialog bg-gmi-surface border border-gmi-border-strong rounded-lg shadow-xl w-full max-w-5xl h-[82%] flex flex-col overflow-hidden text-gmi-text">
+        <div className="data-inspector-header flex-none p-2.5 border-b border-gmi-border flex justify-between items-center bg-gmi-surface-soft">
           <div>
             <h2 className="text-base font-semibold text-gmi-navy">Datautforsker</h2>
             <p className="text-xs text-gmi-text-subtle">
@@ -356,7 +383,7 @@ export default function DataDisplayModal() {
         </div>
 
         {!target && (
-          <div className="flex-none border-b border-gmi-border px-3 bg-gmi-surface">
+          <div className="data-inspector-tabs flex-none border-b border-gmi-border px-3 bg-gmi-surface">
             <div className="flex space-x-2">
               <button
                 onClick={() => setActiveTab('header')}
@@ -392,10 +419,10 @@ export default function DataDisplayModal() {
           </div>
         )}
 
-        <div className="flex-1 overflow-auto p-2.5">
+        <div className="data-inspector-body min-h-0 flex-1 overflow-auto p-2.5">
           {targetPoint && (
-            <div className="space-y-4">
-              <div className="border border-gmi-border rounded-lg p-4 bg-gmi-surface-soft">
+            <div className="data-inspector-target space-y-4">
+              <div className="data-inspector-card data-inspector-identity border border-gmi-border rounded-lg p-4 bg-gmi-surface-soft">
                 <h3 className="text-sm font-semibold text-gmi-text">
                   Punkt #{target.index + 1}
                 </h3>
@@ -407,7 +434,7 @@ export default function DataDisplayModal() {
                 </div>
               </div>
 
-              <div className="border border-gmi-border rounded-lg p-4">
+              <div className="data-inspector-card data-inspector-diagnostic border border-gmi-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold text-gmi-text">
                   Terrenghøyde
                 </h4>
@@ -467,20 +494,27 @@ export default function DataDisplayModal() {
                 </div>
               </div>
 
-              <div className="border border-gmi-border rounded-lg p-4">
+              <div className="data-inspector-card data-inspector-attributes border border-gmi-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold text-gmi-text">
                   Attributter
                 </h4>
-                <pre className="text-xs mt-2 bg-gmi-surface-soft p-3 rounded border border-gmi-border max-h-72 overflow-auto">
+                {renderAttributeHighlights(targetPoint.attributes)}
+                <pre className="data-inspector-tall-raw text-xs mt-2 bg-gmi-surface-soft p-3 rounded border border-gmi-border max-h-72 overflow-auto">
                   {JSON.stringify(targetPoint.attributes, null, 2)}
                 </pre>
+                <details className="data-inspector-compact-raw">
+                  <summary className="gmi-focus-ring cursor-pointer text-xs font-medium text-gmi-navy">Vis rådata</summary>
+                  <pre className="data-inspector-raw mt-1.5 overflow-auto rounded border border-gmi-border bg-gmi-surface-soft p-2 text-xs">
+                    {JSON.stringify(targetPoint.attributes, null, 2)}
+                  </pre>
+                </details>
               </div>
             </div>
           )}
 
           {targetLine && (
-            <div className="space-y-4">
-              <div className="border border-gmi-border rounded-lg p-4 bg-gmi-surface-soft">
+            <div className="data-inspector-target space-y-4">
+              <div className="data-inspector-card data-inspector-identity border border-gmi-border rounded-lg p-4 bg-gmi-surface-soft">
                 <h3 className="text-sm font-semibold text-gmi-text">
                   Ledning #{target.index}
                 </h3>
@@ -494,7 +528,7 @@ export default function DataDisplayModal() {
                 )}
               </div>
 
-              <div className="border border-gmi-border rounded-lg p-4">
+              <div className="data-inspector-card data-inspector-diagnostic border border-gmi-border rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-gmi-text">
                     Linjepunkter (XYZ)
@@ -516,7 +550,7 @@ export default function DataDisplayModal() {
                 )}
               </div>
 
-              <div className="border border-gmi-border rounded-lg p-4">
+              <div className="data-inspector-card data-inspector-diagnostic border border-gmi-border rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-gmi-text">
                     Høydedata (terrengprofil)
@@ -538,13 +572,20 @@ export default function DataDisplayModal() {
                 )}
               </div>
 
-              <div className="border border-gmi-border rounded-lg p-4">
+              <div className="data-inspector-card data-inspector-attributes border border-gmi-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold text-gmi-text">
                   Attributter
                 </h4>
-                <pre className="text-xs mt-2 bg-gmi-surface-soft p-3 rounded border border-gmi-border max-h-72 overflow-auto">
+                {renderAttributeHighlights(targetLine.attributes)}
+                <pre className="data-inspector-tall-raw text-xs mt-2 bg-gmi-surface-soft p-3 rounded border border-gmi-border max-h-72 overflow-auto">
                   {JSON.stringify(targetLine.attributes, null, 2)}
                 </pre>
+                <details className="data-inspector-compact-raw">
+                  <summary className="gmi-focus-ring cursor-pointer text-xs font-medium text-gmi-navy">Vis rådata</summary>
+                  <pre className="data-inspector-raw mt-1.5 overflow-auto rounded border border-gmi-border bg-gmi-surface-soft p-2 text-xs">
+                    {JSON.stringify(targetLine.attributes, null, 2)}
+                  </pre>
+                </details>
               </div>
             </div>
           )}
@@ -623,9 +664,15 @@ export default function DataDisplayModal() {
                             )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gmi-text-subtle">
-                        <pre className="text-xs">
+                        <pre className="data-inspector-tall-raw text-xs">
                           {JSON.stringify(point.attributes, null, 2)}
                         </pre>
+                        <details className="data-inspector-compact-raw text-xs">
+                          <summary className="gmi-focus-ring cursor-pointer text-gmi-navy">Vis rådata</summary>
+                          <pre className="mt-2 whitespace-pre-wrap wrap-break-word">
+                            {JSON.stringify(point.attributes, null, 2)}
+                          </pre>
+                        </details>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gmi-text-subtle">
                         <button
@@ -729,13 +776,19 @@ export default function DataDisplayModal() {
                           </div>
                         </td>
                         <td className="px-3 py-2 align-top text-sm text-gmi-text-subtle">
-                          <pre className="text-xs whitespace-pre-wrap wrap-break-word">
+                          <pre className="data-inspector-tall-raw text-xs whitespace-pre-wrap wrap-break-word">
                             {JSON.stringify(
                               line.attributes || {},
                               null,
                               2,
                             )}
                           </pre>
+                          <details className="data-inspector-compact-raw text-xs">
+                            <summary className="gmi-focus-ring cursor-pointer text-gmi-navy">Vis rådata</summary>
+                            <pre className="mt-2 whitespace-pre-wrap wrap-break-word">
+                              {JSON.stringify(line.attributes || {}, null, 2)}
+                            </pre>
+                          </details>
                         </td>
                       </tr>
                       {expandedLinePoints[idx] && (
