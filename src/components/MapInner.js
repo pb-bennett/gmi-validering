@@ -34,6 +34,7 @@ import {
   projectCoordinateToWgs84,
 } from '@/lib/map/coordinateProjection';
 import { createFeaturePopupContent } from '@/lib/map/featurePopupContent.mjs';
+import { getLineStyle } from '@/lib/map/lineStyle.mjs';
 import { RulerIcon, XIcon } from '@phosphor-icons/react';
 
 // Fix for default Leaflet icons
@@ -2253,6 +2254,8 @@ export default function MapInner({ onZoomChange }) {
         };
       }
 
+      const baseWeight = getLineWeight(feature.properties);
+
       // Analysis Mode Highlighting
       if (analysisIsOpen && analysisSelectedPipeIndex !== null) {
         // Match by ID (we added 'id' property in geoJsonData creation which corresponds to index)
@@ -2266,45 +2269,50 @@ export default function MapInner({ onZoomChange }) {
           analysisLayerId &&
           feature.properties._layerId !== analysisLayerId
         ) {
+          const lineStyle = getLineStyle(fcode, getColorByFCode, baseWeight);
           return {
-            color: getColorByFCode(fcode),
-            weight: getLineWeight(feature.properties),
+            color: lineStyle.color,
+            weight: baseWeight,
             opacity: 0.9,
-            dashArray: fcode && fcode.includes('DR') ? '5, 5' : null,
+            dashArray: lineStyle.dashArray,
           };
         }
 
         if (isSelected) {
+          const weight = 8;
+          const lineStyle = getLineStyle(fcode, getColorByFCode, weight);
           return {
-            color: getColorByFCode(fcode), // Keep original color
-            weight: 8, // Thicker
+            color: lineStyle.color, // Keep original color
+            weight, // Thicker
             opacity: 1.0,
-            dashArray: null,
+            dashArray: lineStyle.dashArray,
           };
         } else {
+          const weight = 2;
+          const lineStyle = getLineStyle(fcode, getColorByFCode, weight);
           return {
-            color: getColorByFCode(fcode),
-            weight: 2,
+            color: lineStyle.color,
+            weight,
             opacity: 0.3, // Fade out but keep visible
-            dashArray: null,
+            dashArray: lineStyle.dashArray,
           };
         }
       }
 
+      const weight = isHighlighted ? baseWeight + 4 : baseWeight;
+      const lineStyle = getLineStyle(fcode, getColorByFCode, weight);
       const color = isHighlighted
         ? layerHighlightActive && !hasOtherHighlight
           ? layerHighlightColor
           : '#00FFFF'
-        : getColorByFCode(fcode);
-      const baseWeight = getLineWeight(feature.properties);
-      const weight = isHighlighted ? baseWeight + 4 : baseWeight;
+        : lineStyle.color;
       const opacity = isHighlighted ? 1 : 0.9;
 
       return {
         color: color,
         weight: weight,
         opacity: opacity,
-        dashArray: fcode && fcode.includes('DR') ? '5, 5' : null,
+        dashArray: lineStyle.dashArray,
         shadowBlur: isHighlighted ? 10 : 0,
       };
     },

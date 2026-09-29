@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { CaretDownIcon } from '@phosphor-icons/react';
 import { FCODE_COLORS, LEGEND_ITEMS, getLegendSvg } from './MapInner';
+import { LINE_LEGEND_ITEMS, getLineLegendSwatchStyle } from '@/lib/map/lineStyle.mjs';
 import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import { useMapPanePresentation } from './MapPanePresentationProvider';
@@ -214,48 +215,15 @@ export default function MapLegend() {
             Linjer
           </div>
           <div className="space-y-1">
-            <div className="flex items-center gap-2 px-1 py-0.5">
-              <div
-                className="w-5 h-0.5 shrink-0"
-                style={{ backgroundColor: FCODE_COLORS.AF }}
-              ></div>
-              <span className="text-xs text-gmi-text">
-                Avløp Felles (AF)
-              </span>
-            </div>
-            <div className="flex items-center gap-2 px-1 py-0.5">
-              <div
-                className="w-5 h-0.5 shrink-0"
-                style={{ backgroundColor: FCODE_COLORS.VL }}
-              ></div>
-              <span className="text-xs text-gmi-text">
-                Vannledning
-              </span>
-            </div>
-            <div className="flex items-center gap-2 px-1 py-0.5">
-              <div
-                className="w-5 h-0.5 shrink-0"
-                style={{ backgroundColor: FCODE_COLORS.SP }}
-              ></div>
-              <span className="text-xs text-gmi-text">Spillvann</span>
-            </div>
-            <div className="flex items-center gap-2 px-1 py-0.5">
-              <div
-                className="w-5 h-0.5 shrink-0"
-                style={{ backgroundColor: FCODE_COLORS.OV }}
-              ></div>
-              <span className="text-xs text-gmi-text">Overvann</span>
-            </div>
-            <div className="flex items-center gap-2 px-1 py-0.5">
-              <div
-                className="w-5 h-0.5 shrink-0"
-                style={{
-                  backgroundImage: `repeating-linear-gradient(90deg, ${FCODE_COLORS.DR}, ${FCODE_COLORS.DR} 3px, transparent 3px, transparent 6px)`,
-                  height: '2px',
-                }}
-              ></div>
-              <span className="text-xs text-gmi-text">Drenering</span>
-            </div>
+            {LINE_LEGEND_ITEMS.map(({ fcode, label }) => (
+              <div key={fcode} className="flex items-center gap-2 px-1 py-0.5">
+                <div
+                  className="w-5 h-0.5 shrink-0"
+                  style={getLineLegendSwatchStyle(fcode, (code) => FCODE_COLORS[code])}
+                />
+                <span className="text-xs text-gmi-text">{label}</span>
+              </div>
+            ))}
           </div>
 
           {/* Highlight indicator */}
