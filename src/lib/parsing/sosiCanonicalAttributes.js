@@ -13,6 +13,23 @@ const lineMappings = [
   ['Vertikalnivå', ['EGS_LEDNING', 'VERT_NIVÅ'], 'code'],
 ];
 
+const pointMappings = [
+  ['S_FCODE', ['EGS_PUNKT', 'P_TEMA'], 'code'],
+  ['Type', ['EGS_PUNKT', 'TYPE'], 'code'],
+  ['Bredde', ['EGS_PUNKT', 'KUMBREDDE'], 'number'],
+  ['Kumform', ['EGS_PUNKT', 'KUMFORM'], 'code'],
+  ['InnvendigUtvendig', ['EGS_PUNKT', 'INNVUTV_DIM'], 'code'],
+  ['Anleggsår', ['EGS_PUNKT', 'ANLEGGSÅR'], 'number'],
+  ['Byggemetode', ['EGS_PUNKT', 'BYGGEMET'], 'code'],
+  ['Tykkelse', ['EGS_PUNKT', 'TYKK'], 'number'],
+  ['Kjegle', ['EGS_PUNKT', 'KJEGLE'], 'code'],
+  ['Adkomst', ['EGS_PUNKT', 'ADKOMST'], 'code'],
+  ['AnleggsID', ['EGS_PUNKT', 'PUNKTIDANL'], 'code'],
+  ['Vertikalnivå', ['EGS_PUNKT', 'VERT_NIVÅ'], 'code'],
+];
+
+const nonPhysicalPointNames = new Set(['VADriftsdata', 'VASymbol', 'VAPåskrift']);
+
 const sharedMappings = [
   ['Høydereferanse', ['HØYDEREFERANSE'], 'code'],
   ['Stedfestingsforhold', ['STEDF_FORH'], 'code'],
@@ -75,12 +92,17 @@ export function mapSosiCanonicalAttributes({ geometryType, properties = {}, infe
   if (geometryType === 'LineString' || geometryType === 'Polygon') {
     fill(attributes, properties, lineMappings);
   }
+  if (geometryType === 'Point') {
+    fill(attributes, properties, pointMappings);
+  }
   if (geometryType === 'LineString' || geometryType === 'Polygon' || geometryType === 'Point') {
     fill(attributes, properties, sharedMappings);
   }
-  // Point P_TEMA remains deferred. Both geometries retain name inference as a fallback.
+  // Annotation and operations records need a real theme path to acquire S_FCODE.
   if (attributes.S_FCODE === undefined || attributes.S_FCODE === null || attributes.S_FCODE === '') {
-    if (inferredFcode) attributes.S_FCODE = String(inferredFcode);
+    if (inferredFcode && !(geometryType === 'Point' && nonPhysicalPointNames.has(properties.objekttypenavn))) {
+      attributes.S_FCODE = String(inferredFcode);
+    }
   }
   attributes.SOURCE_FORMAT = 'SOSI';
 

@@ -9,7 +9,7 @@ const [
   { KOFParser },
   { SOSIParser },
   { getDatasetCoordinate },
-  { transformPipes },
+  { transformPipes, transformPoints },
   { getMapSourceProjection, projectCoordinateToWgs84 },
 ] = await Promise.all([
   import('../src/lib/parsing/gmiParser.js'),
@@ -241,6 +241,30 @@ test('SOSI parser projects line attributes and GUID while Validator V2 stays GMI
   assert.strictEqual(feature.attributes.datafangstdato, sourceDate);
   assert.ok(Number.isNaN(properties.kvalitet.nøyaktighet));
   assert.equal(createValidationV2Input({ id: 'sosi-layer', data: parsed }), null);
+});
+
+test('SOSI parser projects point fields into shared 3D paths without Validator V2 eligibility', () => {
+  const group = { P_TEMA: 'KUM', TYPE: 'UTS_LOD', KUMBREDDE: '1200', PUNKTIDANL: 'facility-1' };
+  const parsed = new SOSIParser('synthetic-sosi-input', () => ({
+    parse: () => ({ dumps: () => ({ features: [{
+      geometry: { type: 'Point', coordinates: [597000, 6643000, 12] },
+      properties: { objekttypenavn: 'Kum', EGS_PUNKT: group, GUID: 'point-guid' },
+    }] }) }),
+  })).parse();
+  assert.equal(parsed.errors.length, 0);
+  assert.equal(parsed.points.length, 1);
+  const feature = parsed.points[0];
+  assert.equal(feature.attributes.S_FCODE, 'KUM');
+  assert.equal(feature.attributes.Type, 'UTS_LOD');
+  assert.equal(feature.attributes.Bredde, 1200);
+  assert.equal(feature.attributes.AnleggsID, 'facility-1');
+  assert.equal(feature.guid, 'point-guid');
+  assert.strictEqual(feature.attributes.EGS_PUNKT, group);
+  const threeD = transformPoints(parsed.points, parsed.header);
+  assert.equal(threeD.cylinders.length, 1);
+  assert.equal(threeD.cylinders[0].radius, 0.6);
+  assert.equal(threeD.cylinders[0].type, 'UTS_LOD');
+  assert.equal(createValidationV2Input({ id: 'sosi-point-layer', data: parsed }), null);
 });
 
 test('dataset coordinate uses parser-owned shared operational CRS provenance', () => {

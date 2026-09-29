@@ -118,26 +118,93 @@ test('primitive GUID is retained and passed to structural field; absent GUID sta
   assert.equal(point({}).guid, null);
 });
 
-test('points receive only present shared fields and no EGS_PUNKT projection', () => {
+test('rich point maps exact structure fields and shared metadata without changing source', () => {
   const capture = new Date('2020-01-02Z');
+  const group = {
+    P_TEMA: 'KUM', TYPE: 'UTS_LOD', KUMBREDDE: '1200', KUMFORM: 'R',
+    INNVUTV_DIM: 'ID', ANLEGGSÅR: '0', BYGGEMET: 'UKJENT', TYKK: '12.5',
+    KJEGLE: 'J', ADKOMST: 'A', PUNKTIDANL: 'facility-1', VERT_NIVÅ: 'B',
+    unknownChild: { raw: true },
+  };
+  const kvalitet = { målemetode: 1, nøyaktighet: 20, synbarhet: 2, målemetodeHøyde: 3, nøyaktighetHøyde: 4 };
   const result = point({
-    EGS_PUNKT: { P_TEMA: 'KUM', TYPE: 'K', KUMBREDDE: '1000', TYKK: '10' },
+    EGS_PUNKT: group,
     GUID: 'point-guid', datafangstdato: capture,
-    STEDF_FORH: 'S', STEDF_ÅRSA: 'A',
-    kvalitet: { målemetode: 1 },
+    STEDF_FORH: 'S', STEDF_ÅRSA: 'A', HØYDEREFERANSE: 'NN2000',
+    kvalitet, unknownTop: { raw: true },
+  }, 'VL');
+  assert.deepEqual(Object.fromEntries([
+    'S_FCODE', 'Type', 'Bredde', 'Kumform', 'InnvendigUtvendig',
+    'Anleggsår', 'Byggemetode', 'Tykkelse', 'Kjegle', 'Adkomst',
+    'AnleggsID', 'Vertikalnivå',
+  ].map((key) => [key, result.attributes[key]])), {
+    S_FCODE: 'KUM', Type: 'UTS_LOD', Bredde: 1200, Kumform: 'R',
+    InnvendigUtvendig: 'ID', Anleggsår: 0, Byggemetode: 'UKJENT',
+    Tykkelse: 12.5, Kjegle: 'J', Adkomst: 'A', AnleggsID: 'facility-1',
+    Vertikalnivå: 'B',
   });
   assert.equal(result.guid, 'point-guid');
+  assert.equal(result.attributes.GUID, 'point-guid');
   assert.equal(result.attributes.Datafangstdato, capture.toISOString());
   assert.equal(result.attributes.Stedfestingsforhold, 'S');
   assert.equal(result.attributes.Stedfestingsårsak, 'A');
+  assert.equal(result.attributes.Høydereferanse, 'NN2000');
   assert.equal(result.attributes.Målemetode, 1);
-  for (const key of ['Type', 'Bredde', 'Tykkelse', 'AnleggsID']) {
-    assert.equal(Object.hasOwn(result.attributes, key), false, key);
+  assert.equal(result.attributes.NøyaktighetHøyde, 4);
+  assert.strictEqual(result.attributes.EGS_PUNKT, group);
+  assert.strictEqual(result.attributes.kvalitet, kvalitet);
+  assert.deepEqual(result.attributes.unknownTop, { raw: true });
+  assert.equal(group.KUMBREDDE, '1200');
+  assert.equal(Object.hasOwn(result.attributes, 'Tema'), false);
+});
+
+test('equipment and operational point shapes receive only exact present aliases', () => {
+  const equipment = point({ objekttypenavn: 'Stengeventil', EGS_PUNKT: { P_TEMA: 'SV', SID: 'db-id' } }, 'VL');
+  const operation = point({ objekttypenavn: 'VADriftsdata', EGS_PUNKT: { BKODE: 'x', DBID: 'db-id', MDATO: '2020' } }, 'VADRIFTSDATA');
+  const symbol = point({ objekttypenavn: 'VASymbol', EGS_PUNKT: { P_TEMA: 'SYM' } }, 'VASYMBOL');
+  const annotation = point({ objekttypenavn: 'VAPåskrift', text: 'label' }, 'VAPASKRIFT');
+  assert.equal(equipment.attributes.S_FCODE, 'SV');
+  assert.equal(operation.attributes.EGS_PUNKT.BKODE, 'x');
+  assert.equal(Object.hasOwn(operation.attributes, 'S_FCODE'), false);
+  assert.equal(symbol.attributes.S_FCODE, 'SYM');
+  assert.equal(annotation.attributes.text, 'label');
+  assert.equal(Object.hasOwn(annotation.attributes, 'S_FCODE'), false);
+  assert.equal(Object.hasOwn(point({ objekttypenavn: 'VASymbol', EGS_PUNKT: {} }).attributes, 'S_FCODE'), false);
+  for (const result of [equipment, operation, symbol, annotation]) {
+    for (const key of ['Type', 'Bredde', 'Kumform', 'Anleggsår', 'AnleggsID', 'Målemetode']) {
+      assert.equal(Object.hasOwn(result.attributes, key), false, key);
+    }
+    assert.equal(result.guid, null);
   }
-  for (const name of ['VADriftsdata', 'VASymbol', 'VAPåskrift']) {
-    const sparse = point({ objekttypenavn: name, EGS_PUNKT: { P_TEMA: 'x' } });
-    assert.equal(Object.hasOwn(sparse.attributes, 'Type'), false);
-    assert.equal(Object.hasOwn(sparse.attributes, 'Målemetode'), false);
-    assert.equal(sparse.guid, null);
-  }
+  assert.equal(Object.hasOwn(annotation.attributes, 'EGS_PUNKT'), false);
+});
+
+test('point precedence fills empty slots, keeps supplied scalars, and infers identity last', () => {
+  const group = { P_TEMA: 'SP', TYPE: 'UTS_LTV', KUMBREDDE: '900', ANLEGGSÅR: '9999', PUNKTIDANL: 'source-id' };
+  const attrs = point({ EGS_PUNKT: group, S_FCODE: '', Type: 'given', Bredde: 0, Anleggsår: false, AnleggsID: null }).attributes;
+  assert.equal(attrs.S_FCODE, 'SP');
+  assert.equal(attrs.Type, 'given');
+  assert.equal(attrs.Bredde, 0);
+  assert.equal(attrs.Anleggsår, false);
+  assert.equal(attrs.AnleggsID, 'source-id');
+  assert.equal(point({ EGS_PUNKT: { TYPE: 'UTS_LTV', KUMBREDDE: '900', ANLEGGSÅR: '9999' }, Type: null, Bredde: undefined, Anleggsår: '' }).attributes.Type, 'UTS_LTV');
+  assert.equal(point({ EGS_PUNKT: { KUMBREDDE: '900' }, Bredde: undefined }).attributes.Bredde, 900);
+  assert.equal(point({ EGS_PUNKT: { ANLEGGSÅR: '9999' }, Anleggsår: '' }).attributes.Anleggsår, 9999);
+  assert.equal(point({ EGS_PUNKT: {} }, 'KUM').attributes.S_FCODE, 'KUM');
+  assert.equal(point({ S_FCODE: 'EXPLICIT', EGS_PUNKT: { P_TEMA: 'SP' } }).attributes.S_FCODE, 'EXPLICIT');
+});
+
+test('unverified point size, quality, ownership, and identity paths stay source-only', () => {
+  const group = {
+    SID: 'db-id', DIMENSJON: '300', INNV_BREDDE_1: '500', UTV_BREDDE_1: '600',
+    DYBDE_BER: '2000', TOPPLOKKH: '10', HBUNN: '8', geodataeier: 'owner', DRIFTSANSV: 'operator',
+    MÅLEMETODE_TOPPZ: '1', NØYAKTIGHET_TOPPZ: '2',
+  };
+  const attrs = point({ EGS_PUNKT: group, datauttaksdato: new Date('2020-01-01Z') }).attributes;
+  for (const key of [
+    'AnleggsID', 'Bredde', 'Lengde', 'Avst_BunnInnvUnderUtv', 'Utvendig_høyde',
+    'Eier', 'Datafangstdato', 'MålemetodeHøyde', 'NøyaktighetHøyde',
+  ]) assert.equal(Object.hasOwn(attrs, key), false, key);
+  assert.strictEqual(attrs.EGS_PUNKT, group);
+  assert.equal(Object.hasOwn(point({ EGS_PUNKT: { KUMBREDDE: 'unknown', TYKK: '' } }).attributes, 'Bredde'), false);
 });
