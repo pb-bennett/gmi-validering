@@ -485,3 +485,37 @@
     padding-top: 1rem;
   }
 }
+.leaflet-tooltip.gmi-compact-hover-tooltip {
+  max-width: min(260px, 70vw);
+  padding: 4px 6px;
+  border: 1px solid rgba(65, 77, 88, 0.22);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 1px 5px rgba(25, 35, 45, 0.16);
+  color: #17212b;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.gmi-compact-hover-content {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.gmi-compact-hover-dot {
+  display: block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.gmi-compact-hover-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

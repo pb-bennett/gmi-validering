@@ -7,6 +7,7 @@ import { analyzeIncline } from '@/lib/analysis/incline';
 import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
+import { getLayerHighlightStyle } from '@/lib/map/layerHighlight.mjs';
 import {
   ArrowCounterClockwiseIcon,
   CaretDownIcon,
@@ -1216,6 +1217,8 @@ export default function LayerPanel({ layerId, codeLookups }) {
     setTopplokOpen((prev) => !prev);
   };
 
+  const layerColor = getLayerHighlightStyle(layer, layerId).color;
+
   return (
     <div className="py-1">
       <div
@@ -1236,6 +1239,13 @@ export default function LayerPanel({ layerId, codeLookups }) {
             }}
             className="h-3.5 w-3.5 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
             title={layer.visible ? 'Skjul lag' : 'Vis lag'}
+          />
+
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 shrink-0 rounded-full border border-gmi-border-strong"
+            style={{ backgroundColor: layerColor }}
+            title={`Markeringsfarge: ${layerColor}`}
           />
 
           {/* Layer name and stats */}

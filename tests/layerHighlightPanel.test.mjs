@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { getFallbackLayerHighlightColor, getLayerHighlightStyle } from '../src/lib/map/layerHighlight.mjs';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 const [panel, mapView, layerPanel, layerManager, mapInner, styles] = await Promise.all([
@@ -40,6 +41,31 @@ test('panel controls target each layer and share the sidebar enable state', () =
   }
   assert.match(panel, /min="20"[\s\S]*?max="80"[\s\S]*?step="5"/);
   assert.match(panel, /min="2"[\s\S]*?max="8"[\s\S]*?step="1"/);
+});
+
+test('sidebar rows show each stored layer colour with a stable fallback and existing controls', () => {
+  assert.match(layerPanel, /getLayerHighlightStyle\(layer, layerId\)\.color/);
+  assert.match(layerPanel, /className="h-2 w-2 shrink-0 rounded-full border border-gmi-border-strong"/);
+  assert.match(layerPanel, /style=\{\{ backgroundColor: layerColor \}\}/);
+  assert.match(layerPanel, /title=\{`Markeringsfarge: \$\{layerColor\}`\}/);
+  assert.match(layerPanel, /<input[\s\S]*?checked=\{layer\.visible\}/);
+  assert.match(layerPanel, /truncate text-xs font-medium text-gmi-text/);
+  assert.match(layerPanel, /\{pointCount\} punkt, \{lineCount\} ledn\./);
+  assert.match(layerPanel, /title="Zoom til lag"/);
+  assert.match(layerPanel, /title="Fjern lag"/);
+
+  const first = { highlightAll: false, highlightStyle: { color: '#123ABC' } };
+  const second = { highlightAll: true, highlightStyle: { color: '#45ABCD' } };
+  assert.equal(getLayerHighlightStyle(first, 'first').color, '#123ABC');
+  first.highlightStyle.color = '#ABCDEF'; // Updated Markeringsfarge value.
+  assert.equal(getLayerHighlightStyle(first, 'first').color, '#ABCDEF');
+  assert.notEqual(getLayerHighlightStyle(first, 'first').color, getLayerHighlightStyle(second, 'second').color);
+  const layers = { first, second };
+  const orderedColors = ['first', 'second'].map((id) => getLayerHighlightStyle(layers[id], id).color);
+  const reorderedColors = ['second', 'first'].map((id) => getLayerHighlightStyle(layers[id], id).color);
+  assert.deepEqual(reorderedColors, [...orderedColors].reverse());
+  assert.equal(getLayerHighlightStyle({ highlightAll: false }, 'legacy-layer').color,
+    getFallbackLayerHighlightColor('legacy-layer'));
 });
 
 test('slider drafts commit on release or keyboard completion, leaving the map free while open', () => {

@@ -35,6 +35,8 @@ import {
   projectCoordinateToWgs84,
 } from '@/lib/map/coordinateProjection';
 import { createFeaturePopupContent } from '@/lib/map/featurePopupContent.mjs';
+import { getFeatureHoverColor, getFeatureHoverLabel } from '@/lib/map/featureHoverLabel.mjs';
+import { createFeatureHoverController } from '@/lib/map/featureHoverController.mjs';
 import { getLineStyle } from '@/lib/map/lineStyle.mjs';
 import {
   getLayerMarkerZIndexOffset,
@@ -1567,7 +1569,54 @@ function MapCenterHandler() {
   return null;
 }
 
+function FeatureHoverTooltip({ controllerRef, resetKey }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const tooltip = L.tooltip({
+      permanent: true,
+      interactive: false,
+      direction: 'top',
+      offset: L.point(10, -10),
+      opacity: 1,
+      className: 'gmi-compact-hover-tooltip',
+    });
+    const controller = createFeatureHoverController({
+      show: ({ feature, latlng, label }) => {
+        const content = document.createElement('span');
+        content.className = 'gmi-compact-hover-content';
+        const layerColor = getFeatureHoverColor(feature, useStore.getState().layers);
+        if (layerColor) {
+          const dot = document.createElement('span');
+          dot.className = 'gmi-compact-hover-dot';
+          dot.style.backgroundColor = layerColor;
+          dot.setAttribute('aria-hidden', 'true');
+          content.appendChild(dot);
+        }
+        const text = document.createElement('span');
+        text.className = 'gmi-compact-hover-label';
+        text.textContent = label;
+        content.appendChild(text);
+        tooltip.setLatLng(latlng).setContent(content).addTo(map);
+      },
+      hide: () => map.removeLayer(tooltip),
+    });
+    controllerRef.current = controller;
+    const cancel = () => controller.cancel();
+    map.on('movestart dragstart zoomstart', cancel);
+    return () => {
+      controller.cancel();
+      map.off('movestart dragstart zoomstart', cancel);
+      if (controllerRef.current === controller) controllerRef.current = null;
+    };
+  }, [map, controllerRef]);
+
+  useEffect(() => controllerRef.current?.cancel(), [controllerRef, resetKey]);
+  return null;
+}
+
 export default function MapInner({ onZoomChange }) {
+  const hoverControllerRef = useRef(null);
   const data = useStore((state) => state.data);
   const multiLayerModeEnabled = useStore(
     (state) => state.ui.multiLayerModeEnabled,
@@ -2545,6 +2594,19 @@ export default function MapInner({ onZoomChange }) {
         return;
       }
 
+      const hoverLabel = getFeatureHoverLabel(feature);
+      if (hoverLabel && layer.options.interactive !== false && !measureMode) {
+        layer.on('mouseover', (event) => {
+          const latlng = feature.geometry?.type === 'Point'
+            ? layer.getLatLng()
+            : event.latlng;
+          if (latlng) hoverControllerRef.current?.enter(layer, {
+            feature, latlng, label: hoverLabel,
+          });
+        });
+        layer.on('mouseout', () => hoverControllerRef.current?.leave(layer));
+      }
+
       // When measure tool is active: disable popups and route clicks to measuring
       if (measureMode) {
         layer.off('click');
@@ -2614,6 +2676,10 @@ export default function MapInner({ onZoomChange }) {
       style={{ height: '100%', width: '100%' }}
       maxZoom={25} // Allow higher zoom levels globally
     >
+      <FeatureHoverTooltip
+        controllerRef={hoverControllerRef}
+        resetKey={`${geoJsonDataKey}-${styleVersionKey}-${mapOverlayVisibility.data}`}
+      />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
       <LayersControl
         key={`layers-control-${customWmsConfig?.url ?? 'none'}`}
