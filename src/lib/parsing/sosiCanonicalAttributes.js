@@ -1,5 +1,6 @@
 // Browser field names shared with GMI. Source groups remain intact in attributes.
 const lineMappings = [
+  ['Eier', ['EGS_LEDNING', 'geodataeier'], 'code'],
   ['S_FCODE', ['EGS_LEDNING', 'L_TEMA'], 'code'],
   ['Material', ['EGS_LEDNING', 'MATERIAL'], 'code'],
   ['Dimensjon', ['EGS_LEDNING', 'DIMENSJON'], 'number'],
@@ -14,6 +15,7 @@ const lineMappings = [
 ];
 
 const pointMappings = [
+  ['Eier', ['EGS_PUNKT', 'geodataeier'], 'code'],
   ['S_FCODE', ['EGS_PUNKT', 'P_TEMA'], 'code'],
   ['Type', ['EGS_PUNKT', 'TYPE'], 'code'],
   ['Bredde', ['EGS_PUNKT', 'KUMBREDDE'], 'number'],

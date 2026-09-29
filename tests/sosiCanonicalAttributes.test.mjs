@@ -57,9 +57,10 @@ test('unverified line fields and dates stay source-only', () => {
     datauttaksdato: new Date('2022-01-01Z'),
   };
   const { attributes } = line(properties);
-  for (const key of ['Dimensjon', 'VertikalDimensjon', 'Lengde', 'SDR', 'Eier', 'AnleggsID', 'Datafangstdato']) {
+  for (const key of ['Dimensjon', 'VertikalDimensjon', 'Lengde', 'SDR', 'AnleggsID', 'Datafangstdato']) {
     assert.equal(Object.hasOwn(attributes, key), false, key);
   }
+  assert.equal(attributes.Eier, 'owner');
   assert.strictEqual(attributes.EGS_LEDNING, properties.EGS_LEDNING);
   assert.strictEqual(attributes.datauttaksdato, properties.datauttaksdato);
 });
@@ -203,8 +204,28 @@ test('unverified point size, quality, ownership, and identity paths stay source-
   const attrs = point({ EGS_PUNKT: group, datauttaksdato: new Date('2020-01-01Z') }).attributes;
   for (const key of [
     'AnleggsID', 'Bredde', 'Lengde', 'Avst_BunnInnvUnderUtv', 'Utvendig_høyde',
-    'Eier', 'Datafangstdato', 'MålemetodeHøyde', 'NøyaktighetHøyde',
+    'Datafangstdato', 'MålemetodeHøyde', 'NøyaktighetHøyde',
   ]) assert.equal(Object.hasOwn(attrs, key), false, key);
+  assert.equal(attrs.Eier, 'owner');
   assert.strictEqual(attrs.EGS_PUNKT, group);
   assert.equal(Object.hasOwn(point({ EGS_PUNKT: { KUMBREDDE: 'unknown', TYKK: '' } }).attributes, 'Bredde'), false);
+});
+
+test('geodataeier maps exactly to canonical Eier for lines and points', () => {
+  const lineGroup = { geodataeier: 'K', DRIFTSANSV: 'operator', SID: 'line-db-id' };
+  const pointGroup = { geodataeier: 'P', DRIFTSANSV: 'operator', SID: 'point-db-id' };
+  const mappedLine = line({ EGS_LEDNING: lineGroup });
+  const mappedPoint = point({ EGS_PUNKT: pointGroup });
+
+  assert.equal(mappedLine.attributes.Eier, 'K');
+  assert.equal(mappedPoint.attributes.Eier, 'P');
+  assert.strictEqual(mappedLine.attributes.EGS_LEDNING, lineGroup);
+  assert.strictEqual(mappedPoint.attributes.EGS_PUNKT, pointGroup);
+  assert.equal(line({ EGS_LEDNING: { geodataeier: 'P1' } }).attributes.Eier, 'P1');
+  assert.equal(Object.hasOwn(line({ EGS_LEDNING: {} }).attributes, 'Eier'), false);
+  assert.equal(Object.hasOwn(point({ EGS_PUNKT: {} }).attributes, 'Eier'), false);
+
+  assert.equal(line({ EGS_LEDNING: { geodataeier: 'P' }, Eier: 'K' }).attributes.Eier, 'K');
+  assert.equal(point({ EGS_PUNKT: { geodataeier: 'K' }, Eier: 'P' }).attributes.Eier, 'P');
+  assert.equal(line({ EGS_LEDNING: { geodataeier: '  K-raw  ' } }).attributes.Eier, '  K-raw  ');
 });

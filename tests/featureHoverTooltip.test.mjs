@@ -36,6 +36,21 @@ test('line labels append the exact canonical cause last and omit missing values'
   );
 });
 
+test('line owner uses canonical Eier before Stedfestingsårsak without translation', () => {
+  const base = { S_FCODE: 'VL', Dimensjon: 32, Material: 'PE', ['Anleggs\u00e5r']: 2022 };
+  assert.equal(getFeatureHoverLabel(line({ ...base, Eier: 'K' })), 'VL 32 · PE · 2022 · K');
+  assert.equal(getFeatureHoverLabel(line({ ...base, Eier: 'P', ['Stedfestings\u00e5rsak']: 'NY' })), 'VL 32 · PE · 2022 · P · NY');
+  assert.equal(getFeatureHoverLabel(line({ ...base, Eier: 'OWNER-X' })), 'VL 32 · PE · 2022 · OWNER-X');
+  assert.equal(getFeatureHoverLabel(line({ ...base, Eier: '' })), getFeatureHoverLabel(line(base)));
+  assert.equal(getFeatureHoverLabel(line({ ...base, Eier: '-' })), getFeatureHoverLabel(line(base)));
+
+  const canonical = { ...base, Eier: 'K' };
+  assert.equal(
+    getFeatureHoverLabel(line({ ...canonical, SOURCE_FORMAT: 'GMI' })),
+    getFeatureHoverLabel(line({ ...canonical, SOURCE_FORMAT: 'SOSI' })),
+  );
+});
+
 test('canonical point labels stay concise and skip redundant identity', () => {
   assert.equal(getFeatureHoverLabel(point({ S_FCODE: 'KUM', Type: 'Kum', Bredde: 1200, Material: 'BET', Anleggsår: 2021 })), 'KUM · 1200 · BET · 2021');
   assert.equal(getFeatureHoverLabel(point({ S_FCODE: 'SLU', Bredde: 650, Anleggsår: 2019 })), 'SLU · 650 · 2019');
@@ -52,6 +67,13 @@ test('point labels append canonical cause after identity while sparse points sta
   const label = getFeatureHoverLabel(sparse);
   assert.equal(label, 'SLU · 650');
   assert.equal(getFeatureHoverLabel(point({ ...sparse.properties, ['Stedfestings\u00e5rsak']: 'EKSISTERENDE' })), label + ' · EKSISTERENDE');
+});
+
+test('point owner follows current identity fields and precedes final cause', () => {
+  assert.equal(
+    getFeatureHoverLabel(point({ S_FCODE: 'KUM', Bredde: 1200, Material: 'BET', Eier: 'P', ['Stedfestings\u00e5rsak']: 'NY' })),
+    'KUM · 1200 · BET · P · NY',
+  );
 });
 
 test('colour comes from the current owning layer regardless of highlight or order', () => {
