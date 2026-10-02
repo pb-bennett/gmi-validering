@@ -208,7 +208,7 @@ export default function LayerHighlightPanel() {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="gmi-elevated-surface gmi-compact-button gmi-focus-ring absolute right-[14rem] top-14 z-[1200] inline-flex items-center gap-1.5 bg-gmi-surface/95 px-2.5 py-1.5 text-xs font-medium text-gmi-text backdrop-blur-sm"
+        className="gmi-elevated-surface gmi-compact-button gmi-focus-ring absolute left-[10px] top-[124px] z-[1200] inline-flex items-center gap-1.5 bg-gmi-surface/95 px-2.5 py-1.5 text-xs font-medium text-gmi-text backdrop-blur-sm"
         aria-label="Lagmarkering"
         aria-controls="layer-highlight-panel"
         aria-expanded={open}

@@ -146,8 +146,7 @@ const useStore = create(
             mapCenterTarget: null,
             mapBaseLayer: 'Kartverket Topo',
             mapOverlayVisibility: {
-              data: true,
-              geminiWms: true,
+                geminiWms: true,
               eiendomsgrenser: true,
             },
             measureMode: false,
@@ -1011,7 +1010,6 @@ const useStore = create(
           mapCenterTarget: null, // { coordinates, zoom, featureId } - Target for map centering
           mapBaseLayer: 'Kartverket Topo', // Selected background map in LayersControl
           mapOverlayVisibility: {
-            data: true,
             geminiWms: true,
             eiendomsgrenser: true,
           },
@@ -3133,16 +3131,10 @@ const useStore = create(
               }
               if (state.ui.mapOverlayVisibility === undefined) {
                 state.ui.mapOverlayVisibility = {
-                  data: true,
                   geminiWms: true,
                   eiendomsgrenser: true,
                 };
               } else {
-                if (
-                  state.ui.mapOverlayVisibility.data === undefined
-                ) {
-                  state.ui.mapOverlayVisibility.data = true;
-                }
                 if (
                   state.ui.mapOverlayVisibility.geminiWms ===
                   undefined

@@ -292,6 +292,57 @@
 /* Reserve the map toolbar row above the Leaflet base-layer selector. */
 .leaflet-top.leaflet-right .leaflet-control-layers {
   margin-top: 58px;
+  border: 1px solid var(--gmi-border);
+  border-radius: 0.5rem;
+  background: var(--gmi-surface);
+  color: var(--gmi-text);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+  font-family: var(--font-roboto), system-ui, -apple-system, sans-serif;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.leaflet-top.leaflet-right .leaflet-control-layers-expanded {
+  padding: 0.5rem;
+}
+
+.leaflet-control-layers label {
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
+.leaflet-control-layers label:hover,
+.leaflet-control-layers-toggle:hover {
+  background-color: var(--gmi-surface-soft);
+}
+
+.leaflet-control-layers-toggle {
+  border-radius: inherit;
+}
+
+.leaflet-control-layers-separator {
+  border-top-color: var(--gmi-border);
+  margin: 0.375rem 0;
+}
+
+/* Reuse the native input + GMI accent pattern used by sidebar layer controls. */
+.leaflet-control-layers-selector {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.375rem;
+  accent-color: var(--gmi-interactive);
+  cursor: pointer;
+}
+
+.leaflet-control-layers-selector:focus-visible,
+.leaflet-control-layers-toggle:focus-visible {
+  outline: 2px solid var(--gmi-interactive);
+  outline-offset: 2px;
+}
+
+.leaflet-control-layers-overlays {
+  color: var(--gmi-text-muted);
 }
 
 .statistics-button:focus-visible,

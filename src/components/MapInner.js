@@ -1735,7 +1735,6 @@ export default function MapInner({ onZoomChange }) {
   const mapOverlayVisibility = useStore(
     (state) =>
       state.ui.mapOverlayVisibility || {
-        data: true,
         geminiWms: true,
         eiendomsgrenser: true,
       },
@@ -2678,7 +2677,7 @@ export default function MapInner({ onZoomChange }) {
     >
       <FeatureHoverTooltip
         controllerRef={hoverControllerRef}
-        resetKey={`${geoJsonDataKey}-${styleVersionKey}-${mapOverlayVisibility.data}`}
+        resetKey={`${geoJsonDataKey}-${styleVersionKey}`}
       />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
       <LayersControl
@@ -2731,28 +2730,6 @@ export default function MapInner({ onZoomChange }) {
         </LayersControl.BaseLayer>
 
         <LayersControl.Overlay
-          checked={mapOverlayVisibility.data !== false}
-          name="Data"
-        >
-          {casingData && (
-            <GeoJSON
-              key={`casing-${geoJsonDataKey}-${styleVersionKey}`}
-              data={casingData}
-              style={casingStyle}
-              pane="layer-highlight-casing"
-              interactive={false}
-            />
-          )}
-          <GeoJSON
-            key={`geojson-${geoJsonDataKey}-${styleVersionKey}`}
-            data={geoJsonData}
-            style={lineStyle}
-            pointToLayer={pointToLayer}
-            onEachFeature={onEachFeature}
-          />
-        </LayersControl.Overlay>
-
-        <LayersControl.Overlay
           checked={mapOverlayVisibility.eiendomsgrenser !== false}
           name="Eiendomsgrenser"
         >
@@ -2768,6 +2745,23 @@ export default function MapInner({ onZoomChange }) {
           />
         </LayersControl.Overlay>
       </LayersControl>
+
+      {casingData && (
+        <GeoJSON
+          key={`casing-${geoJsonDataKey}-${styleVersionKey}`}
+          data={casingData}
+          style={casingStyle}
+          pane="layer-highlight-casing"
+          interactive={false}
+        />
+      )}
+      <GeoJSON
+        key={`geojson-${geoJsonDataKey}-${styleVersionKey}`}
+        data={geoJsonData}
+        style={lineStyle}
+        pointToLayer={pointToLayer}
+        onEachFeature={onEachFeature}
+      />
 
       {customWmsConfig?.url &&
         customWmsConfig?.username &&
@@ -3043,9 +3037,7 @@ function LayerControlPersistence({
       const name = event?.name;
       if (!name || !onOverlayChange) return;
 
-      if (name === 'Data') {
-        onOverlayChange('data', true);
-      } else if (name === 'Eiendomsgrenser') {
+      if (name === 'Eiendomsgrenser') {
         onOverlayChange('eiendomsgrenser', true);
       }
     };
@@ -3054,9 +3046,7 @@ function LayerControlPersistence({
       const name = event?.name;
       if (!name || !onOverlayChange) return;
 
-      if (name === 'Data') {
-        onOverlayChange('data', false);
-      } else if (name === 'Eiendomsgrenser') {
+      if (name === 'Eiendomsgrenser') {
         onOverlayChange('eiendomsgrenser', false);
       }
     };
