@@ -84,7 +84,7 @@ test('review diagnostics retain required context and factual coverage', () => {
   const model = buildFieldDiagnostics({ result, rule, field: { canonicalFieldId: 'wallThickness', displayName: 'Tykkelse' }, geometryScope: 'point', summary: { objectCount: 2 } });
   const diagnostic = model.diagnostics.find((item) => item.state === 'CHECK');
   assert.ok(diagnostic);
-  assert.match(renderValidationV2Diagnostic(diagnostic), /normalt påkrevd.*ikke merket NYTT.*bør kontrolleres/);
+  assert.match(renderValidationV2Diagnostic(diagnostic), /Objektet er ikke registrert som NYTT.*eksisterende anlegg.*Kontroller dersom verdien er kjent/);
   assert.equal(model.coverage?.applicableCount, 2);
   assert.equal(model.coverage?.presentCount, 1);
 });

@@ -548,10 +548,14 @@ test('representative contextual and unconditional missing rules retain relevant 
     return model.diagnostics.map(renderValidationV2Diagnostic);
   };
   assert.match(renderFor('innmaling.point.type.valid', 'type', 'Type', 'point')[0], /med Tema `KUM`/);
-  assert.match(renderFor('innmaling.point.construction-method.valid', 'constructionMethod', 'Byggemetode', 'point')[0], /med Tema `KUM`/);
-  assert.match(renderFor('innmaling.point.cone.valid', 'cone', 'Kjegle', 'point')[0], /med Tema `KUM`/);
-  assert.match(renderFor('innmaling.point.bottom-distance.decimal', 'innerBottomToOuterUndersideDistance', 'Avst_BunnInnvUnderUtv', 'point')[0], /med Tema `KUM`/);
-  assert.match(renderFor('innmaling.line.sdr.valid', 'sdr', 'SDR', 'line')[0], /med Tema `VL` og Material `PE100`/);
+  for (const [id, fieldId, name, scope] of [
+    ['innmaling.point.construction-method.valid', 'constructionMethod', 'Byggemetode', 'point'],
+    ['innmaling.point.cone.valid', 'cone', 'Kjegle', 'point'],
+    ['innmaling.point.bottom-distance.decimal', 'innerBottomToOuterUndersideDistance', 'Avst_BunnInnvUnderUtv', 'point'],
+    ['innmaling.line.sdr.valid', 'sdr', 'SDR', 'line'],
+  ]) {
+    assert.match(renderFor(id, fieldId, name, scope)[0], /Objektet er ikke registrert som NYTT.*eksisterende anlegg/);
+  }
   const measurementMethod = renderFor('innmaling.common.measurement-method.required', 'measurementMethod', 'Målemetode', 'point')[0];
   assert.equal(measurementMethod, '1 objekt mangler Målemetode. Feltet er påkrevd.');
   assert.doesNotMatch(measurementMethod, /med Tema/);

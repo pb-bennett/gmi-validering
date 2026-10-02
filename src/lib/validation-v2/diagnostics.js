@@ -140,6 +140,14 @@ function evidenceValue(finding) {
 
 function contextKey(finding, type) {
   const facts = finding.details?.diagnosticFacts || {};
+  // Missing-value identity follows the evaluator's reason, not the values
+  // that made the field applicable. Keep required/expected populations apart.
+  if ([RuleReasonCode.NON_NEW_REQUIRED_VALUE_MISSING,
+    RuleReasonCode.REQUIRED_VALUE_MISSING,
+    RuleReasonCode.APPLICABILITY_REQUIRED_MISSING].includes(finding.reasonCode)) {
+    return JSON.stringify({ requirement: facts.requirement || null,
+      coverageApplicability: facts.coverageApplicability || null });
+  }
   if (finding.canonicalFieldId === 'attachmentLink'
     && type === T.CONTEXT_UNEXPECTED_VALUE
     && finding.reasonCode === RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE) {
@@ -213,12 +221,19 @@ function createGroup({ finding, type, field, geometryScope, denominator }) {
 }
 
 function addFinding(group, finding) {
-  if (group.wordingKey === 'S_HYPERLINK_LOK_TOP'
-    && finding.objectRef?.key
+  if (finding.objectRef?.key
     && group.exactObjectRefs.has(finding.objectRef.key)) return;
   group.count += 1;
   if (finding.reasonCode && !group.reasonCodes.includes(finding.reasonCode)) group.reasonCodes.push(finding.reasonCode);
   if (finding.ruleId && !group.ruleIds.includes(finding.ruleId)) group.ruleIds.push(finding.ruleId);
+  // Preserve all applicability values for context wording; the raw finding
+  // and outcome still retain the complete per-object diagnostic facts.
+  if (finding.details?.diagnosticFacts) {
+    const contexts = new Map([...(group.contextFacts?.context || []),
+      ...(finding.details.diagnosticFacts.context || [])]
+      .map((item) => [JSON.stringify([item.fieldId, item.value]), item]));
+    group.contextFacts = { ...group.contextFacts, context: [...contexts.values()] };
+  }
   const value = evidenceValue(finding);
   if (value) group.values.set(value, (group.values.get(value) || 0) + 1);
   const theme = (finding.details?.diagnosticFacts?.context || [])
@@ -385,6 +400,10 @@ function displayValues(diagnostic) {
 
 function objectCountText(count) { return `${count} ${count === 1 ? 'objekt' : 'objekter'}`; }
 
+function nonNewMissingText(count, name) {
+  return `${objectCountText(count)} mangler ${name}. ${count === 1 ? 'Objektet er' : 'Objektene er'} ikke registrert som NYTT, og opplysningen kan derfor mangle for eksisterende anlegg. Kontroller dersom verdien er kjent.`;
+}
+
 function contextText(diagnostic) {
   if (![T.CONTEXT_REQUIRED_MISSING, T.CONTEXT_UNEXPECTED_VALUE].includes(diagnostic.type)) return '';
   if (diagnostic.field?.canonicalFieldId === 'attachmentLink'
@@ -420,7 +439,7 @@ export function renderValidationV2Diagnostic(diagnostic) {
     case 'TEMA_SCHEMA_COEXISTENCE': return 'Både Tema og S_FCODE finnes i skjemaet. Kolonnene beskriver samme identitet; kontroller hvorfor begge er levert.';
     case 'POSITIONING_CAUSE_SHARED_NYTT_YEAR': return `${objectCountText(count)} har Stedfestingsårsak som må kontrolleres mot et delt NYTT-år i leveringen.`;
     case 'S_HYPERLINK_LOK_TOP': return `${objectCountText(count)} kumlokk med Tema LOK eller TOP har bilder. Gemini VA støtter ikke bilder på disse objektene. Fjern bildelenken fra de berørte objektene.`;
-    case 'NON_NEW_REQUIRED_VALUE_MISSING': return `${objectCountText(count)}${contextText(diagnostic)} mangler ${name}. Feltet er normalt påkrevd, men objektene er ikke merket NYTT. Den manglende opplysningen bør kontrolleres.`;
+    case 'NON_NEW_REQUIRED_VALUE_MISSING': return nonNewMissingText(count, name);
     default: break;
   }
   switch (diagnostic.type) {
