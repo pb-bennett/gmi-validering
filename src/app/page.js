@@ -2,9 +2,11 @@
 
 import { startTransition, useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { EnvelopeSimpleIcon, InfoIcon, GearSixIcon, PlusIcon, XIcon } from '@phosphor-icons/react';
+import { EnvelopeSimpleIcon, ImagesIcon, InfoIcon, GearSixIcon, PlusIcon, XIcon } from '@phosphor-icons/react';
 import FileUpload from '@/components/FileUpload';
 import GlobalFileDrop from '@/components/GlobalFileDrop';
+import PhotoCollectionDialog from '@/components/photos/PhotoCollectionDialog';
+import { photoSession } from '@/lib/photos/photoSession.mjs';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import ZValidationModal from '@/components/ZValidationModal';
 import InclineAnalysisModal from '@/components/InclineAnalysisModal';
@@ -111,6 +113,14 @@ export default function Home() {
   const [showStats, setShowStats] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAppInfo, setShowAppInfo] = useState(false);
+  const [showPhotos, setShowPhotos] = useState(false);
+  const photoTriggerRef = useRef(null);
+  const openPhotos = (event) => {
+    photoTriggerRef.current = event.currentTarget;
+    setShowPhotos(true);
+  };
+  // The page owns the session; ordinary dialog/workspace mounts do not clear it.
+  useEffect(() => () => photoSession.clear(), []);
   const [appInfoInitialTab, setAppInfoInitialTab] = useState('about');
   const appInfoTriggerRef = useRef(null);
   const appInfoAutoCheckedRef = useRef(false);
@@ -260,6 +270,7 @@ export default function Home() {
   }, []);
 
   const handleReset = () => {
+    setShowPhotos(false);
     closeDataInspector();
     resetAll();
   };
@@ -275,8 +286,9 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gmi-surface-soft">
-      <GlobalFileDrop enabled={parsingStatus !== 'parsing'} />
+      <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !showPhotos} />
       <TestModeActivation />
+      {showPhotos && <PhotoCollectionDialog onClose={() => setShowPhotos(false)} openerRef={photoTriggerRef} />}
       {/* Floating Stats Button */}
       {!(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
       <button
@@ -400,6 +412,14 @@ export default function Home() {
               <FileUpload />
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <button
+                  type="button"
+                  onClick={openPhotos}
+                  aria-haspopup="dialog"
+                  className="gmi-compact-button gmi-focus-ring inline-flex min-h-9 items-center gap-1.5 border border-gmi-border-strong bg-gmi-surface px-3 py-1.5 text-xs font-medium"
+                >
+                  <ImagesIcon size={15} aria-hidden="true" />Bilder
+                </button>
+                <button
                   ref={appInfoTriggerRef}
                   type="button"
                   onClick={(event) => openAppInfo('about', event.currentTarget)}
@@ -436,6 +456,7 @@ export default function Home() {
             sidebarWidth={sidebarWidth}
             onOpenAppInfo={(event) => openAppInfo('about', event.currentTarget)}
             appInfoTriggerRef={appInfoTriggerRef}
+            onOpenPhotos={openPhotos}
             sidebar={fieldValidationOpen ? (
               <FieldValidationSidebar
                 sidebarWidth={sidebarWidth}

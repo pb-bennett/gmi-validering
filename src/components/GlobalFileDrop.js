@@ -61,6 +61,8 @@ export default function GlobalFileDrop({ enabled = true }) {
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('dragleave', onDragLeave);
       window.removeEventListener('drop', onDrop);
+      dragCounter.current = 0;
+      setIsDragging(false);
     };
   }, [enabled, handleFile]);
 

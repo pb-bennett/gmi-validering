@@ -5,6 +5,7 @@ import { analyzeIncline } from './analysis/incline';
 import { analyzeZValues } from './analysis/zValidation';
 import { createContextualObjectInspection, createExactObjectInspection } from './objectTableInspection';
 import { moveLayerInOrder } from './map/layerOrder.mjs';
+import { photoSession } from './photos/photoSession.mjs';
 import {
   DEFAULT_HIGHLIGHT_OPACITY,
   DEFAULT_HIGHLIGHT_SPREAD,
@@ -2960,7 +2961,8 @@ const useStore = create(
         // ============================================
         // GLOBAL ACTIONS — cross-slice operations
         // ============================================
-        resetAll: () =>
+        resetAll: () => {
+          photoSession.clear();
           set(
             (state) => {
               const initial = get()._initial;
@@ -2994,7 +2996,8 @@ const useStore = create(
             },
             false,
             'global/resetAll',
-          ),
+          );
+        },
 
         // ============================================
         // SELECTORS (computed/derived values)

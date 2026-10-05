@@ -1,6 +1,44 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+/* Intermediate, session-only Bilder shell. Both panes retain their own scroll. */
+.photo-collection-dialog {
+  width: 94vw;
+  max-width: none;
+  height: 94dvh;
+  max-height: calc(100dvh - 1rem);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--gmi-border-strong);
+  border-radius: 1rem;
+}
+.photo-collection-dialog::backdrop { background: rgb(2 6 24 / 60%); backdrop-filter: blur(3px); }
+.photo-collection-frame { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.photo-collection-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.75rem 1rem; flex: none; }
+.photo-collection-notice { padding: 0.5rem 1rem; flex: none; }
+.photo-collection-rejections { max-height: 5rem; overflow: auto; }
+.photo-collection-body { display: grid; grid-template-columns: minmax(0, 42fr) minmax(0, 58fr); flex: 1; min-height: 0; }
+.photo-collection-gallery { overflow: auto; min-height: 0; min-width: 0; padding: 0.75rem; overscroll-behavior: contain; background: var(--gmi-surface-soft); }
+.photo-collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 0.75rem; align-content: start; }
+.photo-collection-card { display: block; width: 100%; text-align: left; overflow: hidden; background: var(--gmi-surface); border: 2px solid var(--gmi-border); border-radius: 0.75rem; }
+.photo-collection-card-selected { border-color: var(--gmi-interactive); background: var(--gmi-cyan-soft); }
+.photo-collection-thumbnail { display: flex; align-items: center; justify-content: center; height: 112px; text-align: center; background: var(--gmi-surface-soft); }
+.photo-collection-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
+.photo-collection-inspector { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; min-height: 0; padding: 0.75rem; border-left: 1px solid var(--gmi-border); }
+.photo-collection-original { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 0; overflow: hidden; border-radius: 0.5rem; background: var(--gmi-surface-soft); }
+.photo-collection-original img { width: 100%; height: 100%; object-fit: contain; }
+.photo-collection-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.375rem 1rem; flex: none; max-height: 26%; overflow: auto; }
+.photo-collection-facts dt { font-weight: 600; }
+@media (max-width: 700px) {
+  .photo-collection-dialog { width: calc(100vw - 1rem); height: calc(100dvh - 1rem); }
+  .photo-collection-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+  .photo-collection-inspector { border-left: 0; border-top: 1px solid var(--gmi-border); }
+  .photo-collection-header, .photo-collection-notice { padding: 0.5rem 0.75rem; }
+  .photo-collection-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .photo-collection-facts { max-height: 30%; }
+}
+
 /* Default desktop profile split retains the accepted large-height layout. */
 :root {
   --profile-map-height: 55%;
