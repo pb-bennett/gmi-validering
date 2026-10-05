@@ -1,10 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { extractHyperlinkFilenames } from '../src/lib/hyperlinkFilenames.mjs';
+import { extractHyperlinkFilenames, extractHyperlinkSourceParts } from '../src/lib/hyperlinkFilenames.mjs';
 import { createFilenameCopyAction, filenameCopyFeedback } from '../src/lib/filenameClipboard.mjs';
 import { rowMatchesTableSearch } from '../src/lib/tableSearch.js';
 import { GMIParser } from '../src/lib/parsing/gmiParser.js';
+
+test('source presentation preserves exact syntax, metadata and shared extraction semantics', () => {
+  for (const source of [
+    '  h:2(sign:"Metadata.jpg" link:"dir/A.jpg"; link:"dir/B.jpg") h:1(link:"other/A.jpg")  ',
+    'h:1(link:"A.jpg"\nsign:"NOSEVIE")',
+    'h:1(sign:"Metadata.jpg")',
+    'h:1(link:"A.jpg" sign:broken)',
+    ' https://example.test/photos/A.jpg?token=x#preview ',
+  ]) {
+    const parts = extractHyperlinkSourceParts(source);
+    assert.equal(parts.map((part) => part.text).join(''), source);
+    assert.deepEqual(parts.filter((part) => part.filename).map((part) => part.filename), extractHyperlinkFilenames(source));
+    assert(parts.filter((part) => part.filename).every((part) => !part.text.includes('sign:')));
+  }
+  assert.deepEqual(extractHyperlinkSourceParts(['dir/A.jpg', ['other/A.jpg', 'dir/B.jpg']]).filter((part) => part.filename).map((part) => part.filename), ['A.jpg', 'B.jpg']);
+});
 
 test('observed GMI wrapper and both path separators yield basenames only', () => {
   assert.deepEqual(extractHyperlinkFilenames(String.raw`h:1(link:"Attachments\DRENS.2.5_20260625_0909_01.jpg")`), ['DRENS.2.5_20260625_0909_01.jpg']);

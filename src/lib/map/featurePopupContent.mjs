@@ -1,4 +1,4 @@
-import { extractHyperlinkFilenames } from '../hyperlinkFilenames.mjs';
+import { extractHyperlinkSourceParts } from '../hyperlinkFilenames.mjs';
 import { createFilenameCopyAction, filenameCopyFeedback } from '../filenameClipboard.mjs';
 
 // Phosphor regular Copy/Check paths from @phosphor-icons/react 2.1.10.
@@ -43,11 +43,11 @@ const createButton = ({ className, featureId, featureType, index, layerId, label
 export const createFeaturePopupContent = (props, featureId, color, fcode) => {
   const content = document.createElement('div');
   content.className =
-    'gmi-feature-popup flex max-h-72 flex-col gap-1.5 p-1 text-[11px] leading-snug text-gmi-text';
+    'gmi-feature-popup flex min-h-0 flex-col gap-1.5 p-1 text-[11px] leading-snug text-gmi-text';
 
   const header = document.createElement('div');
   header.className =
-    'flex flex-wrap items-center gap-x-1 gap-y-0.5 pr-5 font-semibold text-gmi-navy';
+    'flex shrink-0 flex-wrap items-center gap-x-1 gap-y-0.5 pr-5 font-semibold text-gmi-navy';
   appendText(header, 'Type:');
   appendText(header, props.featureType);
 
@@ -61,7 +61,7 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
   content.appendChild(header);
 
   const attributes = document.createElement('div');
-  attributes.className = 'min-h-0 flex-1 overflow-auto border-t border-gmi-border pt-1.5 break-words';
+  attributes.className = 'gmi-feature-popup-attributes min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t border-gmi-border pt-1.5 break-words';
   Object.entries(props).forEach(([key, value]) => {
     if (
       key !== 'featureType' &&
@@ -70,6 +70,40 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
       value !== null &&
       value !== ''
     ) {
+      if (key === 'S_HYPERLINK') {
+        const section = document.createElement('section');
+        section.className = 'gmi-feature-popup-references my-1.5 border-y border-gmi-border bg-gmi-surface-soft px-2 py-1.5';
+        section.setAttribute('aria-label', 'Filreferanser');
+        const heading = document.createElement('h3');
+        heading.className = 'mb-1 text-[11px] font-medium text-gmi-text-muted';
+        heading.textContent = 'Filreferanser (S_HYPERLINK)';
+        section.appendChild(heading);
+        for (const { text, filename } of extractHyperlinkSourceParts(value)) {
+          const reference = document.createElement('div');
+          reference.className = 'gmi-feature-popup-reference flex items-start gap-1 py-0.5';
+          appendText(reference, text, 'min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]');
+          if (filename) {
+            const copy = document.createElement('button');
+            copy.className = 'gmi-compact-button gmi-focus-ring flex h-5 shrink-0 items-center justify-center gap-0.5 px-1 text-[10px] text-gmi-interactive';
+            copy.setAttribute('type', 'button');
+            copy.setAttribute('aria-label', `Kopier filnavn ${filename}`);
+            copy.setAttribute('title', `Kopier filnavn ${filename}`);
+            const iconPath = appendCopyIcon(copy);
+            const feedback = appendText(reference, '', 'shrink-0 text-[10px] text-gmi-text-muted');
+            feedback.setAttribute('role', 'status');
+            const action = createFilenameCopyAction(filename, (status) => {
+              copy.disabled = status === 'pending';
+              iconPath.setAttribute('d', status === 'copied' ? CHECK_PATH : COPY_PATH);
+              feedback.textContent = filenameCopyFeedback(status);
+            });
+            copy.onclick = (event) => action.copy(event);
+            reference.appendChild(copy);
+          }
+          section.appendChild(reference);
+        }
+        attributes.appendChild(section);
+        return;
+      }
       const label = document.createElement('strong');
       label.className = 'font-medium text-gmi-text-muted';
       label.textContent = key;
@@ -77,35 +111,12 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
       attributes.appendChild(document.createTextNode(': '));
       attributes.appendChild(document.createTextNode(String(value)));
       attributes.appendChild(document.createElement('br'));
-      if (key === 'S_HYPERLINK') {
-        for (const filename of extractHyperlinkFilenames(value)) {
-          const reference = document.createElement('div');
-          reference.className = 'flex items-center gap-1 py-0.5';
-          appendText(reference, filename, 'min-w-0 flex-1 break-all');
-          const copy = document.createElement('button');
-          copy.className = 'gmi-compact-button gmi-focus-ring flex h-5 shrink-0 items-center justify-center gap-0.5 px-1 text-[10px] text-gmi-interactive';
-          copy.setAttribute('type', 'button');
-          copy.setAttribute('aria-label', `Kopier filnavn ${filename}`);
-          copy.setAttribute('title', `Kopier filnavn ${filename}`);
-          const iconPath = appendCopyIcon(copy);
-          const feedback = appendText(reference, '', 'text-[10px] text-gmi-text-muted');
-          feedback.setAttribute('role', 'status');
-          const action = createFilenameCopyAction(filename, (status) => {
-            copy.disabled = status === 'pending';
-            iconPath.setAttribute('d', status === 'copied' ? CHECK_PATH : COPY_PATH);
-            feedback.textContent = filenameCopyFeedback(status);
-          });
-          copy.onclick = (event) => action.copy(event);
-          reference.appendChild(copy);
-          attributes.appendChild(reference);
-        }
-      }
     }
   });
   content.appendChild(attributes);
 
   const actions = document.createElement('div');
-  actions.className = 'grid grid-cols-2 gap-1.5 border-t border-gmi-border pt-2';
+  actions.className = 'grid grid-cols-2 shrink-0 gap-1.5 border-t border-gmi-border pt-2';
   const buttonOptions = {
     featureId,
     featureType: props.featureType,

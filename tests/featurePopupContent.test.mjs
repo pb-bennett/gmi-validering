@@ -90,6 +90,56 @@ const popupSource = await readFile(
   new URL('../src/lib/map/featurePopupContent.mjs', import.meta.url),
   'utf8',
 );
+const cssSource = await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+
+test('object popup uses a larger preference bounded by the map, with one internal scroller', () => {
+  assert.match(mapInnerSource, /className: 'gmi-object-popup',[\s\S]*?minWidth: 0,[\s\S]*?maxWidth: 560/);
+  assert.match(mapInnerSource, /className="gmi-object-map"/);
+  assert.match(mapInnerSource, /autoPanPaddingTopLeft: \[24, 64\]/);
+  assert.match(mapInnerSource, /autoPanPaddingBottomRight: \[24, 48\]/);
+  assert.match(cssSource, /\.gmi-object-map\s*\{\s*container-type: size/);
+  assert.match(cssSource, /\.gmi-object-popup \.leaflet-popup-content\s*\{\s*width: min\(35rem, calc\(100cqw - 6rem\)\) !important/);
+  assert.match(cssSource, /max-height: min\(38rem, calc\(100cqh - 10rem\)\)/);
+  assert.match(cssSource, /@media \(max-height: 1000px\) and \(min-width: 1024px\)\s*\{\s*\.gmi-feature-popup\s*\{\s*max-height: min\(34rem, calc\(100cqh - 10rem\)\)/);
+  assert.doesNotMatch(popupSource, /max-h-72|overflow-auto/);
+  const popup = renderPopup({ featureType: 'Line', NAME: 'A long ordinary attribute' });
+  assert.match(popup.children[1].className, /min-h-0 flex-1 overflow-y-auto overflow-x-hidden/);
+  assert.match(popup.children[0].className, /shrink-0/);
+  assert.match(popup.children[2].className, /shrink-0/);
+});
+
+test('file section associates controls with source links, without derived filename rows', () => {
+  const raw = String.raw`h:3(link:"Attachments\Photo_A.jpg" sign:"NOSEVIE" link:"Photos/Photo_B.jpg" link:"other/Photo_A.jpg")`;
+  const popup = renderPopup({ featureType: 'Point', NAME: 'Ordinary', S_HYPERLINK: raw, Status: 'D' });
+  const section = popup.querySelectorAll('section')[0];
+  assert.equal(section.getAttribute('aria-label'), 'Filreferanser');
+  assert.equal(section.querySelectorAll('h3')[0].textContent, 'Filreferanser (S_HYPERLINK)');
+  const rows = section.children.slice(1);
+  assert.equal(rows.map((row) => row.children[0].textContent).join(''), raw);
+  const copies = section.querySelectorAll('button');
+  assert.equal(copies.length, 2);
+  assert.match(copies[0].parentNode.children[0].textContent, /link:"Attachments\\Photo_A.jpg"/);
+  assert.match(copies[1].parentNode.children[0].textContent, /link:"Photos\/Photo_B.jpg"/);
+  const metadata = rows.find((row) => row.textContent.includes('sign:'));
+  assert.match(metadata.textContent, /NOSEVIE/);
+  assert.equal(metadata.querySelectorAll('button').length, 0);
+  assert.equal(rows.find((row) => row.textContent.includes('other/')).querySelectorAll('button').length, 0);
+  assert(!rows.some((row) => ['Photo_A.jpg', 'Photo_B.jpg'].includes(row.children[0].textContent)));
+  assert.match(popup.textContent, /NAME: Ordinary/);
+  assert.match(popup.textContent, /Status: D/);
+});
+
+test('plain and long references retain a single source row and nearby compact control', () => {
+  const source = `Photos/${'long-folder/'.repeat(30)}Photo.jpg`;
+  const popup = renderPopup({ featureType: 'Point', S_HYPERLINK: source });
+  const section = popup.querySelectorAll('section')[0];
+  assert.equal(section.children.length, 2);
+  assert.equal(section.querySelectorAll('button').length, 1);
+  const row = section.children[1];
+  assert.equal(row.children[0].textContent, source);
+  assert.match(row.children[0].className, /min-w-0 flex-1.*overflow-wrap:anywhere/);
+  assert.match(row.querySelectorAll('button')[0].className, /shrink-0/);
+});
 
 test('generic popup exposes canonical Status and Eier as ordinary attributes', () => {
   const popup = renderPopup({ featureType: 'Point', S_FCODE: 'KUM', Status: 'D', Eier: 'K' });
@@ -148,8 +198,8 @@ test('ordinary point and line popups preserve their structure and actions', () =
   assert.equal(linePopup.querySelectorAll('button')[2].textContent, 'Vis profilanalyse');
   assert.match(linePopup.className, /gmi-feature-popup/);
   assert.match(linePopup.children[0].className, /font-semibold text-gmi-navy/);
-  assert.match(linePopup.children[1].className, /overflow-auto border-t border-gmi-border/);
-  assert.match(linePopup.children[2].className, /grid grid-cols-2 gap-1\.5 border-t/);
+  assert.match(linePopup.children[1].className, /overflow-y-auto overflow-x-hidden border-t border-gmi-border/);
+  assert.match(linePopup.children[2].className, /grid grid-cols-2 shrink-0 gap-1\.5 border-t/);
 });
 
 test('MapInner passes a DOM popup element instead of an interpolated HTML string', () => {
