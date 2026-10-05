@@ -1,3 +1,26 @@
+import { extractHyperlinkFilenames } from '../hyperlinkFilenames.mjs';
+import { createFilenameCopyAction, filenameCopyFeedback } from '../filenameClipboard.mjs';
+
+// Phosphor regular Copy/Check paths from @phosphor-icons/react 2.1.10.
+// DOM construction keeps the Leaflet popup text-safe without adding React roots.
+const COPY_PATH = 'M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z';
+const CHECK_PATH = 'M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z';
+
+const appendCopyIcon = (button) => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 256 256');
+  svg.setAttribute('width', '12');
+  svg.setAttribute('height', '12');
+  svg.setAttribute('fill', 'currentColor');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', COPY_PATH);
+  svg.appendChild(path);
+  button.appendChild(svg);
+  return path;
+};
+
 const appendText = (parent, value, className) => {
   const text = document.createElement('span');
   if (className) text.className = className;
@@ -54,6 +77,29 @@ export const createFeaturePopupContent = (props, featureId, color, fcode) => {
       attributes.appendChild(document.createTextNode(': '));
       attributes.appendChild(document.createTextNode(String(value)));
       attributes.appendChild(document.createElement('br'));
+      if (key === 'S_HYPERLINK') {
+        for (const filename of extractHyperlinkFilenames(value)) {
+          const reference = document.createElement('div');
+          reference.className = 'flex items-center gap-1 py-0.5';
+          appendText(reference, filename, 'min-w-0 flex-1 break-all');
+          const copy = document.createElement('button');
+          copy.className = 'gmi-compact-button gmi-focus-ring flex h-5 shrink-0 items-center justify-center gap-0.5 px-1 text-[10px] text-gmi-interactive';
+          copy.setAttribute('type', 'button');
+          copy.setAttribute('aria-label', `Kopier filnavn ${filename}`);
+          copy.setAttribute('title', `Kopier filnavn ${filename}`);
+          const iconPath = appendCopyIcon(copy);
+          const feedback = appendText(reference, '', 'text-[10px] text-gmi-text-muted');
+          feedback.setAttribute('role', 'status');
+          const action = createFilenameCopyAction(filename, (status) => {
+            copy.disabled = status === 'pending';
+            iconPath.setAttribute('d', status === 'copied' ? CHECK_PATH : COPY_PATH);
+            feedback.textContent = filenameCopyFeedback(status);
+          });
+          copy.onclick = (event) => action.copy(event);
+          reference.appendChild(copy);
+          attributes.appendChild(reference);
+        }
+      }
     }
   });
   content.appendChild(attributes);

@@ -18,6 +18,8 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowCounterClockwiseIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon, XIcon } from '@phosphor-icons/react';
 import { normalizeTableSearchQuery, filterTableSearchRows, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
+import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
+import FilenameCopyButton from '@/components/FilenameCopyButton';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
 import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns } from '@/lib/objectTablePresentation';
 
@@ -75,6 +77,22 @@ const DataCell = React.memo(function DataCell({ value, missingLabel = '-', searc
           : <React.Fragment key={index}>{segment.text}</React.Fragment>)
         : displayValue}
     </span>
+  );
+});
+
+const HyperlinkCell = React.memo(function HyperlinkCell({ value, searchQuery }) {
+  const filenames = useMemo(() => extractHyperlinkFilenames(value), [value]);
+  return (
+    <div className="flex w-full min-w-0 items-center gap-1">
+      <div className="min-w-0 flex-1"><DataCell value={value} searchQuery={searchQuery} /></div>
+      {filenames.length > 0 && (
+        <div className="flex max-w-24 shrink-0 items-center gap-0.5 overflow-x-auto" aria-label="Filnavn">
+          {filenames.map((filename, index) => (
+            <FilenameCopyButton key={filename} filename={filename} referenceNumber={filenames.length > 1 ? index + 1 : undefined} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 });
 
@@ -560,7 +578,9 @@ export default function LayerDataTable() {
           }}
         />
       ),
-      dataCell: (info, id) => <DataCell value={info.getValue()} searchQuery={normalizedSearchQuery} missingLabel={isContextualInspection && id === inspection.presentation.fieldColumn ? 'Mangler' : '-'} />,
+      dataCell: (info, id) => id === 'S_HYPERLINK'
+        ? <HyperlinkCell value={info.getValue()} searchQuery={normalizedSearchQuery} />
+        : <DataCell value={info.getValue()} searchQuery={normalizedSearchQuery} missingLabel={isContextualInspection && id === inspection.presentation.fieldColumn ? 'Mangler' : '-'} />,
     });
   }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery]);
 
