@@ -705,7 +705,7 @@ function FieldSubSection({
   );
 }
 
-export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWidthChange }) {
+export default function Sidebar({ onReset, onAddFile, onOpenContact, onOpenPhotoLayer, hasPhotoLayers, width, onWidthChange }) {
   const file = useStore((state) => state.file);
   const data = useStore((state) => state.data);
   const layerOrder = useStore((state) => state.layerOrder);
@@ -713,7 +713,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
     (state) => state.ui.multiLayerModeEnabled,
   );
   const isMultiLayerMode =
-    multiLayerModeEnabled || layerOrder.length > 0;
+    multiLayerModeEnabled || layerOrder.length > 0 || hasPhotoLayers;
 
   const setHighlightedCode = useStore(
     (state) => state.setHighlightedCode,
@@ -1072,7 +1072,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, width, onWi
       {isMultiLayerMode ? (
         /* Multi-layer mode: show LayerManager */
         <div className="min-h-0 flex-1">
-          <LayerManager onAddFile={onAddFile} />
+          <LayerManager onAddFile={onAddFile} onOpenPhotoLayer={onOpenPhotoLayer} />
         </div>
       ) : (
         /* Legacy single-file mode */

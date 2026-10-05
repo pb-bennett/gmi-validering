@@ -4,6 +4,10 @@ import React, { useMemo, useRef, useState } from 'react';
 import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import LayerPanel from './LayerPanel';
+import PhotoLayerCard from './photos/PhotoLayerCard';
+import usePhotoSession from './photos/usePhotoSession';
+import { photoSession } from '@/lib/photos/photoSession.mjs';
+import { getWorkspaceLayerEntries } from '@/lib/layerPresentation.mjs';
 import fieldsData from '@/data/fields.json';
 import { CaretDownIcon, PlusIcon } from '@phosphor-icons/react';
 
@@ -15,7 +19,8 @@ import { CaretDownIcon, PlusIcon } from '@phosphor-icons/react';
  * - Add file button
  * - Expandable LayerPanel for each layer
  */
-export default function LayerManager({ onAddFile }) {
+export default function LayerManager({ onAddFile, onOpenPhotoLayer }) {
+  const { photoLayers } = usePhotoSession();
   const layers = useStore((state) => state.layers);
   const layerOrder = useStore(
     useShallow((state) => state.layerOrder),
@@ -56,10 +61,9 @@ export default function LayerManager({ onAddFile }) {
   }, []);
 
   // Calculate visibility stats
-  const visibleCount = layerOrder.filter(
-    (id) => layers[id]?.visible,
-  ).length;
-  const totalCount = layerOrder.length;
+  const entries = getWorkspaceLayerEntries(layers, layerOrder, photoLayers);
+  const visibleCount = entries.filter((entry) => entry.layer.visible).length;
+  const totalCount = entries.length;
 
   if (totalCount === 0) {
     return (
@@ -95,14 +99,14 @@ export default function LayerManager({ onAddFile }) {
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={showAllLayers}
+            onClick={() => { showAllLayers(); photoSession.setAllLayersVisible(true); }}
             className="gmi-focus-ring rounded-lg px-2 py-1 text-[10px] font-medium text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
             title="Vis alle lag"
           >
             Vis alle
           </button>
           <button
-            onClick={hideAllLayers}
+            onClick={() => { hideAllLayers(); photoSession.setAllLayersVisible(false); }}
             className="gmi-focus-ring rounded-lg px-2 py-1 text-[10px] font-medium text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
             title="Skjul alle lag"
           >
@@ -113,10 +117,12 @@ export default function LayerManager({ onAddFile }) {
 
       {/* Layer list */}
       <div className="flex-1 overflow-y-auto overflow-x-visible pb-6">
-        {layerOrder.map((layerId) => (
+        {entries.map((entry) => entry.kind === 'photo' ? (
+          <PhotoLayerCard key={entry.id} layer={entry.layer} onOpen={onOpenPhotoLayer} />
+        ) : (
           <LayerPanel
-            key={layerId}
-            layerId={layerId}
+            key={entry.id}
+            layerId={entry.id}
             codeLookups={codeLookups}
           />
         ))}

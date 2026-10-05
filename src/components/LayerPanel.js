@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import useStore from '@/lib/store';
+import LayerTypeBadge from './LayerTypeBadge';
 import fieldsData from '@/data/fields.json';
 import { formatStatusChoice } from '@/lib/statusDomain.mjs';
 import { analyzeIncline } from '@/lib/analysis/incline';
@@ -1251,10 +1252,9 @@ export default function LayerPanel({ layerId, codeLookups }) {
 
           {/* Layer name and stats */}
           <div className="flex-1 min-w-0">
-            <div
-              className="truncate text-xs font-medium text-gmi-text"
-            >
-              {layer.name}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <LayerTypeBadge layer={layer} />
+              <span className="truncate text-xs font-medium text-gmi-text" title={layer.name}>{layer.name}</span>
             </div>
             <div className="text-[10px] text-gmi-text-subtle">
               {pointCount} punkt, {lineCount} ledn.

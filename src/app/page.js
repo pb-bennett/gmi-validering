@@ -6,6 +6,7 @@ import { EnvelopeSimpleIcon, ImagesIcon, InfoIcon, GearSixIcon, PlusIcon, XIcon 
 import FileUpload from '@/components/FileUpload';
 import GlobalFileDrop from '@/components/GlobalFileDrop';
 import PhotoCollectionDialog from '@/components/photos/PhotoCollectionDialog';
+import usePhotoSession from '@/components/photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import ZValidationModal from '@/components/ZValidationModal';
@@ -63,6 +64,9 @@ const Viewer3D = dynamic(() => import('@/components/3D/Viewer3D'), {
 });
 
 export default function Home() {
+  const { photoLayers } = usePhotoSession();
+  const hasPhotoLayers = photoLayers.length > 0;
+  const hasSurveyData = useStore((state) => Boolean(state.data) || state.layerOrder.length > 0);
   const parsingStatus = useStore((state) => state.parsing.status);
   const parsingError = useStore((state) => state.parsing.error);
   const resetAll = useStore((state) => state.resetAll);
@@ -114,10 +118,29 @@ export default function Home() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAppInfo, setShowAppInfo] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
+  const [photoLayerId, setPhotoLayerId] = useState(null);
   const photoTriggerRef = useRef(null);
   const openPhotos = (event) => {
+    photoSession.beginImport();
+    setPhotoLayerId(null);
     photoTriggerRef.current = event.currentTarget;
     setShowPhotos(true);
+  };
+  const openPhotoLayer = (id, opener) => {
+    photoTriggerRef.current = opener;
+    setPhotoLayerId(id);
+    setShowPhotos(true);
+  };
+  const closePhotos = () => {
+    if (!photoLayerId) photoSession.cancelImport();
+    setShowPhotos(false);
+    setPhotoLayerId(null);
+  };
+  const createPhotoLayer = () => {
+    if (!photoSession.createLayer()) return;
+    useStore.getState().toggleFieldValidation(false);
+    setShowPhotos(false);
+    setPhotoLayerId(null);
   };
   // The page owns the session; ordinary dialog/workspace mounts do not clear it.
   useEffect(() => () => photoSession.clear(), []);
@@ -288,7 +311,7 @@ export default function Home() {
     <div className="h-screen w-screen overflow-hidden flex bg-gmi-surface-soft">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !showPhotos} />
       <TestModeActivation />
-      {showPhotos && <PhotoCollectionDialog onClose={() => setShowPhotos(false)} openerRef={photoTriggerRef} />}
+      {showPhotos && <PhotoCollectionDialog key={photoLayerId || 'import'} layerId={photoLayerId} onClose={closePhotos} onCreate={createPhotoLayer} openerRef={photoTriggerRef} />}
       {/* Floating Stats Button */}
       {!(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
       <button
@@ -360,7 +383,7 @@ export default function Home() {
       />
 
       {/* Initial Upload Screen */}
-      {parsingStatus !== 'done' && (
+      {parsingStatus !== 'done' && !hasPhotoLayers && (
         <div className="flex-1 flex items-center justify-center overflow-y-auto py-6">
           <div className="my-auto max-w-xl w-full px-4">
             <div className="text-center mb-8">
@@ -447,7 +470,7 @@ export default function Home() {
       )}
 
       {/* Main App Layout (Sidebar + Map) */}
-      {parsingStatus === 'done' && (
+      {(parsingStatus === 'done' || hasPhotoLayers) && (
         <>
           {/* Background terrain fetcher - runs in background */}
           <TerrainFetcher />
@@ -467,6 +490,8 @@ export default function Home() {
             ) : (
               <Sidebar
                 onReset={handleReset}
+                onOpenPhotoLayer={openPhotoLayer}
+                hasPhotoLayers={hasPhotoLayers}
                 onAddFile={() => setShowAddLayerModal(true)}
                 onOpenContact={(event) => openAppInfo('contact', event.currentTarget)}
                 width={sidebarWidth}
@@ -478,6 +503,9 @@ export default function Home() {
             primary={(
               <div className="flex h-full min-h-0 min-w-0 flex-1">
                 <MapPanePresentationProvider analysisOpen={analysisOpen} className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                {hasPhotoLayers && parsingStatus === 'error' && parsingError && (
+                  <div role="alert" className="absolute inset-x-3 top-16 z-[1300] rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Feil ved lasting av fil: {parsingError}. Bruk «Legg til fil» for å prøve igjen.</div>
+                )}
                 <MapPaneToolbar
                   onReset={handleReset}
                   onShare={() => setShowShareModal(true)}
@@ -496,6 +524,14 @@ export default function Home() {
                   }}
                 >
                   <MapView onZoomChange={setZoomLevel} />
+                  {hasPhotoLayers && !hasSurveyData && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+                      <ImagesIcon size={36} className="text-gmi-interactive" aria-hidden="true" />
+                      <h2 className="text-lg font-semibold text-gmi-navy">Bildene er klare i laglisten</h2>
+                      <p className="max-w-md text-sm text-gmi-text-muted">Bruk «Åpne bilder» for å inspisere fotokartlaget. Last inn en GMI-, SOSI- eller KOF-fil for kart og validering.</p>
+                      <button type="button" onClick={() => setShowAddLayerModal(true)} className="gmi-primary-control gmi-focus-ring px-4 py-2 text-sm">Legg til innmålingsfil</button>
+                    </div>
+                  )}
 
                   {/* Floating Zoom Indicator */}
                   <div
@@ -535,7 +571,7 @@ export default function Home() {
                   </div>
 
                   {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
-                  {!analysisOpen && !fieldValidationOpen && (
+                  {!analysisOpen && !fieldValidationOpen && parsingStatus === 'done' && (
                     <div
                       className="absolute bottom-4 -translate-x-1/2"
                       style={{

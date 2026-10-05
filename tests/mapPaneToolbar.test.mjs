@@ -259,7 +259,7 @@ test('start-screen Testmodus host and map toolbar are mutually exclusive and sha
     read('../src/components/FieldValidationSidebar.js'),
   ]);
   const uploadBranch = page.slice(page.indexOf("{parsingStatus !== 'done'"), page.indexOf('{/* Main App Layout'));
-  const mapBranch = page.slice(page.indexOf("{parsingStatus === 'done'"));
+  const mapBranch = page.slice(page.indexOf('{/* Main App Layout'));
   assert.match(uploadBranch, /Last opp og valider GMI-filer[\s\S]*?<TestModeControl \/>[\s\S]*?<FileUpload \/>/);
   assert.match(mapBranch, /<MapPaneToolbar/);
   assert.match(page, /<TestModeActivation \/>/);

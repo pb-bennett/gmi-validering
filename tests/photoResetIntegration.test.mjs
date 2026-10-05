@@ -37,3 +37,18 @@ test('full reset invalidates a pending thumbnail batch before it can publish', a
   assert.equal(photoSession.getSnapshot().photos.length, 0);
   assert.equal(photoSession.getFile(ids[0]), null);
 });
+
+test('actual reset clears created FOTO layers and a new temporary import together', () => {
+  const one = photoSession.importFiles([new File(['one'], 'one.heic')]).acceptedIds[0];
+  const layer = photoSession.createLayer();
+  const two = photoSession.importFiles([new File(['two'], 'two.heic')]).acceptedIds[0];
+  assert.equal(photoSession.getSnapshot().photoLayers[0].type, 'FOTO');
+  assert(!useStore.getState().layers[layer.id], 'photo layer stays out of survey selectors');
+  useStore.getState().clearData();
+  assert(photoSession.getFile(one));
+  useStore.getState().resetAll();
+  assert.deepEqual(photoSession.getSnapshot().photoLayers, []);
+  assert.deepEqual(photoSession.getSnapshot().photos, []);
+  assert.equal(photoSession.getFile(one), null);
+  assert.equal(photoSession.getFile(two), null);
+});

@@ -10,6 +10,7 @@ export default function ProductHeader({ onOpenAppInfo, appInfoTriggerRef, onOpen
         <button
           type="button"
           onClick={onOpenPhotos}
+          title="Importer bilder til nytt fotokartlag"
           aria-haspopup="dialog"
           className="gmi-compact-button gmi-focus-ring inline-flex min-h-9 flex-none items-center gap-1 border border-gmi-border-strong px-2 text-xs font-medium"
         >

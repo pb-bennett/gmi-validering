@@ -11,7 +11,7 @@ function formatSize(size) {
     : `${(size / 1024).toLocaleString('nb-NO', { maximumFractionDigits: 1 })} kB`;
 }
 
-export default function PhotoCollectionPanel({ photos, selectedId }) {
+export default function PhotoCollectionPanel({ photos, selectedId, batchSelectedIds, onInspect = photoSession.select }) {
   return (
     <section className="photo-collection-gallery" aria-label="Alle importerte bilder">
       {photos.length === 0 ? (
@@ -23,10 +23,10 @@ export default function PhotoCollectionPanel({ photos, selectedId }) {
       ) : (
         <ul className="photo-collection-grid">
           {photos.map((photo) => (
-            <li key={photo.id} className="min-w-0">
+            <li key={photo.id} className="relative min-w-0">
               <button
                 type="button"
-                onClick={() => photoSession.select(photo.id)}
+                onClick={() => onInspect(photo.id)}
                 aria-pressed={photo.id === selectedId}
                 aria-label={`Vis ${photo.originalFilename}`}
                 className={`photo-collection-card gmi-focus-ring ${photo.id === selectedId ? 'photo-collection-card-selected' : ''}`}
@@ -42,9 +42,18 @@ export default function PhotoCollectionPanel({ photos, selectedId }) {
                 </div>
                 <span className="block truncate px-2 pt-2 text-xs font-medium" title={photo.originalFilename}>{photo.originalFilename}</span>
                 <span className="block px-2 pb-2 pt-1 text-[11px] text-gmi-text-subtle">
-                  {photo.id === selectedId ? 'Valgt · ' : ''}{formatSize(photo.size)}
+                  {photo.id === selectedId ? 'Vises · ' : ''}{formatSize(photo.size)}
                 </span>
               </button>
+              {batchSelectedIds && (
+                <button type="button" className="photo-batch-toggle gmi-focus-ring"
+                  aria-label={`Velg ${photo.originalFilename} for fjerning`}
+                  aria-pressed={batchSelectedIds.includes(photo.id)}
+                  title="Velg for fjerning; klikk bildet for å inspisere"
+                  onClick={() => photoSession.toggleBatchSelection(photo.id)}>
+                  <span className="photo-batch-circle" aria-hidden="true"><span /></span>
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -74,7 +83,7 @@ export function SelectedPhotoInspector({ photo }) {
   }, [id, canInspect]);
 
   return (
-    <section className="photo-collection-inspector" aria-label="Valgt bilde">
+    <section className="photo-collection-inspector" aria-label="Bilde som vises">
       <h3 className="truncate text-sm font-semibold text-gmi-navy" title={photo?.originalFilename}>
         {photo?.originalFilename || 'Velg et bilde'}
       </h3>

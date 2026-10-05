@@ -1,0 +1,13 @@
+{
+  "log": [
+    "A: import heading and empty-create guard passed; 110 synthetic 4000×3000 JPEG files registered (7569687 bytes each).",
+    "B/C/D: dots and inspection are independent; select-all/clear passed; removed 14 including a real disk-selected PNG (source SHA256/size unchanged); 5 dropped additions appended, preserving batch selection.",
+    "E: create used all 102 remaining photos with only one batch-selected; modal closed into photo-only normal sidebar. Read-only layer inspection retained originals, all thumbnails completed (21825 ms after opening); close kept 102 thumbnail URLs and zero originals.",
+    "G: canceled new import released only its draft; a second FOTO layer has distinct name/count, duplicate names retained; independent and shared visibility controls passed.",
+    "F: real GMI/KOF parser imports and dependency SOSI fixture loaded; all four badges visible, survey drop read once per file, FOTO counts unchanged.",
+    "I: Data Table raw hyperlink/copy UI, Leaflet map and validation remained functional; creation from Validator returned to normal layer list without closing the existing table.",
+    "H: deleted 102-photo layer released its thumbnails; two other FOTO layers and survey layers survived. Full reset removed all layers/assets/owned URLs and new import started empty.",
+    "Successful browser run: zero uncaught runtime exceptions; no /api/track calls with Testmodus active."
+  ],
+  "errors": []
+}

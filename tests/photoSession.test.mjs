@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
+import { createPhotoSession, EMPTY_PHOTO_SNAPSHOT } from '../src/lib/photos/photoSession.mjs';
 
 const file = (name, type = 'image/jpeg', content = 'original') => new File([content], name, { type, lastModified: 123 });
 const result = () => ({ dimensions: { width: 1200, height: 800 }, thumbnailBlob: new Blob(['thumbnail']) });
@@ -114,7 +114,7 @@ test('clear releases all thumbnail URLs and originals, resets selection, and is 
   session.clear();
   assert.deepEqual(revoked, created.map((entry) => entry.url));
   acceptedIds.forEach((id) => assert.equal(session.getFile(id), null));
-  assert.deepEqual(session.getSnapshot(), { photos: [], selectedId: null, lastImport: null });
+  assert.deepEqual(session.getSnapshot(), EMPTY_PHOTO_SNAPSHOT);
   unsubscribe();
   const previousNotifications = notifications;
   session.clear();

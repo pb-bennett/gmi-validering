@@ -29,7 +29,8 @@ test('panel controls target each layer and share the sidebar enable state', () =
   assert.match(panel, /setSpread\(layerId, pixels\)/);
   assert.match(panel, /resetStyle\(layerId\)/);
   assert.match(layerPanel, /toggleLayerHighlightAll\(layerId\)/);
-  assert.match(layerManager, /layerOrder\.map\(\(layerId\) =>/);
+  assert.match(layerManager, /getWorkspaceLayerEntries\(layers, layerOrder, photoLayers\)/);
+  assert.match(layerManager, /entries.map\(\(entry\) => entry.kind === 'photo'/);
   assert.match(panel, /moveLayerUp\(layerId\)/);
   assert.match(panel, /moveLayerDown\(layerId\)/);
   assert.match(panel, /disabled=\{index === 0\}/);
