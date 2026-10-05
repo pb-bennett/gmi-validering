@@ -16,7 +16,8 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowCounterClockwiseIcon, MagnifyingGlassPlusIcon, XIcon } from '@phosphor-icons/react';
+import { ArrowCounterClockwiseIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon, XIcon } from '@phosphor-icons/react';
+import { normalizeTableSearchQuery, filterTableSearchRows, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
 import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns } from '@/lib/objectTablePresentation';
 
@@ -56,7 +57,7 @@ function normalizeColumnOrder(fields, savedOrder) {
 }
 
 // Memoized cell component to prevent re-renders
-const DataCell = React.memo(function DataCell({ value, missingLabel = '-' }) {
+const DataCell = React.memo(function DataCell({ value, missingLabel = '-', searchQuery = '' }) {
   const displayValue = value === null || value === undefined || value === ''
     ? missingLabel
     : String(value);
@@ -68,7 +69,11 @@ const DataCell = React.memo(function DataCell({ value, missingLabel = '-' }) {
       className={`block truncate ${isMissing ? 'text-gmi-text-subtle italic' : ''}`}
       title={needsTooltip ? displayValue : undefined}
     >
-      {displayValue}
+      {!isMissing && tableSearchScalarText(value) !== null && searchQuery
+        ? segmentTableSearchText(displayValue, searchQuery).map((segment, index) => segment.match
+          ? <mark key={index} className="rounded-sm bg-gmi-cyan-soft text-inherit">{segment.text}</mark>
+          : <React.Fragment key={index}>{segment.text}</React.Fragment>)
+        : displayValue}
     </span>
   );
 });
@@ -116,6 +121,9 @@ export default function LayerDataTable() {
   );
 
   const tableContainerRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const normalizedSearchQuery = normalizeTableSearchQuery(searchQuery);
 
   const isOpen = layerDataTable?.isOpen;
   const layerId = layerDataTable?.layerId;
@@ -309,6 +317,14 @@ export default function LayerDataTable() {
   const totalCount = allItemsWithIndex.length;
   const filteredCount = items.length;
   const hiddenCount = totalCount - filteredCount;
+  const searchedItems = useMemo(
+    () => filterTableSearchRows(items, normalizedSearchQuery),
+    [items, normalizedSearchQuery],
+  );
+
+  useEffect(() => {
+    if (tableContainerRef.current) tableContainerRef.current.scrollTop = 0;
+  }, [normalizedSearchQuery, layerId, activeTab, inspection?.id]);
 
   // Defer field calculation for large datasets
   const fields = useMemo(() => {
@@ -544,12 +560,12 @@ export default function LayerDataTable() {
           }}
         />
       ),
-      dataCell: (info, id) => <DataCell value={info.getValue()} missingLabel={isContextualInspection && id === inspection.presentation.fieldColumn ? 'Mangler' : '-'} />,
+      dataCell: (info, id) => <DataCell value={info.getValue()} searchQuery={normalizedSearchQuery} missingLabel={isContextualInspection && id === inspection.presentation.fieldColumn ? 'Mangler' : '-'} />,
     });
-  }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection]);
+  }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery]);
 
   const table = useReactTable({
-    data: items,
+    data: searchedItems,
     columns,
     state: { sorting },
     onSortingChange: (updater) => {
@@ -604,7 +620,7 @@ export default function LayerDataTable() {
       className="flex h-full flex-col border-t border-gmi-border-strong bg-gmi-surface text-gmi-text"
     >
       <div
-        className="flex shrink-0 items-center gap-2 border-b border-gmi-border bg-gmi-surface-soft px-3 py-1.5"
+        className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gmi-border bg-gmi-surface-soft px-3 py-1.5"
       >
         <div className="flex items-center gap-1.5">
           <span
@@ -687,7 +703,38 @@ export default function LayerDataTable() {
           )}
         </div>
 
-        <div className="flex-1" />
+        <div className="ml-auto flex min-w-36 flex-1 items-center justify-end gap-2">
+          <div className="relative w-full min-w-24 max-w-64">
+            <MagnifyingGlassIcon size={14} weight="regular" aria-hidden="true" className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-gmi-text-muted" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              aria-label="Søk i data"
+              placeholder="Søk i data…"
+              className="gmi-focus-ring h-7 w-full rounded border border-gmi-border bg-gmi-surface pl-7 pr-7 text-[11px] text-gmi-text placeholder:text-gmi-text-subtle"
+            />
+            {searchQuery !== '' && (
+              <button
+                type="button"
+                aria-label="Tøm søk"
+                onClick={() => {
+                  setSearchQuery('');
+                  searchInputRef.current?.focus();
+                }}
+                className="gmi-focus-ring absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-gmi-text-muted hover:text-gmi-navy"
+              >
+                <XIcon size={12} weight="regular" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          {normalizedSearchQuery && (
+            <span className="shrink-0 text-[10px] text-gmi-text-muted" role="status">
+              {searchedItems.length} treff
+            </span>
+          )}
+        </div>
 
         <button
           onClick={closeLayerDataTable}

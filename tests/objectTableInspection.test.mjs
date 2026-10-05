@@ -200,7 +200,7 @@ test('contextual missing-field display is presentation-only and whole-layer cell
   assert.match(source, /missingLabel=\{isContextualInspection && id === inspection\.presentation\.fieldColumn \? 'Mangler' : '-'\}/);
   assert.match(source, /line-clamp-2/);
   assert.match(source, /title=\{fullHeaderLabel \|\| undefined\}/);
-  assert.match(source, /const DataCell = React\.memo\(function DataCell\(\{ value, missingLabel = '-' \}\)/);
+  assert.match(source, /const DataCell = React\.memo\(function DataCell\(\{ value, missingLabel = '-', searchQuery = '' \}\)/);
 });
 
 test('ordinary contextual attributes size from complete-scope content rather than long headers', () => {
