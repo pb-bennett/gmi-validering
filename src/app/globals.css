@@ -570,3 +570,32 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The map has explicit dimensions; container units exclude the sidebar and
+   follow the smaller map when the profile panel is open. */
+.gmi-object-map {
+  container-type: size;
+}
+
+/* Leaflet writes an inline measured width. CSS owns the responsive bound;
+   Leaflet still measures this result for positioning and normal auto-pan. */
+.gmi-object-popup .leaflet-popup-content {
+  width: min(35rem, calc(100cqw - 6rem)) !important;
+  min-width: 0;
+  margin: 0.75rem 1.25rem;
+}
+
+.gmi-feature-popup {
+  max-height: min(38rem, calc(100cqh - 10rem));
+}
+
+.gmi-feature-popup-attributes {
+  overflow-wrap: anywhere;
+  scrollbar-gutter: stable;
+}
+
+@media (max-height: 1000px) and (min-width: 1024px) {
+  .gmi-feature-popup {
+    max-height: min(34rem, calc(100cqh - 10rem));
+  }
+}

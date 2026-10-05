@@ -2651,6 +2651,13 @@ export default function MapInner({ onZoomChange }) {
 
         layer.bindPopup(
           createFeaturePopupContent(props, featureId, color, fcode),
+          {
+            className: 'gmi-object-popup',
+            minWidth: 0,
+            maxWidth: 560,
+            autoPanPaddingTopLeft: [24, 64],
+            autoPanPaddingBottomRight: [24, 48],
+          },
         );
       }
     },
@@ -2673,6 +2680,7 @@ export default function MapInner({ onZoomChange }) {
       center={[59.9139, 10.7522]}
       zoom={13}
       style={{ height: '100%', width: '100%' }}
+      className="gmi-object-map"
       maxZoom={25} // Allow higher zoom levels globally
     >
       <FeatureHoverTooltip
