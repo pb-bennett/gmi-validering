@@ -27,13 +27,13 @@ export function getFeatureHoverParts(feature) {
     const dimension = value(props.Dimensjon);
     const material = value(props.Material);
     const year = value(props['Anleggsår']);
-    return [`${identity}${dimension === null ? '' : ` ${dimension}`}`, material, year, exactValue(props.Eier), exactValue(props['Stedfestings\u00e5rsak'])].filter(Boolean);
+    return [`${identity}${dimension === null ? '' : ` ${dimension}`}`, material, year, exactValue(props.Eier), exactValue(props.Status), exactValue(props['Stedfestings\u00e5rsak'])].filter(Boolean);
   }
 
   const pointIdentity = identity ?? type;
   if (!pointIdentity) return [];
   const usefulType = identity && type && type.toLocaleLowerCase() !== identity.toLocaleLowerCase() ? type : null;
-  return [pointIdentity, usefulType, value(props.Bredde), value(props.Material), value(props['Anleggsår']), exactValue(props.Eier), exactValue(props['Stedfestings\u00e5rsak'])].filter(Boolean);
+  return [pointIdentity, usefulType, value(props.Bredde), value(props.Material), value(props['Anleggsår']), exactValue(props.Eier), exactValue(props.Status), exactValue(props['Stedfestings\u00e5rsak'])].filter(Boolean);
 }
 
 export function getFeatureHoverLabel(feature) {

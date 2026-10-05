@@ -3,6 +3,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import useStore from '@/lib/store';
 import fieldsData from '@/data/fields.json';
+import { formatStatusChoice } from '@/lib/statusDomain.mjs';
 import { analyzeIncline } from '@/lib/analysis/incline';
 import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
@@ -867,7 +868,7 @@ function LayerFeltValueSection({
                   value === 'null' ||
                   value === ''
                     ? '(Mangler verdi)'
-                    : value;
+                    : fieldName === 'Status' ? formatStatusChoice(value) : value;
                 const isMissing =
                   value === '(Mangler)' ||
                   value === 'null' ||

@@ -3,6 +3,7 @@
 import useStore from '@/lib/store';
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import fieldsData from '@/data/fields.json';
+import { formatStatusChoice } from '@/lib/statusDomain.mjs';
 import { analyzeIncline } from '@/lib/analysis/incline';
 import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
@@ -641,7 +642,7 @@ function FieldSubSection({
                   value === 'null' ||
                   value === ''
                     ? '(Mangler verdi)'
-                    : value;
+                    : fieldName === 'Status' ? formatStatusChoice(value) : value;
                 const isMissing =
                   value === '(Mangler)' ||
                   value === 'null' ||

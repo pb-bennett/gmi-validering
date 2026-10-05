@@ -90,6 +90,12 @@ const popupSource = await readFile(
   'utf8',
 );
 
+test('generic popup exposes canonical Status and Eier as ordinary attributes', () => {
+  const popup = renderPopup({ featureType: 'Point', S_FCODE: 'KUM', Status: 'D', Eier: 'K' });
+  assert.match(popup.textContent, /Status: D/);
+  assert.match(popup.textContent, /Eier: K/);
+});
+
 test('hostile attribute names and values remain literal popup text', () => {
   const hostileImage = '<img src=x onerror="alert(1)">';
   const hostileScript = '<script>alert(2)</script>';

@@ -76,6 +76,19 @@ test('point owner follows current identity fields and precedes final cause', () 
   );
 });
 
+test('line and point Status codes follow Eier and precede final contextual cause', () => {
+  for (const shape of [line, point]) {
+    const base = { S_FCODE: 'VL', Eier: 'K', Stedfestingsårsak: 'NY' };
+    for (const Status of ['D', 'N', 'EF', 'UK', 'XYZ', 'MIDLUTED']) {
+      assert.equal(getFeatureHoverLabel(shape({ ...base, Status })), `VL · K · ${Status} · NY`);
+    }
+    for (const Status of [undefined, null, '', '   ', '-', 'null', 'undefined', 'NaN', 'n/a']) {
+      assert.equal(getFeatureHoverLabel(shape({ ...base, Status })), 'VL · K · NY');
+    }
+    assert.equal(getFeatureHoverLabel(shape({ ...base, EGS_LEDNING: { status: 'D' } })), 'VL · K · NY');
+  }
+});
+
 test('colour comes from the current owning layer regardless of highlight or order', () => {
   const feature = point({ S_FCODE: 'KUM', _layerId: 'a' });
   const layers = {

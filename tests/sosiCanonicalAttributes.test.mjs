@@ -10,6 +10,36 @@ const line = (properties, inferredFcode = 'VL') =>
 const point = (properties, inferredFcode = 'KUM') =>
   mapSosiCanonicalAttributes({ geometryType: 'Point', properties, inferredFcode });
 
+for (const [map, groupName] of [[line, 'EGS_LEDNING'], [point, 'EGS_PUNKT']]) {
+  test(`${groupName}.status maps additively with canonical precedence and raw codes`, () => {
+    for (const code of ['D', 'N', 'E', 'EF', 'EN', 'F', 'UK', 'MIDLUTED', 'XYZ', '  raw  ']) {
+      const group = Object.freeze({ status: code });
+      const source = Object.freeze({ [groupName]: group });
+      const { attributes } = map(source);
+      assert.equal(attributes.Status, code);
+      assert.strictEqual(attributes[groupName], group);
+      assert.equal(group.status, code);
+      assert.equal(Object.hasOwn(source, 'Status'), false);
+      assert.equal(map({ ...source, Status: 'R' }).attributes.Status, 'R');
+      for (const empty of [undefined, null, '']) {
+        assert.equal(map({ ...source, Status: empty }).attributes.Status, code);
+      }
+    }
+  });
+
+  test(`${groupName} missing/blank status stays absent and unverified aliases stay raw`, () => {
+    for (const source of [{}, { [groupName]: {} }, { [groupName]: { STATUS: 'D' } }, { status: 'D' }]) {
+      assert.equal(Object.hasOwn(map(source).attributes, 'Status'), false);
+    }
+    for (const status of [undefined, null, '', '   ', 0, false]) {
+      const source = { [groupName]: { status } };
+      assert.equal(Object.hasOwn(map(source).attributes, 'Status'), false);
+      assert.strictEqual(map(source).attributes[groupName], source[groupName]);
+    }
+    assert.equal(map({ Status: 'XYZ' }).attributes.Status, 'XYZ');
+  });
+}
+
 test('line core maps exact source paths and keeps numeric dimensions and year', () => {
   const group = {
     L_TEMA: 'SP', MATERIAL: '10P', DIMENSJON: '32.00', INNVUTV_DIM: 'ID',

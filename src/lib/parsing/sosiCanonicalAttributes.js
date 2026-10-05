@@ -1,5 +1,6 @@
 // Browser field names shared with GMI. Source groups remain intact in attributes.
 const lineMappings = [
+  ['Status', ['EGS_LEDNING', 'status'], 'nonBlankCode'],
   ['Eier', ['EGS_LEDNING', 'geodataeier'], 'code'],
   ['S_FCODE', ['EGS_LEDNING', 'L_TEMA'], 'code'],
   ['Material', ['EGS_LEDNING', 'MATERIAL'], 'code'],
@@ -15,6 +16,7 @@ const lineMappings = [
 ];
 
 const pointMappings = [
+  ['Status', ['EGS_PUNKT', 'status'], 'nonBlankCode'],
   ['Eier', ['EGS_PUNKT', 'geodataeier'], 'code'],
   ['S_FCODE', ['EGS_PUNKT', 'P_TEMA'], 'code'],
   ['Type', ['EGS_PUNKT', 'TYPE'], 'code'],
@@ -58,6 +60,11 @@ function sourceValue(properties, path) {
 }
 
 function normalize(value, kind) {
+  if (kind === 'nonBlankCode') {
+    return typeof value === 'string' && value.trim() !== ''
+      ? { valid: true, value }
+      : { valid: false };
+  }
   if (kind === 'finiteNumberOrNull') {
     return { valid: true, value: typeof value === 'number' && Number.isFinite(value) ? value : null };
   }
