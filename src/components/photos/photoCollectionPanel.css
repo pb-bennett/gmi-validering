@@ -1,0 +1,4 @@
+.photo-append-badge { position: absolute; bottom: 6px; left: 6px; max-width: calc(100% - 12px); padding: 1px 5px; border: 1px solid #e1c58e; border-radius: 4px; background: #fffaf0f5; color: #805300; font-size: 10px; font-weight: 600; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.photo-append-override { position: absolute; top: 6px; left: 6px; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #bdc8d4; border-radius: 4px; background: #fffffff5; color: #536579; box-shadow: 0 1px 3px #17202c22; }
+.photo-append-override:hover { border-color: var(--gmi-interactive); }
+[data-append-status='override'] .photo-append-badge, .photo-append-override[aria-pressed='true'] { border-color: #8bbea0; background: #eef9f1f5; color: #245d41; }

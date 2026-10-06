@@ -55,3 +55,27 @@ export const projectCoordinateToWgs84 = (data, x, y) => {
     return [x, y];
   }
 };
+
+// Strict photo-only path: never reinterpret failed projected values as degrees.
+export function projectPhotoCoordinate(sourceCrs, coordinates, transform = proj4) {
+  const horizontalProjection = sourceCrs === 'EPSG:5972' ? 'EPSG:25832' : sourceCrs;
+  if (!['EPSG:25832', 'EPSG:25833', 'EPSG:4326'].includes(horizontalProjection)) {
+    return { status: 'unsupported-crs', position: null, errorCode: 'unsupported-crs' };
+  }
+  if (!Array.isArray(coordinates) || ![2, 3].includes(coordinates.length) || !coordinates.every(Number.isFinite)) {
+    return { status: 'invalid', position: null, errorCode: 'invalid-coordinates' };
+  }
+  try {
+    const [longitude, latitude] = horizontalProjection === 'EPSG:4326'
+      ? coordinates : transform(horizontalProjection, 'EPSG:4326', coordinates.slice(0, 2));
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude) || Math.abs(longitude) > 180 || Math.abs(latitude) > 90) {
+      return { status: 'invalid', position: null, errorCode: 'invalid-geographic-result' };
+    }
+    return {
+      status: 'viable', position: { crs: 'EPSG:4326', longitude, latitude }, errorCode: null,
+      transform: { method: 'proj4-horizontal-map-approximation', horizontalProjection, vertical: 'not-transformed' },
+    };
+  } catch {
+    return { status: 'invalid', position: null, errorCode: 'transform-failed' };
+  }
+}

@@ -23,6 +23,11 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import useStore from '@/lib/store';
+import usePhotoSession from './photos/usePhotoSession';
+import { photoSession } from '@/lib/photos/photoSession.mjs';
+import { buildPhotoMapFeatures } from '@/lib/photos/photoMapFeatures.mjs';
+import PhotoMarkersLayer from './photos/PhotoMarkersLayer';
+import PhotoMapController from './photos/PhotoMapController';
 import { useShallow } from 'zustand/react/shallow';
 import { analyzeIncline } from '@/lib/analysis/incline';
 import {
@@ -1318,17 +1323,18 @@ function MapSizeInvalidator() {
   useEffect(() => {
     const container = map.getContainer();
     if (!container) return;
-
+    let resizeTimer;
     const resizeObserver = new ResizeObserver(() => {
       // Small delay to let the resize settle
-      setTimeout(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
         map.invalidateSize({ animate: false });
       }, 10);
     });
 
     resizeObserver.observe(container);
 
-    return () => resizeObserver.disconnect();
+    return () => { resizeObserver.disconnect(); clearTimeout(resizeTimer); };
   }, [map]);
 
   return null;
@@ -1615,7 +1621,9 @@ function FeatureHoverTooltip({ controllerRef, resetKey }) {
   return null;
 }
 
-export default function MapInner({ onZoomChange }) {
+export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspaceSelection, onSelectPhoto }) {
+  const { photoLayers } = usePhotoSession();
+  const photoFeatures = buildPhotoMapFeatures(photoLayers, photoSession.getLayerPhotos);
   const hoverControllerRef = useRef(null);
   const data = useStore((state) => state.data);
   const multiLayerModeEnabled = useStore(
@@ -2131,7 +2139,7 @@ export default function MapInner({ onZoomChange }) {
 
   // Check if we have any data to render - show map even with empty features if layers exist
   const hasData =
-    data || layerOrder.length > 0 || multiLayerModeEnabled;
+    data || layerOrder.length > 0 || multiLayerModeEnabled || photoLayers.length > 0;
 
   // Memoized helper to check if feature is hidden by felt filter
   const isHiddenByFeltFilter = useCallback(
@@ -2688,6 +2696,7 @@ export default function MapInner({ onZoomChange }) {
         resetKey={`${geoJsonDataKey}-${styleVersionKey}`}
       />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
+      <PhotoMarkersLayer features={photoFeatures} onOpenPhoto={onOpenPhoto} photoWorkspaceSelection={photoWorkspaceSelection} onSelectPhoto={onSelectPhoto} />
       <LayersControl
         key={`layers-control-${customWmsConfig?.url ?? 'none'}`}
         position="topright"
@@ -2805,6 +2814,8 @@ export default function MapInner({ onZoomChange }) {
       <FeatureHighlighter geoJsonData={geoJsonData} />
       <FieldValidationZoomHandler geoJsonData={geoJsonData} />
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}
+      <PhotoMapController features={photoFeatures} hasSurveyData={Boolean(data) || layerOrder.length > 0}
+        locateRequest={photoLocateRequest} onLocateHandled={onPhotoLocateHandled} />
       <MapSizeInvalidator />
       <ZoomToFeatureHandler />
       <MapCenterHandler />

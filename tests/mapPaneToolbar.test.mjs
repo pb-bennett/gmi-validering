@@ -182,13 +182,14 @@ test('map controls are descendants of the map pane, beside rather than inside th
   const mapPaneEnd = primary.lastIndexOf('</MapPanePresentationProvider>', inspectorHost) + '</MapPanePresentationProvider>'.length;
   const mapPane = primary.slice(mapPaneStart, mapPaneEnd);
   assert.ok(mapPaneStart >= 0 && mapPaneEnd > mapPaneStart);
-  assert.match(primary.slice(0, mapPaneStart), /<div className="flex h-full min-h-0 min-w-0 flex-1">/);
+  assert.match(primary.slice(0, mapPaneStart), /<div className=\{`flex h-full min-h-0 min-w-0 flex-1\$\{workspaceLayer \? ' photo-workspace-primary' : ''\}`\}>/);
   assert.match(mapPane, /className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"/);
   assert.match(mapPane, /<MapPaneToolbar/);
   assert.match(page, /statistics-button\$\{parsingStatus === 'done' \? ' statistics-button--workspace' : ''\}[\s\S]*?aria-label="Vis bruksstatistikk"/);
   assert.ok(page.indexOf('aria-label="Vis bruksstatistikk"') < page.indexOf("{parsingStatus !== 'done'"));
   assert.equal((page.match(/aria-label="Vis bruksstatistikk"/g) || []).length, 1);
-  assert.match(mapPane, /<MapView onZoomChange=\{setZoomLevel\} \/>/);
+  assert.match(mapPane, /<MapView onZoomChange=\{setZoomLevel\}[\s\S]*?\/>/);
+  assert.match(mapPane, /photoLocateRequest=\{photoLocateRequest\}/);
   assert.match(primary.slice(inspectorHost), /<div id="validation-v2-field-inspector-root" className="contents" \/>/);
   assert.ok(inspectorHost > mapPaneEnd, 'inspector host is a sibling after the map pane');
   assert.doesNotMatch(page, /right:\s*dockedInspectorOpen/);

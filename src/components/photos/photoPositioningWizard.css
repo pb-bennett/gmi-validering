@@ -1,0 +1,48 @@
+.photo-positioning-wizard { position: fixed; inset: 0; margin: auto; width: min(1080px, calc(100vw - 48px)); height: min(790px, calc(100dvh - 48px)); max-width: none; max-height: none; padding: 0; border: 1px solid var(--gmi-border-strong); border-radius: 10px; background: var(--gmi-surface, #fff); color: var(--gmi-text, #24364b); overflow: hidden; font-size: 13px; }
+.photo-positioning-wizard[open] { display: flex; flex-direction: column; }
+.photo-positioning-wizard::backdrop { background: #15233588; }
+.photo-positioning-wizard header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; }
+.photo-positioning-wizard h2 { font-size: 20px; font-weight: 600; }
+.photo-positioning-wizard h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+.photo-positioning-wizard p { margin: 10px 0; }
+.photo-positioning-wizard button { border: 1px solid var(--gmi-border-strong, #c4ced8); padding: 7px 12px; font-size: 13px; }
+.photo-positioning-wizard button:disabled { opacity: .4; }
+.photo-positioning-wizard .photo-positioning-primary { background: var(--gmi-interactive, #007595); color: white; }
+.photo-positioning-wizard [role="alert"] { color: #9b2c23; }
+.photo-positioning-steps { display: flex; gap: 24px; margin: 0; padding: 0 20px 14px; border-bottom: 1px solid var(--gmi-border, #dce3ea); list-style: none; color: var(--gmi-text-muted); }
+.photo-positioning-steps [aria-current] { color: var(--gmi-interactive, #007595); font-weight: 600; }
+.photo-positioning-content { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.photo-positioning-content fieldset { display: flex; flex-wrap: wrap; gap: 12px; margin: 15px 0; }
+.photo-positioning-content legend { margin-bottom: 10px; }
+.photo-positioning-content fieldset label { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border: 1px solid #c4ced8; border-radius: 6px; }
+.photo-positioning-existing-source { display: flex; flex-direction: column; gap: 6px; max-width: 580px; margin: 18px 0; }
+.photo-positioning-existing-source select { border: 1px solid #c4ced8; padding: 8px; max-width: 100%; }
+.photo-positioning-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0; }
+.photo-positioning-rows { list-style: none; padding: 0; margin: 0; }
+.photo-positioning-rows > li { padding: 10px 0; border-top: 1px solid var(--gmi-border, #dce3ea); }
+.photo-positioning-row { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.photo-positioning-row img, .photo-positioning-thumbnail { width: 56px; height: 48px; object-fit: cover; flex-shrink: 0; background: #edf0f3; }
+.photo-positioning-filename { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.photo-positioning-filename small { display: block; color: #596779; margin-top: 4px; }
+.photo-positioning-action { width: 160px; flex-shrink: 0; font-weight: 500; }
+.photo-positioning-move { color: #875400; }
+.photo-positioning-place { color: #245d41; }
+.photo-positioning-unavailable, .photo-positioning-ambiguous, .photo-positioning-unmatched { color: #596779; }
+.photo-positioning-comparison { margin: 6px 0 0 98px; font-size: 12px; }
+.photo-positioning-wizard summary { cursor: pointer; }
+.photo-positioning-summary dl { max-width: 520px; margin: 18px 0; }
+.photo-positioning-summary dl > div { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #dce3ea; }
+.photo-positioning-selected-count { font-size: 18px; font-weight: 600; }
+.photo-positioning-wizard footer { display: flex; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid #dce3ea; background: var(--gmi-surface, #fff); flex-shrink: 0; }
+.photo-positioning-wizard footer > div { display: flex; gap: 10px; }
+@media (max-width: 700px) {
+  .photo-positioning-wizard { width: calc(100vw - 16px); height: calc(100dvh - 16px); }
+  .photo-positioning-wizard header, .photo-positioning-content { padding: 12px; }
+  .photo-positioning-steps { gap: 12px; padding: 0 12px 12px; font-size: 12px; }
+  .photo-positioning-row { flex-wrap: wrap; gap: 8px; }
+  .photo-positioning-filename { flex-basis: calc(100% - 96px); }
+  .photo-positioning-action { width: auto; margin-left: 80px; }
+  .photo-positioning-comparison { margin-left: 80px; }
+  .photo-positioning-wizard footer { padding: 12px; }
+  .photo-positioning-wizard footer > div { flex-wrap: wrap; justify-content: flex-end; }
+}

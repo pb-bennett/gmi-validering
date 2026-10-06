@@ -9,10 +9,11 @@ export default function WorkspaceShell({
   primary,
   bottomDock,
   bottomDockOpen,
+  photoWorkspace = false,
 }) {
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-gmi-surface-soft">
-      <div className="flex h-full flex-none flex-col overflow-hidden" style={{ width: `${sidebarWidth}px` }}>
+    <div className={`flex h-screen w-screen overflow-hidden bg-gmi-surface-soft${photoWorkspace ? ' photo-workspace-shell' : ''}`}>
+      <div className="workspace-left flex h-full flex-none flex-col overflow-hidden" style={{ width: `${sidebarWidth}px` }}>
         <ProductHeader onOpenAppInfo={onOpenAppInfo} appInfoTriggerRef={appInfoTriggerRef} onOpenPhotos={onOpenPhotos} />
         <div className="min-h-0 flex-1">
           {sidebar}

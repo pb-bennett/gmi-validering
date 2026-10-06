@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useState, useEffect, useRef } from 'react';
+import { startTransition, useState, useEffect, useRef, useReducer } from 'react';
 import dynamic from 'next/dynamic';
 import { EnvelopeSimpleIcon, ImagesIcon, InfoIcon, GearSixIcon, PlusIcon, XIcon } from '@phosphor-icons/react';
 import FileUpload from '@/components/FileUpload';
@@ -8,6 +8,9 @@ import GlobalFileDrop from '@/components/GlobalFileDrop';
 import PhotoCollectionDialog from '@/components/photos/PhotoCollectionDialog';
 import usePhotoSession from '@/components/photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
+import { emptyPhotoWorkspace, photoWorkspaceReducer } from '@/lib/photos/photoWorkspaceState.mjs';
+import PhotoWorkspaceCollection from '@/components/photos/PhotoWorkspaceCollection';
+import { SelectedPhotoInspector } from '@/components/photos/PhotoCollectionPanel';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import ZValidationModal from '@/components/ZValidationModal';
 import InclineAnalysisModal from '@/components/InclineAnalysisModal';
@@ -64,7 +67,7 @@ const Viewer3D = dynamic(() => import('@/components/3D/Viewer3D'), {
 });
 
 export default function Home() {
-  const { photoLayers } = usePhotoSession();
+  const { photoLayers, sourceReviews } = usePhotoSession();
   const hasPhotoLayers = photoLayers.length > 0;
   const hasSurveyData = useStore((state) => Boolean(state.data) || state.layerOrder.length > 0);
   const parsingStatus = useStore((state) => state.parsing.status);
@@ -118,29 +121,63 @@ export default function Home() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAppInfo, setShowAppInfo] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
-  const [photoLayerId, setPhotoLayerId] = useState(null);
+  const [photoImportTarget, setPhotoImportTarget] = useState(null);
+  const [photoWorkspace, dispatchPhotoWorkspace] = useReducer(photoWorkspaceReducer, emptyPhotoWorkspace);
+  const workspaceLayer = photoLayers.find((layer) => layer.id === photoWorkspace.layerId);
+  const workspacePhotos = workspaceLayer ? photoSession.getLayerPhotos(workspaceLayer.id) : [];
+  const activeWorkspacePhoto = workspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
+  const [photoLocateRequest, setPhotoLocateRequest] = useState(null);
   const photoTriggerRef = useRef(null);
   const openPhotos = (event) => {
     photoSession.beginImport();
-    setPhotoLayerId(null);
+    setPhotoImportTarget(null);
     photoTriggerRef.current = event.currentTarget;
     setShowPhotos(true);
   };
-  const openPhotoLayer = (id, opener) => {
-    photoTriggerRef.current = opener;
-    setPhotoLayerId(id);
+  const openPhotoLayer = (id, opener, photoId = null) => {
+    const layer = photoSession.getLayer(id);
+    if (!layer) return;
+    if (opener) photoTriggerRef.current = opener;
+    closeDataInspector();
+    dispatchPhotoWorkspace({ type: 'enter', layerId: id, photoId, photoIds: layer.photoIds });
+    useStore.getState().setActiveViewTab('map');
+  };
+  const exitPhotoWorkspace = () => {
+    dispatchPhotoWorkspace({ type: 'exit' });
+    if (photoTriggerRef.current?.isConnected) photoTriggerRef.current.focus();
+  };
+  const addPhotosToLayer = (event) => {
+    if (!photoSession.beginImport(workspaceLayer?.id)) return;
+    photoTriggerRef.current = event.currentTarget;
+    setPhotoImportTarget(workspaceLayer.id);
     setShowPhotos(true);
   };
   const closePhotos = () => {
-    if (!photoLayerId) photoSession.cancelImport();
+    photoSession.cancelImport();
     setShowPhotos(false);
-    setPhotoLayerId(null);
+    setPhotoImportTarget(null);
   };
+  const locatePhoto = (request) => {
+    if (!photoSession.getLayer(request.layerId)?.photoIds.includes(request.photoId)) return;
+    setPhotoLocateRequest({ ...request, kind: 'photo' });
+    useStore.getState().setActiveViewTab('map');
+  };
+  useEffect(() => photoSession.subscribe(() => {
+    setPhotoLocateRequest((request) => request && !photoSession.getLayer(request.layerId)?.photoIds.includes(request.photoId) ? null : request);
+    dispatchPhotoWorkspace({ type: 'reconcile', layers: photoSession.getSnapshot().photoLayers });
+  }), []);
+  useEffect(() => photoSession.subscribe(() => {
+    if (photoImportTarget && !photoSession.getLayer(photoImportTarget)) {
+      setShowPhotos(false);
+      setPhotoImportTarget(null);
+    }
+  }), [photoImportTarget]);
   const createPhotoLayer = () => {
-    if (!photoSession.createLayer()) return;
-    useStore.getState().toggleFieldValidation(false);
+    const layer = photoImportTarget ? photoSession.appendImport() : photoSession.createLayer();
+    if (!layer) return;
+    if (!photoImportTarget) useStore.getState().toggleFieldValidation(false);
     setShowPhotos(false);
-    setPhotoLayerId(null);
+    setPhotoImportTarget(null);
   };
   // The page owns the session; ordinary dialog/workspace mounts do not clear it.
   useEffect(() => () => photoSession.clear(), []);
@@ -294,6 +331,9 @@ export default function Home() {
 
   const handleReset = () => {
     setShowPhotos(false);
+    setPhotoLocateRequest(null);
+    setPhotoImportTarget(null);
+    dispatchPhotoWorkspace({ type: 'exit' });
     closeDataInspector();
     resetAll();
   };
@@ -309,11 +349,11 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gmi-surface-soft">
-      <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !showPhotos} />
+      <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !showPhotos && !workspaceLayer} />
       <TestModeActivation />
-      {showPhotos && <PhotoCollectionDialog key={photoLayerId || 'import'} layerId={photoLayerId} onClose={closePhotos} onCreate={createPhotoLayer} openerRef={photoTriggerRef} />}
+      {showPhotos && <PhotoCollectionDialog targetLayerId={photoImportTarget} onClose={closePhotos} onCreate={createPhotoLayer} openerRef={photoTriggerRef} />}
       {/* Floating Stats Button */}
-      {!(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
+      {!workspaceLayer && !(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
       <button
         className={`statistics-button${parsingStatus === 'done' ? ' statistics-button--workspace' : ''}`}
         onClick={() => setShowStats(true)}
@@ -476,11 +516,14 @@ export default function Home() {
           <TerrainFetcher />
 
           <WorkspaceShell
-            sidebarWidth={sidebarWidth}
+            sidebarWidth={workspaceLayer ? 280 : sidebarWidth}
+            photoWorkspace={Boolean(workspaceLayer)}
             onOpenAppInfo={(event) => openAppInfo('about', event.currentTarget)}
             appInfoTriggerRef={appInfoTriggerRef}
             onOpenPhotos={openPhotos}
-            sidebar={fieldValidationOpen ? (
+            sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos}
+              workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace} review={sourceReviews[workspaceLayer.id]}
+              onExit={exitPhotoWorkspace} onAddPhotos={addPhotosToLayer} /> : fieldValidationOpen ? (
               <FieldValidationSidebar
                 sidebarWidth={sidebarWidth}
                 canDockInspector={canDockInspector}
@@ -498,38 +541,38 @@ export default function Home() {
                 onWidthChange={setSidebarWidth}
               />
             )}
-            bottomDockOpen={layerDataTableOpen}
+            bottomDockOpen={!workspaceLayer && layerDataTableOpen}
             bottomDock={<LayerDataTable />}
             primary={(
-              <div className="flex h-full min-h-0 min-w-0 flex-1">
+              <div className={`flex h-full min-h-0 min-w-0 flex-1${workspaceLayer ? ' photo-workspace-primary' : ''}`}>
                 <MapPanePresentationProvider analysisOpen={analysisOpen} className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 {hasPhotoLayers && parsingStatus === 'error' && parsingError && (
                   <div role="alert" className="absolute inset-x-3 top-16 z-[1300] rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Feil ved lasting av fil: {parsingError}. Bruk «Legg til fil» for å prøve igjen.</div>
                 )}
-                <MapPaneToolbar
+                {!workspaceLayer && <MapPaneToolbar
                   onReset={handleReset}
                   onShare={() => setShowShareModal(true)}
                   showShare={parsingStatus === 'done'}
-                />
+                />}
                 <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
             {/* Show Map view when activeViewTab is 'map' or 3D viewer is not open */}
-            {(!viewer3DOpen || activeViewTab === 'map') && (
+            {(workspaceLayer || !viewer3DOpen || activeViewTab === 'map') && (
               <>
                 {/* Map fills the upper row, or leaves room for profile analysis */}
                 <div
                   className="relative"
                   style={{
-                    height: primaryViewHeight,
+                    height: workspaceLayer ? '100%' : primaryViewHeight,
                     transition: 'height 0.2s ease',
                   }}
                 >
-                  <MapView onZoomChange={setZoomLevel} />
-                  {hasPhotoLayers && !hasSurveyData && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-                      <ImagesIcon size={36} className="text-gmi-interactive" aria-hidden="true" />
-                      <h2 className="text-lg font-semibold text-gmi-navy">Bildene er klare i laglisten</h2>
-                      <p className="max-w-md text-sm text-gmi-text-muted">Bruk «Åpne bilder» for å inspisere fotokartlaget. Last inn en GMI-, SOSI- eller KOF-fil for kart og validering.</p>
-                      <button type="button" onClick={() => setShowAddLayerModal(true)} className="gmi-primary-control gmi-focus-ring px-4 py-2 text-sm">Legg til innmålingsfil</button>
+                  <MapView onZoomChange={setZoomLevel} onOpenPhoto={(layerId, photoId, opener) => openPhotoLayer(layerId, opener, photoId)}
+                    photoWorkspaceSelection={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId } : null}
+                    onSelectPhoto={(photoId) => dispatchPhotoWorkspace({ type: 'active', photoId })}
+                    photoLocateRequest={photoLocateRequest} onPhotoLocateHandled={() => setPhotoLocateRequest(null)} />
+                  {hasPhotoLayers && !hasSurveyData && photoLayers.every((layer) => layer.placedCount === 0) && (
+                    <div className="pointer-events-none absolute bottom-16 left-3 right-3 rounded-lg border border-gmi-border bg-gmi-surface/95 p-3 text-center text-xs text-gmi-text-muted">
+                      {workspaceLayer ? 'Bildene er uplassert. Velg «Posisjoner bilder» for å bruke GML eller EXIF GPS.' : 'Bildene er uplassert. Åpne bildemodulen for å kontrollere og bruke posisjoner.'}
                     </div>
                   )}
 
@@ -571,7 +614,7 @@ export default function Home() {
                   </div>
 
                   {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
-                  {!analysisOpen && !fieldValidationOpen && parsingStatus === 'done' && (
+                  {!workspaceLayer && !analysisOpen && !fieldValidationOpen && parsingStatus === 'done' && (
                     <div
                       className="absolute bottom-4 -translate-x-1/2"
                       style={{
@@ -592,7 +635,7 @@ export default function Home() {
             )}
 
             {/* Show 3D view when viewer is open and activeViewTab is '3d' */}
-            {viewer3DOpen && activeViewTab === '3d' && (
+            {!workspaceLayer && viewer3DOpen && activeViewTab === '3d' && (
               <div
                 className="relative"
                 style={{
@@ -605,10 +648,12 @@ export default function Home() {
             )}
 
             {/* Profile analysis modal - overlays both 2D and 3D views */}
-            <InclineAnalysisModal />
+            {!workspaceLayer && <InclineAnalysisModal />}
           </div>
                 </MapPanePresentationProvider>
-          <div id="validation-v2-field-inspector-root" className="contents" />
+          {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
+            {!showPhotos && <SelectedPhotoInspector key={photoWorkspace.activePhotoId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} enableLargeView />}
+          </aside> : <div id="validation-v2-field-inspector-root" className="contents" />}
         </div>
             )}
           />
