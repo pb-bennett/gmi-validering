@@ -13,6 +13,8 @@ export default function PhotoMapController({ features, hasSurveyData, locateRequ
     if (hasSurveyData || locateRequest) { initialFitDone.current = true; return; }
     if (initialFitDone.current || !features.length) return;
     initialFitDone.current = true;
+    // A first manual placement is already in the user's chosen map view.
+    if (features.every((feature) => photoSession.getPhoto(feature.properties.photoId)?.spatial.current?.basis.kind === 'manual')) return;
     const coordinates = features.map((feature) => [feature.geometry.coordinates[1], feature.geometry.coordinates[0]]);
     const bounds = L.latLngBounds(coordinates);
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });

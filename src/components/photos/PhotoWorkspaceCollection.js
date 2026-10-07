@@ -24,10 +24,11 @@ function RemovePhotosConfirmation({ count, onCancel, onConfirm }) {
   </dialog>;
 }
 
-export default function PhotoWorkspaceCollection({ layer, photos, workspace, dispatch, review, onExit, onAddPhotos }) {
+export default function PhotoWorkspaceCollection({ layer, photos, workspace, dispatch, review, onExit, onAddPhotos, onBeforeDialog }) {
   const [filter, setFilter] = useState('all');
   const [removalIds, setRemovalIds] = useState(null);
   const [wizard, setWizard] = useState(null);
+  const openWizard = (sourceId) => { onBeforeDialog?.(); setWizard({ sourceId }); };
   const closeWizard = useCallback(() => setWizard(null), []);
   const selectedIds = workspace.selectedIds;
   const shown = photos.filter((photo) => filter === 'all' || (filter === 'placed') === Boolean(photo.spatial.current));
@@ -38,14 +39,14 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
       <p className="sr-only">{layer.exifCandidateCount} bilder med EXIF GPS-kandidat</p>
       <label className="flex items-center gap-2"><input type="checkbox" aria-label={`Vis fotokartlag ${layer.name}`} checked={layer.visible} onChange={(event) => photoSession.setLayerVisibility(layer.id, event.target.checked)} />Vis på kartet</label>
       <button type="button" className={control} onClick={onAddPhotos}>Legg til bilder</button>
-      <button type="button" className={control} aria-haspopup="dialog" disabled={!photos.length} onClick={() => setWizard({ sourceId: null })}>Posisjoner bilder</button>
+      <button type="button" className={control} aria-haspopup="dialog" disabled={!photos.length} onClick={() => openWizard(null)}>Posisjoner bilder</button>
     </header>
     <section className="photo-workspace-sources" aria-label="Posisjonsdata for laget"><details>
       <summary>Posisjonsdata · {layer.spatialSources.length} {layer.spatialSources.length === 1 ? 'kilde' : 'kilder'}</summary>
       <p>{layer.exifCandidateCount} bilder med EXIF GPS. Kildedata beholdes også når en annen posisjon brukes.</p>
       {layer.spatialSources.map((source, index) => <div key={source.id} className="photo-workspace-source-item">
         <details><summary title={source.id}>{index + 1}. {source.filename}</summary><PhotoGmlSummary source={source} ledger={source.ledger} /></details>
-        <button type="button" className={control} onClick={() => setWizard({ sourceId: source.id })}>Sjekk treff på nytt</button>
+        <button type="button" className={control} onClick={() => openWizard(source.id)}>Sjekk treff på nytt</button>
       </div>)}
     </details></section>
     <div className="photo-workspace-batch" aria-label="Handlinger for valgte bilder">
@@ -54,7 +55,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
       <div className="flex flex-wrap gap-2"><button type="button" className={control} disabled={!shown.length} onClick={() => dispatch({ type: 'select-many', photoIds: shown.map((photo) => photo.id) })}>Velg alle viste</button>
         {selectedIds.length > 0 && <button type="button" className={control} onClick={() => dispatch({ type: 'select-many', photoIds: [] })}>Fjern valg</button>}</div>
       {selectedIds.length > 0 && <div className="photo-workspace-selected-actions">
-      <button type="button" className={control} onClick={() => setRemovalIds([...selectedIds])}>Fjern fra lag</button>
+      <button type="button" className={control} onClick={() => { onBeforeDialog?.(); setRemovalIds([...selectedIds]); }}>Fjern fra lag</button>
       </div>}
     </div>
     <ul className="photo-workspace-list" aria-label="Bilder i fotokartlaget">

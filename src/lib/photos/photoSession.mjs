@@ -1,6 +1,6 @@
 import { classifyPhotoFile, createPhotoThumbnail } from './imagePreview.mjs';
 import { readExifGps } from './exifGps.mjs';
-import { acceptPhotoCandidate, createPhotoCandidate, emptySpatial, immutable, isPhotoPosition, photoSpatialCounts } from './photoSpatial.mjs';
+import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, emptySpatial, immutable, isPhotoPosition, photoSpatialCounts } from './photoSpatial.mjs';
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 
@@ -27,6 +27,8 @@ export function createPhotoSession({
 } = {}) {
   // Originals and browser resources deliberately live outside Zustand/React snapshots.
   const records = new Map();
+  const manualTickets = new WeakSet();
+  const manualVisibilityVersions = new Map();
   // Each asset has exactly one owner: the current import or one created FOTO layer.
   // Transfer changes membership, never copies the File or invalidates thumbnail work.
   const layers = new Map();
@@ -81,6 +83,14 @@ export function createPhotoSession({
       });
     }
     return immutable({ ...source, ledger });
+  }
+
+  function manualPlacementIsLive(ticket) {
+    return Boolean(ticket && manualTickets.has(ticket) && ticket.generation === generation
+      && ticket.visibilityVersion === (manualVisibilityVersions.get(ticket.layerId) || 0)
+      && layers.get(ticket.layerId)?.visible
+      && layers.get(ticket.layerId)?.photoIds.includes(ticket.photoId)
+      && records.get(ticket.photoId)?.spatial.current === ticket.expectedCurrent);
   }
 
   function transferDraft() {
@@ -247,6 +257,25 @@ export function createPhotoSession({
 
   return {
     getSnapshot: () => snapshot,
+    beginManualPlacement(layerId, photoId) {
+      if (!layers.get(layerId)?.visible || !layers.get(layerId)?.photoIds.includes(photoId)) return null;
+      const ticket = Object.freeze({ layerId, photoId, generation, visibilityVersion: manualVisibilityVersions.get(layerId) || 0, expectedCurrent: records.get(photoId).spatial.current });
+      manualTickets.add(ticket);
+      return ticket;
+    },
+    manualPlacementIsLive,
+    cancelManualPlacement(ticket) { if (ticket) manualTickets.delete(ticket); },
+    applyManualPlacement(ticket, position) {
+      if (!manualPlacementIsLive(ticket)) return { ok: false, error: 'placement-changed' };
+      const live = records.get(ticket.photoId);
+      const spatial = acceptManualPhotoPosition(live.spatial, position);
+      if (!spatial) return { ok: false, error: 'invalid-position' };
+      // Only current changes; the latest preview, metadata and source evidence survive.
+      updateRecord(ticket.photoId, () => ({ spatial }));
+      manualTickets.delete(ticket);
+      publish();
+      return { ok: true };
+    },
     getFile: (id) => records.get(id)?.file || null,
     getPhoto: (id) => records.has(id) ? publicPhoto(records.get(id)) : null,
     getLayerPhotos: (layerId) => (layers.get(layerId)?.photoIds || []).map((id) => publicPhoto(records.get(id))),
@@ -499,11 +528,15 @@ export function createPhotoSession({
     setLayerVisibility(id, visible) {
       const layer = layers.get(id);
       if (!layer || layer.visible === visible) return;
+      manualVisibilityVersions.set(id, (manualVisibilityVersions.get(id) || 0) + 1);
       layers.set(id, Object.freeze({ ...layer, visible }));
       publish();
     },
     setAllLayersVisible(visible) {
-      for (const [id, layer] of layers) layers.set(id, Object.freeze({ ...layer, visible }));
+      for (const [id, layer] of layers) {
+        if (layer.visible !== visible) manualVisibilityVersions.set(id, (manualVisibilityVersions.get(id) || 0) + 1);
+        layers.set(id, Object.freeze({ ...layer, visible }));
+      }
       publish();
     },
     deleteLayer(id) {

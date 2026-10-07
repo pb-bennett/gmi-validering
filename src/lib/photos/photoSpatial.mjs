@@ -30,6 +30,15 @@ export function acceptPhotoCandidate(spatial, candidateId, acceptance = 'explici
   });
 }
 
+// Manual current is accepted working data, never source evidence or a fake candidate.
+export function acceptManualPhotoPosition(spatial, position, acceptedAt = Date.now()) {
+  if (!isPhotoPosition(position)) return null;
+  return Object.freeze({ ...spatial, current: immutable({
+    position: { crs: 'EPSG:4326', longitude: position.longitude, latitude: position.latitude },
+    basis: { kind: 'manual' }, acceptance: 'manual', acceptedAt,
+  }) });
+}
+
 export function photoSpatialCounts(photos) {
   const placedCount = photos.filter((photo) => isPhotoPosition(photo.spatial?.current?.position)).length;
   return {

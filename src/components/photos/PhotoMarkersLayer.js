@@ -9,7 +9,7 @@ const cameraGlyph = (size, selected = false) => `<svg aria-hidden="true" width="
 const cameraIcon = L.divIcon({ className: 'photo-camera-marker', iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -9], html: cameraGlyph(16) });
 const selectedCameraIcon = L.divIcon({ className: 'photo-camera-marker photo-camera-marker-selected', iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -9], html: cameraGlyph(22, true) });
 
-export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspaceSelection, onSelectPhoto }) {
+export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspaceSelection, onSelectPhoto, placementActive = false }) {
   const map = useMap();
   return (
     <Pane name="photo-markers" style={{ zIndex: 590 }}>
@@ -19,9 +19,11 @@ export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspac
         const filename = photo?.originalFilename || 'Bilde';
         const inWorkspace = photoWorkspaceSelection?.layerId === layerId;
         const selected = inWorkspace && photoWorkspaceSelection.photoId === photoId;
-        const inspect = (event) => {
+        const inspect = () => {
+          if (placementActive) return;
           if (inWorkspace) onSelectPhoto?.(photoId);
-          else event.target.openPopup();
+          // Normal click is handled once by Leaflet's bound Popup.
+          // Opening it here too can make its toggle handler immediately close it.
         };
         return <Marker key={feature.id} position={[feature.geometry.coordinates[1], feature.geometry.coordinates[0]]}
           icon={selected ? selectedCameraIcon : cameraIcon} zIndexOffset={selected ? 1000 : 0}
@@ -30,9 +32,10 @@ export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspac
             if (!['Enter', ' '].includes(event.originalEvent?.key)) return;
             event.originalEvent.preventDefault();
             event.originalEvent.stopPropagation();
-            inspect(event);
+            if (!placementActive && !inWorkspace) event.target.openPopup();
+            else inspect();
           } }}>
-          {!inWorkspace && photo && <Popup pane="popupPane" maxWidth={230} minWidth={190}>
+          {!placementActive && !inWorkspace && photo && <Popup pane="popupPane" maxWidth={230} minWidth={190}>
             <PhotoMapPopup photo={photo} onOpen={() => { map.closePopup(); onOpenPhoto?.(layerId, photoId); }} />
           </Popup>}
         </Marker>;

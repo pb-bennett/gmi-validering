@@ -1,5 +1,6 @@
 'use client';
 
+import PhotoManualPlacementControls from './PhotoManualPlacementControls';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { exifGpsMessage } from '@/lib/photos/exifGps.mjs';
 import { photoSourceLabel as label } from '@/lib/photos/photoPresentation.mjs';
@@ -7,7 +8,7 @@ import { photoSourceLabel as label } from '@/lib/photos/photoPresentation.mjs';
 const coordinates = (position) => position ? `${Math.abs(position.latitude).toFixed(7)}° ${position.latitude < 0 ? 'S' : 'N'}, ${Math.abs(position.longitude).toFixed(7)}° ${position.longitude < 0 ? 'V' : 'Ø'} (WGS84)` : 'Ingen posisjon';
 const buttonStyle = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 disabled:opacity-40';
 
-export default function PhotoSpatialInspector({ photo, layerId, onLocate, proposedEntry }) {
+export default function PhotoSpatialInspector({ photo, layerId, onLocate, proposedEntry, manualPlacement }) {
   const spatial = photo.spatial;
   const basis = spatial.candidates.find((candidate) => candidate.id === spatial.current?.basis?.candidateId);
   const canEdit = Boolean(layerId);
@@ -18,6 +19,7 @@ export default function PhotoSpatialInspector({ photo, layerId, onLocate, propos
       {basis?.sourceFilename && <p className="break-all text-gmi-text-muted">Fra {basis.sourceFilename}</p>}
       <p className="text-gmi-text-muted">{coordinates(spatial.current?.position)}</p>
       {canEdit && <button type="button" className={buttonStyle} disabled={!spatial.current} onClick={() => onLocate?.({ layerId, photoId: photo.id })}>Zoom til posisjon</button>}
+      {canEdit && manualPlacement && <PhotoManualPlacementControls photo={photo} layerId={layerId} placement={manualPlacement} />}
       <p className="text-gmi-text-muted">{exifGpsMessage(spatial.exifRead.state, spatial.exifRead.errorCode)}</p>
       {proposedEntry && <p className="text-gmi-text-muted">GML i importen: {proposedEntry.status === 'viable' ? 'Posisjonen blir gjeldende når laget opprettes.' : 'Posisjonen kan ikke brukes.'}</p>}
       {[...spatial.candidates, ...(proposedEntry ? [{ ...proposedEntry, kind: 'gml', proposed: true }] : [])].map((candidate) => (

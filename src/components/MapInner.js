@@ -27,6 +27,7 @@ import usePhotoSession from './photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { buildPhotoMapFeatures } from '@/lib/photos/photoMapFeatures.mjs';
 import PhotoMarkersLayer from './photos/PhotoMarkersLayer';
+import PhotoManualPlacementLayer from './photos/PhotoManualPlacementLayer';
 import PhotoMapController from './photos/PhotoMapController';
 import { useShallow } from 'zustand/react/shallow';
 import { analyzeIncline } from '@/lib/analysis/incline';
@@ -1621,7 +1622,7 @@ function FeatureHoverTooltip({ controllerRef, resetKey }) {
   return null;
 }
 
-export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspaceSelection, onSelectPhoto }) {
+export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspaceSelection, onSelectPhoto, photoPlacement, onPhotoPropose }) {
   const { photoLayers } = usePhotoSession();
   const photoFeatures = buildPhotoMapFeatures(photoLayers, photoSession.getLayerPhotos);
   const hoverControllerRef = useRef(null);
@@ -2696,7 +2697,8 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
         resetKey={`${geoJsonDataKey}-${styleVersionKey}`}
       />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
-      <PhotoMarkersLayer features={photoFeatures} onOpenPhoto={onOpenPhoto} photoWorkspaceSelection={photoWorkspaceSelection} onSelectPhoto={onSelectPhoto} />
+      <PhotoMarkersLayer features={photoFeatures} onOpenPhoto={onOpenPhoto} photoWorkspaceSelection={photoWorkspaceSelection} onSelectPhoto={onSelectPhoto} placementActive={Boolean(photoPlacement)} />
+      <PhotoManualPlacementLayer transaction={photoPlacement} onPropose={onPhotoPropose} />
       <LayersControl
         key={`layers-control-${customWmsConfig?.url ?? 'none'}`}
         position="topright"

@@ -1,0 +1,11 @@
+.photo-manual-controls { margin: 10px 0; padding: 10px; border: 1px solid #dfb980; border-radius: 6px; background: #fffaf2; }
+.photo-manual-controls h5 { font-weight: 600; }
+.photo-manual-controls p { margin: 6px 0; }
+.photo-placement-active { cursor: crosshair; }
+.photo-placement-active .leaflet-photo-markers-pane, .photo-placement-active .leaflet-marker-pane, .photo-placement-active .leaflet-overlay-pane { pointer-events: none; }
+.photo-placement-active .leaflet-tooltip-pane { visibility: hidden; }
+.photo-proposed-marker { display: flex; align-items: center; justify-content: center; cursor: grab; background: transparent; }
+.photo-proposed-marker:focus-visible { outline: 2px solid #a34c00; outline-offset: 2px; border-radius: 50%; }
+.photo-proposed-marker.leaflet-drag-target { cursor: grabbing; }
+
+.photo-placement-active .leaflet-interactive:not(.photo-proposed-marker) { pointer-events: none; }

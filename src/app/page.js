@@ -9,6 +9,7 @@ import PhotoCollectionDialog from '@/components/photos/PhotoCollectionDialog';
 import usePhotoSession from '@/components/photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { emptyPhotoWorkspace, photoWorkspaceReducer } from '@/lib/photos/photoWorkspaceState.mjs';
+import usePhotoManualPlacement from '@/components/photos/usePhotoManualPlacement';
 import PhotoWorkspaceCollection from '@/components/photos/PhotoWorkspaceCollection';
 import { SelectedPhotoInspector } from '@/components/photos/PhotoCollectionPanel';
 import DataDisplayModal from '@/components/DataDisplayModal';
@@ -122,13 +123,19 @@ export default function Home() {
   const [showAppInfo, setShowAppInfo] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
   const [photoImportTarget, setPhotoImportTarget] = useState(null);
-  const [photoWorkspace, dispatchPhotoWorkspace] = useReducer(photoWorkspaceReducer, emptyPhotoWorkspace);
+  const manualPlacement = usePhotoManualPlacement();
+  const [photoWorkspace, rawDispatchPhotoWorkspace] = useReducer(photoWorkspaceReducer, emptyPhotoWorkspace);
+  const dispatchPhotoWorkspace = (action) => {
+    if (['active', 'enter', 'exit'].includes(action.type)) manualPlacement.cancel();
+    rawDispatchPhotoWorkspace(action);
+  };
   const workspaceLayer = photoLayers.find((layer) => layer.id === photoWorkspace.layerId);
   const workspacePhotos = workspaceLayer ? photoSession.getLayerPhotos(workspaceLayer.id) : [];
   const activeWorkspacePhoto = workspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
   const [photoLocateRequest, setPhotoLocateRequest] = useState(null);
   const photoTriggerRef = useRef(null);
   const openPhotos = (event) => {
+    manualPlacement.cancel();
     photoSession.beginImport();
     setPhotoImportTarget(null);
     photoTriggerRef.current = event.currentTarget;
@@ -147,6 +154,7 @@ export default function Home() {
     if (photoTriggerRef.current?.isConnected) photoTriggerRef.current.focus();
   };
   const addPhotosToLayer = (event) => {
+    manualPlacement.cancel();
     if (!photoSession.beginImport(workspaceLayer?.id)) return;
     photoTriggerRef.current = event.currentTarget;
     setPhotoImportTarget(workspaceLayer.id);
@@ -164,7 +172,7 @@ export default function Home() {
   };
   useEffect(() => photoSession.subscribe(() => {
     setPhotoLocateRequest((request) => request && !photoSession.getLayer(request.layerId)?.photoIds.includes(request.photoId) ? null : request);
-    dispatchPhotoWorkspace({ type: 'reconcile', layers: photoSession.getSnapshot().photoLayers });
+    rawDispatchPhotoWorkspace({ type: 'reconcile', layers: photoSession.getSnapshot().photoLayers });
   }), []);
   useEffect(() => photoSession.subscribe(() => {
     if (photoImportTarget && !photoSession.getLayer(photoImportTarget)) {
@@ -523,7 +531,7 @@ export default function Home() {
             onOpenPhotos={openPhotos}
             sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos}
               workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace} review={sourceReviews[workspaceLayer.id]}
-              onExit={exitPhotoWorkspace} onAddPhotos={addPhotosToLayer} /> : fieldValidationOpen ? (
+              onExit={exitPhotoWorkspace} onAddPhotos={addPhotosToLayer} onBeforeDialog={() => manualPlacement.cancel()} /> : fieldValidationOpen ? (
               <FieldValidationSidebar
                 sidebarWidth={sidebarWidth}
                 canDockInspector={canDockInspector}
@@ -569,6 +577,7 @@ export default function Home() {
                   <MapView onZoomChange={setZoomLevel} onOpenPhoto={(layerId, photoId, opener) => openPhotoLayer(layerId, opener, photoId)}
                     photoWorkspaceSelection={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId } : null}
                     onSelectPhoto={(photoId) => dispatchPhotoWorkspace({ type: 'active', photoId })}
+                    photoPlacement={manualPlacement.transaction} onPhotoPropose={manualPlacement.propose}
                     photoLocateRequest={photoLocateRequest} onPhotoLocateHandled={() => setPhotoLocateRequest(null)} />
                   {hasPhotoLayers && !hasSurveyData && photoLayers.every((layer) => layer.placedCount === 0) && (
                     <div className="pointer-events-none absolute bottom-16 left-3 right-3 rounded-lg border border-gmi-border bg-gmi-surface/95 p-3 text-center text-xs text-gmi-text-muted">
@@ -652,7 +661,7 @@ export default function Home() {
           </div>
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
-            {!showPhotos && <SelectedPhotoInspector key={photoWorkspace.activePhotoId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} enableLargeView />}
+            {!showPhotos && <SelectedPhotoInspector key={photoWorkspace.activePhotoId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} manualPlacement={manualPlacement} enableLargeView />}
           </aside> : <div id="validation-v2-field-inspector-root" className="contents" />}
         </div>
             )}
