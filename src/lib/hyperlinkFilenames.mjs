@@ -20,12 +20,80 @@ function referenceBasename(reference) {
   return filename;
 }
 
+// Canonical member evidence. Offsets are UTF-16 character offsets in each raw
+// source string, never byte offsets. The production grammar stays whole-value
+// validated; malformed wrappers cannot yield partially accepted links.
+export function extractHyperlinkOccurrences(value) {
+  const sources = [], occurrences = [], diagnostics = [], seen = new WeakSet();
+  const pending = [value];
+  while (pending.length) {
+    const raw = pending.pop();
+    if (Array.isArray(raw)) {
+      if (seen.has(raw)) continue;
+      seen.add(raw);
+      for (let i = raw.length - 1; i >= 0; i--) pending.push(raw[i]);
+      continue;
+    }
+    const sourceIndex = sources.length;
+    const record = { raw, sourceIndex, members: [], diagnostics: [], validGrammar: true };
+    sources.push(record);
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+    const source = raw.trim(), leading = raw.length - raw.trimStart().length;
+    const wrapped = /^h\s*:/i.test(source);
+    const wrappers = wrapped ? [...source.matchAll(/h:(\d+)\(\s*((?:[a-z_][a-z\d_-]*\s*:\s*"[^"]*"\s*(?:[,;]\s*)?)+)\)/gi)] : [];
+    let end = 0;
+    if (wrapped) {
+      record.validGrammar = wrappers.length > 0;
+      for (const wrapper of wrappers) {
+        if (!/^[\s,;]*$/.test(source.slice(end, wrapper.index))) record.validGrammar = false;
+        end = wrapper.index + wrapper[0].length;
+      }
+      if (!/^[\s,;]*$/.test(source.slice(end))) record.validGrammar = false;
+      if (!record.validGrammar) {
+        record.diagnostics.push('invalid-wrapper-grammar');
+        diagnostics.push({ sourceIndex, code: 'invalid-wrapper-grammar' });
+        continue;
+      }
+    }
+    const add = (member) => {
+      record.members.push(member);
+      if (member.key !== 'link') return;
+      const filename = referenceBasename(member.referenceRaw);
+      const issues = filename ? [] : [/[\\/]\s*$/.test(member.referenceRaw) ? 'directory-target' : 'missing-filename'];
+      const occurrence = { ...member, sourceIndex, sourceOrder: occurrences.length,
+        filename, normalizedKey: filename?.normalize('NFC').toLowerCase() || null,
+        targetValid: Boolean(filename), diagnostics: issues };
+      occurrences.push(occurrence);
+      for (const code of issues) diagnostics.push({ sourceIndex, sourceOrder: occurrence.sourceOrder, code });
+    };
+    if (!wrapped) {
+      add({ key: 'link', referenceRaw: source, rawMember: raw, rawWrapper: null,
+        wrapperOrdinal: null, wrapperNumber: null, memberOrdinal: 0,
+        rawStart: 0, rawEnd: raw.length, wrapperStart: null, wrapperEnd: null, metadata: [] });
+      continue;
+    }
+    wrappers.forEach((wrapper, wrapperOrdinal) => {
+      const wrapperStart = leading + wrapper.index, wrapperEnd = wrapperStart + wrapper[0].length;
+      const memberOffset = wrapperStart + wrapper[0].indexOf(wrapper[2]);
+      const members = [...wrapper[2].matchAll(/([a-z_][a-z\d_-]*)\s*:\s*"([^"]*)"/gi)];
+      const metadata = members.filter((member) => member[1].toLowerCase() !== 'link')
+        .map((member) => ({ key: member[1], value: member[2], raw: member[0] }));
+      members.forEach((member, memberOrdinal) => add({
+        key: member[1].toLowerCase(), referenceRaw: member[2], rawMember: member[0], rawWrapper: wrapper[0],
+        wrapperOrdinal, wrapperNumber: Number(wrapper[1]), memberOrdinal,
+        rawStart: memberOffset + member.index, rawEnd: memberOffset + member.index + member[0].length,
+        wrapperStart, wrapperEnd, metadata,
+      }));
+    });
+  }
+  return { sources, occurrences, diagnostics };
+}
+
 // Preserve source slices for presentation; only validated links receive actions.
 // Filename validation, source order and deduplication are shared with the table.
 export function extractHyperlinkSourceParts(value) {
   const parts = [];
   const distinct = new Set();
-  const seen = new WeakSet();
   const addReference = (text, reference) => {
     const filename = referenceBasename(reference);
     if (filename && !distinct.has(filename)) {
@@ -35,15 +103,8 @@ export function extractHyperlinkSourceParts(value) {
       parts.push({ text });
     }
   };
-  const pending = [value];
-  while (pending.length) {
-    const current = pending.pop();
-    if (Array.isArray(current)) {
-      if (seen.has(current)) continue;
-      seen.add(current);
-      for (let i = current.length - 1; i >= 0; i--) pending.push(current[i]);
-      continue;
-    }
+  for (const record of extractHyperlinkOccurrences(value).sources) {
+    const current = record.raw;
     if (typeof current !== 'string') {
       parts.push({ text: current });
       continue;
@@ -54,33 +115,17 @@ export function extractHyperlinkSourceParts(value) {
       continue;
     }
     if (/^h\s*:/i.test(source)) {
-      // Validate named, quoted members; metadata is allowed but only links are files.
-      const wrappers = [...source.matchAll(/h:\d+\(\s*((?:[a-z_][a-z\d_-]*\s*:\s*"[^"]*"\s*(?:[,;]\s*)?)+)\)/gi)];
-      let end = 0;
-      const references = [];
-      let valid = wrappers.length > 0;
-      for (const wrapper of wrappers) {
-        if (!/^[\s,;]*$/.test(source.slice(end, wrapper.index))) valid = false;
-        for (const member of wrapper[1].matchAll(/([a-z_][a-z\d_-]*)\s*:\s*"([^"]*)"/gi)) {
-          references.push({
-            reference: member[1].toLowerCase() === 'link' ? member[2] : null,
-            end: wrapper.index + wrapper[0].indexOf(wrapper[1]) + member.index + member[0].length,
-          });
-        }
-        end = wrapper.index + wrapper[0].length;
-      }
-      if (!/^[\s,;]*$/.test(source.slice(end))) valid = false;
-      if (valid) {
+      if (record.validGrammar) {
         let start = 0;
-        const leading = current.length - current.trimStart().length;
-        for (const { reference, end } of references) {
-          const stop = leading + end;
+        for (const member of record.members) {
+          const reference = member.key === 'link' ? member.referenceRaw : null;
+          const stop = member.rawEnd;
           if (reference !== null) addReference(current.slice(start, stop), reference);
           else parts.push({ text: current.slice(start, stop) });
           start = stop;
         }
         if (start < current.length) {
-          if (references.length) parts[parts.length - 1].text += current.slice(start);
+          if (record.members.length) parts[parts.length - 1].text += current.slice(start);
           else parts.push({ text: current.slice(start) });
         }
       } else {

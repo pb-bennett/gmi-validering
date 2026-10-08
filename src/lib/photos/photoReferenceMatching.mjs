@@ -11,32 +11,52 @@ export function photoReferenceKey(value) {
 const fold = (value) => value.toLowerCase();
 const suffix = (a, b) => a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
 
+// Shared collision-checked asset mechanics. Build buckets once for an owner
+// collection; callers decide whether repeated source references are permitted.
+export function createPhotoReferenceResolver(photos, { barePathSuffix = true, skipUnsafePaths = false } = {}) {
+  const paths = new Map(), suffixes = new Map(), names = new Map();
+  const add = (index, key, asset) => {
+    if (!index.has(key)) index.set(key, []);
+    index.get(key).push(asset);
+  };
+  for (const photo of photos) {
+    const asset = { id: photo.id, name: photoReferenceKey(photo.originalFilename).basename,
+      relative: photo.sourceRelativePath ? photoReferenceKey(photo.sourceRelativePath).path : null };
+    add(names, fold(asset.name), asset);
+    if (!asset.relative || (skipUnsafePaths && photoReferenceKey(photo.sourceRelativePath).unsafe)) continue;
+    add(paths, fold(asset.relative), asset);
+    const segments = fold(asset.relative).split('/');
+    for (let i = 0; i < segments.length; i++) add(suffixes, segments.slice(i).join('/'), asset);
+  }
+  return (reference) => {
+    let found = paths.get(fold(reference.path)) || [];
+    let method = found.length === 1 && found[0].relative === reference.path ? 'exact-relative-path' : 'case-insensitive-relative-path';
+    if (!found.length && (barePathSuffix || reference.path.includes('/'))) {
+      const bucket = new Map((suffixes.get(fold(reference.path)) || []).map((asset) => [asset.id, asset]));
+      const segments = fold(reference.path).split('/');
+      for (let i = 1; i < segments.length; i++) {
+        // A bare asset filename is basename evidence, not a folder suffix.
+        if (!barePathSuffix && segments.length - i < 2) continue;
+        for (const asset of paths.get(segments.slice(i).join('/')) || []) bucket.set(asset.id, asset);
+      }
+      found = [...bucket.values()];
+      method = found.length === 1 && suffix(found[0].relative, reference.path) ? 'relative-path-suffix' : 'case-insensitive-path-suffix';
+    }
+    if (!found.length) {
+      found = names.get(fold(reference.basename)) || [];
+      method = found.length === 1 && found[0].name === reference.basename ? 'exact-basename' : 'case-insensitive-basename';
+    }
+    return [found, method];
+  };
+}
+
 // Build the complete association graph before accepting any edge. No first wins.
 export function matchPhotoReferences(entries, photos) {
-  const assets = photos.map((photo) => ({
-    id: photo.id, name: photoReferenceKey(photo.originalFilename).basename,
-    relative: photo.sourceRelativePath ? photoReferenceKey(photo.sourceRelativePath).path : null,
-  }));
+  const find = createPhotoReferenceResolver(photos);
   const refs = entries.map((entry) => ({ entry, key: photoReferenceKey(entry.reference ?? entry.raw?.fotolink) }));
   const graph = refs.map(({ entry, key }) => {
     let eligible = [], method = null;
     if (key.unsafe || !key.basename) return { entryId: entry.id, status: 'unmatched', photoIds: [], reason: key.unsafe ? 'unsafe-reference' : 'missing-reference' };
-    const find = (reference) => {
-      // Even exact spelling cannot hide a case/Unicode collision at the same path.
-      let found = assets.filter((asset) => asset.relative && fold(asset.relative) === fold(reference.path));
-      let via = found.length === 1 && found[0].relative === reference.path ? 'exact-relative-path' : 'case-insensitive-relative-path';
-      if (!found.length) {
-        found = assets.filter((asset) => asset.relative && suffix(fold(asset.relative), fold(reference.path)));
-        via = found.length === 1 && suffix(found[0].relative, reference.path) ? 'relative-path-suffix' : 'case-insensitive-path-suffix';
-      }
-      if (!found.length) {
-        // The whole folded bucket is checked before accepting exact spelling.
-        const bucket = assets.filter((asset) => fold(asset.name) === fold(reference.basename));
-        found = bucket;
-        via = bucket.length === 1 && bucket[0].name === reference.basename ? 'exact-basename' : 'case-insensitive-basename';
-      }
-      return [found, via];
-    };
     [eligible, method] = find(key);
     // Only an explicit file URI receives URI decoding. Literal percent/#/? stay literal.
     if (!eligible.length && /^file:\/\//i.test(String(entry.reference ?? entry.raw?.fotolink))) {

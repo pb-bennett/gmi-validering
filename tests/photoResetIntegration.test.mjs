@@ -2,9 +2,27 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { register } from 'node:module';
 import { photoSession } from '../src/lib/photos/photoSession.mjs';
+import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
 
 register('./esmJsLoader.mjs', import.meta.url);
 const { default: useStore } = await import('../src/lib/store.js');
+
+test('actual application reset clears attached GMI references/indexes without creating a survey map layer', async () => {
+  useStore.getState().resetAll();
+  const id = photoSession.importFiles([new File(['image'], 'a.jpg')]).acceptedIds[0];
+  const layer = photoSession.createLayer();
+  await photoSession.stageLayerSource(layer.id, gmiFile([{ hyperlink: 'h:1(link:"a.jpg") ' }]), 'gmi');
+  const review = photoSession.getSnapshot().sourceReviews[layer.id];
+  assert(photoSession.applyGmiAssociations(layer.id, { confirmed: true, sourceId: review.source.id,
+    memberIds: review.memberIds, associationLedger: review.associationLedger }).ok);
+  assert.equal(photoSession.getGmiPhotoAssociations(layer.id, id).length, 1);
+  assert.deepEqual(useStore.getState().layerOrder, []);
+  assert.equal(useStore.getState().data, null);
+  useStore.getState().resetAll();
+  assert.equal(photoSession.getGmiPhotoAssociations(layer.id, id).length, 0);
+  assert.deepEqual(photoSession.getSnapshot().sourceReviews, {});
+  assert.deepEqual(photoSession.getSnapshot().photoLayers, []);
+});
 
 test('survey data/layer/view/error operations preserve photos; full reset clears both domains', () => {
   const original = new File(['retained'], 'unsupported.heic');

@@ -1,4 +1,4 @@
-export const photoSourceLabel = (kind) => ({ gml: 'GML', exif: 'EXIF', manual: 'Manuell', gmi: 'GMI', 'gmi-dfot': 'GMI DFOT', 'gmi-object': 'GMI-objekt' })[kind] || kind || 'Ukjent';
+export const photoSourceLabel = (kind) => ({ gml: 'GML', exif: 'EXIF', manual: 'Manuell', gmi: 'GMI' })[kind] || kind || 'Ukjent';
 export function photoCurrentSource(photo) {
   const current = photo.spatial.current;
   const basis = photo.spatial.candidates.find((candidate) => candidate.id === current?.basis?.candidateId);

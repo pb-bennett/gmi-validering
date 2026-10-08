@@ -186,12 +186,12 @@ test('late parsing cannot revive a deleted/reset owner or cancelled review; meta
 });
 
 test('future source adapters share the layer evidence seam without new ownership or GML coupling', async () => {
-  const { session } = setup({ sourceAdapters: { 'gmi-dfot': async () => parsed(entry('dfot', 'a.jpg', 12)) } });
+  const { session } = setup({ sourceAdapters: { 'synthetic-position-source': async () => parsed(entry('synthetic', 'a.jpg', 12)) } });
   const [id] = session.importFiles([file('a.jpg')]).acceptedIds;
   const layer = session.createLayer();
-  assert(await session.stageLayerSource(layer.id, file('future.gmi'), 'gmi-dfot'));
+  assert(await session.stageLayerSource(layer.id, file('future.synthetic'), 'synthetic-position-source'));
   session.applyLayerSource(layer.id);
-  assert.equal(session.getPhoto(id).spatial.candidates.find((item) => item.kind === 'gmi-dfot').position.longitude, 12);
+  assert.equal(session.getPhoto(id).spatial.candidates.find((item) => item.kind === 'synthetic-position-source').position.longitude, 12);
   assert.equal(session.getPhoto(id).spatial.current, null);
   const review = reviewPhotoSource(parsed(entry('x', 'a.jpg')), session.getLayerPhotos(layer.id));
   assert.deepEqual(review.unplacedPhotoIds, [id]); session.clear();

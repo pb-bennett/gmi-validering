@@ -4,6 +4,7 @@ import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, 
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
 import { acceptManualPhotoDirection, emptyDirection } from './photoDirection.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
+import { gmiPhotoAssociations, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
   photos: Object.freeze([]), selectedId: null, batchSelectedIds: Object.freeze([]),
@@ -56,20 +57,24 @@ export function createPhotoSession({
   const appendOverrideIds = new Set();
   const sourceReviews = new Map();
   const sourceRequests = new Map();
+  const gmiReviews = new WeakMap();
 
   async function makeSource(file, kind) {
-    const adapter = sourceAdapters[kind] || (kind === 'gml' ? parseGml : null);
+    const adapter = sourceAdapters[kind] || (kind === 'gml' ? parseGml : kind === 'gmi' ? parseGmiPhotoSource : null);
     if (!adapter) throw Object.assign(new Error('unsupported-source'), { code: 'unsupported-source' });
     const parsed = await adapter(file);
-    const evidence = JSON.stringify({ kind, ...parsed });
+    const evidence = parsed.fingerprint ? null : JSON.stringify({ kind, ...parsed });
     // Keep existing HTTP/LAN import support: Web Crypto is restricted to secure contexts.
     // Exact evidence comparison is conservative; never substitute a collision-prone hash.
-    let fingerprint = `evidence-json:${evidence}`;
-    if (globalThis.crypto?.subtle) {
+    let fingerprint = parsed.fingerprint || `evidence-json:${evidence}`;
+    if (!parsed.fingerprint && globalThis.crypto?.subtle) {
       const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(evidence));
       fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
     }
-    return immutable({ ...parsed, id: `photo-${kind}-${createId()}`, kind, fingerprint, filename: file.name, importedAt: Date.now() });
+    const id = `photo-${kind}-${createId()}`;
+    return immutable({ ...parsed, ...(kind === 'gmi' ? {
+      references: parsed.references.map((reference) => ({ ...reference, id: `${id}:${reference.id}` })),
+    } : {}), id, kind, fingerprint, filename: file.name, importedAt: Date.now() });
   }
 
   function attachSource(source, photoIds, initializeCurrent) {
@@ -152,9 +157,18 @@ export function createPhotoSession({
       if (Object.keys(counts).some((key) => counts[key] !== layer[key])) layers.set(id, Object.freeze({ ...layer, ...counts }));
     }
     for (const [id, review] of sourceReviews) {
-      if (review.source && layers.has(id)) sourceReviews.set(id, Object.freeze({ ...review,
-        ...reviewPhotoSource(review.source, layers.get(id).photoIds.map((photoId) => records.get(photoId))),
-      }));
+      if (review.source && layers.has(id)) {
+        const memberIds = layers.get(id).photoIds;
+        if (review.source.kind === 'gmi') {
+          const cached = gmiReviews.get(review.source);
+          const associationLedger = cached?.memberIds === memberIds ? cached.associationLedger
+            : reviewGmiPhotoSource(review.source, memberIds.map((photoId) => records.get(photoId)));
+          gmiReviews.set(review.source, { memberIds, associationLedger });
+          sourceReviews.set(id, Object.freeze({ ...review, memberIds, associationLedger }));
+        } else sourceReviews.set(id, Object.freeze({ ...review,
+          ...reviewPhotoSource(review.source, memberIds.map((photoId) => records.get(photoId))),
+        }));
+      }
     }
     snapshot = Object.freeze({
       photos: Object.freeze(importIds.map((id) => publicPhoto(records.get(id)))),
@@ -312,6 +326,9 @@ export function createPhotoSession({
     getPhoto: (id) => records.has(id) ? publicPhoto(records.get(id)) : null,
     getLayerPhotos: (layerId) => (layers.get(layerId)?.photoIds || []).map((id) => publicPhoto(records.get(id))),
     getLayer: (id) => layers.get(id) || null,
+    getGmiPhotoAssociations(layerId, photoId) {
+      return gmiPhotoAssociations(layers.get(layerId), photoId);
+    },
     async importPositioningGml(file) {
       const owner = draftToken, request = ++gmlRequest;
       positioning = Object.freeze({ ...positioning, state: 'pending', errorCode: null });
@@ -377,12 +394,40 @@ export function createPhotoSession({
     },
     applyLayerSource(layerId) {
       const layer = layers.get(layerId), review = sourceReviews.get(layerId);
-      if (!layer || review?.state !== 'ready') return false;
+      if (!layer || review?.state !== 'ready' || review.source.kind === 'gmi') return false;
       const source = attachSource(review.source, layer.photoIds, false);
       const existing = layer.spatialSources.some((item) => item.id === source.id);
       const sources = existing ? layer.spatialSources.map((item) => item.id === source.id ? source : item)
         : [...layer.spatialSources, source];
       layers.set(layerId, Object.freeze({ ...layer, spatialSources: Object.freeze(sources) }));
+      sourceReviews.delete(layerId);
+      sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
+      publish(); return true;
+    },
+    // Association-only confirmation preflights the exact staged review and owner
+    // membership, then publishes once. No photo record/candidate is written.
+    applyGmiAssociations(layerId, { confirmed = false, sourceId, memberIds, associationLedger } = {}) {
+      const layer = layers.get(layerId), review = sourceReviews.get(layerId);
+      if (!confirmed || !layer || review?.state !== 'ready' || review.source?.kind !== 'gmi'
+        || review.source.id !== sourceId || review.associationLedger !== associationLedger
+        || !memberIds || memberIds.length !== layer.photoIds.length
+        || memberIds.some((id, index) => id !== layer.photoIds[index])) return { ok: false, error: 'review-changed' };
+      if (review.recheck && !layer.spatialSources.some((source) => source.id === sourceId)) return { ok: false, error: 'source-removed' };
+      const source = Object.freeze({ ...review.source, associationLedger });
+      const existing = layer.spatialSources.some((item) => item.id === sourceId);
+      if (!existing && layer.spatialSources.some((item) => item.kind === 'gmi' && item.fingerprint === source.fingerprint))
+        return { ok: false, error: 'duplicate-source' };
+      const sources = existing ? layer.spatialSources.map((item) => item.id === sourceId ? source : item) : [...layer.spatialSources, source];
+      layers.set(layerId, Object.freeze({ ...layer, spatialSources: Object.freeze(sources) }));
+      sourceReviews.delete(layerId);
+      sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
+      publish(); return { ok: true };
+    },
+    removeGmiSource(layerId, sourceId, { confirmed = false } = {}) {
+      const layer = layers.get(layerId);
+      if (!confirmed || !layer?.spatialSources.some((source) => source.id === sourceId && source.kind === 'gmi')) return false;
+      layers.set(layerId, Object.freeze({ ...layer,
+        spatialSources: Object.freeze(layer.spatialSources.filter((source) => source.id !== sourceId)) }));
       sourceReviews.delete(layerId);
       sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
       publish(); return true;
@@ -443,7 +488,8 @@ export function createPhotoSession({
       if (!removed.length) return [];
       const remaining = layer.photoIds.filter((id) => !requested.has(id));
       layers.set(layerId, Object.freeze({ ...layer, photoIds: Object.freeze(remaining), photoCount: remaining.length,
-        spatialSources: Object.freeze(layer.spatialSources.map((source) => prunePhotoSource(source, remaining))),
+        spatialSources: Object.freeze(layer.spatialSources.map((source) => source.kind === 'gmi'
+          ? pruneGmiPhotoSource(source, remaining) : prunePhotoSource(source, remaining))),
       }));
       release(removed); publish(); return removed;
     },

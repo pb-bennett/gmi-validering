@@ -30,6 +30,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const viableExif = photos.filter((photo) => photo.spatial.candidates.some((item) => item.kind === 'exif' && item.status === 'viable')).length;
   const pendingExif = photos.filter((photo) => photo.spatial.exifRead.state === 'pending').length;
   const summary = plan ? summarizePhotoPositioning(plan, selectedIds) : null;
+  const gmlSources = layer.spatialSources.filter((source) => source.kind === 'gml');
 
   useEffect(() => {
     const dialog = dialogRef.current, opener = document.activeElement;
@@ -83,10 +84,10 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
           <p>Velg en GML-fil med bildeposisjoner fra Gemini Terrain. Filnavnene kobler posisjonene til bildene i laget.</p>
           <button type="button" className={control} onClick={() => inputRef.current?.click()} disabled={review?.state === 'pending'}>Velg GML-fil</button>
           <input ref={inputRef} type="file" accept=".gml" hidden aria-label="Velg GML for posisjonering" onChange={readFile} />
-          {layer.spatialSources.length > 0 && <label className="photo-positioning-existing-source">Eller bruk en kilde i laget
+          {gmlSources.length > 0 && <label className="photo-positioning-existing-source">Eller bruk en kilde i laget
             <select aria-label="Bruk GML-kilde i laget" value={review?.state === 'ready' && review.recheck ? review.source.id : ''} onChange={(event) => {
               readRef.current++; setError(''); photoSession.recheckLayerSource(layer.id, event.target.value);
-            }}><option value="" disabled>Velg kilde</option>{layer.spatialSources.filter((source) => source.kind === 'gml').map((source, index) =>
+            }}><option value="" disabled>Velg kilde</option>{gmlSources.map((source, index) =>
               <option key={source.id} value={source.id}>{index + 1}. {source.filename}</option>)}</select></label>}
           {review?.state === 'pending' && <p role="status">Analyserer GML-filen …</p>}
           {review?.state === 'error' && <p role="alert">{readErrors[review.errorCode] || 'GML-filen kunne ikke leses. Velg en annen fil.'}</p>}

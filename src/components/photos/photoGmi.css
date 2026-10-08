@@ -1,0 +1,24 @@
+.photo-gmi-dialog { position: fixed; inset: 0; margin: auto; width: min(820px, calc(100vw - 48px)); height: min(720px, calc(100dvh - 48px)); max-width: none; max-height: none; padding: 0; border: 1px solid var(--gmi-border-strong); border-radius: 10px; background: var(--gmi-surface, #fff); color: var(--gmi-text, #24364b); overflow: hidden; font-size: 13px; }
+.photo-gmi-dialog[open] { display: flex; flex-direction: column; }
+.photo-gmi-dialog::backdrop { background: #15233588; }
+.photo-gmi-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--gmi-border); }
+.photo-gmi-dialog h2 { font-size: 20px; font-weight: 600; }
+.photo-gmi-content { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.photo-gmi-dialog p { margin: 10px 0; }
+.photo-gmi-dialog button { border: 1px solid var(--gmi-border-strong); padding: 7px 12px; }
+.photo-gmi-dialog button:disabled { opacity: .4; }
+.photo-gmi-dialog .photo-gmi-primary { background: var(--gmi-interactive, #007595); color: white; }
+.photo-gmi-dialog [role="alert"] { color: #9b2c23; }
+.photo-gmi-dialog footer { flex-shrink: 0; padding: 12px 20px; border-top: 1px solid var(--gmi-border); }
+.photo-gmi-dialog footer > div { display: flex; justify-content: flex-end; gap: 10px; }
+.photo-gmi-summary dl { margin: 16px 0; }
+.photo-gmi-summary dl > div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--gmi-border); padding: 5px 0; }
+.photo-gmi-summary dd { font-weight: 600; }
+.photo-gmi-summary summary, .photo-gmi-inspector summary { cursor: pointer; }
+.photo-gmi-filename, .photo-gmi-reference-list li, .photo-gmi-inspector li { overflow-wrap: anywhere; }
+.photo-gmi-reference-list li { padding: 8px 0; border-bottom: 1px solid var(--gmi-border); }
+.photo-gmi-inspector { font-size: 12px; margin-top: 12px; border-top: 1px solid var(--gmi-border); padding-top: 8px; }
+.photo-gmi-inspector > details > summary { font-weight: 600; }
+.photo-gmi-inspector ul { max-height: 230px; overflow: auto; }
+.photo-gmi-inspector li { padding: 6px 0; }
+.photo-gmi-inspector p { margin-top: 4px; color: var(--gmi-text-muted); }

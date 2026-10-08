@@ -5,11 +5,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import PhotoPositioningWizard from './PhotoPositioningWizard';
 import PhotoGmlSummary from './PhotoGmlSummary';
+import PhotoGmiDialog from './PhotoGmiDialog';
+import PhotoGmiSummary from './PhotoGmiSummary';
 import './photoWorkspace.css';
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs disabled:opacity-40';
 
-function RemovePhotosConfirmation({ count, onCancel, onConfirm }) {
+function RemovePhotosConfirmation({ count, sourceFilename, onCancel, onConfirm }) {
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current, opener = document.activeElement;
@@ -17,8 +19,8 @@ function RemovePhotosConfirmation({ count, onCancel, onConfirm }) {
     return () => { dialog.close(); if (opener?.isConnected) opener.focus(); };
   }, []);
   return <dialog ref={ref} className="photo-remove-confirmation" aria-labelledby="photo-remove-title" onCancel={(event) => { event.preventDefault(); onCancel(); }}>
-    <h2 id="photo-remove-title">Fjern {count === 1 ? 'bildet' : `${count} bilder`} fra laget?</h2>
-    <p>{count === 1 ? 'Bildet fjernes' : 'Bildene fjernes'} fra fotokartlaget og denne økten. Originalfilene på disken endres ikke.</p>
+    <h2 id="photo-remove-title">{sourceFilename ? 'Fjern GMI-kilden fra laget?' : `Fjern ${count === 1 ? 'bildet' : `${count} bilder`} fra laget?`}</h2>
+    <p>{sourceFilename ? `${sourceFilename} og koblingene fjernes fra denne økten.` : `${count === 1 ? 'Bildet fjernes' : 'Bildene fjernes'} fra fotokartlaget og denne økten. Originalfilene på disken endres ikke.`}</p>
     <div><button type="button" className={control} onClick={onCancel} autoFocus>Avbryt</button>
       <button type="button" className={control} onClick={onConfirm}>Fjern fra lag</button></div>
   </dialog>;
@@ -28,6 +30,12 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
   const [filter, setFilter] = useState('all');
   const [removalIds, setRemovalIds] = useState(null);
   const [wizard, setWizard] = useState(null);
+  const [gmiDialog, setGmiDialog] = useState(null);
+  const [removeSourceId, setRemoveSourceId] = useState(null);
+  const openGmi = (sourceId) => { onBeforeDialog?.(); setGmiDialog({ sourceId }); };
+  const closeGmi = useCallback(() => setGmiDialog(null), []);
+  const gmlSources = layer.spatialSources.filter((source) => source.kind === 'gml');
+  const gmiSources = layer.spatialSources.filter((source) => source.kind === 'gmi');
   const openWizard = (sourceId) => { onBeforeDialog?.(); setWizard({ sourceId }); };
   const closeWizard = useCallback(() => setWizard(null), []);
   const selectedIds = workspace.selectedIds;
@@ -40,15 +48,24 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
       <label className="flex items-center gap-2"><input type="checkbox" aria-label={`Vis fotokartlag ${layer.name}`} checked={layer.visible} onChange={(event) => photoSession.setLayerVisibility(layer.id, event.target.checked)} />Vis på kartet</label>
       <button type="button" className={control} onClick={onAddPhotos}>Legg til bilder</button>
       <button type="button" className={control} aria-haspopup="dialog" disabled={!photos.length} onClick={() => openWizard(null)}>Posisjoner bilder</button>
+      <button type="button" className={control} aria-haspopup="dialog" onClick={() => openGmi(null)}>Koble GMI-referanser</button>
     </header>
     <section className="photo-workspace-sources" aria-label="Posisjonsdata for laget"><details>
-      <summary>Posisjonsdata · {layer.spatialSources.length} {layer.spatialSources.length === 1 ? 'kilde' : 'kilder'}</summary>
+      <summary>Posisjonsdata · {gmlSources.length} {gmlSources.length === 1 ? 'kilde' : 'kilder'}</summary>
       <p>{layer.exifCandidateCount} bilder med EXIF GPS. Kildedata beholdes også når en annen posisjon brukes.</p>
-      {layer.spatialSources.map((source, index) => <div key={source.id} className="photo-workspace-source-item">
+      {gmlSources.map((source, index) => <div key={source.id} className="photo-workspace-source-item">
         <details><summary title={source.id}>{index + 1}. {source.filename}</summary><PhotoGmlSummary source={source} ledger={source.ledger} /></details>
         <button type="button" className={control} onClick={() => openWizard(source.id)}>Sjekk treff på nytt</button>
       </div>)}
     </details></section>
+    {gmiSources.length > 0 && <section className="photo-workspace-sources photo-workspace-gmi-sources" aria-label="GMI-bildereferanser"><details>
+      <summary>Bildereferanser · {gmiSources.length} {gmiSources.length === 1 ? 'GMI-kilde' : 'GMI-kilder'}</summary>
+      {gmiSources.map((source) => <div key={source.id} className="photo-workspace-source-item">
+        <details><summary>{source.filename}</summary><PhotoGmiSummary source={source} /></details>
+        <button type="button" className={control} onClick={() => openGmi(source.id)}>Sjekk GMI-referanser på nytt</button>
+        <button type="button" className={control} onClick={() => { onBeforeDialog?.(); setRemoveSourceId(source.id); }}>Fjern GMI-kilde</button>
+      </div>)}
+    </details></section>}
     <div className="photo-workspace-batch" aria-label="Handlinger for valgte bilder">
       <div className="flex flex-wrap items-center gap-2"><label>Vis <select aria-label="Filtrer bilder" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">Alle bilder</option><option value="placed">Plassert</option><option value="unplaced">Uplassert</option></select></label>
         <span>{selectedIds.length} valgt</span></div>
@@ -72,5 +89,9 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
       photoSession.removeLayerPhotos(layer.id, removalIds, { confirmed: true }); setRemovalIds(null);
     }} />}
     {wizard && <PhotoPositioningWizard layer={layer} photos={photos} review={review} initialSourceId={wizard.sourceId} onClose={closeWizard} />}
+    {gmiDialog && <PhotoGmiDialog layer={layer} review={review} initialSourceId={gmiDialog.sourceId} onClose={closeGmi} />}
+    {removeSourceId && <RemovePhotosConfirmation sourceFilename={gmiSources.find((source) => source.id === removeSourceId)?.filename} onCancel={() => setRemoveSourceId(null)} onConfirm={() => {
+      photoSession.removeGmiSource(layer.id, removeSourceId, { confirmed: true }); setRemoveSourceId(null);
+    }} />}
   </section>;
 }
