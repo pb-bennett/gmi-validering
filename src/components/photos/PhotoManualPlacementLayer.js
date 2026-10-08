@@ -3,10 +3,10 @@
 import { useEffect } from 'react';
 import { Marker, Pane, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { proposalMarkerOptions } from '@/lib/photos/photoMarkerPresentation.mjs';
 import './photoManualPlacement.css';
 
-const proposalIcon = L.divIcon({ className: 'photo-proposed-marker', iconSize: [32, 32], iconAnchor: [16, 16],
-  html: '<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24"><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="white" stroke-width="5"/><circle cx="12" cy="12" r="6" fill="#fff4df" stroke="white" stroke-width="5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="#a34c00" stroke-width="2"/><circle cx="12" cy="12" r="6" fill="#fff4df" stroke="#a34c00" stroke-width="2"/></svg>' });
+const proposalIcon = L.divIcon(proposalMarkerOptions);
 const positionFrom = (latlng) => ({ crs: 'EPSG:4326', longitude: latlng.wrap().lng, latitude: latlng.lat });
 
 export default function PhotoManualPlacementLayer({ transaction, onPropose }) {
@@ -58,7 +58,7 @@ export default function PhotoManualPlacementLayer({ transaction, onPropose }) {
   const point = [position.latitude, position.longitude];
   const current = ticket.expectedCurrent?.position;
   return <Pane name="photo-placement" style={{ zIndex: 610 }}>
-    {current && <Polyline positions={[[current.latitude, current.longitude], point]} interactive={false}
+    {current && <Polyline positions={[[current.latitude, current.longitude], point]} interactive={false} className="photo-placement-connector"
       pathOptions={{ color: '#a34c00', weight: 1, dashArray: '4 4', opacity: 0.8 }} />}
     <Marker position={point} icon={proposalIcon} draggable keyboard zIndexOffset={1500}
       title="Foreslått bildeposisjon. Dra eller bruk piltastene for å justere." alt="Foreslått bildeposisjon"

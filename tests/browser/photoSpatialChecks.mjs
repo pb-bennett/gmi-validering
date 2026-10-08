@@ -70,6 +70,7 @@ export async function runPhotoSpatialChecks() {
       const layer = session.createLayer();
       await until(() => session.getPhoto(id).spatial.exifRead.state !== 'pending' && session.getPhoto(id).preview.state !== 'pending');
       const photo = session.getPhoto(id), evidence = photo.spatial.candidates;
+      assert(photo.direction.current === null, 'Raw GML zero does not establish operational north');
       assert(evidence.length === 2 && photo.spatial.current.basis.candidateId === evidence.find((item) => item.kind === 'gml').id, 'GML basis survives extraction');
       const exif = evidence.find((item) => item.kind === 'exif');
       session.acceptCandidates(layer.id, [{ photoId: id, candidateId: exif.id }]);
@@ -100,6 +101,9 @@ export async function runPhotoSpatialChecks() {
       assert(layer.placedCount === 148 && layer.unplacedCount === 0, 'Initial current positions');
       await until(() => session.getLayer(layer.id).exifCandidateCount === 148 && session.getLayerPhotos(layer.id).every((photo) => photo.preview.state !== 'pending'));
       const photos = session.getLayerPhotos(layer.id), features = buildPhotoMapFeatures(session.getSnapshot().photoLayers, session.getLayerPhotos);
+      assert(photos.every(photo => photo.direction.current === null
+        && photo.spatial.candidates.find(candidate => candidate.kind === 'gml').raw.direction.valueText === '0'),
+      'All 148 raw zero headings remain source evidence; operational direction stays unknown');
       assert(photos.every((photo) => photo.preview.state === 'ready' && photo.spatial.candidates.length === 2 && photo.spatial.candidates.find((candidate) => candidate.id === photo.spatial.current.basis.candidateId).kind === 'gml'), 'EXIF and preview never overwrite GML');
       assert(photos.every((photo) => {
         const gml = photo.spatial.candidates.find((candidate) => candidate.kind === 'gml').position;

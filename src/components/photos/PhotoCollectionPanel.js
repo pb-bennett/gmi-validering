@@ -75,7 +75,7 @@ export default function PhotoCollectionPanel({ photos, selectedId, batchSelected
   );
 }
 
-export function SelectedPhotoInspector({ photo, layerId, onLocate, proposedEntry, manualPlacement, enableLargeView = false }) {
+export function SelectedPhotoInspector({ photo, layerId, onLocate, proposedEntry, manualPlacement, directionEditor, enableLargeView = false }) {
   const imageRef = useRef(null);
   const [inspectionFailed, setInspectionFailed] = useState(false);
   const [largeImageUrl, setLargeImageUrl] = useState(null);
@@ -127,7 +127,7 @@ export function SelectedPhotoInspector({ photo, layerId, onLocate, proposedEntry
           <div><dt>Sist endret</dt><dd>{new Date(photo.lastModified).toLocaleString('nb-NO')}</dd></div>
         </dl>
       )}
-      {photo && <PhotoSpatialInspector photo={photo} layerId={layerId} onLocate={onLocate} proposedEntry={proposedEntry} manualPlacement={manualPlacement} />}
+      {photo && <PhotoSpatialInspector photo={photo} layerId={layerId} onLocate={onLocate} proposedEntry={proposedEntry} manualPlacement={manualPlacement} directionEditor={directionEditor} />}
       {largeImageUrl && photo?.dimensions && <PhotoImageViewer src={largeImageUrl} filename={photo.originalFilename}
         dimensions={photo.dimensions} onClose={() => setLargeImageUrl(null)} />}
     </section>

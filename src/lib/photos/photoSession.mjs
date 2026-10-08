@@ -2,6 +2,7 @@ import { classifyPhotoFile, createPhotoThumbnail } from './imagePreview.mjs';
 import { readExifGps } from './exifGps.mjs';
 import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, emptySpatial, immutable, isPhotoPosition, photoSpatialCounts } from './photoSpatial.mjs';
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
+import { acceptManualPhotoDirection, emptyDirection } from './photoDirection.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
@@ -28,6 +29,9 @@ export function createPhotoSession({
   // Originals and browser resources deliberately live outside Zustand/React snapshots.
   const records = new Map();
   const manualTickets = new WeakSet();
+  const directionTickets = new WeakSet();
+  // Only one editing transaction is live; starting either kind invalidates the other.
+  let editVersion = 0;
   const manualVisibilityVersions = new Map();
   // Each asset has exactly one owner: the current import or one created FOTO layer.
   // Transfer changes membership, never copies the File or invalidates thumbnail work.
@@ -87,10 +91,20 @@ export function createPhotoSession({
 
   function manualPlacementIsLive(ticket) {
     return Boolean(ticket && manualTickets.has(ticket) && ticket.generation === generation
+      && ticket.editVersion === editVersion
       && ticket.visibilityVersion === (manualVisibilityVersions.get(ticket.layerId) || 0)
       && layers.get(ticket.layerId)?.visible
       && layers.get(ticket.layerId)?.photoIds.includes(ticket.photoId)
       && records.get(ticket.photoId)?.spatial.current === ticket.expectedCurrent);
+  }
+
+  function directionEditIsLive(ticket) {
+    return Boolean(ticket && directionTickets.has(ticket) && ticket.generation === generation
+      && ticket.editVersion === editVersion
+      && ticket.visibilityVersion === (manualVisibilityVersions.get(ticket.layerId) || 0)
+      && layers.get(ticket.layerId)?.visible
+      && layers.get(ticket.layerId)?.photoIds.includes(ticket.photoId)
+      && records.get(ticket.photoId)?.direction.current === ticket.expectedCurrent);
   }
 
   function transferDraft() {
@@ -259,7 +273,7 @@ export function createPhotoSession({
     getSnapshot: () => snapshot,
     beginManualPlacement(layerId, photoId) {
       if (!layers.get(layerId)?.visible || !layers.get(layerId)?.photoIds.includes(photoId)) return null;
-      const ticket = Object.freeze({ layerId, photoId, generation, visibilityVersion: manualVisibilityVersions.get(layerId) || 0, expectedCurrent: records.get(photoId).spatial.current });
+      const ticket = Object.freeze({ layerId, photoId, generation, editVersion: ++editVersion, visibilityVersion: manualVisibilityVersions.get(layerId) || 0, expectedCurrent: records.get(photoId).spatial.current });
       manualTickets.add(ticket);
       return ticket;
     },
@@ -273,6 +287,24 @@ export function createPhotoSession({
       // Only current changes; the latest preview, metadata and source evidence survive.
       updateRecord(ticket.photoId, () => ({ spatial }));
       manualTickets.delete(ticket);
+      publish();
+      return { ok: true };
+    },
+    beginDirectionEdit(layerId, photoId) {
+      if (!layers.get(layerId)?.visible || !layers.get(layerId)?.photoIds.includes(photoId)) return null;
+      const ticket = Object.freeze({ layerId, photoId, generation, editVersion: ++editVersion,
+        visibilityVersion: manualVisibilityVersions.get(layerId) || 0, expectedCurrent: records.get(photoId).direction.current });
+      directionTickets.add(ticket);
+      return ticket;
+    },
+    directionEditIsLive,
+    cancelDirectionEdit(ticket) { if (ticket) directionTickets.delete(ticket); },
+    applyDirectionEdit(ticket, degrees) {
+      if (!directionEditIsLive(ticket)) return { ok: false, error: 'direction-changed' };
+      const direction = acceptManualPhotoDirection(degrees);
+      if (!direction) return { ok: false, error: 'invalid-direction' };
+      updateRecord(ticket.photoId, () => ({ direction }));
+      directionTickets.delete(ticket);
       publish();
       return { ok: true };
     },
@@ -447,6 +479,7 @@ export function createPhotoSession({
           dimensions: null,
           sourceRelativePath: file.webkitRelativePath || null,
           spatial: emptySpatial(),
+          direction: emptyDirection(),
           preview: Object.freeze({ state: errorCode ? 'error' : 'pending', thumbnailUrl: null, errorCode }),
         });
         acceptedIds.push(id);

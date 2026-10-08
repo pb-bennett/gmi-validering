@@ -1622,7 +1622,7 @@ function FeatureHoverTooltip({ controllerRef, resetKey }) {
   return null;
 }
 
-export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspaceSelection, onSelectPhoto, photoPlacement, onPhotoPropose }) {
+export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspaceSelection, onSelectPhoto, photoPlacement, onPhotoPropose, photoDirectionEdit }) {
   const { photoLayers } = usePhotoSession();
   const photoFeatures = buildPhotoMapFeatures(photoLayers, photoSession.getLayerPhotos);
   const hoverControllerRef = useRef(null);
@@ -2697,7 +2697,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
         resetKey={`${geoJsonDataKey}-${styleVersionKey}`}
       />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
-      <PhotoMarkersLayer features={photoFeatures} onOpenPhoto={onOpenPhoto} photoWorkspaceSelection={photoWorkspaceSelection} onSelectPhoto={onSelectPhoto} placementActive={Boolean(photoPlacement)} />
+      <PhotoMarkersLayer features={photoFeatures} onOpenPhoto={onOpenPhoto} photoWorkspaceSelection={photoWorkspaceSelection} onSelectPhoto={onSelectPhoto} placementActive={Boolean(photoPlacement)} directionEdit={photoDirectionEdit} />
       <PhotoManualPlacementLayer transaction={photoPlacement} onPropose={onPhotoPropose} />
       <LayersControl
         key={`layers-control-${customWmsConfig?.url ?? 'none'}`}

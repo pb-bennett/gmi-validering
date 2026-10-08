@@ -5,6 +5,7 @@
 .photo-placement-active .leaflet-photo-markers-pane, .photo-placement-active .leaflet-marker-pane, .photo-placement-active .leaflet-overlay-pane { pointer-events: none; }
 .photo-placement-active .leaflet-tooltip-pane { visibility: hidden; }
 .photo-proposed-marker { display: flex; align-items: center; justify-content: center; cursor: grab; background: transparent; }
+.photo-proposed-marker svg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
 .photo-proposed-marker:focus-visible { outline: 2px solid #a34c00; outline-offset: 2px; border-radius: 50%; }
 .photo-proposed-marker.leaflet-drag-target { cursor: grabbing; }
 

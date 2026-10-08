@@ -4,12 +4,12 @@ import { Marker, Pane, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import PhotoMapPopup from './PhotoMapPopup';
+import { cameraMarkerOptions } from '@/lib/photos/photoMarkerPresentation.mjs';
 
-const cameraGlyph = (size, selected = false) => `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-linejoin="round"><path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${selected ? 'currentColor' : '#ffffffcc'}" stroke="white" stroke-width="4"/><path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${selected ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="${selected ? 'white' : 'currentColor'}" stroke-width="2"/></svg>`;
-const cameraIcon = L.divIcon({ className: 'photo-camera-marker', iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -9], html: cameraGlyph(16) });
-const selectedCameraIcon = L.divIcon({ className: 'photo-camera-marker photo-camera-marker-selected', iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -9], html: cameraGlyph(22, true) });
+const cameraIcon = L.divIcon(cameraMarkerOptions());
+const selectedCameraIcon = L.divIcon(cameraMarkerOptions({ selected: true }));
 
-export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspaceSelection, onSelectPhoto, placementActive = false }) {
+export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspaceSelection, onSelectPhoto, placementActive = false, directionEdit }) {
   const map = useMap();
   return (
     <Pane name="photo-markers" style={{ zIndex: 590 }}>
@@ -19,6 +19,11 @@ export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspac
         const filename = photo?.originalFilename || 'Bilde';
         const inWorkspace = photoWorkspaceSelection?.layerId === layerId;
         const selected = inWorkspace && photoWorkspaceSelection.photoId === photoId;
+        const editingDirection = selected && directionEdit?.ticket.photoId === photoId && directionEdit.ticket.layerId === layerId;
+        const degrees = editingDirection ? directionEdit.degrees : photo?.direction?.current?.degrees;
+        const icon = selected && degrees != null
+          ? L.divIcon(cameraMarkerOptions({ selected: true, degrees, proposed: Boolean(editingDirection) }))
+          : selected ? selectedCameraIcon : cameraIcon;
         const inspect = () => {
           if (placementActive) return;
           if (inWorkspace) onSelectPhoto?.(photoId);
@@ -26,7 +31,7 @@ export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspac
           // Opening it here too can make its toggle handler immediately close it.
         };
         return <Marker key={feature.id} position={[feature.geometry.coordinates[1], feature.geometry.coordinates[0]]}
-          icon={selected ? selectedCameraIcon : cameraIcon} zIndexOffset={selected ? 1000 : 0}
+          icon={icon} zIndexOffset={selected ? 1000 : 0}
           title={`Vis bilde: ${filename}`} alt={`Vis bilde: ${filename}`} keyboard
           eventHandlers={{ click: inspect, keydown: (event) => {
             if (!['Enter', ' '].includes(event.originalEvent?.key)) return;

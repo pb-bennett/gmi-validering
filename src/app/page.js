@@ -10,6 +10,7 @@ import usePhotoSession from '@/components/photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { emptyPhotoWorkspace, photoWorkspaceReducer } from '@/lib/photos/photoWorkspaceState.mjs';
 import usePhotoManualPlacement from '@/components/photos/usePhotoManualPlacement';
+import usePhotoDirectionEdit from '@/components/photos/usePhotoDirectionEdit';
 import PhotoWorkspaceCollection from '@/components/photos/PhotoWorkspaceCollection';
 import { SelectedPhotoInspector } from '@/components/photos/PhotoCollectionPanel';
 import DataDisplayModal from '@/components/DataDisplayModal';
@@ -124,9 +125,17 @@ export default function Home() {
   const [showPhotos, setShowPhotos] = useState(false);
   const [photoImportTarget, setPhotoImportTarget] = useState(null);
   const manualPlacement = usePhotoManualPlacement();
+  const directionEdit = usePhotoDirectionEdit();
+  const cancelPhotoEditing = () => { manualPlacement.cancel(); directionEdit.cancel(); };
+  const placementEditor = { ...manualPlacement, begin: (layerId, photoId) => {
+    directionEdit.cancel(); manualPlacement.begin(layerId, photoId);
+  } };
+  const directionEditor = { ...directionEdit, begin: (layerId, photoId) => {
+    manualPlacement.cancel(); directionEdit.begin(layerId, photoId);
+  } };
   const [photoWorkspace, rawDispatchPhotoWorkspace] = useReducer(photoWorkspaceReducer, emptyPhotoWorkspace);
   const dispatchPhotoWorkspace = (action) => {
-    if (['active', 'enter', 'exit'].includes(action.type)) manualPlacement.cancel();
+    if (['active', 'enter', 'exit'].includes(action.type)) cancelPhotoEditing();
     rawDispatchPhotoWorkspace(action);
   };
   const workspaceLayer = photoLayers.find((layer) => layer.id === photoWorkspace.layerId);
@@ -135,7 +144,7 @@ export default function Home() {
   const [photoLocateRequest, setPhotoLocateRequest] = useState(null);
   const photoTriggerRef = useRef(null);
   const openPhotos = (event) => {
-    manualPlacement.cancel();
+    cancelPhotoEditing();
     photoSession.beginImport();
     setPhotoImportTarget(null);
     photoTriggerRef.current = event.currentTarget;
@@ -154,7 +163,7 @@ export default function Home() {
     if (photoTriggerRef.current?.isConnected) photoTriggerRef.current.focus();
   };
   const addPhotosToLayer = (event) => {
-    manualPlacement.cancel();
+    cancelPhotoEditing();
     if (!photoSession.beginImport(workspaceLayer?.id)) return;
     photoTriggerRef.current = event.currentTarget;
     setPhotoImportTarget(workspaceLayer.id);
@@ -531,7 +540,7 @@ export default function Home() {
             onOpenPhotos={openPhotos}
             sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos}
               workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace} review={sourceReviews[workspaceLayer.id]}
-              onExit={exitPhotoWorkspace} onAddPhotos={addPhotosToLayer} onBeforeDialog={() => manualPlacement.cancel()} /> : fieldValidationOpen ? (
+              onExit={exitPhotoWorkspace} onAddPhotos={addPhotosToLayer} onBeforeDialog={cancelPhotoEditing} /> : fieldValidationOpen ? (
               <FieldValidationSidebar
                 sidebarWidth={sidebarWidth}
                 canDockInspector={canDockInspector}
@@ -578,6 +587,7 @@ export default function Home() {
                     photoWorkspaceSelection={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId } : null}
                     onSelectPhoto={(photoId) => dispatchPhotoWorkspace({ type: 'active', photoId })}
                     photoPlacement={manualPlacement.transaction} onPhotoPropose={manualPlacement.propose}
+                    photoDirectionEdit={directionEdit.transaction}
                     photoLocateRequest={photoLocateRequest} onPhotoLocateHandled={() => setPhotoLocateRequest(null)} />
                   {hasPhotoLayers && !hasSurveyData && photoLayers.every((layer) => layer.placedCount === 0) && (
                     <div className="pointer-events-none absolute bottom-16 left-3 right-3 rounded-lg border border-gmi-border bg-gmi-surface/95 p-3 text-center text-xs text-gmi-text-muted">
@@ -661,7 +671,7 @@ export default function Home() {
           </div>
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
-            {!showPhotos && <SelectedPhotoInspector key={photoWorkspace.activePhotoId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} manualPlacement={manualPlacement} enableLargeView />}
+            {!showPhotos && <SelectedPhotoInspector key={photoWorkspace.activePhotoId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} manualPlacement={placementEditor} directionEditor={directionEditor} enableLargeView />}
           </aside> : <div id="validation-v2-field-inspector-root" className="contents" />}
         </div>
             )}
