@@ -1,6 +1,7 @@
 'use client';
 
 import { startTransition, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import {
   ArrowSquareOutIcon,
   CaretDownIcon,
@@ -231,14 +232,34 @@ function FutureContent() {
     <div className={APP_INFO_TAB_CONTENT_CLASS}>
       <AppInfoHero title="Fremtiden – videre utvikling" />
       <section>
-        <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Mulig</span>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Planlagt</span>
+            </div>
+            <h4 className="mt-3 text-base font-bold text-gmi-navy">Full støtte for bilder</h4>
+            <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
+              Videre arbeid vil gi bedre støtte for bilder gjennom hele arbeidsflyten, fra import og kontroll av bildefiler til plassering, kobling mot VA-objekter og eksport. Målet er å støtte bildeintegrasjon både mot GMI- og GML-filer, slik at bilder og tilhørende objekter kan kontrolleres og håndteres samlet i GMI Validator.
+            </p>
           </div>
-          <h4 className="mt-3 text-base font-bold text-gmi-navy">Bedre tilbakemeldinger</h4>
-          <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
-            Mulig støtte for å legge ved skjermbilder i Kontakt-skjemaet, slik at feil og visuelle problemer blir enklere å beskrive.
-          </p>
+          <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Mulig</span>
+            </div>
+            <h4 className="mt-3 text-base font-bold text-gmi-navy">Redigering av feltverdier i GMI-filer</h4>
+            <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
+              Det vurderes også støtte for å gjøre enkle endringer i feltverdier direkte i opplastede GMI-filer. Målet er å kunne korrigere eller supplere egenskaper uten å endre geometrien, med tydelig skille mellom originaldata og redigerte verdier før filen lastes ned på nytt.
+            </p>
+          </div>
+          <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Mulig</span>
+            </div>
+            <h4 className="mt-3 text-base font-bold text-gmi-navy">Bedre tilbakemeldinger</h4>
+            <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
+              Mulig støtte for å legge ved skjermbilder i Kontakt-skjemaet, slik at feil og visuelle problemer blir enklere å beskrive.
+            </p>
+          </div>
         </div>
         <p className="mt-2 text-sm leading-6 text-gmi-text-subtle">Planene kan endres etter hvert som funksjonene utvikles og testes.</p>
       </section>
@@ -270,43 +291,68 @@ function NewsContent() {
         <div className="max-w-[54rem] space-y-6 app-info-news-body">
           <div>
             <ReleaseMeta release={CURRENT_APP_RELEASE} />
-            <h3 className="mt-3 text-xl font-bold tracking-[-0.01em] text-gmi-navy">Ny Validator og oppdatert arbeidsområde</h3>
+            <h3 className="mt-3 text-xl font-bold tracking-[-0.01em] text-gmi-navy">Nytt og mer helhetlig grensesnitt</h3>
             <p className="mt-3 text-[15px] leading-[1.7] text-gmi-text-muted">
-              Versjon 1.2.0 samler en ny arbeidsflyt for GMI-validering med bedre tilgang til objektene bak funnene. Kart, datainnsyn og analyseverktøy er samtidig samlet i et mer sammenhengende arbeidsområde for gjennomgang av innmålingsdata.
+              Hele GMI Validator har fått et omfattende visuelt løft. Utseendet er gjennomgått på tvers av hele løsningen, med et mer konsekvent designspråk for farger, typografi, knapper, paneler og ikoner. Målet har vært å gjøre appen mer ryddig, sammenhengende og moderne, samtidig som det blir enklere å orientere seg og bruke de ulike funksjonene. GMI Validator har også fått en ny logo og en oppdatert visuell profil.
             </p>
           </div>
 
           <section aria-labelledby="app-info-news-validator" className="border-t border-gmi-border pt-5">
             <h4 id="app-info-news-validator" className="text-base font-bold text-gmi-navy">Validator V2</h4>
             <p className="mt-2 text-[15px] leading-[1.7] text-gmi-text-muted">
-              GMI-kontrollen har fått en ny arbeidsflyt der FEIL og SJEKK er tydeligere skilt. Funnene viser hvilket felt og hvilken regel de gjelder, med kildehenvisning og veiledning om verdier der dette finnes. For utvalgte manglende opplysninger på eksisterende objekter som ikke er merket NYTT, kan resultatet være SJEKK for faglig vurdering i stedet for automatisk FEIL.
+              Validator-modulen er bygget helt på nytt. Dette er en fullstendig overhaling av den tidligere løsningen, med ny logikk, tydeligere resultater og et oppsett som nå er praktisk anvendelig til kontroll av GMI-filer.
             </p>
+            <p className="mt-3 text-[15px] leading-[1.7] text-gmi-text-muted">
+              Valideringen bygger på kravene i den nye innmålingsinstruksen. I tillegg har jeg lagt inn enkelte kontroller og vurderinger basert på egne erfaringer fra mottak og kontroll av innmålingsdata.
+            </p>
+            <p className="mt-3 text-[15px] leading-[1.7] text-gmi-text-muted">
+              Resultatene deles i to hovedkategorier:
+            </p>
+            <ul className="mt-3 space-y-3 text-[15px] leading-[1.7] text-gmi-text-muted">
+              <li>
+                <strong className="rounded-md bg-red-50 px-2 py-1 text-sm font-semibold text-red-800">FEIL</strong>
+                {' – forhold som vurderes som klare avvik og normalt bør rettes.'}
+              </li>
+              <li>
+                <strong className="rounded-md bg-amber-50 px-2 py-1 text-sm font-semibold text-amber-800">SJEKK</strong>
+                {' – forhold som ikke nødvendigvis er feil, men som bør vurderes nærmere.'}
+              </li>
+            </ul>
+            <p className="mt-3 text-[15px] leading-[1.7] text-gmi-text-muted">
+              For mange kontroller vises det også mer informasjon om hvilket felt eller krav som er berørt, og hvilke objekter funnet gjelder.
+            </p>
+            <p className="mt-3 text-[15px] leading-[1.7] text-gmi-text-muted">
+              Validatoren er fortsatt under utvikling. Jeg tar derfor gjerne imot innspill til valideringsregler, tolkninger av instruksen eller situasjoner jeg ikke har fanget opp.
+            </p>
+            <Image
+              src="/brand/images/appinfo/validator-v2.png"
+              alt="GMI Validator med Validator V2-knappen markert i analyseverktøyene"
+              width={1536}
+              height={1024}
+              unoptimized
+              className="mt-5 block h-auto w-full max-w-full rounded-lg border border-gmi-border"
+            />
           </section>
 
-          <section aria-labelledby="app-info-news-objects" className="border-t border-gmi-border pt-5">
-            <h4 id="app-info-news-objects" className="text-base font-bold text-gmi-navy">Fra funn til objekt</h4>
+          <section aria-labelledby="app-info-news-sosi" className="border-t border-gmi-border pt-5">
+            <h4 id="app-info-news-sosi" className="text-base font-bold text-gmi-navy">Bedre støtte for SOSI-filer</h4>
             <p className="mt-2 text-[15px] leading-[1.7] text-gmi-text-muted">
-              Berørte objekter kan åpnes direkte fra Validator i en diagnostisk datatabell som avgrenser visningen til de aktuelle objektene. Feltet som undersøkes, vises sammen med relevant objektkontekst. Det gjør det enklere å kontrollere et funn uten å lete manuelt gjennom hele datasettet.
+              Støtten for SOSI-filer er utvidet, med særlig fokus på filer eksportert fra Gemini VA. Flere egenskaper fra eksisterende VA-anlegg blir nå tolket og presentert på en mer nyttig måte i GMI Validator. Dette gjør det enklere å laste inn eksisterende ledningsdata sammen med innmålingsfiler og sammenligne det som allerede ligger i VA-databasen med det som leveres i nye innmålinger.
             </p>
-          </section>
-
-          <section aria-labelledby="app-info-news-workspace" className="border-t border-gmi-border pt-5">
-            <h4 id="app-info-news-workspace" className="text-base font-bold text-gmi-navy">Et mer sammenhengende arbeidsområde</h4>
-            <p className="mt-2 text-[15px] leading-[1.7] text-gmi-text-muted">
-              Kart, lag og datatabell gir flere innganger til samme leveranse. Høydekontroll, Profilanalyse, Standards og 3D kan brukes videre i gjennomgangen uten å miste sammenhengen med objektene og kartvisningen. Profilanalyse er også tilpasset vanlige skrivebordsskjermer på 1080p og visninger med begrenset høyde.
+            <p className="mt-3 text-[15px] leading-[1.7] text-gmi-text-muted">
+              Det er også kommet en ny funksjon for lagmarkering, som gjør det enklere å skille ulike lag visuelt i kartet når flere datasett vises samtidig.
+            </p>
+            <p className="mt-3 text-[15px] leading-[1.7] text-gmi-text-muted">
+              Målet er å gjøre SOSI-data mer nyttige som referansegrunnlag i kontrollarbeidet, slik at avvik, manglende objekter og forskjeller i egenskaper blir lettere å oppdage.
             </p>
           </section>
 
           <section aria-labelledby="app-info-news-other" className="border-t border-gmi-border pt-5">
-            <h4 id="app-info-news-other" className="text-base font-bold text-gmi-navy">Andre forbedringer</h4>
+            <h4 id="app-info-news-other" className="text-base font-bold text-gmi-navy">Mindre forbedringer og justeringer</h4>
             <p className="mt-2 text-[15px] leading-[1.7] text-gmi-text-muted">
-              Presentasjonen av deling og QR-kode, WMS, Stats og AppInfo-dialogene er forbedret og bedre tilpasset det oppdaterte arbeidsområdet.
+              I tillegg er det gjort en rekke mindre forbedringer og feilrettinger gjennom hele løsningen. Flere kontroller og arbeidsflyter er justert for å være tydeligere og mer konsistente, og en del små irritasjonsmomenter i daglig bruk er ryddet opp i. Dette inkluderer blant annet justeringer i kartkontroller, visning av objektinformasjon, filtrering og generell håndtering av data.
             </p>
           </section>
-
-          <p className="border-t border-gmi-border pt-5 text-sm leading-[1.7] text-gmi-text-subtle">
-            Validator V2 dekker utvalgte, kildebaserte GMI-kontroller og er et hjelpemiddel i kvalitetskontrollen. Funnene må fortsatt vurderes faglig opp mot kravene til den enkelte leveransen.
-          </p>
         </div>
       </article>
     </div>

@@ -1,5 +1,5 @@
-import { getDatasetRevision } from './validation-v2/datasetRevision';
-import { assertObjectRefOwnership, createObjectRef } from './validation-v2/objectRef';
+import { getDatasetRevision } from './validation-v2/datasetRevision.js';
+import { assertObjectRefOwnership, createObjectRef } from './validation-v2/objectRef.js';
 
 let inspectionSequence = 0;
 
