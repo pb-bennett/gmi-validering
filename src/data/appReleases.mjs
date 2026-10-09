@@ -11,7 +11,7 @@ const release = (entry) =>
 export const APP_RELEASES = Object.freeze([
   release({
     version: '1.2.0',
-    releasedOn: null,
+    releasedOn: '2026-10-09',
     type: 'minor',
     title: 'Visuelt løft, Validator V2 og bedre SOSI-støtte',
     summary:

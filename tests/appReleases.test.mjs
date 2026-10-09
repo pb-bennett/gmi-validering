@@ -67,7 +67,7 @@ test('release catalog is valid, complete, and newest first', () => {
   assert.equal(CURRENT_APP_RELEASE.announce, true);
   assert.equal(APP_RELEASES.length, 5);
   assert.equal(APP_RELEASES[0].type, 'minor');
-  assert.equal(APP_RELEASES[0].releasedOn, null);
+  assert.equal(APP_RELEASES[0].releasedOn, '2026-10-09');
   assert.equal(APP_RELEASES[0].title, 'Visuelt løft, Validator V2 og bedre SOSI-støtte');
   assert.equal(APP_RELEASES[0].announce, true);
   assert.equal(APP_RELEASES[0].summary, 'GMI Validator har fått et omfattende visuelt løft, en helt ny Validator V2 for kontroll av GMI-filer og betydelig bedre støtte for SOSI-data. I tillegg er det gjort en rekke mindre forbedringer og feilrettinger gjennom hele løsningen.');

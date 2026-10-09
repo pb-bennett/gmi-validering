@@ -58,7 +58,7 @@ GMI Validator er et hjelpemiddel. Resultatene er ikke et offisielt vedtak om at 
 
 ## Status
 
-Den eksisterende offentlige tjenesten er tilgjengelig. **v1.2.0** er klargjort for utgivelse på denne grenen og er ikke bekreftet publisert i produksjon.
+GMI Validator **v1.2.0** er gjeldende produksjonsversjon.
 
 Prosjektet er lite, selvstendig og ikke-kommersielt.
 
