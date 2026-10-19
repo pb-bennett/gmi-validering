@@ -12,6 +12,7 @@ import { emptyPhotoWorkspace, photoWorkspaceReducer } from '@/lib/photos/photoWo
 import usePhotoManualPlacement from '@/components/photos/usePhotoManualPlacement';
 import usePhotoDirectionEdit from '@/components/photos/usePhotoDirectionEdit';
 import PhotoWorkspaceCollection from '@/components/photos/PhotoWorkspaceCollection';
+import PhotoPositioningWizard from '@/components/photos/PhotoPositioningWizard';
 import { SelectedPhotoInspector } from '@/components/photos/PhotoCollectionPanel';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import ZValidationModal from '@/components/ZValidationModal';
@@ -141,10 +142,18 @@ export default function Home() {
   const workspaceLayer = photoLayers.find((layer) => layer.id === photoWorkspace.layerId);
   const workspacePhotos = workspaceLayer ? photoSession.getLayerPhotos(workspaceLayer.id) : [];
   const activeWorkspacePhoto = workspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
+  const [photoSourceWorkflow, setPhotoSourceWorkflow] = useState(null);
+  const sourceWorkflowLayer = photoLayers.find((layer) => layer.id === photoSourceWorkflow?.layerId);
+  const openPhotoSources = (context = {}) => {
+    if (!workspaceLayer) return;
+    cancelPhotoEditing();
+    setPhotoSourceWorkflow({ layerId: workspaceLayer.id, ...context });
+  };
   const [photoLocateRequest, setPhotoLocateRequest] = useState(null);
   const photoTriggerRef = useRef(null);
   const openPhotos = (event) => {
     cancelPhotoEditing();
+    setPhotoSourceWorkflow(null);
     photoSession.beginImport();
     setPhotoImportTarget(null);
     photoTriggerRef.current = event.currentTarget;
@@ -159,6 +168,7 @@ export default function Home() {
     useStore.getState().setActiveViewTab('map');
   };
   const exitPhotoWorkspace = () => {
+    setPhotoSourceWorkflow(null);
     dispatchPhotoWorkspace({ type: 'exit' });
     if (photoTriggerRef.current?.isConnected) photoTriggerRef.current.focus();
   };
@@ -181,6 +191,7 @@ export default function Home() {
   };
   useEffect(() => photoSession.subscribe(() => {
     setPhotoLocateRequest((request) => request && !photoSession.getLayer(request.layerId)?.photoIds.includes(request.photoId) ? null : request);
+    setPhotoSourceWorkflow((workflow) => workflow && !photoSession.getLayer(workflow.layerId) ? null : workflow);
     rawDispatchPhotoWorkspace({ type: 'reconcile', layers: photoSession.getSnapshot().photoLayers });
   }), []);
   useEffect(() => photoSession.subscribe(() => {
@@ -369,6 +380,10 @@ export default function Home() {
       <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !showPhotos && !workspaceLayer} />
       <TestModeActivation />
       {showPhotos && <PhotoCollectionDialog targetLayerId={photoImportTarget} onClose={closePhotos} onCreate={createPhotoLayer} openerRef={photoTriggerRef} />}
+      {sourceWorkflowLayer && !showPhotos && <PhotoPositioningWizard layer={sourceWorkflowLayer}
+        photos={photoSession.getLayerPhotos(sourceWorkflowLayer.id)} review={sourceReviews[sourceWorkflowLayer.id]}
+        initialSourceId={photoSourceWorkflow.sourceId} focusedPhotoId={photoSourceWorkflow.photoId}
+        onClose={() => setPhotoSourceWorkflow(null)} />}
       {/* Floating Stats Button */}
       {!workspaceLayer && !(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
       <button
@@ -539,8 +554,8 @@ export default function Home() {
             appInfoTriggerRef={appInfoTriggerRef}
             onOpenPhotos={openPhotos}
             sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos}
-              workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace} review={sourceReviews[workspaceLayer.id]}
-              onExit={exitPhotoWorkspace} onAddPhotos={addPhotosToLayer} onBeforeDialog={cancelPhotoEditing} /> : fieldValidationOpen ? (
+              workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace}
+              onExit={exitPhotoWorkspace} onAddPhotos={addPhotosToLayer} onBeforeDialog={cancelPhotoEditing} onOpenSources={openPhotoSources} /> : fieldValidationOpen ? (
               <FieldValidationSidebar
                 sidebarWidth={sidebarWidth}
                 canDockInspector={canDockInspector}
@@ -591,7 +606,7 @@ export default function Home() {
                     photoLocateRequest={photoLocateRequest} onPhotoLocateHandled={() => setPhotoLocateRequest(null)} />
                   {hasPhotoLayers && !hasSurveyData && photoLayers.every((layer) => layer.placedCount === 0) && (
                     <div className="pointer-events-none absolute bottom-16 left-3 right-3 rounded-lg border border-gmi-border bg-gmi-surface/95 p-3 text-center text-xs text-gmi-text-muted">
-                      {workspaceLayer ? 'Bildene er uplassert. Velg «Posisjoner bilder» for å bruke GML eller EXIF GPS.' : 'Bildene er uplassert. Åpne bildemodulen for å kontrollere og bruke posisjoner.'}
+                      {workspaceLayer ? 'Bildene er uplassert. Velg «Koble og posisjoner bilder» for å kontrollere GML eller EXIF GPS.' : 'Bildene er uplassert. Åpne bildemodulen for å kontrollere og bruke posisjoner.'}
                     </div>
                   )}
 
@@ -671,7 +686,7 @@ export default function Home() {
           </div>
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
-            {!showPhotos && <SelectedPhotoInspector key={photoWorkspace.activePhotoId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} manualPlacement={placementEditor} directionEditor={directionEditor} enableLargeView />}
+            {!showPhotos && <SelectedPhotoInspector key={photoWorkspace.activePhotoId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} manualPlacement={placementEditor} directionEditor={directionEditor} onOpenSources={openPhotoSources} enableLargeView />}
           </aside> : <div id="validation-v2-field-inspector-root" className="contents" />}
         </div>
             )}

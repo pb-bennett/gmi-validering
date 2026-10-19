@@ -37,6 +37,8 @@ for (const order of ['gps-first', 'thumbnail-first']) for (const thumbnailError 
     await until(() => thumbStarted && gpsStarted);
     await session.importPositioningGml(new File(['gml'], 'p.gml'));
     const layer = session.createLayer();
+    assert.equal(session.getPhoto(id).spatial.current, null, 'import does not accept GML');
+    session.acceptCandidates(layer.id, [{ photoId: id, candidateId: session.getPhoto(id).spatial.candidates.find((candidate) => candidate.kind === 'gml').id }]);
     assert.equal(session.getPhoto(id).spatial.current.basis.candidateId.includes('entry-1'), true);
     const finishThumb = () => thumbnailError ? thumb.reject(new Error('decode')) : thumb.resolve({ dimensions: { width: 10, height: 10 }, thumbnailBlob: new Blob(['thumb']) });
     if (order === 'gps-first') {
@@ -121,7 +123,7 @@ test('staged GML replacement is transactional; creation waits; owner invalidates
   assert.equal(session.createLayer(), null);
   session.discardPositioningError();
   const layer = session.createLayer();
-  assert.equal(layer.placedCount, 1);
+  assert.equal(layer.placedCount, 0);
   assert.equal(layer.spatialSources[0].filename, 'old.gml');
   session.clear();
 
@@ -143,7 +145,7 @@ test('curation rematches sources; unresolved rows transfer as diagnostics withou
   assert.equal(session.getSnapshot().positioning.ledger.summary.matchedCount, 1);
   const layer = session.createLayer();
   assert.deepEqual(layer.photoIds, [ids[1]]);
-  assert.equal(layer.placedCount, 1);
+  assert.equal(layer.placedCount, 0);
   session.deleteLayer(layer.id);
   assert.equal(session.getLayer(layer.id), null);
   assert.equal(session.getPhoto(ids[1]), null);

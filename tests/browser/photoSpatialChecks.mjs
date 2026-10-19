@@ -71,7 +71,7 @@ export async function runPhotoSpatialChecks() {
       await until(() => session.getPhoto(id).spatial.exifRead.state !== 'pending' && session.getPhoto(id).preview.state !== 'pending');
       const photo = session.getPhoto(id), evidence = photo.spatial.candidates;
       assert(photo.direction.current === null, 'Raw GML zero does not establish operational north');
-      assert(evidence.length === 2 && photo.spatial.current.basis.candidateId === evidence.find((item) => item.kind === 'gml').id, 'GML basis survives extraction');
+      assert(evidence.length === 2 && photo.spatial.current === null, 'GML and EXIF stay evidence until explicit acceptance');
       const exif = evidence.find((item) => item.kind === 'exif');
       session.acceptCandidates(layer.id, [{ photoId: id, candidateId: exif.id }]);
       assert(session.getPhoto(id).spatial.current.position.longitude === exif.position.longitude, 'Explicit EXIF accepted');
@@ -98,7 +98,12 @@ export async function runPhotoSpatialChecks() {
       const draft = session.getSnapshot().positioning;
       assert(draft.ledger.summary.matchedCount === 148 && draft.ledger.summary.ambiguousCount === 0 && draft.ledger.summary.unmatchedCount === 0 && draft.ledger.summary.viablePlacementCount === 148, 'Exact real matching');
       const layer = session.createLayer();
-      assert(layer.placedCount === 148 && layer.unplacedCount === 0, 'Initial current positions');
+      assert(layer.placedCount === 0 && layer.unplacedCount === 148, 'Import does not accept source positions');
+      const ticket = session.beginSourceWorkflow(layer.id);
+      const plan = session.reviewSourceWorkflowPositions(ticket);
+      assert(session.applySourceWorkflowPositions(ticket, plan, plan.rows.map(row => ({ photoId: row.photoId,
+        candidateId: row.options.find(candidate => candidate.kind === 'gml').id }))).ok, 'Explicit reviewed GML batch');
+      session.endSourceWorkflow(ticket);
       await until(() => session.getLayer(layer.id).exifCandidateCount === 148 && session.getLayerPhotos(layer.id).every((photo) => photo.preview.state !== 'pending'));
       const photos = session.getLayerPhotos(layer.id), features = buildPhotoMapFeatures(session.getSnapshot().photoLayers, session.getLayerPhotos);
       assert(photos.every(photo => photo.direction.current === null

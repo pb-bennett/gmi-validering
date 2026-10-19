@@ -35,10 +35,27 @@
 .photo-positioning-selected-count { font-size: 18px; font-weight: 600; }
 .photo-positioning-wizard footer { display: flex; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid #dce3ea; background: var(--gmi-surface, #fff); flex-shrink: 0; }
 .photo-positioning-wizard footer > div { display: flex; gap: 10px; }
+.photo-positioning-wizard header, .photo-positioning-steps { flex-shrink: 0; }
+.photo-positioning-wizard .photo-source-saved { margin: 0; padding: 10px 20px; background: var(--gmi-surface-soft); flex-shrink: 0; }
+.photo-source-inventory { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; margin: 16px 0; }
+.photo-source-inventory > section { min-width: 0; padding: 12px; border: 1px solid var(--gmi-border); border-radius: 6px; }
+.photo-source-inventory h4 { font-weight: 600; }
+.photo-source-filename, .photo-source-removal { overflow-wrap: anywhere; }
+.photo-source-removal { margin-top: 10px; padding: 10px; background: var(--gmi-surface-soft); }
+.photo-position-choice { display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 36%; }
+.photo-position-choice select { width: 100%; border: 1px solid var(--gmi-border-strong); padding: 7px; border-radius: 4px; }
+.photo-position-conflict { color: #855400; }
+.photo-positioning-rows [data-focused] { border-left: 3px solid var(--gmi-interactive); padding-left: 8px; }
+@media (max-width: 1100px) {
+  .photo-positioning-row { flex-wrap: wrap; }
+  .photo-position-choice { flex: 1 1 260px; max-width: none; }
+  .photo-positioning-wizard footer { flex-wrap: wrap; padding: 10px 16px; }
+  .photo-positioning-wizard footer > div { flex-wrap: wrap; margin-left: auto; }
+}
 @media (max-width: 700px) {
   .photo-positioning-wizard { width: calc(100vw - 16px); height: calc(100dvh - 16px); }
   .photo-positioning-wizard header, .photo-positioning-content { padding: 12px; }
-  .photo-positioning-steps { gap: 12px; padding: 0 12px 12px; font-size: 12px; }
+  .photo-positioning-steps { gap: 8px 12px; flex-wrap: wrap; padding: 0 12px 12px; font-size: 12px; }
   .photo-positioning-row { flex-wrap: wrap; gap: 8px; }
   .photo-positioning-filename { flex-basis: calc(100% - 96px); }
   .photo-positioning-action { width: auto; margin-left: 80px; }

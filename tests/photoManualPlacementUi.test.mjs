@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readdir, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { applyPhotoSourcePositions, clickSourceControl, closePhotoSources } from './helpers/photoSourceWorkflow.mjs';
 
 const app = process.env.PHOTO_UI_URL, gml = process.env.PHOTO_GML_FIXTURE;
 test('manual FOTO placement: real corpus, click/drag/keyboard, transactions, sources, safety and layouts',
@@ -89,11 +90,12 @@ test('manual FOTO placement: real corpus, click/drag/keyboard, transactions, sou
           await inputFiles('input[aria-label="Velg GML med bildeposisjoner"]',[gml]);
           await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("148 treff")');
         }
-        await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("148 bilder med EXIF GPS-kandidat")',45000);
+        await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("148 bilder med EXIF GPS")',45000);
         // URL assertions below isolate the inspector from temporary decoder URLs.
         await browser.waitFor('document.querySelectorAll(".photo-collection-card img").length===148',60000);
         await click('Opprett fotokartlag (148 bilder)');
         await click('Bildemodul'); await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length===148');
+        if (positioned) await applyPhotoSourcePositions(browser, 'gml');
         await browser.waitFor('document.querySelector(".photo-collection-original img")?.naturalWidth>0');
         await browser.waitFor('window.__originalUrls.size===1');
         await settleMapLayout();
@@ -143,8 +145,8 @@ test('manual FOTO placement: real corpus, click/drag/keyboard, transactions, sou
       await begin(); await pointClick(); await selectIndex(1); assert.equal(await browser.evaluate(markerCount),1);
       await begin(); await pointClick(); await click('Legg til bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
       assert.equal(await browser.evaluate(proposal),null); await click('Avbryt', 'document.querySelector(".photo-collection-dialog")');
-      await begin(); await pointClick(); await click('Posisjoner bilder'); await browser.waitFor('document.querySelector(".photo-positioning-wizard[open]")');
-      assert.equal(await browser.evaluate(proposal),null); await click('Avbryt','document.querySelector(".photo-positioning-wizard")');
+      await begin(); await pointClick(); await click('Koble og posisjoner bilder'); await browser.waitFor('document.querySelector(".photo-positioning-wizard[open]")');
+      assert.equal(await browser.evaluate(proposal),null); await closePhotoSources(browser);
       await begin(); await pointClick(); await browser.evaluate('document.querySelector(".photo-workspace-collection header input").click()');
       await browser.waitFor('!document.querySelector(".photo-placement-active")');
       assert(await browser.evaluate('document.querySelector(".photo-manual-start").disabled'));
@@ -179,15 +181,16 @@ test('manual FOTO placement: real corpus, click/drag/keyboard, transactions, sou
       const after=await transforms(); assert.equal(after.filter((value,index)=>value!==aligned[index]).length,1);
       assert.deepEqual(await evidence(),oldEvidence); assert.equal(await browser.evaluate(markerCount),148);
       const movedCurrent=await currentText();
-      await click('Posisjoner bilder'); await browser.waitFor('document.querySelector(".photo-positioning-wizard[open]")');
-      await browser.evaluate('document.querySelector(".photo-positioning-wizard input[value=exif]").click()');
-      await click('Neste','document.querySelector(".photo-positioning-wizard")');
+      await click('Koble og posisjoner bilder'); await browser.waitFor('document.querySelector(".photo-positioning-wizard[open]")');
+      await clickSourceControl(browser, 'Kontroller tilgjengelige posisjoner');
+      await clickSourceControl(browser, 'Foreslå EXIF for viste');
       await browser.waitFor('document.querySelector(".photo-positioning-rows")');
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-positioning-rows [data-action=move]").length'),1);
       assert(await browser.evaluate('document.querySelector(".photo-positioning-rows").innerText.includes("Flyttes")'));
-      await click('Avbryt','document.querySelector(".photo-positioning-wizard")'); assert.equal(await currentText(),movedCurrent);
-      await click('Bruk GML-posisjon',spatial); assert.equal(await currentText(),oldCoords); assert.deepEqual(await evidence(),oldEvidence);
-      await click('Bruk EXIF-posisjon',spatial); assert.deepEqual(await evidence(),oldEvidence);
+      await closePhotoSources(browser); assert.equal(await currentText(),movedCurrent);
+      const activeFilename = await browser.evaluate('document.querySelector(".photo-workspace-inspector h3").innerText');
+      await applyPhotoSourcePositions(browser, 'gml', { filename: activeFilename }); assert.equal(await currentText(),oldCoords); assert.deepEqual(await evidence(),oldEvidence);
+      await applyPhotoSourcePositions(browser, 'exif', { filename: activeFilename }); assert.deepEqual(await evidence(),oldEvidence);
       await begin(); await pointClick(-80,-30); await click('Bruk plassering',controls);
       assert(await browser.evaluate(`${spatial}.innerText.includes('Gjeldende posisjon (Manuell)')`));
       await begin(); await pointClick();

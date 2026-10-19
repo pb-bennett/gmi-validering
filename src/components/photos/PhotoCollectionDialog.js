@@ -92,7 +92,7 @@ export default function PhotoCollectionDialog({ onClose, onCreate, openerRef, ta
               <button type="button" className="gmi-primary-control gmi-focus-ring inline-flex min-h-9 items-center gap-2 px-3 text-sm" onClick={() => inputRef.current?.click()}>
                 <UploadSimpleIcon size={17} aria-hidden="true" />Legg til bilder
               </button>
-              <button type="button" className="gmi-compact-button gmi-focus-ring min-h-9 border border-gmi-border-strong px-3 text-sm" onClick={() => gmlInputRef.current?.click()}>Legg til posisjoner (GML)</button>
+              <button type="button" className="gmi-compact-button gmi-focus-ring min-h-9 border border-gmi-border-strong px-3 text-sm" onClick={() => gmlInputRef.current?.click()}>Legg til GML-kildedata</button>
               <button type="button" disabled={!photos.length} onClick={() => photoSession.selectAll()} className="gmi-compact-button gmi-focus-ring min-h-9 border border-gmi-border-strong px-3 text-sm disabled:opacity-40">Velg alle</button>
               <button type="button" disabled={!batchSelectedIds.length} onClick={() => photoSession.clearSelection()} className="gmi-compact-button gmi-focus-ring min-h-9 border border-gmi-border-strong px-3 text-sm disabled:opacity-40">Fjern valg</button>
               <button type="button" disabled={!batchSelectedIds.length} onClick={() => photoSession.removeSelected()} className="gmi-compact-button gmi-focus-ring inline-flex min-h-9 items-center gap-2 border border-gmi-border-strong px-3 text-sm disabled:opacity-40">
@@ -127,8 +127,8 @@ export default function PhotoCollectionDialog({ onClose, onCreate, openerRef, ta
             {errorCount > 0 && ` ${errorCount} uten forhåndsvisning.`}
             {lastImport && ` Siste import: ${lastImport.acceptedCount} lagt til, ${lastImport.rejectedNames.length} avvist.`}
           </p>
-          <p>{counts.exifCandidateCount} bilder med EXIF GPS-kandidat. EXIF blir bare gjeldende posisjon når du velger det selv.</p>
-          <p>Entydige, brukbare GML-treff blir gjeldende posisjoner når importen bekreftes.</p>
+          <p>{counts.exifCandidateCount} bilder med EXIF GPS. EXIF blir bare gjeldende posisjon når du velger det selv.</p>
+          <p>GML-kildedata beholdes uten å endre posisjoner. Kontroller og bruk posisjoner i «Koble og posisjoner bilder» etter importen.</p>
           <PhotoGmlSummary {...positioning} onDiscardError={() => photoSession.discardPositioningError()} />
           {dropError && <p role="alert" className="text-red-700">Velg én GML-fil med bildeposisjoner om gangen.</p>}
           {targetLayerId && <p>Bare de nye bildene legges til. Eksisterende bilder og posisjoner beholdes.</p>}

@@ -4,6 +4,7 @@ import { readdir, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { assertPhotoDialogLayout } from './helpers/photoDialogLayout.mjs';
+import { applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
 
 // Opt-in production UI acceptance; private originals stay outside the repository.
 const applicationUrl = process.env.PHOTO_UI_URL;
@@ -48,6 +49,8 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await browser.waitFor('document.querySelector("dialog").innerText.includes("148 treff")');
     await assertPhotoDialogLayout(browser, 'populated real-corpus importer');
     await click('Opprett fotokartlag (148 bilder)');
+    assert.equal(await browser.evaluate(markerCount), 0, 'import retains GML evidence without positions');
+    await applyPhotoSourcePositions(browser, 'gml');
     await browser.waitFor(`${markerCount} === 148`);
     await browser.waitFor('document.querySelector(".leaflet-container") && document.body.innerText.includes("148 plassert")');
     await browser.waitFor('/Zoom: (1[6-8])/.test(document.body.innerText)');
@@ -73,24 +76,24 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     assert(!await browser.evaluate('Boolean(document.querySelector("dialog[open]"))'));
     await click('Åpne i bildemodul');
     await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-    await browser.waitFor('document.body.innerText.includes("148 bilder med EXIF GPS-kandidat")', 45000);
+    await browser.waitFor('document.body.innerText.includes("148 bilder med EXIF GPS")', 45000);
     assert(await browser.evaluate(`document.querySelector('.photo-collection-inspector').innerText.includes(${JSON.stringify(markerTitle)})`));
     assert(await browser.evaluate('document.body.innerText.includes("Gjeldende posisjon (GML)")'));
     for (const kind of ['GML', 'EXIF']) await browser.evaluate(`Array.from(document.querySelectorAll('summary')).find(e => e.innerText === 'Kildeinformasjon (${kind})').click()`);
     assert(await browser.evaluate('document.body.innerText.includes("EPSG:5972") && document.body.innerText.includes("GPSLatitude")'));
     await browser.evaluate('document.querySelector(".photo-spatial-inspector").scrollIntoView({block:"start"})');
     await screenshot('photo-spatial-inspector');
-    await click('Bruk EXIF-posisjon');
+    await applyPhotoSourcePositions(browser, 'exif', { filename: markerTitle });
     await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (EXIF)")');
     await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await click('Bildemodul');
     await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (EXIF)")');
-    await click('Bruk GML-posisjon');
+    await applyPhotoSourcePositions(browser, 'gml', { filename: markerTitle });
     await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (GML)")');
     for (const [width, height] of [[1024, 620], [390, 700]]) {
       await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
       assert(await browser.evaluate('document.querySelector(".photo-workspace-shell").getBoundingClientRect().width === innerWidth'));
-      await browser.evaluate('Array.from(document.querySelectorAll("button")).find(e => e.innerText === "Bruk EXIF-posisjon").scrollIntoView({block:"center"})');
-      assert(await browser.evaluate('Array.from(document.querySelectorAll("button")).find(e => e.innerText === "Bruk EXIF-posisjon").getBoundingClientRect().bottom <= window.innerHeight'));
+      await browser.evaluate('Array.from(document.querySelectorAll("button")).find(e => e.innerText === "Kontroller kilder og posisjon").scrollIntoView({block:"center"})');
+      assert(await browser.evaluate('Array.from(document.querySelectorAll("button")).find(e => e.innerText === "Kontroller kilder og posisjon").getBoundingClientRect().bottom <= window.innerHeight'));
     }
     await browser.send('Emulation.setDeviceMetricsOverride', { width: 1680, height: 900, deviceScaleFactor: 1, mobile: false });
     checks.push('marker focuses correct photo; provenance visible; candidate acceptance preserved on reopen');
@@ -106,12 +109,12 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
 
     await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")');
     await inputFiles('input[aria-label="Velg bildefiler"]', photos);
-    await browser.waitFor('document.querySelector("dialog").innerText.includes("148 bilder med EXIF GPS-kandidat")', 45000);
+    await browser.waitFor('document.querySelector("dialog").innerText.includes("148 bilder med EXIF GPS")', 45000);
     await click('Opprett fotokartlag (148 bilder)');
     await browser.waitFor('document.body.innerText.includes("148 uplassert") && document.querySelector(".leaflet-container")');
     assert.equal(await browser.evaluate(markerCount), 0);
     await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-    await click('Bruk EXIF-posisjon'); await click('Tilbake til appen');
+    await applyPhotoSourcePositions(browser, 'exif', { filename: await browser.evaluate('document.querySelector(".photo-workspace-inspector h3").innerText') }); await click('Tilbake til appen');
     await browser.waitFor(`${markerCount} === 1`);
     assert(await browser.evaluate('document.body.innerText.includes("1 plassert") && document.body.innerText.includes("147 uplassert")'));
     checks.push('all 148 EXIF candidates stay unplaced without GML; explicit acceptance creates exactly one marker');

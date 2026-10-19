@@ -4,6 +4,7 @@ import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { assertPhotoDialogLayout } from './helpers/photoDialogLayout.mjs';
+import { applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
 
 const applicationUrl = process.env.PHOTO_UI_URL, gmlPath = process.env.PHOTO_GML_FIXTURE;
 test('real append duplicate correction: 148 minus six, reimport 148 adds six only; zero-new blocked, override explicit',
@@ -59,8 +60,9 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
       await click('Bilder'); await browser.waitFor(`${dialog}?.open`);
       await files('input[aria-label="Velg bildefiler"]',photos);
       await files('input[aria-label="Velg GML med bildeposisjoner"]',[gmlPath]);
-      await browser.waitFor(`${dialog}.innerText.includes('148 treff') && ${dialog}.innerText.includes('148 bilder med EXIF GPS-kandidat')`,45000);
+      await browser.waitFor(`${dialog}.innerText.includes('148 treff') && ${dialog}.innerText.includes('148 bilder med EXIF GPS')`,45000);
       await click('Opprett fotokartlag (148 bilder)',dialog); await browser.waitFor(`!${dialog}`); await click('Bildemodul');
+      await applyPhotoSourcePositions(browser, 'gml');
       await browser.waitFor(`${collection}===148`);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list img").length===148',45000);
       const before = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(e=>({id:e.dataset.photoId,filename:e.querySelector('.photo-workspace-filename').title,thumbnail:e.querySelector('img')?.src}))`);
@@ -80,7 +82,7 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
       await browser.waitFor(`${dialog}.querySelector('.photo-spatial-inspector').innerText.includes('GPS leses bare hvis')`);
       assert(!await browser.evaluate(`${dialog}.querySelector('.photo-spatial-inspector').innerText.includes('EXIF kandidat')`));
       await files('input[aria-label="Velg GML med bildeposisjoner"]',[gmlPath]);
-      await browser.waitFor(`${dialog}.innerText.includes('6 treff') && ${dialog}.innerText.includes('6 bilder med EXIF GPS-kandidat')`,45000);
+      await browser.waitFor(`${dialog}.innerText.includes('6 treff') && ${dialog}.innerText.includes('6 bilder med EXIF GPS')`,45000);
       assert(!await browser.evaluate(`${dialog}.querySelector('.photo-spatial-inspector').innerText.includes('GML i importen')`));
       await browser.waitFor(`${dialog}.querySelector('.photo-collection-original img')?.complete && ${dialog}.querySelector('.photo-collection-original img').naturalWidth > 0`,45000);
       await assertPhotoDialogLayout(browser,'append 148 with 142 skipped');
@@ -96,6 +98,8 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
       await openAppend(); await files('input[aria-label="Velg bildefiler"]',photos);
       await files('input[aria-label="Velg GML med bildeposisjoner"]',[gmlPath]); await browser.waitFor(`${dialog}.innerText.includes('6 treff')`);
       await click('Legg til 6 bilder i laget',dialog); await browser.waitFor(`${collection}===148`);
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'),142, 'append does not accept GML positions');
+      await applyPhotoSourcePositions(browser, 'gml');
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'),148);
       const after = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(e=>({id:e.dataset.photoId,filename:e.querySelector('.photo-workspace-filename').title,thumbnail:e.querySelector('img')?.src}))`);
       before.slice(6).forEach(photo=>assert.deepEqual(after.find(e=>e.id===photo.id),photo));

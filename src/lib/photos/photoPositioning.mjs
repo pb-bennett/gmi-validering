@@ -60,3 +60,43 @@ export function photoPositioningRequests(plan, selectedIds) {
     photoId: row.photoId, candidateId: row.proposal.id, expectedCurrent: row.current,
   }));
 }
+
+// Retained evidence from every position source, without assigning source priority.
+// Keep original candidate/current identities for the session's optimistic guards.
+export function photoSourceEvidenceSignature(photos) {
+  return JSON.stringify(photos.map((photo) => [photo.id, photo.spatial.exifRead.state,
+    photo.spatial.candidates.map((candidate) => [candidate.id, candidate.status])]));
+}
+
+export function planPhotoSourcePositions(photos, sources) {
+  const gmlOptions = new Set();
+  for (const source of sources.filter((item) => item.kind === 'gml')) {
+    for (const match of matchPhotoReferences(source.entries, photos).matches) {
+      if (match.status === 'matched') gmlOptions.add(JSON.stringify([match.photoId, source.id, match.entryId]));
+    }
+  }
+  const rows = photos.map((photo) => {
+    const options = photo.spatial.candidates.filter((candidate) => candidate.status === 'viable'
+      && isPhotoPosition(candidate.position) && (candidate.kind === 'exif'
+        || (candidate.kind === 'gml' && gmlOptions.has(JSON.stringify([photo.id, candidate.sourceId, candidate.sourceEntryId])))));
+    const current = photo.spatial.current;
+    const basis = photo.spatial.candidates.find((candidate) => candidate.id === current?.basis.candidateId);
+    const objectCount = sources.filter((source) => source.kind === 'gmi').reduce((count, source) =>
+      count + (source.associationLedger.reverseIndexes.byPhotoId[photo.id]?.length || 0), 0);
+    return Object.freeze({ photoId: photo.id, filename: photo.originalFilename, thumbnailUrl: photo.preview.thumbnailUrl,
+      current, currentKind: basis?.kind || current?.basis.kind, currentSourceFilename: basis?.sourceFilename,
+      options: Object.freeze(options), objectCount, exifState: photo.spatial.exifRead.state,
+      defaultChoice: !current && options.length === 1 ? options[0].id : '' });
+  });
+  return Object.freeze({ rows: Object.freeze(rows), evidenceSignature: photoSourceEvidenceSignature(photos) });
+}
+
+export function selectedPhotoSourcePositions(plan, choices) {
+  return plan.rows.flatMap((row) => {
+    const proposal = row.options.find((candidate) => candidate.id === choices[row.photoId]);
+    if (!proposal) return [];
+    const distanceMetres = row.current ? photoPositionDistance(row.current.position, proposal.position) : null;
+    return [{ ...row, proposal, distanceMetres,
+      action: !row.current ? 'place' : distanceMetres > PHOTO_POSITION_TOLERANCE_METRES ? 'move' : 'same' }];
+  });
+}

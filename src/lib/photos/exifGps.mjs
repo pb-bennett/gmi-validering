@@ -56,5 +56,5 @@ export async function readExifGps(file, { parse } = {}) {
 export function exifGpsMessage(state, errorCode) {
   if (state === 'skipped-duplicate') return 'GPS leses bare hvis bildet legges til likevel.';
   if (errorCode === 'unsupported-gps-datum') return 'GPS har et koordinatsystem som ikke støttes.';
-  return ({ pending: 'Leser EXIF GPS …', viable: 'EXIF GPS er tilgjengelig som kandidat.', 'no-gps': 'Ingen EXIF GPS funnet.', invalid: 'Ugyldige eller ufullstendige GPS-data.', error: 'GPS-data kunne ikke leses.', 'unsupported-format': 'GPS-lesing støttes foreløpig for JPEG og PNG.' })[state] || 'GPS-status er ukjent.';
+  return ({ pending: 'Leser EXIF GPS …', viable: 'EXIF GPS: Posisjon tilgjengelig.', 'no-gps': 'Ingen EXIF GPS funnet.', invalid: 'Ugyldige eller ufullstendige GPS-data.', error: 'GPS-data kunne ikke leses.', 'unsupported-format': 'GPS-lesing støttes foreløpig for JPEG og PNG.' })[state] || 'GPS-status er ukjent.';
 }

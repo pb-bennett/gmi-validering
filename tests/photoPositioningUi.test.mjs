@@ -1,165 +1,168 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readdir, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { gpsPng } from './helpers/photoGpsFixtures.mjs';
+import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
+import { sourceWizard, clickSourceControl as click, setPhotoFiles, openPhotoSources, closePhotoSources, stagePhotoSource, savePhotoSource, applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
 
-const applicationUrl = process.env.PHOTO_UI_URL, gmlPath = process.env.PHOTO_GML_FIXTURE;
-test('positioning wizard: real 148-photo GML/EXIF, selection, summaries, cancellation, failures and owner lifecycle',
-  { skip: !chromePath || !applicationUrl || !gmlPath, timeout: 240000 }, async () => {
-    const browser = await openTestChrome(), checks = [], wizard = 'document.querySelector(".photo-positioning-wizard")';
-    const markerCount = 'document.querySelectorAll(".photo-camera-marker").length';
-    const click = (text, scope = 'document') => browser.evaluate(`(() => {
-      const button = Array.from(${scope}.querySelectorAll('button')).find(e => e.innerText.trim() === ${JSON.stringify(text)});
-      if (!button || button.disabled) throw new Error('Unavailable button: ' + ${JSON.stringify(text)}); button.click(); })()`);
-    const inputFiles = async (selector, files) => {
-      const { root } = await browser.send('DOM.getDocument');
-      const { nodeId } = await browser.send('DOM.querySelector', { nodeId: root.nodeId, selector });
-      assert(nodeId, selector); await browser.send('DOM.setFileInputFiles', { nodeId, files });
-    };
-    const selectedCount = () => browser.evaluate(`${wizard}.querySelectorAll('.photo-positioning-rows input:checked').length`);
-    const actionCount = (action) => browser.evaluate(`${wizard}.querySelectorAll('[data-action=${action}]').length`);
-    const summaryCount = (label) => browser.evaluate(`Array.from(${wizard}.querySelectorAll('dl > div')).find(e => e.querySelector('dt').innerText === ${JSON.stringify(label)}).querySelector('dd').innerText`);
-    const originals = () => browser.evaluate('window.__originalUrls.size');
-    const begin = async (kind = 'gml') => {
-      await click('Posisjoner bilder'); await browser.waitFor(`${wizard}?.open`);
-      if (kind === 'exif') await browser.evaluate(`${wizard}.querySelector('input[value=exif]').click()`);
-    };
-    const cancel = async () => { await click('Avbryt', wizard); await browser.waitFor(`!${wizard}`); };
-    const next = () => click('Neste', wizard);
-    const review = async () => { await next(); await browser.waitFor(`${wizard}.querySelector('.photo-positioning-rows')`); };
-    const summary = async () => { await next(); await browser.waitFor(`${wizard}.querySelector('.photo-positioning-summary')`); };
-    const apply = async (kind, count) => {
-      await click(`Bruk ${kind}-posisjon for ${count} ${count === 1 ? 'bilde' : 'bilder'}`, wizard);
-      await browser.waitFor(`!${wizard}`);
-    };
-    const screenshot = async (name) => {
-      if (!process.env.PHOTO_SCREENSHOT_DIR) return;
-      await browser.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
-      await mkdir(process.env.PHOTO_SCREENSHOT_DIR, { recursive: true });
-      const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
-      await writeFile(path.join(process.env.PHOTO_SCREENSHOT_DIR, `${name}.png`), Buffer.from(data, 'base64'));
-    };
-    const deleteLayer = async () => {
-      await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
-      await browser.evaluate(`document.querySelector('button[aria-label^="Fjern fotokartlag"]').click()`);
-      await click('Fjern'); await browser.waitFor('!document.querySelector("section[aria-label^=Fotokartlag]")');
-    };
-    const loadXml = async (xml, filename = 'positioning.gml', creation = false) => browser.evaluate(`(() => {
-      const transfer = new DataTransfer(); transfer.items.add(new File([${JSON.stringify(xml)}], ${JSON.stringify(filename)}));
-      const input = document.querySelector(${JSON.stringify(creation ? 'input[aria-label="Velg GML med bildeposisjoner"]' : 'input[aria-label="Velg GML for posisjonering"]')});
-      input.files = transfer.files; input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
-    const xmlFor = (entries) => `<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy>${entries.map((entry,index) => `<gml:featureMember><app:Skråfoto gml:id="row${index}"><app:fotolink>Attachments\\${entry.filename.replaceAll('&','&amp;')}</app:fotolink><app:fotograferingspunkt><gml:Point${entry.invalid ? ' srsName="EPSG:999999"' : ''} srsDimension="3"><gml:pos>${entry.x || 582932} 6566001 0</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember>`).join('')}</gml:FeatureCollection>`;
-    const layout = async (width, height, label) => {
-      await browser.send('Emulation.setDeviceMetricsOverride', { width,height,deviceScaleFactor:1,mobile:false });
-      await browser.evaluate('new Promise(resolve => requestAnimationFrame(resolve))');
-      const boxes = await browser.evaluate(`(() => { const dialog = ${wizard}, content = dialog.querySelector('.photo-positioning-content'), footer=dialog.querySelector('footer');
-        return {dialog:dialog.getBoundingClientRect().toJSON(),footer:footer.getBoundingClientRect().toJSON(),scroll:content.scrollWidth,content:content.clientWidth}; })()`);
-      assert(boxes.dialog.left >= 0 && boxes.dialog.right <= width && boxes.dialog.top >= 0 && boxes.dialog.bottom <= height);
-      assert(boxes.footer.bottom <= height && boxes.scroll <= boxes.content + 1);
-      await screenshot(`wizard-${label}-${width}x${height}`);
-      checks.push(`${label} layout ${width}×${height}: ${boxes.dialog.width}×${boxes.dialog.height}; footer visible`);
-    };
+const app = process.env.PHOTO_UI_URL, realGml = process.env.PHOTO_GML_FIXTURE;
+async function start(browser) {
+  await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'localStorage.clear();' });
+  await browser.send('Page.navigate', { url: app + '?testmodus=1' });
+  await browser.waitFor('document.querySelector("button[aria-label=Lukk]")');
+  await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
+}
+const spatial = 'document.querySelector(".photo-spatial-inspector")';
+const markerCount = 'document.querySelectorAll(".photo-camera-marker").length';
+const selectPhoto = async (browser, filename) => {
+  await browser.evaluate(`document.querySelector(${JSON.stringify(`.photo-workspace-list button[aria-label="Vis ${filename}"]`)}).click()`);
+  await browser.waitFor(`document.querySelector('.photo-workspace-inspector h3').innerText===${JSON.stringify(filename)}`);
+};
+
+test('unified source workflow: GMI/GML checkpoints, mixed positions, manual current, recheck/removal, cancel and layouts',
+  { skip: !chromePath || !app, timeout: 180000 }, async () => {
+    const root = path.resolve(tmpdir()), directory = await mkdtemp(path.join(root, 'photo-source-workflow-'));
+    const browser = await openTestChrome();
+    const names = ['a.png', 'b.png', 'c.png'], photos = names.map((name) => path.join(directory, name));
+    const gmi = path.join(directory, 'objects.gmi'), gml = path.join(directory, 'positions.gml');
+    await Promise.all(photos.map((file) => writeFile(file, gpsPng())));
+    await writeFile(gmi, Buffer.from(await gmiFile([{ hyperlink: 'h:1(link:"a.png") h:2(link:"b.png") ' },
+      { hyperlink: 'h:1(link:"a.png") h:2(link:"missing.png") ' }]).arrayBuffer()));
+    await writeFile(gml, `<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy>${names.slice(0, 2).map((name, index) => `<gml:featureMember><app:Skråfoto gml:id="photo-${index}"><app:fotolink>${name}</app:fotolink><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>581930 6566000 0</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember>`).join('')}</gml:FeatureCollection>`);
     try {
-      await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => { const urls=new Set(), create=URL.createObjectURL.bind(URL),revoke=URL.revokeObjectURL.bind(URL);
-        URL.createObjectURL=value=>{const url=create(value);if(value instanceof File)urls.add(url);return url;};URL.revokeObjectURL=url=>{urls.delete(url);revoke(url);};window.__originalUrls=urls; })();` });
-      await browser.send('Emulation.setDeviceMetricsOverride', {width:1680,height:900,deviceScaleFactor:1,mobile:false});
-      await browser.send('Page.navigate', {url:applicationUrl+'?testmodus=1'});
-      await browser.waitFor('document.querySelector("button[aria-label=Lukk]")');
+      await start(browser);
+      await click(browser, 'Bilder', 'document');
+      await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', photos);
+      await browser.waitFor('!document.querySelector(".photo-collection-notice [role=status]").innerText.includes("Lager miniatyrbilder")');
+      await click(browser, 'Opprett fotokartlag (3 bilder)', 'document');
+      await click(browser, 'Bildemodul', 'document');
+      await browser.waitFor('document.querySelector(".photo-workspace-collection")?.innerText.includes("3 bilder med EXIF")');
+      assert.equal(await browser.evaluate(markerCount), 0);
+      await selectPhoto(browser, 'c.png');
+      await click(browser, 'Plasser på kartet', spatial);
+      const box = await browser.evaluate('document.querySelector(".leaflet-container").getBoundingClientRect().toJSON()');
+      const x = box.left + box.width / 2, y = box.top + box.height / 2;
+      await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+      await browser.waitFor('document.querySelector(".photo-proposed-marker")');
+      await click(browser, 'Bruk plassering', spatial);
+      const manual = await browser.evaluate(`${spatial}.innerText`);
+      assert.match(manual, /Gjeldende posisjon \(Manuell\)/);
+
+      await stagePhotoSource(browser, gmi, 'gmi');
+      await closePhotoSources(browser);
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-source-item").length'), 0, 'pre-checkpoint cancellation');
+      await stagePhotoSource(browser, gmi, 'gmi');
+      await browser.evaluate('void (window.__unifiedDialog = document.querySelector(".photo-positioning-wizard"))');
+      await savePhotoSource(browser, 'gmi');
+      assert(await browser.evaluate(`${sourceWizard}===window.__unifiedDialog`));
+      assert.equal(await browser.evaluate(markerCount), 1, 'GMI save creates zero positions');
+      assert.equal(await browser.evaluate(`${spatial}.innerText`), manual, 'GMI save changes neither current nor direction');
+      await stagePhotoSource(browser, gml);
+      await savePhotoSource(browser);
+      assert(await browser.evaluate(`${sourceWizard}===window.__unifiedDialog`));
+      assert.equal(await browser.evaluate(markerCount), 1, 'GML save retains evidence only');
+      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '0 valgt');
+      assert(await browser.evaluate(`${sourceWizard}.innerText.includes('GMI: koblet til 2 objekter')`));
+      assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Ulike posisjoner fra kildene')`));
+      for (const [width, height] of [[1680, 900], [1366, 768], [1280, 720], [1024, 768], [1024, 620]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        const geometry = await browser.evaluate(`(() => {const dialog=${sourceWizard},footer=dialog.querySelector('footer'),content=dialog.querySelector('.photo-positioning-content');return {dialog:dialog.getBoundingClientRect().toJSON(),footer:footer.getBoundingClientRect().toJSON(),scroll:content.scrollWidth,width:content.clientWidth};})()`);
+        assert(geometry.dialog.left >= 0 && geometry.dialog.right <= width && geometry.dialog.top >= 0 && geometry.dialog.bottom <= height);
+        assert(geometry.footer.bottom <= height && geometry.footer.top >= geometry.dialog.top);
+        assert(geometry.scroll <= geometry.width + 1);
+        if (process.env.PHOTO_SCREENSHOT_DIR) {
+          await mkdir(process.env.PHOTO_SCREENSHOT_DIR, { recursive: true });
+          const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+          await writeFile(path.join(process.env.PHOTO_SCREENSHOT_DIR, `unified-positions-${width}x${height}.png`), Buffer.from(data, 'base64'));
+        }
+      }
+      await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
+      for (const [name, kind] of [['a.png', 'EXIF'], ['b.png', 'GML']]) await browser.evaluate(`(() => {
+        const select=Array.from(${sourceWizard}.querySelectorAll('select')).find(item=>item.getAttribute('aria-label')===${JSON.stringify(`Velg posisjon for ${name}`)});
+        select.value=Array.from(select.options).find(option=>option.text.startsWith(${JSON.stringify(kind)})).value;
+        select.dispatchEvent(new Event('change',{bubbles:true}));
+      })()`);
+      await click(browser, 'Neste');
+      await click(browser, 'Bruk valgte posisjoner for 2 bilder');
+      await browser.waitFor(`!${sourceWizard}`);
+      assert.equal(await browser.evaluate(markerCount), 3);
+      await selectPhoto(browser, 'a.png');
+      assert(await browser.evaluate(`${spatial}.innerText.includes('Gjeldende posisjon (EXIF)')`));
+      assert(await browser.evaluate(`${spatial}.innerText.includes('2 objekter')`));
+      assert(!await browser.evaluate(`Array.from(${spatial}.querySelectorAll('button')).some(button=>/^Bruk (EXIF|GML)-posisjon/.test(button.innerText))`));
+      await selectPhoto(browser, 'b.png');
+      assert(await browser.evaluate(`${spatial}.innerText.includes('Gjeldende posisjon (GML)')`));
+      await selectPhoto(browser, 'c.png');
+      assert(await browser.evaluate(`${spatial}.innerText.includes('Gjeldende posisjon (Manuell)')`));
+
+      await browser.evaluate('document.querySelector(".photo-workspace-sources > details").open=true');
+      await click(browser, 'Kontroller på nytt', 'document.querySelector(".photo-workspace-source-item")');
+      await browser.waitFor(`${sourceWizard}.innerText.includes('Kilden finnes i laget')`);
+      await savePhotoSource(browser, 'gmi');
+      await closePhotoSources(browser);
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-source-item").length'), 2, 'recheck does not duplicate sources');
+      await click(browser, 'Kontroller kilder og posisjon', spatial);
+      await browser.waitFor(`${sourceWizard}?.open`);
+      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-filename strong').innerText`), 'c.png', 'inspector entry focuses the active photo');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '0 valgt');
+      await click(browser, 'Tilbake');
+      await click(browser, 'Fjern kilde');
+      await click(browser, 'Fjern GMI-kilde');
+      await closePhotoSources(browser);
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-source-item").length'), 1);
+      assert.equal(await browser.evaluate(markerCount), 3);
+      assert(await browser.evaluate(`${spatial}.innerText.includes('Gjeldende posisjon (Manuell)')`));
+      const activePhoto = await browser.evaluate('document.querySelector(".photo-workspace-active").dataset.photoId');
+      await browser.evaluate(`document.querySelector('button[aria-label="Om appen, versjon 1.2.0"]').click()`);
+      await browser.waitFor('document.querySelector(".app-info-dialog")');
+      await click(browser, 'Nytt', 'document.querySelector(".app-info-dialog")');
+      await browser.waitFor('document.querySelector(".app-info-dialog").innerText.includes("Nytt og mer helhetlig grensesnitt")');
       await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
-      const paths = (await readdir(path.join(path.dirname(gmlPath),'Attachments'))).filter(name=>/\.jpe?g$/i.test(name)).sort().map(name=>path.join(path.dirname(gmlPath),'Attachments',name));
-      assert.equal(paths.length,148);
-      const createRealLayer = async () => {
-        await click('Bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
-        await inputFiles('input[aria-label="Velg bildefiler"]', paths);
-        await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("148 bilder med EXIF GPS-kandidat")',45000);
-        await click('Opprett fotokartlag (148 bilder)'); await browser.waitFor('!document.querySelector(".photo-collection-dialog")');
-        const label=await browser.evaluate(`document.querySelector('button[title="Åpne bildemodul"]').getAttribute('aria-label')`);
-        assert(label.startsWith('Åpne bildemodul for ')); await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-        await browser.waitFor('document.querySelectorAll(".photo-workspace-list img").length===148'); await browser.waitFor('window.__originalUrls.size===1');
-      };
-      await createRealLayer(); assert.equal(await browser.evaluate(markerCount),0);
-      assert.equal(await browser.evaluate('document.querySelector(".photo-preview-open").title'),'Vis stort');
-      assert.equal(await browser.evaluate('document.querySelector(".photo-preview-open").getAttribute("aria-label")'),'Vis stort');
-      assert(await browser.evaluate('Boolean(document.querySelector(".photo-preview-open svg"))'));
-      await begin('exif'); await layout(1680,900,'source'); await cancel(); assert.equal(await browser.evaluate(markerCount),0);
-      await begin('exif'); await review(); assert.equal(await selectedCount(),148); assert.equal(await actionCount('place'),148);
-      await cancel(); assert.equal(await browser.evaluate(markerCount),0);
-      await begin('exif'); await review(); await summary(); assert.equal(await summaryCount('Plasseres'),'148');
-      await cancel(); assert.equal(await browser.evaluate(markerCount),0);
-      await begin('exif'); await review();
-      await layout(1680,900,'exif-review'); await layout(1024,620,'exif-review'); await layout(390,700,'exif-review');
-      await browser.send('Emulation.setDeviceMetricsOverride',{width:1680,height:900,deviceScaleFactor:1,mobile:false});
-      await summary(); await screenshot('wizard-exif-summary'); await apply('EXIF',148); await browser.waitFor(`${markerCount}===148`);
-      assert.equal(await originals(),1); checks.push('photos-only EXIF: 148 default-selected placements; cancellation at all three steps leaves zero markers; explicit confirmation creates 148');
-      await deleteLayer(); assert.equal(await originals(),0);
+      await browser.waitFor('!document.querySelector(".app-info-dialog")');
+      assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-active").dataset.photoId'), activePhoto);
+      assert.equal(await browser.evaluate(markerCount), 3);
+      console.log('Unified acceptance: one dialog, both checkpoints, GMI many-to-many, GML+EXIF mixed apply, manual preserved, recheck/removal and five desktop layouts.');
+    } finally {
+      await browser.close();
+      if (path.dirname(path.resolve(directory)) !== root || !path.basename(directory).startsWith('photo-source-workflow-')) throw new Error('Unsafe fixture cleanup');
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 
-      await createRealLayer(); await begin(); await inputFiles('input[aria-label="Velg GML for posisjonering"]',[gmlPath]);
-      await browser.waitFor(`${wizard}.innerText.includes('148 treff')`); assert.equal(await browser.evaluate(markerCount),0);
-      await review(); assert.equal(await selectedCount(),148); assert.equal(await actionCount('place'),148);
-      await summary(); assert.equal(await summaryCount('Plasseres'),'148'); await screenshot('wizard-gml-summary');
-      await apply('GML',148); await browser.waitFor(`${markerCount}===148`);
-      await begin('exif'); await review(); assert.equal(await selectedCount(),148); assert.equal(await actionCount('same'),148); assert.equal(await actionCount('move'),0);
-      await browser.evaluate(`${wizard}.querySelector('.photo-positioning-comparison summary').click()`);
-      assert(await browser.evaluate(`${wizard}.innerText.includes('Gjeldende (GML)') && ${wizard}.innerText.includes('Foreslått (EXIF)')`));
-      await summary(); assert.equal(await summaryCount('Flyttes'),'0'); assert.equal(await summaryCount('Har allerede samme posisjon'),'148');
-      await apply('EXIF',148); assert(await browser.evaluate('document.querySelector(".photo-spatial-inspector").innerText.includes("Gjeldende posisjon (EXIF)")'));
-      await begin(); await inputFiles('input[aria-label="Velg GML for posisjonering"]',[gmlPath]);
-      await browser.waitFor(`${wizard}.innerText.includes('brukes på nytt')`); await review(); assert.equal(await actionCount('same'),148);
-      await summary(); await apply('GML',148);
-      assert(await browser.evaluate('document.querySelector(".photo-workspace-sources summary").innerText.includes("1 kilde")'));
-      assert.equal(await browser.evaluate(markerCount),148);
-      checks.push('photos-only GML: 148 matches/placements; EXIF comparison reports 148 same and zero moves; identical source reused without duplication; reversible explicit basis');
-      await deleteLayer();
-
-      await click('Bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
-      await inputFiles('input[aria-label="Velg bildefiler"]',paths.slice(0,2));
-      await browser.evaluate(`(async()=>{const canvas=document.createElement('canvas');canvas.width=120;canvas.height=80;const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
-        const transfer=new DataTransfer();for(const name of ['none.png','repeat.png','REPEAT.PNG','invalid.png'])transfer.items.add(new File([blob],name,{type:'image/png'}));
-        const input=document.querySelector('input[aria-label="Velg bildefiler"]');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-      const first=path.basename(paths[0]),second=path.basename(paths[1]);
-      await loadXml(xmlFor([{filename:first},{filename:second}]),'initial.gml',true);
-      await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("2 treff")');
-      await click('Opprett fotokartlag (6 bilder)'); await browser.waitFor('!document.querySelector(".photo-collection-dialog")'); await click('Bildemodul');
-      await browser.waitFor('document.querySelector(".photo-workspace-shell")'); await browser.waitFor('document.body.innerText.includes("2 bilder med EXIF GPS-kandidat")');
-      await begin('exif'); await review(); assert.equal(await actionCount('move'),2); assert.equal(await actionCount('unavailable'),4); assert.equal(await selectedCount(),2);
-      const toggleFirst = () => browser.evaluate(`${wizard}.querySelector(${JSON.stringify(`input[aria-label="Posisjoner ${first}"]`)}).click()`);
-      await toggleFirst(); assert.equal(await selectedCount(),1); await summary(); assert.equal(await summaryCount('Flyttes'),'1');
-      await cancel(); assert(await browser.evaluate('document.querySelector(".photo-spatial-inspector").innerText.includes("Gjeldende posisjon (GML)")'));
-      await begin('exif'); await review(); await click('Fjern alle valg',wizard); assert.equal(await selectedCount(),0);
-      assert(await browser.evaluate(`Array.from(${wizard}.querySelectorAll('button')).find(e=>e.innerText==='Neste').disabled`));
-      await click('Velg alle brukbare',wizard); await toggleFirst(); await summary(); await apply('EXIF',1);
-      await browser.evaluate(`document.querySelector(${JSON.stringify(`.photo-workspace-list button[aria-label="Vis ${first}"]`)}).click()`);
-      assert(await browser.evaluate('document.querySelector(".photo-spatial-inspector").innerText.includes("Gjeldende posisjon (GML)")'));
-      await browser.evaluate(`document.querySelector(${JSON.stringify(`.photo-workspace-list button[aria-label="Vis ${second}"]`)}).click()`);
-      await browser.waitFor('document.querySelector(".photo-spatial-inspector").innerText.includes("Gjeldende posisjon (EXIF)")');
-      checks.push('conflicting EXIF: two visible moves, four no-GPS rows disabled; deselection updates summary; confirmation changes only selected photo');
-      await begin(); await loadXml('broken XML','broken.gml'); await browser.waitFor(`${wizard}.querySelector('[role=alert]')`);
-      assert(await browser.evaluate(`Array.from(${wizard}.querySelectorAll('button')).find(e=>e.innerText==='Neste').disabled`)); await screenshot('wizard-parse-error');
-      await cancel();
-      await begin(); await loadXml(xmlFor([{filename:first,x:583932},{filename:'repeat.png'},{filename:'invalid.png',invalid:true},{filename:'absent.png'}]),'mixed.gml');
-      await browser.waitFor(`${wizard}.innerText.includes('1 tvetydige')`); await review();
-      assert.equal(await selectedCount(),1); assert.equal(await actionCount('ambiguous'),2); assert.equal(await actionCount('unavailable'),1); assert.equal(await actionCount('unmatched'),2);
-      await layout(1024,620,'mixed-review'); await layout(390,700,'mixed-review');
-      await browser.send('Emulation.setDeviceMetricsOverride',{width:1680,height:900,deviceScaleFactor:1,mobile:false});
-      await summary(); assert.equal(await summaryCount('Flyttes'),'1'); await screenshot('wizard-mixed-summary'); await apply('GML',1);
-      assert(await browser.evaluate('document.querySelector(".photo-workspace-sources summary").innerText.includes("2 kilder")'));
-      assert.equal(await browser.evaluate(markerCount),2);
-      checks.push('parse failure is clear; mixed GML surfaces unmatched/ambiguous/invalid rows; only viable selected row applies and source evidence persists');
-
-      await browser.evaluate('document.querySelector(".photo-workspace-list input").click()');
-      await begin('exif'); await review();
-      await click('Fjern fra lag','document.querySelector(".photo-workspace-selected-actions")');
-      await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
-      await click('Fjern fra lag','document.querySelector(".photo-remove-confirmation")');
-      await browser.waitFor(`!${wizard} && document.querySelectorAll('.photo-workspace-list li[data-photo-id]').length===5`);
-      assert(await browser.evaluate('document.querySelector(".photo-workspace-sources summary").innerText.includes("2 kilder")'));
-      await begin('exif'); await review(); await browser.send('Page.reload');
-      await browser.waitFor(`!${wizard} && !document.querySelector('.photo-workspace-shell,section[aria-label^=Fotokartlag]')`);
-      assert.equal(await originals(),0);
-      checks.push('external confirmed member removal aborts wizard and retains existing sources; hard reload clears wizard/layer/resources');
-      assert.deepEqual(browser.events.filter(e=>e.method==='Runtime.exceptionThrown').map(e=>e.params.exceptionDetails.exception?.description||e.params.exceptionDetails.text),[]);
-      console.log(JSON.stringify({positioningWizardChecks:checks},null,2));
-    } catch(error) { console.error(await browser.evaluate('document.body.innerText.slice(0,10000)')); await screenshot('wizard-failure'); throw error; }
-    finally { await browser.close(); }
+test('real 148-photo import retains GML/EXIF evidence until central explicit source-position review',
+  { skip: !chromePath || !app || !realGml, timeout: 180000 }, async () => {
+    const browser = await openTestChrome();
+    try {
+      await start(browser);
+      const photos = (await readdir(path.join(path.dirname(realGml), 'Attachments'))).filter((name) => /\.jpe?g$/i.test(name)).sort()
+        .map((name) => path.join(path.dirname(realGml), 'Attachments', name));
+      assert.equal(photos.length, 148);
+      await click(browser, 'Bilder', 'document');
+      await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', photos);
+      await setPhotoFiles(browser, 'input[aria-label="Velg GML med bildeposisjoner"]', [realGml]);
+      await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("148 treff")');
+      await click(browser, 'Opprett fotokartlag (148 bilder)', 'document');
+      await browser.waitFor('document.querySelector(".leaflet-container")');
+      assert.equal(await browser.evaluate(markerCount), 0);
+      await click(browser, 'Bildemodul', 'document');
+      await browser.waitFor('document.querySelector(".photo-workspace-collection")?.innerText.includes("148 bilder med EXIF")');
+      await openPhotoSources(browser);
+      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '0 valgt');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelectorAll('select').length`), 148);
+      await closePhotoSources(browser);
+      assert.equal(await browser.evaluate(markerCount), 0, 'closing review changes no current positions');
+      await applyPhotoSourcePositions(browser, 'gml');
+      await browser.waitFor(`${markerCount}===148`);
+      await applyPhotoSourcePositions(browser, 'exif');
+      assert.equal(await browser.evaluate(markerCount), 148);
+      assert(await browser.evaluate(`${spatial}.innerText.includes('Gjeldende posisjon (EXIF)')`));
+      console.log(JSON.stringify({ realUnifiedPositions: 148, retainedGmlAndExif: 148, explicitBatchSources: ['GML', 'EXIF'], automaticImportPositions: 0 }));
+    } finally { await browser.close(); }
   });

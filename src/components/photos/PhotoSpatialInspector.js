@@ -3,14 +3,13 @@
 import PhotoManualPlacementControls from './PhotoManualPlacementControls';
 import PhotoDirectionControls from './PhotoDirectionControls';
 import PhotoGmiInspector from './PhotoGmiInspector';
-import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { exifGpsMessage } from '@/lib/photos/exifGps.mjs';
 import { photoSourceLabel as label } from '@/lib/photos/photoPresentation.mjs';
 
 const coordinates = (position) => position ? `${Math.abs(position.latitude).toFixed(7)}° ${position.latitude < 0 ? 'S' : 'N'}, ${Math.abs(position.longitude).toFixed(7)}° ${position.longitude < 0 ? 'V' : 'Ø'} (WGS84)` : 'Ingen posisjon';
 const buttonStyle = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 disabled:opacity-40';
 
-export default function PhotoSpatialInspector({ photo, layerId, onLocate, proposedEntry, manualPlacement, directionEditor }) {
+export default function PhotoSpatialInspector({ photo, layerId, onLocate, proposedEntry, manualPlacement, directionEditor, onOpenSources }) {
   const spatial = photo.spatial;
   const basis = spatial.candidates.find((candidate) => candidate.id === spatial.current?.basis?.candidateId);
   const canEdit = Boolean(layerId);
@@ -24,18 +23,18 @@ export default function PhotoSpatialInspector({ photo, layerId, onLocate, propos
       {canEdit && manualPlacement && <PhotoManualPlacementControls photo={photo} layerId={layerId} placement={manualPlacement} />}
       <PhotoDirectionControls photo={photo} layerId={layerId} editor={directionEditor} />
       {canEdit && <PhotoGmiInspector layerId={layerId} photoId={photo.id} />}
+      {canEdit && onOpenSources && <button type="button" className={buttonStyle} onClick={() => onOpenSources({ photoId: photo.id })}>Kontroller kilder og posisjon</button>}
       <p className="text-gmi-text-muted">{exifGpsMessage(spatial.exifRead.state, spatial.exifRead.errorCode)}</p>
-      {proposedEntry && <p className="text-gmi-text-muted">GML i importen: {proposedEntry.status === 'viable' ? 'Posisjonen blir gjeldende når laget opprettes.' : 'Posisjonen kan ikke brukes.'}</p>}
+      {proposedEntry && <p className="text-gmi-text-muted">GML i importen: {proposedEntry.status === 'viable' ? 'Posisjonen beholdes for senere kontroll. Gjeldende posisjon endres ikke.' : 'Posisjonen kan ikke brukes.'}</p>}
       {[...spatial.candidates, ...(proposedEntry ? [{ ...proposedEntry, kind: 'gml', proposed: true }] : [])].map((candidate) => (
         <div key={candidate.id} className="mt-2 border-t border-gmi-border pt-2">
-          <p className="font-medium">{label(candidate.kind)}{candidate.proposed ? ' (foreslått)' : ' kandidat'}{candidate.status !== 'viable' ? ' · Kan ikke brukes' : ''}{candidate.id === basis?.id ? ' · I bruk' : ''}</p>
+          <p className="font-medium">{label(candidate.kind)}{candidate.proposed ? ' (i importen)' : ' · Kildedata'}{candidate.status !== 'viable' ? ' · Kan ikke brukes' : ''}{candidate.id === basis?.id ? ' · I bruk' : ''}</p>
           {candidate.sourceFilename && <p className="break-all text-gmi-text-muted">{candidate.sourceFilename}</p>}
           <p className="text-gmi-text-muted">{coordinates(candidate.position)}</p>
           {candidate.issues?.includes('questionable-zero-gps') && <p className="text-amber-800">GPS er 0°/0°. Kontroller kilden før du bruker posisjonen.</p>}
           {candidate.errorCode && <p className="text-red-700">{candidate.errorCode}</p>}
           {canEdit && candidate.status === 'viable' && <div className="mt-1 flex flex-wrap gap-2">
             <button type="button" className={buttonStyle} onClick={() => onLocate?.({ layerId, photoId: photo.id, candidateId: candidate.id })}>Zoom til {label(candidate.kind)}</button>
-            <button type="button" className={buttonStyle} onClick={() => photoSession.acceptCandidates(layerId, [{ photoId: photo.id, candidateId: candidate.id }])}>Bruk {label(candidate.kind)}-posisjon</button>
           </div>}
           <details className="mt-1 text-gmi-text-muted">
             <summary className="cursor-pointer">Kildeinformasjon ({label(candidate.kind)})</summary>
@@ -47,7 +46,7 @@ export default function PhotoSpatialInspector({ photo, layerId, onLocate, propos
           </details>
         </div>
       ))}
-      {canEdit && <p className="mt-2 text-gmi-text-muted">Bruk av en kandidat endrer bare gjeldende posisjon. Kildene og originalfilen beholdes.</p>}
+      {canEdit && <p className="mt-2 text-gmi-text-muted">Kildedata kan kontrolleres samlet før du velger gjeldende posisjon. Originalfilen beholdes.</p>}
     </section>
   );
 }

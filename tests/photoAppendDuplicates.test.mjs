@@ -33,6 +33,9 @@ test('148 incoming / 142 existing: six appendable, select-all excludes 142, only
   const ids = session.importFiles(originals).acceptedIds;
   await session.importPositioningGml(source(names));
   const layer = session.createLayer(); await settled(session);
+  assert.equal(session.getLayer(layer.id).placedCount, 0);
+  session.acceptCandidates(layer.id, session.getLayerPhotos(layer.id).map((photo) => ({ photoId: photo.id,
+    candidateId: photo.spatial.candidates.find((candidate) => candidate.kind === 'gml').id })));
   session.removeLayerPhotos(layer.id, ids.slice(0, 6), { confirmed: true });
   const before = session.getLayerPhotos(layer.id), previousSource = session.getLayer(layer.id).spatialSources[0];
   session.beginImport(layer.id);
@@ -55,7 +58,8 @@ test('148 incoming / 142 existing: six appendable, select-all excludes 142, only
   const skippedUrls = incoming.slice(6).map((id) => session.getPhoto(id).preview.thumbnailUrl);
   session.appendImport();
   assert.equal(session.getLayer(layer.id).photoCount, 148);
-  assert.equal(buildPhotoMapFeatures([session.getLayer(layer.id)], session.getLayerPhotos).length, 148);
+  assert.equal(buildPhotoMapFeatures([session.getLayer(layer.id)], session.getLayerPhotos).length, 142);
+  incoming.slice(0, 6).forEach((id) => assert.equal(session.getPhoto(id).spatial.current, null, 'append retains GML evidence only'));
   assert.strictEqual(session.getLayer(layer.id).spatialSources[0], previousSource);
   before.forEach((photo, index) => {
     assert.deepEqual(session.getPhoto(photo.id), photo);

@@ -7,9 +7,10 @@ import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiFile, realGrammarFamilies, sharedGuids, sharedFilename, sevenGuid } from './helpers/gmiPhotoFixtures.mjs';
 import { extractHyperlinkFilenames } from '../src/lib/hyperlinkFilenames.mjs';
+import { stagePhotoSource, savePhotoSource, closePhotoSources, openPhotoSources, applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
 
 const app = process.env.PHOTO_UI_URL, corpus = process.env.GMI_PHOTO_CORPUS;
-const dialog = 'document.querySelector(".photo-gmi-dialog")';
+const dialog = 'document.querySelector(".photo-positioning-wizard")';
 const spatial = 'document.querySelector(".photo-spatial-inspector")';
 const inspector = 'document.querySelector(".photo-gmi-inspector")';
 const link = (filename) => `h:1(link:"Attachments\\${filename}") `;
@@ -26,8 +27,7 @@ function actions(browser) {
   };
   const summary = () => browser.evaluate(`Object.fromEntries(Array.from(${dialog}.querySelectorAll('dl > div')).map(e=>[e.querySelector('dt').innerText,Number(e.querySelector('dd').innerText)]))`);
   const open = async (gmi) => {
-    await click('Koble GMI-referanser'); await browser.waitFor(`${dialog}?.open`);
-    await input('input[aria-label="Velg GMI med bildereferanser"]', [gmi]);
+    await stagePhotoSource(browser, gmi, 'gmi');
     await browser.waitFor(`${dialog}.querySelector('.photo-gmi-summary')`);
   };
   const select = async (filename) => {
@@ -50,6 +50,7 @@ function actions(browser) {
     await browser.waitFor(`!document.querySelector('.photo-collection-notice [role=status]').innerText.includes('Lager miniatyrbilder')`, 60000);
     await click(`Opprett fotokartlag (${photos.length} bilder)`);
     await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+    if (gml) await applyPhotoSourcePositions(browser, 'gml');
   };
   return { click, input, summary, open, select, start, create };
 }
@@ -102,7 +103,7 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
       for (const [width,height] of [[1680,900],[1366,768],[1280,720],[1024,768],[1440,600]]) {
         await browser.send('Emulation.setDeviceMetricsOverride', { width,height,deviceScaleFactor:1,mobile:false });
         const box = await browser.evaluate(`({dialog:${dialog}.getBoundingClientRect().toJSON(),footer:${dialog}.querySelector('footer').getBoundingClientRect().toJSON(),
-          scroll:${dialog}.querySelector('.photo-gmi-content').scrollWidth,client:${dialog}.querySelector('.photo-gmi-content').clientWidth})`);
+          scroll:${dialog}.querySelector('.photo-positioning-content').scrollWidth,client:${dialog}.querySelector('.photo-positioning-content').clientWidth})`);
         assert(box.dialog.left>=0 && box.dialog.right<=width && box.dialog.top>=0 && box.dialog.bottom<=height);
         assert(box.footer.bottom<=height && box.scroll<=box.client+1);
         if (process.env.PHOTO_SCREENSHOT_DIR) {
@@ -116,9 +117,10 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
       assert(details.includes('Målet er en mappe uten filnavn.')); assert(details.includes(unicode));
       assert(details.includes('associations.gmi')); assert(details.includes('2 mulige bilder i laget'));
       await click('Avbryt', dialog); await browser.waitFor(`!${dialog}`);
-      assert.equal(await browser.evaluate(inspector), null); assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-gmi-sources")'), null);
+      assert.equal(await browser.evaluate(inspector), null);
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-source-item").length'), 1, 'only the import GML is retained after cancelling GMI');
       assert.deepEqual(await evidence(), before);
-      await open(gmi); await click('Bekreft GMI-koblinger', dialog); await browser.waitFor(`!${dialog}`);
+      await open(gmi); await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(`!${dialog}`);
       await showAssociations();
       assert((await browser.evaluate(`${inspector}.innerText`)).includes('2 objekter'));
       for (const guid of sharedGuids) assert((await browser.evaluate(`${inspector}.innerText`)).includes(guid));
@@ -130,9 +132,9 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
         assert((await browser.evaluate(`${spatial}.innerText`)).includes('Uplassert'));
       }
       await select(sharedFilename); await showAssociations();
-      await click('Bruk EXIF-posisjon', spatial); assert((await browser.evaluate(`${spatial}.innerText`)).includes('Gjeldende posisjon (EXIF)'));
+      await applyPhotoSourcePositions(browser, 'exif', { filename: sharedFilename }); assert((await browser.evaluate(`${spatial}.innerText`)).includes('Gjeldende posisjon (EXIF)'));
       assert((await browser.evaluate(`${inspector}.innerText`)).includes('2 objekter'));
-      await click('Bruk GML-posisjon', spatial);
+      await applyPhotoSourcePositions(browser, 'gml', { filename: sharedFilename });
       await click('Flytt på kartet');
       const mapBox = await browser.evaluate('document.querySelector(".leaflet-container").getBoundingClientRect().toJSON()');
       const x = mapBox.left + mapBox.width / 2 + 60, y = mapBox.top + mapBox.height / 2 + 30;
@@ -153,23 +155,24 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
       const later = path.join(directory, 'later.jpg'); await writeFile(later, bytes);
       await click('Legg til bilder'); await input('input[aria-label="Velg bildefiler"]', [later]);
       await click('Legg til 1 bilde i laget'); await select('later.jpg'); assert.equal(await browser.evaluate(inspector), null);
-      await browser.evaluate('document.querySelector(".photo-workspace-gmi-sources > details").open=true');
-      await click('Sjekk GMI-referanser på nytt'); await browser.waitFor(`${dialog}.querySelector('.photo-gmi-summary')`);
+      await browser.evaluate('document.querySelector(".photo-workspace-sources > details").open=true');
+      await click('Kontroller på nytt', 'Array.from(document.querySelectorAll(".photo-workspace-source-item")).find(item=>item.innerText.includes("associations.gmi"))');
+      await browser.waitFor(`${dialog}?.querySelector('.photo-gmi-summary')`);
       assert.equal((await summary())['Ikke matchet'], 0); assert.equal((await summary()).Tvetydig, 1);
-      await click('Bekreft GMI-koblinger', dialog); await browser.waitFor(inspector);
+      await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(inspector);
       await showAssociations(); assert((await browser.evaluate(`${inspector}.innerText`)).includes('TYPE: DFOT'));
       // Same byte revision reimport becomes a recheck, without duplicating objects.
-      await open(gmi); await click('Bekreft GMI-koblinger', dialog); await browser.waitFor(`!${dialog}`);
+      await open(gmi); await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(`!${dialog}`);
       assert((await browser.evaluate(`${inspector}.innerText`)).includes('1 objekt'));
       const revised = path.join(directory,'revision.gmi');
       await writeFile(revised, Buffer.from(await gmiFile(objects.map((object)=>({...object,xyz:'581940 6566005 1'}))).arrayBuffer()));
-      await open(revised); await click('Bekreft GMI-koblinger', dialog); await browser.waitFor(`!${dialog}`);
+      await open(revised); await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(`!${dialog}`);
       await select(sharedFilename); await showAssociations();
       assert((await browser.evaluate(`${inspector}.innerText`)).includes('4 objekter'));
       assert((await browser.evaluate(`${inspector}.innerText`)).includes('revision.gmi'));
-      await click('Fjern GMI-kilde'); await click('Fjern fra lag','document.querySelector(".photo-remove-confirmation")');
+      await openPhotoSources(browser); await click('Fjern kilde', dialog); await click('Fjern GMI-kilde', dialog); await closePhotoSources(browser);
       await showAssociations(); assert((await browser.evaluate(`${inspector}.innerText`)).includes('2 objekter'));
-      await click('Fjern GMI-kilde'); await click('Fjern fra lag','document.querySelector(".photo-remove-confirmation")');
+      await openPhotoSources(browser); await click('Fjern kilde', dialog); await click('Fjern GMI-kilde', dialog); await closePhotoSources(browser);
       await browser.waitFor(`!${inspector}`);
       console.log(JSON.stringify({ gmiBrowserAcceptance:'synthetic images with pinned real reference evidence', layouts:['1680x900','1366x768','1280x720','1024x768','1440x600'],
         checks:'analysis/summary, explicit confirmation/cancel, 2-object photo, 7-photo object, Unicode, invalid directory, unmatched/ambiguous, unchanged positions/direction/preview, GML/EXIF/manual, lightbox, append/recheck, duplicate source, revisions, removal, no GMI map layer' }));
@@ -199,7 +202,7 @@ test('private G01/G04 browser: real GMI sources and photos, 94/31 matched occurr
         await open(gmi);
         assert.equal((await summary())['Matchet (referanser)'],matched);
         assert.equal((await summary())['Ugyldig referanse'],matched===94 ? 1 : 0);
-        await click('Bekreft GMI-koblinger',dialog); await browser.waitFor(inspector);
+        await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(inspector);
         await browser.evaluate(`${inspector}.querySelectorAll('details').forEach(e=>e.open=true)`);
         const text = await browser.evaluate(`${inspector}.innerText`);
         assert(text.includes(`${expectedObjects} ${expectedObjects===1?'objekt':'objekter'}`));

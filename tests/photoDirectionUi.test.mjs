@@ -4,6 +4,7 @@ import { readdir, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 
 const app = process.env.PHOTO_UI_URL;
@@ -132,7 +133,8 @@ test('FOTO direction: native slider, N/E/S/W geometry, explicit transactions, so
         await browser.waitFor(`document.querySelector('.photo-collection-dialog').innerText.includes('${files.photos.length} treff')`);
         await browser.waitFor(`document.querySelectorAll('.photo-collection-card img').length===${files.photos.length}`, 60000);
         await click(`Opprett fotokartlag (${files.photos.length} bilder)`);
-        await click('Bildemodul'); await browser.waitFor(`document.querySelectorAll('.photo-camera-marker').length===${files.photos.length}`);
+        await click('Bildemodul'); await applyPhotoSourcePositions(browser, 'gml');
+        await browser.waitFor(`document.querySelectorAll('.photo-camera-marker').length===${files.photos.length}`);
         await browser.waitFor(`document.querySelector('.photo-collection-original img')?.naturalWidth>0`);
         await click('Zoom til posisjon', spatial); await settle();
       };
@@ -186,17 +188,13 @@ test('FOTO direction: native slider, N/E/S/W geometry, explicit transactions, so
       await click('Flytt på kartet'); await mapClick(80,40); await click('Bruk plassering','document.querySelector(".photo-manual-controls")');
       await browser.waitFor(`${spatial}.innerText.includes('Gjeldende posisjon (Manuell)')`);
       assert.equal(await accepted(),'90°'); await assertHeading(90,false); assert.notEqual(await position(),originalPosition);
-      await click('Bruk GML-posisjon',spatial); assert.equal(await position(),originalPosition); assert.equal(await accepted(),'90°');
-      await browser.waitFor(`Array.from(${spatial}.querySelectorAll('button')).some(e=>e.innerText==='Bruk EXIF-posisjon')`);
-      await click('Bruk EXIF-posisjon',spatial); assert.equal(await accepted(),'90°'); assert.deepEqual(await evidence(),originalEvidence);
+      const activeFilename = await browser.evaluate('document.querySelector(".photo-workspace-inspector h3").innerText');
+      await applyPhotoSourcePositions(browser, 'gml', { filename: activeFilename }); assert.equal(await position(),originalPosition); assert.equal(await accepted(),'90°');
+      await applyPhotoSourcePositions(browser, 'exif', { filename: activeFilename }); assert.equal(await accepted(),'90°'); assert.deepEqual(await evidence(),originalEvidence);
       // Wizard only changes positions; it cancels any direction proposal before opening.
-      await begin(); await number(180); await click('Posisjoner bilder'); await browser.waitFor('document.querySelector(".photo-positioning-wizard[open]")');
+      await begin(); await number(180); await click('Koble og posisjoner bilder'); await browser.waitFor('document.querySelector(".photo-positioning-wizard[open]")');
       assert.equal(await browser.evaluate(editor),null);
-      await browser.evaluate('document.querySelector(".photo-positioning-wizard input[value=exif]").click()');
-      await click('Neste','document.querySelector(".photo-positioning-wizard")'); await browser.waitFor('document.querySelector(".photo-positioning-rows")');
-      await click('Neste','document.querySelector(".photo-positioning-wizard")'); await browser.waitFor('document.querySelector(".photo-positioning-summary")');
-      await click(`Bruk EXIF-posisjon for ${files.photos.length} bilder`,'document.querySelector(".photo-positioning-wizard")');
-      await browser.waitFor('!document.querySelector(".photo-positioning-wizard")'); assert.equal(await accepted(),'90°');
+      await applyPhotoSourcePositions(browser, 'exif'); assert.equal(await accepted(),'90°');
       await select(1); assert.equal(await accepted(),'Ikke angitt'); assert.equal(await browser.evaluate(indicator),null);
       await begin(); await apply(); assert.equal(await accepted(),'0°'); await assertHeading(0,false);
       await begin(); await number(200); await select(0); assert.equal(await accepted(),'90°'); await assertHeading(90,false);

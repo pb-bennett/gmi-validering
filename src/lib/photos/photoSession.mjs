@@ -5,6 +5,7 @@ import { matchPhotoReferences } from './photoReferenceMatching.mjs';
 import { acceptManualPhotoDirection, emptyDirection } from './photoDirection.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 import { gmiPhotoAssociations, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
+import { planPhotoSourcePositions } from './photoPositioning.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
   photos: Object.freeze([]), selectedId: null, batchSelectedIds: Object.freeze([]),
@@ -58,6 +59,13 @@ export function createPhotoSession({
   const sourceReviews = new Map();
   const sourceRequests = new Map();
   const gmiReviews = new WeakMap();
+  const sourceWorkflows = new Map();
+  const workflowReviews = new WeakMap();
+
+  function sourceWorkflowIsLive(ticket) {
+    return Boolean(ticket && ticket.generation === generation && sourceWorkflows.get(ticket.layerId) === ticket
+      && layers.get(ticket.layerId)?.photoIds === ticket.memberIds);
+  }
 
   async function makeSource(file, kind) {
     const adapter = sourceAdapters[kind] || (kind === 'gml' ? parseGml : kind === 'gmi' ? parseGmiPhotoSource : null);
@@ -77,7 +85,7 @@ export function createPhotoSession({
     } : {}), id, kind, fingerprint, filename: file.name, importedAt: Date.now() });
   }
 
-  function attachSource(source, photoIds, initializeCurrent) {
+  function attachSource(source, photoIds) {
     const ledger = matchPhotoReferences(source.entries, photoIds.map((id) => records.get(id)));
     for (const match of ledger.matches) {
       if (match.status !== 'matched') continue;
@@ -86,8 +94,7 @@ export function createPhotoSession({
         sourceId: source.id, sourceFilename: source.filename, sourceEntryId: entry.id });
       updateRecord(match.photoId, (live) => {
         if (live.spatial.candidates.some((item) => item.sourceId === source.id && item.sourceEntryId === entry.id)) return {};
-        let spatial = Object.freeze({ ...live.spatial, candidates: Object.freeze([...live.spatial.candidates, candidate]) });
-        if (initializeCurrent && !spatial.current && candidate.status === 'viable') spatial = acceptPhotoCandidate(spatial, candidate.id, 'initial-confident-gml-match');
+        const spatial = Object.freeze({ ...live.spatial, candidates: Object.freeze([...live.spatial.candidates, candidate]) });
         return { spatial };
       });
     }
@@ -285,6 +292,78 @@ export function createPhotoSession({
 
   return {
     getSnapshot: () => snapshot,
+    beginSourceWorkflow(layerId) {
+      const layer = layers.get(layerId);
+      if (!layer) return null;
+      const ticket = Object.freeze({ operationId: createId(), layerId, generation, memberIds: layer.photoIds });
+      sourceWorkflows.set(layerId, ticket);
+      sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
+      if (sourceReviews.delete(layerId)) publish();
+      return ticket;
+    },
+    sourceWorkflowIsLive,
+    endSourceWorkflow(ticket) {
+      if (!ticket || sourceWorkflows.get(ticket.layerId) !== ticket) return;
+      sourceWorkflows.delete(ticket.layerId);
+      sourceRequests.set(ticket.layerId, (sourceRequests.get(ticket.layerId) || 0) + 1);
+      sourceReviews.delete(ticket.layerId);
+      publish();
+    },
+    saveSourceWorkflowSource(ticket, expectedReview) {
+      if (!sourceWorkflowIsLive(ticket)) return { ok: false, error: 'membership-changed' };
+      const review = sourceReviews.get(ticket.layerId), layer = layers.get(ticket.layerId);
+      if (!review || review.state !== 'ready' || review.source !== expectedReview?.source
+        || review.recheck !== expectedReview.recheck) return { ok: false, error: 'source-changed' };
+      if (review.source.kind === 'gmi') return this.applyGmiAssociations(ticket.layerId, {
+        confirmed: true, sourceId: review.source.id, memberIds: ticket.memberIds,
+        associationLedger: expectedReview.associationLedger,
+      });
+      if (review.source.kind !== 'gml') return { ok: false, error: 'unsupported-source' };
+      if (review.recheck && !layer.spatialSources.includes(review.source)) return { ok: false, error: 'source-removed' };
+      if (!review.recheck && layer.spatialSources.some((source) => source.fingerprint === review.source.fingerprint))
+        return { ok: false, error: 'duplicate-source' };
+      // Validate every attachment before the first record write.
+      try {
+        for (const match of matchPhotoReferences(review.source.entries, layer.photoIds.map((id) => records.get(id))).matches) {
+          if (match.status !== 'matched') continue;
+          const entry = review.source.entries.find((item) => item.id === match.entryId);
+          createPhotoCandidate({ ...entry, id: `${review.source.id}:${entry.id}`, kind: 'gml' });
+        }
+      } catch { return { ok: false, error: 'invalid-source' }; }
+      return { ok: this.applyLayerSource(ticket.layerId) };
+    },
+    reviewSourceWorkflowPositions(ticket) {
+      if (!sourceWorkflowIsLive(ticket) || sourceReviews.has(ticket.layerId)) return null;
+      const layer = layers.get(ticket.layerId);
+      const plan = planPhotoSourcePositions(layer.photoIds.map((id) => records.get(id)), layer.spatialSources);
+      workflowReviews.set(plan, { ticket, sources: layer.spatialSources });
+      return plan;
+    },
+    applySourceWorkflowPositions(ticket, plan, requests) {
+      const reviewed = workflowReviews.get(plan), layer = layers.get(ticket?.layerId);
+      if (!sourceWorkflowIsLive(ticket) || reviewed?.ticket !== ticket || reviewed.sources !== layer.spatialSources
+        || sourceReviews.has(ticket.layerId)) return { ok: false, error: 'review-changed' };
+      if (!requests?.length) return { ok: false, error: 'invalid-selection' };
+      const seen = new Set();
+      for (const request of requests) {
+        const row = plan.rows.find((item) => item.photoId === request.photoId);
+        const live = records.get(request.photoId);
+        const candidate = row?.options.find((item) => item.id === request.candidateId);
+        if (seen.has(request.photoId) || !live || !row || live.spatial.current !== row.current
+          || !candidate || !live.spatial.candidates.includes(candidate)
+          || candidate.status !== 'viable' || !isPhotoPosition(candidate.position)
+          || (candidate.kind === 'gml' && !layer.spatialSources.some((source) => source.kind === 'gml' && source.id === candidate.sourceId)))
+          return { ok: false, error: 'review-changed' };
+        seen.add(request.photoId);
+      }
+      const acceptedAt = Date.now();
+      for (const request of requests) updateRecord(request.photoId, (live) => ({
+        spatial: acceptPhotoCandidate(live.spatial, request.candidateId, 'explicit-candidate', acceptedAt),
+      }));
+      workflowReviews.delete(plan);
+      publish();
+      return { ok: true, acceptedIds: [...seen] };
+    },
     beginManualPlacement(layerId, photoId) {
       if (!layers.get(layerId)?.visible || !layers.get(layerId)?.photoIds.includes(photoId)) return null;
       const ticket = Object.freeze({ layerId, photoId, generation, editVersion: ++editVersion, visibilityVersion: manualVisibilityVersions.get(layerId) || 0, expectedCurrent: records.get(photoId).spatial.current });
@@ -395,7 +474,7 @@ export function createPhotoSession({
     applyLayerSource(layerId) {
       const layer = layers.get(layerId), review = sourceReviews.get(layerId);
       if (!layer || review?.state !== 'ready' || review.source.kind === 'gmi') return false;
-      const source = attachSource(review.source, layer.photoIds, false);
+      const source = attachSource(review.source, layer.photoIds);
       const existing = layer.spatialSources.some((item) => item.id === source.id);
       const sources = existing ? layer.spatialSources.map((item) => item.id === source.id ? source : item)
         : [...layer.spatialSources, source];
@@ -466,7 +545,7 @@ export function createPhotoSession({
         seen.add(request.photoId);
       }
       if (kind === 'gml') {
-        const source = attachSource(review.source, layer.photoIds, false);
+        const source = attachSource(review.source, layer.photoIds);
         const existing = layer.spatialSources.some((item) => item.id === source.id);
         const sources = existing ? layer.spatialSources.map((item) => item.id === source.id ? source : item) : [...layer.spatialSources, source];
         layers.set(layerId, Object.freeze({ ...layer, spatialSources: Object.freeze(sources) }));
@@ -575,7 +654,7 @@ export function createPhotoSession({
     createLayer() {
       if (draftTargetLayerId || !importIds.length || ['pending', 'error'].includes(positioning.state)) return null;
       const source = positioning.source;
-      const attached = source ? attachSource(source, importIds, true) : null;
+      const attached = source ? attachSource(source, importIds) : null;
       let suffix = 1;
       let name = 'Bilder';
       const names = new Set(Array.from(layers.values(), (layer) => layer.name));
@@ -596,8 +675,8 @@ export function createPhotoSession({
       const layer = layers.get(draftTargetLayerId);
       const policy = appendPolicy();
       if (!layer || !policy.appendableIds.length || ['pending', 'error'].includes(positioning.state)) return null;
-      // Positioning supplied here applies only to the new, curated draft assets.
-      const source = positioning.source ? attachSource(positioning.source, policy.appendableIds, true) : null;
+      // Import retains evidence only for new curated assets; acceptance is separate.
+      const source = positioning.source ? attachSource(positioning.source, policy.appendableIds) : null;
       const updated = Object.freeze({ ...layer, photoIds: Object.freeze([...layer.photoIds, ...policy.appendableIds]),
         photoCount: layer.photoIds.length + policy.appendableIds.length,
         spatialSources: Object.freeze([...layer.spatialSources, ...(source ? [source] : [])]),
@@ -622,6 +701,7 @@ export function createPhotoSession({
       const layer = layers.get(id);
       if (!layer) return;
       layers.delete(id);
+      sourceWorkflows.delete(id);
       sourceReviews.delete(id); sourceRequests.delete(id);
       release(layer.photoIds);
       if (draftTargetLayerId === id) clearImport();
@@ -634,6 +714,7 @@ export function createPhotoSession({
       positioning = EMPTY_PHOTO_SNAPSHOT.positioning;
       release(Array.from(records.keys()));
       layers.clear();
+      sourceWorkflows.clear();
       sourceReviews.clear(); sourceRequests.clear(); draftTargetLayerId = null;
       appendOverrideIds.clear();
       importIds = [];

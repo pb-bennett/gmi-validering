@@ -70,7 +70,8 @@ test('target import cancellation leaves owner unchanged; append transfers pendin
   assert.strictEqual(session.getPhoto(first).spatial, before.spatial);
   assert.strictEqual(session.getPhoto(first).preview, before.preview);
   assert.strictEqual(session.getFile(first), original);
-  assert.equal(session.getPhoto(added).spatial.current.position.longitude, 12);
+  assert.equal(session.getPhoto(added).spatial.current, null);
+  assert.equal(session.getPhoto(added).spatial.candidates.find((candidate) => candidate.kind === 'gml').position.longitude, 12);
   assert.equal(session.getPhoto(added).spatial.candidates.length, 2);
   assert.equal(session.getSnapshot().draftTargetLayerId, null);
   session.clear();
@@ -125,7 +126,7 @@ test('duplicate source is diagnosed, changed sources accumulate, batch needs exp
   assert.equal(session.getLayer(layer.id).spatialSources.length, 2);
   assert.equal(photoBatchCandidateRequests(session.getLayerPhotos(layer.id), [a, b], 'gml'), null);
   assert.equal(photoBatchCandidateRequests(session.getLayerPhotos(layer.id), [a, b], 'gml', firstSource.id).length, 2);
-  assert.equal(session.getPhoto(a).spatial.current.position.longitude, 10);
+  assert.equal(session.getPhoto(a).spatial.current, null);
   const sourceOrder = session.getLayer(layer.id).spatialSources.map((item) => item.id);
   session.recheckLayerSource(layer.id, firstSource.id); session.applyLayerSource(layer.id);
   assert.deepEqual(session.getLayer(layer.id).spatialSources.map((item) => item.id), sourceOrder, 'recheck retains source identity and display order');
@@ -158,6 +159,8 @@ test('confirmed member removal releases records, source associations, markers an
   await session.importPositioningGml(source(parsed(entry('a', 'a.jpg'), entry('b', 'b.jpg'))));
   const layer = session.createLayer(); await ready(session);
   assert.deepEqual(session.removeLayerPhotos(layer.id, ids), []);
+  assert.equal(session.getLayer(layer.id).placedCount, 0);
+  session.acceptCandidates(layer.id, photoBatchCandidateRequests(session.getLayerPhotos(layer.id), ids, 'gml'));
   const original = session.getFile(ids[0]);
   assert.deepEqual(session.removeLayerPhotos(layer.id, [ids[0], 'foreign'], { confirmed: true }), [ids[0]]);
   assert.equal(session.getFile(ids[0]), null); assert.equal(await original.text(), 'original');
@@ -228,7 +231,7 @@ test('source import and duplicate detection still work without secure-context We
     const positions = source(parsed(entry('a', 'a.jpg')));
     assert(await session.importPositioningGml(positions));
     const layer = session.createLayer();
-    assert.equal(layer.placedCount, 1);
+    assert.equal(layer.placedCount, 0);
     assert.equal(await session.stageLayerSource(layer.id, positions), false);
     assert.equal(session.getSnapshot().sourceReviews[layer.id].errorCode, 'duplicate-source');
   } finally {
