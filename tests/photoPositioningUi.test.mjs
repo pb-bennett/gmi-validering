@@ -88,7 +88,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
         select.dispatchEvent(new Event('change',{bubbles:true}));
       })()`);
       await click(browser, 'Neste');
-      await click(browser, 'Bruk valgte posisjoner for 2 bilder');
+      await click(browser, 'Bruk valgte posisjoner for 2 plasseringer');
       await browser.waitFor(`!${sourceWizard}`);
       assert.equal(await browser.evaluate(markerCount), 3);
       await selectPhoto(browser, 'a.png');

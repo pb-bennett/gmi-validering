@@ -11,11 +11,12 @@ export function photoPositionDistance(a, b) {
 
 // A frozen review projection, never a second authority for photo coordinates.
 export function planPhotoPositioning(photos, { kind, source = null }) {
-  const ledger = kind === 'gml' && source ? matchPhotoReferences(source.entries, photos) : null;
+  const assets = [...new Map(photos.map((photo) => [photo.assetId || photo.id, { ...photo, id: photo.assetId || photo.id }])).values()];
+  const ledger = kind === 'gml' && source ? matchPhotoReferences(source.entries, assets) : null;
   const rows = photos.map((photo) => {
     let proposal = null, action = 'unavailable';
     if (kind === 'gml' && ledger) {
-      const edges = ledger.matches.filter((match) => match.photoIds.includes(photo.id));
+      const edges = ledger.matches.filter((match) => match.photoIds.includes(photo.assetId || photo.id));
       const match = edges.find((edge) => edge.status === 'matched');
       if (edges.some((edge) => edge.status === 'ambiguous')) action = 'ambiguous';
       else if (!match) action = 'unmatched';
@@ -69,21 +70,28 @@ export function photoSourceEvidenceSignature(photos) {
 }
 
 export function planPhotoSourcePositions(photos, sources) {
+  const assets = [...new Map(photos.map((photo) => [photo.assetId || photo.id, { ...photo, id: photo.assetId || photo.id }])).values()];
   const gmlOptions = new Set();
   for (const source of sources.filter((item) => item.kind === 'gml')) {
-    for (const match of matchPhotoReferences(source.entries, photos).matches) {
+    for (const match of matchPhotoReferences(source.entries, assets).matches) {
       if (match.status === 'matched') gmlOptions.add(JSON.stringify([match.photoId, source.id, match.entryId]));
     }
   }
   const rows = photos.map((photo) => {
     const options = photo.spatial.candidates.filter((candidate) => candidate.status === 'viable'
       && isPhotoPosition(candidate.position) && (candidate.kind === 'exif'
-        || (candidate.kind === 'gml' && gmlOptions.has(JSON.stringify([photo.id, candidate.sourceId, candidate.sourceEntryId])))));
+        || (candidate.kind === 'gmi' && photo.occurrence?.key === candidate.provenance?.key
+          && sources.some((source) => source.kind === 'gmi' && source.id === candidate.sourceId))
+        || (candidate.kind === 'gml' && gmlOptions.has(JSON.stringify([photo.assetId || photo.id, candidate.sourceId, candidate.sourceEntryId])))));
     const current = photo.spatial.current;
     const basis = photo.spatial.candidates.find((candidate) => candidate.id === current?.basis.candidateId);
     const objectCount = sources.filter((source) => source.kind === 'gmi').reduce((count, source) =>
-      count + (source.associationLedger.reverseIndexes.byPhotoId[photo.id]?.length || 0), 0);
-    return Object.freeze({ photoId: photo.id, filename: photo.originalFilename, thumbnailUrl: photo.preview.thumbnailUrl,
+      count + (source.associationLedger.reverseIndexes.byPhotoId[photo.assetId || photo.id]?.length || 0), 0);
+    const peers = photos.filter((item) => (item.assetId || item.id) === (photo.assetId || photo.id));
+    return Object.freeze({ photoId: photo.id, assetId: photo.assetId || photo.id, occurrence: photo.occurrence,
+      occurrenceCount: peers.length, occurrenceIndex: peers.findIndex((item) => item.id === photo.id) + 1,
+      gmiUnavailable: photo.spatial.candidates.find((candidate) => candidate.kind === 'gmi' && candidate.status !== 'viable')?.errorCode,
+      filename: photo.originalFilename, thumbnailUrl: photo.preview.thumbnailUrl,
       current, currentKind: basis?.kind || current?.basis.kind, currentSourceFilename: basis?.sourceFilename,
       options: Object.freeze(options), objectCount, exifState: photo.spatial.exifRead.state,
       defaultChoice: !current && options.length === 1 ? options[0].id : '' });

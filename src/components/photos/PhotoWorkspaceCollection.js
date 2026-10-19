@@ -5,11 +5,12 @@ import { useEffect, useRef, useState } from 'react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import PhotoGmlSummary from './PhotoGmlSummary';
 import PhotoGmiSummary from './PhotoGmiSummary';
+import PhotoOccurrenceContext from './PhotoOccurrenceContext';
 import './photoWorkspace.css';
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs disabled:opacity-40';
 
-function RemovePhotosConfirmation({ count, onCancel, onConfirm }) {
+function RemovePhotosConfirmation({ count, occurrences, onCancel, onConfirm }) {
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current, opener = document.activeElement;
@@ -17,8 +18,8 @@ function RemovePhotosConfirmation({ count, onCancel, onConfirm }) {
     return () => { dialog.close(); if (opener?.isConnected) opener.focus(); };
   }, []);
   return <dialog ref={ref} className="photo-remove-confirmation" aria-labelledby="photo-remove-title" onCancel={(event) => { event.preventDefault(); onCancel(); }}>
-    <h2 id="photo-remove-title">{`Fjern ${count === 1 ? 'bildet' : `${count} bilder`} fra laget?`}</h2>
-    <p>{count === 1 ? 'Bildet fjernes' : 'Bildene fjernes'} fra fotokartlaget og denne økten. Originalfilene på disken endres ikke.</p>
+    <h2 id="photo-remove-title">{`Fjern ${occurrences ? `${count} ${count === 1 ? 'plassering' : 'plasseringer'}` : count === 1 ? 'bildet' : `${count} bilder`} fra laget?`}</h2>
+    <p>Valgte {occurrences ? 'plasseringer' : 'bilder'} fjernes fra laget. Bildet beholdes så lenge det har en annen plassering. Originalfilene på disken endres ikke.</p>
     <div><button type="button" className={control} onClick={onCancel} autoFocus>Avbryt</button>
       <button type="button" className={control} onClick={onConfirm}>Fjern fra lag</button></div>
   </dialog>;
@@ -32,7 +33,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
   const removalCount = removalIds?.filter((id) => layer.photoIds.includes(id)).length || 0;
   return <section className="photo-workspace-collection" aria-label="Bildemodul">
     <header><div className="flex items-center justify-between gap-2"><h1 title={layer.name}>{layer.name}</h1><button type="button" className={control} onClick={onExit}>Tilbake til appen</button></div>
-      <p>{layer.photoCount} {layer.photoCount === 1 ? 'bilde' : 'bilder'} · {layer.placedCount} plassert · {layer.unplacedCount} uplassert</p>
+      <p>{layer.assetCount ?? layer.photoCount} {(layer.assetCount ?? layer.photoCount) === 1 ? 'bilde' : 'bilder'}{layer.assetCount < layer.photoCount ? ` · ${layer.photoCount} plasseringer` : ''} · {layer.placedCount} plassert · {layer.unplacedCount} uplassert</p>
       <p className="sr-only">{layer.exifCandidateCount} bilder med EXIF GPS</p>
       <label className="flex items-center gap-2"><input type="checkbox" aria-label={`Vis fotokartlag ${layer.name}`} checked={layer.visible} onChange={(event) => photoSession.setLayerVisibility(layer.id, event.target.checked)} />Vis på kartet</label>
       <button type="button" className={control} onClick={onAddPhotos}>Legg til bilder</button>
@@ -54,6 +55,10 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
         {selectedIds.length > 0 && <button type="button" className={control} onClick={() => dispatch({ type: 'select-many', photoIds: [] })}>Fjern valg</button>}</div>
       {selectedIds.length > 0 && <div className="photo-workspace-selected-actions">
       <button type="button" className={control} onClick={() => { onBeforeDialog?.(); setRemovalIds([...selectedIds]); }}>Fjern fra lag</button>
+      {photos.some((photo) => selectedIds.includes(photo.id) && photo.repeatGroup?.occurrenceCount > 1) && <button type="button" className={control} onClick={() => {
+        const selectedAssets = new Set(photos.filter((photo) => selectedIds.includes(photo.id)).map((photo) => photo.assetId));
+        onBeforeDialog?.(); setRemovalIds(photos.filter((photo) => selectedAssets.has(photo.assetId)).map((photo) => photo.id));
+      }}>Fjern hele bildet med alle plasseringer</button>}
       </div>}
     </div>
     <ul className="photo-workspace-list" aria-label="Bilder i fotokartlaget">
@@ -63,10 +68,11 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
           {photo.preview.thumbnailUrl ? <img src={photo.preview.thumbnailUrl} alt="" loading="lazy" /> : <span className="photo-workspace-thumbnail-empty">Bilde</span>}
           <span><span className="photo-workspace-filename" title={photo.originalFilename}>{photo.originalFilename}</span><span className="text-gmi-text-muted">{photo.spatial.current ? 'Plassert' : 'Uplassert'}</span></span>
         </button>
+        <PhotoOccurrenceContext occurrence={photo.occurrence} count={photo.repeatGroup?.occurrenceCount} index={photo.repeatGroup?.occurrenceIndex} objectCount={photo.repeatGroup?.referringObjectCount} compact />
       </li>)}
       {!shown.length && <li className="photo-workspace-empty">{photos.length ? 'Ingen bilder med denne statusen.' : 'Laget er tomt. Legg til bilder for å fortsette.'}</li>}
     </ul>
-    {removalIds && <RemovePhotosConfirmation count={removalCount} onCancel={() => setRemovalIds(null)} onConfirm={() => {
+    {removalIds && <RemovePhotosConfirmation count={removalCount} occurrences={photos.some((photo) => removalIds.includes(photo.id) && photo.repeatGroup?.repeated)} onCancel={() => setRemovalIds(null)} onConfirm={() => {
       photoSession.removeLayerPhotos(layer.id, removalIds, { confirmed: true }); setRemovalIds(null);
     }} />}
   </section>;

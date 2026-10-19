@@ -81,11 +81,11 @@ export function SelectedPhotoInspector({ photo, layerId, onLocate, proposedEntry
   const [largeImageUrl, setLargeImageUrl] = useState(null);
   const canInspect = photo?.preview.state === 'ready'
     || (photo?.preview.errorCode === 'thumbnail-failed' && Boolean(photo?.dimensions));
-  const id = photo?.id;
+  const assetId = photo?.assetId || photo?.id;
 
   useEffect(() => {
     if (!canInspect) return;
-    const file = photoSession.getFile(id);
+    const file = photoSession.getAssetFile(assetId);
     const image = imageRef.current;
     if (!file || !image) return;
     const url = URL.createObjectURL(file);
@@ -94,7 +94,7 @@ export function SelectedPhotoInspector({ photo, layerId, onLocate, proposedEntry
       image.removeAttribute('src');
       URL.revokeObjectURL(url);
     };
-  }, [id, canInspect]);
+  }, [assetId, canInspect]);
 
   return (
     <section className="photo-collection-inspector" aria-label="Bilde som vises">

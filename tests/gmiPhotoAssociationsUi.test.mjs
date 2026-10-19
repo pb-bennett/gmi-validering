@@ -85,7 +85,7 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
     await writeFile(gml, `<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy><gml:featureMember><app:Skråfoto gml:id="shared"><app:fotolink>${sharedFilename}</app:fotolink><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>581930 6566000 0</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember></gml:FeatureCollection>`);
     const evidence = () => browser.evaluate(`({ position:Array.from(${spatial}.querySelectorAll('p')).find(e=>e.innerText.includes('(WGS84)'))?.innerText,
       direction:document.querySelector('.photo-direction-accepted').innerText,
-      candidates:Array.from(${spatial}.querySelectorAll('pre')).map(e=>e.textContent),
+      candidates:Array.from(${spatial}.querySelectorAll('pre')).filter(e=>!e.closest('details').querySelector('summary').innerText.includes('(GMI)')).map(e=>e.textContent),
       image:document.querySelector('.photo-collection-original img')?.src })`);
     const showAssociations = async () => browser.evaluate(`${inspector}.querySelectorAll('details').forEach(e=>e.open=true)`);
     try {

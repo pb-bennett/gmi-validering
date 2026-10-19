@@ -3,6 +3,7 @@
 import PhotoManualPlacementControls from './PhotoManualPlacementControls';
 import PhotoDirectionControls from './PhotoDirectionControls';
 import PhotoGmiInspector from './PhotoGmiInspector';
+import PhotoOccurrenceContext from './PhotoOccurrenceContext';
 import { exifGpsMessage } from '@/lib/photos/exifGps.mjs';
 import { photoSourceLabel as label } from '@/lib/photos/photoPresentation.mjs';
 
@@ -16,6 +17,7 @@ export default function PhotoSpatialInspector({ photo, layerId, onLocate, propos
   return (
     <section className="photo-spatial-inspector text-xs" aria-label="Bildeposisjon og kilder">
       <h4 className="font-semibold text-gmi-navy">Posisjon og kilder</h4>
+      <PhotoOccurrenceContext occurrence={photo.occurrence} count={photo.repeatGroup?.occurrenceCount} index={photo.repeatGroup?.occurrenceIndex} objectCount={photo.repeatGroup?.referringObjectCount} />
       <p>{spatial.current ? `Gjeldende posisjon (${label(basis?.kind || spatial.current.basis.kind)})` : 'Uplassert'}</p>
       {basis?.sourceFilename && <p className="break-all text-gmi-text-muted">Fra {basis.sourceFilename}</p>}
       <p className="text-gmi-text-muted">{coordinates(spatial.current?.position)}</p>

@@ -5,6 +5,7 @@ import L from 'leaflet';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import PhotoMapPopup from './PhotoMapPopup';
 import { cameraMarkerOptions } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { gmiObjectLabel } from '@/lib/photos/gmiPhotoSource.mjs';
 
 const cameraIcon = L.divIcon(cameraMarkerOptions());
 const selectedCameraIcon = L.divIcon(cameraMarkerOptions({ selected: true }));
@@ -17,6 +18,8 @@ export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspac
         const { layerId, photoId } = feature.properties;
         const photo = photoSession.getPhoto(photoId);
         const filename = photo?.originalFilename || 'Bilde';
+        const context = photo?.repeatGroup?.occurrenceCount > 1
+          ? ` · plassering ${photo.repeatGroup.occurrenceIndex} av ${photo.repeatGroup.occurrenceCount}${photo.occurrence ? ` · ${gmiObjectLabel(photo.occurrence.object)}` : ''}` : '';
         const inWorkspace = photoWorkspaceSelection?.layerId === layerId;
         const selected = inWorkspace && photoWorkspaceSelection.photoId === photoId;
         const editingDirection = selected && directionEdit?.ticket.photoId === photoId && directionEdit.ticket.layerId === layerId;
@@ -32,7 +35,7 @@ export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspac
         };
         return <Marker key={feature.id} position={[feature.geometry.coordinates[1], feature.geometry.coordinates[0]]}
           icon={icon} zIndexOffset={selected ? 1000 : 0}
-          title={`Vis bilde: ${filename}`} alt={`Vis bilde: ${filename}`} keyboard
+          title={`Vis bilde: ${filename}${context}`} alt={`Vis bilde: ${filename}${context}`} keyboard
           eventHandlers={{ click: inspect, keydown: (event) => {
             if (!['Enter', ' '].includes(event.originalEvent?.key)) return;
             event.originalEvent.preventDefault();

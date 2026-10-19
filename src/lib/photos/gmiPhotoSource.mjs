@@ -5,6 +5,7 @@ import { extractHyperlinkOccurrences } from '../hyperlinkFilenames.mjs';
 import { createPhotoReferenceResolver, photoReferenceKey } from './photoReferenceMatching.mjs';
 import { immutable } from './photoSpatial.mjs';
 import { classifyPhotoFile } from './imagePreview.mjs';
+import { projectPhotoCoordinate } from '../map/coordinateProjection.js';
 
 export const MAX_PHOTO_GMI_BYTES = 10 * 1024 * 1024;
 
@@ -58,7 +59,32 @@ export async function parseGmiPhotoSource(file) {
         comparison: photoReferenceKey(occurrence.referenceRaw) });
     }
   });
-  return immutable({ kind: 'gmi', fingerprint, header: parser.header, objectsByKey, references, issues });
+  return immutable({ kind: 'gmi', fingerprint, header: parser.header, crsContext: parser.toObject().crsContext, objectsByKey, references, issues });
+}
+
+// Only parsed source points qualify. Never use display geometry or line heuristics.
+export function gmiPointPosition(source, object) {
+  if (object.geometryScope !== 'point') return null;
+  const context = source.crsContext;
+  const raw = object.rawGeometry;
+  if (!Array.isArray(raw) || raw.length !== 1) return { status: 'invalid', position: null, errorCode: 'invalid-geometry' };
+  if (context?.crsStatus !== 'declared' || !context.epsg) return {
+    status: 'invalid', position: null, errorCode: context?.crsStatus === 'unsupported' ? 'unsupported-crs' : 'missing-crs',
+  };
+  const { x, y, z } = raw[0];
+  return { ...projectPhotoCoordinate(`EPSG:${context.epsg}`, z === null || z === undefined ? [x, y] : [x, y, z]),
+    crsResolution: { sourceCrs: `EPSG:${context.epsg}`, method: 'gmi-source-declaration', axisOrder: 'easting-northing-height' } };
+}
+
+// Shared by the photo presentation; future Validator warning can consume these
+// source-scoped edges: reference/filename, count, objects/GUIDs and source GMI.
+// TODO Validator: warn when one photo reference is used by distinct GMI objects.
+export function gmiRepeatedPhotoReferences(source, ledger = source.associationLedger) {
+  return Object.entries(ledger.reverseIndexes.byPhotoId).flatMap(([assetId, ids]) => ids.length > 1 ? [{
+    assetId, count: ids.length, sourceId: source.id, sourceFingerprint: source.fingerprint,
+    objects: ids.map((id) => source.objectsByKey[ledger.associationsById[id].objectKey]),
+    references: ids.flatMap((id) => ledger.associationsById[id].referenceIds.map((refId) => source.references.find((ref) => ref.id === refId))),
+  }] : []);
 }
 
 function ledgerFromResolutions(source, resolutions) {
@@ -134,8 +160,9 @@ export function gmiObjectLabel(object) {
 
 export function gmiPhotoAssociations(layer, photoId) {
   if (!layer?.photoIds.includes(photoId)) return [];
+  const assetId = layer.assetIdsByPhotoId?.[photoId] || photoId;
   return layer.spatialSources.filter((source) => source.kind === 'gmi').flatMap((source) =>
-    (source.associationLedger.reverseIndexes.byPhotoId[photoId] || []).map((id) => {
+    (source.associationLedger.reverseIndexes.byPhotoId[assetId] || []).map((id) => {
       const association = source.associationLedger.associationsById[id];
       return { association, sourceId: source.id, sourceFilename: source.filename,
         object: source.objectsByKey[association.objectKey] };

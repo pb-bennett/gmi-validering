@@ -4,7 +4,7 @@ import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, 
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
 import { acceptManualPhotoDirection, emptyDirection } from './photoDirection.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
-import { gmiPhotoAssociations, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
+import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
@@ -30,6 +30,10 @@ export function createPhotoSession({
 } = {}) {
   // Originals and browser resources deliberately live outside Zustand/React snapshots.
   const records = new Map();
+  // Assets own File, preview and shared EXIF/GML evidence. Records are occurrences:
+  // current position, direction and exact referring point, with shared metadata views.
+  const assets = new Map();
+  const workflowMembers = new WeakMap();
   const manualTickets = new WeakSet();
   const directionTickets = new WeakSet();
   // Only one editing transaction is live; starting either kind invalidates the other.
@@ -64,7 +68,33 @@ export function createPhotoSession({
 
   function sourceWorkflowIsLive(ticket) {
     return Boolean(ticket && ticket.generation === generation && sourceWorkflows.get(ticket.layerId) === ticket
-      && layers.get(ticket.layerId)?.photoIds === ticket.memberIds);
+      && layers.get(ticket.layerId)?.photoIds === workflowMembers.get(ticket));
+  }
+
+  const assetIds = (ids) => [...new Set(ids.map((id) => records.get(id)?.assetId).filter(Boolean))];
+  const assetPhotos = (ids) => assetIds(ids).map((id) => ({ ...assets.get(id), id }));
+  const fileFor = (id) => assets.get(records.get(id)?.assetId)?.file || null;
+  function makeOccurrence(assetId, id = assetId, occurrence = null) {
+    const { file: _file, spatial, ...metadata } = assets.get(assetId);
+    return { ...metadata, id, assetId, occurrence, spatial: Object.freeze({ ...spatial, current: null }), direction: emptyDirection() };
+  }
+  function updateAsset(assetId, patch, jobGeneration = generation) {
+    const asset = assets.get(assetId);
+    if (!asset || jobGeneration !== generation) return false;
+    const updated = { ...asset, ...patch(asset) };
+    assets.set(assetId, updated);
+    for (const [id, record] of records) {
+      if (record.assetId !== assetId) continue;
+      const { file: _file, spatial: shared, ...metadata } = updated;
+      const local = record.spatial.candidates.filter((candidate) => candidate.kind === 'gmi');
+      const candidates = [...shared.candidates, ...local];
+      const same = record.spatial.exifRead === shared.exifRead && candidates.length === record.spatial.candidates.length
+        && candidates.every((item, index) => item === record.spatial.candidates[index]);
+      records.set(id, { ...record, ...metadata, spatial: same ? record.spatial : Object.freeze({
+        ...record.spatial, exifRead: shared.exifRead, candidates: Object.freeze(candidates),
+      }) });
+    }
+    return true;
   }
 
   async function makeSource(file, kind) {
@@ -86,13 +116,13 @@ export function createPhotoSession({
   }
 
   function attachSource(source, photoIds) {
-    const ledger = matchPhotoReferences(source.entries, photoIds.map((id) => records.get(id)));
+    const ledger = matchPhotoReferences(source.entries, assetPhotos(photoIds));
     for (const match of ledger.matches) {
       if (match.status !== 'matched') continue;
       const entry = source.entries.find((item) => item.id === match.entryId);
       const candidate = createPhotoCandidate({ ...entry, id: `${source.id}:${entry.id}`, kind: entry.kind || source.kind,
         sourceId: source.id, sourceFilename: source.filename, sourceEntryId: entry.id });
-      updateRecord(match.photoId, (live) => {
+      updateAsset(match.photoId, (live) => {
         if (live.spatial.candidates.some((item) => item.sourceId === source.id && item.sourceEntryId === entry.id)) return {};
         const spatial = Object.freeze({ ...live.spatial, candidates: Object.freeze([...live.spatial.candidates, candidate]) });
         return { spatial };
@@ -126,19 +156,31 @@ export function createPhotoSession({
     appendOverrideIds.clear();
   }
 
-  const publicPhoto = ({ file: _file, ...photo }) => Object.freeze(photo);
+  const publicPhoto = (photo) => {
+    const layer = [...layers.values()].find((item) => item.photoIds.includes(photo.id));
+    const peers = layer ? layer.photoIds.map((id) => records.get(id)).filter((item) => item.assetId === photo.assetId) : [photo];
+    const links = layer ? gmiPhotoAssociations(layer, photo.id) : [];
+    return Object.freeze({ ...photo, repeatGroup: Object.freeze({ assetId: photo.assetId,
+      occurrenceCount: peers.length, occurrenceIndex: peers.findIndex((item) => item.id === photo.id) + 1,
+      pointObjectCount: links.filter((link) => link.object.geometryScope === 'point').length,
+      referringObjectCount: links.length, repeated: links.length > 1 || peers.length > 1 }) });
+  };
 
   // Never write a record captured before an await back into the registry.
   // Each writer owns a field patch; all other live fields survive completion.
   function updateRecord(id, patch, jobGeneration = generation) {
     const current = records.get(id);
     if (!current || jobGeneration !== generation) return false;
-    records.set(id, { ...current, ...patch(current) });
+    const changes = patch(current);
+    const { spatial, direction, occurrence, ...shared } = changes;
+    if (Object.keys(shared).length) updateAsset(current.assetId, () => shared);
+    records.set(id, { ...records.get(id), ...(spatial ? { spatial } : {}), ...(direction ? { direction } : {}),
+      ...(occurrence !== undefined ? { occurrence } : {}) });
     return true;
   }
 
   const appendPolicy = () => draftTargetLayerId ? photoAppendPolicy(importIds.map((id) => records.get(id)),
-    (layers.get(draftTargetLayerId)?.photoIds || []).map((id) => records.get(id)), appendOverrideIds) : null;
+    assetPhotos(layers.get(draftTargetLayerId)?.photoIds || []), appendOverrideIds) : null;
   const skippedSpatial = () => immutable({ ...emptySpatial(), exifRead: { state: 'skipped-duplicate', errorCode: null } });
   const publish = () => {
     const appendStatus = appendPolicy();
@@ -150,9 +192,9 @@ export function createPhotoSession({
       if (skipped.has(id) && live.spatial.exifRead.state !== 'skipped-duplicate') {
         metadataQueue = metadataQueue.filter((job) => job.id !== id);
         if (activeMetadata?.id === id) activeMetadata.cancelled = true;
-        updateRecord(id, () => ({ spatial: skippedSpatial() }));
+        updateAsset(id, () => ({ spatial: skippedSpatial() }));
       } else if (!skipped.has(id) && live.spatial.exifRead.state === 'skipped-duplicate') {
-        updateRecord(id, () => ({ spatial: emptySpatial() }));
+        updateAsset(id, () => ({ spatial: emptySpatial() }));
         metadataQueue.push({ id, generation });
         resumedMetadata = true;
       }
@@ -160,7 +202,8 @@ export function createPhotoSession({
     if (positioning.source) positioning = Object.freeze({ ...positioning, ledger: matchPhotoReferences(positioning.source.entries,
       (appendStatus?.appendableIds || importIds).map((id) => records.get(id))) });
     for (const [id, layer] of layers) {
-      const counts = photoSpatialCounts(layer.photoIds.map((photoId) => records.get(photoId)));
+      const counts = { ...photoSpatialCounts(layer.photoIds.map((photoId) => records.get(photoId))),
+        assetCount: assetIds(layer.photoIds).length };
       if (Object.keys(counts).some((key) => counts[key] !== layer[key])) layers.set(id, Object.freeze({ ...layer, ...counts }));
     }
     for (const [id, review] of sourceReviews) {
@@ -169,11 +212,12 @@ export function createPhotoSession({
         if (review.source.kind === 'gmi') {
           const cached = gmiReviews.get(review.source);
           const associationLedger = cached?.memberIds === memberIds ? cached.associationLedger
-            : reviewGmiPhotoSource(review.source, memberIds.map((photoId) => records.get(photoId)));
+            : reviewGmiPhotoSource(review.source, assetPhotos(memberIds));
           gmiReviews.set(review.source, { memberIds, associationLedger });
           sourceReviews.set(id, Object.freeze({ ...review, memberIds, associationLedger }));
         } else sourceReviews.set(id, Object.freeze({ ...review,
-          ...reviewPhotoSource(review.source, memberIds.map((photoId) => records.get(photoId))),
+          ...reviewPhotoSource(review.source, assetPhotos(memberIds).map((asset) => ({ ...asset,
+            spatial: records.get(memberIds.find((photoId) => records.get(photoId).assetId === asset.id)).spatial }))),
         }));
       }
     }
@@ -200,14 +244,14 @@ export function createPhotoSession({
       while (metadataQueue.length) {
         await yieldJob();
         const job = metadataQueue.shift();
-        const record = records.get(job?.id);
+        const record = assets.get(job?.id);
         if (!record || job.generation !== generation || record.spatial.exifRead.state === 'skipped-duplicate') continue;
         activeMetadata = { id: job.id, cancelled: false };
         const token = activeMetadata;
         let result;
         try { result = await extractGps(record.file); }
         catch { result = { state: 'error', errorCode: 'gps-read-failed', candidate: null }; }
-        if (!token.cancelled && updateRecord(job.id, (live) => ({
+        if (!token.cancelled && updateAsset(job.id, (live) => ({
           spatial: Object.freeze({
             ...live.spatial,
             exifRead: immutable({ state: result.state, errorCode: result.errorCode }),
@@ -227,26 +271,26 @@ export function createPhotoSession({
         await yieldJob();
         const job = queue.shift();
         if (!job || job.generation !== generation) continue;
-        const record = records.get(job.id);
+        const record = assets.get(job.id);
         if (!record) continue;
         const controller = new AbortController();
         activeJob = { id: job.id, controller };
         let thumbnailUrl = null;
         try {
           const result = await createThumbnail(record.file, { signal: controller.signal });
-          if (job.generation !== generation || !records.has(job.id)) continue;
+          if (job.generation !== generation || !assets.has(job.id)) continue;
           thumbnailUrl = urls.createObjectURL(result.thumbnailBlob);
-          const previousUrl = records.get(job.id).preview.thumbnailUrl;
+          const previousUrl = assets.get(job.id).preview.thumbnailUrl;
           if (previousUrl) urls.revokeObjectURL(previousUrl);
-          updateRecord(job.id, () => ({
+          updateAsset(job.id, () => ({
             dimensions: Object.freeze(result.dimensions),
             preview: Object.freeze({ state: 'ready', thumbnailUrl, errorCode: null }),
           }), job.generation);
           thumbnailUrl = null; // Ownership transferred to the registry.
           publish();
         } catch (error) {
-          if (job.generation === generation && records.has(job.id)) {
-            updateRecord(job.id, () => ({
+          if (job.generation === generation && assets.has(job.id)) {
+            updateAsset(job.id, () => ({
               dimensions: error.dimensions ? Object.freeze(error.dimensions) : null,
               preview: Object.freeze({ state: 'error', thumbnailUrl: null, errorCode: error.code || 'decode-failed' }),
             }), job.generation);
@@ -263,16 +307,18 @@ export function createPhotoSession({
   }
 
   function release(ids) {
-    const removed = new Set(ids);
+    const candidates = assetIds(ids);
+    for (const id of ids) { records.delete(id); appendOverrideIds.delete(id); }
+    const live = new Set([...records.values()].map((record) => record.assetId));
+    const removed = new Set(candidates.filter((id) => !live.has(id)));
     queue = queue.filter((job) => !removed.has(job.id));
     metadataQueue = metadataQueue.filter((job) => !removed.has(job.id));
     if (removed.has(activeMetadata?.id)) activeMetadata.cancelled = true;
     if (removed.has(activeJob?.id)) activeJob.controller.abort();
     for (const id of removed) {
-      const record = records.get(id);
+      const record = assets.get(id);
       if (record?.preview.thumbnailUrl) urls.revokeObjectURL(record.preview.thumbnailUrl);
-      records.delete(id);
-      appendOverrideIds.delete(id);
+      assets.delete(id);
     }
   }
 
@@ -297,6 +343,7 @@ export function createPhotoSession({
       if (!layer) return null;
       const ticket = Object.freeze({ operationId: createId(), layerId, generation, memberIds: layer.photoIds });
       sourceWorkflows.set(layerId, ticket);
+      workflowMembers.set(ticket, layer.photoIds);
       sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
       if (sourceReviews.delete(layerId)) publish();
       return ticket;
@@ -315,7 +362,7 @@ export function createPhotoSession({
       if (!review || review.state !== 'ready' || review.source !== expectedReview?.source
         || review.recheck !== expectedReview.recheck) return { ok: false, error: 'source-changed' };
       if (review.source.kind === 'gmi') return this.applyGmiAssociations(ticket.layerId, {
-        confirmed: true, sourceId: review.source.id, memberIds: ticket.memberIds,
+        confirmed: true, sourceId: review.source.id, memberIds: layer.photoIds,
         associationLedger: expectedReview.associationLedger,
       });
       if (review.source.kind !== 'gml') return { ok: false, error: 'unsupported-source' };
@@ -324,7 +371,7 @@ export function createPhotoSession({
         return { ok: false, error: 'duplicate-source' };
       // Validate every attachment before the first record write.
       try {
-        for (const match of matchPhotoReferences(review.source.entries, layer.photoIds.map((id) => records.get(id))).matches) {
+        for (const match of matchPhotoReferences(review.source.entries, assetPhotos(layer.photoIds)).matches) {
           if (match.status !== 'matched') continue;
           const entry = review.source.entries.find((item) => item.id === match.entryId);
           createPhotoCandidate({ ...entry, id: `${review.source.id}:${entry.id}`, kind: 'gml' });
@@ -352,7 +399,7 @@ export function createPhotoSession({
         if (seen.has(request.photoId) || !live || !row || live.spatial.current !== row.current
           || !candidate || !live.spatial.candidates.includes(candidate)
           || candidate.status !== 'viable' || !isPhotoPosition(candidate.position)
-          || (candidate.kind === 'gml' && !layer.spatialSources.some((source) => source.kind === 'gml' && source.id === candidate.sourceId)))
+          || (['gml', 'gmi'].includes(candidate.kind) && !layer.spatialSources.some((source) => source.kind === candidate.kind && source.id === candidate.sourceId)))
           return { ok: false, error: 'review-changed' };
         seen.add(request.photoId);
       }
@@ -401,7 +448,8 @@ export function createPhotoSession({
       publish();
       return { ok: true };
     },
-    getFile: (id) => records.get(id)?.file || null,
+    getFile: fileFor,
+    getAssetFile: (assetId) => assets.get(assetId)?.file || null,
     getPhoto: (id) => records.has(id) ? publicPhoto(records.get(id)) : null,
     getLayerPhotos: (layerId) => (layers.get(layerId)?.photoIds || []).map((id) => publicPhoto(records.get(id))),
     getLayer: (id) => layers.get(id) || null,
@@ -483,8 +531,8 @@ export function createPhotoSession({
       sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
       publish(); return true;
     },
-    // Association-only confirmation preflights the exact staged review and owner
-    // membership, then publishes once. No photo record/candidate is written.
+    // Checkpoint A: source, asset associations and point occurrences, never current.
+    // Construct the entire change before publishing any occurrence/source writes.
     applyGmiAssociations(layerId, { confirmed = false, sourceId, memberIds, associationLedger } = {}) {
       const layer = layers.get(layerId), review = sourceReviews.get(layerId);
       if (!confirmed || !layer || review?.state !== 'ready' || review.source?.kind !== 'gmi'
@@ -496,8 +544,43 @@ export function createPhotoSession({
       const existing = layer.spatialSources.some((item) => item.id === sourceId);
       if (!existing && layer.spatialSources.some((item) => item.kind === 'gmi' && item.fingerprint === source.fingerprint))
         return { ok: false, error: 'duplicate-source' };
+      const additions = [], replacements = new Map(), memberList = [...layer.photoIds];
+      const dismissed = new Set(layer.dismissedGmiPlacements || []);
+      try {
+        for (const association of Object.values(associationLedger.associationsById)) {
+          const object = source.objectsByKey[association.objectKey];
+          const position = gmiPointPosition(source, object);
+          if (!position) continue;
+          const assetId = association.photoId;
+          const key = JSON.stringify([source.fingerprint, object.objectKey, assetId]);
+          if (dismissed.has(key)) continue;
+          const peers = memberList.map((id) => replacements.get(id) || records.get(id) || additions.find((item) => item.id === id))
+            .filter((record) => record.assetId === assetId);
+          let record = peers.find((item) => item.occurrence?.key === key);
+          if (record?.occurrence.sourceId === sourceId) continue;
+          record = record || peers.find((item) => !item.occurrence) || makeOccurrence(assetId, createId());
+          const occurrence = immutable({ key, assetId, sourceId, sourceFingerprint: source.fingerprint,
+            sourceFilename: source.filename, objectKey: object.objectKey, object,
+            referenceIds: association.referenceIds, references: source.references.filter((ref) => association.referenceIds.includes(ref.id)),
+            matchMethods: association.matchMethods, ownerLayerId: layerId });
+          const candidate = createPhotoCandidate({ id: `gmi-position:${key}`, kind: 'gmi', sourceId,
+            sourceFilename: source.filename, sourceEntryId: association.id, ...position,
+            raw: { geometry: object.rawGeometry }, provenance: occurrence });
+          const updated = { ...record, occurrence, spatial: Object.freeze({ ...record.spatial,
+            candidates: Object.freeze([...record.spatial.candidates.filter((item) => item.provenance?.key !== key), candidate]) }) };
+          if (records.has(record.id)) replacements.set(record.id, updated);
+          else { additions.push(updated); memberList.push(record.id); }
+        }
+      } catch { return { ok: false, error: 'invalid-source' }; }
       const sources = existing ? layer.spatialSources.map((item) => item.id === sourceId ? source : item) : [...layer.spatialSources, source];
-      layers.set(layerId, Object.freeze({ ...layer, spatialSources: Object.freeze(sources) }));
+      for (const [id, record] of replacements) records.set(id, record);
+      for (const record of additions) records.set(record.id, record);
+      const photoIds = additions.length ? Object.freeze(memberList) : layer.photoIds;
+      layers.set(layerId, Object.freeze({ ...layer, photoIds, photoCount: photoIds.length,
+        assetIdsByPhotoId: Object.freeze(Object.fromEntries(photoIds.map((id) => [id, records.get(id).assetId]))),
+        spatialSources: Object.freeze(sources) }));
+      const workflow = sourceWorkflows.get(layerId);
+      if (workflow && workflowMembers.get(workflow) === layer.photoIds) workflowMembers.set(workflow, photoIds);
       sourceReviews.delete(layerId);
       sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
       publish(); return { ok: true };
@@ -524,7 +607,7 @@ export function createPhotoSession({
       const proposed = new Map();
       if (kind === 'gml') {
         const source = review.source;
-        const ledger = matchPhotoReferences(source.entries, layer.photoIds.map((id) => records.get(id)));
+        const ledger = matchPhotoReferences(source.entries, assetPhotos(layer.photoIds));
         // Preflight every attachment before writing anything (including diagnostic evidence).
         try {
           for (const match of ledger.matches.filter((item) => item.status === 'matched')) {
@@ -539,7 +622,7 @@ export function createPhotoSession({
         const live = records.get(request.photoId);
         if (!layer.photoIds.includes(request.photoId) || seen.has(request.photoId)
           || !live || live.spatial.current !== request.expectedCurrent) return fail('review-changed');
-        const candidate = kind === 'gml' ? proposed.get(request.photoId)
+        const candidate = kind === 'gml' ? proposed.get(live.assetId)
           : live.spatial.candidates.find((item) => item.id === request.candidateId && item.kind === 'exif');
         if (candidate?.id !== request.candidateId || candidate?.status !== 'viable' || !isPhotoPosition(candidate.position)) return fail('review-changed');
         seen.add(request.photoId);
@@ -566,11 +649,19 @@ export function createPhotoSession({
       const removed = layer.photoIds.filter((id) => requested.has(id));
       if (!removed.length) return [];
       const remaining = layer.photoIds.filter((id) => !requested.has(id));
+      const remainingAssets = assetIds(remaining);
       layers.set(layerId, Object.freeze({ ...layer, photoIds: Object.freeze(remaining), photoCount: remaining.length,
+        assetIdsByPhotoId: Object.freeze(Object.fromEntries(remaining.map((id) => [id, records.get(id).assetId]))),
+        dismissedGmiPlacements: Object.freeze([...new Set([...(layer.dismissedGmiPlacements || []),
+          ...removed.map((id) => records.get(id).occurrence?.key).filter(Boolean)])]),
         spatialSources: Object.freeze(layer.spatialSources.map((source) => source.kind === 'gmi'
-          ? pruneGmiPhotoSource(source, remaining) : prunePhotoSource(source, remaining))),
+          ? pruneGmiPhotoSource(source, remainingAssets) : prunePhotoSource(source, remainingAssets))),
       }));
       release(removed); publish(); return removed;
+    },
+    removeLayerAssets(layerId, requestedAssetIds, options) {
+      const requested = new Set(requestedAssetIds);
+      return this.removeLayerPhotos(layerId, (layers.get(layerId)?.photoIds || []).filter((id) => requested.has(records.get(id).assetId)), options);
     },
     // One owner-scoped API for single acceptance and a future batch operation.
     // It validates each pair, updates only current, and publishes once.
@@ -598,15 +689,15 @@ export function createPhotoSession({
         if (!classification.candidate) { rejectedNames.push(file.name); continue; }
         const id = createId();
         const errorCode = !classification.supported ? 'unsupported-format' : !file.size ? 'empty-file' : null;
-        records.set(id, {
-          id, file, originalFilename: file.name, mimeType: file.type || null,
+        assets.set(id, {
+          file, originalFilename: file.name, mimeType: file.type || null,
           size: file.size, lastModified: file.lastModified, importedAt: Date.now(), source: 'local-file',
           dimensions: null,
           sourceRelativePath: file.webkitRelativePath || null,
           spatial: emptySpatial(),
-          direction: emptyDirection(),
           preview: Object.freeze({ state: errorCode ? 'error' : 'pending', thumbnailUrl: null, errorCode }),
         });
+        records.set(id, makeOccurrence(id));
         acceptedIds.push(id);
         importIds.push(id);
         if (!errorCode) queue.push({ id, generation });
@@ -661,7 +752,8 @@ export function createPhotoSession({
       while (names.has(name)) name = `Bilder (${++suffix})`;
       const layer = Object.freeze({
         id: `photo-layer-${createId()}`, type: 'FOTO', name,
-        photoIds: Object.freeze([...importIds]), photoCount: importIds.length,
+        photoIds: Object.freeze([...importIds]), photoCount: importIds.length, assetCount: importIds.length,
+        assetIdsByPhotoId: Object.freeze(Object.fromEntries(importIds.map((id) => [id, records.get(id).assetId]))),
         visible: true, createdAt: Date.now(),
         spatialSources: Object.freeze(attached ? [attached] : []),
         ...photoSpatialCounts(importIds.map((id) => records.get(id))),
@@ -679,6 +771,7 @@ export function createPhotoSession({
       const source = positioning.source ? attachSource(positioning.source, policy.appendableIds) : null;
       const updated = Object.freeze({ ...layer, photoIds: Object.freeze([...layer.photoIds, ...policy.appendableIds]),
         photoCount: layer.photoIds.length + policy.appendableIds.length,
+        assetIdsByPhotoId: Object.freeze({ ...layer.assetIdsByPhotoId, ...Object.fromEntries(policy.appendableIds.map((id) => [id, records.get(id).assetId])) }),
         spatialSources: Object.freeze([...layer.spatialSources, ...(source ? [source] : [])]),
       });
       layers.set(layer.id, updated); release(policy.skippedIds); transferDraft(); publish(); return layers.get(layer.id);

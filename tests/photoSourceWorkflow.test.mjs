@@ -38,12 +38,14 @@ test('GMI checkpoint then EXIF batch in the same operation preserves direction, 
   assert.equal(source.associationLedger.summary.unmatchedCount, 1);
   ids.forEach((id, index) => {
     const photo = session.getPhoto(id);
-    for (const field of ['spatial', 'direction', 'preview', 'dimensions']) assert.strictEqual(photo[field], before[index][field]);
+    for (const field of ['direction', 'preview', 'dimensions']) assert.strictEqual(photo[field], before[index][field]);
+    assert.strictEqual(photo.spatial.current, before[index].spatial.current);
   });
   const plan = session.reviewSourceWorkflowPositions(ticket);
   assert.equal(plan.rows[0].objectCount, 2);
-  assert(plan.rows.every((row) => row.options.every((option) => option.kind === 'exif')));
-  const requests = plan.rows.map((row) => ({ photoId: row.photoId, candidateId: row.defaultChoice }));
+  assert.equal(plan.rows.length, 4);
+  assert.equal(plan.rows.filter((row) => row.options.some((option) => option.kind === 'gmi')).length, 2);
+  const requests = plan.rows.map((row) => ({ photoId: row.photoId, candidateId: row.options.find((option) => option.kind === 'exif').id }));
   let publications = 0; const unsubscribe = session.subscribe(() => publications++);
   assert.equal(session.applySourceWorkflowPositions(ticket, plan, requests).ok, true);
   assert.equal(publications, 1); unsubscribe();
@@ -51,7 +53,7 @@ test('GMI checkpoint then EXIF batch in the same operation preserves direction, 
     const photo = session.getPhoto(id);
     assert.equal(photo.spatial.current.basis.candidateId, `${id}:exif`);
     for (const field of ['direction', 'preview', 'dimensions']) assert.strictEqual(photo[field], before[index][field]);
-    assert.strictEqual(photo.spatial.candidates, before[index].spatial.candidates);
+    assert.strictEqual(photo.spatial.candidates.find((candidate) => candidate.kind === 'exif'), before[index].spatial.candidates[0]);
     assert.strictEqual(session.getFile(id), files[index]);
   });
   assert.equal(session.getPhoto(ids[0]).direction.current.degrees, 0);

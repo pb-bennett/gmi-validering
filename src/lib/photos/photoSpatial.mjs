@@ -43,6 +43,7 @@ export function photoSpatialCounts(photos) {
   const placedCount = photos.filter((photo) => isPhotoPosition(photo.spatial?.current?.position)).length;
   return {
     placedCount, unplacedCount: photos.length - placedCount,
-    exifCandidateCount: photos.filter((photo) => photo.spatial?.candidates.some((item) => item.kind === 'exif' && item.status === 'viable')).length,
+    exifCandidateCount: new Set(photos.filter((photo) => photo.spatial?.candidates.some((item) => item.kind === 'exif' && item.status === 'viable'))
+      .map((photo) => photo.assetId || photo.id || photo)).size,
   };
 }

@@ -61,3 +61,7 @@
   .photo-workspace-inspector { width: 100%; overflow: visible; }
   .photo-workspace-inspector .photo-collection-original { height: 280px; }
 }
+.photo-repeat-warning { color: #854d0e; background: #fffbeb; padding: .25rem .4rem; border-radius: .25rem; font-size: .75rem; overflow-wrap: anywhere; }
+.photo-workspace-list li { flex-wrap: wrap; }
+.photo-workspace-list .photo-occurrence-context { flex: 1 0 calc(100% - 28px); margin-left: 22px; min-width: 0; font-size: .7rem; }
+.photo-occurrence-context details { overflow-wrap: anywhere; }

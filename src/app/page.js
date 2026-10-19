@@ -686,7 +686,7 @@ export default function Home() {
           </div>
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
-            {!showPhotos && <SelectedPhotoInspector key={photoWorkspace.activePhotoId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} manualPlacement={placementEditor} directionEditor={directionEditor} onOpenSources={openPhotoSources} enableLargeView />}
+            {!showPhotos && <SelectedPhotoInspector key={activeWorkspacePhoto?.assetId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} manualPlacement={placementEditor} directionEditor={directionEditor} onOpenSources={openPhotoSources} enableLargeView />}
           </aside> : <div id="validation-v2-field-inspector-root" className="contents" />}
         </div>
             )}

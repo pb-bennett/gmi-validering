@@ -162,7 +162,7 @@ const attach = async (session, layerId, file) => {
     memberIds: review.memberIds, associationLedger: review.associationLedger });
 };
 
-test('association-only confirmation/cancel are atomic and leave current, direction, candidates, preview and File refs identical', async () => {
+test('source confirmation/cancel are atomic and retain current, direction, preview and File while adding point evidence', async () => {
   const session = setup();
   const original = photoFile('a.jpg'), photoId = session.importFiles([original]).acceptedIds[0], layer = session.createLayer();
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -179,7 +179,9 @@ test('association-only confirmation/cancel are atomic and leave current, directi
   assert.equal(session.getGmiPhotoAssociations(layer.id, photoId).length, 0);
   assert((await attach(session, layer.id, file)).ok);
   const after = session.getPhoto(photoId);
-  for (const key of ['spatial', 'direction', 'preview', 'dimensions']) assert.strictEqual(after[key], before[key]);
+  for (const key of ['direction', 'preview', 'dimensions']) assert.strictEqual(after[key], before[key]);
+  assert.strictEqual(after.spatial.current, before.spatial.current);
+  assert.equal(after.spatial.candidates.filter((candidate) => candidate.kind === 'gmi').length, 1);
   assert.strictEqual(session.getFile(photoId), original);
   assert.equal(session.getGmiPhotoAssociations(layer.id, photoId).length, 1);
   const wrongLayer = session.importFiles([photoFile('a.jpg')]);
@@ -237,7 +239,7 @@ test('manual move, GML/EXIF acceptance and direction edits preserve both source 
   assert.deepEqual(session.getGmiPhotoAssociations(layer.id, photoId), originalEdges);
   assert(session.removeGmiSource(layer.id, originalEdges[0].sourceId, { confirmed: true }));
   assert.equal(session.getGmiPhotoAssociations(layer.id, photoId).length, 1);
-  session.removeLayerPhotos(layer.id, [photoId], { confirmed: true });
+  session.removeLayerAssets(layer.id, [photoId], { confirmed: true });
   const retained = session.getLayer(layer.id).spatialSources.find((item) => item.kind === 'gmi');
   assert.equal(retained.associationLedger.resolutions[0].status, 'unmatched');
   assert.deepEqual(retained.associationLedger.reverseIndexes.byPhotoId, {});

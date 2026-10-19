@@ -1,6 +1,6 @@
 'use client';
 
-import { gmiObjectLabel } from '@/lib/photos/gmiPhotoSource.mjs';
+import { gmiObjectLabel, gmiRepeatedPhotoReferences } from '@/lib/photos/gmiPhotoSource.mjs';
 
 const statusLabels = { confident: 'Matchet', ambiguous: 'Tvetydig', unmatched: 'Ikke matchet', invalid: 'Ugyldig referanse' };
 const methods = { 'exact-relative-path': 'Relativ sti', 'relative-path-suffix': 'Stisuffiks',
@@ -13,6 +13,10 @@ export default function PhotoGmiSummary({ source, ledger = source.associationLed
   const summary = ledger.summary;
   return <div className="photo-gmi-summary">
     <p className="photo-gmi-filename">GMI-fil: {source.filename}</p>
+    {gmiRepeatedPhotoReferences(source, ledger).map((group) => <p key={group.assetId} className="photo-repeat-warning" role="status">
+      <strong>Gjentas</strong> · {group.references[0]?.filename} er referert fra {group.count} GMI-objekter.
+      {' '}{group.objects.filter((object) => object.geometryScope === 'point').length} punktplasseringer. Linjer gir bare koblinger.
+    </p>)}
     <dl aria-label="Oppsummering av bildereferanser">
       {[
         ['Objekter analysert', summary.objectCount], ['Objekter med bildereferanser', summary.referencingObjectCount],

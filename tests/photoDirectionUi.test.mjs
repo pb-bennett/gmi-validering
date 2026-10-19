@@ -133,7 +133,8 @@ test('FOTO direction: native slider, N/E/S/W geometry, explicit transactions, so
         await browser.waitFor(`document.querySelector('.photo-collection-dialog').innerText.includes('${files.photos.length} treff')`);
         await browser.waitFor(`document.querySelectorAll('.photo-collection-card img').length===${files.photos.length}`, 60000);
         await click(`Opprett fotokartlag (${files.photos.length} bilder)`);
-        await click('Bildemodul'); await applyPhotoSourcePositions(browser, 'gml');
+        await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+        await applyPhotoSourcePositions(browser, 'gml');
         await browser.waitFor(`document.querySelectorAll('.photo-camera-marker').length===${files.photos.length}`);
         await browser.waitFor(`document.querySelector('.photo-collection-original img')?.naturalWidth>0`);
         await click('Zoom til posisjon', spatial); await settle();
