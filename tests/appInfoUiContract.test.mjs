@@ -152,10 +152,23 @@ test('modal source has a stable accessible dialog and tab shell', () => {
 });
 
 test('AppInfo reclaims desktop height only in constrained viewports', () => {
-  const compactStart = globalCssSource.indexOf('@media (max-height: 1000px) and (min-width: 1024px) {');
-  const compactEnd = globalCssSource.indexOf('.statistics-button--cue', compactStart);
+  const compactMediaBlocks = [...globalCssSource.matchAll(/@media\s*\(max-height:\s*1000px\)\s*and\s*\(min-width:\s*1024px\)\s*\{/g)]
+    .map((match) => {
+      const compactStart = match.index;
+      let compactEnd = compactStart + match[0].length;
+      let depth = 1;
+      while (depth > 0 && compactEnd < globalCssSource.length) {
+        const character = globalCssSource[compactEnd++];
+        if (character === '{') depth += 1;
+        if (character === '}') depth -= 1;
+      }
+      assert.equal(depth, 0, 'constrained-height media block must be closed');
+      return { compactStart, compactEnd, compactCss: globalCssSource.slice(compactStart, compactEnd) };
+    })
+    .filter(({ compactCss }) => /\.app-info-dialog\s*\{/.test(compactCss));
+  assert.equal(compactMediaBlocks.length, 1, 'one constrained desktop media block must contain AppInfo');
+  const { compactStart, compactEnd, compactCss } = compactMediaBlocks[0];
   assert.ok(compactStart > 0 && compactEnd > compactStart);
-  const compactCss = globalCssSource.slice(compactStart, compactEnd);
 
   assert.match(globalCssSource.slice(0, compactStart), /\.app-info-dialog\s*\{\s*width: min\(1180px, calc\(100vw - 48px\)\);\s*height: min\(86dvh, 56rem\);\s*min-height: 34rem;\s*max-height: calc\(100dvh - 2rem\);/);
   assert.match(compactCss, /\.app-info-dialog\s*\{\s*height: calc\(100dvh - 2rem\);\s*min-height: 0;/);
@@ -298,25 +311,33 @@ test('Nytt presents one sourced 1.2.0 release article with professional detail',
   assert.equal((newsSource.match(/<ReleaseMeta\b/g) || []).length, 1);
   assert.match(newsSource, /<ReleaseMeta release=\{CURRENT_APP_RELEASE\} \/>/);
   assert.match(modalSource, /CURRENT_APP_RELEASE[\s\S]*CURRENT_APP_VERSION[\s\S]*from '@\/data\/appReleases\.mjs'/);
-  assert.match(newsSource, /Ny Validator og oppdatert arbeidsområde/);
-  assert.match(newsSource, /Versjon 1\.2\.0 samler en ny arbeidsflyt for GMI-validering/);
-  for (const heading of ['Validator V2', 'Fra funn til objekt', 'Et mer sammenhengende arbeidsområde', 'Andre forbedringer']) {
-    assert.match(newsSource, new RegExp(`>${heading}</h4>`));
-  }
-  assert.match(newsSource, /FEIL og SJEKK er tydeligere skilt/);
-  assert.match(newsSource, /felt og hvilken regel/);
-  assert.match(newsSource, /kildehenvisning og veiledning om verdier der dette finnes/);
-  assert.match(newsSource, /utvalgte manglende opplysninger på eksisterende objekter som ikke er merket NYTT/);
-  assert.match(newsSource, /SJEKK for faglig vurdering i stedet for automatisk FEIL/);
-  assert.match(newsSource, /åpnes direkte fra Validator i en diagnostisk datatabell/);
-  assert.match(newsSource, /Feltet som undersøkes, vises sammen med relevant objektkontekst/);
-  assert.match(newsSource, /uten å lete manuelt gjennom hele datasettet/);
-  for (const capability of ['Kart, lag og datatabell', 'Høydekontroll', 'Profilanalyse', 'Standards', '3D', '1080p']) {
-    assert.match(newsSource, new RegExp(capability));
-  }
-  assert.match(newsSource, /deling og QR-kode, WMS, Stats og AppInfo-dialogene er forbedret/);
-  assert.match(newsSource, /utvalgte, kildebaserte GMI-kontroller/);
-  assert.match(newsSource, /Funnene må fortsatt vurderes faglig/);
+  const headings = [...newsSource.matchAll(/<h[34][^>]*>([^<]+)<\/h[34]>/g)]
+    .map(([, heading]) => heading);
+  assert.deepEqual(headings, [
+    'Nytt og mer helhetlig grensesnitt',
+    'Validator V2',
+    'Bedre støtte for SOSI-filer',
+    'Mindre forbedringer og justeringer',
+  ]);
+  assert.match(newsSource, /Hele GMI Validator har fått et omfattende visuelt løft/);
+  assert.match(newsSource, /ny logo og en oppdatert visuell profil/);
+  assert.match(newsSource, /Validator-modulen er bygget helt på nytt/);
+  assert.match(newsSource, /praktisk anvendelig til kontroll av GMI-filer/);
+  assert.match(newsSource, /kravene i den nye innmålingsinstruksen/);
+  assert.match(newsSource, /egne erfaringer fra mottak og kontroll av innmålingsdata/);
+  assert.match(newsSource, /bg-red-50[^>]*>FEIL<\/strong>/);
+  assert.match(newsSource, /bg-amber-50[^>]*>SJEKK<\/strong>/);
+  assert.match(newsSource, /FEIL<\/strong>\s*\{' – forhold som vurderes som klare avvik og normalt bør rettes\.'\}/);
+  assert.match(newsSource, /SJEKK<\/strong>\s*\{' – forhold som ikke nødvendigvis er feil, men som bør vurderes nærmere\.'\}/);
+  assert.match(newsSource, /hvilket felt eller krav som er berørt, og hvilke objekter funnet gjelder/);
+  assert.match(newsSource, /Validatoren er fortsatt under utvikling/);
+  assert.match(newsSource, /innspill til valideringsregler, tolkninger av instruksen/);
+  assert.match(newsSource, /filer eksportert fra Gemini VA/);
+  assert.match(newsSource, /sammenligne det som allerede ligger i VA-databasen med det som leveres i nye innmålinger/);
+  assert.match(newsSource, /ny funksjon for lagmarkering/);
+  assert.match(newsSource, /SOSI-data mer nyttige som referansegrunnlag/);
+  assert.match(newsSource, /kartkontroller, visning av objektinformasjon, filtrering og generell håndtering av data/);
+  assert.doesNotMatch(newsSource, /bilder|bildefiler|GML|Redigering av feltverdier|Fra funn til objekt|1080p/);
   assert.doesNotMatch(newsSource, /NEWS_HIGHLIGHTS|NewsHighlightMockup|Illustrasjon|lg:grid-cols|mockup/);
   assert.doesNotMatch(modalSource, /function NewsHighlightMockup|NEWS_HIGHLIGHTS/);
   assert.doesNotMatch(newsSource, /releaseEntry\.news\.map|ReleaseDetails/);
@@ -335,6 +356,22 @@ test('Nytt presents one sourced 1.2.0 release article with professional detail',
   assert.match(modalSource, /APP_RELEASES\.map/);
 });
 
+test('Validator V2 release screenshot follows its explanation and preserves intrinsic dimensions', async () => {
+  const newsSource = modalSource.slice(modalSource.indexOf('function NewsContent'), modalSource.indexOf('function HistoryContent'));
+  const validatorStart = newsSource.indexOf('<section aria-labelledby="app-info-news-validator"');
+  const validatorSource = newsSource.slice(validatorStart, newsSource.indexOf('</section>', validatorStart));
+  const screenshots = [...newsSource.matchAll(/<Image\b[^>]*\/>/g)];
+  assert.equal(screenshots.length, 1);
+  const screenshot = screenshots[0][0];
+  assert.match(modalSource, /import Image from 'next\/image'/);
+  assert.ok(validatorSource.indexOf(screenshot) > validatorSource.lastIndexOf('</p>'));
+  assert.match(screenshot, /src="\/brand\/images\/appinfo\/validator-v2\.png"/);
+  assert.match(screenshot, /alt="GMI Validator med Validator V2-knappen markert i analyseverktøyene"/);
+  const png = await readFile(new URL('../public/brand/images/appinfo/validator-v2.png', import.meta.url));
+  assert.match(screenshot, new RegExp(`width=\\{${png.readUInt32BE(16)}\\}`));
+  assert.match(screenshot, new RegExp(`height=\\{${png.readUInt32BE(20)}\\}`));
+});
+
 test('future roadmap stays separate from released versions and has no date', () => {
   const aboutStart = modalSource.indexOf('function AboutContent');
   const futureStart = modalSource.indexOf('function FutureContent');
@@ -345,17 +382,26 @@ test('future roadmap stays separate from released versions and has no date', () 
   assert.match(futureSource, /<AppInfoHero title="Fremtiden – videre utvikling" \/>/);
   assert.doesNotMatch(futureSource, /app-info-roadmap-heading|<h3[^>]*>Videre utvikling<\/h3>/);
 
-  const screenshotRoadmapStart = futureSource.indexOf('Bedre tilbakemeldinger');
-  assert.ok(screenshotRoadmapStart > 0);
-  const roadmapStart = screenshotRoadmapStart;
-  assert.ok(roadmapStart > 0);
-  const roadmapSource = futureSource.slice(roadmapStart);
+  const roadmapSource = futureSource.slice(futureSource.indexOf('<section>'));
+  const headings = [...roadmapSource.matchAll(/<h4[^>]*>([^<]+)<\/h4>/g)]
+    .map(([, heading]) => heading);
+  assert.deepEqual(headings, [
+    'Full støtte for bilder',
+    'Redigering av feltverdier i GMI-filer',
+    'Bedre tilbakemeldinger',
+  ]);
 
+  assert.match(roadmapSource, /Videre arbeid vil gi bedre støtte for bilder gjennom hele arbeidsflyten/);
+  assert.match(roadmapSource, /bildeintegrasjon både mot GMI- og GML-filer/);
+  assert.match(roadmapSource, /Det vurderes også støtte for å gjøre enkle endringer i feltverdier/);
+  assert.match(roadmapSource, /uten å endre geometrien/);
+  assert.match(roadmapSource, /tydelig skille mellom originaldata og redigerte verdier/);
+  assert.match(roadmapSource, />Planlagt<\/span>/);
   assert.match(roadmapSource, /Bedre tilbakemeldinger/);
   assert.match(roadmapSource, /Mulig støtte for å legge ved skjermbilder i Kontakt-skjemaet/);
   assert.match(futureSource, />Mulig<\/span>/);
   assert.match(roadmapSource, /Planene kan endres etter hvert som funksjonene utvikles og testes/);
-  assert.doesNotMatch(roadmapSource, /1\.2\.0|Validator 2\.0|beta|Senere:|Videre forbedringer av tabellvisning/);
+  assert.doesNotMatch(roadmapSource, /\d+\.\d+\.\d+|Validator V2|Validator 2\.0|beta|Senere:|Videre forbedringer av tabellvisning/);
   assert.doesNotMatch(roadmapSource, /202\d|releasedOn|januar|august/);
   assert.match(catalogSource, /version: '1\.2\.0'/);
 });
