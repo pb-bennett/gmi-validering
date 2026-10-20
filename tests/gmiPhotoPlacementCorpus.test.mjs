@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { gmiPointPosition, parseGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
+import { photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '../src/lib/photos/photoPositioning.mjs';
 
 async function inventory(directory) {
   const files = [];
@@ -23,7 +24,7 @@ for (const [label, directory] of [['corpus', process.env.GMI_PHOTO_CORPUS], ['Ek
       const files = await inventory(directory), before = {};
       for (const file of files) before[file] = await hash(file);
       if (process.env.GMI_PLACEMENT_HASH_DIR) await writeFile(path.join(process.env.GMI_PLACEMENT_HASH_DIR, `${label}-before.json`), JSON.stringify(before, null, 2));
-      const findings = { sources: 0, assets: 0, pointPlacements: 0, repeatedAssets: 0, repeatedPointAssets: 0,
+      const findings = { sources: 0, assets: 0, pointPlacements: 0, automaticallyProposed: 0, sourceActions: [], repeatedAssets: 0, repeatedPointAssets: 0,
         repeatedPointPlacements: 0, lineOnlyRepeats: 0, missingCrsOrGeometry: 0, unmatchedReferences: 0, ambiguousReferences: 0, invalidReferences: 0, repeated: [] };
       for (const filename of files.filter((file) => /\.gmi$/i.test(file))) {
         const sourceFile = new File([await readFile(filename)], path.basename(filename));
@@ -75,6 +76,13 @@ for (const [label, directory] of [['corpus', process.env.GMI_PHOTO_CORPUS], ['Ek
         }
         const plan = session.reviewSourceWorkflowPositions(ticket);
         const requests = plan.rows.flatMap((row) => row.options.filter((option) => option.kind === 'gmi').map((candidate) => ({ photoId: row.photoId, candidateId: candidate.id })));
+        const proposed = selectedPhotoSourcePositions(plan, photoSourcePositionChoices(plan));
+        assert.equal(proposed.length, requests.length);
+        assert(proposed.every((row) => row.proposal.kind === 'gmi'));
+        const sourceActions = photoSourceProposalKinds(plan.rows);
+        assert.deepEqual(sourceActions, requests.length ? ['gmi'] : []);
+        findings.automaticallyProposed += proposed.length;
+        findings.sourceActions.push({ source: path.basename(filename), kinds: sourceActions });
         const pointCount = [...expected.values()].reduce((sum, points) => sum + points.length, 0);
         assert.equal(requests.length, pointCount - [...expected.values()].flat().filter((edge) => gmiPointPosition(parsed, parsed.objectsByKey[edge.objectKey]).status !== 'viable').length);
         if (requests.length) assert(session.applySourceWorkflowPositions(ticket, plan, requests).ok);

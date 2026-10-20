@@ -62,7 +62,7 @@ export function photoPositioningRequests(plan, selectedIds) {
   }));
 }
 
-// Retained evidence from every position source, without assigning source priority.
+// Retained evidence from every position source. Defaults are proposals, never acceptance.
 // Keep original candidate/current identities for the session's optimistic guards.
 export function photoSourceEvidenceSignature(photos) {
   return JSON.stringify(photos.map((photo) => [photo.id, photo.spatial.exifRead.state,
@@ -80,23 +80,52 @@ export function planPhotoSourcePositions(photos, sources) {
   const rows = photos.map((photo) => {
     const options = photo.spatial.candidates.filter((candidate) => candidate.status === 'viable'
       && isPhotoPosition(candidate.position) && (candidate.kind === 'exif'
-        || (candidate.kind === 'gmi' && photo.occurrence?.key === candidate.provenance?.key
-          && sources.some((source) => source.kind === 'gmi' && source.id === candidate.sourceId))
+        || (candidate.kind === 'gmi' && photo.occurrence?.key && photo.occurrence.key === candidate.provenance?.key
+          && photo.occurrence.sourceId === candidate.sourceId
+          && sources.some((source) => source.kind === 'gmi' && source.id === candidate.sourceId
+            && source.fingerprint === candidate.provenance.sourceFingerprint))
         || (candidate.kind === 'gml' && gmlOptions.has(JSON.stringify([photo.assetId || photo.id, candidate.sourceId, candidate.sourceEntryId])))));
     const current = photo.spatial.current;
     const basis = photo.spatial.candidates.find((candidate) => candidate.id === current?.basis.candidateId);
     const objectCount = sources.filter((source) => source.kind === 'gmi').reduce((count, source) =>
       count + (source.associationLedger.reverseIndexes.byPhotoId[photo.assetId || photo.id]?.length || 0), 0);
     const peers = photos.filter((item) => (item.assetId || item.id) === (photo.assetId || photo.id));
+    const gmi = options.filter((candidate) => candidate.kind === 'gmi');
     return Object.freeze({ photoId: photo.id, assetId: photo.assetId || photo.id, occurrence: photo.occurrence,
       occurrenceCount: peers.length, occurrenceIndex: peers.findIndex((item) => item.id === photo.id) + 1,
       gmiUnavailable: photo.spatial.candidates.find((candidate) => candidate.kind === 'gmi' && candidate.status !== 'viable')?.errorCode,
       filename: photo.originalFilename, thumbnailUrl: photo.preview.thumbnailUrl,
       current, currentKind: basis?.kind || current?.basis.kind, currentSourceFilename: basis?.sourceFilename,
       options: Object.freeze(options), objectCount, exifState: photo.spatial.exifRead.state,
-      defaultChoice: !current && options.length === 1 ? options[0].id : '' });
+      defaultChoice: current || gmi.length > 1 ? '' : gmi.length === 1 ? gmi[0].id
+        : options.length === 1 ? options[0].id : '' });
   });
   return Object.freeze({ rows: Object.freeze(rows), evidenceSignature: photoSourceEvidenceSignature(photos) });
+}
+
+export function photoSourceProposalKinds(rows) {
+  return ['gmi', 'gml', 'exif'].filter((kind) => rows.some((row) => row.options.some((option) => option.kind === kind)));
+}
+
+// Preserve deliberate keep/unplaced choices too. An ID alone cannot prove that
+// a refreshed candidate still represents the exact evidence the user reviewed.
+export function photoSourcePositionChoices(next, previous = null, choices = {}, focusedPhotoId = null,
+  { newGmiSourceId = null, editedIds = new Set() } = {}) {
+  return Object.fromEntries(next.rows.map((row) => {
+    const before = previous?.rows.find((item) => item.photoId === row.photoId);
+    if (before) {
+      const newGmi = row.options.filter((option) => option.kind === 'gmi');
+      if (!row.current && !editedIds.has(row.photoId) && (!focusedPhotoId || row.photoId === focusedPhotoId)
+        && newGmi.length === 1 && newGmi[0].sourceId === newGmiSourceId
+        && !before.options.some((option) => option.id === newGmi[0].id)) return [row.photoId, row.defaultChoice];
+      const choice = choices[row.photoId] || '';
+      const oldCandidate = before.options.find((option) => option.id === choice);
+      const candidate = row.options.find((option) => option.id === choice);
+      return [row.photoId, before.current === row.current && candidate && oldCandidate
+        && JSON.stringify(candidate) === JSON.stringify(oldCandidate) ? choice : ''];
+    }
+    return [row.photoId, focusedPhotoId && row.photoId !== focusedPhotoId ? '' : row.defaultChoice];
+  }));
 }
 
 export function selectedPhotoSourcePositions(plan, choices) {

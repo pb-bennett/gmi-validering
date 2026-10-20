@@ -6,6 +6,7 @@ import { photoSession } from '@/lib/photos/photoSession.mjs';
 import PhotoMapPopup from './PhotoMapPopup';
 import { cameraMarkerOptions } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { gmiObjectLabel } from '@/lib/photos/gmiPhotoSource.mjs';
+import { PHOTO_MARKER_PANE, PHOTO_MARKER_Z_INDEX } from '@/lib/photos/photoMapPanes.mjs';
 
 const cameraIcon = L.divIcon(cameraMarkerOptions());
 const selectedCameraIcon = L.divIcon(cameraMarkerOptions({ selected: true }));
@@ -13,7 +14,7 @@ const selectedCameraIcon = L.divIcon(cameraMarkerOptions({ selected: true }));
 export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspaceSelection, onSelectPhoto, placementActive = false, directionEdit }) {
   const map = useMap();
   return (
-    <Pane name="photo-markers" style={{ zIndex: 590 }}>
+    <Pane name={PHOTO_MARKER_PANE} style={{ zIndex: PHOTO_MARKER_Z_INDEX }}>
       {features.map((feature) => {
         const { layerId, photoId } = feature.properties;
         const photo = photoSession.getPhoto(photoId);
@@ -34,7 +35,7 @@ export default function PhotoMarkersLayer({ features, onOpenPhoto, photoWorkspac
           // Opening it here too can make its toggle handler immediately close it.
         };
         return <Marker key={feature.id} position={[feature.geometry.coordinates[1], feature.geometry.coordinates[0]]}
-          icon={icon} zIndexOffset={selected ? 1000 : 0}
+          pane={PHOTO_MARKER_PANE} icon={icon} zIndexOffset={selected ? 1000 : 0}
           title={`Vis bilde: ${filename}${context}`} alt={`Vis bilde: ${filename}${context}`} keyboard
           eventHandlers={{ click: inspect, keydown: (event) => {
             if (!['Enter', ' '].includes(event.originalEvent?.key)) return;

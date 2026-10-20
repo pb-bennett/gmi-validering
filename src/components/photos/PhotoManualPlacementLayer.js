@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Marker, Pane, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { proposalMarkerOptions } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { PHOTO_PLACEMENT_PANE, PHOTO_PLACEMENT_Z_INDEX } from '@/lib/photos/photoMapPanes.mjs';
 import './photoManualPlacement.css';
 
 const proposalIcon = L.divIcon(proposalMarkerOptions);
@@ -57,10 +58,10 @@ export default function PhotoManualPlacementLayer({ transaction, onPropose }) {
   const { position, ticket } = transaction;
   const point = [position.latitude, position.longitude];
   const current = ticket.expectedCurrent?.position;
-  return <Pane name="photo-placement" style={{ zIndex: 610 }}>
+  return <Pane name={PHOTO_PLACEMENT_PANE} style={{ zIndex: PHOTO_PLACEMENT_Z_INDEX }}>
     {current && <Polyline positions={[[current.latitude, current.longitude], point]} interactive={false} className="photo-placement-connector"
-      pathOptions={{ color: '#a34c00', weight: 1, dashArray: '4 4', opacity: 0.8 }} />}
-    <Marker position={point} icon={proposalIcon} draggable keyboard zIndexOffset={1500}
+      pane={PHOTO_PLACEMENT_PANE} pathOptions={{ color: '#a34c00', weight: 1, dashArray: '4 4', opacity: 0.8 }} />}
+    <Marker pane={PHOTO_PLACEMENT_PANE} position={point} icon={proposalIcon} draggable keyboard zIndexOffset={1500}
       title="Foreslått bildeposisjon. Dra eller bruk piltastene for å justere." alt="Foreslått bildeposisjon"
       eventHandlers={{ dragend: (event) => onPropose(positionFrom(event.target.getLatLng())), keydown: (event) => {
         const original = event.originalEvent;

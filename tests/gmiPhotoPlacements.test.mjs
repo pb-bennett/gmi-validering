@@ -5,6 +5,7 @@ import { buildPhotoMapFeatures } from '../src/lib/photos/photoMapFeatures.mjs';
 import { gmiFile, gmiText, realGrammarFamilies, sevenGuid, sharedFilename, sharedGuids } from './helpers/gmiPhotoFixtures.mjs';
 import { gmiPointPosition, parseGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
 import { projectCoordinateToWgs84 } from '../src/lib/map/coordinateProjection.js';
+import { photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '../src/lib/photos/photoPositioning.mjs';
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const point = (longitude = 10) => ({ crs: 'EPSG:4326', longitude, latitude: 60 });
@@ -42,7 +43,7 @@ function apply(context, ticket, kind = 'gmi') {
   return plan;
 }
 
-for (const count of [1, 2, 3, 7, 20]) test(`${count} distinct point references produce ${count} occurrences, shared asset and distinct marker IDs only after explicit apply`, async () => {
+for (const count of [1, 2, 3, 7, 20, 30]) test(`${count} distinct point references produce ${count} occurrences, shared asset and distinct marker IDs only after explicit apply`, async () => {
   const context = await setup(), { session, layer, files, created } = context;
   const ticket = await save(context, gmiFile(objects(count)));
   const photos = session.getLayerPhotos(layer.id);
@@ -55,7 +56,8 @@ for (const count of [1, 2, 3, 7, 20]) test(`${count} distinct point references p
   const plan = session.reviewSourceWorkflowPositions(ticket);
   assert(plan.rows.every((row) => row.options.filter((option) => option.kind === 'gmi').length === 1));
   assert(plan.rows.every((row) => row.options.some((option) => option.kind === 'exif')));
-  assert(plan.rows.every((row) => row.defaultChoice === '', 'GMI and EXIF require an explicit choice'));
+  assert(plan.rows.every((row) => row.defaultChoice === row.options.find((option) => option.kind === 'gmi').id));
+  assert.equal(selectedPhotoSourcePositions(plan, photoSourcePositionChoices(plan)).length, count);
   assert.equal(session.getLayer(layer.id).placedCount, 0);
   apply(context, ticket);
   const features = buildPhotoMapFeatures([session.getLayer(layer.id)], session.getLayerPhotos);
@@ -66,6 +68,63 @@ for (const count of [1, 2, 3, 7, 20]) test(`${count} distinct point references p
   assert.equal(session.getLayer(layer.id).placedCount, count);
   session.clear();
   assert.deepEqual(context.revoked, created);
+});
+
+for (const kinds of [['gmi'], ['gmi', 'exif'], ['gmi', 'gml'], ['gmi', 'gml', 'exif']])
+  test(`${kinds.join(' + ')}: unplaced defaults to GMI, alternatives and only usable source actions remain available`, async () => {
+    const context = await setup(kinds.includes('exif') ? {} : { extractGps: async () => ({ state: 'no-gps' }) });
+    const ticket = await save(context, gmiFile(objects(1))), { session } = context;
+    if (kinds.includes('gml')) await save(context, new File(['positions'], 'positions.gml'), 'gml', ticket);
+    const plan = session.reviewSourceWorkflowPositions(ticket), row = plan.rows[0];
+    assert.equal(row.defaultChoice, row.options.find((option) => option.kind === 'gmi').id);
+    assert.deepEqual(photoSourceProposalKinds(plan.rows), ['gmi', 'gml', 'exif'].filter((kind) => kinds.includes(kind)));
+    assert.deepEqual(row.options.map((option) => option.kind).sort(), [...kinds].sort());
+    assert.equal(session.getPhoto(row.photoId).spatial.current, null, 'source checkpoint and proposal creation write no current position');
+    session.clear();
+  });
+
+for (const kind of ['manual', 'exif', 'gml', 'gmi']) test(`accepted ${kind} current stays identical and defaults to keep after GMI confirmation`, async () => {
+  const context = await setup(), { session, layer, ids } = context;
+  const ticket = session.beginSourceWorkflow(layer.id);
+  if (kind === 'manual') session.applyManualPlacement(session.beginManualPlacement(layer.id, ids[0]), point(12));
+  else {
+    if (kind === 'gmi') await save(context, gmiFile(objects(1)), 'gmi', ticket);
+    if (kind === 'gml') await save(context, new File(['positions'], 'positions.gml'), 'gml', ticket);
+    apply(context, ticket, kind);
+  }
+  const current = session.getPhoto(ids[0]).spatial.current;
+  if (kind === 'gmi') {
+    session.recheckLayerSource(layer.id, session.getLayer(layer.id).spatialSources[0].id);
+    assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  } else await save(context, gmiFile(objects(1)), 'gmi', ticket);
+  assert.strictEqual(session.getPhoto(ids[0]).spatial.current, current);
+  assert.equal(session.reviewSourceWorkflowPositions(ticket).rows[0].defaultChoice, '');
+  session.clear();
+});
+
+test('EXIF arrival, GML attachment and recheck preserve reviewed GMI and deliberate alternative/empty choices', async () => {
+  let resolveGps;
+  const context = await setup({ extractGps: () => new Promise((resolve) => { resolveGps = resolve; }) });
+  const { session, layer } = context, ticket = await save(context);
+  let plan = session.reviewSourceWorkflowPositions(ticket), choices = photoSourcePositionChoices(plan);
+  resolveGps({ state: 'viable', candidate: { status: 'viable', position: point() } });
+  await tick(); await tick();
+  let next = session.reviewSourceWorkflowPositions(ticket);
+  assert(next.rows.every((row) => row.options.some((option) => option.kind === 'exif')));
+  assert.deepEqual(photoSourcePositionChoices(next, plan, choices), choices);
+  plan = next;
+  await save(context, new File(['positions'], 'positions.gml'), 'gml', ticket);
+  next = session.reviewSourceWorkflowPositions(ticket);
+  assert.deepEqual(photoSourcePositionChoices(next, plan, choices), choices);
+  plan = next;
+  choices[plan.rows[0].photoId] = plan.rows[0].options.find((option) => option.kind === 'exif').id;
+  choices[plan.rows[1].photoId] = '';
+  session.recheckLayerSource(layer.id, session.getLayer(layer.id).spatialSources[0].id);
+  assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  next = session.reviewSourceWorkflowPositions(ticket);
+  assert.deepEqual(photoSourcePositionChoices(next, plan, choices), choices);
+  assert(session.getLayerPhotos(layer.id).every((photo) => photo.spatial.current === null));
+  session.clear();
 });
 
 for (const epsg of [25832, 25833, 4326]) test(`GMI EPSG:${epsg} point uses raw source coordinates and agrees with map transformation`, async () => {

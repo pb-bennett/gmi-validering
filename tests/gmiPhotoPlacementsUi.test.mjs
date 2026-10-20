@@ -6,7 +6,7 @@ import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
-import { sourceWizard, clickSourceControl as click, setPhotoFiles, openPhotoSources, closePhotoSources, stagePhotoSource, savePhotoSource, applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
+import { sourceWizard, clickSourceControl as click, setPhotoFiles, openPhotoSources, closePhotoSources, stagePhotoSource, savePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 const inspector = 'document.querySelector(".photo-spatial-inspector")';
@@ -53,11 +53,16 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Gjentas')`));
       await closePhotoSources(browser);
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 3);
+      await openPhotoSources(browser);
+      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '3 valgt');
       await stagePhotoSource(browser, sourceFile, 'gmi');
       await savePhotoSource(browser, 'gmi');
       assert.equal(await browser.evaluate(markers), 0);
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 4);
-      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      await browser.waitFor(`${sourceWizard}.querySelector('section[aria-label="Kontroller posisjoner"]')`);
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '4 valgt');
+      assert(!await browser.evaluate(`${sourceWizard}.innerText.includes('Foreslå GML for viste')`));
       const rows = await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id]')).map(row=>({id:row.dataset.photoId,filename:row.querySelector('strong').innerText,options:Array.from(row.querySelector('select').options).map(option=>option.text)}))`);
       const repeated = rows.filter((row) => row.filename === 'a.png');
       assert.equal(repeated.length, 2);
@@ -65,14 +70,41 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       assert(!rows.find((row) => row.filename === 'line.png').options.includes('GMI – objektposisjon'));
       assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Flere plasseringer')`));
       assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Kum A') && ${sourceWizard}.innerText.includes('Kum B')`));
+      assert(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id]')).filter(row=>row.querySelector('select').selectedOptions[0].text==='GMI – objektposisjon').length===3`));
+      await click(browser, 'Oppdater kontrollen');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '4 valgt');
       for (const [width, height] of [[1366, 768], [1024, 620]]) {
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
         assert(await browser.evaluate(`(() => {const content=${sourceWizard}.querySelector('.photo-positioning-content');return content.scrollWidth<=content.clientWidth+1;})()`));
       }
-      await applyPhotoSourcePositions(browser, 'gmi');
+      // The line-only photo has EXIF as its sole option; leave it unplaced here.
+      await browser.evaluate(`(() => {const row=Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id]')).find(row=>row.querySelector('strong').innerText==='line.png');const select=row.querySelector('select');select.value='';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await click(browser, 'Neste');
+      assert.equal(await browser.evaluate(markers), 0, 'summary still writes no accepted positions');
+      await click(browser, 'Bruk valgte posisjoner for 3 plasseringer');
+      await browser.waitFor(`!${sourceWizard}`);
       assert.equal(await browser.evaluate(markers), 3);
+      await click(browser, 'Tilbake til appen', 'document');
+      await click(browser, 'Legg til fil', 'document');
+      await browser.waitFor('document.querySelector("input[type=file]")');
+      await browser.evaluate('window.confirm = () => true');
+      await setPhotoFiles(browser, 'input[type=file]', [sourceFile]);
+      await browser.waitFor('document.body.innerText.includes("points-and-lines")');
+      await click(browser, 'Bildemodul', 'document');
+      await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+      assert(await browser.evaluate(`(() => {
+        const pane=document.querySelector('.leaflet-photo-markers-pane'), survey=document.querySelector('.leaflet-marker-pane');
+        return pane.querySelectorAll('.photo-camera-marker').length===3 && survey.querySelectorAll('.leaflet-marker-icon').length>=3
+          && Number(getComputedStyle(pane).zIndex)>Number(getComputedStyle(survey).zIndex)
+          && Number(getComputedStyle(pane).zIndex)<Number(getComputedStyle(document.querySelector('.leaflet-tooltip-pane')).zIndex);
+      })()`), 'photo icons above loaded GMI markers, below tooltip/popups');
       assert(await browser.evaluate('document.querySelector(".photo-workspace-collection header").innerText.includes("3 bilder · 4 plasseringer · 3 plassert · 1 uplassert")'));
       const [a, b] = repeated.map((row) => row.id);
+      for (const row of repeated) {
+        const label = row.id === a ? 'Kum A' : 'Kum B';
+        await browser.evaluate(`Array.from(document.querySelectorAll('.photo-camera-marker')).find(marker=>marker.title.includes(${JSON.stringify(label)})).click()`);
+        await browser.waitFor(`document.querySelector('.photo-workspace-active')?.dataset.photoId===${JSON.stringify(row.id)}`);
+      }
       await select(a); await openProvenance();
       assert(await browser.evaluate(`${inspector}.innerText.includes(${JSON.stringify(guids[0])})`));
       assert(await browser.evaluate(`${inspector}.querySelector('.photo-occurrence-context').innerText.includes('Kum A')`));
@@ -95,6 +127,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
       await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
       await browser.waitFor('document.querySelector(".photo-proposed-marker")');
+      assert(await browser.evaluate(`Number(getComputedStyle(document.querySelector('.leaflet-photo-placement-pane')).zIndex)>Number(getComputedStyle(document.querySelector('.leaflet-photo-markers-pane')).zIndex)`));
       await click(browser, 'Bruk plassering', inspector);
       assert(await browser.evaluate(`${inspector}.innerText.includes('Gjeldende posisjon (Manuell)')`));
       await click(browser, 'Juster retning', inspector);
@@ -105,6 +138,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       assert.equal(await browser.evaluate('document.querySelector(".photo-direction-accepted").innerText'), 'Ikke angitt');
       await select(b);
       assert.equal(await browser.evaluate('document.querySelector(".photo-direction-accepted").innerText'), '75°');
+      assert(await browser.evaluate(`Boolean(document.querySelector('.leaflet-photo-markers-pane .photo-camera-marker-selected .photo-direction-indicator[data-degrees="75"]'))`));
       await openPhotoSources(browser);
       await click(browser, 'Kontroller tilgjengelige posisjoner');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('li[data-photo-id="${b}"] select').value`), '');

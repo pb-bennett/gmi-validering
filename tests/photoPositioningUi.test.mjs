@@ -66,7 +66,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert(await browser.evaluate(`${sourceWizard}===window.__unifiedDialog`));
       assert.equal(await browser.evaluate(markerCount), 1, 'GML save retains evidence only');
       await click(browser, 'Kontroller tilgjengelige posisjoner');
-      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '0 valgt');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '3 valgt');
       assert(await browser.evaluate(`${sourceWizard}.innerText.includes('GMI: koblet til 2 objekter')`));
       assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Ulike posisjoner fra kildene')`));
       for (const [width, height] of [[1680, 900], [1366, 768], [1280, 720], [1024, 768], [1024, 620]]) {
@@ -82,6 +82,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
         }
       }
       await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
+      await click(browser, 'Behold alle gjeldende');
       for (const [name, kind] of [['a.png', 'EXIF'], ['b.png', 'GML']]) await browser.evaluate(`(() => {
         const select=Array.from(${sourceWizard}.querySelectorAll('select')).find(item=>item.getAttribute('aria-label')===${JSON.stringify(`Velg posisjon for ${name}`)});
         select.value=Array.from(select.options).find(option=>option.text.startsWith(${JSON.stringify(kind)})).value;

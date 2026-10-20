@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- Reuses session-owned thumbnail URLs only. */
 import { useEffect, useRef, useState } from 'react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
-import { photoPositionDistance, PHOTO_POSITION_TOLERANCE_METRES, photoSourceEvidenceSignature, selectedPhotoSourcePositions } from '@/lib/photos/photoPositioning.mjs';
+import { photoPositionDistance, PHOTO_POSITION_TOLERANCE_METRES, photoSourceEvidenceSignature, photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '@/lib/photos/photoPositioning.mjs';
 import { photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoGmlSummary from './PhotoGmlSummary';
 import PhotoGmiSummary from './PhotoGmiSummary';
@@ -27,6 +27,7 @@ const readErrors = {
 
 export default function PhotoPositioningWizard({ layer, photos, review, initialSourceId, focusedPhotoId, onClose }) {
   const dialogRef = useRef(null), inputRef = useRef(null), ticketRef = useRef(null);
+  const editedIds = useRef(new Set());
   const [step, setStep] = useState(initialSourceId ? 2 : 1);
   const [kind, setKind] = useState('gml');
   const [plan, setPlan] = useState(null), [choices, setChoices] = useState({});
@@ -66,7 +67,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
     const file = event.target.files?.[0]; event.target.value = '';
     const ticket = ticketRef.current;
     if (!file || review || !photoSession.sourceWorkflowIsLive(ticket)) return;
-    setError(''); setStep(2); setPlan(null); setRemoveSourceId(null);
+    setError(''); setStep(2); setRemoveSourceId(null);
     await photoSession.stageLayerSource(layer.id, file, kind);
     if (ticketRef.current !== ticket || !photoSession.sourceWorkflowIsLive(ticket)) return;
     const result = photoSession.getSnapshot().sourceReviews[layer.id];
@@ -75,7 +76,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const recheck = (sourceId) => {
     if (review || !photoSession.sourceWorkflowIsLive(ticketRef.current)) return;
     photoSession.recheckLayerSource(layer.id, sourceId);
-    setStep(2); setPlan(null); setError(''); setRemoveSourceId(null);
+    setStep(2); setError(''); setRemoveSourceId(null);
   };
   const discard = () => {
     photoSession.cancelLayerSourceReview(layer.id);
@@ -84,14 +85,13 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const keepSource = () => {
     const result = photoSession.saveSourceWorkflowSource(ticketRef.current, review);
     if (!result.ok) { setError('Bildene eller kilden er endret. Kontroller kilden på nytt før du bekrefter.'); return; }
-    setNotice(savedMessage); setPlan(null); setError('');
+    setNotice(savedMessage); setError('');
+    if (review.source.kind === 'gmi') positions(review.source.id);
   };
-  const positions = (refresh = false) => {
+  const positions = (newGmiSourceId = null) => {
     const next = photoSession.reviewSourceWorkflowPositions(ticketRef.current);
     if (!next) { setError('Behold eller forkast den usparte kilden før du kontrollerer posisjoner.'); return; }
-    setChoices(Object.fromEntries(next.rows.map((row) => [row.photoId, refresh
-      ? row.options.some((option) => option.id === choices[row.photoId]) ? choices[row.photoId] : ''
-      : focusedPhotoId && row.photoId !== focusedPhotoId ? '' : row.defaultChoice])));
+    setChoices(photoSourcePositionChoices(next, plan, choices, focusedPhotoId, { newGmiSourceId, editedIds: editedIds.current }));
     setPlan(next); setStep(3); setError(''); setRemoveSourceId(null);
   };
   const apply = () => {
@@ -126,7 +126,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
               <button type="button" className={control} onClick={() => setRemoveSourceId(null)}>Avbryt fjerning</button>
               <button type="button" className={control} onClick={() => {
                 if (photoSession.sourceWorkflowIsLive(ticketRef.current) && photoSession.removeGmiSource(layer.id, source.id, { confirmed: true })) {
-                  setNotice('GMI-kilden og koblingene er fjernet. Posisjoner er ikke endret.'); setPlan(null);
+                  setNotice('GMI-kilden og koblingene er fjernet. Posisjoner er ikke endret.');
                 }
                 setRemoveSourceId(null);
               }}>Fjern GMI-kilde</button></div>}
@@ -161,9 +161,10 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
         {newEvidence && <div role="status"><p>Nye posisjoner eller GPS-status er tilgjengelige. Oppdater kontrollen for å se dem; valgene utvides ikke automatisk.</p>
         </div>}
         <div className="photo-positioning-selection"><strong>{selected.length} valgt</strong>
-          <button type="button" className={control} onClick={() => positions(true)}>Oppdater kontrollen</button>
-          <button type="button" className={control} onClick={() => setChoices({})}>Behold alle gjeldende</button>
-          {['gmi', 'gml', 'exif'].map((sourceKind) => <button key={sourceKind} type="button" className={control} onClick={() => setChoices(Object.fromEntries(plan.rows.map((row) => {
+          <button type="button" className={control} onClick={() => positions()}>Oppdater kontrollen</button>
+          <button type="button" className={control} onClick={() => { positionRows.forEach((row) => editedIds.current.add(row.photoId)); setChoices({}); }}>Behold alle gjeldende</button>
+          {photoSourceProposalKinds(positionRows).map((sourceKind) => <button key={sourceKind} type="button" className={control} onClick={() => setChoices(Object.fromEntries(positionRows.map((row) => {
+            editedIds.current.add(row.photoId);
             const options = row.options.filter((option) => option.kind === sourceKind);
             return [row.photoId, options.length === 1 ? options[0].id : ''];
           })))}>Foreslå {sourceKind.toUpperCase()} for viste</button>)}
@@ -185,7 +186,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
                 {row.gmiUnavailable && <small>GMI-posisjon utilgjengelig: {row.gmiUnavailable === 'missing-crs' ? 'Kilden mangler et kjent koordinatsystem.' : row.gmiUnavailable === 'unsupported-crs' ? 'Koordinatsystemet støttes ikke.' : 'Punktgeometrien kan ikke brukes.'}</small>}
               </div>
               <label className="photo-position-choice">Posisjon
-                <select aria-label={`Velg posisjon for ${row.filename}`} value={choices[row.photoId] || ''} onChange={(event) => setChoices({ ...choices, [row.photoId]: event.target.value })}>
+                <select aria-label={`Velg posisjon for ${row.filename}`} value={choices[row.photoId] || ''} onChange={(event) => { editedIds.current.add(row.photoId); setChoices({ ...choices, [row.photoId]: event.target.value }); }}>
                   <option value="">{row.current ? 'Behold gjeldende' : 'La bildet være uplassert'}</option>
                   {row.options.map((candidate) => <option key={candidate.id} value={candidate.id}>{optionLabel(candidate)}</option>)}
                 </select>
