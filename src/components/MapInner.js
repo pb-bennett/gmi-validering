@@ -27,6 +27,7 @@ import usePhotoSession from './photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { buildPhotoMapFeatures } from '@/lib/photos/photoMapFeatures.mjs';
 import PhotoMarkersLayer from './photos/PhotoMarkersLayer';
+import GeminiReferenceLayer from './gemini-wfs/GeminiReferenceLayer';
 import PhotoManualPlacementLayer from './photos/PhotoManualPlacementLayer';
 import PhotoMapController from './photos/PhotoMapController';
 import { useShallow } from 'zustand/react/shallow';
@@ -2697,6 +2698,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
         resetKey={`${geoJsonDataKey}-${styleVersionKey}`}
       />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
+      <GeminiReferenceLayer />
       <PhotoMarkersLayer features={photoFeatures} onOpenPhoto={onOpenPhoto} photoWorkspaceSelection={photoWorkspaceSelection} onSelectPhoto={onSelectPhoto} placementActive={Boolean(photoPlacement)} directionEdit={photoDirectionEdit} />
       <PhotoManualPlacementLayer transaction={photoPlacement} onPropose={onPhotoPropose} />
       <LayersControl

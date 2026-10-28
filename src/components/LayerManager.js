@@ -5,6 +5,7 @@ import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import LayerPanel from './LayerPanel';
 import PhotoLayerCard from './photos/PhotoLayerCard';
+import GeminiReferenceCard from './gemini-wfs/GeminiReferenceCard';
 import usePhotoSession from './photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { getWorkspaceLayerEntries } from '@/lib/layerPresentation.mjs';
@@ -126,6 +127,8 @@ export default function LayerManager({ onAddFile, onOpenPhotoLayer }) {
             codeLookups={codeLookups}
           />
         ))}
+
+        <GeminiReferenceCard />
 
         {customWmsConfig?.url && (
           <div className="py-1">
