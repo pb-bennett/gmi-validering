@@ -6,6 +6,7 @@ import { analyzeZValues } from './analysis/zValidation';
 import { createContextualObjectInspection, createExactObjectInspection } from './objectTableInspection';
 import { moveLayerInOrder } from './map/layerOrder.mjs';
 import { photoSession } from './photos/photoSession.mjs';
+import { bindGeminiSurveyStore, geminiSession } from './gemini-wfs/geminiSession.mjs';
 import {
   DEFAULT_HIGHLIGHT_OPACITY,
   DEFAULT_HIGHLIGHT_SPREAD,
@@ -2962,6 +2963,7 @@ const useStore = create(
         // GLOBAL ACTIONS — cross-slice operations
         // ============================================
         resetAll: () => {
+          geminiSession.reset();
           photoSession.clear();
           set(
             (state) => {
@@ -3292,6 +3294,7 @@ const useStore = create(
 );
 
 storeApi = useStore;
+bindGeminiSurveyStore(useStore);
 if (hydrationCompletedDuringInitialization) {
   useStore.setState({ hydrated: true }, false, 'persist/hydrated');
 }
