@@ -17,6 +17,13 @@ export function field(name, value = '', { prefix = 'gemini', attributes = '' } =
   return `<${prefix}:${name} ${attributes}>${escape(value)}</${prefix}:${name}>`;
 }
 
+// Synthetic reproduction of the sole GML 3.2 featureMembers array observed in
+// M7. The member objects/values below remain invented, never a service extract.
+export function featureArrayCollection(members = [], options = {}) {
+  const gml = options.gml || 'gml';
+  return collection([], { ...options, before: `<${gml}:featureMembers>${members.join('')}</${gml}:featureMembers>` });
+}
+
 export function feature({ type = 'VA_MPNT', id = `${type}.001`, prefix = 'gemini', gml = 'gml',
   xyz = '581932.579311 6566001.891835 0', dimension = '3', crs = 'EPSG:25832',
   geometry, fields, attributes = '', positionAttributes = '', before = '' } = {}) {

@@ -152,6 +152,29 @@ test('header, query and method denials return safe errors without fetch', async 
   assert.equal(h.calls.length, 0);
 });
 
+test('Next dev loopback alias passes header policy while hostile origins stop before any upstream call', async () => {
+  const previous = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'development';
+    const h = harness();
+    const local = (headers = {}, raw) => makeRequest({ url: 'http://localhost:3000/api/gemini-wfs',
+      headers: { Origin: 'http://127.0.0.1:3000', Host: '127.0.0.1:3000', ...headers }, ...(raw === undefined ? {} : { raw }) });
+    await assertError(await h.handle(local({}, '{}')), 'invalid_request', 400);
+    assert.equal(h.calls.length, 0);
+    assert.equal((await h.handle(local())).status, 200);
+    assert.equal(h.calls.length, 1);
+    for (const headers of [
+      { Origin: 'https://attacker.example.test', 'X-Forwarded-Host': 'attacker.example.test' },
+      { 'Sec-Fetch-Site': 'cross-site' }, { Host: 'localhost:3000' },
+    ]) await assertError(await h.handle(local(headers)), 'origin_rejected', 403);
+    process.env.NODE_ENV = 'production';
+    await assertError(await h.handle(local()), 'origin_rejected', 403);
+    assert.equal(h.calls.length, 1);
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous;
+  }
+});
+
 test('request body is bounded by both declared and actual streamed bytes', async () => {
   const h = harness();
   await assertError(await h.handle(makeRequest({ headers: {
@@ -224,7 +247,7 @@ test('missing/unsupported MIME, HTML login pages and unsafe charset are rejected
       if (mime === null) response.headers.delete('content-type'); else response.headers.set('content-type', mime);
       return response;
     });
-    await assertError(await h.handle(makeRequest()), 'unsupported_upstream_mime', 502);
+    await assertError(await h.handle(makeRequest()), mime === 'text/html' ? 'invalid_upstream_response' : 'unsupported_upstream_mime', 502);
   }
 });
 

@@ -13,3 +13,11 @@ other GML versions and multipart geometries are deliberately unsupported.
 These fixtures are structural/behavioral tests, not evidence that every
 possible live response has the same metadata placement. No schema, external
 URL, live feature or credentials are loaded by the tests.
+
+M7 observed this Gemini service wrapping direct confirmed features in one sole
+GML 3.2 `featureMembers` array under the WFS 2 `FeatureCollection`, rather than
+individual `wfs:member` elements. `featureArrayCollection` reproduces only that
+wrapper using the same invented members. It contains no copied service values.
+The adapter deliberately rejects mixed/repeated wrappers, wrapper attributes,
+links, structural text and foreign/nested feature structures. All existing
+feature, ID, scalar, geometry, CRS and resource checks apply to array children.

@@ -1,9 +1,13 @@
 import { Buffer } from 'node:buffer';
+import { parseGeminiGml } from './parseGeminiGml.mjs';
+import { parseNodeXml } from './nodeXmlParser.mjs';
+import { decodeGeminiXml } from './geminiXmlEncoding.mjs';
 import {
   WFS_MAX_REQUEST_BYTES,
   WFS_MAX_RESPONSE_BYTES,
   WFS_TIMEOUT_MS,
   WfsProxyError,
+  canValidateGeminiHtml,
   getWfsContentType,
   getWfsErrorResult,
   getWfsSafeHeaders,
@@ -98,6 +102,7 @@ export function createWfsProxyHandler({
 } = {}) {
   // This closure contains dependencies only; all auth/response state is local.
   return async function handleWfsRequest(request) {
+    const started = performance.now();
     const controller = new AbortController();
     const onClientAbort = () => controller.abort(new WfsProxyError('request_aborted'));
     const timeout = setTimeout(() => controller.abort(new WfsProxyError('timeout')), timeoutMs);
@@ -136,10 +141,37 @@ export function createWfsProxyHandler({
       });
       response = await abortable(pendingResponse, controller.signal);
       validateWfsUpstreamStatus(response.status);
-      const contentType = getWfsContentType(response.headers.get('content-type'));
-      if (!contentType) throw new WfsProxyError('unsupported_upstream_mime');
+      const declaredType = response.headers.get('content-type');
+      let contentType = getWfsContentType(declaredType);
+      const compatibility = !contentType && canValidateGeminiHtml({
+        connectionId: body.connectionId, url, status: response.status, contentType: declaredType,
+      });
+      if (!contentType && !compatibility) throw new WfsProxyError('unsupported_upstream_mime');
+      if (compatibility && (response.redirected || (response.url && response.url !== url))) {
+        throw new WfsProxyError('upstream_redirect');
+      }
       const xml = await readBoundedBytes(response, WFS_MAX_RESPONSE_BYTES, controller.signal, true);
-      return new Response(xml, { status: 200, headers: getWfsSafeHeaders(contentType) });
+      let validationDuration;
+      if (compatibility) {
+        const validationStarted = performance.now();
+        contentType = 'application/gml+xml; charset=utf-8';
+        try {
+          // Reuse browser decoding and the complete M2 contract. The model is
+          // temporary; only original bounded bytes cross the transport boundary.
+          parseGeminiGml(decodeGeminiXml(xml, contentType), { parseXml: parseNodeXml });
+        } catch { throw new WfsProxyError('invalid_upstream_response'); }
+        validationDuration = performance.now() - validationStarted;
+        // Synchronous DOM work cannot service the timer while running. Check
+        // elapsed time explicitly, then yield so pending client aborts can run.
+        if (performance.now() - started >= timeoutMs) throw new WfsProxyError('timeout');
+        await new Promise((resolve) => setImmediate(resolve));
+        controller.signal.throwIfAborted();
+        if (performance.now() - started >= timeoutMs) throw new WfsProxyError('timeout');
+      }
+      return new Response(xml, { status: 200, headers: {
+        ...getWfsSafeHeaders(contentType),
+        ...(compatibility ? { 'Server-Timing': `gemini-validation;dur=${validationDuration.toFixed(1)}` } : {}),
+      } });
     } catch (error) {
       return errorResponse(controller.signal.aborted ? controller.signal.reason : error);
     } finally {

@@ -22,6 +22,15 @@ test('authentication and permission are distinct Norwegian messages', () => {
   assert.match(getGeminiUiError({ code: 'permission_denied' }), /ikke tilgang/);
   assert.match(getGeminiUiError({ code: 'credentials_unavailable' }), /på nytt/);
 });
+
+test('local origin rejection is a fixed app-security message, distinct from provider permission and authentication', () => {
+  const detail = randomUUID();
+  const message = getGeminiUiError({ code: 'origin_rejected', message: detail, body: detail });
+  assert.match(message, /appens sikkerhetskontroll/);
+  assert(!message.includes(detail));
+  assert.notEqual(message, getGeminiUiError({ code: 'permission_denied' }));
+  assert.notEqual(message, getGeminiUiError({ code: 'authentication_failed' }));
+});
 test('safe source/extent messages and bounded numeric dimension details', () => {
   assert.match(getGeminiUiError({ code: 'no_source_geometry' }), /ingen geometri/);
   assert.match(getGeminiUiError({ code: 'unsupported_crs' }), /Koordinatsystemet/);

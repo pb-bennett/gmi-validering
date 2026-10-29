@@ -143,7 +143,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
     });
     await t.test('safe form errors cover permission, timeout, provider, size, encoding, parser and display failures', async () => {
       await browser.evaluate('geminiWorkflow.sources("single")'); await open();
-      for (const [mode, text] of [['permission', 'ikke tilgang'], ['timeout', 'for lang tid'], ['error', 'mislyktes'], ['size', 'for stort'],
+      for (const [mode, text] of [['origin', 'appens sikkerhetskontroll'], ['permission', 'ikke tilgang'], ['timeout', 'for lang tid'], ['error', 'mislyktes'], ['size', 'for stort'],
         ['encoding', 'tegnkoding'], ['parser', 'kunne ikke leses'], ['display', 'kartet'], ['auth', 'Kontroller brukernavn og passord']]) {
         await browser.evaluate(`geminiWorkflow.geminiSession.disconnect(); geminiWorkflow.audit.mode=${JSON.stringify(mode)}`);
         await fill(); await submit(); await idle(); await waitError(text);

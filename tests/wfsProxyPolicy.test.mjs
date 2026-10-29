@@ -145,6 +145,35 @@ test('queries and spoofed forwarding headers cannot widen origin or target', () 
   validateWfsRequestHeaders(request({ url: 'http://localhost:3000/api/gemini-wfs', headers: { Origin: 'http://localhost:3000' } }));
 });
 
+test('observed Next dev localhost URL accepts 127.0.0.1 only with matching Host/port and same-origin signal', () => {
+  const previous = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'development';
+    const local = (headers = {}, url = 'http://localhost:3000/api/gemini-wfs') => request({ url, headers: {
+      Origin: 'http://127.0.0.1:3000', Host: '127.0.0.1:3000', ...headers,
+    } });
+    validateWfsRequestHeaders(local());
+    for (const headers of [
+      { Host: 'localhost:3000' }, { Host: '' }, { Origin: 'http://127.0.0.1:3001' },
+      { Origin: 'https://127.0.0.1:3000' }, { Origin: 'http://attacker.example.test:3000', Host: 'attacker.example.test:3000' },
+      { Origin: 'http://127.0.0.1.attacker.example.test:3000', Host: '127.0.0.1.attacker.example.test:3000' },
+      { 'Sec-Fetch-Site': 'same-site' }, { 'Sec-Fetch-Site': 'cross-site' },
+      { Origin: 'http://127.0.0.1:3000/path' }, { Origin: 'http://user@127.0.0.1:3000' },
+      { Host: 'localhost:3000', 'X-Forwarded-Host': '127.0.0.1:3000', 'X-Forwarded-Proto': 'http' },
+    ]) assert.throws(() => validateWfsRequestHeaders(local(headers)), { code: 'origin_rejected' });
+    const noFetchSite = local(); noFetchSite.headers.delete('sec-fetch-site');
+    assert.throws(() => validateWfsRequestHeaders(noFetchSite), { code: 'origin_rejected' });
+    assert.throws(() => validateWfsRequestHeaders(local({}, 'http://internal.example.test:3000/api/gemini-wfs')), { code: 'origin_rejected' });
+    assert.throws(() => validateWfsRequestHeaders(local({}, 'http://localhost:3001/api/gemini-wfs')), { code: 'origin_rejected' });
+    process.env.NODE_ENV = 'production';
+    assert.throws(() => validateWfsRequestHeaders(local()), { code: 'origin_rejected' });
+    validateWfsRequestHeaders(local({}, 'http://127.0.0.1:3000/api/gemini-wfs'));
+    validateWfsRequestHeaders(request());
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous;
+  }
+});
+
 test('MIME allowlist accepts only the narrow XML/GML types and safe declared charsets', () => {
   for (const type of ['application/xml', 'text/xml', 'application/gml+xml']) {
     assert.equal(getWfsContentType(type), type);

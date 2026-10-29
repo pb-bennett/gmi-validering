@@ -1,7 +1,8 @@
-import { parseGeminiGml, getGeminiField, getGeminiNumericValue, GEMINI_GML_LIMITS } from '../../src/lib/gemini-wfs/parseGeminiGml.mjs';
+import { parseGeminiGml as defaultParseGeminiGml, getGeminiField, getGeminiNumericValue, GEMINI_GML_LIMITS } from '../../src/lib/gemini-wfs/parseGeminiGml.mjs';
 import { buildGeminiMapFeatures } from '../../src/lib/gemini-wfs/geminiMapFeatures.mjs';
-import { collection, feature, field, populatedXml, partialZLine, namespace } from '../fixtures/gemini-wfs/syntheticProfile.mjs';
+import { collection, feature, field, featureArrayCollection, populatedXml, partialZLine, independentPoint, namespace } from '../fixtures/gemini-wfs/syntheticProfile.mjs';
 
+export function createGeminiGmlChecks(parseGeminiGml = defaultParseGeminiGml) {
 const assert = (condition, message = 'Gemini parser assertion failed') => { if (!condition) throw new Error(message); };
 const equal = (actual, expected) => assert(JSON.stringify(actual) === JSON.stringify(expected), 'Structured source/display values differ');
 function error(xml, code) {
@@ -14,7 +15,64 @@ const record = (options) => parseGeminiGml(collection([feature(options)])).recor
 const line = (options = {}) => feature({ type: 'VA_LINE', xyz: '579300 6559200 0 579600 6559500 0', ...options });
 const box = (crs = 'EPSG:25832') => `<gml:boundedBy><gml:Envelope srsName="${crs}" srsDimension="2"><gml:lowerCorner>579300 6559200</gml:lowerCorner><gml:upperCorner>579900 6559800</gml:upperCorner></gml:Envelope></gml:boundedBy>`;
 
-export const checks = [
+return [
+  ['valid XML declarations match the native DOM contract while actual processing instructions stay unsafe', () => {
+    for (const declaration of ['<?xml version="1.0"?>', '<?xml version="1.0" encoding="UTF-8"?>',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>']) {
+      equal(parseGeminiGml(declaration + populatedXml), parseGeminiGml(populatedXml));
+    }
+    error('<?xml version="1.0"?><?xml-stylesheet href="https://blocked.invalid/style"?>' + populatedXml, 'unsafe-xml');
+    for (const invalid of ['<?xml invalid?>', '<?xml version="1.0"?><?xml version="1.0"?>',
+      '<!--before--><?xml version="1.0"?>']) error(invalid + populatedXml, 'invalid-xml');
+  }],
+  ['observed sole GML featureMembers array preserves the original profile source/display contract', () => {
+    const xml = featureArrayCollection([partialZLine, independentPoint]);
+    const parsed = parseGeminiGml(xml), original = parseGeminiGml(populatedXml);
+    equal(parsed, original);
+    equal(buildGeminiMapFeatures(parsed), buildGeminiMapFeatures(original));
+    assert(Object.isFrozen(parsed.records) && parsed.records.every(Object.isFrozen));
+    assert(xml === featureArrayCollection([partialZLine, independentPoint]));
+  }],
+  ['featureMembers array supports empty data and namespace prefix changes', () => {
+    assert(parseGeminiGml(featureArrayCollection()).counts.records === 0);
+    const changed = featureArrayCollection([feature({ prefix: 'va', gml: 'geo' })], { prefix: 'va', gml: 'geo', wfs: 'f' });
+    equal(parseGeminiGml(changed), parseGeminiGml(featureArrayCollection([feature()])));
+  }],
+  ['featureMembers rejects mixed, repeated, nested and wrong-namespace wrappers', () => {
+    const array = featureArrayCollection([feature()]);
+    for (const xml of [
+      array.replace('</wfs:FeatureCollection>', '<wfs:member/></wfs:FeatureCollection>'),
+      array.replace('</wfs:FeatureCollection>', '<gml:featureMembers/></wfs:FeatureCollection>'),
+      array.replace('</wfs:FeatureCollection>', box() + '</wfs:FeatureCollection>'),
+      array.replaceAll('gml:featureMembers', 'gemini:featureMembers'),
+      array.replaceAll('gml:featureMembers', 'gml:featureMember'),
+      featureArrayCollection([collection([feature()])]),
+      featureArrayCollection([`<wfs:member>${feature()}</wfs:member>`]),
+    ]) error(xml, 'unsupported-profile');
+  }],
+  ['featureMembers rejects wrapper attributes, links, nil and structural text', () => {
+    for (const attributes of ['xlink:href="https://blocked.invalid/features"', 'xsi:nil="true"', 'xsi:nil="false"',
+      'id="unobserved"', 'xml:base="https://blocked.invalid/"', 'srsDimension="3"']) {
+      error(featureArrayCollection([feature()]).replace('<gml:featureMembers>', `<gml:featureMembers ${attributes}>`), 'unsupported-profile');
+    }
+    for (const text of ['unexpected', '<![CDATA[unexpected]]>']) {
+      error(featureArrayCollection([feature()]).replace('<gml:featureMembers>', '<gml:featureMembers>' + text), 'unsupported-profile');
+    }
+  }],
+  ['featureMembers retains strict feature namespace/type, ID, geometry and exception checks', () => {
+    error(featureArrayCollection([feature()], { ns: 'urn:unexpected' }), 'unsupported-profile');
+    error(featureArrayCollection([feature({ type: 'OTHER' })]), 'unsupported-profile');
+    error(featureArrayCollection([feature(), feature()]), 'duplicate-feature-id');
+    error(featureArrayCollection([feature({ id: '' })]), 'invalid-feature-id');
+    error(featureArrayCollection([feature({ geometry: '<gml:Polygon/>' })]), 'unsupported-geometry');
+    error(featureArrayCollection(['<o:ExceptionReport xmlns:o="http://www.opengis.net/ows/1.1"/>']), 'service-exception');
+    error(featureArrayCollection([feature({ fields: '<gemini:UNKNOWN><gemini:nested/></gemini:UNKNOWN>' })]), 'invalid-attributes');
+  }],
+  ['featureMembers obeys the same exact feature cap without truncating', () => {
+    const values = Array.from({ length: GEMINI_GML_LIMITS.features }, (_, index) => feature({ id: `synthetic.${index}` }));
+    assert(parseGeminiGml(featureArrayCollection(values)).counts.records === GEMINI_GML_LIMITS.features);
+    error(featureArrayCollection([...values, feature({ id: 'synthetic.excess' })]), 'parser-limit');
+  }],
   ['empty collection ignores numberReturned and accepts numberMatched unknown', () => {
     const result = parseGeminiGml(collection());
     equal(result.counts, { members: 0, records: 0, lines: 0, points: 0, coordinates: 0 });
@@ -266,3 +324,6 @@ export const checks = [
     error(collection([feature({ fields })]), 'parser-limit');
   }],
 ];
+}
+
+export const checks = createGeminiGmlChecks();

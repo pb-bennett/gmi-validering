@@ -1,4 +1,4 @@
-// Browser-only, deliberately narrow WFS 2 / GML 3.2 value adapter.
+// Shared, deliberately narrow WFS 2 / GML 3.2 value adapter.
 export const GEMINI_SOURCE_CRS = 'EPSG:25832';
 export const GEMINI_CONNECTION_ID = 'faerder-va-basis';
 // Confirmed by the user from the VA_LINE / VA_MPNT service XSD.
@@ -18,7 +18,7 @@ const NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 const MESSAGES = Object.freeze({
   'invalid-xml': 'Malformed WFS XML',
   'unsafe-xml': 'XML declarations or processing instructions are not supported',
-  'xml-parser-unavailable': 'A browser XML parser is required',
+  'xml-parser-unavailable': 'An XML parser is required',
   'unsupported-profile': 'Unsupported WFS feature collection or member structure',
   'service-exception': 'The WFS service returned an exception',
   'unsupported-geometry': 'Unsupported Gemini geometry or coordinate encoding',
@@ -45,7 +45,8 @@ export class GeminiGmlError extends Error {
 }
 const fail = (code) => { throw new GeminiGmlError(code); };
 const is = (node, namespace, name) => node?.namespaceURI === namespace && node.localName === name;
-const children = (node) => Array.from(node.children || []);
+// DOM Level 2 traversal works in native browser DOMs and the Node XML adapter.
+const children = (node) => Array.from(node.childNodes).filter((child) => child.nodeType === 1);
 const freeze = Object.freeze;
 const absentField = freeze({ state: 'absent', rawText: null, xmlAttributes: freeze([]) });
 
@@ -124,7 +125,7 @@ function envelope(parent) {
   const box = contents[0];
   const corners = elementChildren(box);
   if (corners.length !== 2 || !is(corners[0], GML, 'lowerCorner') || !is(corners[1], GML, 'upperCorner') ||
-    corners.some((node) => node.children.length)) fail('unsupported-profile');
+    corners.some((node) => children(node).length)) fail('unsupported-profile');
   const values = corners.map((node) => ordinates(node.textContent));
   const dimension = resolveDimension(declarations([box, ...corners], 'srsDimension')) || values[0].length;
   if (![2, 3].includes(dimension) || values.some((value) => value.length !== dimension)) fail('invalid-dimension');
@@ -136,7 +137,7 @@ function envelope(parent) {
 }
 
 function scalarField(node) {
-  if (node.children.length) fail('invalid-attributes');
+  if (children(node).length) fail('invalid-attributes');
   const nil = node.getAttributeNS(XSI, 'nil');
   if (nil !== null && !['true', '1', 'false', '0'].includes(nil.trim())) fail('invalid-attributes');
   const isNil = nil !== null && ['true', '1'].includes(nil.trim());
@@ -154,12 +155,12 @@ function sourceGeometry(container, root, envelopes, expectedType, budget) {
   const geometry = contents[0];
   const positions = elementChildren(geometry);
   const encoding = expectedType === 'Point' ? 'pos' : 'posList';
-  if (positions.length !== 1 || !is(positions[0], GML, encoding) || positions[0].children.length) {
+  if (positions.length !== 1 || !is(positions[0], GML, encoding) || children(positions[0]).length) {
     fail('unsupported-geometry');
   }
   const position = positions[0];
   const ancestors = [];
-  for (let node = position; node; node = node.parentElement) {
+  for (let node = position; node?.nodeType === 1; node = node.parentNode) {
     ancestors.unshift(node);
     if (node === root) break;
   }
@@ -265,20 +266,35 @@ export function parseGeminiGml(xml, { parseXml } = {}) {
   const collectionEnvelope = envelope(root);
   resolveCrs([...declarations([root], 'srsName'), ...(collectionEnvelope?.crsDeclarations || [])], false);
   resolveDimension(declarations([root], 'srsDimension'));
-  if (rootChildren.some((node) => !(is(node, WFS, 'member') || is(node, GML, 'boundedBy')))) fail('unsupported-profile');
-  const members = rootChildren.filter((node) => is(node, WFS, 'member'));
-  if (members.length > GEMINI_GML_LIMITS.features) fail('parser-limit');
+  const arrays = rootChildren.filter((node) => is(node, GML, 'featureMembers'));
+  let featureElements;
+  if (arrays.length) {
+    // Observed Gemini serialization: one sole GML 3.2 array of direct features.
+    // Do not admit mixed/repeated wrappers, links, nil or unobserved attributes.
+    if (rootChildren.length !== 1 || Array.from(arrays[0].attributes).some((attribute) => attribute.namespaceURI !== XMLNS)) {
+      fail('unsupported-profile');
+    }
+    featureElements = elementChildren(arrays[0]);
+    if (featureElements.length > GEMINI_GML_LIMITS.features) fail('parser-limit');
+  } else {
+    if (rootChildren.some((node) => !(is(node, WFS, 'member') || is(node, GML, 'boundedBy')))) fail('unsupported-profile');
+    const members = rootChildren.filter((node) => is(node, WFS, 'member'));
+    if (members.length > GEMINI_GML_LIMITS.features) fail('parser-limit');
+    featureElements = members.map((member) => {
+      const contents = elementChildren(member);
+      if (contents.length !== 1 || member.hasAttributeNS(XLINK, 'href')) fail('unsupported-profile');
+      return contents[0];
+    });
+  }
   const ids = new Set(), budget = { coordinates: 0 };
-  const records = members.map((member) => {
-    const contents = elementChildren(member);
-    if (contents.length !== 1 || member.hasAttributeNS(XLINK, 'href')) fail('unsupported-profile');
-    if (OWS.has(contents[0].namespaceURI) && contents[0].localName === 'ExceptionReport') fail('service-exception');
-    return featureRecord(contents[0], root, featureNamespace, collectionEnvelope, ids, budget);
+  const records = featureElements.map((feature) => {
+    if (OWS.has(feature.namespaceURI) && feature.localName === 'ExceptionReport') fail('service-exception');
+    return featureRecord(feature, root, featureNamespace, collectionEnvelope, ids, budget);
   });
   return freeze({
     connectionId: GEMINI_CONNECTION_ID, featureNamespace, sourceCrs: GEMINI_SOURCE_CRS,
     records: freeze(records), envelope: collectionEnvelope, xmlAttributes: xmlAttributes(root),
-    counts: freeze({ members: members.length, records: records.length,
+    counts: freeze({ members: featureElements.length, records: records.length,
       lines: records.filter((record) => record.geometry.type === 'LineString').length,
       points: records.filter((record) => record.geometry.type === 'Point').length,
       coordinates: budget.coordinates }),

@@ -33,7 +33,7 @@ document.addEventListener('submit', (event) => {
 globalThis.addEventListener('error', (event) => audit.errors.push(event.message));
 L.Map.addInitHook(function () { audit.map = this; });
 function response(side, mode) {
-  const errors = { auth: [401, 'authentication_failed'], permission: [403, 'permission_denied'], timeout: [504, 'timeout'],
+  const errors = { auth: [401, 'authentication_failed'], permission: [403, 'permission_denied'], origin: [403, 'origin_rejected'], timeout: [504, 'timeout'],
     error: [502, 'upstream_failure'], size: [502, 'response_too_large'] };
   if (errors[mode]) {
     const [status, code] = errors[mode]; return Response.json({ code, message: 'UNTRUSTED_PROVIDER_DETAIL' }, { status });

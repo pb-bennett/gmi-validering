@@ -86,14 +86,23 @@ export function validateWfsRequestHeaders(request) {
   } catch {
     throw new WfsProxyError('origin_rejected');
   }
+  const fetchSite = request.headers.get('sec-fetch-site');
+  // Next dev reconstructs request.url with localhost even when bound/accessed
+  // through 127.0.0.1. Accept only this observed HTTP loopback alias, with the
+  // browser's Host/port and same-origin signal agreeing. Forwarded headers do
+  // not authorize anything; production retains exact request-URL matching.
+  const developmentLoopback = process.env.NODE_ENV === 'development' &&
+    url.protocol === 'http:' && url.hostname === 'localhost' &&
+    origin.protocol === 'http:' && origin.hostname === '127.0.0.1' &&
+    origin.port === url.port && request.headers.get('host') === origin.host &&
+    fetchSite?.toLowerCase().trim() === 'same-origin';
   if (
     !['http:', 'https:'].includes(origin.protocol) ||
     origin.username || origin.password || origin.pathname !== '/' ||
-    origin.search || origin.hash || origin.origin !== url.origin
+    origin.search || origin.hash || (origin.origin !== url.origin && !developmentLoopback)
   ) {
     throw new WfsProxyError('origin_rejected');
   }
-  const fetchSite = request.headers.get('sec-fetch-site');
   if (fetchSite !== null && fetchSite.toLowerCase().trim() !== 'same-origin') {
     throw new WfsProxyError('origin_rejected');
   }
@@ -204,6 +213,18 @@ export function getWfsContentType(value) {
   const match = parameters[0].match(/^charset\s*=\s*(?:"([a-z0-9-]+)"|([a-z0-9-]+))$/);
   const charset = match?.[1] || match?.[2];
   return XML_CHARSETS.has(charset) ? `${type}; charset=${charset}` : null;
+}
+
+// Exception for this observed response only; this does not approve its body.
+// No charset/other parameters are admitted: the observation is plain text/html.
+export function canValidateGeminiHtml({ connectionId, url, status, contentType }) {
+  if (connectionId !== 'faerder-va-basis' || status !== 200 ||
+    typeof contentType !== 'string' || contentType.trim().toLowerCase() !== 'text/html') return false;
+  try {
+    const target = new URL(url);
+    return !target.username && !target.password && !target.hash &&
+      `${target.origin}${target.pathname}` === CONNECTIONS.get('faerder-va-basis');
+  } catch { return false; }
 }
 
 export function validateWfsUpstreamStatus(status) {
