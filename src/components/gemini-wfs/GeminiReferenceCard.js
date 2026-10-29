@@ -1,20 +1,23 @@
 'use client';
 
 import { useMemo } from 'react';
-import { CornersOutIcon, EyeIcon, EyeSlashIcon } from '@phosphor-icons/react';
+import { ArrowClockwiseIcon, CornersOutIcon, EyeIcon, EyeSlashIcon, PlugsIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import useGeminiSession from './useGeminiSession';
 import useGeminiPresentation from './useGeminiPresentation';
 import { geminiPresentation, getGeminiReferenceBounds, getGeminiReferenceNotice } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
+import { geminiSession } from '@/lib/gemini-wfs/geminiSession.mjs';
+import { getGeminiUiError } from '@/lib/gemini-wfs/geminiWorkflowUi.mjs';
 
-export default function GeminiReferenceCard() {
+export default function GeminiReferenceCard({ onOpenConnection }) {
   const session = useGeminiSession();
   const { result } = session;
   const visibility = useGeminiPresentation();
   const sourceName = useStore((state) => state.layers[result?.provenance.sourceLayerId]?.file?.name);
   const bounds = useMemo(() => getGeminiReferenceBounds(result), [result]);
   if (!result) return null;
-  const notice = getGeminiReferenceNotice(session);
+  const notice = session.error ? `${getGeminiUiError(session.error)} Forrige resultat vises.` : getGeminiReferenceNotice(session);
+  const connected = session.connectionStatus === 'connected';
   return (
     <section className="border-b-2 border-gmi-border py-1 text-gmi-text" aria-label="Eksisterende anlegg · Gemini VA">
       <div className="flex items-start gap-2 p-2">
@@ -45,6 +48,20 @@ export default function GeminiReferenceCard() {
             </button>
           </div>;
         })}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 px-2 pb-2 text-[10px]">
+        <button type="button" disabled={session.status === 'loading' || (!connected && !onOpenConnection)}
+          onClick={() => connected ? void geminiSession.refresh(result.provenance.sourceLayerId) : onOpenConnection(result.provenance.sourceLayerId)}
+          aria-label={connected ? 'Oppdater Gemini-referanse' : 'Oppgi Gemini-tilgang'}
+          className="gmi-compact-button gmi-focus-ring flex items-center gap-1 px-2 py-1 disabled:opacity-50">
+          <ArrowClockwiseIcon size={13} weight="regular" aria-hidden="true" />{connected ? 'Oppdater' : 'Oppgi tilgang'}
+        </button>
+        {onOpenConnection && <button type="button" onClick={() => onOpenConnection(result.provenance.sourceLayerId)}
+          aria-label="Endre Gemini-tilgang eller innmålingsfil" className="gmi-compact-button gmi-focus-ring px-2 py-1">Tilgang</button>}
+        <button type="button" onClick={() => geminiSession.disconnect()} aria-label="Koble fra Gemini VA" title="Koble fra og fjern Gemini-referansen"
+          className="gmi-compact-button gmi-focus-ring ml-auto flex items-center gap-1 px-2 py-1">
+          <PlugsIcon size={13} weight="regular" aria-hidden="true" />Koble fra
+        </button>
       </div>
       {notice && <p role="status" className="px-2 pb-2 text-[10px] text-gmi-text-muted">{notice}</p>}
     </section>

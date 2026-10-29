@@ -20,7 +20,7 @@ import { CaretDownIcon, PlusIcon } from '@phosphor-icons/react';
  * - Add file button
  * - Expandable LayerPanel for each layer
  */
-export default function LayerManager({ onAddFile, onOpenPhotoLayer }) {
+export default function LayerManager({ onAddFile, onOpenPhotoLayer, onOpenGemini }) {
   const { photoLayers } = usePhotoSession();
   const layers = useStore((state) => state.layers);
   const layerOrder = useStore(
@@ -128,7 +128,7 @@ export default function LayerManager({ onAddFile, onOpenPhotoLayer }) {
           />
         ))}
 
-        <GeminiReferenceCard />
+        <GeminiReferenceCard onOpenConnection={onOpenGemini} />
 
         {customWmsConfig?.url && (
           <div className="py-1">

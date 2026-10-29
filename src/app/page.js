@@ -25,6 +25,8 @@ import MapPaneToolbar from '@/components/MapPaneToolbar';
 import { MapPanePresentationProvider } from '@/components/MapPanePresentationProvider';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import WmsLayerModal from '@/components/WmsLayerModal';
+import GeminiConnectionButton from '@/components/gemini-wfs/GeminiConnectionButton';
+import GeminiConnectionModal from '@/components/gemini-wfs/GeminiConnectionModal';
 import ShareQrModal from '@/components/ShareQrModal';
 import StatsModal from '@/components/StatsModal';
 import AppInfoModal from '@/components/AppInfoModal';
@@ -117,6 +119,7 @@ export default function Home() {
 
   // State for WMS layer modal
   const [showWmsModal, setShowWmsModal] = useState(false);
+  const [geminiDialog, setGeminiDialog] = useState(null);
   const customWmsConfig = useStore((state) => state.customWmsConfig);
 
   // State for stats modal
@@ -566,6 +569,7 @@ export default function Home() {
               <Sidebar
                 onReset={handleReset}
                 onOpenPhotoLayer={openPhotoLayer}
+                onOpenGemini={(sourceLayerId) => setGeminiDialog({ sourceLayerId })}
                 hasPhotoLayers={hasPhotoLayers}
                 onAddFile={() => setShowAddLayerModal(true)}
                 onOpenContact={(event) => openAppInfo('contact', event.currentTarget)}
@@ -626,6 +630,7 @@ export default function Home() {
                     style={{ zIndex: 1000 }}
                   >
                     <div className="flex items-center gap-1">
+                      <GeminiConnectionButton onOpen={() => setGeminiDialog({})} />
                       {/* WMS Settings Button */}
                       <button
                         onClick={() => setShowWmsModal(true)}
@@ -729,6 +734,7 @@ export default function Home() {
       )}
 
       {/* WMS Layer Modal */}
+      {geminiDialog && <GeminiConnectionModal initialSourceId={geminiDialog.sourceLayerId} onClose={() => setGeminiDialog(null)} />}
       <WmsLayerModal
         isOpen={showWmsModal}
         onClose={() => setShowWmsModal(false)}

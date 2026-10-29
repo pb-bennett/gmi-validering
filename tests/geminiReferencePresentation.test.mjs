@@ -108,16 +108,21 @@ test('MapInner/LayerManager mount independent components without modifying surve
     read('../src/components/gemini-wfs/GeminiReferenceLayer.js'), read('../src/components/gemini-wfs/GeminiReferenceCard.js'),
     read('../src/lib/gemini-wfs/geminiReferencePresentation.mjs'),
   ]);
-  assert.match(map, /<GeminiReferenceLayer \/>/); assert.match(manager, /<GeminiReferenceCard \/>/);
+  assert.match(map, /<GeminiReferenceLayer \/>/); assert.match(manager, /<GeminiReferenceCard onOpenConnection=\{onOpenGemini\}/);
   assert.match(map, /name="layer-highlight-casing" style=\{\{ zIndex: 390/);
   assert.match(map, /<AuthenticatedWmsLayer/); assert.match(manager, /setMapOverlayVisibility\(\s*'geminiWms'/);
   assert.match(layer, /<Fragment key=\{resultVersion\}>/);
   assert.match(layer, /data=\{result.lines.display\}/); assert.match(layer, /data=\{result.points.display\}/);
   assert.match(layer, /pointerEvents: 'none'/); assert.match(layer, /interactive=\{false\}/);
   assert.doesNotMatch(layer, /onEachFeature|bindPopup|Popup|eventHandlers|draggable|normalizeFeature|proj4|parseGeminiGml/);
-  for (const source of [layer, card, presentation]) {
+  for (const source of [layer, presentation]) {
     assert.doesNotMatch(source, /setCredentials|\.fetch\(|\.refresh\(|addLayer|localStorage|sessionStorage|setState|normalizeFeature/);
   }
+  // M5 deliberately adds explicit card refresh/disconnect; the rendering and
+  // visibility domains still have no network/credential responsibilities.
+  assert.match(card, /geminiSession\.refresh\(result\.provenance\.sourceLayerId\)/);
+  assert.match(card, /geminiSession\.disconnect\(\)/);
+  assert.doesNotMatch(card, /setCredentials|\.fetch\(|addLayer|localStorage|sessionStorage|setState|normalizeFeature/);
   assert.match(card, /if \(!result\) return null/); assert.match(card, /aria-pressed=\{visible\}/);
   assert.match(card, /disabled=\{!bounds\}/); assert.match(card, /gmi-focus-ring/);
   assert.doesNotMatch(card, /LayerTypeBadge|LayerPanel|password|username/);
