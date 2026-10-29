@@ -34,6 +34,7 @@ export async function serveGeminiWorkflowApp() {
     const cssFile = path.join(root, 'src/app/globals.css');
     const styles = await require('postcss')([require('@tailwindcss/postcss')()]).process(await readFile(cssFile, 'utf8'), { from: cssFile });
     const leafletCss = await readFile(path.join(root, 'node_modules/leaflet/dist/leaflet.css'), 'utf8');
+    const popupCss = await readFile(path.join(root, 'src/components/gemini-wfs/geminiPopup.css'), 'utf8');
     server = createServer(async (request, response) => {
       try {
         const pathname = new URL(request.url, 'http://localhost').pathname;
@@ -42,7 +43,7 @@ export async function serveGeminiWorkflowApp() {
           response.setHeader('Content-Type', 'text/html; charset=utf-8');
           response.end('<!doctype html><html lang="nb"><head><meta charset="utf-8"><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script defer src="/app.js"></script></body></html>');
         } else if (pathname === '/app.css') {
-          response.setHeader('Content-Type', 'text/css; charset=utf-8'); response.end(leafletCss + '\n' + styles.css);
+          response.setHeader('Content-Type', 'text/css; charset=utf-8'); response.end(leafletCss + '\n' + styles.css + '\n' + popupCss);
         } else if (/^\/[a-z0-9_.-]+\.js$/i.test(pathname)) {
           response.setHeader('Content-Type', 'text/javascript; charset=utf-8'); response.end(await readFile(path.join(output, pathname.slice(1))));
         } else { response.statusCode = 404; response.end(); }

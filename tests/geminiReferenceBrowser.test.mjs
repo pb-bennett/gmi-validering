@@ -84,7 +84,7 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       assert.equal(await count(`${card} [aria-label="Punkter: 1"]`), 1);
       assert.equal(await browser.evaluate('geminiAcceptance.audit.requests'), 2);
     });
-    await t.test('pane below survey vectors/casing/markers/photos, CSS tokens and noninteractive paths', async () => {
+    await t.test('pane below survey vectors/casing/markers/photos, CSS tokens and inspection-only paths', async () => {
       const panes = await browser.evaluate(`(() => {
         const map = geminiAcceptance.audit.map;
         return Object.fromEntries(['gemini-reference','layer-highlight-casing','overlayPane','markerPane','photo-markers'].map(name => [name, Number(getComputedStyle(map.getPane(name)).zIndex)]));
@@ -92,11 +92,11 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       assert.equal(panes['gemini-reference'], 380); assert.equal(panes['layer-highlight-casing'], 390);
       assert.equal(panes.overlayPane, 400); assert.equal(panes.markerPane, 600); assert.equal(panes['photo-markers'], 620);
       assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(line)}).closest('.leaflet-pane').style.zIndex`), '380');
-      assert.equal(await count(`${line}.leaflet-interactive, ${point}.leaflet-interactive`), 0);
+      assert.equal(await count(`${line}.leaflet-interactive, ${point}.leaflet-interactive`), 2);
       assert.equal(await browser.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(line)})).stroke`), 'rgb(98, 116, 142)');
       assert(await browser.evaluate(`Boolean(document.querySelector('.leaflet-overlay-pane path.leaflet-interactive'))`));
       assert(await browser.evaluate(`(() => { let safe = true; geminiAcceptance.audit.map.eachLayer(layer => {
-        if (layer.feature?.properties.kind === 'gemini-reference') safe &&= !layer.options.interactive && !layer.getPopup?.() && !layer.getTooltip?.() && !layer.dragging;
+        if (layer.feature?.properties.kind === 'gemini-reference') safe &&= layer.options.interactive && !layer.options.bubblingMouseEvents && !layer.getPopup?.() && !layer.getTooltip?.() && !layer.dragging;
       }); return safe; })()`));
     });
     await t.test('independent accessible visibility controls preserve survey/photo/WMS and never fetch', async () => {

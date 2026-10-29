@@ -1,0 +1,37 @@
+.gmi-gemini-popup .leaflet-popup-content {
+  width: min(24rem, calc(100cqw - 4rem)) !important;
+  max-height: min(36rem, calc(100cqh - 9rem));
+  overflow: auto;
+  margin: 14px 18px;
+}
+
+.gmi-gemini-popup-content {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--gmi-text);
+}
+
+.gmi-gemini-popup-content h2 {
+  margin: 0;
+  padding-right: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gmi-navy);
+}
+
+.gmi-gemini-popup-content p {
+  margin: 3px 0 10px;
+  color: var(--gmi-text-muted);
+}
+
+.gmi-gemini-popup-content dl {
+  display: grid;
+  grid-template-columns: minmax(5rem, auto) minmax(0, 1fr);
+  gap: 4px 14px;
+  margin: 0;
+  border-top: 1px solid var(--gmi-border);
+  padding-top: 8px;
+}
+
+.gmi-gemini-popup-content dt { color: var(--gmi-text-muted); }
+.gmi-gemini-popup-content dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

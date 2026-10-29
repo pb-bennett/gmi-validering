@@ -2698,7 +2698,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
         resetKey={`${geoJsonDataKey}-${styleVersionKey}`}
       />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
-      <GeminiReferenceLayer />
+      <GeminiReferenceLayer inspectionEnabled={!measureMode && !photoPlacement && !photoDirectionEdit} />
       <PhotoMarkersLayer features={photoFeatures} onOpenPhoto={onOpenPhoto} photoWorkspaceSelection={photoWorkspaceSelection} onSelectPhoto={onSelectPhoto} placementActive={Boolean(photoPlacement)} directionEdit={photoDirectionEdit} />
       <PhotoManualPlacementLayer transaction={photoPlacement} onPropose={onPhotoPropose} />
       <LayersControl

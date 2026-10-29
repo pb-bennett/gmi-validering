@@ -1,21 +1,22 @@
 'use client';
 
 import { Fragment, useEffect, useMemo } from 'react';
-import { GeoJSON, Pane, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { Pane, useMap } from 'react-leaflet';
+import GeminiInspectionSide from './GeminiInspectionSide';
+import { createGeminiSourceLookup } from '@/lib/gemini-wfs/geminiPopupContent.mjs';
 import useGeminiSession from './useGeminiSession';
 import useGeminiPresentation from './useGeminiPresentation';
 import { geminiPresentation, getGeminiReferenceBounds, GEMINI_REFERENCE_PANE,
   GEMINI_REFERENCE_Z_INDEX, GEMINI_LINE_STYLE, GEMINI_POINT_STYLE } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
 
 const paneStyle = { zIndex: GEMINI_REFERENCE_Z_INDEX, pointerEvents: 'none' };
-const pointToLayer = (_feature, latlng) => L.circleMarker(latlng, { ...GEMINI_POINT_STYLE, pane: GEMINI_REFERENCE_PANE });
 
-export default function GeminiReferenceLayer() {
+export default function GeminiReferenceLayer({ inspectionEnabled = true }) {
   const { result } = useGeminiSession();
   const { linesVisible, pointsVisible, resultVersion, zoomRequest } = useGeminiPresentation();
   const map = useMap();
   const bounds = useMemo(() => getGeminiReferenceBounds(result), [result]);
+  const lookup = useMemo(() => createGeminiSourceLookup(result), [result]);
   useEffect(() => {
     if (!zoomRequest || zoomRequest.resultVersion !== resultVersion) return;
     const fit = () => {
@@ -37,10 +38,10 @@ export default function GeminiReferenceLayer() {
   return (
     <Pane name={GEMINI_REFERENCE_PANE} style={paneStyle}>
       {result && <Fragment key={resultVersion}>
-        {linesVisible && <GeoJSON data={result.lines.display} pane={GEMINI_REFERENCE_PANE}
-          style={GEMINI_LINE_STYLE} interactive={false} />}
-        {pointsVisible && <GeoJSON data={result.points.display} pane={GEMINI_REFERENCE_PANE}
-          pointToLayer={pointToLayer} interactive={false} />}
+        {linesVisible && <GeminiInspectionSide data={result.lines.display} style={GEMINI_LINE_STYLE}
+          lookup={lookup} enabled={inspectionEnabled} />}
+        {pointsVisible && <GeminiInspectionSide data={result.points.display} style={GEMINI_POINT_STYLE}
+          lookup={lookup} enabled={inspectionEnabled} />}
       </Fragment>}
     </Pane>
   );

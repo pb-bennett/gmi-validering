@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import L from 'leaflet';
 import MapInner from '../../src/components/MapInner';
@@ -11,6 +11,7 @@ import { geminiSession } from '../../src/lib/gemini-wfs/geminiSession.mjs';
 import { geminiPresentation } from '../../src/lib/gemini-wfs/geminiReferencePresentation.mjs';
 import { photoSession } from '../../src/lib/photos/photoSession.mjs';
 import { collection, feature, partialZLine, independentPoint } from '../fixtures/gemini-wfs/syntheticProfile.mjs';
+import { popupLine, popupPoint } from '../fixtures/gemini-wfs/popupProfile.mjs';
 
 const audit = { calls: [], mode: 'success', map: null, errors: [], leaked: false };
 const credentials = []; // Synthetic values exist only inside this test closure.
@@ -38,7 +39,7 @@ function response(side, mode) {
     const [status, code] = errors[mode]; return Response.json({ code, message: 'UNTRUSTED_PROVIDER_DETAIL' }, { status });
   }
   if (mode === 'parser') return new Response('<broken', { headers: { 'Content-Type': 'application/xml' } });
-  const text = collection(side === 'lines' ? [partialZLine] : mode === 'display'
+  const text = mode === 'inspection' ? collection([side === 'lines' ? popupLine : popupPoint]) : collection(side === 'lines' ? [partialZLine] : mode === 'display'
     ? [feature({ xyz: '1e100 1e100 0' })] : mode === 'replacement'
       ? [independentPoint, feature({ id: 'VA_MPNT.002', xyz: '581940 6566010 0' })] : [independentPoint]);
   return new Response(text, { headers: { 'Content-Type': mode === 'encoding' ? 'application/xml; charset=iso-8859-1' : 'application/gml+xml; charset=utf-8' } });
@@ -68,9 +69,11 @@ photoSession.applyManualPlacement(photoSession.beginManualPlacement(photoLayer.i
 
 function App() {
   const [dialog, setDialog] = useState(null), [wmsOpen, setWmsOpen] = useState(false);
+  const [mapMode, setMapMode] = useState({});
+  useEffect(() => { audit.setMapMode = setMapMode; }, []);
   return <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', height: '100vh' }}>
     <aside style={{ minHeight: 0 }}><LayerManager onAddFile={() => {}} onOpenPhotoLayer={() => {}} onOpenGemini={(sourceLayerId) => setDialog({ sourceLayerId })} /></aside>
-    <main style={{ minHeight: 0, position: 'relative' }}><MapInner />
+    <main style={{ minHeight: 0, position: 'relative' }}><MapInner {...mapMode} />
       <div style={{ position: 'absolute', bottom: 16, left: 112, zIndex: 1000, display: 'flex', gap: 4 }}>
         <GeminiConnectionButton onOpen={() => setDialog({})} /><button type="button" aria-label="Test WMS setup" onClick={() => setWmsOpen(true)}>WMS</button>
       </div>

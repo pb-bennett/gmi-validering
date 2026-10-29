@@ -108,13 +108,14 @@ test('MapInner/LayerManager mount independent components without modifying surve
     read('../src/components/gemini-wfs/GeminiReferenceLayer.js'), read('../src/components/gemini-wfs/GeminiReferenceCard.js'),
     read('../src/lib/gemini-wfs/geminiReferencePresentation.mjs'),
   ]);
-  assert.match(map, /<GeminiReferenceLayer \/>/); assert.match(manager, /<GeminiReferenceCard onOpenConnection=\{onOpenGemini\}/);
+  assert.match(map, /<GeminiReferenceLayer inspectionEnabled=\{!measureMode && !photoPlacement && !photoDirectionEdit\}/); assert.match(manager, /<GeminiReferenceCard onOpenConnection=\{onOpenGemini\}/);
   assert.match(map, /name="layer-highlight-casing" style=\{\{ zIndex: 390/);
   assert.match(map, /<AuthenticatedWmsLayer/); assert.match(manager, /setMapOverlayVisibility\(\s*'geminiWms'/);
   assert.match(layer, /<Fragment key=\{resultVersion\}>/);
   assert.match(layer, /data=\{result.lines.display\}/); assert.match(layer, /data=\{result.points.display\}/);
-  assert.match(layer, /pointerEvents: 'none'/); assert.match(layer, /interactive=\{false\}/);
-  assert.doesNotMatch(layer, /onEachFeature|bindPopup|Popup|eventHandlers|draggable|normalizeFeature|proj4|parseGeminiGml/);
+  // M6 deliberately enables only dedicated inspection paths; the pane remains transparent.
+  assert.match(layer, /pointerEvents: 'none'/); assert.match(layer, /enabled=\{inspectionEnabled\}/);
+  assert.doesNotMatch(layer, /onEachFeature|bindPopup|eventHandlers|draggable|normalizeFeature|proj4|parseGeminiGml/);
   for (const source of [layer, presentation]) {
     assert.doesNotMatch(source, /setCredentials|\.fetch\(|\.refresh\(|addLayer|localStorage|sessionStorage|setState|normalizeFeature/);
   }
