@@ -6,6 +6,7 @@ import LayerManager from '../../src/components/LayerManager';
 import GeminiConnectionModal from '../../src/components/gemini-wfs/GeminiConnectionModal';
 import GeminiConnectionButton from '../../src/components/gemini-wfs/GeminiConnectionButton';
 import WmsLayerModal from '../../src/components/WmsLayerModal';
+import LayerHighlightPanel from '../../src/components/LayerHighlightPanel';
 import useStore from '../../src/lib/store';
 import { geminiSession } from '../../src/lib/gemini-wfs/geminiSession.mjs';
 import { geminiPresentation } from '../../src/lib/gemini-wfs/geminiReferencePresentation.mjs';
@@ -74,7 +75,7 @@ function App() {
   useEffect(() => { audit.setMapMode = setMapMode; }, []);
   return <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', height: '100vh' }}>
     <aside style={{ minHeight: 0 }}><LayerManager onAddFile={() => {}} onOpenPhotoLayer={() => {}} onOpenGemini={(sourceLayerId) => setDialog({ sourceLayerId })} /></aside>
-    <main style={{ minHeight: 0, position: 'relative' }}><MapInner {...mapMode} />
+    <main style={{ minHeight: 0, position: 'relative' }}><MapInner {...mapMode} /><LayerHighlightPanel />
       <div style={{ position: 'absolute', bottom: 16, left: 112, zIndex: 1000, display: 'flex', gap: 4 }}>
         <GeminiConnectionButton onOpen={() => setDialog({})} /><button type="button" aria-label="Test WMS setup" onClick={() => setWmsOpen(true)}>WMS</button>
       </div>

@@ -85,11 +85,44 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
       assert(await browser.evaluate(`(() => {let point;geminiWorkflow.audit.map.eachLayer(l=>{if(l.feature?.geometry.type==='Point'&&l.feature.properties.kind==='gemini-reference')point=l;}); return point.getLatLng().equals(geminiWorkflow.audit.map._popup.getLatLng());})()`));
       await unchanged(); await close();
     });
+    await t.test('existing Lagmarkering controls change only the external source casing and preserve inspection', async () => {
+      await save();
+      await clickReference('LineString'); await opened();
+      await clickButton('Lagmarkering');
+      await browser.waitFor(`document.querySelector('#layer-highlight-panel input[aria-label="Markeringsfarge for Gemini WFS"]')`);
+      const setControl = async (label, value) => {
+        await browser.evaluate(`(() => {
+          const input = document.querySelector('#layer-highlight-panel input[aria-label=${JSON.stringify(label)}]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(String(value))});
+          input.dispatchEvent(new Event('input', {bubbles:true}));
+          input.dispatchEvent(new Event('change', {bubbles:true}));
+          input.dispatchEvent(new KeyboardEvent('keyup', {key:'ArrowRight',bubbles:true}));
+        })()`);
+      };
+      await setControl('Markeringsfarge for Gemini WFS', '#123456');
+      await setControl('Styrke for Gemini WFS', 80);
+      await setControl('Bredde for Gemini WFS', 8);
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-line-halo').getAttribute('stroke')"), '#123456');
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-line-halo').getAttribute('stroke-opacity')"), '0.8');
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-line-halo').getAttribute('stroke-width')"), '15');
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-reference-line').getAttribute('stroke')"), '#00FFFF');
+      assert.equal(await count(popup), 1);
+      await browser.evaluate(`document.querySelector('#layer-highlight-panel input[aria-label="Lagmarkering for Gemini WFS"]').click()`);
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-line-halo').getAttribute('stroke-opacity')"), '0');
+      assert.equal(await count('.gmi-gemini-reference-point svg [stroke-opacity]'), 0);
+      await clickButton('Nullstill lagmarkering for Gemini WFS');
+      assert.equal(await browser.evaluate('geminiWorkflow.geminiPresentation.getSnapshot().marking.highlightAll'), false);
+      await browser.evaluate(`document.querySelector('#layer-highlight-panel input[aria-label="Lagmarkering for Gemini WFS"]').click()`);
+      await clickButton('Lukk lagmarkering');
+      await close(); await unchanged();
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 600, y: 100 });
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-reference-line').getAttribute('stroke')"), '#0101FF');
+    });
     await t.test('hover and selection stay local; switching objects and closing restore their base styles', async () => {
       await save();
       const target = await browser.evaluate('geminiWorkflow.inspectionTarget("LineString")');
       await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...target });
-      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-reference-line').getAttribute('stroke-width')"), '4');
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-reference-line').getAttribute('stroke-width')"), '7');
       await clickReference('LineString'); await opened();
       // This fixture's point is covered by the line popup. Exercise the
       // Leaflet event here; actual point pointer targeting is covered above.

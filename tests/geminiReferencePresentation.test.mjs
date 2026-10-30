@@ -4,9 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { register } from 'node:module';
 register('./esmJsLoader.mjs', import.meta.url);
 const { createGeminiPresentation, getGeminiReferenceBounds, getGeminiReferenceNotice,
-  GEMINI_REFERENCE_Z_INDEX, GEMINI_LINE_STYLE, GEMINI_POINT_STYLE,
-  getGeminiFeatureStyle, getGeminiHaloStyle } = await import('../src/lib/gemini-wfs/geminiReferencePresentation.mjs');
-const { GEMINI_WFS_HALO, LAYER_HIGHLIGHT_PALETTE, getLineCasingStyle } = await import('../src/lib/map/layerHighlight.mjs');
+  GEMINI_REFERENCE_Z_INDEX } = await import('../src/lib/gemini-wfs/geminiReferencePresentation.mjs');
+const { GEMINI_WFS_HALO, LAYER_HIGHLIGHT_PALETTE } = await import('../src/lib/map/layerHighlight.mjs');
 const { PHOTO_MARKER_Z_INDEX, PHOTO_PLACEMENT_Z_INDEX } = await import('../src/lib/photos/photoMapPanes.mjs');
 
 const result = (lines = [], points = [], owner = {}) => ({
@@ -31,7 +30,7 @@ test('default independent visibility, no result no-op, state contains no source 
   assert.equal(presentation.getSnapshot().linesVisible, false); assert.equal(presentation.getSnapshot().pointsVisible, true);
   presentation.setVisible('points', false); assert.equal(presentation.getSnapshot().pointsVisible, false);
   assert.strictEqual(session.getSnapshot().result, pair); assert.equal(JSON.stringify(pair), before);
-  assert.deepEqual(Object.keys(presentation.getSnapshot()).sort(), ['linesVisible', 'pointsVisible', 'resultVersion', 'zoomRequest']);
+  assert.deepEqual(Object.keys(presentation.getSnapshot()).sort(), ['linesVisible', 'marking', 'pointsVisible', 'resultVersion', 'zoomRequest']);
   presentation.dispose();
 });
 test('ordinary refresh preserves visibility but versions the pair for atomic GeoJSON replacement', () => {
@@ -98,26 +97,25 @@ test('notices are compact fixed text and do not display error codes or provider 
 test('pane and restrained shared-token styles remain below existing survey/photo geometry', () => {
   assert.equal(GEMINI_REFERENCE_Z_INDEX, 380);
   assert(GEMINI_REFERENCE_Z_INDEX < 390 && 390 < 400 && 400 < 600 && 600 < PHOTO_MARKER_Z_INDEX && PHOTO_MARKER_Z_INDEX < PHOTO_PLACEMENT_Z_INDEX);
-  assert.equal(GEMINI_LINE_STYLE.interactive, false); assert.equal(GEMINI_POINT_STYLE.interactive, false);
-  assert.equal(GEMINI_POINT_STYLE.radius, 6);
-  assert(GEMINI_LINE_STYLE.weight === 3 && GEMINI_LINE_STYLE.opacity < 1);
-  assert.match(GEMINI_LINE_STYLE.color, /^var\(--gmi-/);
+  assert(!LAYER_HIGHLIGHT_PALETTE.includes(GEMINI_WFS_HALO.color));
 });
 
-test('Gemini source halo is reserved outside survey defaults and reuses the survey casing helper', () => {
-  assert(!LAYER_HIGHLIGHT_PALETTE.includes(GEMINI_WFS_HALO.color));
-  const halo = getGeminiHaloStyle(false);
-  assert.equal(halo.color, GEMINI_WFS_HALO.color);
-  assert.equal(halo.weight, getLineCasingStyle(GEMINI_LINE_STYLE, GEMINI_WFS_HALO).weight);
-  assert(getGeminiHaloStyle(true).radius > GEMINI_POINT_STYLE.radius);
-  for (const point of [true, false]) {
-    const normal = getGeminiFeatureStyle(point), selected = getGeminiFeatureStyle(point, { selected: true });
-    assert.equal(selected.color, '#00FFFF');
-    assert(selected.weight > normal.weight);
-    assert.equal(getGeminiHaloStyle(point, { selected: true }).color, GEMINI_WFS_HALO.color);
-    if (point) assert(selected.radius > normal.radius);
-  }
+test('external source marking shares normalization and remains isolated across refresh/reset', () => {
+  const { presentation, publish } = setup(); const pair = result(); publish({ result: pair });
+  presentation.setMarking({ highlightStyle: { color: '#ABCDEF', opacity: 5, spread: 99 } });
+  assert.deepEqual(presentation.getSnapshot().marking.highlightStyle, { color: '#ABCDEF', opacity: 0.8, spread: 8 });
+  presentation.setMarking({ highlightAll: false });
+  publish({ result: result() });
+  assert.equal(presentation.getSnapshot().marking.highlightAll, false);
+  assert.equal(presentation.getSnapshot().marking.highlightStyle.color, '#ABCDEF');
+  presentation.resetMarking();
+  assert.equal(presentation.getSnapshot().marking.highlightAll, false);
+  assert.equal(presentation.getSnapshot().marking.highlightStyle.color, GEMINI_WFS_HALO.color);
+  publish({ result: null });
+  assert.equal(presentation.getSnapshot().marking.highlightAll, true);
+  presentation.dispose();
 });
+
 test('MapInner/LayerManager mount independent components without modifying survey/WMS/popup pipelines', async () => {
   const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
   const [map, manager, layer, card, presentation, inspection] = await Promise.all([

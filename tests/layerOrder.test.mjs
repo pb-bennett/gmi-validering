@@ -10,6 +10,7 @@ import {
 
 register('./esmJsLoader.mjs', import.meta.url);
 const { default: useStore } = await import('../src/lib/store.js?layer-order-test');
+const symbols = await readFile(new URL('../src/lib/map/semanticPresentation.mjs', import.meta.url), 'utf8');
 const mapSource = await readFile(new URL('../src/components/MapInner.js', import.meta.url), 'utf8');
 const emptyData = { format: 'GMI', header: {}, points: [], lines: [] };
 const add = (name) => useStore.getState().addLayer({ file: { name }, data: emptyData });
@@ -88,7 +89,7 @@ test('semantic and casing paths share ordered projected features; marker anchor 
   assert.match(mapSource, /data=\{casingData\}[\s\S]*?data=\{geoJsonData\}/);
   assert.match(mapSource, /getLayerMarkerZIndexOffset\(visibleLayerOrder, id, true\)/);
   assert.match(mapSource, /return L\.marker\(latlng, \{ icon, zIndexOffset \}\)/);
-  assert.match(mapSource, /iconAnchor: \[iconSize \/ 2, iconSize \/ 2\]/);
+  assert.match(symbols, /iconAnchor: \[iconSize \/ 2, iconSize \/ 2\]/);
   assert.match(mapSource, /layer\.bindPopup\(/);
   assert.match(mapSource, /cached\.data === source\.data/);
   assert.match(mapSource, /projectedLayerFeaturesRef\.current\.set\(layerId/);

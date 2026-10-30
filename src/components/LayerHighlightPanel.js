@@ -9,19 +9,19 @@ import {
   XIcon,
 } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
+import useGeminiSession from './gemini-wfs/useGeminiSession';
+import useGeminiPresentation from './gemini-wfs/useGeminiPresentation';
+import { geminiMarkingActions } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
 import { getLayerHighlightStyle } from '@/lib/map/layerHighlight.mjs';
 
 function useCommittedRange(value, onCommit) {
-  const [draft, setDraft] = useState(value);
-  const draftRef = useRef(value);
+  const [range, setRange] = useState({ value, draft: value });
+  const draft = range.draft;
   const [dragging, setDragging] = useState(false);
 
-  useEffect(() => {
-    draftRef.current = value;
-    setDraft(value);
-  }, [value]);
-
-  const commit = useCallback(() => onCommit(draftRef.current), [onCommit]);
+  // External source/reset changes replace the local drag draft before commit.
+  if (range.value !== value) setRange({ value, draft: value });
+  const commit = useCallback(() => onCommit(draft), [onCommit, draft]);
 
   useEffect(() => {
     if (!dragging) return undefined;
@@ -41,8 +41,7 @@ function useCommittedRange(value, onCommit) {
     draft,
     onChange: (event) => {
       const next = Number(event.currentTarget.value);
-      draftRef.current = next;
-      setDraft(next);
+      setRange({ value, draft: next });
     },
     onPointerDown: () => setDragging(true),
     onKeyUp: commit,
@@ -50,14 +49,8 @@ function useCommittedRange(value, onCommit) {
   };
 }
 
-function LayerHighlightControls({ layerId, layer, index, layerCount }) {
-  const setEnabled = useStore((state) => state.setLayerHighlightEnabled);
-  const setColor = useStore((state) => state.setLayerHighlightColor);
-  const setOpacity = useStore((state) => state.setLayerHighlightOpacity);
-  const setSpread = useStore((state) => state.setLayerHighlightSpread);
-  const resetStyle = useStore((state) => state.resetLayerHighlightStyle);
-  const moveLayerUp = useStore((state) => state.moveLayerUp);
-  const moveLayerDown = useStore((state) => state.moveLayerDown);
+function LayerHighlightControls({ layerId, layer, index, layerCount, actions }) {
+  const { setEnabled, setColor, setOpacity, setSpread, resetStyle, moveLayerUp, moveLayerDown } = actions;
   const style = getLayerHighlightStyle(layer, layerId);
   const opacity = useCommittedRange(
     Math.round(style.opacity * 100),
@@ -84,6 +77,7 @@ function LayerHighlightControls({ layerId, layer, index, layerCount }) {
           {!layer.visible && <div className="text-xs text-gmi-text-subtle">Skjult i kartet</div>}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          {moveLayerUp && moveLayerDown && <>
           <button
             type="button"
             onClick={() => moveLayerUp(layerId)}
@@ -104,6 +98,7 @@ function LayerHighlightControls({ layerId, layer, index, layerCount }) {
           >
             <CaretDownIcon size={16} weight="regular" aria-hidden="true" />
           </button>
+          </>}
           <button
             type="button"
             onClick={() => resetStyle(layerId)}
@@ -187,6 +182,16 @@ export default function LayerHighlightPanel() {
   const triggerRef = useRef(null);
   const layerOrder = useStore((state) => state.layerOrder);
   const layers = useStore((state) => state.layers);
+  const setEnabled = useStore((state) => state.setLayerHighlightEnabled);
+  const setColor = useStore((state) => state.setLayerHighlightColor);
+  const setOpacity = useStore((state) => state.setLayerHighlightOpacity);
+  const setSpread = useStore((state) => state.setLayerHighlightSpread);
+  const resetStyle = useStore((state) => state.resetLayerHighlightStyle);
+  const moveLayerUp = useStore((state) => state.moveLayerUp);
+  const moveLayerDown = useStore((state) => state.moveLayerDown);
+  const surveyActions = { setEnabled, setColor, setOpacity, setSpread, resetStyle, moveLayerUp, moveLayerDown };
+  const { result } = useGeminiSession();
+  const { marking, linesVisible, pointsVisible } = useGeminiPresentation();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -245,7 +250,7 @@ export default function LayerHighlightPanel() {
             {layerOrder.length > 1 && (
               <p className="text-xs text-gmi-text-muted">Øverste lag tegnes fremst i kartet.</p>
             )}
-            {layerOrder.length === 0 ? (
+            {layerOrder.length === 0 && !result ? (
               <p className="text-sm text-gmi-text-muted">Ingen lag er lastet inn.</p>
             ) : (
               layerOrder.map((layerId, index) => {
@@ -257,10 +262,14 @@ export default function LayerHighlightPanel() {
                     layer={layer}
                     index={index}
                     layerCount={layerOrder.length}
+                    actions={surveyActions}
                   />
                 ) : null;
               })
             )}
+            {result && <LayerHighlightControls layerId={marking.id}
+              layer={{ ...marking, visible: linesVisible || pointsVisible }}
+              actions={geminiMarkingActions} />}
           </div>
         </div>
       )}

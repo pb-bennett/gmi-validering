@@ -74,7 +74,7 @@ test('slider drafts commit on release or keyboard completion, leaving the map fr
   assert.match(panel, /document\.addEventListener\('pointercancel', finish\)/);
   assert.match(panel, /onKeyUp: commit/);
   assert.match(panel, /onBlur: commit/);
-  assert.match(panel, /onChange: \(event\) => \{[\s\S]*?setDraft\(next\)/);
+  assert.match(panel, /onChange: \(event\) => \{[\s\S]*?setRange\(\{ value, draft: next \}\)/);
   assert.match(panel, /onChange=\{opacity\.onChange\}/);
   assert.match(panel, /onChange=\{spread\.onChange\}/);
   assert.doesNotMatch(panel, /closeOnOutsidePointer/);

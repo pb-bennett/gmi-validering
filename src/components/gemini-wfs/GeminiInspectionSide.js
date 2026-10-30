@@ -1,91 +1,99 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { GeoJSON, useMap } from 'react-leaflet';
+import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { createGeminiPopupContent } from '@/lib/gemini-wfs/geminiPopupContent.mjs';
-import { GEMINI_REFERENCE_PANE, getGeminiFeatureStyle, getGeminiHaloStyle } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
+import { getGeminiPresentationInput } from '@/lib/gemini-wfs/geminiPresentationAdapter.mjs';
+import { getSemanticLineStyle, getSemanticPointSymbol } from '@/lib/map/semanticPresentation.mjs';
+import { getLayerHighlightStyle, getLineCasingStyle } from '@/lib/map/layerHighlight.mjs';
+import { getLayerMarkerZIndexOffset } from '@/lib/map/layerOrder.mjs';
+import { GEMINI_REFERENCE_PANE } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
 import './geminiPopup.css';
 
-const interactiveOptions = { interactive: true, bubblingMouseEvents: false };
-const pointToLayer = (_feature, latlng) => L.circleMarker(latlng, {
-  ...getGeminiFeatureStyle(true), ...interactiveOptions, pane: GEMINI_REFERENCE_PANE,
-});
-const haloPointToLayer = (_feature, latlng) => L.circleMarker(latlng, {
-  ...getGeminiHaloStyle(true), ...interactiveOptions, pane: GEMINI_REFERENCE_PANE,
-});
-const haloStyle = (feature) => ({ ...getGeminiHaloStyle(feature.geometry.type === 'Point'), ...interactiveOptions });
+const interactiveOptions = { interactive: true, bubblingMouseEvents: false, pane: GEMINI_REFERENCE_PANE };
 
-export default function GeminiInspectionSide({ data, style, lookup, enabled }) {
-  const group = useRef(null);
-  const casing = useRef(null);
+export default function GeminiInspectionSide({ data, lookup, enabled, marking }) {
   const map = useMap();
+  const markingRef = useRef(marking);
+  const repaint = useRef(null);
   useEffect(() => {
-    const primary = group.current.getLayers();
-    const halos = casing.current.getLayers();
-    const layers = [...halos, ...primary];
-    const pairs = new Map(primary.map((layer, index) => [layer.feature, [layer, halos[index]]]));
-    let popup;
-    let selected = null, hovered = null;
-    const paint = (feature) => {
-      if (!feature) return;
-      const point = feature.geometry.type === 'Point';
-      const state = { selected: selected === feature, hovered: hovered === feature };
-      const [layer, halo] = pairs.get(feature);
-      layer.setStyle({ ...getGeminiFeatureStyle(point, state), ...interactiveOptions });
-      halo.setStyle({ ...getGeminiHaloStyle(point, state), ...interactiveOptions });
-      if (point) {
-        layer.setRadius(getGeminiFeatureStyle(true, state).radius);
-        halo.setRadius(getGeminiHaloStyle(true, state).radius);
+    markingRef.current = marking;
+    repaint.current?.();
+  }, [marking]);
+  useEffect(() => {
+    let popup, selected = null, hovered = null;
+    const input = (feature) => getGeminiPresentationInput(lookup(feature.properties.sourceKey, feature.properties.typeName));
+    const highlight = () => markingRef.current.highlightAll
+      ? getLayerHighlightStyle(markingRef.current, markingRef.current.id) : null;
+    const casing = L.geoJSON(data, {
+      ...interactiveOptions, filter: (feature) => feature.geometry.type === 'LineString',
+      style: (feature) => ({ ...getLineCasingStyle(getSemanticLineStyle(input(feature)), highlight()),
+        opacity: highlight() ? highlight().opacity : 0, className: 'gmi-gemini-line-halo' }),
+    }).addTo(map);
+    const primary = L.geoJSON(data, {
+      ...interactiveOptions,
+      style: (feature) => ({ ...getSemanticLineStyle(input(feature)), className: 'gmi-gemini-reference-line' }),
+      pointToLayer: (feature, latlng) => L.marker(latlng, {
+        ...interactiveOptions, className: 'gmi-gemini-reference-point',
+        icon: L.divIcon({ ...getSemanticPointSymbol(input(feature), false, highlight()),
+          className: 'custom-div-icon gmi-gemini-reference-point' }),
+      }),
+    }).addTo(map);
+    const halos = new Map(casing.getLayers().map((layer) => [layer.feature, layer]));
+    const layers = primary.getLayers();
+    const byFeature = new Map(layers.map((layer) => [layer.feature, layer]));
+    const paintFeature = (feature) => { if (feature) paint(byFeature.get(feature)); };
+    const paint = (layer) => {
+      const feature = layer.feature;
+      const active = selected === feature || hovered === feature;
+      if (feature.geometry.type === 'Point') {
+        layer.setZIndexOffset(getLayerMarkerZIndexOffset([markingRef.current.id], markingRef.current.id, active));
+        layer.setIcon(L.divIcon({ ...getSemanticPointSymbol(input(feature), active, highlight()),
+          className: 'custom-div-icon gmi-gemini-reference-point' }));
+      } else {
+        const style = getSemanticLineStyle(input(feature), active);
+        layer.setStyle(style);
+        const halo = halos.get(feature);
+        halo.setStyle(highlight() ? getLineCasingStyle(style, highlight()) : { opacity: 0 });
+        halo.getElement().style.pointerEvents = enabled && highlight() ? 'auto' : 'none';
       }
-      layer.getElement()?.classList.toggle('gmi-gemini-selected', state.selected);
+      const element = layer.getElement();
+      if (element) {
+        element.style.pointerEvents = enabled ? 'auto' : 'none';
+        element.classList.toggle('gmi-gemini-selected', selected === feature);
+      }
     };
-    const clearSelection = () => {
-      const previous = selected;
-      selected = null;
-      paint(previous);
-    };
-    const enter = (event) => { if (enabled) { hovered = event.target.feature; paint(hovered); } };
-    const leave = (event) => { hovered = null; paint(event.target.feature); };
+    const paintAll = () => layers.forEach(paint);
+    repaint.current = paintAll;
+    const clearSelection = () => { const previous = selected; selected = null; paintFeature(previous); };
     const inspect = (event) => {
       if (!enabled) return;
       const feature = event.target.feature;
-      const record = lookup(feature.properties?.sourceKey, feature.properties?.typeName);
+      const record = lookup(feature.properties.sourceKey, feature.properties.typeName);
       if (!record) return;
-      // Lines use the actual inspection location. Circle points use their centre.
-      const position = record.geometry.type === 'Point' ? event.target.getLatLng() : event.latlng;
+      const position = feature.geometry.type === 'Point' ? event.target.getLatLng() : event.latlng;
       if (!position) return;
       popup?.remove();
       selected = feature;
-      paint(feature);
+      paintFeature(feature);
       popup = L.popup({ className: 'gmi-gemini-popup', minWidth: 0, maxWidth: 400,
         autoPanPaddingTopLeft: [24, 64], autoPanPaddingBottomRight: [24, 48] })
         .setLatLng(position).setContent(createGeminiPopupContent(record)).on('remove', clearSelection).openOn(map);
     };
-    for (const layer of layers) {
-      // Only vector paths receive pointer events. The reference pane stays transparent.
-      layer.getElement().style.pointerEvents = enabled ? 'auto' : 'none';
+    for (const layer of [...casing.getLayers(), ...layers]) {
       layer.options.bubblingMouseEvents = !enabled;
       layer.on('click', inspect);
-      layer.on('mouseover', enter);
-      layer.on('mouseout', leave);
+      layer.on('mouseover', () => { if (enabled) { const previous = hovered; hovered = layer.feature; paintFeature(previous); paintFeature(hovered); } });
+      layer.on('mouseout', () => { const previous = hovered; hovered = null; paintFeature(previous); });
     }
+    paintAll();
     return () => {
+      repaint.current = null;
       popup?.remove();
-      for (const layer of layers) {
-        layer.off('click', inspect);
-        layer.off('mouseover', enter);
-        layer.off('mouseout', leave);
-      }
-      hovered = null;
-      for (const layer of primary) paint(layer.feature);
+      primary.remove();
+      casing.remove();
     };
   }, [map, data, lookup, enabled]);
-
-  return <>
-    <GeoJSON ref={casing} data={data} pane={GEMINI_REFERENCE_PANE}
-      style={haloStyle} pointToLayer={haloPointToLayer} {...interactiveOptions} />
-    <GeoJSON ref={group} data={data} pane={GEMINI_REFERENCE_PANE}
-      style={{ ...style, ...interactiveOptions }} pointToLayer={pointToLayer} {...interactiveOptions} />
-  </>;
+  return null;
 }

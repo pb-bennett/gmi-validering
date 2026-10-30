@@ -7,13 +7,13 @@ import { createGeminiSourceLookup } from '@/lib/gemini-wfs/geminiPopupContent.mj
 import useGeminiSession from './useGeminiSession';
 import useGeminiPresentation from './useGeminiPresentation';
 import { geminiPresentation, getGeminiReferenceBounds, GEMINI_REFERENCE_PANE,
-  GEMINI_REFERENCE_Z_INDEX, GEMINI_LINE_STYLE, GEMINI_POINT_STYLE } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
+  GEMINI_REFERENCE_Z_INDEX } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
 
 const paneStyle = { zIndex: GEMINI_REFERENCE_Z_INDEX, pointerEvents: 'none' };
 
 export default function GeminiReferenceLayer({ inspectionEnabled = true }) {
   const { result } = useGeminiSession();
-  const { linesVisible, pointsVisible, resultVersion, zoomRequest } = useGeminiPresentation();
+  const { linesVisible, pointsVisible, resultVersion, zoomRequest, marking } = useGeminiPresentation();
   const map = useMap();
   const bounds = useMemo(() => getGeminiReferenceBounds(result), [result]);
   const lookup = useMemo(() => createGeminiSourceLookup(result), [result]);
@@ -38,9 +38,9 @@ export default function GeminiReferenceLayer({ inspectionEnabled = true }) {
   return (
     <Pane name={GEMINI_REFERENCE_PANE} style={paneStyle}>
       {result && <Fragment key={resultVersion}>
-        {linesVisible && <GeminiInspectionSide data={result.lines.display} style={GEMINI_LINE_STYLE}
+        {linesVisible && <GeminiInspectionSide data={result.lines.display} marking={marking}
           lookup={lookup} enabled={inspectionEnabled} />}
-        {pointsVisible && <GeminiInspectionSide data={result.points.display} style={GEMINI_POINT_STYLE}
+        {pointsVisible && <GeminiInspectionSide data={result.points.display} marking={marking}
           lookup={lookup} enabled={inspectionEnabled} />}
       </Fragment>}
     </Pane>

@@ -1,35 +1,14 @@
 import { geminiSession } from './geminiSession.mjs';
-import { GEMINI_WFS_HALO, getLineCasingStyle, getPointHaloSpread } from '../map/layerHighlight.mjs';
+import { GEMINI_WFS_HALO, getLayerHighlightStyle } from '../map/layerHighlight.mjs';
 
 export const GEMINI_REFERENCE_PANE = 'gemini-reference';
 export const GEMINI_REFERENCE_Z_INDEX = 380;
-export const GEMINI_LINE_STYLE = Object.freeze({
-  color: 'var(--gmi-navy)', weight: 3, opacity: 0.9, fill: false,
-  interactive: false, className: 'gmi-gemini-reference-line',
+export const GEMINI_PRESENTATION_SOURCE_ID = 'gemini-wfs-reference';
+export const DEFAULT_GEMINI_MARKING = Object.freeze({
+  id: GEMINI_PRESENTATION_SOURCE_ID, name: 'Gemini WFS', visible: true,
+  highlightAll: true, defaultHighlightColor: GEMINI_WFS_HALO.color,
+  highlightStyle: GEMINI_WFS_HALO,
 });
-export const GEMINI_POINT_STYLE = Object.freeze({
-  color: 'var(--gmi-navy)', fillColor: '#FFFFFF',
-  radius: 6, weight: 2, opacity: 0.9, fillOpacity: 1,
-  interactive: false, className: 'gmi-gemini-reference-point',
-});
-
-export function getGeminiFeatureStyle(point, { selected = false, hovered = false } = {}) {
-  const base = point ? GEMINI_POINT_STYLE : GEMINI_LINE_STYLE;
-  return { ...base,
-    ...(selected ? { color: '#00FFFF', weight: point ? 3 : 7, opacity: 1 } :
-      hovered ? { weight: point ? 3 : 4, opacity: 1 } : {}),
-    ...(point ? { radius: base.radius + (selected ? 3 : hovered ? 1 : 0) } : {}),
-  };
-}
-
-export function getGeminiHaloStyle(point, state) {
-  const primary = getGeminiFeatureStyle(point, state);
-  return point ? {
-    ...getLineCasingStyle(primary, GEMINI_WFS_HALO),
-    radius: primary.radius + getPointHaloSpread(GEMINI_WFS_HALO.spread),
-    fill: false, className: 'gmi-gemini-point-halo',
-  } : { ...getLineCasingStyle(primary, GEMINI_WFS_HALO), className: 'gmi-gemini-line-halo' };
-}
 
 // Already-projected M2 display data only. Include every returned vertex, even
 // outside the request BBOX or in a currently hidden reference sublayer.
@@ -58,7 +37,7 @@ export function getGeminiReferenceNotice(snapshot) {
 }
 
 export const EMPTY_GEMINI_PRESENTATION = Object.freeze({
-  linesVisible: true, pointsVisible: true, resultVersion: 0, zoomRequest: null,
+  linesVisible: true, pointsVisible: true, resultVersion: 0, zoomRequest: null, marking: DEFAULT_GEMINI_MARKING,
 });
 
 export function createGeminiPresentation(session) {
@@ -79,7 +58,7 @@ export function createGeminiPresentation(session) {
     const resetVisibility = nextOwner !== owner || !result;
     owner = nextOwner;
     publish({ resultVersion: ++version, zoomRequest: null,
-      ...(resetVisibility ? { linesVisible: true, pointsVisible: true } : {}) });
+      ...(resetVisibility ? { linesVisible: true, pointsVisible: true, marking: DEFAULT_GEMINI_MARKING } : {}) });
   };
   const unsubscribe = session.subscribe(sync);
   sync();
@@ -91,6 +70,14 @@ export function createGeminiPresentation(session) {
       const key = `${side}Visible`;
       if (snapshot[key] !== visible) publish({ [key]: visible });
     },
+    setMarking: (patch) => {
+      if (!currentResult) return;
+      const source = snapshot.marking;
+      const highlightStyle = getLayerHighlightStyle({ highlightStyle: { ...source.highlightStyle, ...patch.highlightStyle } }, source.id);
+      publish({ marking: Object.freeze({ ...source, highlightAll: patch.highlightAll ?? source.highlightAll,
+        highlightStyle: Object.freeze(highlightStyle) }) });
+    },
+    resetMarking: () => { if (currentResult) publish({ marking: Object.freeze({ ...DEFAULT_GEMINI_MARKING, highlightAll: snapshot.marking.highlightAll }) }); },
     requestZoom: () => {
       if (currentResult) publish({ zoomRequest: Object.freeze({ id: ++zoomSequence, resultVersion: snapshot.resultVersion }) });
     },
@@ -99,5 +86,14 @@ export function createGeminiPresentation(session) {
   });
 }
 
-// Booleans and a small zoom intent only; no features, credentials or persistence.
+// Visibility, source marking and a small zoom intent only; no features, credentials or persistence.
 export const geminiPresentation = createGeminiPresentation(geminiSession);
+
+// The shared Lagmarkering controls consume actions, not survey-store ownership.
+export const geminiMarkingActions = Object.freeze({
+  setEnabled: (_id, value) => geminiPresentation.setMarking({ highlightAll: value }),
+  setColor: (_id, color) => { if (/^#[0-9a-f]{6}$/i.test(color)) geminiPresentation.setMarking({ highlightStyle: { color: color.toUpperCase() } }); },
+  setOpacity: (_id, opacity) => { if (Number.isFinite(opacity)) geminiPresentation.setMarking({ highlightStyle: { opacity } }); },
+  setSpread: (_id, spread) => { if (Number.isFinite(spread)) geminiPresentation.setMarking({ highlightStyle: { spread: Math.round(spread) } }); },
+  resetStyle: () => geminiPresentation.resetMarking(),
+});

@@ -8,7 +8,6 @@ import useGeminiPresentation from './useGeminiPresentation';
 import { geminiPresentation, getGeminiReferenceBounds, getGeminiReferenceNotice } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
 import { geminiSession } from '@/lib/gemini-wfs/geminiSession.mjs';
 import { getGeminiUiError } from '@/lib/gemini-wfs/geminiWorkflowUi.mjs';
-import { GEMINI_WFS_HALO } from '@/lib/map/layerHighlight.mjs';
 
 export default function GeminiReferenceCard({ onOpenConnection }) {
   const session = useGeminiSession();
@@ -24,7 +23,7 @@ export default function GeminiReferenceCard({ onOpenConnection }) {
       <div className="flex items-start gap-2 p-2">
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-1.5 text-xs font-medium">
-            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: GEMINI_WFS_HALO.color }} />
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: visibility.marking.highlightStyle.color }} />
             Eksisterende anlegg · Gemini WFS
           </h3>
           <p className="truncate text-[10px] text-gmi-text-subtle" title={sourceName}>

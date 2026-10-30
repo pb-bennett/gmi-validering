@@ -15,6 +15,7 @@ import {
 
 register('./esmJsLoader.mjs', import.meta.url);
 const { default: useStore } = await import('../src/lib/store.js?layer-halo-test');
+const symbols = await readFile(new URL('../src/lib/map/semanticPresentation.mjs', import.meta.url), 'utf8');
 const source = await readFile(new URL('../src/components/MapInner.js', import.meta.url), 'utf8');
 
 const emptyData = { format: 'GMI', header: {}, points: [], lines: [] };
@@ -186,8 +187,8 @@ test('point casing follows representative silhouettes and leaves semantic SVG as
     assert.match(halo, /stroke-opacity="0.55"/);
     assert.match(halo, /fill="none"/);
   }
-  assert.match(source, /const content = padding[\s\S]*?\$\{halo\}\$\{svgPath\}/);
-  assert.match(source, /iconAnchor: \[iconSize \/ 2, iconSize \/ 2\]/);
+  assert.match(symbols, /const content = padding[\s\S]*?\$\{halo\}\$\{svgPath\}/);
+  assert.match(symbols, /iconAnchor: \[iconSize \/ 2, iconSize \/ 2\]/);
   assert.match(source, /return L\.marker\(latlng, \{ icon, zIndexOffset \}\)/);
   assert.match(source, /if \(isHidden \|\| isFilteredOut \|\| isOutlier\)/);
 });
