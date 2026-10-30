@@ -15,9 +15,9 @@ export function resolveGeminiSourceId(sources, preferredId) {
 const MESSAGES = Object.freeze({
   origin_rejected: 'Forespørselen ble avvist av appens sikkerhetskontroll. Last inn siden på nytt eller kontakt tjenesteansvarlig.',
   authentication_failed: 'Gemini WFS-tjenesten avviste autentiseringen. Årsaken er ikke avklart.',
-  credentials_unavailable: 'Oppgi brukernavn og passord for Gemini VA på nytt.',
+  credentials_unavailable: 'Oppgi brukernavn og passord for Gemini WFS på nytt.',
   invalid_credentials: 'Oppgi et gyldig brukernavn og passord. Fyll ut begge feltene.',
-  permission_denied: 'Brukeren har ikke tilgang til denne Gemini VA-tjenesten.',
+  permission_denied: 'Brukeren har ikke tilgang til denne Gemini WFS-tjenesten.',
   no_survey_source: 'Velg en innmålingsfil i GMI-, SOSI- eller KOF-format.',
   no_source_geometry: 'Den valgte innmålingsfilen inneholder ingen geometri som kan brukes til oppslag.',
   unsupported_crs: 'Koordinatsystemet i den valgte filen kan ikke brukes til Gemini-oppslag.',
@@ -26,20 +26,20 @@ const MESSAGES = Object.freeze({
   invalid_bbox: 'Området i den valgte filen ligger utenfor støttet koordinatområde.',
   extent_too_large: 'Innmålingen dekker et for stort område for ett Gemini-oppslag. Velg en mindre innmålingsfil.',
   timeout: 'Hentingen tok for lang tid. Prøv igjen.',
-  provider_rate_limited: 'Gemini VA mottar for mange forespørsler. Prøv igjen senere.',
-  response_too_large: 'Svaret fra Gemini VA er for stort. Velg en mindre innmålingsfil.',
-  unsupported_response_encoding: 'Svaret fra Gemini VA har en tegnkoding som ikke støttes.',
-  gml_parser_error: 'Anleggsdataene fra Gemini VA kunne ikke leses. Prøv igjen eller kontakt tjenesteansvarlig.',
-  display_projection_error: 'Anleggsdataene fra Gemini VA kunne ikke klargjøres for kartet.',
-  unexpected_feature_type: 'Gemini VA returnerte en objekttype som ikke støttes.',
-  unsupported_upstream_mime: 'Gemini VA svarte med et format som ikke støttes.',
+  provider_rate_limited: 'Gemini WFS mottar for mange forespørsler. Prøv igjen senere.',
+  response_too_large: 'Svaret fra Gemini WFS er for stort. Velg en mindre innmålingsfil.',
+  unsupported_response_encoding: 'Svaret fra Gemini WFS har en tegnkoding som ikke støttes.',
+  gml_parser_error: 'Anleggsdataene fra Gemini WFS kunne ikke leses. Prøv igjen eller kontakt tjenesteansvarlig.',
+  display_projection_error: 'Anleggsdataene fra Gemini WFS kunne ikke klargjøres for kartet.',
+  unexpected_feature_type: 'Gemini WFS returnerte en objekttype som ikke støttes.',
+  unsupported_upstream_mime: 'Gemini WFS svarte med et format som ikke støttes.',
   request_aborted: 'Hentingen ble avbrutt. Velg kilde på nytt hvis innmålingen er endret.',
   session_disposed: 'Gemini-økten er avsluttet. Åpne tilgangen på nytt.',
 });
 
 // Never display error.message, XML, provider bodies or arbitrary codes.
 export function getGeminiUiError(error) {
-  let message = Object.hasOwn(MESSAGES, error?.code) ? MESSAGES[error.code] : 'Henting fra Gemini VA mislyktes. Prøv igjen.';
+  let message = Object.hasOwn(MESSAGES, error?.code) ? MESSAGES[error.code] : 'Henting fra Gemini WFS mislyktes. Prøv igjen.';
   const dimensions = error?.dimensions;
   if (error?.code === 'extent_too_large' && dimensions && [dimensions.width, dimensions.height]
     .every((value) => Number.isFinite(value) && value >= 0 && value <= 10_000_000)) {

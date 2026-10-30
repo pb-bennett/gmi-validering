@@ -88,6 +88,7 @@ test('semantic content uses inert text with no provider links, raw internals or 
     const nodes = (node) => [node, ...node.children.flatMap(nodes)];
     assert.equal(dom.tag, 'section'); assert.equal(dom.children[0].tag, 'h2');
     assert.equal(dom.children[0].textContent, 'Eksisterende ledning');
+    assert(nodes(dom).some((node) => node.textContent === 'Gemini WFS · eksisterende anlegg'));
     assert.equal(nodes(dom).filter((node) => node.textContent === lineValues.RESPONSIBLE_TITLE).length, 1);
     assert(!nodes(dom).some((node) => ['img', 'a', 'button', 'script'].includes(node.tag)));
     assert(!JSON.stringify(dom).includes('HIDDEN_')); assert.equal(JSON.stringify(source), before);

@@ -39,7 +39,7 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
     const rows = () => browser.evaluate(`Object.fromEntries(Array.from(document.querySelectorAll('${popup} dt')).map(dt=>[dt.textContent,dt.nextElementSibling.textContent]))`);
     const close = async () => { await browser.evaluate(`document.querySelector('${popup} .leaflet-popup-close-button').click()`); await closed(); await settle(); };
     const connect = async () => {
-      await clickButton('Åpne Gemini VA'); await browser.waitFor('document.querySelector("#gemini-va-connection-form")');
+      await clickButton('Åpne Gemini WFS'); await browser.waitFor('document.querySelector("#gemini-va-connection-form")');
       await browser.evaluate('geminiWorkflow.audit.mode="inspection"; geminiWorkflow.fillCredentials(); document.querySelector("#gemini-va-connection-form").requestSubmit()');
       await browser.waitFor('!document.querySelector("#gemini-va-connection-form") && document.querySelector(".gmi-gemini-reference-point")');
       await browser.evaluate('void geminiWorkflow.audit.map.fitBounds([[59.2244,10.4345],[59.2257,10.437]],{animate:false})'); await settle();
@@ -55,6 +55,8 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
       await connect(); assert.equal(await requests(), 2);
       await browser.evaluate('geminiWorkflow.useStore.getState().setHighlightedFeature("punkter-survey-0")');
       await save(); await clickReference('LineString'); await opened();
+      assert.equal(await count('.gmi-gemini-reference-line.gmi-gemini-selected'), 1);
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-selected').getAttribute('stroke')"), '#00FFFF');
       assert.match(await browser.evaluate(`document.querySelector('${popup}').innerText`), /Eksisterende ledning/);
       assert.deepEqual(await rows(), { Type:'Vannledning – østre grøft', Nettype:'Vann', Dimensjon:'160.00', Materiale:'PE', År:'1980',
         Status:'I drift', Eier:'Færder ÆØÅ', Ansvarlig:'<img src=x onerror=alert(1)>', Lengde:'0', 'Gemini-ID':'000123' });
@@ -73,13 +75,36 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
         await writeFile(process.env.GEMINI_POPUP_SCREENSHOT_PATH, Buffer.from(data, 'base64'));
       }
       await close(); await unchanged();
+      assert.equal(await count('.gmi-gemini-selected'), 0);
     });
     await t.test('actual point pointer popup: fields, cover separate from literal geometry zero and point anchor', async () => {
       await clickReference('Point'); await opened();
+      assert.equal(await count('.gmi-gemini-reference-point.gmi-gemini-selected'), 1);
       assert.deepEqual(await rows(), { Type:'Avløpskum', Punkttype:'Kum ÆØÅ', Funksjon:'Inspeksjon', Utførelse:'Betong', Stasjon:'0007',
         Bredde:'0', Lengde:'1.50', 'Kote lokk':'17.75', Geometrikote:'0', År:'2001', Status:'I drift', Eier:'Færder ÆØÅ', Ansvarlig:'Kommunen', 'Gemini-ID':'000456' });
       assert(await browser.evaluate(`(() => {let point;geminiWorkflow.audit.map.eachLayer(l=>{if(l.feature?.geometry.type==='Point'&&l.feature.properties.kind==='gemini-reference')point=l;}); return point.getLatLng().equals(geminiWorkflow.audit.map._popup.getLatLng());})()`));
       await unchanged(); await close();
+    });
+    await t.test('hover and selection stay local; switching objects and closing restore their base styles', async () => {
+      await save();
+      const target = await browser.evaluate('geminiWorkflow.inspectionTarget("LineString")');
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...target });
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-reference-line').getAttribute('stroke-width')"), '4');
+      await clickReference('LineString'); await opened();
+      // This fixture's point is covered by the line popup. Exercise the
+      // Leaflet event here; actual point pointer targeting is covered above.
+      await browser.evaluate(`geminiWorkflow.audit.map.eachLayer(layer => {
+        if (layer.options.className === 'gmi-gemini-reference-line') layer.fire('mouseout');
+        if (layer.options.className === 'gmi-gemini-reference-point') layer.fire('click', {latlng:layer.getLatLng()});
+      }); void 0`);
+      // Leaflet keeps the outgoing popup DOM during its fade animation.
+      await browser.waitFor("document.querySelectorAll('.gmi-gemini-popup').length === 1 && document.querySelector('.gmi-gemini-popup h2')?.textContent === 'Eksisterende punkt'");
+      assert.equal(await count('.gmi-gemini-selected'), 1);
+      assert.equal(await count('.gmi-gemini-reference-point.gmi-gemini-selected'), 1);
+      assert.equal(await browser.evaluate("document.querySelector('.gmi-gemini-reference-line').getAttribute('stroke-width')"), '3');
+      await close();
+      assert.equal(await count('.gmi-gemini-selected'), 0);
+      await unchanged();
     });
     await t.test('photo pointer popup and survey pointer popup retain normal controls', async () => {
       const photo = await browser.evaluate(`(() => {const r=document.querySelector('.photo-camera-marker').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
@@ -94,7 +119,7 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
     });
     await t.test('hidden lines/points close only their side popup, no fetch or survey/photo mutation', async () => {
       await save();
-      for (const [kind, label] of [['LineString','Vis ledninger fra Gemini VA'],['Point','Vis punkter fra Gemini VA']]) {
+      for (const [kind, label] of [['LineString','Vis ledninger fra Gemini WFS'],['Point','Vis punkter fra Gemini WFS']]) {
         await clickReference(kind); await opened(); await clickButton(label); await closed();
         await clickButton(label); await browser.waitFor(`document.querySelector('.gmi-gemini-reference-${kind==='Point'?'point':'line'}')`);
       }
@@ -145,7 +170,7 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
       await clickReference('Point'); await opened(); await close(); assert.equal(await requests(), 4);
     });
     await t.test('disconnect, clear, source removal and reset remove owned popups/reference without requests', async () => {
-      await clickReference('LineString'); await opened(); await clickButton('Koble fra Gemini VA'); await closed();
+      await clickReference('LineString'); await opened(); await clickButton('Koble fra Gemini WFS'); await closed();
       assert.equal(await count('.gmi-gemini-reference-line'), 0); assert.equal(await requests(), 4);
       for (const action of ['clearResult()', 'source', 'reset']) {
         await connect(); await clickReference('Point'); await opened(); const before=await requests();

@@ -73,7 +73,7 @@ export function createGeminiPopupContent(record) {
   heading.textContent = title;
   content.appendChild(heading);
   const source = document.createElement('p');
-  source.textContent = 'Gemini VA · eksisterende anlegg';
+  source.textContent = 'Gemini WFS · eksisterende anlegg';
   content.appendChild(source);
   const list = document.createElement('dl');
   for (const { label, value } of getGeminiPopupRows(record)) {

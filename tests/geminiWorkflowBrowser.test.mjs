@@ -13,13 +13,13 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
     await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 850, deviceScaleFactor: 1, mobile: false });
     await browser.send('Page.navigate', { url: app.url });
     await browser.waitFor('globalThis.geminiWorkflow?.audit.map && document.querySelector(".photo-camera-marker")');
-    const dialog = 'dialog[aria-labelledby="gemini-va-heading"]', card = 'section[aria-label="Eksisterende anlegg · Gemini VA"]';
+    const dialog = 'dialog[aria-labelledby="gemini-va-heading"]', card = 'section[aria-label="Eksisterende anlegg · Gemini WFS"]';
     const click = async (label) => browser.evaluate(`document.querySelector('button[aria-label=${JSON.stringify(label)}]').click()`);
     const count = (selector) => browser.evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
     const requests = () => browser.evaluate('geminiWorkflow.audit.calls.length');
     const open = async () => {
-      await browser.evaluate('document.querySelector(\'button[aria-label="Åpne Gemini VA"]\').focus()');
-      await click('Åpne Gemini VA'); await browser.waitFor(`document.querySelector('${dialog}')?.matches(':modal')`);
+      await browser.evaluate('document.querySelector(\'button[aria-label="Åpne Gemini WFS"]\').focus()');
+      await click('Åpne Gemini WFS'); await browser.waitFor(`document.querySelector('${dialog}')?.matches(':modal')`);
     };
     const submit = async (duplicate = false) => browser.evaluate(`(() => { const form=document.querySelector('#gemini-va-connection-form'); form.requestSubmit(); ${duplicate ? 'form.requestSubmit();' : ''} })()`);
     const fill = () => browser.evaluate('geminiWorkflow.fillCredentials()');
@@ -29,11 +29,11 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
     const waitError = (text) => browser.waitFor(`document.querySelector('#gemini-va-error')?.innerText.includes(${JSON.stringify(text)})`);
 
     await t.test('entry is discoverable without a result; no-source explains import and disables retrieval', async () => {
-      assert.equal(await count('button[aria-label="Åpne Gemini VA"]'), 1); assert.equal(await count(card), 0);
+      assert.equal(await count('button[aria-label="Åpne Gemini WFS"]'), 1); assert.equal(await count(card), 0);
       await browser.evaluate('geminiWorkflow.sources("none")'); await open();
       assert.equal(await browser.evaluate('document.querySelector("dialog button[type=submit]").disabled'), true);
       assert.match(await browser.evaluate(`document.querySelector('${dialog}').innerText`), /Importer en innmålingsfil/);
-      assert.equal(await requests(), 0); await click('Lukk Gemini VA'); await done();
+      assert.equal(await requests(), 0); await click('Lukk Gemini WFS'); await done();
       await browser.evaluate('geminiWorkflow.sources("single")');
     });
     await t.test('one survey auto-selects; stable native login fields, focus containment and Escape cleanup', async () => {
@@ -47,15 +47,15 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
       await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
       await done(); assert.equal(await count('#gemini-va-password'), 0); assert.equal(await requests(), 0);
-      assert.equal(await browser.evaluate('document.activeElement.getAttribute("aria-label")'), 'Åpne Gemini VA');
-      await open(); assert(await browser.evaluate('document.querySelector("#gemini-va-password").value === ""')); await click('Lukk Gemini VA');
+      assert.equal(await browser.evaluate('document.activeElement.getAttribute("aria-label")'), 'Åpne Gemini WFS');
+      await open(); assert(await browser.evaluate('document.querySelector("#gemini-va-password").value === ""')); await click('Lukk Gemini WFS');
     });
     await t.test('unsafe credential input is rejected before dispatch and cleared for correction', async () => {
       await open(); await fill();
       await browser.evaluate('document.querySelector("#gemini-va-username").value = crypto.randomUUID() + ":"');
       await submit(); await waitError('gyldig brukernavn og passord');
       assert.equal(await requests(), 0); assert(await browser.evaluate('document.querySelector("#gemini-va-password").value === ""'));
-      await clean(); await click('Lukk Gemini VA');
+      await clean(); await click('Lukk Gemini WFS');
     });
     await t.test('normal submit sends exactly one pair, blocks duplicates, shows loading then closes on success', async () => {
       await open(); await fill(); await browser.evaluate('geminiWorkflow.audit.mode="pending"');
@@ -73,13 +73,13 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
     });
     await t.test('opening/closing, map movement, photo changes and reference toggles never fetch', async () => {
       const before = await requests();
-      await open(); await click('Lukk Gemini VA'); await done();
-      await click('Vis ledninger fra Gemini VA'); await browser.waitFor('!document.querySelector(".gmi-gemini-reference-line")');
-      await click('Vis punkter fra Gemini VA'); await browser.waitFor('!document.querySelector(".gmi-gemini-reference-point")');
+      await open(); await click('Lukk Gemini WFS'); await done();
+      await click('Vis ledninger fra Gemini WFS'); await browser.waitFor('!document.querySelector(".gmi-gemini-reference-line")');
+      await click('Vis punkter fra Gemini WFS'); await browser.waitFor('!document.querySelector(".gmi-gemini-reference-point")');
       await browser.evaluate('void geminiWorkflow.audit.map.panBy([10,10], {animate:false})');
       await browser.evaluate('geminiWorkflow.photoSession.importFiles([new File(["synthetic"],"another.heic")]); void 0');
       assert.equal(await requests(), before);
-      await click('Vis punkter fra Gemini VA');
+      await click('Vis punkter fra Gemini WFS');
     });
     await t.test('direct refresh reuses private credentials/generation and retains prior pair while loading', async () => {
       await browser.evaluate('geminiWorkflow.generation=geminiWorkflow.geminiSession.getSnapshot().accountGeneration; geminiWorkflow.good=geminiWorkflow.geminiSession.getSnapshot().result; geminiWorkflow.audit.mode="pending"');
@@ -131,7 +131,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       await browser.evaluate('geminiWorkflow.release()'); await done(); await clean();
     });
     await t.test('disconnect is explicit, removes reference/credentials and preserves survey/photo/WMS', async () => {
-      const before = await requests(); await click('Koble fra Gemini VA');
+      const before = await requests(); await click('Koble fra Gemini WFS');
       await browser.waitFor(`!document.querySelector('${card}')`); assert.equal(await count('.gmi-gemini-reference-point'), 0);
       assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().connectionStatus'), 'disconnected');
       assert(await browser.evaluate('Boolean(geminiWorkflow.useStore.getState().layers.survey && geminiWorkflow.useStore.getState().layers.second)'));
@@ -139,7 +139,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       assert(await browser.evaluate('geminiWorkflow.useStore.getState().ui.mapOverlayVisibility.geminiWms'));
       assert.equal(await requests(), before); await open();
       assert(await browser.evaluate('document.querySelector("#gemini-va-password").required'));
-      await click('Lukk Gemini VA');
+      await click('Lukk Gemini WFS');
     });
     await t.test('safe form errors cover permission, timeout, provider, size, encoding, parser and display failures', async () => {
       await browser.evaluate('geminiWorkflow.sources("single")'); await open();
@@ -151,7 +151,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
         assert.equal(await count(card), 0); await clean();
         assert(!await browser.evaluate('document.body.innerText.includes("UNTRUSTED_PROVIDER_DETAIL")'));
       }
-      await click('Lukk Gemini VA');
+      await click('Lukk Gemini WFS');
     });
     await t.test('source geometry/CRS/area errors stop before proxy requests and remain recoverable', async () => {
       await open();
@@ -166,7 +166,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
     await t.test('closing a pending form cancels explicitly; late responses cannot recreate cleared data', async () => {
       await open(); await fill(); await browser.evaluate('geminiWorkflow.audit.mode="pending"'); await submit();
       await browser.waitFor('geminiWorkflow.geminiSession.getSnapshot().status === "loading"');
-      await click('Lukk Gemini VA'); await done(); await idle();
+      await click('Lukk Gemini WFS'); await done(); await idle();
       assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().error.code'), 'request_aborted');
       await browser.evaluate('geminiWorkflow.release()');
       assert.equal(await count(card), 0); assert.equal(await count('#gemini-va-password'), 0); await clean();
@@ -176,7 +176,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       await browser.waitFor(`document.querySelector('${card}')`);
       if (process.env.GEMINI_WORKFLOW_SCREENSHOT_PATH) {
         await open(); const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
-        await writeFile(process.env.GEMINI_WORKFLOW_SCREENSHOT_PATH, Buffer.from(data, 'base64')); await click('Lukk Gemini VA');
+        await writeFile(process.env.GEMINI_WORKFLOW_SCREENSHOT_PATH, Buffer.from(data, 'base64')); await click('Lukk Gemini WFS');
       }
       await click('Test WMS setup'); await browser.waitFor('document.querySelector("#wms-password")');
       assert.equal(await browser.evaluate('document.querySelector("#wms-password").autocomplete'), 'current-password');

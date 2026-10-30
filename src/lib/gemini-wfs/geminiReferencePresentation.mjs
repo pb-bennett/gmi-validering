@@ -1,16 +1,35 @@
 import { geminiSession } from './geminiSession.mjs';
+import { GEMINI_WFS_HALO, getLineCasingStyle, getPointHaloSpread } from '../map/layerHighlight.mjs';
 
 export const GEMINI_REFERENCE_PANE = 'gemini-reference';
 export const GEMINI_REFERENCE_Z_INDEX = 380;
 export const GEMINI_LINE_STYLE = Object.freeze({
-  color: 'var(--gmi-text-subtle)', weight: 2, opacity: 0.65, fill: false,
+  color: 'var(--gmi-navy)', weight: 3, opacity: 0.9, fill: false,
   interactive: false, className: 'gmi-gemini-reference-line',
 });
 export const GEMINI_POINT_STYLE = Object.freeze({
-  color: 'var(--gmi-text-subtle)', fillColor: 'var(--gmi-text-subtle)',
-  radius: 3, weight: 1, opacity: 0.7, fillOpacity: 0.35,
+  color: 'var(--gmi-navy)', fillColor: '#FFFFFF',
+  radius: 6, weight: 2, opacity: 0.9, fillOpacity: 1,
   interactive: false, className: 'gmi-gemini-reference-point',
 });
+
+export function getGeminiFeatureStyle(point, { selected = false, hovered = false } = {}) {
+  const base = point ? GEMINI_POINT_STYLE : GEMINI_LINE_STYLE;
+  return { ...base,
+    ...(selected ? { color: '#00FFFF', weight: point ? 3 : 7, opacity: 1 } :
+      hovered ? { weight: point ? 3 : 4, opacity: 1 } : {}),
+    ...(point ? { radius: base.radius + (selected ? 3 : hovered ? 1 : 0) } : {}),
+  };
+}
+
+export function getGeminiHaloStyle(point, state) {
+  const primary = getGeminiFeatureStyle(point, state);
+  return point ? {
+    ...getLineCasingStyle(primary, GEMINI_WFS_HALO),
+    radius: primary.radius + getPointHaloSpread(GEMINI_WFS_HALO.spread),
+    fill: false, className: 'gmi-gemini-point-halo',
+  } : { ...getLineCasingStyle(primary, GEMINI_WFS_HALO), className: 'gmi-gemini-line-halo' };
+}
 
 // Already-projected M2 display data only. Include every returned vertex, even
 // outside the request BBOX or in a currently hidden reference sublayer.

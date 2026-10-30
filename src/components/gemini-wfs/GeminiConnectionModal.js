@@ -85,8 +85,8 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
     onCancel={(event) => { event.preventDefault(); close(); }}
     className="m-auto max-h-[90dvh] w-[min(94vw,440px)] overflow-y-auto rounded-xl border border-gmi-border-strong bg-gmi-surface p-0 text-gmi-text shadow-xl backdrop:bg-gmi-ink/60">
     <header className="flex items-center justify-between border-b border-gmi-border p-4">
-      <h2 id="gemini-va-heading" className="text-lg font-semibold text-gmi-navy">Gemini VA</h2>
-      <button type="button" onClick={close} aria-label="Lukk Gemini VA" title="Lukk Gemini VA"
+      <h2 id="gemini-va-heading" className="text-lg font-semibold text-gmi-navy">Gemini WFS</h2>
+      <button type="button" onClick={close} aria-label="Lukk Gemini WFS" title="Lukk Gemini WFS"
         className="gmi-compact-button gmi-focus-ring p-1"><XIcon size={20} weight="regular" aria-hidden="true" /></button>
     </header>
     <form ref={formRef} id="gemini-va-connection-form" method="post" onSubmit={submit} aria-busy={busy}
@@ -117,7 +117,7 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
       {session.stale && !errorText && <p role="status" className="text-xs text-gmi-text-muted">Innmålingsgrunnlaget er endret. Hent referansen på nytt.</p>}
       {busy && <p role="status" className="flex items-center gap-2 text-xs text-gmi-text-muted"><CircleNotchIcon size={16} weight="regular" className="animate-spin" aria-hidden="true" />Henter eksisterende anlegg … Lukk for å avbryte.</p>}
       <footer className="flex flex-wrap items-center justify-end gap-2 pt-2">
-        {connected && <button type="button" onClick={() => { geminiSession.disconnect(); close(); }} className="gmi-compact-button gmi-focus-ring mr-auto px-2 py-2 text-xs">Koble fra Gemini VA</button>}
+        {connected && <button type="button" onClick={() => { geminiSession.disconnect(); close(); }} className="gmi-compact-button gmi-focus-ring mr-auto px-2 py-2 text-xs">Koble fra Gemini WFS</button>}
         <button type="button" onClick={close} className="gmi-compact-button gmi-focus-ring px-3 py-2 text-sm">{busy ? 'Avbryt henting' : 'Avbryt'}</button>
         <button type="submit" disabled={busy || !sourceId} className="gmi-primary-control gmi-focus-ring px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50">Hent eksisterende anlegg</button>
       </footer>

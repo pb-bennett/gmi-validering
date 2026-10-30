@@ -58,7 +58,7 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
     await browser.send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}` });
     await browser.waitFor('globalThis.__geminiBootstrapErrors?.length || (globalThis.geminiAcceptance?.audit.map && document.querySelector(".photo-camera-marker"))');
     assert.deepEqual(await browser.evaluate('__geminiBootstrapErrors'), []);
-    const card = 'section[aria-label="Eksisterende anlegg · Gemini VA"]';
+    const card = 'section[aria-label="Eksisterende anlegg · Gemini WFS"]';
     const line = '.gmi-gemini-reference-line', point = '.gmi-gemini-reference-point';
     const count = (selector) => browser.evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
     const settleMap = async () => {
@@ -79,7 +79,7 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       await browser.waitFor(`document.querySelector(${JSON.stringify(point)})`);
       assert.equal(await count(line), 1); assert.equal(await count(point), 1);
       const text = await browser.evaluate(`document.querySelector(${JSON.stringify(card)}).innerText`);
-      assert.match(text, /Eksisterende anlegg · Gemini VA/); assert.match(text, /Synthetic survey.gmi/);
+      assert.match(text, /Eksisterende anlegg · Gemini WFS/); assert.match(text, /Synthetic survey.gmi/);
       assert.equal(await count(`${card} [aria-label="Ledninger: 1"]`), 1);
       assert.equal(await count(`${card} [aria-label="Punkter: 1"]`), 1);
       assert.equal(await browser.evaluate('geminiAcceptance.audit.requests'), 2);
@@ -93,7 +93,9 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       assert.equal(panes.overlayPane, 400); assert.equal(panes.markerPane, 600); assert.equal(panes['photo-markers'], 620);
       assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(line)}).closest('.leaflet-pane').style.zIndex`), '380');
       assert.equal(await count(`${line}.leaflet-interactive, ${point}.leaflet-interactive`), 2);
-      assert.equal(await browser.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(line)})).stroke`), 'rgb(98, 116, 142)');
+      assert.equal(await browser.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(line)})).stroke`), 'rgb(15, 23, 43)');
+      assert.equal(await browser.evaluate(`getComputedStyle(document.querySelector('.gmi-gemini-line-halo')).stroke`), 'rgb(67, 56, 202)');
+      assert.equal(await count('.gmi-gemini-point-halo'), 1);
       assert(await browser.evaluate(`Boolean(document.querySelector('.leaflet-overlay-pane path.leaflet-interactive'))`));
       assert(await browser.evaluate(`(() => { let safe = true; geminiAcceptance.audit.map.eachLayer(layer => {
         if (layer.feature?.properties.kind === 'gemini-reference') safe &&= layer.options.interactive && !layer.options.bubblingMouseEvents && !layer.getPopup?.() && !layer.getTooltip?.() && !layer.dragging;
@@ -102,13 +104,16 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
     await t.test('independent accessible visibility controls preserve survey/photo/WMS and never fetch', async () => {
       const before = await browser.evaluate(`(() => { geminiAcceptance.originalResult = geminiAcceptance.geminiSession.getSnapshot().result;
         geminiAcceptance.pointNode = document.querySelector('${point}'); return { photo: document.querySelectorAll('.photo-camera-marker').length, requests: geminiAcceptance.audit.requests }; })()`);
-      await click('Vis ledninger fra Gemini VA'); await browser.waitFor(`!document.querySelector('${line}')`);
+      await click('Vis ledninger fra Gemini WFS'); await browser.waitFor(`!document.querySelector('${line}')`);
+      assert.equal(await count('.gmi-gemini-line-halo'), 0);
+      assert.equal(await count('.gmi-gemini-point-halo'), 1);
       assert.equal(await count(point), 1);
       assert(await browser.evaluate(`geminiAcceptance.pointNode === document.querySelector('${point}')`), 'Unchanged point batch is not rebuilt');
-      await click('Vis punkter fra Gemini VA'); await browser.waitFor(`!document.querySelector('${point}')`);
+      await click('Vis punkter fra Gemini WFS'); await browser.waitFor(`!document.querySelector('${point}')`);
+      assert.equal(await count('.gmi-gemini-point-halo'), 0);
       assert.equal(await count(line), 0); assert.equal(await count(point), 0);
-      await click('Vis ledninger fra Gemini VA'); await browser.waitFor(`document.querySelector('${line}')`);
-      assert.equal(await count(point), 0); await click('Vis punkter fra Gemini VA');
+      await click('Vis ledninger fra Gemini WFS'); await browser.waitFor(`document.querySelector('${line}')`);
+      assert.equal(await count(point), 0); await click('Vis punkter fra Gemini WFS');
       await browser.waitFor(`document.querySelector('${point}')`);
       assert.equal(await browser.evaluate('geminiAcceptance.audit.requests'), before.requests);
       assert.equal(await count('.photo-camera-marker'), before.photo);
@@ -117,21 +122,21 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       assert(await browser.evaluate('geminiAcceptance.originalResult === geminiAcceptance.geminiSession.getSnapshot().result'));
       await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
       await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
-      await browser.evaluate(`document.querySelector('button[aria-label="Vis ledninger fra Gemini VA"]').focus()`);
+      await browser.evaluate(`document.querySelector('button[aria-label="Vis ledninger fra Gemini WFS"]').focus()`);
       assert(await browser.evaluate('document.activeElement.matches(":focus-visible")'));
       assert.notEqual(await browser.evaluate('getComputedStyle(document.activeElement).boxShadow'), 'none');
       await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
       await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
-      await browser.waitFor(`!document.querySelector('${line}')`); await click('Vis ledninger fra Gemini VA');
+      await browser.waitFor(`!document.querySelector('${line}')`); await click('Vis ledninger fra Gemini WFS');
     });
     await t.test('zoom includes all returned vertices, preserves visibility, and viewport changes do not fetch', async () => {
-      await click('Vis punkter fra Gemini VA');
+      await click('Vis punkter fra Gemini WFS');
       await click('Zoom til Gemini-referanse');
       await browser.waitFor('geminiAcceptance.geminiPresentation.getSnapshot().zoomRequest === null');
       assert(await browser.evaluate(`(() => { const map = geminiAcceptance.audit.map, bounds = map.getBounds();
         return geminiAcceptance.geminiSession.getSnapshot().result.lines.display.features.every(f => f.geometry.coordinates.every(c => bounds.contains([c[1],c[0]]))) &&
           geminiAcceptance.geminiSession.getSnapshot().result.points.display.features.every(f => bounds.contains([f.geometry.coordinates[1],f.geometry.coordinates[0]])); })()`));
-      assert.equal(await count(point), 0); await click('Vis punkter fra Gemini VA');
+      assert.equal(await count(point), 0); await click('Vis punkter fra Gemini WFS');
       const requests = await browser.evaluate('geminiAcceptance.audit.requests');
       await browser.evaluate('void geminiAcceptance.audit.map.panBy([15,15], {animate:false})');
       assert.equal(await browser.evaluate('geminiAcceptance.audit.requests'), requests);
@@ -159,7 +164,7 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
           result.points.display.features.every(f => bounds.contains([f.geometry.coordinates[1],f.geometry.coordinates[0]])); })()`));
     });
     await t.test('new complete pair replaces both batches with stable feature IDs; same-owner choices survive', async () => {
-      await click('Vis ledninger fra Gemini VA');
+      await click('Vis ledninger fra Gemini WFS');
       await browser.evaluate(`geminiAcceptance.oldPointNode = document.querySelector('${point}')`);
       await seeded('replacement');
       await browser.waitFor(`document.querySelectorAll('${point}').length === 2`);
@@ -167,7 +172,7 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       assert.equal(await browser.evaluate(`geminiAcceptance.oldPointNode.isConnected`), false);
       assert.equal(await count(`${card} [aria-label="Punkter: 2"]`), 1);
       assert(await browser.evaluate(`(() => { const ids = geminiAcceptance.geminiSession.getSnapshot().result.points.display.features.map(f => f.id); return new Set(ids).size === 2 && ids.every(id => typeof id === 'string'); })()`));
-      await click('Vis ledninger fra Gemini VA');
+      await click('Vis ledninger fra Gemini WFS');
     });
     await t.test('retained previous-good data stays rendered during loading and after simulated failure/staleness', async () => {
       await browser.evaluate(`(() => { geminiAcceptance.retained = geminiAcceptance.geminiSession.getSnapshot().result; geminiAcceptance.audit.mode='pending'; geminiAcceptance.pending=geminiAcceptance.geminiSession.refresh('survey'); })()`);
@@ -208,14 +213,14 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
           await writeFile(process.env.GEMINI_SCREENSHOT_PATH, Buffer.from(data, 'base64'));
         }
         const requests = await browser.evaluate('geminiAcceptance.audit.requests');
-        await click('Vis ledninger fra Gemini VA'); await browser.waitFor(`!document.querySelector('${line}')`);
+        await click('Vis ledninger fra Gemini WFS'); await browser.waitFor(`!document.querySelector('${line}')`);
         assert.equal(await count(point), points);
         assert.equal(await browser.evaluate('geminiAcceptance.audit.requests'), requests);
-        await click('Vis ledninger fra Gemini VA');
+        await click('Vis ledninger fra Gemini WFS');
       }
     });
     await t.test('clear removes vectors/card, next result restores defaults, source removal and full reset clear presentation', async () => {
-      await seeded(); await click('Vis ledninger fra Gemini VA');
+      await seeded(); await click('Vis ledninger fra Gemini WFS');
       await browser.evaluate('geminiAcceptance.clear()'); await browser.waitFor(`!document.querySelector('${card}')`);
       assert.equal(await count(line), 0); assert.equal(await count(point), 0);
       await seeded(); await browser.waitFor(`document.querySelector('${line}')`);

@@ -10,6 +10,9 @@ export const LAYER_HIGHLIGHT_PALETTE = [
 export const DEFAULT_HIGHLIGHT_OPACITY = 0.55;
 export const DEFAULT_HIGHLIGHT_SPREAD = 4;
 
+// Reserved external-reference source treatment, outside the survey auto palette.
+export const GEMINI_WFS_HALO = Object.freeze({ color: '#4338CA', opacity: 0.55, spread: 4 });
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export function getNextLayerHighlightColor(layers, layerOrder) {

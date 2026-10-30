@@ -68,6 +68,8 @@ test('Home owns conditional native modal, map connection entry, and callback pat
   assert.match(modal, /geminiSession.selectSource\(sourceId\)/); assert.match(modal, /geminiSession.fetch\(sourceId\)/);
   assert.match(card, /geminiSession.refresh\(result.provenance.sourceLayerId\)/);
   for (const source of [modal, card, entry]) {
+    assert.doesNotMatch(source, /Gemini VA/);
+    assert.match(source, /Gemini WFS/);
     assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB|console\.|Authorization|fetch\(['"]|parseGeminiGml|normalizeFeature|faerder\.geminisuite/);
   }
   assert.doesNotMatch(modal, /autoComplete="off"|type="url"|useState\(['"](?:username|password)/);

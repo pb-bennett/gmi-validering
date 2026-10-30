@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { register } from 'node:module';
 register('./esmJsLoader.mjs', import.meta.url);
 const { createGeminiPresentation, getGeminiReferenceBounds, getGeminiReferenceNotice,
-  GEMINI_REFERENCE_Z_INDEX, GEMINI_LINE_STYLE, GEMINI_POINT_STYLE } = await import('../src/lib/gemini-wfs/geminiReferencePresentation.mjs');
+  GEMINI_REFERENCE_Z_INDEX, GEMINI_LINE_STYLE, GEMINI_POINT_STYLE,
+  getGeminiFeatureStyle, getGeminiHaloStyle } = await import('../src/lib/gemini-wfs/geminiReferencePresentation.mjs');
+const { GEMINI_WFS_HALO, LAYER_HIGHLIGHT_PALETTE, getLineCasingStyle } = await import('../src/lib/map/layerHighlight.mjs');
 const { PHOTO_MARKER_Z_INDEX, PHOTO_PLACEMENT_Z_INDEX } = await import('../src/lib/photos/photoMapPanes.mjs');
 
 const result = (lines = [], points = [], owner = {}) => ({
@@ -97,16 +99,32 @@ test('pane and restrained shared-token styles remain below existing survey/photo
   assert.equal(GEMINI_REFERENCE_Z_INDEX, 380);
   assert(GEMINI_REFERENCE_Z_INDEX < 390 && 390 < 400 && 400 < 600 && 600 < PHOTO_MARKER_Z_INDEX && PHOTO_MARKER_Z_INDEX < PHOTO_PLACEMENT_Z_INDEX);
   assert.equal(GEMINI_LINE_STYLE.interactive, false); assert.equal(GEMINI_POINT_STYLE.interactive, false);
-  assert.equal(GEMINI_POINT_STYLE.radius, 3);
-  assert(GEMINI_LINE_STYLE.weight <= 2 && GEMINI_LINE_STYLE.opacity < 1);
+  assert.equal(GEMINI_POINT_STYLE.radius, 6);
+  assert(GEMINI_LINE_STYLE.weight === 3 && GEMINI_LINE_STYLE.opacity < 1);
   assert.match(GEMINI_LINE_STYLE.color, /^var\(--gmi-/);
+});
+
+test('Gemini source halo is reserved outside survey defaults and reuses the survey casing helper', () => {
+  assert(!LAYER_HIGHLIGHT_PALETTE.includes(GEMINI_WFS_HALO.color));
+  const halo = getGeminiHaloStyle(false);
+  assert.equal(halo.color, GEMINI_WFS_HALO.color);
+  assert.equal(halo.weight, getLineCasingStyle(GEMINI_LINE_STYLE, GEMINI_WFS_HALO).weight);
+  assert(getGeminiHaloStyle(true).radius > GEMINI_POINT_STYLE.radius);
+  for (const point of [true, false]) {
+    const normal = getGeminiFeatureStyle(point), selected = getGeminiFeatureStyle(point, { selected: true });
+    assert.equal(selected.color, '#00FFFF');
+    assert(selected.weight > normal.weight);
+    assert.equal(getGeminiHaloStyle(point, { selected: true }).color, GEMINI_WFS_HALO.color);
+    if (point) assert(selected.radius > normal.radius);
+  }
 });
 test('MapInner/LayerManager mount independent components without modifying survey/WMS/popup pipelines', async () => {
   const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
-  const [map, manager, layer, card, presentation] = await Promise.all([
+  const [map, manager, layer, card, presentation, inspection] = await Promise.all([
     read('../src/components/MapInner.js'), read('../src/components/LayerManager.js'),
     read('../src/components/gemini-wfs/GeminiReferenceLayer.js'), read('../src/components/gemini-wfs/GeminiReferenceCard.js'),
     read('../src/lib/gemini-wfs/geminiReferencePresentation.mjs'),
+    read('../src/components/gemini-wfs/GeminiInspectionSide.js'),
   ]);
   assert.match(map, /<GeminiReferenceLayer inspectionEnabled=\{!measureMode && !photoPlacement && !photoDirectionEdit\}/); assert.match(manager, /<GeminiReferenceCard onOpenConnection=\{onOpenGemini\}/);
   assert.match(map, /name="layer-highlight-casing" style=\{\{ zIndex: 390/);
@@ -116,7 +134,7 @@ test('MapInner/LayerManager mount independent components without modifying surve
   // M6 deliberately enables only dedicated inspection paths; the pane remains transparent.
   assert.match(layer, /pointerEvents: 'none'/); assert.match(layer, /enabled=\{inspectionEnabled\}/);
   assert.doesNotMatch(layer, /onEachFeature|bindPopup|eventHandlers|draggable|normalizeFeature|proj4|parseGeminiGml/);
-  for (const source of [layer, presentation]) {
+  for (const source of [layer, presentation, inspection]) {
     assert.doesNotMatch(source, /setCredentials|\.fetch\(|\.refresh\(|addLayer|localStorage|sessionStorage|setState|normalizeFeature/);
   }
   // M5 deliberately adds explicit card refresh/disconnect; the rendering and

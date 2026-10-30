@@ -1,8 +1,8 @@
 # Gemini WFS M7: real-service acceptance
 
-Latest continuation: **2026-10-30 — Vercel Deployment Protection root cause established; explicit browser `credentials: 'same-origin'` fix implemented.** The main-PC 401 came from Vercel before Next.js/M1 executed, not from Gemini. Direct main-PC Gemini requests succeed for both feature types, including the exact app BBOX. Server-to-Gemini authentication and destination/origin restrictions remain unchanged. See **Vercel Deployment Protection correction** below for current evidence and validation. Redeploy and retest the protected preview through the normal browser workflow; M7 real line/point/map acceptance remains incomplete until that succeeds.
+Latest continuation: **2026-10-30 — hosted Gemini WFS acceptance verified; M7 presentation closeout implemented and validated.** The user confirmed 461 lines / 329 points, correct rendering/alignment, both curated popups, browser autofill, and disconnect/reconnect with identical counts after checkpoint `8266e5a`. Gemini now has an indigo source halo, clear foreground geometry, hover and local selection, and consistent Gemini WFS terminology. Separate session/data ownership and all fetch/security behavior are preserved. See **Hosted acceptance and presentation closeout** below and `20261030-gemini-wfs-m7-presentation-closeout.md`. Historical pending/redeploy statements below describe earlier checkpoints and are superseded by this evidence. New presentation has automated/local synthetic verification; no hosted visual review of the new styling is claimed.
 
-Date: 2026-10-29. **Status: guarded MIME compatibility is implemented using the shared strict M2 parser and a dedicated Node XML DOM adapter. The earlier origin and sole `featureMembers` fixes are preserved. Prior diagnostic evidence established 1,201 real lines; normal-path line/point/map acceptance still requires manual reimport/login. M7 remains incomplete pending that user action. M8/topology/validation work has not started.**
+Initial checkpoint, 2026-10-29 (historical; superseded by closeout below): guarded MIME compatibility implemented using the shared strict M2 parser and dedicated Node XML DOM adapter. Earlier origin and `featureMembers` fixes preserved. Prior diagnostic evidence established 1,201 real lines; acceptance was pending manual reimport/login at that time. No M8/topology/validation work started.
 
 ## Starting state
 
@@ -603,3 +603,51 @@ Focused ESLint and diff checks passed. Production build passed (Next.js 16.1.6, 
 ### Next acceptance step
 
 **Redeploy the protected preview with this change, open the resulting preview in the normal Vercel-authenticated browser session, and retry Hent eksisterende anlegg.** Use the existing application form; do not send credentials to this agent or export a HAR/auth headers. Confirm both API requests reach M1 and return successful line/point results, then record safe aggregate counts and map behavior. This correction is locally validated, but hosted protected-preview acceptance and full M7 acceptance remain pending. No deployment was made by this run, and no topology/matching/validation work was started.
+
+## Hosted acceptance and presentation closeout
+
+Date: **2026-10-30**. Starting checkpoint: **`8266e5a` — Fix Gemini WFS access on protected previews**, branch `feature/photo-workspace`, initially clean worktree. The user supplied the following completed hosted acceptance on the main work PC. These are manual user observations, not new real-service requests performed by this agent:
+
+| Hosted check | Verified evidence |
+| --- | --- |
+| Protected Vercel preview | Normal browser workflow succeeds after explicit same-origin credential correction. The earlier 401 was Vercel interception before M1, not a Gemini rejection. |
+| Browser credential storage/autofill | Browser password-manager storage and autofill work. Application credential persistence remains prohibited and absent. |
+| Real result | **461 lines and 329 points**. |
+| Line rendering | Real lines render with correct apparent geographic alignment. |
+| Point rendering | Real points render with correct apparent geographic alignment. |
+| Line inspection | Real curated line popup works, including sensible type/nettype/dimension/material/year/status/owner/responsible/length/ID fields. |
+| Point inspection | Real curated point popup works; source geometry elevation and attributes such as COVER_Z remain distinct. |
+| Disconnect/reconnect | Works; reconnect returns the same **461 / 329** counts. |
+| Domain separation | Gemini reference data remains separate from normal GMI/SOSI survey data. Browser/Vercel credentials are not forwarded to Gemini. |
+
+Hosted refresh, independent visibility, zoom, and the new halo/selection appearance were **not reported as manually checked**. Their functional behavior is covered by automated browser/session tests. The new styling was reviewed on a local synthetic screenshot without a basemap; its appearance against both hosted Kartverket basemap variants is a follow-up visual check, not an asserted manual acceptance result.
+
+### Presentation decisions
+
+Inspected `MapInner.js` and `map/layerHighlight.mjs` before changing Gemini. Survey line rendering separates primary strokes from casings; white-filled point symbols receive matching source halos; cyan and increased size identify selection. Survey halo colours are assigned per imported layer from a palette, not intrinsically fixed by GMI/SOSI format. That palette and all survey rendering remain unchanged.
+
+Reserved **indigo `#4338CA`**, opacity **0.55**, spread **4**, as `GEMINI_WFS_HALO` in the existing shared halo module, outside the survey automatic palette. This avoids the validation red/amber/green family and distinguishes Gemini from ordinary survey defaults. Users can still manually choose custom survey colours; uniqueness against every custom colour is not claimed. The source card repeats the same indigo swatch. Dark navy primary geometry and opaque white-filled points provide contrast independently of the halo; translucent casing and pane 380 keep the reference below survey casing/vectors/markers.
+
+Gemini uses the existing `getLineCasingStyle` and `getPointHaloSpread` helpers, with paired Leaflet GeoJSON/SVG layers. Lines are 3 px with 7 px source casing at rest; white-filled circle points have 6 px radius with a larger halo. No speculative FCODE classification or validation semantics were introduced. Hover increases weight/size. Selection uses the survey cyan treatment with greater width/radius while retaining the indigo source halo. Halo paths also provide a wider click target. All paths honor existing tool suppression, and selection follows the owned popup rather than survey-store highlight state.
+
+Independent line/point toggles, zoom, refresh and disconnect retain their existing design. Hiding a side removes its primary and halo together, closes its popup, preserves the other side's nodes, and does not change source records, imported surveys, or request counts. Switching inspection, popup close, result replacement, tool changes and disconnect clear owned selection appropriately. Curated popup fields and geometry Z/COVER_Z handling are unchanged.
+
+All user-visible integration occurrences of Gemini VA in the dedicated WFS components, error mappings and popup provenance now say **Gemini WFS**. Related test expectations were updated. Stable `gemini-va-*` internal DOM IDs were retained to avoid unnecessary autofill/form-identity changes. Genuine references to the separate Gemini VA program in application information, SOSI history and validation documentation were preserved.
+
+### Architecture and safety
+
+No survey `addLayer()` insertion, store mutation, matching, topology, validation, snapping, photo work or new data domain was introduced. Rendering receives the existing immutable display/source pair and uses effect-local hover/selection only. The shared survey halo module only gains an exported constant; existing functions/palette are unchanged. `MapInner.js`, survey store, parser/projection, client/session, WFS proxy/policy and request construction have no diff from checkpoint `8266e5a`.
+
+Therefore fixed endpoint/types, WFS 2.0.0, strict BBOX/100 m buffer/EPSG:25832, GML 3.2 featureMembers, guarded text/html compatibility, limits/no redirects, atomic publication/stale-request handling, same-origin browser fetch, server-only request-local Basic, no cookie/Authorization forwarding, session-only Gemini credentials, and origin/CSRF protections are preserved and regression-tested.
+
+### Final validation
+
+- **259 Node tests passed, 0 failed, 0 skipped**, across 21 files: all nine non-browser `gemini*.test.mjs` suites plus WFS proxy/policy/MIME, line styles, hover tooltip, layer halo/panel/order/presentation, map pane/background controls and WMS policy. A subsequent 27-test rerun of the three edited presentation/UI/popup unit suites passed; those overlapping results are not added to 259.
+- **91 browser tests passed, 0 failed, 0 skipped**, including parents, across `geminiReferenceBrowser`, `geminiPopupBrowser`, `geminiWorkflowBrowser`, `geminiServiceBrowser`, and `geminiGmlBrowser`. Includes native Vercel-cookie-gate regression, form/autofill/privacy, both actual-pointer popups, local selection and restore, tool suppression, unchanged survey/photo interactions, visibility isolation, zoom, refresh/atomic replacement, disconnect and 2000-line/2000-point synthetic rendering.
+- Final synthetic render timings: 267 lines / 162 points in **550 ms**, cap-sized 2000 / 2000 in **1148 ms** on this PC. These are local single-run observations, not hosted performance guarantees.
+- Initial browser runs exposed an outdated expected navy colour and a test fixture point covered by its popup. Corrected the token expectation, exercised cross-side selection through its Leaflet event while retaining separate actual-pointer tests, and waited for outgoing popup fade completion. Final complete browser run passes.
+- Focused ESLint on all changed JS/MJS files passed. No unrelated MapInner lint debt was changed.
+- `npm.cmd run build` passed: Next.js 16.1.6 compiled, TypeScript checks and eight static pages completed; API routes remain dynamic. Existing Browserslist-age notice and Node test module-type/localStorage harness warnings remain.
+- `git diff --check` passed; branch/status reviewed. Combined distinct selected coverage: **350 passed**. Full repository suite not run. Synthetic screenshot reviewed locally; no real credentials, saved authentication values, real municipal payload, or authenticated browser trace was inspected/exported.
+
+**Closeout:** requested M7 presentation implementation and local validation are complete; real hosted fetch/map/popup/reconnect acceptance is recorded. New presentation can be checked after deployment, especially against both Kartverket basemaps and for hosted refresh/visibility/zoom. No commits, pushes or deployment were made. Stop here; photo support is the user's next intended task and was not started.

@@ -8,6 +8,7 @@ import useGeminiPresentation from './useGeminiPresentation';
 import { geminiPresentation, getGeminiReferenceBounds, getGeminiReferenceNotice } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
 import { geminiSession } from '@/lib/gemini-wfs/geminiSession.mjs';
 import { getGeminiUiError } from '@/lib/gemini-wfs/geminiWorkflowUi.mjs';
+import { GEMINI_WFS_HALO } from '@/lib/map/layerHighlight.mjs';
 
 export default function GeminiReferenceCard({ onOpenConnection }) {
   const session = useGeminiSession();
@@ -19,10 +20,13 @@ export default function GeminiReferenceCard({ onOpenConnection }) {
   const notice = session.error ? `${getGeminiUiError(session.error)} Forrige resultat vises.` : getGeminiReferenceNotice(session);
   const connected = session.connectionStatus === 'connected';
   return (
-    <section className="border-b-2 border-gmi-border py-1 text-gmi-text" aria-label="Eksisterende anlegg · Gemini VA">
+    <section className="border-b-2 border-gmi-border py-1 text-gmi-text" aria-label="Eksisterende anlegg · Gemini WFS">
       <div className="flex items-start gap-2 p-2">
         <div className="min-w-0 flex-1">
-          <h3 className="text-xs font-medium">Eksisterende anlegg · Gemini VA</h3>
+          <h3 className="flex items-center gap-1.5 text-xs font-medium">
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: GEMINI_WFS_HALO.color }} />
+            Eksisterende anlegg · Gemini WFS
+          </h3>
           <p className="truncate text-[10px] text-gmi-text-subtle" title={sourceName}>
             Referanse{sourceName ? ` · ${sourceName}` : ''}
           </p>
@@ -41,8 +45,8 @@ export default function GeminiReferenceCard({ onOpenConnection }) {
             <span className="flex-1">{label}</span>
             <span className="text-[10px] tabular-nums text-gmi-text-subtle" aria-label={`${label}: ${result.counts[side]}`}>{result.counts[side]}</span>
             <button type="button" onClick={() => geminiPresentation.setVisible(side, !visible)}
-              aria-label={`Vis ${label.toLowerCase()} fra Gemini VA`} aria-pressed={visible}
-              title={`${visible ? 'Skjul' : 'Vis'} ${label.toLowerCase()} fra Gemini VA`}
+              aria-label={`Vis ${label.toLowerCase()} fra Gemini WFS`} aria-pressed={visible}
+              title={`${visible ? 'Skjul' : 'Vis'} ${label.toLowerCase()} fra Gemini WFS`}
               className="gmi-focus-ring rounded-lg p-1 text-gmi-text-muted hover:bg-gmi-surface-soft hover:text-gmi-navy">
               <Icon size={14} weight="regular" aria-hidden="true" />
             </button>
@@ -58,7 +62,7 @@ export default function GeminiReferenceCard({ onOpenConnection }) {
         </button>
         {onOpenConnection && <button type="button" onClick={() => onOpenConnection(result.provenance.sourceLayerId)}
           aria-label="Endre Gemini-tilgang eller innmålingsfil" className="gmi-compact-button gmi-focus-ring px-2 py-1">Tilgang</button>}
-        <button type="button" onClick={() => geminiSession.disconnect()} aria-label="Koble fra Gemini VA" title="Koble fra og fjern Gemini-referansen"
+        <button type="button" onClick={() => geminiSession.disconnect()} aria-label="Koble fra Gemini WFS" title="Koble fra og fjern Gemini-referansen"
           className="gmi-compact-button gmi-focus-ring ml-auto flex items-center gap-1 px-2 py-1">
           <PlugsIcon size={13} weight="regular" aria-hidden="true" />Koble fra
         </button>
