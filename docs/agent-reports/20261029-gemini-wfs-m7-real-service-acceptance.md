@@ -1,4 +1,6 @@
-# Gemini VA WFS M7: real-service acceptance
+# Gemini WFS M7: real-service acceptance
+
+Latest continuation: **2026-10-30 — Vercel Deployment Protection root cause established; explicit browser `credentials: 'same-origin'` fix implemented.** The main-PC 401 came from Vercel before Next.js/M1 executed, not from Gemini. Direct main-PC Gemini requests succeed for both feature types, including the exact app BBOX. Server-to-Gemini authentication and destination/origin restrictions remain unchanged. See **Vercel Deployment Protection correction** below for current evidence and validation. Redeploy and retest the protected preview through the normal browser workflow; M7 real line/point/map acceptance remains incomplete until that succeeds.
 
 Date: 2026-10-29. **Status: guarded MIME compatibility is implemented using the shared strict M2 parser and a dedicated Node XML DOM adapter. The earlier origin and sole `featureMembers` fixes are preserved. Prior diagnostic evidence established 1,201 real lines; normal-path line/point/map acceptance still requires manual reimport/login. M7 remains incomplete pending that user action. M8/topology/validation work has not started.**
 
@@ -456,3 +458,148 @@ The paragraphs below describe the previous stopping point; the authorized guarde
 The real line profile mismatch is explained and narrowly corrected, and the same response passes strict M2 with 1,201 lines. No point request was sent after development reload cleared credentials; one-point verification needs a restored manual login. Choose provider MIME correction or explicitly agree a shared strict server-validation design before normal acceptance. No further service calls or MIME changes were made after this boundary.
 
 Real point count, normal-path display/map/popup/refresh/disconnect acceptance and end-to-end M7 success remain **unverified**. No unconditional `text/html` acceptance has been added.
+
+## QGIS-success / app-401 diagnosis
+
+Initial diagnostic continuation date: 2026-10-30. This subsection records the earlier handoff and is superseded by **Vercel Deployment Protection correction** below. The subsequent main-PC evidence establishes that the reported browser 401 was Vercel interception before M1, not upstream Gemini `authentication_failed`. Do not classify it as a bad-password failure.
+
+### Evidence and location of the 401
+
+- User evidence: a newly created QGIS WFS connection succeeds with the same username/password used by GMI Validator; the browser reports `POST /api/gemini-wfs` with HTTP 401 and the UI reports authentication failure.
+- The user clarified that this agent is on the backup development PC. Its installed QGIS is 3.44.10, but its sole discovered default profile has no saved WFS connection. No running QGIS or local app/debug listener was found in the inspected processes/ports. This does not contradict the main-PC success. No saved password, authentication database contents, browser credential values, or real Authorization values were inspected.
+- The user supplied the successful connection's base endpoint: `https://faerder.geminisuite.com/portal/api/proxy/map/va-basis.wfs`. This is identical to M1's fixed endpoint. A base host/path mismatch is ruled out by the supplied URL; a canonical destination or operation URL advertised later by capabilities is still unverified.
+- Code audit: the route exports M1's POST handler directly. Local header/body rejection returns 400/403/405/413/415, not 401. After successful local validation, the handler invokes fetch against the fixed HTTPS URL. `validateWfsUpstreamStatus(401)` alone creates `authentication_failed`/401, before MIME handling or parsing. Redirects instead produce `upstream_redirect`/502.
+- Synthetic route regression now verifies an accepted POST reaches injected upstream and that upstream 401 becomes safe `authentication_failed`/401. Existing regressions verify rejected local requests never invoke upstream and that upstream error bodies/headers are neither read nor forwarded.
+- **Corrected interpretation:** route-level tests describe what happens only after M1 executes. They do not establish where the main-PC browser 401 originated. Subsequent evidence identifies Vercel Deployment Protection as its source, before the route. The client's bare-401 fallback explains the misleading authentication UI. There was no Gemini upstream 401 in that intercepted exchange.
+
+### Safe app request semantics
+
+| Item | Current behavior |
+| --- | --- |
+| Browser request | Fixed relative `POST /api/gemini-wfs`; JSON body; now explicit `credentials: same-origin` (previously `omit`); `cache: no-store`; `redirect: error`. Gemini credentials occur transiently in JSON, never query parameters. App/deployment session cookies travel only to the same-origin API. |
+| Upstream method/path | `GET /portal/api/proxy/map/va-basis.wfs` on the fixed `https://faerder.geminisuite.com` origin. |
+| Query keys, in construction order | `SERVICE=WFS`, `VERSION=2.0.0`, `REQUEST=GetFeature`, `TYPENAMES=gemini:VA_LINE` or `gemini:VA_MPNT`, `SRSNAME=EPSG:25832`, `BBOX=minX,minY,maxX,maxY,EPSG:25832`. Uppercase keys; plural `TYPENAMES`. |
+| Query encoding | `URLSearchParams` percent-encodes colons and commas. The BBOX is easting/northing order with a fifth CRS component. Actual failed-request coordinates were not inspected. There is no evidence that order or encoding causes the 401. |
+| Accept | `application/gml+xml, application/xml, text/xml`. |
+| Authentication | One server-created preemptive Basic header; no challenge retry, capabilities/describe preflight, or shared authentication session. |
+| User-Agent | No application override. A synthetic local HTTP observation using this backup PC's Node v24.19.0 / Undici 7.29.0 showed the transport supplies `node`; the main PC's runtime/wire value is unverified. |
+| Cookies | No outgoing Cookie header, no cookie jar, no browser cookie forwarding, and no storage/use of upstream Set-Cookie. |
+| Redirects | `manual`; every upstream 3xx is rejected. |
+| Body / Content-Type | No upstream body; no Content-Type set. |
+| Host | Not copied from the browser or set by application code. Fetch derives the upstream authority from the fixed URL. |
+| Other benign headers | No application Referer, Origin, Accept-Encoding, or Connection override. The synthetic local HTTP probe showed no Referer/Origin, `Connection: keep-alive`, `Accept-Encoding: gzip, deflate`, and transport-added `Cache-Control: no-cache` / `Pragma: no-cache`. This is a local HTTP observation, not a capture of the authenticated HTTPS request; do not assume identical TLS compression defaults. |
+
+### Basic construction and QGIS behavior
+
+The implementation constructs `username + ":" + password`, encodes it as UTF-8 with Node Buffer, then Base64-encodes those bytes. JSON is parsed first. The form reads native FormData strings, the private session copies them unchanged, and the browser serializes them with JSON.stringify. There is no credential trimming, Unicode normalization, URL/form encoding, or surviving JSON escaping. Whitespace is preserved. Control characters/newlines, invalid surrogate sequences, and colons in usernames are rejected before fetch; they are not silently transformed. Username validation uses trim only to reject an entirely whitespace username, not to modify its value. One Authorization header is constructed; incoming browser authentication headers are not forwarded.
+
+A new invented-credential test compares decoded generated bytes with an independently written numeric UTF-8 byte vector. It covers leading/trailing spaces, non-ASCII text, a decomposed accent, a colon in the password, backslash, quote, plus, percent, and an escaped JSON username. It also checks one Authorization field. No real credential is used. Existing native-form browser tests verify synthetic autofill/form values reach the client intact. Actual autofill contents on the main PC remain unobserved and are not blamed for the failure.
+
+The [QGIS 3.44 authorization implementation](https://api.qgis.org/api/3.44/qgsauthorizationsettings_8cpp_source.html) has separate branches: a nonempty Authentication Configuration delegates to the auth manager; direct username/password constructs preemptive Basic from UTF-8 username/colon/password bytes. Thus QGIS can use the same Basic construction, and a mandatory challenge flow must not be assumed. This is source-level evidence for the documented 3.44 implementation, not proof of the main PC's selected method/version or actual successful network sequence.
+
+### Challenge, redirect, session, and header findings
+
+One unauthenticated GET using the app's query contract and Accept value reached the fixed real endpoint. Only safe metadata was emitted:
+
+| Observation | Result |
+| --- | --- |
+| HTTP status | 401 |
+| WWW-Authenticate present / recognized scheme | Yes / Basic; realm and complete header were not output. |
+| Set-Cookie present | No |
+| Redirect destination | None; no 3xx occurred. |
+
+The initial sandbox transport could not connect; the single transmitted probe ran outside that network isolation. No Authorization was sent, no response body was retained, and there were zero real authenticated app attempts. This confirms Basic is advertised for an unauthenticated app-shaped request. It does **not** establish a required challenge/retry, a successful auth scheme, cookie behavior after authentication, or redirects in the successful QGIS flow. No header differential comparison was possible without that reference. No QGIS headers were copied speculatively.
+
+### Earlier handoff (superseded by Vercel diagnosis below)
+
+At this earlier stopping point, the cause was unknown and no upstream protocol workaround was justified. The subsequent Vercel diagnosis below resolves the apparent authentication failure without changing Gemini protocol behavior. Fixed destination restrictions and redirect rejection remain unchanged.
+
+The only production change in this run is authentication error wording: the relevant UI and service error now say `Gemini WFS-tjenesten avviste autentiseringen. Årsaken er ikke avklart.` The server's safe English error also names Gemini WFS. This removes the unsupported instruction to check the password. Other existing Gemini VA labels are recorded for M7 cleanup and were not broadly changed.
+
+Collect the following **non-secret information from the successful connection on the main work PC** before attempting a protocol fix:
+
+1. QGIS version and selected WFS version (including whether automatic negotiation is selected).
+2. Direct Basic tab versus a saved Authentication Configuration; if configured, only the authentication method, such as Basic, OAuth2, or NTLM. Do not provide usernames, passwords, config exports, tokens, or Authorization.
+3. Safe operation sequence and request metadata: GetCapabilities, DescribeFeatureType, GetFeature (or other preflight); method; origin/path; allowlisted WFS parameter names/values and ordering; `TYPENAME` versus `TYPENAMES`; SRSNAME and BBOX syntax; any operation URL advertised by capabilities.
+4. Response statuses in sequence; challenge scheme only; cookie presence booleans; redirect destination origin/path only. Establish whether authentication is preemptive, challenge-based, or managed by a saved/system authentication flow. Do not export a HAR, complete headers, cookie values, or auth data.
+5. For one failed app attempt, safe local response code and upstream status only, to establish route acceptance/fetch/401/mapping directly. Reuse existing private credentials if available; do not capture or request their values.
+
+The earlier handoff asked for main-PC metadata before retrying. That metadata has now arrived and establishes the Vercel boundary failure. The current next step is to redeploy the browser credential-mode correction and retest **Hent eksisterende anlegg** through the authenticated protected-preview browser session. Setting up WFS on the backup PC is unnecessary for this fix.
+
+### Regression coverage and validation
+
+- `node --test tests/wfsProxyHandler.test.mjs tests/wfsProxyPolicy.test.mjs tests/geminiClient.test.mjs tests/geminiWorkflowUi.test.mjs tests/geminiSession.test.mjs`: **73 passed, 0 failed, 0 skipped**. Includes the new independent byte vector, route-level upstream-401 mapping, request destination/origin restrictions, safe errors, redirect rejection, and private session lifecycle.
+- Synthetic `tests/geminiWorkflowBrowser.test.mjs` with `GEMINI_WORKFLOW_SCREENSHOT_PATH` removed: **16 passed, 0 failed, 0 skipped**, including parent. Uses local fixtures and invented credentials. An initial run found a remaining old-message assertion and a dependent timeout; both were resolved by updating that assertion, and the complete rerun passed.
+- Focused ESLint for the six changed JavaScript/MJS files: passed with no output/errors. `git diff --check`: passed.
+- No parser, MIME compatibility, map, popup, photo, topology, validation/matching, dependency, or deployment behavior was changed. A production build and full repository suite were not rerun for the wording/test changes.
+
+## Vercel Deployment Protection correction
+
+Current continuation, 2026-10-30. **Root cause established from user-supplied main-PC evidence: Vercel Authentication rejected the API request before Next.js/M1 executed because the browser fetch explicitly omitted its same-origin deployment session cookie.** This section supersedes the earlier unresolved-authentication handoff. It does not invalidate earlier authenticated Gemini responses obtained directly or on the backup PC.
+
+### Decisive evidence supplied from the main work PC
+
+| Request | Result |
+| --- | --- |
+| Fresh QGIS connection using the same Gemini account | Works |
+| Challenge-based Basic GetCapabilities | HTTP 200 |
+| Preemptive Basic GetCapabilities | HTTP 200 |
+| Direct preemptive GetFeature, `gemini:VA_MPNT` | HTTP 200 |
+| Direct preemptive GetFeature, `gemini:VA_LINE` | HTTP 200 |
+| Exact app-shaped VA_LINE request, BBOX `[579939, 6565821, 580300, 6566150]` | HTTP 200 |
+| Exact app-shaped VA_MPNT request, same BBOX | HTTP 200 |
+| PowerShell POST to protected preview `/api/gemini-wfs` | HTTP 401, `application/json`, message `Protected by Vercel Authentication` |
+
+The tested preview was `https://gmi-validator-fo9f74wkt-paul-bennetts-projects.vercel.app`. These are user-reported main-PC results; this continuation did not repeat real authenticated service calls or inspect credentials. The exact Gemini endpoint remains `https://faerder.geminisuite.com/portal/api/proxy/map/va-basis.wfs`.
+
+Gemini authentication, preemptive Basic, endpoint, WFS version/query contract, both feature types, and the exact app BBOX are confirmed working by those direct comparisons. A Gemini challenge/session/redirect workaround is unnecessary. The exact successful QGIS network sequence is not needed to fix this independently established deployment boundary failure.
+
+The page could load with a valid browser Vercel session, while the API fetch's `credentials: 'omit'` withheld that session cookie. Vercel intercepted the POST. Gemini credentials in the JSON body could not authenticate the request at that boundary, and M1 never contacted Gemini for that exchange. The client maps a bare 401 to `authentication_failed`, which explains why the UI appeared to blame Gemini. **The main-PC browser 401 must not be recorded as a confirmed upstream Gemini authentication failure.** Existing M1 tests of actual upstream-401 mapping remain valid for genuine provider failures.
+
+### Minimal fix and security review
+
+`src/lib/gemini-wfs/geminiClient.mjs` now explicitly uses `credentials: 'same-origin'` for the fixed relative `POST /api/gemini-wfs`. This allows the browser to send its same-origin app/deployment session cookie to the app's protection boundary. `cache: 'no-store'`, `redirect: 'error'`, the JSON contract, and private Gemini credential lifecycle are unchanged.
+
+The outgoing server request is independently constructed and unchanged: fixed HTTPS Gemini endpoint, GET, request-local UTF-8 Basic from JSON credentials, fixed Accept, manual redirects, no browser Cookie/Authorization forwarding, no session/cookie jar, and no persistence. Its explicit header set contains only `Authorization` and `Accept`; changing the browser's credential mode does not copy incoming request headers into that set. No Vercel cookie is sent to Gemini. The request-local Basic construction was already correct and was not modified.
+
+M1's origin and CSRF policy remains intact, including strict production same-origin validation and the existing narrow development loopback exception. Hostile/missing/cross-site origins remain rejected before any upstream fetch. No CORS permissions, redirect allowances, proxy destinations, or shared request utilities changed. WMS behavior is unchanged; its policy regressions were run as an additional check.
+
+The previously touched authentication error strings use **Gemini WFS** / **Gemini WFS-tjenesten** and do not instruct the user to correct a presumed bad password. This continuation changes no UI labels. Remaining untouched legacy labels are a later M7 cleanup item; no broad terminology rewrite was performed.
+
+### Regression coverage and results
+
+- Browser-client unit contract now requires explicit `credentials: 'same-origin'` for both fixed API POSTs, while retaining JSON-only Gemini credentials and no client-created Cookie/Authorization header.
+- M1 line/point regressions supply invented `_vercel_jwt` and app-session cookies plus incoming Authorization. They verify only the server-created Basic and fixed Accept reach the fixed Gemini endpoint, with no incoming Cookie/Authorization forwarded. The independent synthetic UTF-8 byte test remains passing.
+- Added a native Chromium regression to the M3 harness with a local HttpOnly session cookie and simulated deployment gate. An explicit `omit` control receives 401 before M1. The actual corrected client then sends its two same-origin requests through the gate and real M1 handler to an injected synthetic Gemini transport; parsing/display succeeds with one line and one point. Exactly one gate rejection and two upstream calls are asserted. The outgoing header set excludes the incoming cookie. This tests real browser cookie behavior without Vercel access, real credentials, or real Gemini requests.
+- M5 workflow browser audit now verifies the same-origin credential mode through the normal native form, alongside existing credential/privacy, refresh, disconnect, error, and WMS-form isolation checks.
+- Existing hostile-origin and forwarding-header-spoofing tests remain unchanged and pass.
+
+Commands and final results:
+
+```powershell
+node --test tests/geminiClient.test.mjs tests/wfsProxyHandler.test.mjs tests/wfsProxyPolicy.test.mjs tests/geminiSession.test.mjs tests/geminiStoreLifecycle.test.mjs tests/geminiWorkflowUi.test.mjs tests/wmsProxyPolicy.test.mjs
+```
+
+**100 passed, 0 failed, 0 skipped.** Existing module-type and unavailable-localStorage harness warnings remain.
+
+```powershell
+@'
+delete process.env.GEMINI_WORKFLOW_SCREENSHOT_PATH;
+await import('./tests/geminiServiceBrowser.test.mjs');
+await import('./tests/geminiWorkflowBrowser.test.mjs');
+'@ | node --input-type=module
+```
+
+**26 passed, 0 failed, 0 skipped**, including parent tests. Synthetic only; screenshots disabled. Combined selected Node/browser result: **126 passed**.
+
+```powershell
+node node_modules/eslint/bin/eslint.js src/lib/gemini-wfs/geminiClient.mjs src/lib/gemini-wfs/geminiErrors.mjs src/lib/gemini-wfs/geminiWorkflowUi.mjs src/lib/gemini-wfs/wfsProxyPolicy.mjs tests/geminiClient.test.mjs tests/wfsProxyHandler.test.mjs tests/geminiWorkflowUi.test.mjs tests/geminiWorkflowBrowser.test.mjs tests/browser/geminiWorkflowApp.js tests/geminiServiceBrowser.test.mjs tests/browser/geminiServiceChecks.mjs
+npm.cmd run build
+git diff --check
+```
+
+Focused ESLint and diff checks passed. Production build passed (Next.js 16.1.6, TypeScript checks, eight generated pages; WFS/WMS API routes remain dynamic). Existing outdated Browserslist notice remains. No dependency/font/configuration changes were needed. The full repository suite was not run.
+
+### Next acceptance step
+
+**Redeploy the protected preview with this change, open the resulting preview in the normal Vercel-authenticated browser session, and retry Hent eksisterende anlegg.** Use the existing application form; do not send credentials to this agent or export a HAR/auth headers. Confirm both API requests reach M1 and return successful line/point results, then record safe aggregate counts and map behavior. This correction is locally validated, but hosted protected-preview acceptance and full M7 acceptance remain pending. No deployment was made by this run, and no topology/matching/validation work was started.

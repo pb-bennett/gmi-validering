@@ -18,7 +18,8 @@ test('none/single/multiple choices resolve safely; valid explicit/session choice
   assert.equal(resolveGeminiSourceId([a, b], 'removed'), '');
 });
 test('authentication and permission are distinct Norwegian messages', () => {
-  assert.match(getGeminiUiError({ code: 'authentication_failed' }), /Kontroller brukernavn og passord/);
+  assert.equal(getGeminiUiError({ code: 'authentication_failed' }),
+    'Gemini WFS-tjenesten avviste autentiseringen. Årsaken er ikke avklart.');
   assert.match(getGeminiUiError({ code: 'permission_denied' }), /ikke tilgang/);
   assert.match(getGeminiUiError({ code: 'credentials_unavailable' }), /på nytt/);
 });

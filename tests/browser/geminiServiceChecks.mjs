@@ -25,6 +25,15 @@ async function rejects(work, expected) {
 }
 
 export const checks = [
+  ['native same-origin session passes a deployment gate; omit is rejected before M1', async () => {
+    const denied = await fetch('/api/gemini-wfs', {
+      method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    equal(denied.status, 401);
+    await denied.body.cancel();
+    const pair = await createGeminiClient()({ bbox, credentials: credentials() });
+    equal(pair.counts, { lines: 1, points: 1, total: 2 });
+  }],
   ['native decoder + native DOMParser + proj4 create one coherent source/display pair', async () => {
     const { calls, fetchProxy } = transport();
     const account = credentials();

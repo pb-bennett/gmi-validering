@@ -82,7 +82,9 @@ export function createGeminiClient({ fetchProxy = (...args) => globalThis.fetch(
       try {
         if (controller.signal.aborted) throw new GeminiServiceError('request_aborted');
         const pending = Promise.resolve(fetchProxy('/api/gemini-wfs', {
-          method: 'POST', cache: 'no-store', redirect: 'error', credentials: 'omit', signal: controller.signal,
+          // Preserve the app's same-origin session (including deployment protection).
+          // M1 constructs a separate upstream request without browser cookies.
+          method: 'POST', cache: 'no-store', redirect: 'error', credentials: 'same-origin', signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ connectionId: GEMINI_CONNECTION_ID, featureType, bbox,
             username: credentials.username, password: credentials.password }),

@@ -61,7 +61,7 @@ for (const [selector, type] of [['lines', 'gemini:VA_LINE'], ['points', 'gemini:
   test(`successful ${selector}: fixed URL, exact request-local Basic bytes and raw XML only`, async () => {
     const body = makeBody({ featureType: selector });
     const incomingAuth = randomUUID();
-    const cookie = randomUUID();
+    const cookie = `_vercel_jwt=${randomUUID()}; app_session=${randomUUID()}`;
     const h = harness(async () => xmlResponse({
       'Set-Cookie': randomUUID(), Location: 'https://attacker.example.test',
       'WWW-Authenticate': 'Basic', 'Cache-Control': 'public, max-age=10000',
@@ -100,6 +100,27 @@ for (const [selector, type] of [['lines', 'gemini:VA_LINE'], ['points', 'gemini:
     assert.equal(options.headers.Cookie, undefined);
   });
 }
+
+test('invented credentials match an independent UTF-8 byte vector after JSON decoding', async () => {
+  // Deliberately invented: spaces, non-ASCII, decomposed accent, colon,
+  // backslash, quote, plus and percent. Never use real credentials here.
+  const body = makeBody({ username: ' u\u00e6 ', password: ' p:e\u0301\\"+% ' });
+  const raw = JSON.stringify(body).replace('æ', '\\u00e6');
+  const expectedBytes = Buffer.from([
+    0x20, 0x75, 0xc3, 0xa6, 0x20, 0x3a, 0x20, 0x70, 0x3a,
+    0x65, 0xcc, 0x81, 0x5c, 0x22, 0x2b, 0x25, 0x20,
+  ]);
+  const h = harness();
+  assert.equal((await h.handle(makeRequest({ raw }))).status, 200);
+  assert.equal(h.calls.length, 1);
+  const headers = new Headers(h.calls[0][1].headers);
+  const synthetic = headers.get('authorization');
+  assert.ok(synthetic.startsWith('Basic '));
+  // Boolean assertions keep even synthetic encoded values out of failures.
+  assert.ok(Buffer.from(synthetic.slice(6), 'base64').equals(expectedBytes),
+    'Basic must contain exactly the independent UTF-8 bytes');
+  assert.equal([...headers.keys()].filter((key) => key === 'authorization').length, 1);
+});
 
 test('one handler keeps concurrent users request-local without sharing credentials or payloads', async () => {
   const inputs = [makeBody(), makeBody({ featureType: 'points' })];
@@ -366,7 +387,11 @@ test('client cancellation while reading response cancels that stream', async () 
 test('thin App Router exports Node/dynamic POST and safely denies all other supported methods', async (t) => {
   register('./esmJsLoader.mjs', import.meta.url);
   let calls = 0;
-  t.mock.method(globalThis, 'fetch', async () => { calls += 1; return xmlResponse(); });
+  let upstreamStatus = 200;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return upstreamStatus === 200 ? xmlResponse() : new Response(null, { status: upstreamStatus });
+  });
   const route = await import('../src/app/api/gemini-wfs/route.js');
   assert.equal(route.runtime, 'nodejs');
   assert.equal(route.dynamic, 'force-dynamic');
@@ -377,4 +402,7 @@ test('thin App Router exports Node/dynamic POST and safely denies all other supp
   assert.equal(calls, 0);
   assert.equal((await route.POST(makeRequest())).status, 200);
   assert.equal(calls, 1);
+  upstreamStatus = 401;
+  await assertError(await route.POST(makeRequest()), 'authentication_failed', 401);
+  assert.equal(calls, 2);
 });

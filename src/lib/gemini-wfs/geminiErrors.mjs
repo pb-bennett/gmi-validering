@@ -15,7 +15,7 @@ const MESSAGES = Object.freeze({
   request_too_large: 'Forespørselen er for stor.',
   unsupported_media_type: 'Forespørselen har et format som ikke støttes.',
   origin_rejected: 'Forespørselens opprinnelse ble avvist.',
-  authentication_failed: 'Gemini-tilgangen ble avvist. Oppgi tilgang på nytt.',
+  authentication_failed: 'Gemini WFS-tjenesten avviste autentiseringen. Årsaken er ikke avklart.',
   permission_denied: 'Gemini ga ikke tilgang til anleggene.',
   provider_rate_limited: 'Gemini mottar for mange forespørsler. Prøv senere.',
   timeout: 'Hentingen tok for lang tid.',

@@ -23,7 +23,7 @@ const ERRORS = Object.freeze({
   unsupported_media_type: [415, 'WFS requests require application/json'],
   origin_rejected: [403, 'WFS request origin is not allowed'],
   method_not_allowed: [405, 'Only POST is allowed'],
-  authentication_failed: [401, 'Gemini authentication failed'],
+  authentication_failed: [401, 'Gemini WFS authentication failed'],
   permission_denied: [403, 'Gemini access was denied'],
   provider_rate_limited: [429, 'Gemini request limit reached'],
   timeout: [504, 'WFS request timed out'],

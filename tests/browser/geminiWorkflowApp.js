@@ -49,7 +49,8 @@ globalThis.fetch = async (url, init) => {
   const body = JSON.parse(init.body), { featureType } = body;
   audit.calls.push({ url, featureType, bbox: body.bbox, keys: Object.keys(body).sort(),
     credentialsMatch: body.username === currentCredentials?.username && body.password === currentCredentials?.password,
-    safeHeaders: !init.headers.Authorization && !init.headers.Cookie });
+    safeHeaders: !init.headers.Authorization && !init.headers.Cookie,
+    sameOriginCredentials: init.credentials === 'same-origin' });
   if (audit.mode === 'pending') return new Promise((resolve) => waiting.push((mode) => resolve(response(featureType, mode))));
   return response(featureType, audit.mode);
 };

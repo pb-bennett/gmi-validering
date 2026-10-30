@@ -68,7 +68,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       await browser.waitFor(`document.querySelector('${card}') && document.querySelector('.gmi-gemini-reference-point')`);
       assert.equal(await count('.gmi-gemini-reference-line'), 1); assert.equal(await count('.gmi-gemini-reference-point'), 1);
       assert.equal(await requests(), 2); assert.equal(await count('#gemini-va-password'), 0);
-      assert(await browser.evaluate('geminiWorkflow.audit.calls.every(call=>call.url === "/api/gemini-wfs" && call.credentialsMatch && call.safeHeaders)'));
+      assert(await browser.evaluate('geminiWorkflow.audit.calls.every(call=>call.url === "/api/gemini-wfs" && call.credentialsMatch && call.safeHeaders && call.sameOriginCredentials)'));
       assert.deepEqual(await browser.evaluate('geminiWorkflow.audit.calls.map(call=>call.featureType)'), ['lines', 'points']); await clean();
     });
     await t.test('opening/closing, map movement, photo changes and reference toggles never fetch', async () => {
@@ -98,11 +98,11 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       assert.equal(await count('.gmi-gemini-reference-point'), 2);
       assert.match(await browser.evaluate(`document.querySelector('${card} [role="status"]').innerText`), /for lang tid/); await clean();
     });
-    await t.test('401 offers credential-required path; corrected credentials rotate account and succeed', async () => {
+    await t.test('401 reports unresolved authentication; resubmission rotates account and can succeed', async () => {
       await browser.evaluate('geminiWorkflow.audit.mode="auth"'); await click('Oppdater Gemini-referanse'); await idle();
       await browser.waitFor('document.querySelector(\'button[aria-label="Oppgi Gemini-tilgang"]\')');
       await click('Oppgi Gemini-tilgang'); await browser.waitFor(`document.querySelector('${dialog}')`);
-      await waitError('Kontroller brukernavn og passord');
+      await waitError('Gemini WFS-tjenesten avviste autentiseringen');
       assert(await browser.evaluate('document.querySelector("#gemini-va-password").required'));
       await fill(); await browser.evaluate('geminiWorkflow.audit.mode="pending"'); await submit();
       await browser.waitFor('geminiWorkflow.geminiSession.getSnapshot().status === "loading"');
@@ -144,7 +144,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
     await t.test('safe form errors cover permission, timeout, provider, size, encoding, parser and display failures', async () => {
       await browser.evaluate('geminiWorkflow.sources("single")'); await open();
       for (const [mode, text] of [['origin', 'appens sikkerhetskontroll'], ['permission', 'ikke tilgang'], ['timeout', 'for lang tid'], ['error', 'mislyktes'], ['size', 'for stort'],
-        ['encoding', 'tegnkoding'], ['parser', 'kunne ikke leses'], ['display', 'kartet'], ['auth', 'Kontroller brukernavn og passord']]) {
+        ['encoding', 'tegnkoding'], ['parser', 'kunne ikke leses'], ['display', 'kartet'], ['auth', 'Gemini WFS-tjenesten avviste autentiseringen']]) {
         await browser.evaluate(`geminiWorkflow.geminiSession.disconnect(); geminiWorkflow.audit.mode=${JSON.stringify(mode)}`);
         await fill(); await submit(); await idle(); await waitError(text);
         assert(await browser.evaluate('document.querySelector("#gemini-va-password").value === ""'));

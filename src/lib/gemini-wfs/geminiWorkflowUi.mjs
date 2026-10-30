@@ -14,7 +14,7 @@ export function resolveGeminiSourceId(sources, preferredId) {
 
 const MESSAGES = Object.freeze({
   origin_rejected: 'Forespørselen ble avvist av appens sikkerhetskontroll. Last inn siden på nytt eller kontakt tjenesteansvarlig.',
-  authentication_failed: 'Kunne ikke logge inn i Gemini VA. Kontroller brukernavn og passord.',
+  authentication_failed: 'Gemini WFS-tjenesten avviste autentiseringen. Årsaken er ikke avklart.',
   credentials_unavailable: 'Oppgi brukernavn og passord for Gemini VA på nytt.',
   invalid_credentials: 'Oppgi et gyldig brukernavn og passord. Fyll ut begge feltene.',
   permission_denied: 'Brukeren har ikke tilgang til denne Gemini VA-tjenesten.',

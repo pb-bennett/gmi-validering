@@ -21,7 +21,7 @@ const code = (expected) => (error) => {
   assert(!safe.includes(credentials.username)); assert(!safe.includes(credentials.password)); return true;
 };
 
-test('exactly two concurrent same-origin POSTs with the M1 contract and no other credential channels', async () => {
+test('two concurrent same-origin session-bearing POSTs keep Gemini credentials only in JSON', async () => {
   const calls = [];
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
@@ -39,7 +39,7 @@ test('exactly two concurrent same-origin POSTs with the M1 contract and no other
   for (const [index, { url, init }] of calls.entries()) {
     assert.equal(url, '/api/gemini-wfs');
     assert.equal(init.method, 'POST'); assert.equal(init.cache, 'no-store');
-    assert.equal(init.credentials, 'omit'); assert.equal(init.redirect, 'error');
+    assert.equal(init.credentials, 'same-origin'); assert.equal(init.redirect, 'error');
     assert.deepEqual(init.headers, { 'Content-Type': 'application/json' });
     const body = JSON.parse(init.body);
     assert.deepEqual(Object.keys(body).sort(), ['bbox', 'connectionId', 'featureType', 'password', 'username']);
