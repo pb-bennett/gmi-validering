@@ -13,7 +13,7 @@ const paneStyle = { zIndex: GEMINI_REFERENCE_Z_INDEX, pointerEvents: 'none' };
 
 export default function GeminiReferenceLayer({ inspectionEnabled = true, hoverControllerRef }) {
   const { result } = useGeminiSession();
-  const { linesVisible, pointsVisible, resultVersion, zoomRequest, marking } = useGeminiPresentation();
+  const { sourceVisible, linesVisible, pointsVisible, resultVersion, zoomRequest, marking } = useGeminiPresentation();
   const map = useMap();
   const bounds = useMemo(() => getGeminiReferenceBounds(result), [result]);
   const lookup = useMemo(() => createGeminiSourceLookup(result), [result]);
@@ -38,9 +38,9 @@ export default function GeminiReferenceLayer({ inspectionEnabled = true, hoverCo
   return (
     <Pane name={GEMINI_REFERENCE_PANE} style={paneStyle}>
       {result && <Fragment key={resultVersion}>
-        {linesVisible && <GeminiInspectionSide data={result.lines.display} marking={marking}
+        {sourceVisible && linesVisible && <GeminiInspectionSide data={result.lines.display} marking={marking}
           lookup={lookup} enabled={inspectionEnabled} hoverControllerRef={hoverControllerRef} />}
-        {pointsVisible && <GeminiInspectionSide data={result.points.display} marking={marking}
+        {sourceVisible && pointsVisible && <GeminiInspectionSide data={result.points.display} marking={marking}
           lookup={lookup} enabled={inspectionEnabled} hoverControllerRef={hoverControllerRef} />}
       </Fragment>}
     </Pane>

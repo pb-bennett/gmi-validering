@@ -37,7 +37,7 @@ export function getGeminiReferenceNotice(snapshot) {
 }
 
 export const EMPTY_GEMINI_PRESENTATION = Object.freeze({
-  linesVisible: true, pointsVisible: true, resultVersion: 0, zoomRequest: null, marking: DEFAULT_GEMINI_MARKING,
+  sourceVisible: true, linesVisible: true, pointsVisible: true, resultVersion: 0, zoomRequest: null, marking: DEFAULT_GEMINI_MARKING,
 });
 
 export function createGeminiPresentation(session) {
@@ -58,13 +58,18 @@ export function createGeminiPresentation(session) {
     const resetVisibility = nextOwner !== owner || !result;
     owner = nextOwner;
     publish({ resultVersion: ++version, zoomRequest: null,
-      ...(resetVisibility ? { linesVisible: true, pointsVisible: true, marking: DEFAULT_GEMINI_MARKING } : {}) });
+      ...(resetVisibility ? { sourceVisible: true, linesVisible: true, pointsVisible: true, marking: DEFAULT_GEMINI_MARKING } : {}) });
   };
   const unsubscribe = session.subscribe(sync);
   sync();
   return Object.freeze({
     getSnapshot: () => snapshot,
     subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+    setSourceVisible: (visible) => {
+      if (typeof visible !== 'boolean' || !currentResult) return;
+      publish({ sourceVisible: visible,
+        ...(visible && !snapshot.linesVisible && !snapshot.pointsVisible ? { linesVisible: true, pointsVisible: true } : {}) });
+    },
     setVisible: (side, visible) => {
       if (!['lines', 'points'].includes(side) || typeof visible !== 'boolean' || !currentResult) return;
       const key = `${side}Visible`;

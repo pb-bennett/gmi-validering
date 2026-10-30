@@ -1,3 +1,4 @@
+import { TEST_CONNECTION } from '../fixtures/gemini-wfs/connection.mjs';
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import L from 'leaflet';
@@ -11,8 +12,8 @@ import useStore from '../../src/lib/store';
 import { geminiSession } from '../../src/lib/gemini-wfs/geminiSession.mjs';
 import { geminiPresentation } from '../../src/lib/gemini-wfs/geminiReferencePresentation.mjs';
 import { photoSession } from '../../src/lib/photos/photoSession.mjs';
-import { collection, feature, partialZLine, independentPoint } from '../fixtures/gemini-wfs/syntheticProfile.mjs';
-import { popupLine, popupPoint } from '../fixtures/gemini-wfs/popupProfile.mjs';
+import { collection, feature, field, partialZLine, independentPoint } from '../fixtures/gemini-wfs/syntheticProfile.mjs';
+import { popupLine, popupPoint, lineValues, pointValues } from '../fixtures/gemini-wfs/popupProfile.mjs';
 
 const audit = { calls: [], mode: 'success', map: null, errors: [], leaked: false };
 const credentials = []; // Synthetic values exist only inside this test closure.
@@ -34,6 +35,15 @@ document.addEventListener('submit', (event) => {
 globalThis.addEventListener('error', (event) => audit.errors.push(event.message));
 L.Map.addInitHook(function () { audit.map = this; });
 function response(side, mode) {
+  if (mode === 'compact') {
+    const values = side === 'lines' ? { ...lineValues, FCODE: 'SP', FCODE_TITLE: 'Spillvannsledning', DIM: '250', YEAR: '2018' } :
+      { ...pointValues, TYPE_TITLE: 'Kum for kommunalt fordelingsnett og inspeksjon' };
+    Object.assign(values, { MATERIAL_TITLE: 'Polyvinylklorid', OWNER_TITLE: 'Kommunal', STATUS_TITLE: 'Drift' });
+    return new Response(collection([feature({ type: side === 'lines' ? 'VA_LINE' : 'VA_MPNT',
+      xyz: side === 'lines' ? '581900 6565940 12 581980 6565960 0' : '581970 6566030 0',
+      fields: Object.entries(values).map(([name, value]) => field(name, value)).join(''),
+    })]), { headers: { 'Content-Type': 'application/gml+xml' } });
+  }
   const errors = { auth: [401, 'authentication_failed'], permission: [403, 'permission_denied'], origin: [403, 'origin_rejected'], timeout: [504, 'timeout'],
     error: [502, 'upstream_failure'], size: [502, 'response_too_large'] };
   if (errors[mode]) {
@@ -88,6 +98,8 @@ createRoot(document.getElementById('root')).render(<App />);
 globalThis.geminiWorkflow = {
   audit, useStore, geminiSession, geminiPresentation, photoSession,
   fillCredentials: () => {
+    if (!document.querySelector('#gemini-wfs-url').value) document.querySelector('#gemini-wfs-url').value = TEST_CONNECTION.url;
+    if (!document.querySelector('#gemini-wfs-connection-name').value) document.querySelector('#gemini-wfs-connection-name').value = TEST_CONNECTION.name;
     const value = { username: crypto.randomUUID(), password: ` ${crypto.randomUUID()} ` };
     credentials.push(value);
     for (const [name, text] of Object.entries(value)) document.querySelector(`dialog input[name="${name}"]`).value = text;

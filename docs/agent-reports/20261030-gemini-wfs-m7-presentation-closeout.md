@@ -1,6 +1,6 @@
-# Gemini WFS M7 shared presentation correction
+# Gemini WFS M7 UX and connection integration
 
-**Latest status: hosted review of `fbaf556` confirms the shared semantic colours, point symbols and Lagmarkering presentation look good.** This continuation adds the missing shared hover tooltip and changes Gemini marking to default OFF. Those two final changes are implemented and locally validated, with hosted verification pending. Starting HEAD: `fbaf556 Integrate Gemini WFS with shared map presentation`; branch `feature/photo-workspace`; initially clean. No commit, push or deployment. Earlier implementation details and validation below describe the previous correction; see the final continuation section for current results.
+**Latest status: UX and configurable-connection implementation complete; hosted verification pending.** Starting HEAD: `2a0d894 Finish Gemini WFS presentation integration`, branch `feature/photo-workspace`, initially clean. This pass adds compact shared hover vocabulary/natural bounded tooltip width, a source visibility checkbox retaining subtype choices, and persisted non-secret connection settings with a restricted/pinned upstream policy. No commit, push or deployment. Earlier correction/review/build statements below are historical; see **Configured connection and source UX (current)** for the current design/results.
 
 Hosted review rejected `7002c71`: pipe foregrounds appeared uniform/dark, normal semantic VA colouring was lost, and Gemini marking was fixed rather than participating in Lagmarkering. The prior closeout below is historical and does not establish visual acceptance.
 
@@ -46,6 +46,36 @@ Validation: **269 Node + 94 Chromium browser tests passed (363 distinct selected
 Tests cover both actual-pointer Gemini tooltip types, shared survey hover, unchanged requests/survey selection, click popup after hover, tool suppression, default-off visible semantic geometry, enabled marking controls, refresh and new-session defaults. Previously established real hosted 461-line/329-point and popup/reconnect evidence remains valid. Exact selections and results are in the final section of the M7 acceptance report.
 
 **Next:** redeploy and verify hover plus default-off marking before claiming final hosted acceptance. No commit/push/deployment. No photo, matching, topology or comparison work.
+
+## Configured connection and source UX (current)
+
+Starting HEAD: **2a0d894**, branch `feature/photo-workspace`, initially clean. Requested implementation and local validation complete. **Hosted acceptance remains pending.** No commit, push or deployment.
+
+### User-facing changes
+
+- Hover labels for both data domains share compact exact descriptions derived from existing authoritative value tables/status labels: e.g. Polyvinylklorid ? PVC, Kommunal ? K, Drift ? D. Unknown or ambiguous values stay intelligible. Source attributes and full curated popup values are unchanged; semantic line colours/point symbols are not redesigned.
+- Shared tooltip width grows naturally up to `min(720px, 85vw, 90cqw)`, stays on one line and uses clipping only at the cap instead of premature ellipsis. An actual browser label wider than the old 260px cap fits untruncated.
+- Gemini has the ordinary layer checkbox style at the left of its source card. Master OFF hides both batches and keeps data/session/marking/subtype preferences. ON restores those preferences, including lines-on/points-off. Eyes remain available. If both eyes are off, the checkbox is unchecked; checking it restores both. Refresh retains the current presentation choices. No fetch or survey-store insertion occurs.
+- The native connection form adds a name, WFS URL and save action while retaining username/password autocomplete fields. It saves only `{id,name,url}` in `gmi-gemini-wfs-connection-v1` localStorage. Neither username nor password is app-persisted. Settings restore when reopening the dialog after a later visit; unavailable storage permits in-session use with a notice. The configured display name appears on the source card.
+- A URL edit receives a new stable local UUID and cancels/clears old requests, credentials and results. Name-only edits retain identity/data. Disconnect retains non-secret configuration. Request identity includes configured ID/URL plus survey/revision/account/BBOX; parser source keys use the configured connection ID. No fixed F?rder URL/identity remains in production runtime code.
+
+### Changed security boundary
+
+The editable field is restricted to **HTTPS, default/443 port, one ASCII tenant label under `.geminisuite.com`, exact `/portal/api/proxy/map/<slug>.wfs`**, with bounded slug characters. Userinfo, fragments, query parameters, whitespace/controls, percent/backslash/path confusion, IP literals, arbitrary hosts and custom domains are rejected. Only fixed VA_LINE/VA_MPNT GetFeature parameters are generated server-side; caller headers are forbidden. Local connection IDs label ownership and grant no authorization.
+
+`wfsPinnedTransport.mjs` reuses the WMS public-address checker for every resolved address and rejects mixed private/public DNS answers. Node HTTPS pins a selected public address through a custom lookup, preserves validated tenant Host/TLS SNI and normal certificate checks, disables pooling and never follows redirects. This avoids validating DNS and then letting generic fetch resolve again. Browser Cookie/Authorization/Vercel cookies are not forwarded; only server-created Basic and fixed Accept are set. Abort/deadline checks prevent a late DNS result opening a socket, and decoded response bytes retain existing bounds. No new dependency or proxy infrastructure is required by the existing Node/Vercel runtime.
+
+The browser's same-origin credential mode, origin/CSRF policy, 100m BBOX buffer, WFS version/types/CRS, parser/resource/featureMembers safeguards, atomic publication, stale-request handling, curated popups and marking-default-OFF lifecycle remain intact. The guarded plain text/html exception now covers admitted configured profile URLs, with the same complete strict GML validation before returning original bytes. Parser grammar is unchanged; only connection identity is parameterized. Historical fixed-endpoint security statements above/below are superseded by this design.
+
+### Validation and remaining work
+
+**290 Node + 97 Chromium browser tests passed: 387 distinct selected tests, zero failures/skips.** Node selection: 24 files spanning all eleven non-browser Gemini suites, new configured-transport tests, WFS policy/handler/MIME, shared tooltip/line/halo/panel/order/presentation/map controls and WMS policy. Browser selection: all five Gemini suites, including actual reload/edit/storage privacy, master isolation/restoration and compact width/full-popup checks. Transport coverage includes the real POST route through mocked DNS/socket dependencies, pin/SNI/header checks, private/mixed DNS, redirects, late abort, malformed status and decoded response cap. No real service, credential or municipal payload was used.
+
+Focused ESLint passed (0 errors/warnings); `MapInner.js` is unchanged and its unrelated baseline was not touched. **Production build passed** (Next.js 16.1.6, TypeScript, eight static pages, dynamic API routes). Existing Browserslist-age and Node harness warnings only. `git diff --check` passed. Full repository suite not run. Production font configuration is unchanged.
+
+Main production files: shared hover formatter/CSS plus new `map/compactDisplayValue.mjs`; Gemini card/layer/presentation and marking visibility adapter; connection modal plus new `geminiConnection.mjs`; client/session/parser identity changes; proxy policy/handler plus new `wfsPinnedTransport.mjs`. Tests share an invented connection fixture and add connection-persistence and configured-transport suites. Survey store, shared semantic renderer and popup field definitions are unchanged.
+
+**Next:** redeploy; save the actual name/URL once; verify normal browser credentials/fetch through the pinned transport, reload/edit, compact hover/full popup values, master/subtype visibility, refresh and reconnect. These changes have no hosted manual acceptance yet. No matching, topology, comparison, validation or photo work was started. See the [full security design and validation record](20261029-gemini-wfs-m7-real-service-acceptance.md#configured-connection-and-source-ux).
 
 ## Historical checkpoint 7002c71 (superseded)
 

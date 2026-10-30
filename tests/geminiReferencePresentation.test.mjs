@@ -12,7 +12,7 @@ const result = (lines = [], points = [], owner = {}) => ({
   lines: { display: { type: 'FeatureCollection', features: lines.map((coordinates, index) => ({ id: `line-${index}`, geometry: { type: 'LineString', coordinates } })) } },
   points: { display: { type: 'FeatureCollection', features: points.map((coordinates, index) => ({ id: `point-${index}`, geometry: { type: 'Point', coordinates } })) } },
   counts: { lines: lines.length, points: points.length },
-  provenance: { connectionId: 'faerder-va-basis', accountGeneration: 'opaque-a', sourceLayerId: 'a', datasetRevision: 'revision-a', ...owner },
+  provenance: { connectionId: 'gemini-wfs', accountGeneration: 'opaque-a', sourceLayerId: 'a', datasetRevision: 'revision-a', ...owner },
 });
 function setup() {
   let snapshot = { result: null, status: 'idle', error: null, stale: false };
@@ -30,7 +30,7 @@ test('default independent visibility, no result no-op, state contains no source 
   assert.equal(presentation.getSnapshot().linesVisible, false); assert.equal(presentation.getSnapshot().pointsVisible, true);
   presentation.setVisible('points', false); assert.equal(presentation.getSnapshot().pointsVisible, false);
   assert.strictEqual(session.getSnapshot().result, pair); assert.equal(JSON.stringify(pair), before);
-  assert.deepEqual(Object.keys(presentation.getSnapshot()).sort(), ['linesVisible', 'marking', 'pointsVisible', 'resultVersion', 'zoomRequest']);
+  assert.deepEqual(Object.keys(presentation.getSnapshot()).sort(), ['linesVisible', 'marking', 'pointsVisible', 'resultVersion', 'sourceVisible', 'zoomRequest']);
   presentation.dispose();
 });
 test('ordinary refresh preserves visibility but versions the pair for atomic GeoJSON replacement', () => {
@@ -40,6 +40,28 @@ test('ordinary refresh preserves visibility but versions the pair for atomic Geo
   publish({ result: result(), status: 'ready' });
   assert.equal(presentation.getSnapshot().resultVersion, version + 1); assert.equal(presentation.getSnapshot().linesVisible, false);
   assert.equal(presentation.getSnapshot().marking.highlightAll, false);
+  presentation.dispose();
+});
+
+test('master source visibility preserves subchoices, marking and data through hide/show and refresh', () => {
+  const { presentation, publish, session } = setup();
+  const pair = result(); publish({ result: pair });
+  presentation.setVisible('points', false);
+  presentation.setMarking({ highlightAll: true, highlightStyle: { color: '#123456' } });
+  const marking = presentation.getSnapshot().marking;
+  presentation.setSourceVisible(false);
+  assert.equal(presentation.getSnapshot().sourceVisible, false);
+  assert.equal(session.getSnapshot().result, pair);
+  publish({ result: result() });
+  assert.equal(presentation.getSnapshot().sourceVisible, false);
+  presentation.setSourceVisible(true);
+  assert.equal(presentation.getSnapshot().linesVisible, true);
+  assert.equal(presentation.getSnapshot().pointsVisible, false);
+  assert.equal(presentation.getSnapshot().marking, marking);
+  presentation.setVisible('lines', false);
+  presentation.setSourceVisible(true); // Both subtypes off: ordinary checkbox-on restores both.
+  assert.equal(presentation.getSnapshot().linesVisible, true);
+  assert.equal(presentation.getSnapshot().pointsVisible, true);
   presentation.dispose();
 });
 test('new source, dataset, account or connection resets visibility to both visible', () => {

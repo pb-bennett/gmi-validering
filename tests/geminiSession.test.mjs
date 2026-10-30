@@ -1,3 +1,4 @@
+import { TEST_CONNECTION } from './fixtures/gemini-wfs/connection.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -21,7 +22,7 @@ function fixture(requestPair = async () => pair()) {
   const layers = { a: survey(), b: survey(579500) }, calls = [];
   const session = createGeminiSession({ getLayer: (id) => layers[id], now: () => 123456,
     requestPair: (args) => { calls.push(args); return requestPair(args, calls.length); } });
-  const account = credentials(); session.setCredentials(account);
+  const account = credentials(); session.setConnection(TEST_CONNECTION); session.setCredentials(account);
   return { session, layers, calls, account };
 }
 function assertPrivate(value, account) {
@@ -40,7 +41,7 @@ test('atomic pair, credential-free snapshots, fixed buffer, counts and stable pr
   const state = session.getSnapshot(), provenance = state.result.provenance;
   assert.equal(state.status, 'ready'); assert.equal(state.stale, false);
   assert.equal(provenance.datasetRevision, getDatasetRevision(layers.a.data));
-  assert.equal(provenance.sourceLayerId, 'a'); assert.equal(provenance.connectionId, 'faerder-va-basis');
+  assert.equal(provenance.sourceLayerId, 'a'); assert.equal(provenance.connectionId, 'gemini-wfs');
   assert.equal(provenance.accountGeneration, state.accountGeneration);
   assert.equal(provenance.bufferMetres, 100); assert.equal(state.result.fetchedAt, 123456);
   assert.deepEqual(provenance.counts, { lines: 0, points: 0, total: 0 });
@@ -87,7 +88,7 @@ test('reset, disconnect, clear and disposal invalidate pending work even if tran
     gate.resolve(pair('late')); assert.equal((await pending).ok, false);
     assert.equal(session.getSnapshot().result, null);
     if (['reset', 'disconnect', 'dispose'].includes(action)) {
-      assert.deepEqual(session.getSnapshot(), EMPTY_GEMINI_SNAPSHOT);
+      assert.deepEqual(session.getSnapshot(), { ...EMPTY_GEMINI_SNAPSHOT, connection: TEST_CONNECTION, connectionId: TEST_CONNECTION.id });
       const error = (await session.fetch('a')).error;
       assert.equal(error.code, action === 'dispose' ? 'session_disposed' : 'credentials_unavailable');
     } else assert.equal((await session.fetch('a')).ok, true);
@@ -97,7 +98,7 @@ test('account replacement clears old data, rotates opaque identity and aborts pe
   const gate = deferred(); const { session, calls, account } = fixture((_args, count) => count === 1 ? pair('old-account') : gate.promise);
   await session.fetch('a'); const previousGeneration = session.getSnapshot().accountGeneration;
   const pending = session.refresh('a'); await tick();
-  const replacement = credentials(); session.setCredentials(replacement);
+  const replacement = credentials(); session.setConnection(TEST_CONNECTION); session.setCredentials(replacement);
   assert(calls[1].signal.aborted); assert.equal(session.getSnapshot().result, null);
   assert.notEqual(session.getSnapshot().accountGeneration, previousGeneration);
   gate.resolve(pair('late')); await pending;

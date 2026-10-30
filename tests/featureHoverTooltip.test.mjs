@@ -3,9 +3,20 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { getFeatureHoverLabel, getFeatureHoverColor } from '../src/lib/map/featureHoverLabel.mjs';
 import { createFeatureHoverController, HOVER_DELAY_MS } from '../src/lib/map/featureHoverController.mjs';
+import { compactDisplayValue } from '../src/lib/map/compactDisplayValue.mjs';
 
 const line = (properties) => ({ geometry: { type: 'LineString' }, properties });
 const point = (properties) => ({ geometry: { type: 'Point' }, properties });
+
+test('hover display shares exact authoritative abbreviations and retains unknown/ambiguous text', () => {
+  for (const shape of [line, point]) {
+    const props = { S_FCODE: 'SP', Dimensjon: '250', Material: 'Polyvinylklorid', Anleggsår: '2018', Eier: 'Kommunal', Status: 'Drift' };
+    assert.equal(getFeatureHoverLabel(shape(props)), shape === line ? 'SP 250 · PVC · 2018 · K · D' : 'SP · PVC · 2018 · K · D');
+    assert.equal(props.Material, 'Polyvinylklorid');
+  }
+  assert.equal(compactDisplayValue('material', 'Unlisted descriptive material'), 'Unlisted descriptive material');
+  assert.equal(compactDisplayValue('material', 'Polyet. høy dens'), 'Polyet. høy dens'); // Ambiguous PE50/PE80.
+});
 
 test('canonical line labels omit missing data and preserve zero', () => {
   assert.equal(getFeatureHoverLabel(line({ S_FCODE: 'VL', Dimensjon: 32, Material: 'PE', Anleggsår: 2022 })), 'VL 32 · PE · 2022');

@@ -1,3 +1,5 @@
+import { compactDisplayValue } from './compactDisplayValue.mjs';
+
 const value = (input) => {
   if (typeof input === 'number') return Number.isFinite(input) ? String(input) : null;
   if (typeof input !== 'string') return null;
@@ -25,15 +27,15 @@ export function getFeatureHoverParts(feature) {
 
   if (!point) {
     const dimension = value(props.Dimensjon);
-    const material = value(props.Material);
+    const material = compactDisplayValue('material', value(props.Material));
     const year = value(props['Anleggsår']);
-    return [`${identity}${dimension === null ? '' : ` ${dimension}`}`, material, year, exactValue(props.Eier), exactValue(props.Status), exactValue(props['Stedfestings\u00e5rsak'])].filter(Boolean);
+    return [`${identity}${dimension === null ? '' : ` ${dimension}`}`, material, year, compactDisplayValue('owner', exactValue(props.Eier)), compactDisplayValue('status', exactValue(props.Status)), compactDisplayValue('positioningCause', exactValue(props['Stedfestings\u00e5rsak']))].filter(Boolean);
   }
 
   const pointIdentity = identity ?? type;
   if (!pointIdentity) return [];
   const usefulType = identity && type && type.toLocaleLowerCase() !== identity.toLocaleLowerCase() ? type : null;
-  return [pointIdentity, usefulType, value(props.Bredde), value(props.Material), value(props['Anleggsår']), exactValue(props.Eier), exactValue(props.Status), exactValue(props['Stedfestings\u00e5rsak'])].filter(Boolean);
+  return [pointIdentity, usefulType, value(props.Bredde), compactDisplayValue('material', value(props.Material)), value(props['Anleggsår']), compactDisplayValue('owner', exactValue(props.Eier)), compactDisplayValue('status', exactValue(props.Status)), compactDisplayValue('positioningCause', exactValue(props['Stedfestings\u00e5rsak']))].filter(Boolean);
 }
 
 export function getFeatureHoverLabel(feature) {

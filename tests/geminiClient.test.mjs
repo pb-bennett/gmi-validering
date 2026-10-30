@@ -1,3 +1,4 @@
+import { TEST_CONNECTION } from './fixtures/gemini-wfs/connection.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -12,9 +13,9 @@ const xmlResponse = (text = '<synthetic/>', headers = {}) => new Response(text, 
 const parsed = (type) => ({ records: [{ typeName: type }], counts: { records: 1 } });
 const parseGml = (text) => parsed(text === 'lines' ? 'gemini:VA_LINE' : 'gemini:VA_MPNT');
 const buildDisplay = () => ({ type: 'FeatureCollection', features: [] });
-const makeClient = (options = {}) => createGeminiClient({
+const makeClient = (options = {}) => { const client = createGeminiClient({
   fetchProxy: async (_url, init) => xmlResponse(JSON.parse(init.body).featureType), parseGml, buildDisplay, ...options,
-});
+}); return (args) => client({ connection: TEST_CONNECTION, ...args }); };
 const code = (expected) => (error) => {
   assert.equal(error.code, expected);
   const safe = JSON.stringify(error) + error.message;
@@ -42,8 +43,8 @@ test('two concurrent same-origin session-bearing POSTs keep Gemini credentials o
     assert.equal(init.credentials, 'same-origin'); assert.equal(init.redirect, 'error');
     assert.deepEqual(init.headers, { 'Content-Type': 'application/json' });
     const body = JSON.parse(init.body);
-    assert.deepEqual(Object.keys(body).sort(), ['bbox', 'connectionId', 'featureType', 'password', 'username']);
-    assert.equal(body.connectionId, 'faerder-va-basis');
+    assert.deepEqual(Object.keys(body).sort(), ['bbox', 'connectionId', 'connectionUrl', 'featureType', 'password', 'username']);
+    assert.equal(body.connectionId, 'gemini-wfs');
     assert.equal(body.featureType, index === 0 ? 'lines' : 'points');
     assert.deepEqual(body.bbox, bbox);
     assert(body.username === credentials.username && body.password === credentials.password, 'Credentials preserved only in body');

@@ -185,6 +185,35 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       await clean(); assert.equal(await browser.evaluate('geminiWorkflow.audit.errors.length'), 0);
       assert(await browser.evaluate('geminiWorkflow.audit.calls.every(call=>call.credentialsMatch && call.safeHeaders)'));
     });
+    await t.test('connection edit invalidates old private session without fetch; name/URL restore after reload', async () => {
+      const before = await requests();
+      await browser.evaluate('geminiWorkflow.savedSurveyLayers=geminiWorkflow.useStore.getState().layers');
+      await open();
+      const previousId = await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().connection.id');
+      await browser.evaluate(`document.querySelector('#gemini-wfs-connection-name').value='Edited connection';
+        document.querySelector('#gemini-wfs-url').value='https://another.geminisuite.com/portal/api/proxy/map/other.wfs'`);
+      await click('Lagre Gemini WFS-tilkobling');
+      assert.equal(await requests(), before);
+      assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().result'), null);
+      assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().connectionStatus'), 'disconnected');
+      assert.equal(await browser.evaluate('geminiWorkflow.savedSurveyLayers===geminiWorkflow.useStore.getState().layers'), true);
+      const saved = await browser.evaluate("JSON.parse(localStorage.getItem('gmi-gemini-wfs-connection-v1'))");
+      assert.deepEqual(Object.keys(saved).sort(), ['id', 'name', 'url']);
+      assert.notEqual(saved.id, previousId);
+      await clean();
+      await click('Lukk Gemini WFS'); await done();
+      await browser.send('Page.reload');
+      await browser.waitFor('globalThis.geminiWorkflow?.audit.map');
+      await open();
+      assert.equal(await browser.evaluate("document.querySelector('#gemini-wfs-connection-name').value"), saved.name);
+      assert.equal(await browser.evaluate("document.querySelector('#gemini-wfs-url').value"), saved.url);
+      assert.equal(await browser.evaluate("document.querySelector('#gemini-va-password').value"), '');
+      assert.equal(await browser.evaluate("document.querySelector('#gemini-va-username').value"), '');
+      await click('Lagre Gemini WFS-tilkobling');
+      assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().connection.id'), saved.id);
+      assert.equal(await requests(), 0);
+      await click('Lukk Gemini WFS'); await done(); await clean();
+    });
   } finally {
     if (browser) await browser.close(); await app.close();
   }

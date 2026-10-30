@@ -1,3 +1,4 @@
+import { TEST_CONNECTION } from './fixtures/gemini-wfs/connection.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { register } from 'node:module';
@@ -19,7 +20,7 @@ test('actual store removal aborts Gemini only for its source and preserves photo
   const settings = useStore.getState().settings;
   const signals = [];
   t.mock.method(globalThis, 'fetch', (_url, init) => { signals.push(init.signal); return new Promise(() => {}); });
-  geminiSession.setCredentials(account());
+  geminiSession.setConnection(TEST_CONNECTION); geminiSession.setCredentials(account());
   const pending = geminiSession.fetch('a'); await tick(); assert.equal(signals.length, 2);
   useStore.getState().removeLayer('b');
   assert(signals.every((signal) => !signal.aborted));
@@ -40,7 +41,7 @@ test('actual full reset clears credentials/results and invalidates late transpor
   t.mock.method(globalThis, 'fetch', (_url, init) => {
     signals.push(init.signal); return new Promise((resolve) => late.push(resolve));
   });
-  const credentials = account(); geminiSession.setCredentials(credentials);
+  const credentials = account(); geminiSession.setConnection(TEST_CONNECTION); geminiSession.setCredentials(credentials);
   const pending = geminiSession.fetch('a'); await tick();
   // Extent came from selected layer, despite unrelated legacy state.data.
   assert.deepEqual(geminiSession.getSnapshot().request.bbox, [579200, 6559100, 579400, 6559300]);
@@ -60,7 +61,7 @@ test('store revision changes abort Gemini; unrelated store/photo changes never f
   useStore.setState({ layers: { a: original }, layerOrder: ['a'] });
   let called = 0; const signals = [];
   t.mock.method(globalThis, 'fetch', (_url, init) => { called++; signals.push(init.signal); return new Promise(() => {}); });
-  geminiSession.setCredentials(account()); geminiSession.selectSource('a');
+  geminiSession.setConnection(TEST_CONNECTION); geminiSession.setCredentials(account()); geminiSession.selectSource('a');
   useStore.setState({ layers: { a: { ...original, visible: false } } });
   photoSession.importFiles([new File(['synthetic'], 'photo.heic')]);
   useStore.setState({ ui: { ...useStore.getState().ui, activeViewTab: '3d' } });

@@ -1,6 +1,6 @@
 // Shared, deliberately narrow WFS 2 / GML 3.2 value adapter.
 export const GEMINI_SOURCE_CRS = 'EPSG:25832';
-export const GEMINI_CONNECTION_ID = 'faerder-va-basis';
+export const GEMINI_CONNECTION_ID = 'gemini-wfs';
 // Confirmed by the user from the VA_LINE / VA_MPNT service XSD.
 export const GEMINI_FEATURE_NAMESPACE = 'http://www.powel.com/gemini';
 export const GEMINI_GML_LIMITS = Object.freeze({
@@ -200,7 +200,7 @@ function sourceGeometry(container, root, envelopes, expectedType, budget) {
   });
 }
 
-function featureRecord(feature, root, featureNamespace, collectionEnvelope, ids, budget) {
+function featureRecord(feature, root, featureNamespace, collectionEnvelope, ids, budget, connectionId) {
   if (feature.namespaceURI !== featureNamespace || !TYPES.has(feature.localName)) fail('unsupported-profile');
   const gmlId = feature.getAttributeNS(GML, 'id');
   if (!gmlId || /\s/.test(gmlId)) fail('invalid-feature-id');
@@ -223,7 +223,7 @@ function featureRecord(feature, root, featureNamespace, collectionEnvelope, ids,
   const idField = feature.localName === 'VA_LINE' ? 'LSID' : 'PSID';
   const idAttribute = Object.hasOwn(attributes, idField) ? attributes[idField] : absentField;
   return freeze({
-    key: JSON.stringify([GEMINI_CONNECTION_ID, featureNamespace, feature.localName, gmlId]),
+    key: JSON.stringify([connectionId, featureNamespace, feature.localName, gmlId]),
     gmlId, typeName: `gemini:${feature.localName}`, featureNamespace, sourceCrs: GEMINI_SOURCE_CRS,
     idField, objectId: ['absent', 'nil'].includes(idAttribute.state) ? null : idAttribute.rawText,
     attributes, xmlAttributes: xmlAttributes(feature), envelope: featureEnvelope,
@@ -243,7 +243,8 @@ export function getGeminiNumericValue(record, name) {
 }
 
 /** Match the confirmed XSD namespace, never a prefix or schemaLocation URL. */
-export function parseGeminiGml(xml, { parseXml } = {}) {
+export function parseGeminiGml(xml, { parseXml, connectionId = GEMINI_CONNECTION_ID } = {}) {
+  if (typeof connectionId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(connectionId)) fail('unsupported-profile');
   const featureNamespace = GEMINI_FEATURE_NAMESPACE;
   if (typeof xml !== 'string') fail('invalid-xml');
   if (new TextEncoder().encode(xml).byteLength > GEMINI_GML_LIMITS.bytes) fail('parser-limit');
@@ -289,10 +290,10 @@ export function parseGeminiGml(xml, { parseXml } = {}) {
   const ids = new Set(), budget = { coordinates: 0 };
   const records = featureElements.map((feature) => {
     if (OWS.has(feature.namespaceURI) && feature.localName === 'ExceptionReport') fail('service-exception');
-    return featureRecord(feature, root, featureNamespace, collectionEnvelope, ids, budget);
+    return featureRecord(feature, root, featureNamespace, collectionEnvelope, ids, budget, connectionId);
   });
   return freeze({
-    connectionId: GEMINI_CONNECTION_ID, featureNamespace, sourceCrs: GEMINI_SOURCE_CRS,
+    connectionId, featureNamespace, sourceCrs: GEMINI_SOURCE_CRS,
     records: freeze(records), envelope: collectionEnvelope, xmlAttributes: xmlAttributes(root),
     counts: freeze({ members: featureElements.length, records: records.length,
       lines: records.filter((record) => record.geometry.type === 'LineString').length,

@@ -1,3 +1,4 @@
+import { TEST_CONNECTION } from './fixtures/gemini-wfs/connection.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
@@ -7,12 +8,12 @@ import { GEMINI_GML_LIMITS } from '../src/lib/gemini-wfs/parseGeminiGml.mjs';
 import { collection, featureArrayCollection, feature, field, partialZLine, independentPoint } from './fixtures/gemini-wfs/syntheticProfile.mjs';
 
 const origin = 'https://validator.example.test';
-const endpoint = 'https://faerder.geminisuite.com/portal/api/proxy/map/va-basis.wfs';
+const endpoint = 'https://tenant.geminisuite.com/portal/api/proxy/map/va-basis.wfs';
 function request(overrides = {}, signal) {
   return new Request(`${origin}/api/gemini-wfs`, {
     method: 'POST', signal,
     headers: { Origin: origin, 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin' },
-    body: JSON.stringify({ connectionId: 'faerder-va-basis', featureType: 'lines',
+    body: JSON.stringify({ connectionId: 'gemini-wfs', connectionUrl: TEST_CONNECTION.url, featureType: 'lines',
       bbox: [579300, 6559200, 579900, 6559800], username: randomUUID(), password: randomUUID(), ...overrides }),
   });
 }
@@ -82,11 +83,11 @@ for (const [name, xml] of invalidProfiles) {
   });
 }
 
-test('exception is bound to the fixed connection, HTTPS upstream, HTTP 200 and observed plain MIME', async () => {
-  const valid = { connectionId: 'faerder-va-basis', url: endpoint + '?SERVICE=WFS', status: 200, contentType: 'text/html' };
+test('exception is bound to an admitted Gemini profile, HTTPS upstream, HTTP 200 and observed plain MIME', async () => {
+  const valid = { connectionId: 'gemini-wfs', url: endpoint + '?SERVICE=WFS', status: 200, contentType: 'text/html' };
   assert.equal(canValidateGeminiHtml(valid), true);
   for (const change of [
-    { connectionId: 'other' }, { url: 'https://blocked.invalid/portal/api/proxy/map/va-basis.wfs' },
+    { connectionId: '' }, { url: 'https://blocked.invalid/portal/api/proxy/map/va-basis.wfs' },
     { url: endpoint + '/other' }, { url: endpoint.replace('https:', 'http:') }, { url: endpoint + '#fragment' },
     { url: endpoint.replace('https://', 'https://user:password@') }, { url: 'invalid' },
     { status: 201 }, { status: 302 }, { contentType: null }, { contentType: 'application/xhtml+xml' },
@@ -95,7 +96,7 @@ test('exception is bound to the fixed connection, HTTPS upstream, HTTP 200 and o
   ]) assert.equal(canValidateGeminiHtml({ ...valid, ...change }), false);
   let calls = 0;
   const handle = createWfsProxyHandler({ fetchUpstream: async () => { calls += 1; return upstream(collection()); } });
-  await expectError(await handle(request({ connectionId: 'other' })), 'invalid_request', 400);
+  await expectError(await handle(request({ connectionId: '' })), 'invalid_request', 400);
   await expectError(await handle(request({ upstream: endpoint })), 'invalid_request', 400);
   assert.equal(calls, 0);
   for (const status of [201, 206, 302, 401, 500]) {

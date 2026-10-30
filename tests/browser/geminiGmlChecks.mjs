@@ -237,7 +237,7 @@ return [
     const first = parseGeminiGml(collection([a, b]));
     const second = parseGeminiGml(collection([b, a]));
     assert(first.records[0].key === second.records[1].key && first.records[0].key !== first.records[1].key);
-    equal(JSON.parse(first.records[0].key), ['faerder-va-basis', namespace, 'VA_MPNT', 'VA_MPNT.0001']);
+    equal(JSON.parse(first.records[0].key), ['gemini-wfs', namespace, 'VA_MPNT', 'VA_MPNT.0001']);
   }],
   ['CRS equivalences normalize while raw declarations survive', () => {
     for (const crs of ['EPSG:25832', 'urn:ogc:def:crs:EPSG::25832', 'http://www.opengis.net/def/crs/EPSG/0/25832',

@@ -1,3 +1,4 @@
+import { fetchPinnedWfs } from './wfsPinnedTransport.mjs';
 import { Buffer } from 'node:buffer';
 import { parseGeminiGml } from './parseGeminiGml.mjs';
 import { parseNodeXml } from './nodeXmlParser.mjs';
@@ -97,7 +98,7 @@ async function readBoundedBytes(message, maximumBytes, signal, upstream = false)
 }
 
 export function createWfsProxyHandler({
-  fetchUpstream = (...args) => globalThis.fetch(...args),
+  fetchUpstream = fetchPinnedWfs,
   timeoutMs = WFS_TIMEOUT_MS,
 } = {}) {
   // This closure contains dependencies only; all auth/response state is local.

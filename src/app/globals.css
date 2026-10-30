@@ -594,7 +594,7 @@
   }
 }
 .leaflet-tooltip.gmi-compact-hover-tooltip {
-  max-width: min(260px, 70vw);
+  max-width: min(720px, 85vw, 90cqw);
   padding: 4px 6px;
   border: 1px solid rgba(65, 77, 88, 0.22);
   border-radius: 4px;
@@ -624,7 +624,7 @@
 
 .gmi-compact-hover-label {
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
 }
 

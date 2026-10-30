@@ -252,5 +252,26 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
       assert.deepEqual(await browser.evaluate('geminiWorkflow.audit.errors'), []);
       assert(await browser.evaluate('geminiWorkflow.privateStateClean()'));
     });
+    await t.test('compact shared vocabulary fits ordinary hover text while popups preserve full descriptions', async () => {
+      await browser.evaluate('geminiWorkflow.sources("single")');
+      await connect();
+      await browser.evaluate('geminiWorkflow.audit.mode="compact"; geminiWorkflow.geminiSession.refresh("survey").then(() => true)');
+      await save();
+      for (const [kind, expected] of [['LineString', 'SP 250 · PVC · 2018 · K · D'], ['Point', 'KUM · Kum for kommunalt fordelingsnett og inspeksjon · 0 · PVC · 2001 · K · D']]) {
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 600, y: 100 });
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...await browser.evaluate(`geminiWorkflow.inspectionTarget(${JSON.stringify(kind)})`) });
+        await browser.waitFor(`document.querySelector('.gmi-compact-hover-label')?.textContent===${JSON.stringify(expected)}`);
+        const sizing = await browser.evaluate(`(() => {const label=document.querySelector('.gmi-compact-hover-label'),tip=document.querySelector('.gmi-compact-hover-tooltip');return{width:tip.getBoundingClientRect().width,fits:label.scrollWidth<=label.clientWidth,overflow:getComputedStyle(label).textOverflow};})()`);
+        assert.equal(sizing.fits, true); assert.equal(sizing.overflow, 'clip');
+        assert(sizing.width <= 720);
+        if (kind === 'Point') assert(sizing.width > 260);
+        await clickReference(kind); await opened();
+        const actual = await rows();
+        assert.equal(actual.Eier, 'Kommunal'); assert.equal(actual.Status, 'Drift');
+        if (kind === 'LineString') assert.equal(actual.Materiale, 'Polyvinylklorid');
+        else assert.equal(actual.Punkttype, 'Kum for kommunalt fordelingsnett og inspeksjon');
+        await close(); await unchanged();
+      }
+    });
   } finally { if (browser) await browser.close(); await app.close(); }
 });

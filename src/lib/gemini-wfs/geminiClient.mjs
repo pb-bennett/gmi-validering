@@ -1,6 +1,7 @@
+import { validateGeminiConnection } from './geminiConnection.mjs';
 import { decodeGeminiXml } from './geminiXmlEncoding.mjs';
 export { decodeGeminiXml } from './geminiXmlEncoding.mjs';
-import { GEMINI_CONNECTION_ID, GEMINI_GML_LIMITS, parseGeminiGml } from './parseGeminiGml.mjs';
+import { GEMINI_GML_LIMITS, parseGeminiGml } from './parseGeminiGml.mjs';
 import { buildGeminiMapFeatures } from './geminiMapFeatures.mjs';
 import { validateGeminiBbox } from './geminiExtent.mjs';
 import { GeminiServiceError, safeGeminiError, waitForGemini } from './geminiErrors.mjs';
@@ -69,7 +70,10 @@ async function proxyError(response, signal) {
 
 export function createGeminiClient({ fetchProxy = (...args) => globalThis.fetch(...args),
   parseGml = parseGeminiGml, buildDisplay = buildGeminiMapFeatures, timeoutMs = GEMINI_CLIENT_TIMEOUT_MS } = {}) {
-  return async function fetchPair({ bbox, credentials, signal }) {
+  return async function fetchPair({ bbox, credentials, signal, connection: inputConnection }) {
+    let connection;
+    try { connection = validateGeminiConnection(inputConnection); }
+    catch { throw new GeminiServiceError('invalid_connection'); }
     validateGeminiBbox(bbox);
     validateGeminiCredentials(credentials);
     const controller = new AbortController();
@@ -86,7 +90,7 @@ export function createGeminiClient({ fetchProxy = (...args) => globalThis.fetch(
           // M1 constructs a separate upstream request without browser cookies.
           method: 'POST', cache: 'no-store', redirect: 'error', credentials: 'same-origin', signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ connectionId: GEMINI_CONNECTION_ID, featureType, bbox,
+          body: JSON.stringify({ connectionId: connection.id, connectionUrl: connection.url, featureType, bbox,
             username: credentials.username, password: credentials.password }),
         })).then((value) => { if (controller.signal.aborted) cancelBody(value); return value; });
         response = await waitForGemini(pending, controller.signal);
@@ -95,7 +99,7 @@ export function createGeminiClient({ fetchProxy = (...args) => globalThis.fetch(
         const bytes = await boundedBytes(response, controller.signal);
         const xml = decodeGeminiXml(bytes, response.headers.get('content-type'));
         let source, display;
-        try { source = parseGml(xml); }
+        try { source = parseGml(xml, { connectionId: connection.id }); }
         catch (error) { throw new GeminiServiceError('gml_parser_error', { parserCode: error?.code }); }
         const expected = featureType === 'lines' ? 'gemini:VA_LINE' : 'gemini:VA_MPNT';
         if (source.records.some((record) => record.typeName !== expected)) throw new GeminiServiceError('unexpected_feature_type');

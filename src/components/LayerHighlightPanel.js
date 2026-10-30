@@ -191,7 +191,7 @@ export default function LayerHighlightPanel() {
   const moveLayerDown = useStore((state) => state.moveLayerDown);
   const surveyActions = { setEnabled, setColor, setOpacity, setSpread, resetStyle, moveLayerUp, moveLayerDown };
   const { result } = useGeminiSession();
-  const { marking, linesVisible, pointsVisible } = useGeminiPresentation();
+  const { marking, sourceVisible, linesVisible, pointsVisible } = useGeminiPresentation();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -268,7 +268,7 @@ export default function LayerHighlightPanel() {
               })
             )}
             {result && <LayerHighlightControls layerId={marking.id}
-              layer={{ ...marking, visible: linesVisible || pointsVisible }}
+              layer={{ ...marking, visible: sourceVisible && (linesVisible || pointsVisible) }}
               actions={geminiMarkingActions} />}
           </div>
         </div>

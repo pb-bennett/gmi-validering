@@ -18,16 +18,22 @@ export default function GeminiReferenceCard({ onOpenConnection }) {
   if (!result) return null;
   const notice = session.error ? `${getGeminiUiError(session.error)} Forrige resultat vises.` : getGeminiReferenceNotice(session);
   const connected = session.connectionStatus === 'connected';
+  const sourceVisible = visibility.sourceVisible && (visibility.linesVisible || visibility.pointsVisible);
   return (
     <section className="border-b-2 border-gmi-border py-1 text-gmi-text" aria-label="Eksisterende anlegg · Gemini WFS">
       <div className="flex items-start gap-2 p-2">
+        <input type="checkbox" aria-label="Vis Gemini WFS-kilden"
+          checked={sourceVisible}
+          onChange={(event) => geminiPresentation.setSourceVisible(event.currentTarget.checked)}
+          className="mt-0.5 h-3.5 w-3.5 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
+          title={sourceVisible ? 'Skjul lag' : 'Vis lag'} />
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-1.5 text-xs font-medium">
             <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: visibility.marking.highlightStyle.color }} />
             Eksisterende anlegg · Gemini WFS
           </h3>
           <p className="truncate text-[10px] text-gmi-text-subtle" title={sourceName}>
-            Referanse{sourceName ? ` · ${sourceName}` : ''}
+            {session.connection?.name} ? Referanse{sourceName ? ` · ${sourceName}` : ''}
           </p>
         </div>
         <button type="button" onClick={() => geminiPresentation.requestZoom()} disabled={!bounds}

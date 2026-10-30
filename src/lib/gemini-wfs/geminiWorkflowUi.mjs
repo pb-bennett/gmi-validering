@@ -13,6 +13,8 @@ export function resolveGeminiSourceId(sources, preferredId) {
 }
 
 const MESSAGES = Object.freeze({
+  connection_unavailable: 'Oppgi en Gemini WFS-tilkobling f?rst.',
+  invalid_connection: 'Oppgi navn og en gyldig HTTPS-adresse til en Gemini Suite WFS-tjeneste uten parametere.',
   origin_rejected: 'Forespørselen ble avvist av appens sikkerhetskontroll. Last inn siden på nytt eller kontakt tjenesteansvarlig.',
   authentication_failed: 'Gemini WFS-tjenesten avviste autentiseringen. Årsaken er ikke avklart.',
   credentials_unavailable: 'Oppgi brukernavn og passord for Gemini WFS på nytt.',

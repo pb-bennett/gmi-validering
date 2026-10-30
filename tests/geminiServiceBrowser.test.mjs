@@ -17,7 +17,7 @@ test('Gemini M3 service with native Chromium decoding/XML/projection (synthetic 
   const proxy = createWfsProxyHandler({ fetchUpstream: async (url, init) => {
     upstreamCalls += 1;
     const target = new URL(url);
-    assert.equal(target.origin, 'https://faerder.geminisuite.com');
+    assert.equal(target.origin, 'https://tenant.geminisuite.com');
     assert.equal(target.pathname, '/portal/api/proxy/map/va-basis.wfs');
     // Explicit upstream headers exclude every incoming browser cookie/header.
     assert.deepEqual(Object.keys(init.headers).sort(), ['Accept', 'Authorization']);

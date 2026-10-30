@@ -2,11 +2,11 @@ import { getDatasetRevision } from '../validation-v2/datasetRevision.js';
 import { getLayerType } from '../layerPresentation.mjs';
 import { getGeminiExtent } from './geminiExtent.mjs';
 import { fetchGeminiPair, validateGeminiCredentials } from './geminiClient.mjs';
-import { GEMINI_CONNECTION_ID } from './parseGeminiGml.mjs';
+import { validateGeminiConnection } from './geminiConnection.mjs';
 import { GeminiServiceError, safeGeminiError, waitForGemini } from './geminiErrors.mjs';
 
 export const EMPTY_GEMINI_SNAPSHOT = Object.freeze({
-  connectionId: GEMINI_CONNECTION_ID, connectionStatus: 'disconnected', accountGeneration: null,
+  connection: null, connectionId: null, connectionStatus: 'disconnected', accountGeneration: null,
   source: null, status: 'idle', request: null, result: null, error: null, stale: false,
 });
 const SURVEY_TYPES = new Set(['GMI', 'SOSI', 'KOF']);
@@ -83,11 +83,12 @@ export function createGeminiSession({ getLayer = () => null, requestPair = fetch
     try {
       reconcileSource();
       selectSource(id);
+      if (!snapshot.connection) throw new GeminiServiceError('connection_unavailable');
       if (!credentials) throw new GeminiServiceError('credentials_unavailable');
       const layer = survey(id);
       // Production deliberately passes no buffer override: fixed 100 m.
       const bounds = extent(layer);
-      const identity = [id, snapshot.source.datasetRevision, GEMINI_CONNECTION_ID,
+      const identity = [id, snapshot.source.datasetRevision, snapshot.connectionId, snapshot.connection.url,
         snapshot.accountGeneration, bounds.bbox, bounds.bufferMetres];
       const key = JSON.stringify(identity);
       if (active?.key === key) return active.promise;
@@ -96,7 +97,7 @@ export function createGeminiSession({ getLayer = () => null, requestPair = fetch
       }
       invalidate();
       request = Object.freeze({ sourceLayerId: id, datasetRevision: snapshot.source.datasetRevision,
-        connectionId: GEMINI_CONNECTION_ID, accountGeneration: snapshot.accountGeneration,
+        connectionId: snapshot.connectionId, connectionUrl: snapshot.connection.url, accountGeneration: snapshot.accountGeneration,
         bbox: Object.freeze([...bounds.bbox]), bufferMetres: bounds.bufferMetres,
         sourceCrs: bounds.sourceCrs, crs: bounds.crs, requestKey: key, generation });
     } catch (error) { return fail(error); }
@@ -104,9 +105,10 @@ export function createGeminiSession({ getLayer = () => null, requestPair = fetch
     const ticket = { key: request.requestKey, generation, controller: new AbortController(), promise: null };
     active = ticket;
     const operationCredentials = credentials;
+    const operationConnection = snapshot.connection;
     const work = Promise.resolve().then(() => {
       if (ticket.controller.signal.aborted) throw new GeminiServiceError('request_aborted');
-      return requestPair({ bbox: request.bbox, credentials: operationCredentials, signal: ticket.controller.signal });
+      return requestPair({ connection: operationConnection, bbox: request.bbox, credentials: operationCredentials, signal: ticket.controller.signal });
     });
     ticket.promise = (async () => {
       try {
@@ -136,11 +138,22 @@ export function createGeminiSession({ getLayer = () => null, requestPair = fetch
   }
   function reset() {
     invalidate(); credentials = null;
-    publish(EMPTY_GEMINI_SNAPSHOT);
+    publish({ ...EMPTY_GEMINI_SNAPSHOT, connection: snapshot.connection, connectionId: snapshot.connectionId });
   }
   return Object.freeze({
     getSnapshot: () => snapshot,
     subscribe: (listener) => { if (disposed) return () => {}; listeners.add(listener); return () => listeners.delete(listener); },
+    setConnection: (input) => {
+      if (disposed) throw new GeminiServiceError('session_disposed');
+      let connection;
+      try { connection = validateGeminiConnection(input); }
+      catch { throw new GeminiServiceError('invalid_connection'); }
+      if (snapshot.connection?.id === connection.id && snapshot.connection.url === connection.url) {
+        publish({ connection }); return;
+      }
+      invalidate(); credentials = null;
+      publish({ ...EMPTY_GEMINI_SNAPSHOT, connection, connectionId: connection.id });
+    },
     setCredentials: (input) => {
       if (disposed) throw new GeminiServiceError('session_disposed');
       validateGeminiCredentials(input);

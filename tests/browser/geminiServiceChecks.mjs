@@ -1,3 +1,4 @@
+import { TEST_CONNECTION } from '../fixtures/gemini-wfs/connection.mjs';
 import { createGeminiClient, decodeGeminiXml } from '../../src/lib/gemini-wfs/geminiClient.mjs';
 import { createGeminiSession } from '../../src/lib/gemini-wfs/geminiSession.mjs';
 import { parseGeminiGml, getGeminiField } from '../../src/lib/gemini-wfs/parseGeminiGml.mjs';
@@ -31,13 +32,13 @@ export const checks = [
     });
     equal(denied.status, 401);
     await denied.body.cancel();
-    const pair = await createGeminiClient()({ bbox, credentials: credentials() });
+    const pair = await createGeminiClient()({ connection: TEST_CONNECTION, bbox, credentials: credentials() });
     equal(pair.counts, { lines: 1, points: 1, total: 2 });
   }],
   ['native decoder + native DOMParser + proj4 create one coherent source/display pair', async () => {
     const { calls, fetchProxy } = transport();
     const account = credentials();
-    const pair = await createGeminiClient({ fetchProxy })({ bbox, credentials: account });
+    const pair = await createGeminiClient({ fetchProxy })({ connection: TEST_CONNECTION, bbox, credentials: account });
     assert(calls.length === 2 && calls.every((call) => call.url === '/api/gemini-wfs'));
     equal(pair.counts, { lines: 1, points: 1, total: 2 });
     const source = pair.lines.source.records[0];
@@ -61,7 +62,7 @@ export const checks = [
   }],
   ['empty native-parsed collections publish valid zero-count pairs', async () => {
     const { fetchProxy } = transport({ empty: true });
-    const pair = await createGeminiClient({ fetchProxy })({ bbox, credentials: credentials() });
+    const pair = await createGeminiClient({ fetchProxy })({ connection: TEST_CONNECTION, bbox, credentials: credentials() });
     equal(pair.counts, { lines: 0, points: 0, total: 0 });
     equal(pair.lines.display.features, []); equal(pair.points.display.features, []);
   }],
@@ -71,7 +72,7 @@ export const checks = [
     const client = createGeminiClient({ fetchProxy: (url, init) => broken && JSON.parse(init.body).featureType === 'points'
       ? xml('<broken') : fetchProxy(url, init) });
     const session = createGeminiSession({ getLayer: () => sourceLayer, requestPair: client });
-    const account = credentials(); session.setCredentials(account);
+    const account = credentials(); session.setConnection(TEST_CONNECTION); session.setCredentials(account);
     const snapshots = []; session.subscribe(() => snapshots.push(session.getSnapshot()));
     assert((await session.fetch('survey')).ok);
     const good = session.getSnapshot().result;
@@ -89,7 +90,7 @@ export const checks = [
     const client = createGeminiClient({ fetchProxy, buildDisplay: (parsed) => buildGeminiMapFeatures(parsed, { project: () => [NaN, 59] }) });
     const sourceLayer = layer();
     const session = createGeminiSession({ getLayer: () => sourceLayer, requestPair: client });
-    session.setCredentials(credentials());
+    session.setConnection(TEST_CONNECTION); session.setCredentials(credentials());
     assert((await session.fetch('survey')).error.code === 'display_projection_error');
     assert(session.getSnapshot().result === null); session.dispose();
   }],
@@ -99,7 +100,7 @@ export const checks = [
       ? Response.json({ code: 'permission_denied', message: 'synthetic provider detail' }, { status: 403 }) : fetchProxy(url, init) });
     const sourceLayer = layer();
     const session = createGeminiSession({ getLayer: () => sourceLayer, requestPair: client });
-    session.setCredentials(credentials());
+    session.setConnection(TEST_CONNECTION); session.setCredentials(credentials());
     assert((await session.fetch('survey')).ok); const good = session.getSnapshot().result;
     fail = true;
     assert((await session.refresh('survey')).error.code === 'permission_denied');
@@ -109,7 +110,7 @@ export const checks = [
     const releases = [], sourceLayer = layer();
     const client = createGeminiClient({ fetchProxy: () => new Promise((resolve) => releases.push(resolve)) });
     const session = createGeminiSession({ getLayer: () => sourceLayer, requestPair: client });
-    session.setCredentials(credentials()); const pending = session.fetch('survey');
+    session.setConnection(TEST_CONNECTION); session.setCredentials(credentials()); const pending = session.fetch('survey');
     await Promise.resolve(); assert(releases.length === 2);
     session.reset(); for (const release of releases) release(xml(collection()));
     assert((await pending).error.code === 'request_aborted');
@@ -123,7 +124,7 @@ export const checks = [
       parseGml: (text) => { counts.parse++; return parseGeminiGml(text); },
       buildDisplay: (source) => { counts.display++; return buildGeminiMapFeatures(source); },
     });
-    const pair = await client({ bbox, credentials: credentials() });
+    const pair = await client({ connection: TEST_CONNECTION, bbox, credentials: credentials() });
     equal(counts, { parse: 2, display: 2 });
     equal(pair.points.source.records[0].geometry.coordinates, [579300, 6559200]);
   }],

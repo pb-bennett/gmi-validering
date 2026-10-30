@@ -1,4 +1,6 @@
-// Server-side policy for one registered WFS connection, not a URL proxy.
+import { normalizeGeminiWfsUrl } from './geminiConnection.mjs';
+
+// Server-side policy for the restricted Gemini Suite WFS profile.
 export const WFS_MAX_REQUEST_BYTES = 16 * 1024;
 export const WFS_MAX_RESPONSE_BYTES = 3 * 1024 * 1024;
 export const WFS_TIMEOUT_MS = 15_000;
@@ -7,14 +9,11 @@ export const WFS_MAX_AREA_SQUARE_METRES = 4_000_000;
 export const WFS_MAX_USERNAME_LENGTH = 256;
 export const WFS_MAX_PASSWORD_LENGTH = 1024;
 
-const CONNECTIONS = new Map([
-  ['faerder-va-basis', 'https://faerder.geminisuite.com/portal/api/proxy/map/va-basis.wfs'],
-]);
 const FEATURE_TYPES = new Map([
   ['lines', 'gemini:VA_LINE'],
   ['points', 'gemini:VA_MPNT'],
 ]);
-const BODY_KEYS = new Set(['connectionId', 'featureType', 'bbox', 'username', 'password']);
+const BODY_KEYS = new Set(['connectionId', 'connectionUrl', 'featureType', 'bbox', 'username', 'password']);
 const XML_TYPES = new Set(['application/xml', 'text/xml', 'application/gml+xml']);
 const XML_CHARSETS = new Set(['utf-8', 'utf8', 'us-ascii']);
 const ERRORS = Object.freeze({
@@ -186,14 +185,16 @@ export function validateWfsRequestBody(body) {
     !body || typeof body !== 'object' || Array.isArray(body) ||
     Object.keys(body).length !== BODY_KEYS.size ||
     !Object.keys(body).every((key) => BODY_KEYS.has(key)) ||
-    !CONNECTIONS.has(body.connectionId) || !FEATURE_TYPES.has(body.featureType)
+    typeof body.connectionId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(body.connectionId) || !FEATURE_TYPES.has(body.featureType)
   ) {
     throw new WfsProxyError('invalid_request');
   }
   validateCredential(body.username, WFS_MAX_USERNAME_LENGTH, true);
   validateCredential(body.password, WFS_MAX_PASSWORD_LENGTH);
   validateWfsBbox(body.bbox);
-  const url = new URL(CONNECTIONS.get(body.connectionId));
+  let url;
+  try { url = new URL(normalizeGeminiWfsUrl(body.connectionUrl)); }
+  catch { throw new WfsProxyError('invalid_request'); }
   url.search = new URLSearchParams({
     SERVICE: 'WFS',
     VERSION: '2.0.0',
@@ -218,12 +219,12 @@ export function getWfsContentType(value) {
 // Exception for this observed response only; this does not approve its body.
 // No charset/other parameters are admitted: the observation is plain text/html.
 export function canValidateGeminiHtml({ connectionId, url, status, contentType }) {
-  if (connectionId !== 'faerder-va-basis' || status !== 200 ||
+  if (!connectionId || status !== 200 ||
     typeof contentType !== 'string' || contentType.trim().toLowerCase() !== 'text/html') return false;
   try {
     const target = new URL(url);
     return !target.username && !target.password && !target.hash &&
-      `${target.origin}${target.pathname}` === CONNECTIONS.get('faerder-va-basis');
+      Boolean(normalizeGeminiWfsUrl(`${target.origin}${target.pathname}`));
   } catch { return false; }
 }
 

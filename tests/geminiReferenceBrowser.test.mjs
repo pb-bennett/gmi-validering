@@ -129,6 +129,24 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
       await browser.waitFor(`!document.querySelector('${line}')`); await click('Vis ledninger fra Gemini WFS');
     });
+    await t.test('ordinary source checkbox gates both batches, remembers subchoices and leaves data/marking/surveys unchanged', async () => {
+      const checkbox = `${card} input[aria-label="Vis Gemini WFS-kilden"]`;
+      await browser.evaluate('geminiAcceptance.savedResult=geminiAcceptance.geminiSession.getSnapshot().result; geminiAcceptance.savedLayers=geminiAcceptance.useStore.getState().layers; geminiAcceptance.savedMarking=geminiAcceptance.geminiPresentation.getSnapshot().marking');
+      const before = await browser.evaluate('geminiAcceptance.audit.requests');
+      await click('Vis punkter fra Gemini WFS');
+      await browser.evaluate(`document.querySelector('${checkbox}').click()`);
+      await browser.waitFor(`!document.querySelector('${line}') && !document.querySelector('${point}')`);
+      assert.equal(await browser.evaluate('geminiAcceptance.geminiSession.getSnapshot().result===geminiAcceptance.savedResult'), true);
+      await browser.evaluate(`document.querySelector('${checkbox}').click()`);
+      await browser.waitFor(`document.querySelector('${line}')`);
+      assert.equal(await count(point), 0);
+      assert.equal(await browser.evaluate('geminiAcceptance.audit.requests'), before);
+      assert.equal(await browser.evaluate('geminiAcceptance.useStore.getState().layers===geminiAcceptance.savedLayers && geminiAcceptance.geminiPresentation.getSnapshot().marking===geminiAcceptance.savedMarking'), true);
+      await click('Vis ledninger fra Gemini WFS');
+      assert.equal(await browser.evaluate(`document.querySelector('${checkbox}').checked`), false);
+      await browser.evaluate(`document.querySelector('${checkbox}').click()`);
+      await browser.waitFor(`document.querySelector('${line}') && document.querySelector('${point}')`);
+    });
     await t.test('zoom includes all returned vertices, preserves visibility, and viewport changes do not fetch', async () => {
       await click('Vis punkter fra Gemini WFS');
       await click('Zoom til Gemini-referanse');

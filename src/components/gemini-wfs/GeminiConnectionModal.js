@@ -6,9 +6,13 @@ import useStore from '@/lib/store';
 import { geminiSession } from '@/lib/gemini-wfs/geminiSession.mjs';
 import { getGeminiSurveySources, resolveGeminiSourceId, getGeminiUiError } from '@/lib/gemini-wfs/geminiWorkflowUi.mjs';
 import useGeminiSession from './useGeminiSession';
+import { normalizeGeminiWfsUrl, validateGeminiConnection, readGeminiConnection, saveGeminiConnection } from '@/lib/gemini-wfs/geminiConnection.mjs';
+import { GeminiServiceError } from '@/lib/gemini-wfs/geminiErrors.mjs';
 
 export default function GeminiConnectionModal({ onClose, initialSourceId }) {
   const session = useGeminiSession();
+  const [initialConnection] = useState(() => session.connection ?? readGeminiConnection());
+  const [storageNotice, setStorageNotice] = useState(null);
   const layers = useStore((state) => state.layers);
   const layerOrder = useStore((state) => state.layerOrder);
   const sources = useMemo(() => getGeminiSurveySources(layers, layerOrder), [layers, layerOrder]);
@@ -22,6 +26,22 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
   const connected = session.connectionStatus === 'connected';
   const busy = submitting || session.status === 'loading';
   const errorText = (error || session.error) ? getGeminiUiError(error || session.error) : null;
+
+  const applyConnection = (form) => {
+    try {
+      const values = new FormData(form);
+      const url = normalizeGeminiWfsUrl(String(values.get('connectionUrl') ?? '').trim());
+      const previous = geminiSession.getSnapshot().connection ?? initialConnection;
+      const connection = validateGeminiConnection({
+        id: previous?.url === url ? previous.id : crypto.randomUUID(),
+        name: values.get('connectionName'), url,
+      });
+      geminiSession.setConnection(connection);
+      setStorageNotice(saveGeminiConnection(connection) ? 'Tilkoblingen er lagret i denne nettleseren.' :
+        'Tilkoblingen brukes i økten, men kunne ikke lagres i nettleseren.');
+      return connection;
+    } catch { throw new GeminiServiceError('invalid_connection'); }
+  };
 
   const clearInputs = () => {
     for (const name of ['username', 'password']) {
@@ -57,6 +77,7 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
     if (pending.current || geminiSession.getSnapshot().status === 'loading' || !sourceId) return;
     pending.current = true; setSubmitting(true); setError(null);
     try {
+      applyConnection(event.currentTarget);
       // Native values also work when a password manager autofills without a
       // React change event. Credentials never become React/global UI state.
       {
@@ -92,6 +113,19 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
     <form ref={formRef} id="gemini-va-connection-form" method="post" onSubmit={submit} aria-busy={busy}
       aria-describedby={errorText ? 'gemini-va-error' : 'gemini-va-description'} className="space-y-3 p-4">
       <p id="gemini-va-description" className="text-xs text-gmi-text-muted">Hent eksisterende VA-anlegg rundt en innmålingsfil. Tilgangen brukes bare i denne økten. Nettleserens passordbehandler kan huske den for deg.</p>
+      <div className="space-y-2">
+        <label htmlFor="gemini-wfs-connection-name" className="block text-sm font-medium">Tilkoblingsnavn</label>
+        <input id="gemini-wfs-connection-name" name="connectionName" defaultValue={initialConnection?.name ?? ''}
+          type="text" required maxLength={100} disabled={busy} className="gmi-compact-field w-full px-3 py-2 text-sm" />
+        <label htmlFor="gemini-wfs-url" className="block text-sm font-medium">WFS-URL</label>
+        <input id="gemini-wfs-url" name="connectionUrl" defaultValue={initialConnection?.url ?? ''}
+          type="url" required maxLength={500} disabled={busy} autoComplete="off"
+          className="gmi-compact-field w-full px-3 py-2 text-sm" />
+        <p className="text-xs text-gmi-text-muted">HTTPS-adresse på en Gemini Suite-vert med stien /portal/api/proxy/map/… .wfs, uten URL-parametere. Navn og URL lagres her; passord lagres ikke av appen.</p>
+        <button type="button" disabled={busy} aria-label="Lagre Gemini WFS-tilkobling" className="gmi-compact-button gmi-focus-ring px-2 py-1 text-xs"
+          onClick={() => { try { applyConnection(formRef.current); setError(null); } catch (failure) { setError(failure); } }}>Lagre tilkobling</button>
+        {storageNotice && <p role="status" className="text-xs text-gmi-text-muted">{storageNotice}</p>}
+      </div>
       <label htmlFor="gemini-va-source" className="block text-sm font-medium">Innmålingsfil</label>
       <select id="gemini-va-source" name="sourceLayerId" value={sourceId} disabled={busy || !sources.length} required
         onChange={(event) => { setDraftSourceId(event.target.value); setError(null); }}

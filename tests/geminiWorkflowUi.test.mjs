@@ -72,6 +72,6 @@ test('Home owns conditional native modal, map connection entry, and callback pat
     assert.match(source, /Gemini WFS/);
     assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB|console\.|Authorization|fetch\(['"]|parseGeminiGml|normalizeFeature|faerder\.geminisuite/);
   }
-  assert.doesNotMatch(modal, /autoComplete="off"|type="url"|useState\(['"](?:username|password)/);
+  assert.doesNotMatch(modal, /useState\(['"](?:username|password)/);
   assert.doesNotMatch(entry, /\.fetch\(|\.refresh\(/);
 });

@@ -1,6 +1,8 @@
 import { GeminiGmlError } from './parseGeminiGml.mjs';
 
 const MESSAGES = Object.freeze({
+  connection_unavailable: 'Oppgi en Gemini WFS-tilkobling f?rst.',
+  invalid_connection: 'Oppgi navn og en gyldig HTTPS-adresse til en Gemini Suite WFS-tjeneste uten parametere.',
   no_survey_source: 'Velg et innmålingslag.',
   no_source_geometry: 'Innmålingslaget har ingen koordinater.',
   unsupported_crs: 'Innmålingslaget mangler et støttet koordinatsystem.',

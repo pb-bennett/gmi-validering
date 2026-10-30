@@ -1,3 +1,4 @@
+import { TEST_CONNECTION } from './fixtures/gemini-wfs/connection.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
@@ -16,7 +17,7 @@ import {
 
 const origin = 'https://validator.example.test';
 const body = (overrides = {}) => ({
-  connectionId: 'faerder-va-basis', featureType: 'lines',
+  connectionId: 'gemini-wfs', connectionUrl: TEST_CONNECTION.url, featureType: 'lines',
   bbox: [579300, 6559200, 579900, 6559800],
   username: randomUUID(), password: randomUUID(), ...overrides,
 });
@@ -24,12 +25,12 @@ const invalid = (value) => assert.throws(() => validateWfsRequestBody(value), {
   name: 'WfsProxyError', code: 'invalid_request',
 });
 
-test('registered line and point requests produce only the exact fixed WFS contract', () => {
+test('configured line and point requests produce only the exact fixed WFS operation contract', () => {
   for (const [selector, type] of [['lines', 'gemini:VA_LINE'], ['points', 'gemini:VA_MPNT']]) {
     const input = body({ featureType: selector, bbox: [579300.25, 6559200.5, 579900.75, 6559800] });
     const serialized = validateWfsRequestBody(input);
     const url = new URL(serialized);
-    assert.equal(url.origin, 'https://faerder.geminisuite.com');
+    assert.equal(url.origin, 'https://tenant.geminisuite.com');
     assert.equal(url.pathname, '/portal/api/proxy/map/va-basis.wfs');
     assert.equal(url.port, '');
     assert.equal(url.username, '');
@@ -45,15 +46,15 @@ test('registered line and point requests produce only the exact fixed WFS contra
   assert.equal(WFS_TIMEOUT_MS, 15_000);
 });
 
-test('only known connection IDs, selectors and exactly the five allowed fields are accepted', () => {
-  for (const value of [null, [], {}, 'text', body({ connectionId: '__proto__' }),
-    body({ connectionId: 'other' }), body({ connectionId: 'https://attacker.example.test' }),
+test('bounded connection identities, profile URLs, selectors and exactly six allowed fields are accepted', () => {
+  for (const value of [null, [], {}, 'text', body({ connectionId: 'bad:id' }),
+    body({ connectionUrl: 'https://attacker.invalid/a.wfs' }), body({ connectionId: 'https://attacker.example.test' }),
     body({ featureType: 'gemini:VA_LINE' }), body({ featureType: ['lines', 'points'] })]) invalid(value);
   for (const key of ['url', 'hostname', 'host', 'path', 'port', 'headers', 'Authorization',
     'operation', 'request', 'version', 'crs', 'FILTER', 'CQL', 'outputFormat', 'startIndex', 'COUNT', 'xml']) {
     invalid(body({ [key]: 'untrusted' }));
   }
-  for (const key of ['connectionId', 'featureType', 'bbox', 'username', 'password']) {
+  for (const key of ['connectionId', 'connectionUrl', 'featureType', 'bbox', 'username', 'password']) {
     const input = body(); delete input[key]; invalid(input);
   }
 });

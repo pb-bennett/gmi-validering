@@ -1,3 +1,4 @@
+import { TEST_CONNECTION } from '../fixtures/gemini-wfs/connection.mjs';
 import { createRoot } from 'react-dom/client';
 import L from 'leaflet';
 import MapInner from '../../src/components/MapInner';
@@ -58,6 +59,7 @@ globalThis.geminiAcceptance = {
   audit, useStore, geminiSession, geminiPresentation, photoSession,
   seed: async (mode = 'pair') => {
     audit.mode = mode;
+    geminiSession.setConnection(TEST_CONNECTION);
     if (geminiSession.getSnapshot().connectionStatus !== 'connected') geminiSession.setCredentials({ username: crypto.randomUUID(), password: crypto.randomUUID() });
     return geminiSession.refresh('survey');
   },
