@@ -153,6 +153,15 @@ test('single fake clock delays, replaces, cancels, and hides hover', () => {
   assert.deepEqual(events, ['show:b', 'hide', 'show:a', 'hide']);
 });
 
+test('external presentation source colour uses the same tooltip contract without survey ownership', () => {
+  const source = { highlightAll: false, highlightStyle: { color: '#4338CA' } };
+  const feature = point({ S_FCODE: 'KUM' });
+  assert.equal(getFeatureHoverColor(feature, {}, source), '#4338CA');
+  source.highlightStyle.color = '#123456';
+  assert.equal(getFeatureHoverColor(feature, {}, source), '#123456');
+  assert.equal(feature.properties._layerId, undefined);
+});
+
 test('semantic layer and non-interactive tooltip retain popup and click handlers', () => {
   const map = readFileSync(new URL('../src/components/MapInner.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');

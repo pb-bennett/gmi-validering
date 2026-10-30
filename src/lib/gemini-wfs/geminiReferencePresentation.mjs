@@ -6,7 +6,7 @@ export const GEMINI_REFERENCE_Z_INDEX = 380;
 export const GEMINI_PRESENTATION_SOURCE_ID = 'gemini-wfs-reference';
 export const DEFAULT_GEMINI_MARKING = Object.freeze({
   id: GEMINI_PRESENTATION_SOURCE_ID, name: 'Gemini WFS', visible: true,
-  highlightAll: true, defaultHighlightColor: GEMINI_WFS_HALO.color,
+  highlightAll: false, defaultHighlightColor: GEMINI_WFS_HALO.color,
   highlightStyle: GEMINI_WFS_HALO,
 });
 

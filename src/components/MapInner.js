@@ -1095,10 +1095,10 @@ function FeatureHoverTooltip({ controllerRef, resetKey }) {
       className: 'gmi-compact-hover-tooltip',
     });
     const controller = createFeatureHoverController({
-      show: ({ feature, latlng, label }) => {
+      show: ({ feature, latlng, label, getSource }) => {
         const content = document.createElement('span');
         content.className = 'gmi-compact-hover-content';
-        const layerColor = getFeatureHoverColor(feature, useStore.getState().layers);
+        const layerColor = getFeatureHoverColor(feature, useStore.getState().layers, getSource?.());
         if (layerColor) {
           const dot = document.createElement('span');
           dot.className = 'gmi-compact-hover-dot';
@@ -2187,7 +2187,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
         resetKey={`${geoJsonDataKey}-${styleVersionKey}`}
       />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
-      <GeminiReferenceLayer inspectionEnabled={!measureMode && !photoPlacement && !photoDirectionEdit} />
+      <GeminiReferenceLayer inspectionEnabled={!measureMode && !photoPlacement && !photoDirectionEdit} hoverControllerRef={hoverControllerRef} />
       <PhotoMarkersLayer features={photoFeatures} onOpenPhoto={onOpenPhoto} photoWorkspaceSelection={photoWorkspaceSelection} onSelectPhoto={onSelectPhoto} placementActive={Boolean(photoPlacement)} directionEdit={photoDirectionEdit} />
       <PhotoManualPlacementLayer transaction={photoPlacement} onPropose={onPhotoPropose} />
       <LayersControl

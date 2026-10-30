@@ -39,14 +39,17 @@ test('ordinary refresh preserves visibility but versions the pair for atomic Geo
   publish({ status: 'loading' }); assert.equal(presentation.getSnapshot().resultVersion, version);
   publish({ result: result(), status: 'ready' });
   assert.equal(presentation.getSnapshot().resultVersion, version + 1); assert.equal(presentation.getSnapshot().linesVisible, false);
+  assert.equal(presentation.getSnapshot().marking.highlightAll, false);
   presentation.dispose();
 });
 test('new source, dataset, account or connection resets visibility to both visible', () => {
   for (const owner of [{ sourceLayerId: 'b' }, { datasetRevision: 'b' }, { accountGeneration: 'b' }, { connectionId: 'b' }]) {
     const { presentation, publish } = setup(); publish({ result: result() });
     presentation.setVisible('lines', false); presentation.setVisible('points', false);
+    presentation.setMarking({ highlightAll: true });
     publish({ result: result([], [], owner) });
-    assert(presentation.getSnapshot().linesVisible && presentation.getSnapshot().pointsVisible); presentation.dispose();
+    assert(presentation.getSnapshot().linesVisible && presentation.getSnapshot().pointsVisible);
+    assert.equal(presentation.getSnapshot().marking.highlightAll, false); presentation.dispose();
   }
 });
 test('clear/reset/disconnect removal resets visibility and discards pending zoom', () => {
@@ -102,17 +105,20 @@ test('pane and restrained shared-token styles remain below existing survey/photo
 
 test('external source marking shares normalization and remains isolated across refresh/reset', () => {
   const { presentation, publish } = setup(); const pair = result(); publish({ result: pair });
+  assert.equal(presentation.getSnapshot().marking.highlightAll, false);
   presentation.setMarking({ highlightStyle: { color: '#ABCDEF', opacity: 5, spread: 99 } });
   assert.deepEqual(presentation.getSnapshot().marking.highlightStyle, { color: '#ABCDEF', opacity: 0.8, spread: 8 });
-  presentation.setMarking({ highlightAll: false });
+  presentation.setMarking({ highlightAll: true });
   publish({ result: result() });
-  assert.equal(presentation.getSnapshot().marking.highlightAll, false);
+  assert.equal(presentation.getSnapshot().marking.highlightAll, true);
   assert.equal(presentation.getSnapshot().marking.highlightStyle.color, '#ABCDEF');
   presentation.resetMarking();
-  assert.equal(presentation.getSnapshot().marking.highlightAll, false);
+  assert.equal(presentation.getSnapshot().marking.highlightAll, true);
   assert.equal(presentation.getSnapshot().marking.highlightStyle.color, GEMINI_WFS_HALO.color);
   publish({ result: null });
-  assert.equal(presentation.getSnapshot().marking.highlightAll, true);
+  assert.equal(presentation.getSnapshot().marking.highlightAll, false);
+  publish({ result: result() });
+  assert.equal(presentation.getSnapshot().marking.highlightAll, false);
   presentation.dispose();
 });
 

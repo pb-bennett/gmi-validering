@@ -20,5 +20,13 @@ export function getGeminiPresentationInput(record) {
     else if (title === 'SLUK') code = 'SLU';
     else if (title === 'SANDFANG') code = 'SAN';
   }
-  return { S_FCODE: code, DIM: geminiFieldText(record, 'DIM') };
+  const dimension = geminiFieldText(record, 'DIM');
+  return { S_FCODE: code, DIM: dimension, Dimensjon: dimension,
+    Type: geminiFieldText(record, 'TYPE_TITLE', 'FCODE_TITLE', 'TYPE'),
+    Bredde: geminiFieldText(record, 'OBJWIDTH'),
+    Material: geminiFieldText(record, 'MATERIAL_TITLE', 'MATERIAL'),
+    Anleggsår: geminiFieldText(record, 'YEAR'),
+    Eier: geminiFieldText(record, 'OWNER_TITLE', 'OWNER'),
+    Status: geminiFieldText(record, 'STATUS_TITLE', 'STATUS'),
+  };
 }

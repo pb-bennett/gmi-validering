@@ -41,9 +41,9 @@ export function getFeatureHoverLabel(feature) {
   return parts.length ? parts.join(' · ') : null;
 }
 
-export function getFeatureHoverColor(feature, layers) {
+export function getFeatureHoverColor(feature, layers, source) {
   const layerId = feature?.properties?._layerId;
   const layer = layerId && layers?.[layerId];
-  const color = layer?.highlightStyle?.color;
+  const color = (source ?? layer)?.highlightStyle?.color;
   return typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color : null;
 }

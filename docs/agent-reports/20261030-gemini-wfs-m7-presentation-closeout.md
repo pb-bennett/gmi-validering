@@ -1,6 +1,6 @@
 # Gemini WFS M7 shared presentation correction
 
-**Current status: implemented and locally validated; hosted visual acceptance pending.** Starting checkpoint: `7002c71 Polish Gemini WFS map presentation`, branch `feature/photo-workspace`, initially clean. No commit, push or deployment in this correction.
+**Latest status: hosted review of `fbaf556` confirms the shared semantic colours, point symbols and Lagmarkering presentation look good.** This continuation adds the missing shared hover tooltip and changes Gemini marking to default OFF. Those two final changes are implemented and locally validated, with hosted verification pending. Starting HEAD: `fbaf556 Integrate Gemini WFS with shared map presentation`; branch `feature/photo-workspace`; initially clean. No commit, push or deployment. Earlier implementation details and validation below describe the previous correction; see the final continuation section for current results.
 
 Hosted review rejected `7002c71`: pipe foregrounds appeared uniform/dark, normal semantic VA colouring was lost, and Gemini marking was fixed rather than participating in Lagmarkering. The prior closeout below is historical and does not establish visual acceptance.
 
@@ -30,6 +30,22 @@ Previously established manual hosted evidence remains **461 lines / 329 points**
 ## Files in this correction
 
 `MapInner.js`; `map/semanticPresentation.mjs` (new extraction); `LayerHighlightPanel.js`; `geminiPresentationAdapter.mjs` (new adapter); `geminiReferencePresentation.mjs`; Gemini reference layer/card/inspection components; `geminiSemanticPresentation.test.mjs` (new); existing reference/popup and shared halo/panel/order tests; browser workflow harness; both M7 reports.
+
+## Final hover/default-marking continuation (current)
+
+Starting HEAD: **fbaf556**, initially clean. The user confirmed the hosted shared semantic colours, shared point symbols and existing Lagmarkering integration look good. This hosted review supersedes the previous pending shared-presentation review. Two residual issues were corrected locally; **these changes still await hosted verification**.
+
+- Gemini line/point events now enter the **same map-wide hover controller and tooltip** used by GMI/SOSI. There is no separate tooltip component, formatting table, controller, timer or CSS. The existing 500 ms delay, single-tooltip behavior and movement cancellation are retained. Gemini click popups remain unchanged and take priority over hover.
+- The presentation adapter supplies canonical hover fields from immutable source attributes; `getFeatureHoverLabel` formats both data domains. The existing colour helper accepts an optional external presentation source, avoiding survey-store ownership. Hover uses inert text, adds no requests and does not alter survey selection. Leave/removal/replacement/tool suppression clean up pending/visible hover through the shared controller.
+- Gemini marking defaults **OFF**. Semantic colours and symbols remain visible. Indigo remains the configurable default colour; manual enablement restores existing halo controls. Same-owner refresh retains the current marking choice/settings, while disconnect/reconnect/new owner reset to off. Survey defaults are unchanged.
+
+Changed production files in this continuation: `MapInner.js` (controller/source-colour wiring), Gemini reference/inspection components, `geminiPresentationAdapter.mjs` (hover fields), `geminiReferencePresentation.mjs` (off default), and shared `featureHoverLabel.mjs` (optional presentation source). Updated existing tooltip, semantic, presentation and browser tests; no new parallel system. WFS/security/parser/client/session, survey store and shared semantic renderer have no changes.
+
+Validation: **269 Node + 94 Chromium browser tests passed (363 distinct selected tests), zero failures/skips**. Final focused hover/popup rerun: **15 passed**, overlapping the 94. Focused lint has zero errors/warnings outside MapInner; MapInner retains exactly its previous **8 errors / 4 warnings**, with no new diagnostics. **Production build passed**, including the final cleanup-adjustment rerun; Google Fonts was reachable this time and no font configuration changed. `git diff --check` passed. Full repository suite not run.
+
+Tests cover both actual-pointer Gemini tooltip types, shared survey hover, unchanged requests/survey selection, click popup after hover, tool suppression, default-off visible semantic geometry, enabled marking controls, refresh and new-session defaults. Previously established real hosted 461-line/329-point and popup/reconnect evidence remains valid. Exact selections and results are in the final section of the M7 acceptance report.
+
+**Next:** redeploy and verify hover plus default-off marking before claiming final hosted acceptance. No commit/push/deployment. No photo, matching, topology or comparison work.
 
 ## Historical checkpoint 7002c71 (superseded)
 

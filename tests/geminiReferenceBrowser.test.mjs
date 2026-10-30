@@ -94,8 +94,8 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(line)}).closest('.leaflet-pane').style.zIndex`), '380');
       assert.equal(await count(`${line}.leaflet-interactive, ${point}.leaflet-interactive`), 2);
       assert.equal(await browser.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(line)})).stroke`), 'rgb(1, 1, 255)');
-      assert.equal(await browser.evaluate(`getComputedStyle(document.querySelector('.gmi-gemini-line-halo')).stroke`), 'rgb(67, 56, 202)');
-      assert.equal(await count('.gmi-gemini-reference-point svg [stroke-opacity]'), 1);
+      assert.equal(await browser.evaluate(`document.querySelector('.gmi-gemini-line-halo').getAttribute('stroke-opacity')`), '0');
+      assert.equal(await count('.gmi-gemini-reference-point svg [stroke-opacity]'), 0);
       assert(await browser.evaluate(`Boolean(document.querySelector('.leaflet-overlay-pane path.leaflet-interactive'))`));
       assert(await browser.evaluate(`(() => { let safe = true; geminiAcceptance.audit.map.eachLayer(layer => {
         if (layer.feature?.properties.kind === 'gemini-reference') safe &&= (layer.options.className === 'gmi-gemini-line-halo' || layer.options.interactive) && !layer.options.bubblingMouseEvents && !layer.getPopup?.() && !layer.getTooltip?.() && !layer.dragging?.enabled();
@@ -106,7 +106,7 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
         geminiAcceptance.pointNode = document.querySelector('${point}'); return { photo: document.querySelectorAll('.photo-camera-marker').length, requests: geminiAcceptance.audit.requests }; })()`);
       await click('Vis ledninger fra Gemini WFS'); await browser.waitFor(`!document.querySelector('${line}')`);
       assert.equal(await count('.gmi-gemini-line-halo'), 0);
-      assert.equal(await count('.gmi-gemini-reference-point svg [stroke-opacity]'), 1);
+      assert.equal(await count('.gmi-gemini-reference-point svg [stroke-opacity]'), 0);
       assert.equal(await count(point), 1);
       assert(await browser.evaluate(`geminiAcceptance.pointNode === document.querySelector('${point}')`), 'Unchanged point batch is not rebuilt');
       await click('Vis punkter fra Gemini WFS'); await browser.waitFor(`!document.querySelector('${point}')`);

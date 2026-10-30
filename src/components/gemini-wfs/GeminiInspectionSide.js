@@ -8,12 +8,13 @@ import { getGeminiPresentationInput } from '@/lib/gemini-wfs/geminiPresentationA
 import { getSemanticLineStyle, getSemanticPointSymbol } from '@/lib/map/semanticPresentation.mjs';
 import { getLayerHighlightStyle, getLineCasingStyle } from '@/lib/map/layerHighlight.mjs';
 import { getLayerMarkerZIndexOffset } from '@/lib/map/layerOrder.mjs';
+import { getFeatureHoverLabel } from '@/lib/map/featureHoverLabel.mjs';
 import { GEMINI_REFERENCE_PANE } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
 import './geminiPopup.css';
 
 const interactiveOptions = { interactive: true, bubblingMouseEvents: false, pane: GEMINI_REFERENCE_PANE };
 
-export default function GeminiInspectionSide({ data, lookup, enabled, marking }) {
+export default function GeminiInspectionSide({ data, lookup, enabled, marking, hoverControllerRef }) {
   const map = useMap();
   const markingRef = useRef(marking);
   const repaint = useRef(null);
@@ -22,6 +23,7 @@ export default function GeminiInspectionSide({ data, lookup, enabled, marking })
     repaint.current?.();
   }, [marking]);
   useEffect(() => {
+    const hoverController = hoverControllerRef?.current;
     let popup, selected = null, hovered = null;
     const input = (feature) => getGeminiPresentationInput(lookup(feature.properties.sourceKey, feature.properties.typeName));
     const highlight = () => markingRef.current.highlightAll
@@ -74,6 +76,7 @@ export default function GeminiInspectionSide({ data, lookup, enabled, marking })
       if (!record) return;
       const position = feature.geometry.type === 'Point' ? event.target.getLatLng() : event.latlng;
       if (!position) return;
+      hoverController?.cancel();
       popup?.remove();
       selected = feature;
       paintFeature(feature);
@@ -84,16 +87,31 @@ export default function GeminiInspectionSide({ data, lookup, enabled, marking })
     for (const layer of [...casing.getLayers(), ...layers]) {
       layer.options.bubblingMouseEvents = !enabled;
       layer.on('click', inspect);
-      layer.on('mouseover', () => { if (enabled) { const previous = hovered; hovered = layer.feature; paintFeature(previous); paintFeature(hovered); } });
-      layer.on('mouseout', () => { const previous = hovered; hovered = null; paintFeature(previous); });
+      layer.on('mouseover', (event) => {
+        if (!enabled) return;
+        const previous = hovered;
+        hovered = layer.feature;
+        paintFeature(previous); paintFeature(hovered);
+        const feature = { geometry: layer.feature.geometry, properties: input(layer.feature) };
+        const label = getFeatureHoverLabel(feature);
+        const latlng = feature.geometry.type === 'Point' ? layer.getLatLng() : event.latlng;
+        if (label && latlng) hoverController?.enter(layer, {
+          feature, latlng, label, getSource: () => markingRef.current,
+        });
+      });
+      layer.on('mouseout', () => {
+        hoverController?.leave(layer);
+        const previous = hovered; hovered = null; paintFeature(previous);
+      });
     }
     paintAll();
     return () => {
       repaint.current = null;
+      for (const layer of [...casing.getLayers(), ...layers]) hoverController?.leave(layer);
       popup?.remove();
       primary.remove();
       casing.remove();
     };
-  }, [map, data, lookup, enabled]);
+  }, [map, data, lookup, enabled, hoverControllerRef]);
   return null;
 }

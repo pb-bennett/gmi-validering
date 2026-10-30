@@ -43,6 +43,7 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
       await browser.evaluate('geminiWorkflow.audit.mode="inspection"; geminiWorkflow.fillCredentials(); document.querySelector("#gemini-va-connection-form").requestSubmit()');
       await browser.waitFor('!document.querySelector("#gemini-va-connection-form") && document.querySelector(".gmi-gemini-reference-point")');
       await browser.evaluate('void geminiWorkflow.audit.map.fitBounds([[59.2244,10.4345],[59.2257,10.437]],{animate:false})'); await settle();
+      assert.equal(await browser.evaluate('geminiWorkflow.geminiPresentation.getSnapshot().marking.highlightAll'), false);
     };
     const save = () => browser.evaluate(`geminiWorkflow.before = { result: geminiWorkflow.geminiSession.getSnapshot().result,
       evidence:JSON.stringify(geminiWorkflow.geminiSession.getSnapshot().result), layers:geminiWorkflow.useStore.getState().layers,
@@ -77,6 +78,36 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
       await close(); await unchanged();
       assert.equal(await count('.gmi-gemini-selected'), 0);
     });
+    await t.test('line and point hover share the delayed survey tooltip without fetch or survey selection', async () => {
+      await save();
+      for (const [kind, text] of [['LineString', 'VL 160.00 · PE · 1980'], ['Point', 'KUM · Kum ÆØÅ · 0 · 2001']]) {
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 600, y: 100 });
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...await browser.evaluate(`geminiWorkflow.inspectionTarget(${JSON.stringify(kind)})`) });
+        await browser.waitFor(`document.querySelector('.gmi-compact-hover-label')?.textContent.includes(${JSON.stringify(text)})`);
+        assert.equal(await count('.gmi-compact-hover-tooltip'), 1);
+        assert.equal(await count('.gmi-compact-hover-tooltip img, .gmi-compact-hover-tooltip a'), 0);
+        await unchanged();
+        await clickReference(kind); await opened();
+        await browser.waitFor("!document.querySelector('.gmi-compact-hover-tooltip')");
+        await close(); await unchanged();
+      }
+    });
+    await t.test('shared hover cancels for tool ownership and resumes without requests', async () => {
+      await save();
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 600, y: 100 });
+      const target = await browser.evaluate('geminiWorkflow.inspectionTarget("LineString")');
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...target });
+      await browser.waitFor("document.querySelector('.gmi-compact-hover-tooltip')");
+      await browser.evaluate('geminiWorkflow.useStore.getState().toggleMeasureMode()');
+      await browser.waitFor("!document.querySelector('.gmi-compact-hover-tooltip')");
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 600, y: 100 });
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...target });
+      await browser.evaluate('new Promise(resolve => setTimeout(resolve, 650))');
+      assert.equal(await count('.gmi-compact-hover-tooltip'), 0);
+      await browser.evaluate('geminiWorkflow.useStore.getState().toggleMeasureMode()');
+      await browser.waitFor('document.querySelector(".gmi-gemini-reference-line").style.pointerEvents === "auto"');
+      await unchanged();
+    });
     await t.test('actual point pointer popup: fields, cover separate from literal geometry zero and point anchor', async () => {
       await clickReference('Point'); await opened();
       assert.equal(await count('.gmi-gemini-reference-point.gmi-gemini-selected'), 1);
@@ -90,6 +121,9 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
       await clickReference('LineString'); await opened();
       await clickButton('Lagmarkering');
       await browser.waitFor(`document.querySelector('#layer-highlight-panel input[aria-label="Markeringsfarge for Gemini WFS"]')`);
+      assert.equal(await browser.evaluate(`document.querySelector('#layer-highlight-panel input[aria-label="Lagmarkering for Gemini WFS"]').checked`), false);
+      assert.equal(await count('.gmi-gemini-reference-point svg [stroke-opacity]'), 0);
+      await browser.evaluate(`document.querySelector('#layer-highlight-panel input[aria-label="Lagmarkering for Gemini WFS"]').click()`);
       const setControl = async (label, value) => {
         await browser.evaluate(`(() => {
           const input = document.querySelector('#layer-highlight-panel input[aria-label=${JSON.stringify(label)}]');
@@ -145,6 +179,9 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
       assert.match(await browser.evaluate('document.querySelector(".photo-map-popup").innerText'), /Synthetic photo.heic/);
       await browser.evaluate('geminiWorkflow.audit.map.closePopup(); void 0'); await settle();
       const survey = await browser.evaluate(`(() => {const map=geminiWorkflow.audit.map;let layer;map.eachLayer(l=>{if(l.feature?.properties.featureType==='Line')layer=l;});const v=layer.getLatLngs(),p=map.latLngToContainerPoint({lat:v[0].lat+.15*(v[1].lat-v[0].lat),lng:v[0].lng+.15*(v[1].lng-v[0].lng)}),r=map.getContainer().getBoundingClientRect();return{x:r.x+p.x,y:r.y+p.y};})()`);
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...survey });
+      await browser.waitFor("document.querySelector('.gmi-compact-hover-label')?.textContent.includes('VL')");
+      assert.equal(await count('.gmi-compact-hover-tooltip'), 1);
       await pointer(survey); await browser.waitFor('document.querySelector(".gmi-feature-popup")');
       assert.equal(await count('.gmi-feature-popup .inspect-data-btn'), 1);
       await browser.evaluate('geminiWorkflow.audit.map.closePopup(); void 0'); await settle();

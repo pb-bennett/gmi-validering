@@ -4,8 +4,22 @@ import { readFile } from 'node:fs/promises';
 import { getGeminiPresentationInput } from '../src/lib/gemini-wfs/geminiPresentationAdapter.mjs';
 import { getSemanticLineStyle, getSemanticPointSymbol, FCODE_COLORS } from '../src/lib/map/semanticPresentation.mjs';
 import { getLineCasingStyle } from '../src/lib/map/layerHighlight.mjs';
+import { getFeatureHoverLabel } from '../src/lib/map/featureHoverLabel.mjs';
+import { lineValues, pointValues } from './fixtures/gemini-wfs/popupProfile.mjs';
 
 const record = (values) => ({ attributes: Object.fromEntries(Object.entries(values).map(([key, rawText]) => [key, { state: 'text', rawText }])) });
+
+test('Gemini adapter supplies the existing survey hover-label contract for lines and points', () => {
+  for (const [values, geometry, survey] of [
+    [lineValues, 'LineString', { S_FCODE: 'VL', Dimensjon: '160.00', Material: 'PE', Anleggsår: '1980', Eier: lineValues.OWNER_TITLE, Status: 'I drift' }],
+    [pointValues, 'Point', { S_FCODE: 'KUM', Type: pointValues.TYPE_TITLE, Bredde: '0', Anleggsår: '2001', Eier: pointValues.OWNER_TITLE, Status: 'I drift' }],
+  ]) {
+    const source = record(values), before = JSON.stringify(source);
+    assert.equal(getFeatureHoverLabel({ geometry: { type: geometry }, properties: getGeminiPresentationInput(source) }),
+      getFeatureHoverLabel({ geometry: { type: geometry }, properties: survey }));
+    assert.equal(JSON.stringify(source), before);
+  }
+});
 
 for (const [title, code] of [['Vannledning', 'VL'], ['Spillvannsledning', 'SP'], ['Overvannsledning', 'OV'], ['Drensledning', 'DR']]) {
   test(`Gemini ${title} uses identical survey semantic presentation`, () => {
