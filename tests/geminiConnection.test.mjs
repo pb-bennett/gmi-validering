@@ -37,7 +37,7 @@ test('changing connection cancels old work, releases credentials/results, and sc
   const empty = { lines: { source: { records: [] }, display: { features: [] } },
     points: { source: { records: [] }, display: { features: [] } }, counts: { lines: 0, points: 0, total: 0 } };
   const layer = { file: { format: 'GMI' }, data: { format: 'GMI', header: { COSYS_EPSG: 25832 }, points: [{ coordinates: [{ x: 579300, y: 6559200 }] }], lines: [] } };
-  const session = createGeminiSession({ getLayer: () => layer, requestPair: (args) => {
+  const session = createGeminiSession({ getLayers: () => ({ survey: layer }), requestPair: (args) => {
     calls.push(args); return calls.length === 1 ? new Promise((resolve) => { release = resolve; }) : Promise.resolve(empty);
   } });
   session.setConnection(TEST_CONNECTION); session.setCredentials({ username: 'invented', password: 'invented' });

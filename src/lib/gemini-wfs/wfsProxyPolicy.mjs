@@ -1,11 +1,12 @@
 import { normalizeGeminiWfsUrl } from './geminiConnection.mjs';
+import { GEMINI_ABSOLUTE_SIDE_METRES, GEMINI_ABSOLUTE_AREA_SQUARE_METRES } from './geminiCoveragePolicy.mjs';
 
 // Server-side policy for the restricted Gemini Suite WFS profile.
 export const WFS_MAX_REQUEST_BYTES = 16 * 1024;
 export const WFS_MAX_RESPONSE_BYTES = 3 * 1024 * 1024;
 export const WFS_TIMEOUT_MS = 15_000;
-export const WFS_MAX_SIDE_METRES = 2_000;
-export const WFS_MAX_AREA_SQUARE_METRES = 4_000_000;
+export const WFS_MAX_SIDE_METRES = GEMINI_ABSOLUTE_SIDE_METRES;
+export const WFS_MAX_AREA_SQUARE_METRES = GEMINI_ABSOLUTE_AREA_SQUARE_METRES;
 export const WFS_MAX_USERNAME_LENGTH = 256;
 export const WFS_MAX_PASSWORD_LENGTH = 1024;
 

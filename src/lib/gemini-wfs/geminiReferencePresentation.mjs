@@ -53,8 +53,7 @@ export function createGeminiPresentation(session) {
     if (result === currentResult) return;
     currentResult = result;
     const provenance = result?.provenance;
-    const nextOwner = result ? JSON.stringify([provenance.connectionId, provenance.accountGeneration,
-      provenance.sourceLayerId, provenance.datasetRevision]) : null;
+    const nextOwner = result ? JSON.stringify([provenance.connectionId, provenance.accountGeneration]) : null;
     const resetVisibility = nextOwner !== owner || !result;
     owner = nextOwner;
     publish({ resultVersion: ++version, zoomRequest: null,

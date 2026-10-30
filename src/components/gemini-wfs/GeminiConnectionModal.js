@@ -1,24 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CircleNotchIcon, XIcon } from '@phosphor-icons/react';
-import useStore from '@/lib/store';
 import { geminiSession } from '@/lib/gemini-wfs/geminiSession.mjs';
-import { getGeminiSurveySources, resolveGeminiSourceId, getGeminiUiError } from '@/lib/gemini-wfs/geminiWorkflowUi.mjs';
+import { getGeminiUiError } from '@/lib/gemini-wfs/geminiWorkflowUi.mjs';
 import useGeminiSession from './useGeminiSession';
 import { normalizeGeminiWfsUrl, validateGeminiConnection, readGeminiConnection, saveGeminiConnection } from '@/lib/gemini-wfs/geminiConnection.mjs';
 import { GeminiServiceError } from '@/lib/gemini-wfs/geminiErrors.mjs';
 
-export default function GeminiConnectionModal({ onClose, initialSourceId }) {
+export default function GeminiConnectionModal({ onClose }) {
   const session = useGeminiSession();
   const [initialConnection] = useState(() => session.connection ?? readGeminiConnection());
   const [storageNotice, setStorageNotice] = useState(null);
-  const layers = useStore((state) => state.layers);
-  const layerOrder = useStore((state) => state.layerOrder);
-  const sources = useMemo(() => getGeminiSurveySources(layers, layerOrder), [layers, layerOrder]);
-  // Unsubmitted source choice is a form draft, not a change of result ownership.
-  const [draftSourceId, setDraftSourceId] = useState(() => initialSourceId ?? session.source?.sourceLayerId);
-  const sourceId = resolveGeminiSourceId(sources, draftSourceId);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const dialogRef = useRef(null), formRef = useRef(null);
@@ -61,8 +54,7 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
     document.body.style.overflow = 'hidden';
     closed.current = false;
     dialog.showModal();
-    const select = dialog.querySelector('select');
-    dialog.querySelector(select.options.length > 1 ? 'select' : '#gemini-va-username')?.focus();
+    dialog.querySelector('#gemini-va-username')?.focus();
     return () => {
       closed.current = true;
       if (pending.current) geminiSession.cancel();
@@ -74,7 +66,7 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (pending.current || geminiSession.getSnapshot().status === 'loading' || !sourceId) return;
+    if (pending.current || geminiSession.getSnapshot().status === 'loading') return;
     pending.current = true; setSubmitting(true); setError(null);
     try {
       applyConnection(event.currentTarget);
@@ -87,8 +79,7 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
           geminiSession.setCredentials({ username, password });
         }
       }
-      geminiSession.selectSource(sourceId);
-      const outcome = await geminiSession.fetch(sourceId);
+      const outcome = await geminiSession.fetch();
       if (!closed.current) {
         clearInputs();
         if (outcome.ok) { pending.current = false; onClose(); }
@@ -112,7 +103,7 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
     </header>
     <form ref={formRef} id="gemini-va-connection-form" method="post" onSubmit={submit} aria-busy={busy}
       aria-describedby={errorText ? 'gemini-va-error' : 'gemini-va-description'} className="space-y-3 p-4">
-      <p id="gemini-va-description" className="text-xs text-gmi-text-muted">Hent eksisterende VA-anlegg rundt en innmålingsfil. Tilgangen brukes bare i denne økten. Nettleserens passordbehandler kan huske den for deg.</p>
+      <p id="gemini-va-description" className="text-xs text-gmi-text-muted">Gemini WFS henter eksisterende VA-anlegg rundt innlastede innmålingslag. Nye innmålingslag legges til automatisk mens tilkoblingen er aktiv. Tilgangen brukes bare i denne økten. Nettleserens passordbehandler kan huske den for deg.</p>
       <div className="space-y-2">
         <label htmlFor="gemini-wfs-connection-name" className="block text-sm font-medium">Tilkoblingsnavn</label>
         <input id="gemini-wfs-connection-name" name="connectionName" defaultValue={initialConnection?.name ?? ''}
@@ -126,16 +117,8 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
           onClick={() => { try { applyConnection(formRef.current); setError(null); } catch (failure) { setError(failure); } }}>Lagre tilkobling</button>
         {storageNotice && <p role="status" className="text-xs text-gmi-text-muted">{storageNotice}</p>}
       </div>
-      <label htmlFor="gemini-va-source" className="block text-sm font-medium">Innmålingsfil</label>
-      <select id="gemini-va-source" name="sourceLayerId" value={sourceId} disabled={busy || !sources.length} required
-        onChange={(event) => { setDraftSourceId(event.target.value); setError(null); }}
-        className="gmi-compact-field w-full px-3 py-2 text-sm">
-        {!sourceId && <option value="">{sources.length ? 'Velg innmålingsfil' : 'Ingen innmålingsfil'}</option>}
-        {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
-      </select>
-      {!sources.length && <p role="status" className="text-xs text-gmi-text-muted">Importer en innmålingsfil i GMI-, SOSI- eller KOF-format først.</p>}
       {connected && <p className="text-xs text-gmi-text-muted">Tilgang er oppgitt for økten. La begge feltene stå tomme for å bruke den, eller fyll ut begge for å bytte bruker.</p>}
-      <fieldset disabled={busy || !sourceId} className="space-y-3">
+      <fieldset disabled={busy} className="space-y-3">
         <div>
           <label htmlFor="gemini-va-username" className="mb-1 block text-sm font-medium">Brukernavn</label>
           <input id="gemini-va-username" name="username" type="text" autoComplete="username" required={!connected} maxLength={256}
@@ -148,12 +131,11 @@ export default function GeminiConnectionModal({ onClose, initialSourceId }) {
         </div>
       </fieldset>
       {errorText && <p id="gemini-va-error" role="alert" className="rounded-lg border border-gmi-border bg-gmi-surface-soft p-2 text-sm">{errorText}</p>}
-      {session.stale && !errorText && <p role="status" className="text-xs text-gmi-text-muted">Innmålingsgrunnlaget er endret. Hent referansen på nytt.</p>}
       {busy && <p role="status" className="flex items-center gap-2 text-xs text-gmi-text-muted"><CircleNotchIcon size={16} weight="regular" className="animate-spin" aria-hidden="true" />Henter eksisterende anlegg … Lukk for å avbryte.</p>}
       <footer className="flex flex-wrap items-center justify-end gap-2 pt-2">
         {connected && <button type="button" onClick={() => { geminiSession.disconnect(); close(); }} className="gmi-compact-button gmi-focus-ring mr-auto px-2 py-2 text-xs">Koble fra Gemini WFS</button>}
         <button type="button" onClick={close} className="gmi-compact-button gmi-focus-ring px-3 py-2 text-sm">{busy ? 'Avbryt henting' : 'Avbryt'}</button>
-        <button type="submit" disabled={busy || !sourceId} className="gmi-primary-control gmi-focus-ring px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50">Hent eksisterende anlegg</button>
+        <button type="submit" disabled={busy} className="gmi-primary-control gmi-focus-ring px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50">Hent eksisterende anlegg</button>
       </footer>
     </form>
   </dialog>;

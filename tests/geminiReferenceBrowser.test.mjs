@@ -79,7 +79,7 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       await browser.waitFor(`document.querySelector(${JSON.stringify(point)})`);
       assert.equal(await count(line), 1); assert.equal(await count(point), 1);
       const text = await browser.evaluate(`document.querySelector(${JSON.stringify(card)}).innerText`);
-      assert.match(text, /Eksisterende anlegg · Gemini WFS/); assert.match(text, /Synthetic survey.gmi/);
+      assert.match(text, /Eksisterende anlegg · Gemini WFS/); assert.match(text, /1 omr/);
       assert.equal(await count(`${card} [aria-label="Ledninger: 1"]`), 1);
       assert.equal(await count(`${card} [aria-label="Punkter: 1"]`), 1);
       assert.equal(await browser.evaluate('geminiAcceptance.audit.requests'), 2);
@@ -202,7 +202,7 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       assert.equal(await count(point), 2); assert.equal(await count(line), 1);
       assert(await browser.evaluate('geminiAcceptance.retained === geminiAcceptance.geminiSession.getSnapshot().result'));
       await browser.evaluate(`geminiAcceptance.useStore.setState(state => ({layers:{...state.layers, survey:{...state.layers.survey, data:{...state.layers.survey.data}}}}))`);
-      await browser.waitFor(`document.querySelector('${card} [role="status"]').innerText.includes('Utdatert')`);
+      assert(await browser.evaluate('geminiAcceptance.retained === geminiAcceptance.geminiSession.getSnapshot().result'));
       assert.equal(await count(point), 2);
     });
     await t.test('lines-only, single-point-only and empty pairs support zoom safely', async () => {
@@ -237,13 +237,13 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
         await click('Vis ledninger fra Gemini WFS');
       }
     });
-    await t.test('clear removes vectors/card, next result restores defaults, source removal and full reset clear presentation', async () => {
+    await t.test('clear removes vectors, connected card stays available; next result/source removal/reset retain lifecycle', async () => {
       await seeded(); await click('Vis ledninger fra Gemini WFS');
-      await browser.evaluate('geminiAcceptance.clear()'); await browser.waitFor(`!document.querySelector('${card}')`);
+      await browser.evaluate('geminiAcceptance.clear()'); await browser.waitFor(`!document.querySelector('${line}') && !document.querySelector('${point}')`);
       assert.equal(await count(line), 0); assert.equal(await count(point), 0);
       await seeded(); await browser.waitFor(`document.querySelector('${line}')`);
       await browser.evaluate('geminiAcceptance.useStore.getState().removeLayer("survey")');
-      await browser.waitFor(`!document.querySelector('${card}')`);
+      await browser.waitFor(`!document.querySelector('${line}') && !document.querySelector('${point}')`);
       assert.equal(await count(line), 0); assert.equal(await count(point), 0);
       assert.equal(await count('.photo-camera-marker'), 1);
       await browser.evaluate('geminiAcceptance.reset()');

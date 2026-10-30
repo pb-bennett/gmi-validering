@@ -569,7 +569,7 @@ export default function Home() {
               <Sidebar
                 onReset={handleReset}
                 onOpenPhotoLayer={openPhotoLayer}
-                onOpenGemini={(sourceLayerId) => setGeminiDialog({ sourceLayerId })}
+                onOpenGemini={() => setGeminiDialog({})}
                 hasPhotoLayers={hasPhotoLayers}
                 onAddFile={() => setShowAddLayerModal(true)}
                 onOpenContact={(event) => openAppInfo('contact', event.currentTarget)}
@@ -734,7 +734,7 @@ export default function Home() {
       )}
 
       {/* WMS Layer Modal */}
-      {geminiDialog && <GeminiConnectionModal initialSourceId={geminiDialog.sourceLayerId} onClose={() => setGeminiDialog(null)} />}
+      {geminiDialog && <GeminiConnectionModal onClose={() => setGeminiDialog(null)} />}
       <WmsLayerModal
         isOpen={showWmsModal}
         onClose={() => setShowWmsModal(false)}

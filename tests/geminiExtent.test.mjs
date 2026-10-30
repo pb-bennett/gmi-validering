@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { register } from 'node:module';
 register('./esmJsLoader.mjs', import.meta.url);
-const { getGeminiExtent, validateGeminiBbox, GEMINI_BUFFER_METRES } = await import('../src/lib/gemini-wfs/geminiExtent.mjs');
+const { getGeminiExtent, getGeminiMapExtent, validateGeminiBbox, GEMINI_BUFFER_METRES } = await import('../src/lib/gemini-wfs/geminiExtent.mjs');
 const { validateWfsBbox } = await import('../src/lib/gemini-wfs/wfsProxyPolicy.mjs');
 
 export const survey = (points = [], lines = [], epsg = 25832, format = 'GMI') => ({
@@ -110,4 +110,20 @@ test('client safety envelope agrees with M1 at exact boundaries and one-metre ex
     const accepts = (validate) => { try { validate(bbox); return true; } catch { return false; } };
     assert.equal(accepts(validateGeminiBbox), accepts(validateWfsBbox));
   }
+});
+
+
+test('Leaflet viewport uses strict WGS84 projection and the visible envelope without rounding or 100 m buffer', () => {
+  const bounds = { getWest: () => 10, getEast: () => 10.01, getSouth: () => 59, getNorth: () => 59.01 };
+  const calls = [];
+  const bbox = getGeminiMapExtent(bounds, { project: (from, to, xy) => {
+    calls.push([from, to, xy]); return [xy[0] * 1000 + 500000, xy[1] * 1000 + 6500000];
+  } });
+  assert.deepEqual(bbox, [510000, 6559000, 510010, 6559010]);
+  assert.equal(calls.length, 68); assert(calls.every(([from, to]) => from === 'EPSG:4326' && to === 'EPSG:25832'));
+  const real = getGeminiMapExtent(bounds);
+  assert(Math.abs(real[0] - 557434.2814033268) < 0.001); assert(real[2] > real[0]); assert(real[3] > real[1]);
+  assert.throws(() => getGeminiMapExtent(bounds, { project: () => [NaN, 0] }), code('extent_projection_failed'));
+  assert.throws(() => getGeminiMapExtent({ ...bounds, getWest: () => -181 }), code('invalid_bbox'));
+  assert.throws(() => getGeminiMapExtent(bounds, { project: () => { throw new Error('private'); } }), code('extent_projection_failed'));
 });

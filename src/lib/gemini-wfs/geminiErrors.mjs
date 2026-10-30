@@ -1,6 +1,8 @@
 import { GeminiGmlError } from './parseGeminiGml.mjs';
 
 const MESSAGES = Object.freeze({
+  map_extent_too_large: 'Kartutsnittet er for stort for én Gemini WFS-forespørsel. Zoom inn og prøv igjen.',
+  map_unavailable: 'Kartet er ikke klart. Åpne kartet og prøv igjen.',
   connection_unavailable: 'Oppgi en Gemini WFS-tilkobling f?rst.',
   invalid_connection: 'Oppgi navn og en gyldig HTTPS-adresse til en Gemini Suite WFS-tjeneste uten parametere.',
   no_survey_source: 'Velg et innmålingslag.',

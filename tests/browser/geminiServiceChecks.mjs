@@ -71,12 +71,12 @@ export const checks = [
     const sourceLayer = layer();
     const client = createGeminiClient({ fetchProxy: (url, init) => broken && JSON.parse(init.body).featureType === 'points'
       ? xml('<broken') : fetchProxy(url, init) });
-    const session = createGeminiSession({ getLayer: () => sourceLayer, requestPair: client });
+    const session = createGeminiSession({ getLayers: () => ({ survey: sourceLayer }), requestPair: client });
     const account = credentials(); session.setConnection(TEST_CONNECTION); session.setCredentials(account);
     const snapshots = []; session.subscribe(() => snapshots.push(session.getSnapshot()));
     assert((await session.fetch('survey')).ok);
     const good = session.getSnapshot().result;
-    assert(calls.length === 2 && good.provenance.bufferMetres === 100);
+    assert(calls.length === 2 && session.getSnapshot().coverages[0].bufferMetres === 100);
     broken = true; const outcome = await session.refresh('survey');
     assert(!outcome.ok && outcome.error.code === 'gml_parser_error');
     assert(outcome.error.parserCode === 'invalid-xml');
@@ -89,7 +89,7 @@ export const checks = [
     const { fetchProxy } = transport();
     const client = createGeminiClient({ fetchProxy, buildDisplay: (parsed) => buildGeminiMapFeatures(parsed, { project: () => [NaN, 59] }) });
     const sourceLayer = layer();
-    const session = createGeminiSession({ getLayer: () => sourceLayer, requestPair: client });
+    const session = createGeminiSession({ getLayers: () => ({ survey: sourceLayer }), requestPair: client });
     session.setConnection(TEST_CONNECTION); session.setCredentials(credentials());
     assert((await session.fetch('survey')).error.code === 'display_projection_error');
     assert(session.getSnapshot().result === null); session.dispose();
@@ -99,7 +99,7 @@ export const checks = [
     const client = createGeminiClient({ fetchProxy: (url, init) => fail && JSON.parse(init.body).featureType === 'points'
       ? Response.json({ code: 'permission_denied', message: 'synthetic provider detail' }, { status: 403 }) : fetchProxy(url, init) });
     const sourceLayer = layer();
-    const session = createGeminiSession({ getLayer: () => sourceLayer, requestPair: client });
+    const session = createGeminiSession({ getLayers: () => ({ survey: sourceLayer }), requestPair: client });
     session.setConnection(TEST_CONNECTION); session.setCredentials(credentials());
     assert((await session.fetch('survey')).ok); const good = session.getSnapshot().result;
     fail = true;
@@ -109,7 +109,7 @@ export const checks = [
   ['browser cancellation ignores late replies and reset clears private access', async () => {
     const releases = [], sourceLayer = layer();
     const client = createGeminiClient({ fetchProxy: () => new Promise((resolve) => releases.push(resolve)) });
-    const session = createGeminiSession({ getLayer: () => sourceLayer, requestPair: client });
+    const session = createGeminiSession({ getLayers: () => ({ survey: sourceLayer }), requestPair: client });
     session.setConnection(TEST_CONNECTION); session.setCredentials(credentials()); const pending = session.fetch('survey');
     await Promise.resolve(); assert(releases.length === 2);
     session.reset(); for (const release of releases) release(xml(collection()));

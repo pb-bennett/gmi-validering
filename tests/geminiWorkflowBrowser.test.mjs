@@ -28,17 +28,19 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
     const clean = async () => assert.equal(await browser.evaluate('geminiWorkflow.privateStateClean()'), true, 'No credential leakage');
     const waitError = (text) => browser.waitFor(`document.querySelector('#gemini-va-error')?.innerText.includes(${JSON.stringify(text)})`);
 
-    await t.test('entry is discoverable without a result; no-source explains import and disables retrieval', async () => {
-      assert.equal(await count('button[aria-label="Åpne Gemini WFS"]'), 1); assert.equal(await count(card), 0);
+    await t.test('empty workspace connects without a selector or requests and explains survey/map coverage', async () => {
+      assert.equal(await count(card), 0);
       await browser.evaluate('geminiWorkflow.sources("none")'); await open();
-      assert.equal(await browser.evaluate('document.querySelector("dialog button[type=submit]").disabled'), true);
-      assert.match(await browser.evaluate(`document.querySelector('${dialog}').innerText`), /Importer en innmålingsfil/);
-      assert.equal(await requests(), 0); await click('Lukk Gemini WFS'); await done();
-      await browser.evaluate('geminiWorkflow.sources("single")');
+      assert.equal(await count('#gemini-va-source'), 0);
+      assert.equal(await browser.evaluate('document.querySelector("dialog button[type=submit]").disabled'), false);
+      await fill(); await submit(); await done();
+      assert.equal(await requests(), 0); assert.equal(await count(card), 1);
+      assert.match(await browser.evaluate(`document.querySelector('${card}').innerText`), /Hent for kartutsnitt/);
+      await click('Koble fra Gemini WFS'); await browser.evaluate('geminiWorkflow.sources("single")');
     });
-    await t.test('one survey auto-selects; stable native login fields, focus containment and Escape cleanup', async () => {
+    await t.test('one survey needs no selector; stable native login fields, focus containment and Escape cleanup', async () => {
       await open();
-      assert.equal(await browser.evaluate('document.querySelector("#gemini-va-source").value'), 'survey');
+      assert.equal(await count('#gemini-va-source'), 0);
       const semantics = await browser.evaluate(`(() => { const form=document.querySelector('#gemini-va-connection-form'); return {
         method:form.method, fields:['username','password'].map(name=>{const e=form.elements.namedItem(name); return [e.id,e.name,e.type,e.autocomplete];}), focused:document.activeElement.id }; })()`);
       assert.deepEqual(semantics.fields, [['gemini-va-username', 'username', 'text', 'username'], ['gemini-va-password', 'password', 'password', 'current-password']]);
@@ -63,7 +65,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       assert(await browser.evaluate('document.querySelector("dialog form").getAttribute("aria-busy") === "true"'));
       assert(await browser.evaluate('document.querySelector("dialog button[type=submit]").disabled'));
       assert.match(await browser.evaluate(`document.querySelector('${dialog}').innerText`), /Henter eksisterende anlegg/);
-      assert.equal(await count(card), 0); await clean();
+      assert.equal(await count('.gmi-gemini-reference-point'), 0); await clean();
       await browser.evaluate('geminiWorkflow.release()'); await done();
       await browser.waitFor(`document.querySelector('${card}') && document.querySelector('.gmi-gemini-reference-point')`);
       assert.equal(await count('.gmi-gemini-reference-line'), 1); assert.equal(await count('.gmi-gemini-reference-point'), 1);
@@ -106,27 +108,91 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       assert(await browser.evaluate('document.querySelector("#gemini-va-password").required'));
       await fill(); await browser.evaluate('geminiWorkflow.audit.mode="pending"'); await submit();
       await browser.waitFor('geminiWorkflow.geminiSession.getSnapshot().status === "loading"');
-      assert.equal(await count(card), 0); assert(await browser.evaluate('geminiWorkflow.generation !== geminiWorkflow.geminiSession.getSnapshot().accountGeneration'));
+      assert.equal(await count('.gmi-gemini-reference-point'), 0); assert(await browser.evaluate('geminiWorkflow.generation !== geminiWorkflow.geminiSession.getSnapshot().accountGeneration'));
       await browser.evaluate('geminiWorkflow.release()'); await done(); await clean();
     });
-    await t.test('multiple eligible sources exclude photos; draft selection waits for explicit fetch and preserves account', async () => {
-      await browser.evaluate('geminiWorkflow.sources("multiple")'); await open();
-      assert.deepEqual(await browser.evaluate('Array.from(document.querySelector("#gemini-va-source").options).filter(o=>o.value).map(o=>o.value)'), ['survey', 'second', 'third']);
+    await t.test('new loaded surveys automatically fetch separate pairs and merge into one deduplicated source', async () => {
       const before = await requests();
-      await browser.evaluate('geminiWorkflow.generation=geminiWorkflow.geminiSession.getSnapshot().accountGeneration; const source=document.querySelector("#gemini-va-source"); source.value="second"; source.dispatchEvent(new Event("change",{bubbles:true}));');
+      await browser.evaluate('geminiWorkflow.sources("multiple")'); await idle();
+      assert.equal(await requests(), before + 4);
+      assert.equal(await count(card), 1);
+      assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().coverages.length'), 3);
+      assert.deepEqual(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().result.counts'), { lines:1, points:1, total:2 });
+      assert(await browser.evaluate('geminiWorkflow.audit.calls.slice(-4).every(call=>call.bbox[2]-call.bbox[0]===270)'));
+      await browser.evaluate(`geminiWorkflow.useStore.getState().toggleLayerVisibility('second');
+        geminiWorkflow.useStore.getState().setLayerHighlightEnabled('second',true);
+        geminiWorkflow.useStore.getState().setLayerHighlightColor('second','#ABCDEF')`);
+      assert.equal(await requests(), before + 4); await clean();
+    });
+    const setMapLevel = async (level) => {
+      await browser.evaluate(`(() => {
+        const w=geminiWorkflow;
+        for(let zoom=22; zoom>=3; zoom--) {
+          w.audit.map.setView([59.225,10.4355],zoom,{animate:false});
+          const bbox=w.readGeminiMapBbox();
+          if(w.classifyGeminiMapExtent(bbox).level===${JSON.stringify(level)}) return;
+        }
+        throw new Error('No viewport for test level');
+      })()`);
+    };
+    const mapDialog = 'dialog[aria-label="Hent for kartutsnitt"]';
+    await t.test('actual current Leaflet viewport fetches without buffer and repeated view refreshes one manual coverage', async () => {
+      await setMapLevel('ordinary');
+      const bbox = await browser.evaluate('geminiWorkflow.readGeminiMapBbox()');
+      const before = await requests();
+      await click('Hent for kartutsnitt'); await idle();
+      assert.equal(await requests(), before + 2);
+      assert.deepEqual(await browser.evaluate('geminiWorkflow.audit.calls.at(-1).bbox'), bbox);
+      const areas = await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().coverages.length');
+      await click('Hent for kartutsnitt'); await idle();
+      assert.equal(await requests(), before + 4);
+      assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().coverages.length'), areas);
+      assert.deepEqual(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().result.counts'), {lines:1,points:1,total:2});
+    });
+    await t.test('large viewport cancellation dispatches zero; Hent likevel confirms exactly one pair', async () => {
+      await setMapLevel('confirm'); const before = await requests();
+      await click('Hent for kartutsnitt'); await browser.waitFor(`document.querySelector('${mapDialog}')?.matches(':modal')`);
       assert.equal(await requests(), before);
-      assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().source.sourceLayerId'), 'survey');
-      await browser.evaluate('geminiWorkflow.audit.mode="pending"'); await submit();
-      await browser.waitFor('geminiWorkflow.geminiSession.getSnapshot().status === "loading"');
-      assert.match(await browser.evaluate(`document.querySelector('${card}').innerText`), /survey.gmi/);
-      await browser.evaluate('geminiWorkflow.release()'); await done();
-      await browser.waitFor(`document.querySelector('${card}').innerText.includes('second.sosi')`);
-      assert(await browser.evaluate('geminiWorkflow.generation === geminiWorkflow.geminiSession.getSnapshot().accountGeneration')); await clean();
+      assert.match(await browser.evaluate(`document.querySelector('${mapDialog}').innerText`), /stort omr/);
+      await browser.evaluate(`document.querySelector('${mapDialog} button').click()`);
+      await browser.waitFor(`!document.querySelector('${mapDialog}')`); assert.equal(await requests(), before);
+      await click('Hent for kartutsnitt'); await browser.waitFor(`document.querySelector('${mapDialog}')?.matches(':modal')`);
+      await browser.evaluate(`Array.from(document.querySelectorAll('${mapDialog} button')).find(b=>b.textContent==='Hent likevel').click()`);
+      await idle(); assert.equal(await requests(), before + 2);
+    });
+    await t.test('excessive viewport cannot continue and sends zero requests', async () => {
+      await setMapLevel('blocked'); const before = await requests();
+      await click('Hent for kartutsnitt'); await browser.waitFor(`document.querySelector('${mapDialog}')?.matches(':modal')`);
+      assert.match(await browser.evaluate(`document.querySelector('${mapDialog}').innerText`), /for stort for/);
+      assert.equal(await browser.evaluate(`document.querySelectorAll('${mapDialog} button').length`), 1);
+      await browser.evaluate(`document.querySelector('${mapDialog} button').click()`); assert.equal(await requests(), before);
+    });
+    await t.test('Oppdater refreshes all automatic and recorded manual areas while retaining visible data', async () => {
+      const areas = await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().coverages.length');
+      const before = await requests();
+      await browser.evaluate('geminiWorkflow.good=geminiWorkflow.geminiSession.getSnapshot().result; geminiWorkflow.audit.mode="pending"');
+      await click('Oppdater Gemini-referanse');
+      await browser.waitFor(`geminiWorkflow.audit.calls.length===${before + 4}`);
+      assert(await browser.evaluate('geminiWorkflow.good===geminiWorkflow.geminiSession.getSnapshot().result'));
+      // Release each bounded wave, including units that have not started yet.
+      await browser.evaluate('geminiWorkflow.release()'); await idle();
+      assert.equal(await requests(), before + areas * 2); await clean();
+    });
+    await t.test('disconnect discards manual areas and pending map confirmation; reconnect derives only current surveys', async () => {
+      await setMapLevel('confirm');
+      await click('Hent for kartutsnitt'); await browser.waitFor(`document.querySelector('${mapDialog}')?.matches(':modal')`);
+      await browser.evaluate('geminiWorkflow.geminiSession.disconnect()');
+      await browser.waitFor(`!document.querySelector('${mapDialog}')`);
+      assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().coverages.length'), 0);
+      await open(); await fill(); await submit(); await done();
+      assert.equal(await count(mapDialog), 0);
+      assert(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().coverages.length===3 && geminiWorkflow.geminiSession.getSnapshot().coverages.every(area=>area.kind==="survey")'));
+      assert.equal(await browser.evaluate('geminiWorkflow.geminiPresentation.getSnapshot().marking.highlightAll'), false);
     });
     await t.test('explicit account replacement clears prior-account data without leaking form values', async () => {
       await open(); await fill(); await browser.evaluate('geminiWorkflow.audit.mode="pending"'); await submit();
       await browser.waitFor('geminiWorkflow.geminiSession.getSnapshot().status === "loading"');
-      assert.equal(await count(card), 0); assert.equal(await count('.gmi-gemini-reference-point'), 0);
+      assert.equal(await count('.gmi-gemini-reference-point'), 0);
       assert(await browser.evaluate('geminiWorkflow.generation !== geminiWorkflow.geminiSession.getSnapshot().accountGeneration'));
       await browser.evaluate('geminiWorkflow.release()'); await done(); await clean();
     });
@@ -148,14 +214,14 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
         await browser.evaluate(`geminiWorkflow.geminiSession.disconnect(); geminiWorkflow.audit.mode=${JSON.stringify(mode)}`);
         await fill(); await submit(); await idle(); await waitError(text);
         assert(await browser.evaluate('document.querySelector("#gemini-va-password").value === ""'));
-        assert.equal(await count(card), 0); await clean();
+        assert.equal(await count('.gmi-gemini-reference-point'), 0); await clean();
         assert(!await browser.evaluate('document.body.innerText.includes("UNTRUSTED_PROVIDER_DETAIL")'));
       }
       await click('Lukk Gemini WFS');
     });
     await t.test('source geometry/CRS/area errors stop before proxy requests and remain recoverable', async () => {
       await open();
-      for (const [mode, text] of [['empty', 'ingen geometri'], ['crs', 'Koordinatsystemet'], ['large', 'for stort område']]) {
+      for (const [mode, text] of [['crs', 'Koordinatsystemet'], ['large', 'for stort område']]) {
         await browser.evaluate(`geminiWorkflow.geminiSession.disconnect(); geminiWorkflow.sourceVariant(${JSON.stringify(mode)})`);
         const before = await requests(); await fill(); await submit(); await waitError(text);
         assert.equal(await requests(), before); await clean();
@@ -169,7 +235,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       await click('Lukk Gemini WFS'); await done(); await idle();
       assert.equal(await browser.evaluate('geminiWorkflow.geminiSession.getSnapshot().error.code'), 'request_aborted');
       await browser.evaluate('geminiWorkflow.release()');
-      assert.equal(await count(card), 0); assert.equal(await count('#gemini-va-password'), 0); await clean();
+      assert.equal(await count('.gmi-gemini-reference-point'), 0); assert.equal(await count('#gemini-va-password'), 0); await clean();
     });
     await t.test('reconnect works; WMS form semantics remain independent and final state stays private', async () => {
       await open(); await fill(); await submit(); await done();

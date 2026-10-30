@@ -9,6 +9,8 @@ import GeminiConnectionButton from '../../src/components/gemini-wfs/GeminiConnec
 import WmsLayerModal from '../../src/components/WmsLayerModal';
 import LayerHighlightPanel from '../../src/components/LayerHighlightPanel';
 import useStore from '../../src/lib/store';
+import { readGeminiMapBbox } from '../../src/lib/gemini-wfs/geminiMapViewport.mjs';
+import { classifyGeminiMapExtent } from '../../src/lib/gemini-wfs/geminiCoveragePolicy.mjs';
 import { geminiSession } from '../../src/lib/gemini-wfs/geminiSession.mjs';
 import { geminiPresentation } from '../../src/lib/gemini-wfs/geminiReferencePresentation.mjs';
 import { photoSession } from '../../src/lib/photos/photoSession.mjs';
@@ -96,7 +98,7 @@ function App() {
 }
 createRoot(document.getElementById('root')).render(<App />);
 globalThis.geminiWorkflow = {
-  audit, useStore, geminiSession, geminiPresentation, photoSession,
+  audit, useStore, geminiSession, geminiPresentation, photoSession, readGeminiMapBbox, classifyGeminiMapExtent,
   fillCredentials: () => {
     if (!document.querySelector('#gemini-wfs-url').value) document.querySelector('#gemini-wfs-url').value = TEST_CONNECTION.url;
     if (!document.querySelector('#gemini-wfs-connection-name').value) document.querySelector('#gemini-wfs-connection-name').value = TEST_CONNECTION.name;
@@ -111,6 +113,9 @@ globalThis.geminiWorkflow = {
     !containsCredential(document.body.innerText) && !containsCredential(document.cookie),
   sources: (mode = 'single') => {
     const layers = mode === 'none' ? {} : mode === 'multiple' ? { survey: layer(), second: layer('second', 'SOSI'), third: layer('third', 'KOF') } : { survey: layer() };
+    for (const [index, item] of Object.values(layers).entries()) {
+      for (const feature of [...item.data.points, ...item.data.lines]) for (const coordinate of feature.coordinates) coordinate.x += index * 20000;
+    }
     useStore.setState({ layers, layerOrder: Object.keys(layers) });
   },
   sourceVariant: (mode) => {

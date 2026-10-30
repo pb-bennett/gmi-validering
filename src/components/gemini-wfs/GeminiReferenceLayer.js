@@ -6,6 +6,7 @@ import GeminiInspectionSide from './GeminiInspectionSide';
 import { createGeminiSourceLookup } from '@/lib/gemini-wfs/geminiPopupContent.mjs';
 import useGeminiSession from './useGeminiSession';
 import useGeminiPresentation from './useGeminiPresentation';
+import { bindGeminiMapViewport } from '@/lib/gemini-wfs/geminiMapViewport.mjs';
 import { geminiPresentation, getGeminiReferenceBounds, GEMINI_REFERENCE_PANE,
   GEMINI_REFERENCE_Z_INDEX } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
 
@@ -15,6 +16,7 @@ export default function GeminiReferenceLayer({ inspectionEnabled = true, hoverCo
   const { result } = useGeminiSession();
   const { sourceVisible, linesVisible, pointsVisible, resultVersion, zoomRequest, marking } = useGeminiPresentation();
   const map = useMap();
+  useEffect(() => bindGeminiMapViewport(() => map.getBounds()), [map]);
   const bounds = useMemo(() => getGeminiReferenceBounds(result), [result]);
   const lookup = useMemo(() => createGeminiSourceLookup(result), [result]);
   useEffect(() => {

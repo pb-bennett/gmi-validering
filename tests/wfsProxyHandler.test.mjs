@@ -403,3 +403,13 @@ test('thin App Router exports Node/dynamic POST and safely denies all other supp
   assert.equal(calls, 0);
   assert.equal(typeof route.POST, 'function');
 });
+
+
+test('crafted oversized map POST is rejected by absolute BBOX ceiling before upstream transport', async () => {
+  const { handle, calls } = harness();
+  for (const bbox of [[579000, 6559000, 581001, 6561000], [579000, 6559000, 580000, 6561001]]) {
+    const response = await handle(makeRequest({ body: makeBody({ bbox }) }));
+    assert.equal(response.status, 400); assert.equal((await response.json()).code, 'invalid_request');
+  }
+  assert.equal(calls.length, 0);
+});

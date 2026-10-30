@@ -2,21 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { getGeminiSurveySources, resolveGeminiSourceId, getGeminiUiError } from '../src/lib/gemini-wfs/geminiWorkflowUi.mjs';
+import { getGeminiUiError } from '../src/lib/gemini-wfs/geminiWorkflowUi.mjs';
 
-test('source choices use current survey IDs/names/order and exclude FOTO/WMS/reference/unknown domains', () => {
-  const layer = (format, name) => ({ data: { format }, file: { name } });
-  const layers = { a: layer('GMI', 'Survey a.gmi'), b: layer('SOSI', 'Survey b.sos'), c: layer('KOF', 'Survey c.kof'),
-    photo: { type: 'FOTO', data: { format: 'GMI' } }, wms: { type: 'WMS' }, reference: { type: 'GEMINI_WFS_REFERENCE' }, unknown: layer('GML', 'photo.gml') };
-  assert.deepEqual(getGeminiSurveySources(layers, ['b', 'a', 'c', 'photo', 'wms', 'reference', 'unknown', 'removed']),
-    [{ id: 'b', name: 'Survey b.sos' }, { id: 'a', name: 'Survey a.gmi' }, { id: 'c', name: 'Survey c.kof' }]);
-});
-test('none/single/multiple choices resolve safely; valid explicit/session choice wins', () => {
-  const a = { id: 'a' }, b = { id: 'b' };
-  assert.equal(resolveGeminiSourceId([], 'a'), ''); assert.equal(resolveGeminiSourceId([a], null), 'a');
-  assert.equal(resolveGeminiSourceId([a, b], null), ''); assert.equal(resolveGeminiSourceId([a, b], 'b'), 'b');
-  assert.equal(resolveGeminiSourceId([a, b], 'removed'), '');
-});
 test('authentication and permission are distinct Norwegian messages', () => {
   assert.equal(getGeminiUiError({ code: 'authentication_failed' }),
     'Gemini WFS-tjenesten avviste autentiseringen. Årsaken er ikke avklart.');
@@ -65,8 +52,8 @@ test('Home owns conditional native modal, map connection entry, and callback pat
     assert(modal.includes(`id="${id}" name="${name}" type="${type}" autoComplete="${autocomplete}"`));
   }
   assert.match(modal, /new FormData\(event.currentTarget\)/); assert.match(modal, /geminiSession.setCredentials\(/);
-  assert.match(modal, /geminiSession.selectSource\(sourceId\)/); assert.match(modal, /geminiSession.fetch\(sourceId\)/);
-  assert.match(card, /geminiSession.refresh\(result.provenance.sourceLayerId\)/);
+  assert.doesNotMatch(modal, /gemini-va-source|selectSource/); assert.match(modal, /geminiSession.fetch\(\)/);
+  assert.match(card, /geminiSession.refresh\(\)/);
   for (const source of [modal, card, entry]) {
     assert.doesNotMatch(source, /Gemini VA/);
     assert.match(source, /Gemini WFS/);

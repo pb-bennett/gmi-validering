@@ -1,5 +1,23 @@
 # Gemini WFS M7 UX and connection integration
 
+## Workspace coverage continuation (current)
+
+Continuation from **`241e94f Add configurable Gemini WFS connections`**, branch `feature/photo-workspace`, initially clean. **Implementation and local validation complete; hosted workspace acceptance pending.** No commit/push/deployment, model change or sub-agents.
+
+The single-file connection selector/ownership model is removed. Connection is workspace-wide and allowed with no surveys; the connected source guides users to load an innmålingsfil or use **Hent for kartutsnitt**. Geometry-bearing GMI/SOSI/KOF survey layers are identified through the existing layer-type abstraction, independently of visibility. FOTO, WMS, explicit external/reference types and empty/non-geometric layers are excluded. Each survey has its own strict EPSG:25832 extent and fixed 100 m buffer. Two coverage units run concurrently at most (four HTTP requests because each unit has one line/point pair); no union/overlap rectangle is fetched.
+
+Coverage units preserve provenance and immutable pair results. One merged source deduplicates using parsed connection/namespace/type/provider GML identity. New loaded layer IDs fetch automatically once; ordinary geometry/presentation/selection changes do not. Layer removal subtracts only its coverage with no WFS request, retaining features shared with other survey/manual areas. **Oppdater** refreshes every active area, recalculates survey extents and retains recorded manual BBOXes; pair success replaces that area atomically, while failure retains its previous good pair and unrelated results.
+
+The manual action reads current Leaflet bounds through a getter, strictly projects the view envelope without adding 100 m, and refreshes/reuses metre-equivalent manual keys. Central warning: **>750 m width/height OR >500,000 m²**; confirm with **Avbryt / Hent likevel**. Hard block: **>1,500 m width/height OR >2,000,000 m²**, with no override. Server ceiling remains **2,000 m per side / 4,000,000 m²**. This leaves conservative headroom under the established 3 MiB and parser/resource limits for queries larger than the observed hundreds-of-metres survey requests. Manual areas/data are session-only and disappear on disconnect/reconnect/reload. Pending confirmation is also discarded. Saved `{id,name,url}` and native password-manager fields remain unchanged.
+
+Approved semantic colours/symbols, compact hover/full curated popups, master checkbox and subtype eyes/counts, zoom and shared Lagmarkering remain. Presentation ownership is now the connection/account session, so adding/removing coverage preserves current choices; reconnect restores Lagmarkering OFF. MapInner, survey/photo store schema, renderer/hover/popup definitions and pinned transport/security checks are unchanged. The proxy only imports the unchanged absolute BBOX constants from the new central policy.
+
+**330 Node tests across 28 files + 102 Chromium tests across all five Gemini browser suites = 432 passed, 0 failed/skipped.** Focused ESLint passed with 0 errors/warnings; production build passed (Next.js 16.1.6, TypeScript, eight static pages); `git diff --check` passed. The existing font download required network access; no font mock/change. Chromium needed unsandboxed local debugging. Existing Browserslist/Node harness warnings only. No unrelated MapInner lint repairs, real-service fixtures, matching/topology/comparison or photo work.
+
+See [the completion report](20261030-1311-gemini-wfs-workspace-coverage.md) for exact test selection, implementation boundaries and remaining hosted checks. Earlier sections below are historical; their single-file ownership and initial presentation/build statements do not describe this continuation.
+
+## Previous configurable-connection continuation
+
 **Latest status: UX and configurable-connection implementation complete; hosted verification pending.** Starting HEAD: `2a0d894 Finish Gemini WFS presentation integration`, branch `feature/photo-workspace`, initially clean. This pass adds compact shared hover vocabulary/natural bounded tooltip width, a source visibility checkbox retaining subtype choices, and persisted non-secret connection settings with a restricted/pinned upstream policy. No commit, push or deployment. Earlier correction/review/build statements below are historical; see **Configured connection and source UX (current)** for the current design/results.
 
 Hosted review rejected `7002c71`: pipe foregrounds appeared uniform/dark, normal semantic VA colouring was lost, and Gemini marking was fixed rather than participating in Lagmarkering. The prior closeout below is historical and does not establish visual acceptance.

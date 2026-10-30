@@ -64,8 +64,8 @@ test('master source visibility preserves subchoices, marking and data through hi
   assert.equal(presentation.getSnapshot().pointsVisible, true);
   presentation.dispose();
 });
-test('new source, dataset, account or connection resets visibility to both visible', () => {
-  for (const owner of [{ sourceLayerId: 'b' }, { datasetRevision: 'b' }, { accountGeneration: 'b' }, { connectionId: 'b' }]) {
+test('new account or connection resets visibility to both visible', () => {
+  for (const owner of [{ accountGeneration: 'b' }, { connectionId: 'b' }]) {
     const { presentation, publish } = setup(); publish({ result: result() });
     presentation.setVisible('lines', false); presentation.setVisible('points', false);
     presentation.setMarking({ highlightAll: true });
@@ -165,10 +165,10 @@ test('MapInner/LayerManager mount independent components without modifying surve
   }
   // M5 deliberately adds explicit card refresh/disconnect; the rendering and
   // visibility domains still have no network/credential responsibilities.
-  assert.match(card, /geminiSession\.refresh\(result\.provenance\.sourceLayerId\)/);
+  assert.match(card, /geminiSession\.refresh\(\)/);
   assert.match(card, /geminiSession\.disconnect\(\)/);
   assert.doesNotMatch(card, /setCredentials|\.fetch\(|addLayer|localStorage|sessionStorage|setState|normalizeFeature/);
-  assert.match(card, /if \(!result\) return null/); assert.match(card, /aria-pressed=\{visible\}/);
+  assert.match(card, /if \(!session.result && session.connectionStatus !== 'connected'\) return null/); assert.match(card, /aria-pressed=\{visible\}/);
   assert.match(card, /disabled=\{!bounds\}/); assert.match(card, /gmi-focus-ring/);
   assert.doesNotMatch(card, /LayerTypeBadge|LayerPanel|password|username/);
 });
