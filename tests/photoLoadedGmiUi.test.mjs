@@ -19,14 +19,16 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
   { skip: !chromePath || !app, timeout: 240000 }, async (t) => {
     const root = path.resolve(tmpdir()), directory = await mkdtemp(path.join(root, 'photo-loaded-gmi-ui-'));
     const source = path.join(directory, 'Synthetic delivery.gmi');
-    const bytes = gpsPng({ captureTime: '2026:05:12 14:33:02', artist: 'Synthetic Artist' }).toString('base64');
+    const bytes = gpsPng({ captureTime: '2026:05:12 14:33:02', artist: 'Synthetic Artist', direction: 359.875, directionRef: 'T' }).toString('base64');
+    const unresolvedBytes = gpsPng().toString('base64');
     await writeFile(source, Buffer.from(gmiText([linked('A/a.png'), linked('A/a.png'), linked('B/a.png'), linked('dup.png'),
       linked('absent.png'), linked('../unsafe.png'), linked('flat.png'), linked('line.png', { scope: 'line' })]), 'latin1'));
     const browser = await openTestChrome();
     const folder = async () => browser.evaluate(`(() => {
       const data=Uint8Array.from(atob(${JSON.stringify(bytes)}), c=>c.charCodeAt(0)), transfer=new DataTransfer();
       for(const relative of ['A/a.png','B/a.png','X/dup.png','Y/dup.png','flat.png','line.png','extra.png']) {
-        const file=new File([data], relative.split('/').at(-1), {type:'image/png'});
+        const original=relative==='flat.png'?Uint8Array.from(atob(${JSON.stringify(unresolvedBytes)}),c=>c.charCodeAt(0)):data;
+        const file=new File([original], relative.split('/').at(-1), {type:'image/png'});
         Object.defineProperty(file,'webkitRelativePath',{value:'Delivery/'+relative}); transfer.items.add(file);
       }
       const input=document.querySelector('input[aria-label="Velg leveransemappe"]');
@@ -111,6 +113,40 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
       await click(browser, 'Behold alle gjeldende'); await click(browser, 'Foreslå GMI for viste'); await click(browser, 'Neste');
       await click(browser, 'Bruk valgte posisjoner for 4 plasseringer');
       await browser.waitFor(`!${sourceWizard} && document.querySelectorAll('.photo-camera-marker').length===4`);
+      await t.test('bulk export readiness: grouped blockers, unique assets, repeated direction, preserved manual values and unresolved evidence', async () => {
+        const scope = `document.querySelector('.photo-export-dialog')`;
+        const inspector = `document.querySelector('.photo-workspace-inspector')`;
+        const rows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).filter(li=>li.querySelector('button')?.getAttribute('aria-label')==='Vis a.png' && li.innerText.includes('Flere plasseringer')).map(li=>li.dataset.photoId)`);
+        await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[0]}"] button').click()`);
+        await browser.evaluate(`(() => {const input=document.querySelector('input[aria-label="Opptakstid"]'); input.value='2025-01-02T01:02:03'; input.closest('form').requestSubmit();})()`);
+        await click(browser,'Juster retning','document');
+        await browser.evaluate(`(() => {const input=document.querySelector('input[aria-label="Retning i grader"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'90');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+        await click(browser,'Bruk retning','document');
+        await click(browser, 'Eksporter', 'document');
+        await browser.evaluate(`(() => {const e=${scope}.querySelector('[aria-label="Eksportprofil"]');e.value='legacy2019';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+        const preview = async () => { await click(browser,'Lag eksportforhåndsvisning',scope); await browser.waitFor(`${scope}.querySelector('[aria-label="Eksportforhåndsvisning"]')`); };
+        const count = (code) => browser.evaluate(`Number(${scope}.querySelector('[data-diagnostic-code="${code}"] summary')?.textContent.split('—').at(-1).trim()||0)`);
+        await preview();
+        assert.equal(await count('capture-time-required'),2);
+        assert.equal(await count('direction-required'),3);
+        assert.equal(await browser.evaluate(`${scope}.querySelector('[data-diagnostic-code="direction-required"]').open`),false);
+        assert.equal(await browser.evaluate(`${scope}.querySelector('[data-diagnostic-code="direction-required"]').querySelectorAll('li').length`),3);
+        await click(browser,'Bruk EXIF-tid for alle mulige (5)',scope);
+        assert.equal(await browser.evaluate(`Boolean(${scope}.querySelector('[aria-label="Eksportforhåndsvisning"]'))`),false);
+        await preview(); assert.equal(await count('capture-time-required'),1);
+        await click(browser,'Bruk EXIF-fotograf for alle mulige (6)',scope);
+        await click(browser,'Bruk EXIF-retning for alle mulige (6)',scope);
+        await preview(); assert.equal(await count('direction-required'),1);
+        assert.equal(await count('capture-time-required'),1);
+        assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
+        await click(browser,'Lukk eksport',scope);
+        await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[0]}"] button').click()`);
+        assert(await browser.evaluate(`${inspector}.querySelector('[data-accepted-metadata="captureTime"]').textContent.includes('2025-01-02T01:02:03 (Manuell)')`));
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.photo-direction-accepted').textContent`),'90°');
+        await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] button').click()`);
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.photo-direction-accepted').textContent`),'359.875°');
+        assert.equal(await browser.evaluate('photoWfsCalls'),2);
+      });
       await t.test('canonical metadata: manual, adopt, clear, deduplicated batch and shared repeated occurrences', async () => {
         const inspector = `document.querySelector('.photo-workspace-inspector')`;
         const setValue = async (label, value) => browser.evaluate(`(() => {
@@ -121,6 +157,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         const accepted = (field, value) => browser.waitFor(`${inspector}.querySelector('[data-accepted-metadata="${field}"]').textContent.includes(${JSON.stringify(value)})`);
         const rows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li')).filter(li=>li.querySelector('button')?.getAttribute('aria-label')==='Vis a.png' && li.innerText.includes('Flere plasseringer')).map(li=>li.dataset.photoId)`);
         await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[0]}"] button').click()`);
+        await click(browser, 'Nullstill opptakstid', inspector);
         await accepted('captureTime', 'Ukjent');
         await setValue('Fotograf', 'Manual Artist'); await click(browser, 'Lagre fotograf', inspector);
         await accepted('photographer', 'Manual Artist');
@@ -173,7 +210,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await browser.evaluate(`${scope}.querySelector('select[aria-label="Eksportprofil"]').value`), '');
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Lag eksportforhåndsvisning').disabled`));
         await setExport('Eksportprofil', 'legacy2019'); await preview();
-        assert(await browser.evaluate(`${scope}.innerText.includes('Legacy krever godtatt retning')`));
+        assert(await browser.evaluate(`${scope}.textContent.includes('Legacy krever godtatt retning')`));
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
         await click(browser, 'Lukk eksport', scope);
         const placed = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).filter(li=>Array.from(li.querySelectorAll('span')).some(s=>s.textContent==='Plassert')).map(li=>li.dataset.photoId)`);
@@ -191,11 +228,11 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         const legacyXml=strFromU8(legacy['photos.gml']);
         assert.equal((legacyXml.match(/<app:Skråfoto /g)||[]).length,4); assert(legacyXml.includes('<app:fotograf>Batch Artist</app:fotograf>'));
         await setExport('Eksportprofil','asbuilt52'); await preview();
-        assert(await browser.evaluate(`${scope}.innerText.includes('Datafangstdato: oppgi')`));
+        assert(await browser.evaluate(`${scope}.textContent.includes('Datafangstdato: oppgi')`));
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
         for(const [label,value] of [['Datafangstdato','2026-05-12'],['Datasettets navn','Synthetic export dataset'],['Prosjektnavn','Synthetic export project'],['Målemetode','99'],['Målemetode høyde','99'],['Stedfestingsårsak','nytt'],['Stedfestingsforhold','åpenGrøft']]) await setExport('Eksport '+label,value);
         await preview();
-        assert(await browser.evaluate(`${scope}.innerText.includes('fotograf utelates i AsBuilt 5.2')`));
+        assert(await browser.evaluate(`${scope}.textContent.includes('fotograf utelates i AsBuilt 5.2')`));
         assert(await browser.evaluate(`${scope}.innerText.includes('Eksperimentell 2D')`));
         for (const [width, height] of [[1920, 1080], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
@@ -211,7 +248,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         const modern = await download('asbuilt52');
         const modernXml=strFromU8(modern['photos.gml']);assert(!modernXml.includes('<app:fotoinformasjon>')); assert(modernXml.includes('Synthetic export dataset'));
         assert.equal((modernXml.match(/<app:Skråfoto /g)||[]).length,4);
-        for(const [name,data] of Object.entries(modern))if(name!=='photos.gml')assert.deepEqual(data,Uint8Array.from(Buffer.from(bytes,'base64')));
+        for(const [name,data] of Object.entries(modern))if(name!=='photos.gml')assert.deepEqual(data,Uint8Array.from(Buffer.from(name.endsWith('/flat.png')?unresolvedBytes:bytes,'base64')));
         assert.equal(await browser.evaluate('photoWfsCalls'),2);
         await click(browser,'Lukk eksport',scope);
       });

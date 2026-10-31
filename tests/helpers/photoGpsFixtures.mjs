@@ -1,9 +1,13 @@
 // Small synthetic containers, independent from the real/private photo corpus.
-export function gpsTiff({ littleEndian = true, latitude = [59, 13, 30.44], longitude = [10, 26, 7.98], latRef = 'N', lonRef = 'E', datum, denominator = 1000000, partial = false, captureTime, artist, subsecond, offsetTime } = {}) {
+export function gpsTiff({ littleEndian = true, latitude = [59, 13, 30.44], longitude = [10, 26, 7.98], latRef = 'N', lonRef = 'E', datum, denominator = 1000000, partial = false, captureTime, artist, subsecond, offsetTime, noLocation = false, direction, directionRef } = {}) {
   const fields = [
+    ...(direction !== undefined ? [[17, 5, 1, [direction]]] : []),
+    ...(directionRef !== undefined ? [[16, 2, directionRef.length + 1, Buffer.from(`${directionRef}\0`)]] : []),
+    ...(!noLocation ? [
     [1, 2, 2, Buffer.from(`${latRef}\0`)],
     [2, 5, 3, latitude],
     ...(!partial ? [[3, 2, 2, Buffer.from(`${lonRef}\0`)], [4, 5, 3, longitude]] : []),
+    ] : []),
     ...(datum ? [[18, 2, datum.length + 1, Buffer.from(`${datum}\0`)]] : []),
   ];
   const data = Buffer.alloc(2048);

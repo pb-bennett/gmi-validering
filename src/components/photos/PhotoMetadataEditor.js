@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
+import PhotoEvidenceActions from './PhotoEvidenceActions';
 
 const fields = [['captureTime', 'Opptakstid'], ['photographer', 'Fotograf']];
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs';
@@ -54,6 +55,7 @@ export function PhotoMetadataBatch({ photos, selectedIds, layerId }) {
   const count = new Set(selected.map((photo) => photo.assetId)).size;
   if (!count) return null;
   return <details className="p-2 text-xs" aria-label="Felles opptaksmetadata"><summary>Opptaksmetadata for {count} unike bilder</summary>
+    <PhotoEvidenceActions photos={photos} layerId={layerId} selectedIds={selectedIds} />
     <p>Overskriver valgt felt for {count} unike bilder, også deres øvrige plasseringer.</p>
     {fields.map(([field, label]) => <MetadataForm key={field} layerId={layerId} photoIds={selected.map((photo) => photo.id)} field={field} label={label} batch />)}
   </details>;

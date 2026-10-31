@@ -3,6 +3,8 @@
 import { useId } from 'react';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
 import usePhotoSession from './usePhotoSession';
+import { photoSession } from '@/lib/photos/photoSession.mjs';
+import { evidenceEligibility } from '@/lib/photos/photoEvidenceAdoption.mjs';
 import './photoDirection.css';
 
 export default function PhotoDirectionControls({ photo, layerId, editor }) {
@@ -20,6 +22,12 @@ export default function PhotoDirectionControls({ photo, layerId, editor }) {
       {editor && !active && <button type="button" className={`${control} photo-direction-start`}
         disabled={!visible} onClick={() => editor.begin(layerId, photo.id)}>Juster retning</button>}
     </div>
+    {photo.direction.current && <p>Kilde: {photo.direction.current.basis.kind === 'manual' ? 'Manuell' : 'EXIF bilderetning'}.</p>}
+    {!!photo.directionEvidence?.length && <details><summary>EXIF-retning: kildeverdier</summary>
+      {photo.directionEvidence.map((item) => <p key={item.id}>{JSON.stringify(item.raw)} · {item.status === 'usable' ? `${item.value}° fra geografisk nord` : item.status === 'unsupported-reference' ? 'Ukjent eller magnetisk referanse; krever gjennomgang.' : 'Ugyldig retningsverdi.'}</p>)}
+      <button type="button" className={control} disabled={evidenceEligibility(photo, 'direction').status !== 'eligible'}
+        onClick={() => photoSession.adoptSourceEvidence(layerId, 'direction', 'exif', [photo.id])}>Bruk EXIF-retning for denne forekomsten</button>
+    </details>}
     {active && <div className="photo-direction-editor">
       <label htmlFor={`${id}-slider`}>Foreslått retning: <strong>{photoDirectionLabel(degrees)}</strong></label>
       <input id={`${id}-slider`} type="range" min="0" max="359" step="1" value={degrees ?? accepted ?? 0}

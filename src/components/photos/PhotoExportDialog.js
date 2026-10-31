@@ -6,9 +6,18 @@ import { capturePhotoExportSnapshot, buildPhotoExportPlan } from '@/lib/photos/e
 import { buildPhotoExportPackage } from '@/lib/photos/export/photoExportPackage.mjs';
 import { PHOTO_EXPORT_PROFILES, EXPORT_CONTEXT_FIELDS, ASBUILT_CODES } from '@/lib/photos/export/exportContract.mjs';
 import usePhotoSession from './usePhotoSession';
+import PhotoEvidenceActions from './PhotoEvidenceActions';
+import { groupPhotoExportDiagnostics } from '@/lib/photos/export/photoExportDiagnostics.mjs';
 import './photoExport.css';
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs disabled:opacity-40';
+
+function Diagnostics({ items }) {
+  return groupPhotoExportDiagnostics(items).map((group) => <details key={group.code} data-diagnostic-code={group.code}>
+    <summary>{group.label} — {group.count}</summary>
+    <ul>{group.items.map((item, index) => <li key={index}>{item.message}</li>)}</ul>
+  </details>);
+}
 
 export default function PhotoExportDialog({ layerId, onClose }) {
   usePhotoSession();
@@ -52,6 +61,7 @@ export default function PhotoExportDialog({ layerId, onClose }) {
         : <input type={type} aria-label={`Eksport ${label}`} value={context[key] || ''} onChange={(event) => { invalidate(); setContext({ ...context, [key]: event.target.value }); }} />}</label>)}
     </fieldset>}
     <p>Attachments/&lt;filnavn&gt; med skråstrek er appens testkonvensjon. Retning antas eksperimentelt å være grader med klokken fra geografisk nord (1/1).</p>
+    <PhotoEvidenceActions photos={photoSession.getLayerPhotos(layerId)} layerId={layerId} onAdopt={invalidate} />
     <button className={control} type="button" disabled={!profile || !layer || busy} onClick={async () => {
       const token = ++operation.current.version; setBusy(true); setPlan(null); setMessage('Bygger forhåndsvisning …');
       try {
@@ -64,8 +74,8 @@ export default function PhotoExportDialog({ layerId, onClose }) {
       <p>{plan.counts.uniqueImages} unike bilder i laget · {plan.counts.totalOccurrences} forekomster · {plan.counts.placed} plassert · {plan.counts.excluded} utelatt/uplassert</p>
       <p>{plan.counts.features} planlagte features · {plan.counts.attachments} vedlegg · {plan.counts.sharedAttachments} delte originalbilder</p>
       {!live && <p role="alert">Fotolaget eller godtatte data er endret. Lag en ny forhåndsvisning.</p>}
-      <h3>Blokkerende feil ({plan.errors.length})</h3><ul>{plan.errors.map((item, index) => <li key={index}>{item.message}</li>)}</ul>
-      <h3>Advarsler ({plan.warnings.length})</h3><ul>{plan.warnings.map((item, index) => <li key={index}>{item.message}</li>)}</ul>
+      <h3>Blokkerende feil ({plan.errors.length})</h3><Diagnostics items={plan.errors} />
+      <h3>Advarsler ({plan.warnings.length})</h3><Diagnostics items={plan.warnings} />
       <details><summary>Vedleggsnavn og endringer</summary><ul>{plan.assets.map((asset) => <li key={asset.assetId}>{asset.originalFilename} → {asset.exportFilename}</li>)}</ul></details>
       <button className={control} type="button" disabled={busy || !live || Boolean(plan.errors.length)} onClick={async () => {
         const token = ++operation.current.version; setBusy(true); setMessage('Lager ZIP …');

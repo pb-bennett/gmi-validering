@@ -52,7 +52,7 @@ for (const time of ['2026-05-12T14:33:02', '2026-05-12T14:33:02.123456789+02:00'
 });
 for (const time of [null, '2026-05-12', '2026-05-12T14:33']) test(`insufficient capture time blocks both profiles: ${time}`, async () => {
   const f = await exportFixture({ time });
-  try { for (const profile of ['legacy2019', 'asbuilt52']) { const p = await f.plan({ profile }); assert(p.errors.some((item) => item.code === 'capture-time-required')); assert.throws(() => serializePhotoExport(p)); } }
+  try { for (const profile of ['legacy2019', 'asbuilt52']) { const p = await f.plan({ profile }); assert(p.errors.some((item) => ['capture-time-required', 'capture-time-precision'].includes(item.code))); assert.throws(() => serializePhotoExport(p)); } }
   finally { f.session.clear(); }
 });
 test('unknown direction blocks legacy; modern omits it, unknown photographer omits legacy info', async () => {

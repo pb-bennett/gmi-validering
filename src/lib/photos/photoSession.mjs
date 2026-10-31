@@ -3,7 +3,8 @@ import { classifyPhotoFile, createPhotoThumbnail } from './imagePreview.mjs';
 import { readExifGps } from './exifGps.mjs';
 import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, emptySpatial, immutable, isPhotoPosition, photoSpatialCounts } from './photoSpatial.mjs';
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
-import { acceptManualPhotoDirection, emptyDirection } from './photoDirection.mjs';
+import { acceptManualPhotoDirection, acceptEvidencePhotoDirection, emptyDirection } from './photoDirection.mjs';
+import { planEvidenceAdoption } from './photoEvidenceAdoption.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
@@ -79,7 +80,7 @@ export function createPhotoSession({
   const assetPhotos = (ids) => assetIds(ids).map((id) => ({ ...assets.get(id), id }));
   const fileFor = (id) => assets.get(records.get(id)?.assetId)?.file || null;
   function makeOccurrence(assetId, id = assetId, occurrence = null) {
-    const { file: _file, spatial, captureMetadata: _capture, metadataEvidence: _evidence, ...metadata } = assets.get(assetId);
+    const { file: _file, spatial, captureMetadata: _capture, metadataEvidence: _evidence, directionEvidence: _directionEvidence, ...metadata } = assets.get(assetId);
     return { ...metadata, id, assetId, occurrence, spatial: Object.freeze({ ...spatial, current: null }), direction: emptyDirection() };
   }
   function updateAsset(assetId, patch, jobGeneration = generation) {
@@ -89,7 +90,7 @@ export function createPhotoSession({
     assets.set(assetId, updated);
     for (const [id, record] of records) {
       if (record.assetId !== assetId) continue;
-      const { file: _file, spatial: shared, captureMetadata: _capture, metadataEvidence: _evidence, ...metadata } = updated;
+      const { file: _file, spatial: shared, captureMetadata: _capture, metadataEvidence: _evidence, directionEvidence: _directionEvidence, ...metadata } = updated;
       const local = record.spatial.candidates.filter((candidate) => candidate.kind === 'gmi');
       const candidates = [...shared.candidates, ...local];
       const same = record.spatial.exifRead === shared.exifRead && candidates.length === record.spatial.candidates.length
@@ -161,11 +162,11 @@ export function createPhotoSession({
     appendOverrideIds.clear();
   }
 
-  const publicPhoto = (photo) => {
-    const layer = [...layers.values()].find((item) => item.photoIds.includes(photo.id));
-    const peers = layer ? layer.photoIds.map((id) => records.get(id)).filter((item) => item.assetId === photo.assetId) : [photo];
+  const publicPhoto = (photo, context = null) => {
+    const layer = context?.layer || [...layers.values()].find((item) => item.photoIds.includes(photo.id));
+    const peers = context?.peers.get(photo.assetId) || (layer ? layer.photoIds.map((id) => records.get(id)).filter((item) => item.assetId === photo.assetId) : [photo]);
     const links = layer ? gmiPhotoAssociations(layer, photo.id) : [];
-    return Object.freeze({ ...photo, captureMetadata: assets.get(photo.assetId).captureMetadata, metadataEvidence: assets.get(photo.assetId).metadataEvidence, repeatGroup: Object.freeze({ assetId: photo.assetId,
+    return Object.freeze({ ...photo, directionEvidence: assets.get(photo.assetId).directionEvidence || Object.freeze([]), captureMetadata: assets.get(photo.assetId).captureMetadata, metadataEvidence: assets.get(photo.assetId).metadataEvidence, repeatGroup: Object.freeze({ assetId: photo.assetId,
       occurrenceCount: peers.length, occurrenceIndex: peers.findIndex((item) => item.id === photo.id) + 1,
       pointObjectCount: links.filter((link) => link.object.geometryScope === 'point').length,
       referringObjectCount: links.length, repeated: links.length > 1 || peers.length > 1 }) });
@@ -259,6 +260,7 @@ export function createPhotoSession({
         try { result = await extractGps(record.file); }
         catch { result = { state: 'error', errorCode: 'gps-read-failed', candidate: null }; }
         if (!token.cancelled && updateAsset(job.id, (live) => ({
+          directionEvidence: immutable(result.directionEvidence || []),
           metadataEvidence: immutable([...live.metadataEvidence.filter((item) => item.kind !== 'exif'), ...(result.metadataEvidence || [])]),
           spatial: Object.freeze({
             ...live.spatial,
@@ -626,10 +628,45 @@ export function createPhotoSession({
       if (changes.length) publish();
       return { ok: true, assetIds: ids };
     },
+    adoptSourceEvidence(layerId, field, kind = 'exif', photoIds = null) {
+      if (!['captureTime', 'photographer', 'direction'].includes(field) || !['exif', 'gml'].includes(kind)) return { ok: false, error: 'invalid-field' };
+      const members = layers.get(layerId)?.photoIds || [];
+      const photos = members.map((id) => {
+        const record = records.get(id), asset = assets.get(record.assetId);
+        return { ...record, captureMetadata: asset.captureMetadata, metadataEvidence: asset.metadataEvidence, directionEvidence: asset.directionEvidence };
+      });
+      const plan = planEvidenceAdoption(photos, field, kind, photoIds || members);
+      const acceptedAt = Date.now();
+      for (const target of plan.targets) {
+        if (field === 'direction') records.set(target.photoId, { ...records.get(target.photoId),
+          direction: acceptEvidencePhotoDirection(target.evidence, target.agreeingEvidence, acceptedAt) });
+        else {
+          const asset = assets.get(target.assetId), evidence = target.evidence;
+          // Metadata is projected from the asset; avoid a record scan per asset.
+          assets.set(target.assetId, { ...asset, captureMetadata: immutable({ ...asset.captureMetadata, [field]: {
+            value: evidence.value, provenance: { kind: evidence.kind, evidenceId: evidence.id, tag: evidence.tag || null,
+              sourceId: evidence.sourceId || null, sourceFilename: evidence.sourceFilename || null,
+              sourceEntryId: evidence.sourceEntryId || null, raw: evidence.raw, evidence: target.agreeingEvidence }, acceptedAt,
+          } }) });
+        }
+      }
+      if (plan.targets.length) publish();
+      return { ok: true, ...plan, counts: { ...plan.counts, adopted: plan.targets.length } };
+    },
     getFile: fileFor,
     getAssetFile: (assetId) => assets.get(assetId)?.file || null,
     getPhoto: (id) => records.has(id) ? publicPhoto(records.get(id)) : null,
-    getLayerPhotos: (layerId) => (layers.get(layerId)?.photoIds || []).map((id) => publicPhoto(records.get(id))),
+    getLayerPhotos(layerId) {
+      const layer = layers.get(layerId);
+      if (!layer) return [];
+      const peers = new Map();
+      for (const id of layer.photoIds) {
+        const record = records.get(id);
+        if (!peers.has(record.assetId)) peers.set(record.assetId, []);
+        peers.get(record.assetId).push(record);
+      }
+      return layer.photoIds.map((id) => publicPhoto(records.get(id), { layer, peers }));
+    },
     getLayer: (id) => layers.get(id) || null,
     getGmiPhotoAssociations(layerId, photoId) {
       return gmiPhotoAssociations(layers.get(layerId), photoId);

@@ -47,7 +47,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   const profile = configuration.profile, crs = configuration.crs;
   const context = Object.fromEntries(EXPORT_CONTEXT_FIELDS.map(({ key }) => [key, String(configuration.context?.[key] ?? '').trim()]));
   const errors = [], warnings = [];
-  const error = (code, message, occurrenceId) => errors.push({ code, message, occurrenceId });
+  const error = (code, message, occurrenceId, assetId) => errors.push({ code, message, occurrenceId, assetId });
   if (!Object.hasOwn(PHOTO_EXPORT_PROFILES, profile)) error('invalid-profile', 'Velg en eksportprofil eksplisitt.');
   if (!['EPSG:25832', 'EPSG:25833'].includes(crs)) error('invalid-crs', 'Velg EPSG:25832 eller EPSG:25833.');
   if (profile === 'asbuilt52') errors.push(...validateExportContext(context));
@@ -68,12 +68,13 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
       try { asset.checksum = await digestHex(await asset.file.arrayBuffer()); }
       catch { error('file-read-failed', `${asset.originalFilename}: originalfilen kunne ikke leses og hashes.`); }
     }
-    if (!fullCaptureTime(asset.metadata?.captureTime)) error('capture-time-required', `${asset.originalFilename}: godtatt opptakstid med sekunder kreves.`);
+    if (!fullCaptureTime(asset.metadata?.captureTime)) error(asset.metadata?.captureTime ? 'capture-time-precision' : 'capture-time-required', `${asset.originalFilename}: godtatt opptakstid med sekunder kreves.`, undefined, asset.assetId);
     const photographer = asset.metadata?.photographer?.value;
     if (profile === 'legacy2019' && photographer && !isXmlText(photographer)) error('invalid-xml-text', `${asset.originalFilename}: fotograf inneholder ugyldige XML-tegn.`);
     if (profile === 'asbuilt52' && photographer) warnings.push({ code: 'photographer-omitted', assetId: asset.assetId,
       message: `${asset.originalFilename}: fotograf utelates i AsBuilt 5.2 fordi godtatt brennvidde og kameratype mangler.` });
   }
+  const byAsset = new Map(assets.map((asset) => [asset.assetId, asset]));
   const occurrences = [];
   for (const row of placed) {
     let point = null;
@@ -81,15 +82,17 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
       if (!isPhotoPosition(row.current.position) || !['EPSG:25832', 'EPSG:25833'].includes(crs)) throw new Error();
       const coordinates = transform('EPSG:4326', crs, [row.current.position.longitude, row.current.position.latitude]);
       point = { easting: formatExportCoordinate(coordinates[0]), northing: formatExportCoordinate(coordinates[1]) };
-    } catch { error('projection-failed', `${row.occurrenceId}: posisjonen kan ikke projiseres.`, row.occurrenceId); }
-    if (row.direction && (!Number.isInteger(row.direction.degrees) || row.direction.degrees < 0 || row.direction.degrees > 359)) error('invalid-direction', `${row.occurrenceId}: ugyldig godtatt retning.`, row.occurrenceId);
-    if (profile === 'legacy2019' && !row.direction) error('direction-required', `${row.occurrenceId}: Legacy krever godtatt retning.`, row.occurrenceId);
+    } catch { error('projection-failed', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): posisjonen kan ikke projiseres.`, row.occurrenceId); }
+    if (row.direction && (!Number.isFinite(row.direction.degrees) || row.direction.degrees < 0 || row.direction.degrees >= 360)) error('invalid-direction', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): ugyldig godtatt retning.`, row.occurrenceId);
+    if (profile === 'legacy2019' && !row.direction) error('direction-required', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): Legacy krever godtatt retning.`, row.occurrenceId);
     const guid = await exportGuid(`occurrence:${snapshot.layer.id}:${row.occurrenceId}`);
     occurrences.push({ ...row, point, guid, featureId: `photo-${guid}`, geometryId: `point-${guid}` });
   }
   const associationCount = new Set(all.flatMap((row) => row.associations.map((link) => JSON.stringify([row.assetId, link.sourceId, link.object.objectKey])))).size;
   if (associationCount) warnings.push({ code: 'associations-omitted', message: `${associationCount} objektkoblinger beholdes i appen, men er ikke med i denne testeksporten.` });
-  const sharedAttachments = assets.filter((asset) => placed.filter((row) => row.assetId === asset.assetId).length > 1).length;
+  const occurrenceCounts = new Map();
+  for (const row of placed) occurrenceCounts.set(row.assetId, (occurrenceCounts.get(row.assetId) || 0) + 1);
+  const sharedAttachments = [...occurrenceCounts.values()].filter((count) => count > 1).length;
   if (sharedAttachments) warnings.push({ code: 'shared-attachments', message: `${sharedAttachments} originalbilder deles av flere separate forekomst-features.` });
   warnings.push({ code: 'experimental-mapping', message: 'Eksperimentell forekomstbevarende mapping: én godtatt forekomst = én Skråfoto-feature. Ingen ny kameraposisjon utledes. Gemini-kompatibilitet er ikke verifisert.' });
   warnings.push({ code: 'direction-assumption', message: 'Eksperimentell retningsantakelse: med klokken i grader fra geografisk nord (enhet 1, referanse 1).' });

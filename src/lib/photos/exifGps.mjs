@@ -1,9 +1,10 @@
 import { exifCaptureEvidence } from './photoCaptureMetadata.mjs';
+import { exifDirectionEvidence } from './photoDirection.mjs';
 import { immutable } from './photoSpatial.mjs';
 
 const TAGS = ['GPSLatitude', 'GPSLatitudeRef', 'GPSLongitude', 'GPSLongitudeRef', 'GPSMapDatum', 'GPSAltitude', 'GPSAltitudeRef', 'GPSDOP', 'GPSHPositioningError'];
 const OPTIONS = {
-  tiff: true, ifd0: { pick: [0x8825, 0x8769, 'Artist'] }, ifd1: false, exif: { pick: ['DateTimeOriginal', 'SubSecTimeOriginal', 'OffsetTimeOriginal'] }, gps: { pick: TAGS },
+  tiff: true, ifd0: { pick: [0x8825, 0x8769, 'Artist'] }, ifd1: false, exif: { pick: ['DateTimeOriginal', 'SubSecTimeOriginal', 'OffsetTimeOriginal'] }, gps: { pick: [...TAGS, 'GPSImgDirection', 'GPSImgDirectionRef'] },
   xmp: false, icc: false, iptc: false, jfif: false, ihdr: false,
   makerNote: false, userComment: false, interop: false,
   translateKeys: true, translateValues: false, reviveValues: false,
@@ -49,7 +50,7 @@ export async function readExifGps(file, { parse } = {}) {
     }
     const reader = parse || (await import('exifr/dist/full.esm.mjs')).parse;
     const tags = await reader(file, OPTIONS) || {};
-    return immutable({ ...normalizeExifGps(tags), metadataEvidence: exifCaptureEvidence(tags) });
+    return immutable({ ...normalizeExifGps(tags), metadataEvidence: exifCaptureEvidence(tags), directionEvidence: exifDirectionEvidence(tags) });
   } catch {
     return immutable({ state: 'error', errorCode: 'gps-read-failed', candidate: null });
   }
