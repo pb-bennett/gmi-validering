@@ -1,6 +1,7 @@
+import { unzipSync, strFromU8 } from 'fflate';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
@@ -144,6 +145,75 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         }
         await click(browser, 'Fjern valg', 'document');
         assert.equal(await browser.evaluate('photoWfsCalls'), 2);
+      });
+      await t.test('experimental dual export: explicit profiles, blocked legacy, truthful-context controls, shared originals and WFS isolation', async () => {
+        const scope = `document.querySelector('.photo-export-dialog')`;
+        const setExport = async (label, value) => browser.evaluate(`(() => {
+          const e=document.querySelector('[aria-label="${label}"]');
+          if(e.tagName==='INPUT')Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});
+          else e.value=${JSON.stringify(value)};
+          e.dispatchEvent(new Event(e.tagName==='INPUT'?'input':'change',{bubbles:true}));
+        })()`);
+        const preview = async () => {
+          await click(browser, 'Lag eksportforhåndsvisning', scope);
+          await browser.waitFor(`${scope}.querySelector('section[aria-label="Eksportforhåndsvisning"]') && !${scope}.innerText.includes('Bygger forhåndsvisning')`);
+        };
+        await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: directory });
+        const download = async (profile) => {
+          await click(browser, 'Last ned testpakke', scope);
+          await browser.waitFor(`${scope}.innerText.includes('ZIP-pakken er klar')`);
+          const file=path.join(directory,`photos-${profile}-25832.zip`);
+          for(let attempt=0;attempt<100;attempt++) {
+            try { return unzipSync(new Uint8Array(await readFile(file))); }
+            catch { await new Promise(resolve=>setTimeout(resolve,100)); }
+          }
+          throw new Error('ZIP download not completed');
+        };
+        await click(browser, 'Eksporter', 'document');
+        assert.equal(await browser.evaluate(`${scope}.querySelector('select[aria-label="Eksportprofil"]').value`), '');
+        assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Lag eksportforhåndsvisning').disabled`));
+        await setExport('Eksportprofil', 'legacy2019'); await preview();
+        assert(await browser.evaluate(`${scope}.innerText.includes('Legacy krever godtatt retning')`));
+        assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
+        await click(browser, 'Lukk eksport', scope);
+        const placed = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).filter(li=>Array.from(li.querySelectorAll('span')).some(s=>s.textContent==='Plassert')).map(li=>li.dataset.photoId)`);
+        assert.equal(placed.length, 4);
+        for(const id of placed) {
+          await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').click()`);
+          await click(browser, 'Juster retning', 'document'); await click(browser, 'Bruk retning', 'document');
+        }
+        await click(browser, 'Eksporter', 'document'); await setExport('Eksportprofil','legacy2019'); await preview();
+        assert(await browser.evaluate(`${scope}.innerText.includes('4 planlagte features · 3 vedlegg · 1 delte originalbilder')`));
+        assert(await browser.evaluate(`${scope}.innerText.includes('4 utelatt/uplassert')`));
+        assert(await browser.evaluate(`${scope}.innerText.includes('Gemini-kompatibilitet er ikke verifisert')`));
+        const legacy = await download('legacy2019');
+        assert.equal(Object.keys(legacy).length,4);
+        const legacyXml=strFromU8(legacy['photos.gml']);
+        assert.equal((legacyXml.match(/<app:Skråfoto /g)||[]).length,4); assert(legacyXml.includes('<app:fotograf>Batch Artist</app:fotograf>'));
+        await setExport('Eksportprofil','asbuilt52'); await preview();
+        assert(await browser.evaluate(`${scope}.innerText.includes('Datafangstdato: oppgi')`));
+        assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
+        for(const [label,value] of [['Datafangstdato','2026-05-12'],['Datasettets navn','Synthetic export dataset'],['Prosjektnavn','Synthetic export project'],['Målemetode','99'],['Målemetode høyde','99'],['Stedfestingsårsak','nytt'],['Stedfestingsforhold','åpenGrøft']]) await setExport('Eksport '+label,value);
+        await preview();
+        assert(await browser.evaluate(`${scope}.innerText.includes('fotograf utelates i AsBuilt 5.2')`));
+        assert(await browser.evaluate(`${scope}.innerText.includes('Eksperimentell 2D')`));
+        for (const [width, height] of [[1920, 1080], [1280, 720]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          const bounds = await browser.evaluate(`(() => {const d=${scope},r=d.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,overflow:d.scrollWidth>d.clientWidth};})()`);
+          assert(bounds.left >= 0 && bounds.right <= width && bounds.top >= 0 && bounds.bottom <= height);
+          assert.equal(bounds.overflow, false);
+          if (process.env.PHOTO_SCREENSHOT_DIR) {
+            await mkdir(process.env.PHOTO_SCREENSHOT_DIR, { recursive: true });
+            const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+            await writeFile(path.join(process.env.PHOTO_SCREENSHOT_DIR, `photo-export-${width}x${height}.png`), Buffer.from(data, 'base64'));
+          }
+        }
+        const modern = await download('asbuilt52');
+        const modernXml=strFromU8(modern['photos.gml']);assert(!modernXml.includes('<app:fotoinformasjon>')); assert(modernXml.includes('Synthetic export dataset'));
+        assert.equal((modernXml.match(/<app:Skråfoto /g)||[]).length,4);
+        for(const [name,data] of Object.entries(modern))if(name!=='photos.gml')assert.deepEqual(data,Uint8Array.from(Buffer.from(bytes,'base64')));
+        assert.equal(await browser.evaluate('photoWfsCalls'),2);
+        await click(browser,'Lukk eksport',scope);
       });
       await t.test('repeated image occurrences select independently with one original URL; current GMI inspector, preview and panes remain', async () => {
         const rows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li')).filter(li=>li.querySelector('button')?.getAttribute('aria-label')==='Vis a.png' && li.innerText.includes('Flere plasseringer')).map(li=>li.dataset.photoId)`);

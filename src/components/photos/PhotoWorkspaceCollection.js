@@ -7,6 +7,7 @@ import { PhotoMetadataBatch } from './PhotoMetadataEditor';
 import PhotoGmlSummary from './PhotoGmlSummary';
 import PhotoGmiSummary from './PhotoGmiSummary';
 import PhotoOccurrenceContext from './PhotoOccurrenceContext';
+import PhotoExportDialog from './PhotoExportDialog';
 import './photoWorkspace.css';
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs disabled:opacity-40';
@@ -29,6 +30,7 @@ function RemovePhotosConfirmation({ count, occurrences, onCancel, onConfirm }) {
 export default function PhotoWorkspaceCollection({ layer, photos, workspace, dispatch, onExit, onAddPhotos, onBeforeDialog, onOpenSources }) {
   const [filter, setFilter] = useState('all');
   const [removalIds, setRemovalIds] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const selectedIds = workspace.selectedIds;
   const shown = photos.filter((photo) => filter === 'all' || (filter === 'placed') === Boolean(photo.spatial.current));
   const removalCount = removalIds?.filter((id) => layer.photoIds.includes(id)).length || 0;
@@ -38,6 +40,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
       <p className="sr-only">{layer.exifCandidateCount} bilder med EXIF GPS</p>
       <label className="flex items-center gap-2"><input type="checkbox" aria-label={`Vis fotokartlag ${layer.name}`} checked={layer.visible} onChange={(event) => photoSession.setLayerVisibility(layer.id, event.target.checked)} />Vis på kartet</label>
       <button type="button" className={control} onClick={onAddPhotos}>Legg til bilder</button>
+      <button type="button" className={control} aria-haspopup="dialog" onClick={() => { onBeforeDialog?.(); setExportOpen(true); }}>Eksporter</button>
       <button type="button" className={control} aria-haspopup="dialog" onClick={() => onOpenSources()}>Koble og posisjoner bilder</button>
     </header>
     <section className="photo-workspace-sources" aria-label="Kilder og koblinger"><details>
@@ -62,6 +65,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
       }}>Fjern hele bildet med alle plasseringer</button>}
       </div>}
     </div>
+    {exportOpen && <PhotoExportDialog layerId={layer.id} onClose={() => setExportOpen(false)} />}
     <PhotoMetadataBatch photos={photos} selectedIds={selectedIds} layerId={layer.id} />
     <ul className="photo-workspace-list" aria-label="Bilder i fotokartlaget">
       {shown.map((photo) => <li key={photo.id} data-photo-id={photo.id} className={photo.id === workspace.activePhotoId ? 'photo-workspace-active' : ''}>

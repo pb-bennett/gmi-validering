@@ -1,0 +1,9 @@
+.photo-export-dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 20px; border: 1px solid var(--color-gmi-border, #ccc); background: var(--color-gmi-surface, white); color: var(--color-gmi-text, #17253b); font-size: .8rem; }
+.photo-export-dialog::backdrop { background: #0007; }
+.photo-export-dialog header { display: flex; justify-content: space-between; gap: 12px; }
+.photo-export-dialog h2, .photo-export-dialog h3 { font-weight: 600; }
+.photo-export-dialog p, .photo-export-dialog fieldset, .photo-export-dialog ul { margin: 8px 0; }
+.photo-export-dialog label { display: block; margin: 8px 0; }
+.photo-export-dialog input, .photo-export-dialog select { display: block; width: 100%; max-width: 100%; border: 1px solid #999; padding: 4px; background: var(--color-gmi-surface, white); }
+.photo-export-dialog ul { list-style: disc; padding-left: 20px; overflow-wrap: anywhere; }
+.photo-export-dialog fieldset { border: 1px solid #999; padding: 8px; }
