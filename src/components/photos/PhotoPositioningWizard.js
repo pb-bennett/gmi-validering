@@ -25,10 +25,10 @@ const readErrors = {
   'gml-doctype-not-supported': 'GML med eksterne entiteter eller dokumenttype støttes ikke.',
 };
 
-export default function PhotoPositioningWizard({ layer, photos, review, initialSourceId, focusedPhotoId, onClose }) {
+export default function PhotoPositioningWizard({ layer, photos, review, initialSourceId, focusedPhotoId, initialPositions = false, onClose }) {
   const dialogRef = useRef(null), inputRef = useRef(null), ticketRef = useRef(null);
   const editedIds = useRef(new Set());
-  const [step, setStep] = useState(initialSourceId ? 2 : 1);
+  const [step, setStep] = useState(initialPositions ? 3 : initialSourceId ? 2 : 1);
   const [kind, setKind] = useState('gml');
   const [plan, setPlan] = useState(null), [choices, setChoices] = useState({});
   const [notice, setNotice] = useState(''), [error, setError] = useState('');
@@ -50,15 +50,22 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
     const dialog = dialogRef.current, opener = document.activeElement;
     const ticket = photoSession.beginSourceWorkflow(layer.id);
     ticketRef.current = ticket;
+    const opened = () => {
+      if (!initialPositions || ticketRef.current !== ticket || !dialog.open) return;
+      const next = photoSession.reviewSourceWorkflowPositions(ticket);
+      if (next) { setPlan(next); setChoices(photoSourcePositionChoices(next)); setStep(3); setNotice(savedMessage); }
+    };
+    dialog.addEventListener('toggle', opened, { once: true });
     dialog.showModal();
     if (initialSourceId) photoSession.recheckLayerSource(layer.id, initialSourceId);
     return () => {
       ticketRef.current = null;
       photoSession.endSourceWorkflow(ticket);
+      dialog.removeEventListener('toggle', opened);
       dialog.close();
       if (opener?.isConnected) opener.focus();
     };
-  }, [layer.id, initialSourceId]);
+  }, [layer.id, initialSourceId, initialPositions]);
   useEffect(() => {
     if (!photoSession.sourceWorkflowIsLive(ticketRef.current)) onClose();
   }, [layer.photoIds, onClose]);

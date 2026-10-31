@@ -6,6 +6,7 @@ import { analyzeZValues } from './analysis/zValidation';
 import { createContextualObjectInspection, createExactObjectInspection } from './objectTableInspection';
 import { moveLayerInOrder } from './map/layerOrder.mjs';
 import { photoSession } from './photos/photoSession.mjs';
+import { bindLoadedGmiSurveyStore, loadedGmiSources } from './photos/loadedGmiSource.mjs';
 import { bindGeminiSurveyStore, geminiSession } from './gemini-wfs/geminiSession.mjs';
 import {
   DEFAULT_HIGHLIGHT_OPACITY,
@@ -1957,7 +1958,7 @@ const useStore = create(
          */
         addLayer: (layerData) => {
           const layerId = `layer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          const { file, data } = layerData;
+          const { file, data, sourceInput } = layerData;
           const initial = get()._initial;
           const inclineRequirementMode =
             get().settings.inclineRequirementMode;
@@ -2019,6 +2020,9 @@ const useStore = create(
             },
           };
 
+          if (sourceInput && file?.format === 'GMI') {
+            loadedGmiSources.register(layerId, data, sourceInput.file, sourceInput.evidence);
+          }
           set(
             (state) => ({
               layers: {
@@ -3295,6 +3299,7 @@ const useStore = create(
 
 storeApi = useStore;
 bindGeminiSurveyStore(useStore);
+bindLoadedGmiSurveyStore(useStore, photoSession);
 if (hydrationCompletedDuringInitialization) {
   useStore.setState({ hydrated: true }, false, 'persist/hydrated');
 }

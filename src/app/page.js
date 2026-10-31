@@ -8,6 +8,7 @@ import GlobalFileDrop from '@/components/GlobalFileDrop';
 import PhotoCollectionDialog from '@/components/photos/PhotoCollectionDialog';
 import usePhotoSession from '@/components/photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
+import { loadedGmiSources } from '@/lib/photos/loadedGmiSource.mjs';
 import { emptyPhotoWorkspace, photoWorkspaceReducer } from '@/lib/photos/photoWorkspaceState.mjs';
 import usePhotoManualPlacement from '@/components/photos/usePhotoManualPlacement';
 import usePhotoDirectionEdit from '@/components/photos/usePhotoDirectionEdit';
@@ -127,6 +128,7 @@ export default function Home() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAppInfo, setShowAppInfo] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
+  const [loadedPhotoImport, setLoadedPhotoImport] = useState(false);
   const [photoImportTarget, setPhotoImportTarget] = useState(null);
   const manualPlacement = usePhotoManualPlacement();
   const directionEdit = usePhotoDirectionEdit();
@@ -155,12 +157,22 @@ export default function Home() {
   const [photoLocateRequest, setPhotoLocateRequest] = useState(null);
   const photoTriggerRef = useRef(null);
   const openPhotos = (event) => {
+    setLoadedPhotoImport(false);
     cancelPhotoEditing();
     setPhotoSourceWorkflow(null);
     photoSession.beginImport();
     setPhotoImportTarget(null);
     photoTriggerRef.current = event.currentTarget;
     setShowPhotos(true);
+  };
+  const openLoadedGmiPhotos = (layerId, event) => {
+    const ticket = loadedGmiSources.begin(layerId);
+    if (!ticket) return;
+    cancelPhotoEditing(); setPhotoSourceWorkflow(null);
+    photoTriggerRef.current = event.currentTarget;
+    setPhotoImportTarget(null); setLoadedPhotoImport(true); setShowPhotos(true);
+    void photoSession.beginLoadedGmiImport({ binding: ticket.binding,
+      read: () => loadedGmiSources.read(ticket), isLive: loadedGmiSources.isLive });
   };
   const openPhotoLayer = (id, opener, photoId = null) => {
     const layer = photoSession.getLayer(id);
@@ -176,6 +188,7 @@ export default function Home() {
     if (photoTriggerRef.current?.isConnected) photoTriggerRef.current.focus();
   };
   const addPhotosToLayer = (event) => {
+    setLoadedPhotoImport(false);
     cancelPhotoEditing();
     if (!photoSession.beginImport(workspaceLayer?.id)) return;
     photoTriggerRef.current = event.currentTarget;
@@ -183,6 +196,7 @@ export default function Home() {
     setShowPhotos(true);
   };
   const closePhotos = () => {
+    setLoadedPhotoImport(false);
     photoSession.cancelImport();
     setShowPhotos(false);
     setPhotoImportTarget(null);
@@ -203,7 +217,16 @@ export default function Home() {
       setPhotoImportTarget(null);
     }
   }), [photoImportTarget]);
-  const createPhotoLayer = () => {
+  const createPhotoLayer = (loadedReview) => {
+    if (loadedPhotoImport) {
+      const result = photoSession.applyLoadedGmiImport(loadedReview);
+      if (!result.ok) return result;
+      setShowPhotos(false); setLoadedPhotoImport(false); setPhotoImportTarget(null);
+      useStore.getState().toggleFieldValidation(false);
+      openPhotoLayer(result.layer.id);
+      setPhotoSourceWorkflow({ layerId: result.layer.id, initialPositions: true });
+      return result;
+    }
     const layer = photoImportTarget ? photoSession.appendImport() : photoSession.createLayer();
     if (!layer) return;
     if (!photoImportTarget) useStore.getState().toggleFieldValidation(false);
@@ -382,10 +405,10 @@ export default function Home() {
     <div className="h-screen w-screen overflow-hidden flex bg-gmi-surface-soft">
       <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !showPhotos && !workspaceLayer} />
       <TestModeActivation />
-      {showPhotos && <PhotoCollectionDialog targetLayerId={photoImportTarget} onClose={closePhotos} onCreate={createPhotoLayer} openerRef={photoTriggerRef} />}
+      {showPhotos && <PhotoCollectionDialog loadedGmi={loadedPhotoImport} targetLayerId={photoImportTarget} onClose={closePhotos} onCreate={createPhotoLayer} openerRef={photoTriggerRef} />}
       {sourceWorkflowLayer && !showPhotos && <PhotoPositioningWizard layer={sourceWorkflowLayer}
         photos={photoSession.getLayerPhotos(sourceWorkflowLayer.id)} review={sourceReviews[sourceWorkflowLayer.id]}
-        initialSourceId={photoSourceWorkflow.sourceId} focusedPhotoId={photoSourceWorkflow.photoId}
+        initialPositions={photoSourceWorkflow.initialPositions} initialSourceId={photoSourceWorkflow.sourceId} focusedPhotoId={photoSourceWorkflow.photoId}
         onClose={() => setPhotoSourceWorkflow(null)} />}
       {/* Floating Stats Button */}
       {!workspaceLayer && !(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
@@ -569,6 +592,7 @@ export default function Home() {
               <Sidebar
                 onReset={handleReset}
                 onOpenPhotoLayer={openPhotoLayer}
+                onAddGmiPhotos={openLoadedGmiPhotos}
                 onOpenGemini={() => setGeminiDialog({})}
                 hasPhotoLayers={hasPhotoLayers}
                 onAddFile={() => setShowAddLayerModal(true)}

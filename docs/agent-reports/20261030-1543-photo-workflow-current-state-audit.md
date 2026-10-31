@@ -373,3 +373,15 @@ Explicitly deferred: delivery/export and schema selection, attachment ZIP packag
 ## Audit closeout
 
 Only this new report was created. Production code, tests and historical reports were not edited. No commit/push, sub-agent, customer corpus access or WFS behavior change occurred. Focused current-checkout results: **371 tests, 357 passed, 0 failed, 14 skipped, 0 cancelled/todo**. Fresh regression acceptance of the supplied workspace-wide WFS revision remains a separate execution step because it was not checked out.
+
+## Implementation continuation — 2026-10-30
+
+The recommended **loaded-GMI photo-folder import and reconciliation** milestone has now been implemented from clean HEAD `1eba6af` on `feature/photo-workspace`. The original audit above remains a historical snapshot; this continuation supersedes its description of that gap as unimplemented.
+
+Loaded GMI layers now expose **Legg til bilder**, using the captured original File and evidence from the same production parser, bound to the exact layer/dataset/input revision. No second GMI selection is required. The existing importer supports directory Files with relative paths, a FOTO create/append target and explicit matched/repeated/ambiguous/not-selected/unreferenced review. Unreferenced inclusion defaults on; unresolved ambiguity is never guessed. One guarded source checkpoint transfers assets and uses the existing ledger/POINT occurrence model without accepting coordinates, then opens the existing explicit positioning review and resulting FOTO workspace.
+
+Survey removal/replacement invalidates unconfirmed imports. After confirmation it marks the loaded-source binding detached while preserving the owned photos, associations, occurrence evidence, accepted coordinates and direction. Ordinary independent photo import remains available. Table/popup filename-copy behavior, photo panes and Gemini WFS production behavior were preserved.
+
+Final focused validation of the actual workspace-wide-WFS baseline: **430 tests, 425 passed, zero failed, five external-corpus skips** across disjoint domain/shared/app/WFS selections. The final WFS browser selection passed **51/51**. Production Webpack build and diff/whitespace checks passed. All 17 changed/new JS/MJS files were linted with zero new findings; four existing LayerPanel hook errors and one FileUpload dependency warning remain unchanged, so raw whole-file ESLint is not claimed clean. No private corpus was probed or reaccepted.
+
+See [the implementation report](20261030-1633-photo-loaded-gmi-reconciliation-implementation.md) for architecture, exact commands/counts, interim failures/reruns, lifecycle semantics and remaining limits. Next recommended milestone is accepted capture-date/photographer metadata, with export, persistence, source-heading import and the Validator duplicate-reference warning still deferred.

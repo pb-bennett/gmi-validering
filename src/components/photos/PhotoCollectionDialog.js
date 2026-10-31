@@ -6,10 +6,15 @@ import { photoSession } from '@/lib/photos/photoSession.mjs';
 import usePhotoSession from './usePhotoSession';
 import PhotoCollectionPanel, { SelectedPhotoInspector } from './PhotoCollectionPanel';
 import PhotoGmlSummary from './PhotoGmlSummary';
+import PhotoGmiReconciliation from './PhotoGmiReconciliation';
 import { photoSpatialCounts } from '@/lib/photos/photoSpatial.mjs';
 
-export default function PhotoCollectionDialog({ onClose, onCreate, openerRef, targetLayerId = null }) {
+export default function PhotoCollectionDialog({ onClose, onCreate, openerRef, targetLayerId: ordinaryTarget = null, loadedGmi = false }) {
   const session = usePhotoSession();
+  const targetLayerId = loadedGmi ? session.draftTargetLayerId : ordinaryTarget;
+  const [loadedReview, setLoadedReview] = useState(null);
+  const [includeUnreferenced, setIncludeUnreferenced] = useState(true);
+  const [applyError, setApplyError] = useState('');
   const [dropError, setDropError] = useState(null);
   const layer = session.photoLayers.find((item) => item.id === targetLayerId);
   const photos = session.photos;
@@ -17,6 +22,7 @@ export default function PhotoCollectionDialog({ onClose, onCreate, openerRef, ta
   const { lastImport, batchSelectedIds } = session;
   const dialogRef = useRef(null);
   const inputRef = useRef(null);
+  const folderRef = useRef(null);
   const gmlInputRef = useRef(null);
   const selected = photos.find((photo) => photo.id === selectedId);
   const pendingCount = photos.filter((photo) => photo.preview.state === 'pending').length;
@@ -28,6 +34,7 @@ export default function PhotoCollectionDialog({ onClose, onCreate, openerRef, ta
   const proposedMatch = positioning.ledger?.matches.find((match) => match.status === 'matched' && match.photoId === selectedId);
   const proposedEntry = proposedMatch ? positioning.source.entries.find((entry) => entry.id === proposedMatch.entryId) : null;
   const addFiles = (files) => {
+    setLoadedReview(null); setApplyError('');
     const gmlFiles = files.filter((file) => /\.gml$/i.test(file.name));
     const images = files.filter((file) => !/\.gml$/i.test(file.name));
     if (images.length) photoSession.importFiles(images);
@@ -92,6 +99,7 @@ export default function PhotoCollectionDialog({ onClose, onCreate, openerRef, ta
               <button type="button" className="gmi-primary-control gmi-focus-ring inline-flex min-h-9 items-center gap-2 px-3 text-sm" onClick={() => inputRef.current?.click()}>
                 <UploadSimpleIcon size={17} aria-hidden="true" />Legg til bilder
               </button>
+              {loadedGmi && <button type="button" className="gmi-compact-button gmi-focus-ring min-h-9 border border-gmi-border-strong px-3 text-sm" onClick={() => folderRef.current?.click()}>Velg leveransemappe</button>}
               <button type="button" className="gmi-compact-button gmi-focus-ring min-h-9 border border-gmi-border-strong px-3 text-sm" onClick={() => gmlInputRef.current?.click()}>Legg til GML-kildedata</button>
               <button type="button" disabled={!photos.length} onClick={() => photoSession.selectAll()} className="gmi-compact-button gmi-focus-ring min-h-9 border border-gmi-border-strong px-3 text-sm disabled:opacity-40">Velg alle</button>
               <button type="button" disabled={!batchSelectedIds.length} onClick={() => photoSession.clearSelection()} className="gmi-compact-button gmi-focus-ring min-h-9 border border-gmi-border-strong px-3 text-sm disabled:opacity-40">Fjern valg</button>
@@ -119,9 +127,21 @@ export default function PhotoCollectionDialog({ onClose, onCreate, openerRef, ta
           <input ref={gmlInputRef} type="file" accept=".gml" className="hidden" aria-label="Velg GML med bildeposisjoner" onChange={(event) => {
             const files = Array.from(event.target.files || []); event.target.value = ''; if (files.length) addFiles(files);
           }} />
+          {loadedGmi && <input ref={folderRef} type="file" multiple webkitdirectory="" directory="" className="hidden" aria-label="Velg leveransemappe" onChange={(event) => {
+            const files = Array.from(event.target.files || []); event.target.value = ''; if (files.length) addFiles(files);
+          }} />}
         </header>
         <div className="photo-collection-notice border-b border-gmi-border text-xs text-gmi-text-muted">
-          <p id="photo-collection-session-note">Legg til bilder, kontroller utvalget og fjern eventuelle bilder før du bekrefter. {targetLayerId ? 'Nye bilder blir med; filnavn som finnes i laget hoppes over med mindre du velger «Legg til likevel». Prikkene velger bare bilder for fjerning.' : 'Alle gjenværende bilder blir med; prikkene velger bare bilder for fjerning.'} Bilder forsvinner ved omlasting.</p>
+          {loadedGmi && <section aria-label="Lastet GMI-kilde" className="mb-2">
+            <p>GMI: {session.loadedImport?.binding.filename} · Den lastede kilden brukes. Du trenger ikke velge GMI-filen på nytt.</p>
+            {session.loadedImport?.state === 'pending' && <p role="status">Klargjør bildereferanser fra lastet GMI …</p>}
+            {(!session.loadedImport || session.loadedImport.state === 'error') && <p role="alert">Den lastede GMI-kilden er ikke lenger tilgjengelig eller kunne ikke leses. Avbryt og start fra et tilgjengelig GMI-lag.</p>}
+            <label>Mållag <select aria-label="Velg FOTO-mållag" value={targetLayerId || ''} onChange={(event) => {
+              photoSession.setLoadedGmiTarget(event.target.value || null); setLoadedReview(null); setApplyError('');
+            }}><option value="">Nytt FOTO-lag</option>{session.photoLayers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          </section>}
+          {applyError && <p role="alert">{applyError}</p>}
+          <p id="photo-collection-session-note">Legg til bilder, kontroller utvalget og fjern eventuelle bilder før du bekrefter. {targetLayerId ? 'Nye bilder blir med; filnavn som finnes i laget hoppes over med mindre du velger «Legg til likevel». Prikkene velger bare bilder for fjerning.' : loadedGmi ? 'Kontroller referansene og velg om bilder uten GMI-referanse skal være med. Prikkene velger bare bilder for fjerning.' : 'Alle gjenværende bilder blir med; prikkene velger bare bilder for fjerning.'} Bilder forsvinner ved omlasting.</p>
           <p role="status" aria-live="polite">
             {pendingCount > 0 ? `Lager miniatyrbilder: ${photos.length - pendingCount} av ${photos.length} ferdig.` : `${photos.length} bilder i samlingen.`}
             {errorCount > 0 && ` ${errorCount} uten forhåndsvisning.`}
@@ -150,14 +170,25 @@ export default function PhotoCollectionDialog({ onClose, onCreate, openerRef, ta
           )}
         </div>
         <div className="photo-collection-body">
-          <PhotoCollectionPanel photos={photos} selectedId={selectedId} batchSelectedIds={batchSelectedIds} onInspect={photoSession.select} appendStatus={appendStatus} />
+          {loadedGmi && loadedReview ? <PhotoGmiReconciliation review={loadedReview} photos={photos} onIncludeChange={(include) => {
+            setIncludeUnreferenced(include); setLoadedReview(photoSession.reviewLoadedGmiImport({ includeUnreferenced: include }));
+          }} /> : <PhotoCollectionPanel photos={photos} selectedId={selectedId} batchSelectedIds={batchSelectedIds} onInspect={photoSession.select} appendStatus={appendStatus} />}
           <SelectedPhotoInspector key={selectedId || 'empty'} photo={selected} proposedEntry={proposedEntry} />
         </div>
         <footer className="photo-import-footer border-t border-gmi-border">
           <>
             <p className="mr-auto text-xs text-gmi-text-muted">Avbryt forkaster denne importen. Originalfilene på disken beholdes.</p>
             <button type="button" onClick={onClose} className="gmi-compact-button gmi-focus-ring min-h-10 border border-gmi-border-strong px-4 text-sm">Avbryt</button>
-            <button type="button" disabled={!appendCount || ['pending', 'error'].includes(positioning.state)} onClick={onCreate} className="gmi-primary-control gmi-focus-ring min-h-10 px-4 text-sm font-medium">{targetLayerId ? `Legg til ${appendCount} ${appendCount === 1 ? 'bilde' : 'bilder'} i laget` : `Opprett fotokartlag (${photos.length} bilder)`}</button>
+            {loadedGmi ? <>
+              {loadedReview && <button type="button" className="gmi-compact-button gmi-focus-ring min-h-10 border border-gmi-border-strong px-4 text-sm" onClick={() => setLoadedReview(null)}>Tilbake til bilder</button>}
+              <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4 text-sm font-medium"
+                disabled={session.loadedImport?.state !== 'ready' || ['pending', 'error'].includes(positioning.state) || (!targetLayerId && !(loadedReview ? loadedReview.includedIds.length : photos.length))}
+                onClick={() => {
+                  if (!loadedReview) { setLoadedReview(photoSession.reviewLoadedGmiImport({ includeUnreferenced })); return; }
+                  const result = onCreate(loadedReview);
+                  if (!result?.ok) { setApplyError('Bildene, mållaget eller GMI-kilden er endret. Kontroller referansene på nytt før du bekrefter.'); setLoadedReview(null); }
+                }}>{loadedReview ? 'Bekreft bilder og koblinger' : 'Kontroller referanser'}</button>
+            </> : <button type="button" disabled={!appendCount || ['pending', 'error'].includes(positioning.state)} onClick={onCreate} className="gmi-primary-control gmi-focus-ring min-h-10 px-4 text-sm font-medium">{targetLayerId ? `Legg til ${appendCount} ${appendCount === 1 ? 'bilde' : 'bilder'} i laget` : `Opprett fotokartlag (${photos.length} bilder)`}</button>}
           </>
         </footer>
       </div>

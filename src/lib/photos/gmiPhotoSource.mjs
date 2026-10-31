@@ -9,20 +9,32 @@ import { projectPhotoCoordinate } from '../map/coordinateProjection.js';
 
 export const MAX_PHOTO_GMI_BYTES = 10 * 1024 * 1024;
 
+export async function gmiSourceFingerprint(file) {
+  if (file.size > MAX_PHOTO_GMI_BYTES) throw Object.assign(new Error('gmi-too-large'), { code: 'gmi-too-large' });
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (globalThis.crypto?.subtle) {
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  }
+  return `exact-bytes:${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
 // Exact bytes identify a revision. The insecure-context fallback is exact bytes,
 // not a short/collision-prone hash or a filename/GUID approximation.
 export async function parseGmiPhotoSource(file) {
   if (file.size > MAX_PHOTO_GMI_BYTES) throw Object.assign(new Error('gmi-too-large'), { code: 'gmi-too-large' });
   const bytes = new Uint8Array(await file.arrayBuffer());
-  let fingerprint;
-  if (globalThis.crypto?.subtle) {
-    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-    fingerprint = `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
-  } else fingerprint = `exact-bytes:${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  const fingerprint = await gmiSourceFingerprint(file);
   let parser;
   try { parser = new GMIParser(decodeGmiBytes(bytes)); }
   catch { throw Object.assign(new Error('invalid-gmi'), { code: 'invalid-gmi' }); }
   if (parser.errors.length) throw Object.assign(new Error('invalid-gmi'), { code: 'invalid-gmi' });
+  return createGmiPhotoSource(parser, fingerprint);
+}
+
+// Shared evidence factory: the survey uploader already has this exact parser.
+// Capture before operational/user-assumed CRS changes; never use display geometry.
+export function createGmiPhotoSource(parser, fingerprint = null) {
   const collections = [['point', parser.points], ['line', parser.linesParsed]];
   const guidCounts = new Map();
   for (const [, objects] of collections) for (const object of objects) {

@@ -47,7 +47,7 @@ export default function PhotoCollectionPanel({ photos, selectedId, batchSelected
                   )}
                   {collisions.has(photo.id) && <span className="photo-append-badge">{skipped.has(photo.id) ? 'Finnes allerede' : 'Legges til'}</span>}
                 </div>
-                <span className="block truncate px-2 pt-2 text-xs font-medium" title={photo.originalFilename}>{photo.originalFilename}</span>
+                <span className="block truncate px-2 pt-2 text-xs font-medium" title={photo.sourceRelativePath || photo.originalFilename}>{photo.originalFilename}</span>
                 <span className="block px-2 pb-2 pt-1 text-[11px] text-gmi-text-subtle">
                   {photo.id === selectedId ? 'Vises · ' : ''}{formatSize(photo.size)}
                 </span>
@@ -121,6 +121,7 @@ export function SelectedPhotoInspector({ photo, layerId, onLocate, proposedEntry
       {photo && (
         <dl className="photo-collection-facts text-xs text-gmi-text-muted">
           <div><dt>Filnavn</dt><dd className="break-all">{photo.originalFilename}</dd></div>
+          {photo.sourceRelativePath && <div><dt>Relativ sti</dt><dd className="break-all">{photo.sourceRelativePath}</dd></div>}
           <div><dt>Størrelse</dt><dd>{formatSize(photo.size)}</dd></div>
           <div><dt>MIME/type</dt><dd className="break-all">{photo.mimeType || 'Ikke oppgitt'}</dd></div>
           <div><dt>Bildedimensjoner</dt><dd>{photo.dimensions ? `${photo.dimensions.width} × ${photo.dimensions.height} px` : 'Ikke tilgjengelig'}</dd></div>

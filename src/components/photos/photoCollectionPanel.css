@@ -2,3 +2,6 @@
 .photo-append-override { position: absolute; top: 6px; left: 6px; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #bdc8d4; border-radius: 4px; background: #fffffff5; color: #536579; box-shadow: 0 1px 3px #17202c22; }
 .photo-append-override:hover { border-color: var(--gmi-interactive); }
 [data-append-status='override'] .photo-append-badge, .photo-append-override[aria-pressed='true'] { border-color: #8bbea0; background: #eef9f1f5; color: #245d41; }
+.photo-reconciliation-counts { display: grid; gap: 6px; margin: 12px 0; }
+.photo-reconciliation-counts > div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--gmi-border); padding-bottom: 4px; }
+.photo-reconciliation-counts dd { font-weight: 600; }

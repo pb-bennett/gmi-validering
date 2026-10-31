@@ -7,6 +7,7 @@ import { GMIParser } from '@/lib/parsing/gmiParser';
 import { SOSIParser } from '@/lib/parsing/sosiParser';
 import { KOFParser } from '@/lib/parsing/kofParser';
 import { decodeGmiBytes } from '@/lib/parsing/gmiDecoding';
+import { createGmiPhotoSource } from '@/lib/photos/gmiPhotoSource.mjs';
 import {
   classifyCrs,
 } from '@/lib/telemetry/classifiers.mjs';
@@ -94,7 +95,7 @@ export function useFileLoader({ onComplete } = {}) {
       if (!file) return;
 
       const ext = (file.name || '').toLowerCase().split('.').pop();
-      const preferArrayBuffer = ext === 'sos' || ext === 'sosi';
+      const preferArrayBuffer = ext !== 'kof';
 
       // Update file metadata in store
       setFile({
@@ -135,6 +136,7 @@ export function useFileLoader({ onComplete } = {}) {
           });
 
           let parsedData;
+          let gmiPhotoEvidence = null;
           if (format === 'SOSI') {
             // Pass raw bytes so sosijs can detect and decode charset correctly.
             const parser = new SOSIParser(
@@ -155,6 +157,7 @@ export function useFileLoader({ onComplete } = {}) {
                 : content;
             const parser = new GMIParser(gmiText);
             parsedData = parser.toObject();
+            if (!parser.errors.length) gmiPhotoEvidence = createGmiPhotoSource(parser);
           }
 
           if (parsedData?.errors?.length > 0) {
@@ -213,7 +216,8 @@ export function useFileLoader({ onComplete } = {}) {
           };
 
           // Always use layer system - add file as a new layer
-          addLayer({ file: fileMeta, data: parsedDataForApp });
+          addLayer({ file: fileMeta, data: parsedDataForApp,
+            sourceInput: gmiPhotoEvidence ? { file, evidence: gmiPhotoEvidence } : null });
 
           // Also set legacy data/file state for backward compatibility
           setFile(fileMeta);
@@ -293,7 +297,7 @@ export function useFileLoader({ onComplete } = {}) {
         );
       };
 
-      // GMI files are typically text/latin1 or utf8, but let's assume text
+      // Decode GMI from its actual bytes with the shared production decoder.
       if (preferArrayBuffer) {
         reader.readAsArrayBuffer(file);
       } else {

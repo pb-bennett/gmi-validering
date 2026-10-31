@@ -13,6 +13,7 @@ export default function PhotoGmiSummary({ source, ledger = source.associationLed
   const summary = ledger.summary;
   return <div className="photo-gmi-summary">
     <p className="photo-gmi-filename">GMI-fil: {source.filename}</p>
+    {source.loadedBinding && <p>{source.loadedBinding.live ? 'Koblet til lastet GMI-lag.' : 'Det opprinnelige GMI-laget er ikke lenger tilgjengelig. Lagrede koblinger og bildeposisjoner beholdes.'}</p>}
     {gmiRepeatedPhotoReferences(source, ledger).map((group) => <p key={group.assetId} className="photo-repeat-warning" role="status">
       <strong>Gjentas</strong> · {group.references[0]?.filename} er referert fra {group.count} GMI-objekter.
       {' '}{group.objects.filter((object) => object.geometryScope === 'point').length} punktplasseringer. Linjer gir bare koblinger.
@@ -34,6 +35,7 @@ export default function PhotoGmiSummary({ source, ledger = source.associationLed
           {row.method && <small>{methods[row.method] || row.method}</small>}
           {row.reason === 'directory-target' && <p>Målet er en mappe uten filnavn.</p>}
           {row.reason === 'non-image-target' && <p>Målet er ikke en støttet bildefil.</p>}
+          {row.reason === 'unsafe-reference' && <p>Referansen har ekstern adresse eller utrygg sti og brukes ikke.</p>}
           {row.status === 'ambiguous' && <p>{row.photoIds.length} mulige bilder i laget. Ingen kobling er valgt.</p>}
           {row.status === 'unmatched' && <p>Ingen treff i dette FOTO-laget.</p>}
         </li>;

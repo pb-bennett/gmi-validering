@@ -3,6 +3,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import useStore from '@/lib/store';
 import LayerTypeBadge from './LayerTypeBadge';
+import { isLoadedGmiSurveyLayer, loadedGmiSources } from '@/lib/photos/loadedGmiSource.mjs';
 import fieldsData from '@/data/fields.json';
 import { formatStatusChoice } from '@/lib/statusDomain.mjs';
 import { analyzeIncline } from '@/lib/analysis/incline';
@@ -1137,7 +1138,7 @@ function LayerFeltSection({
  * Shows layer name, visibility toggle, and
  * expandable sections for Tema and Felt filtering plus analysis buttons.
  */
-export default function LayerPanel({ layerId, codeLookups }) {
+export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
   const layer = useStore((state) => state.layers[layerId]);
   const expandedLayerId = useStore(
     (state) => state.ui.expandedLayerId,
@@ -1298,6 +1299,12 @@ export default function LayerPanel({ layerId, codeLookups }) {
           </div>
         </div>
 
+        {isLoadedGmiSurveyLayer(layer) && <div className="px-3 pb-2">
+          <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs"
+            disabled={!onAddGmiPhotos || !loadedGmiSources.available(layerId)}
+            title={loadedGmiSources.available(layerId) ? 'Velg bilder til referansene i dette GMI-laget' : 'Originalkilden er ikke tilgjengelig i denne ?kten. Last GMI-filen inn p? nytt.'}
+            aria-label={`Legg til bilder fra ${layer.name}`} onClick={(event) => onAddGmiPhotos?.(layerId, event)}>Legg til bilder</button>
+        </div>}
         {showRemoveConfirm && (
           <div className="fixed inset-0 z-10002 flex items-center justify-center bg-gmi-ink/50 p-4">
             <div className="w-full max-w-sm rounded-xl border border-gmi-border bg-gmi-surface shadow-xl">

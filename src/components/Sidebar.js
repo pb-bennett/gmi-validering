@@ -705,7 +705,7 @@ function FieldSubSection({
   );
 }
 
-export default function Sidebar({ onReset, onAddFile, onOpenContact, onOpenPhotoLayer, onOpenGemini, hasPhotoLayers, width, onWidthChange }) {
+export default function Sidebar({ onReset, onAddFile, onOpenContact, onOpenPhotoLayer, onAddGmiPhotos, onOpenGemini, hasPhotoLayers, width, onWidthChange }) {
   const file = useStore((state) => state.file);
   const data = useStore((state) => state.data);
   const layerOrder = useStore((state) => state.layerOrder);
@@ -1072,7 +1072,7 @@ export default function Sidebar({ onReset, onAddFile, onOpenContact, onOpenPhoto
       {isMultiLayerMode ? (
         /* Multi-layer mode: show LayerManager */
         <div className="min-h-0 flex-1">
-          <LayerManager onAddFile={onAddFile} onOpenPhotoLayer={onOpenPhotoLayer} onOpenGemini={onOpenGemini} />
+          <LayerManager onAddFile={onAddFile} onOpenPhotoLayer={onOpenPhotoLayer} onAddGmiPhotos={onAddGmiPhotos} onOpenGemini={onOpenGemini} />
         </div>
       ) : (
         /* Legacy single-file mode */
