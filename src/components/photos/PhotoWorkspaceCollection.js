@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- Session thumbnail Blob URLs are already derived and browser-owned. */
 import { useEffect, useRef, useState } from 'react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
+import { PhotoMetadataBatch } from './PhotoMetadataEditor';
 import PhotoGmlSummary from './PhotoGmlSummary';
 import PhotoGmiSummary from './PhotoGmiSummary';
 import PhotoOccurrenceContext from './PhotoOccurrenceContext';
@@ -61,6 +62,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
       }}>Fjern hele bildet med alle plasseringer</button>}
       </div>}
     </div>
+    <PhotoMetadataBatch photos={photos} selectedIds={selectedIds} layerId={layer.id} />
     <ul className="photo-workspace-list" aria-label="Bilder i fotokartlaget">
       {shown.map((photo) => <li key={photo.id} data-photo-id={photo.id} className={photo.id === workspace.activePhotoId ? 'photo-workspace-active' : ''}>
         <input type="checkbox" aria-label={`Velg ${photo.originalFilename}`} checked={selectedIds.includes(photo.id)} onChange={() => dispatch({ type: 'toggle', photoId: photo.id })} />

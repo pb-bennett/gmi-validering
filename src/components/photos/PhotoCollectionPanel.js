@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowsOutIcon, CheckIcon, PlusIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPreviewMessage } from '@/lib/photos/imagePreview.mjs';
+import PhotoMetadataEditor from './PhotoMetadataEditor';
 import PhotoSpatialInspector from './PhotoSpatialInspector';
 import PhotoImageViewer from './PhotoImageViewer';
 import './photoCollectionPanel.css';
@@ -128,6 +129,7 @@ export function SelectedPhotoInspector({ photo, layerId, onLocate, proposedEntry
           <div><dt>Sist endret</dt><dd>{new Date(photo.lastModified).toLocaleString('nb-NO')}</dd></div>
         </dl>
       )}
+      {photo && <PhotoMetadataEditor photo={photo} layerId={layerId} />}
       {photo && <PhotoSpatialInspector photo={photo} layerId={layerId} onLocate={onLocate} proposedEntry={proposedEntry} manualPlacement={manualPlacement} directionEditor={directionEditor} onOpenSources={onOpenSources} />}
       {largeImageUrl && photo?.dimensions && <PhotoImageViewer src={largeImageUrl} filename={photo.originalFilename}
         dimensions={photo.dimensions} onClose={() => setLargeImageUrl(null)} />}

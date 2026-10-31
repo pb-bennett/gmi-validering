@@ -1,3 +1,4 @@
+import { emptyCaptureMetadata, normalizeCaptureTime, normalizePhotographer, gmlCaptureEvidence } from './photoCaptureMetadata.mjs';
 import { classifyPhotoFile, createPhotoThumbnail } from './imagePreview.mjs';
 import { readExifGps } from './exifGps.mjs';
 import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, emptySpatial, immutable, isPhotoPosition, photoSpatialCounts } from './photoSpatial.mjs';
@@ -78,7 +79,7 @@ export function createPhotoSession({
   const assetPhotos = (ids) => assetIds(ids).map((id) => ({ ...assets.get(id), id }));
   const fileFor = (id) => assets.get(records.get(id)?.assetId)?.file || null;
   function makeOccurrence(assetId, id = assetId, occurrence = null) {
-    const { file: _file, spatial, ...metadata } = assets.get(assetId);
+    const { file: _file, spatial, captureMetadata: _capture, metadataEvidence: _evidence, ...metadata } = assets.get(assetId);
     return { ...metadata, id, assetId, occurrence, spatial: Object.freeze({ ...spatial, current: null }), direction: emptyDirection() };
   }
   function updateAsset(assetId, patch, jobGeneration = generation) {
@@ -88,7 +89,7 @@ export function createPhotoSession({
     assets.set(assetId, updated);
     for (const [id, record] of records) {
       if (record.assetId !== assetId) continue;
-      const { file: _file, spatial: shared, ...metadata } = updated;
+      const { file: _file, spatial: shared, captureMetadata: _capture, metadataEvidence: _evidence, ...metadata } = updated;
       const local = record.spatial.candidates.filter((candidate) => candidate.kind === 'gmi');
       const candidates = [...shared.candidates, ...local];
       const same = record.spatial.exifRead === shared.exifRead && candidates.length === record.spatial.candidates.length
@@ -128,7 +129,7 @@ export function createPhotoSession({
       updateAsset(match.photoId, (live) => {
         if (live.spatial.candidates.some((item) => item.sourceId === source.id && item.sourceEntryId === entry.id)) return {};
         const spatial = Object.freeze({ ...live.spatial, candidates: Object.freeze([...live.spatial.candidates, candidate]) });
-        return { spatial };
+        return { spatial, metadataEvidence: immutable([...live.metadataEvidence, ...gmlCaptureEvidence(source, entry)]) };
       });
     }
     return immutable({ ...source, ledger });
@@ -164,7 +165,7 @@ export function createPhotoSession({
     const layer = [...layers.values()].find((item) => item.photoIds.includes(photo.id));
     const peers = layer ? layer.photoIds.map((id) => records.get(id)).filter((item) => item.assetId === photo.assetId) : [photo];
     const links = layer ? gmiPhotoAssociations(layer, photo.id) : [];
-    return Object.freeze({ ...photo, repeatGroup: Object.freeze({ assetId: photo.assetId,
+    return Object.freeze({ ...photo, captureMetadata: assets.get(photo.assetId).captureMetadata, metadataEvidence: assets.get(photo.assetId).metadataEvidence, repeatGroup: Object.freeze({ assetId: photo.assetId,
       occurrenceCount: peers.length, occurrenceIndex: peers.findIndex((item) => item.id === photo.id) + 1,
       pointObjectCount: links.filter((link) => link.object.geometryScope === 'point').length,
       referringObjectCount: links.length, repeated: links.length > 1 || peers.length > 1 }) });
@@ -258,6 +259,7 @@ export function createPhotoSession({
         try { result = await extractGps(record.file); }
         catch { result = { state: 'error', errorCode: 'gps-read-failed', candidate: null }; }
         if (!token.cancelled && updateAsset(job.id, (live) => ({
+          metadataEvidence: immutable([...live.metadataEvidence.filter((item) => item.kind !== 'exif'), ...(result.metadataEvidence || [])]),
           spatial: Object.freeze({
             ...live.spatial,
             exifRead: immutable({ state: result.state, errorCode: result.errorCode }),
@@ -601,6 +603,29 @@ export function createPhotoSession({
       publish();
       return { ok: true };
     },
+    // Owner-scoped, deduplicated asset writes. Stale occurrences are ignored;
+    // invalid values and stale evidence fail before any write.
+    setCaptureMetadata(layerId, photoIds, field, input, { evidenceId = null } = {}) {
+      if (!['captureTime', 'photographer'].includes(field)) return { ok: false, error: 'invalid-field', assetIds: [] };
+      const members = layerId ? layers.get(layerId)?.photoIds || [] : importIds;
+      const ids = assetIds(photoIds.filter((id) => members.includes(id)));
+      const changes = [];
+      for (const assetId of ids) {
+        const asset = assets.get(assetId);
+        const evidence = evidenceId ? asset.metadataEvidence.find((item) => item.id === evidenceId && item.field === field) : null;
+        const value = evidenceId ? evidence?.value : input === null ? null
+          : field === 'captureTime' ? normalizeCaptureTime(input) : normalizePhotographer(input);
+        if ((evidenceId && !value) || (input !== null && !evidenceId && !value)) return { ok: false, error: 'invalid-value', assetIds: [] };
+        const accepted = value === null ? null : immutable({ value, provenance: evidence
+          ? { kind: evidence.kind, evidenceId: evidence.id, sourceId: evidence.sourceId || null,
+            sourceFilename: evidence.sourceFilename || null, sourceEntryId: evidence.sourceEntryId || null, tag: evidence.tag || null, raw: evidence.raw }
+          : { kind: 'manual' }, acceptedAt: Date.now() });
+        changes.push([assetId, accepted]);
+      }
+      for (const [assetId, accepted] of changes) updateAsset(assetId, (asset) => ({ captureMetadata: immutable({ ...asset.captureMetadata, [field]: accepted }) }));
+      if (changes.length) publish();
+      return { ok: true, assetIds: ids };
+    },
     getFile: fileFor,
     getAssetFile: (assetId) => assets.get(assetId)?.file || null,
     getPhoto: (id) => records.has(id) ? publicPhoto(records.get(id)) : null,
@@ -815,7 +840,7 @@ export function createPhotoSession({
         assets.set(id, {
           file, originalFilename: file.name, mimeType: file.type || null,
           size: file.size, lastModified: file.lastModified, importedAt: Date.now(), source: 'local-file',
-          dimensions: null,
+          dimensions: null, captureMetadata: emptyCaptureMetadata(), metadataEvidence: immutable([]),
           sourceRelativePath: file.webkitRelativePath || null,
           spatial: emptySpatial(),
           preview: Object.freeze({ state: errorCode ? 'error' : 'pending', thumbnailUrl: null, errorCode }),

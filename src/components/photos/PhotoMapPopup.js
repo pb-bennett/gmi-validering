@@ -13,7 +13,8 @@ export default function PhotoMapPopup({ photo, onOpen }) {
     <PhotoOccurrenceContext occurrence={photo.occurrence} count={photo.repeatGroup?.occurrenceCount} index={photo.repeatGroup?.occurrenceIndex} objectCount={photo.repeatGroup?.referringObjectCount} compact />
     <p>{photo.spatial.current ? `Plassert · ${photoCurrentSource(photo)}` : 'Uplassert'}</p>
     {photo.dimensions && <p>{photo.dimensions.width} × {photo.dimensions.height} px</p>}
-    {captureTime && <p>Fotografert (GML): {captureTime}</p>}
+    {captureTime && <p>Godtatt opptakstid: {captureTime}</p>}
+    {photo.captureMetadata?.photographer && <p>Fotograf: {photo.captureMetadata.photographer.value}</p>}
     <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1" onClick={onOpen}>Åpne i bildemodul</button>
   </div>;
 }

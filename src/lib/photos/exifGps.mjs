@@ -1,8 +1,9 @@
+import { exifCaptureEvidence } from './photoCaptureMetadata.mjs';
 import { immutable } from './photoSpatial.mjs';
 
 const TAGS = ['GPSLatitude', 'GPSLatitudeRef', 'GPSLongitude', 'GPSLongitudeRef', 'GPSMapDatum', 'GPSAltitude', 'GPSAltitudeRef', 'GPSDOP', 'GPSHPositioningError'];
 const OPTIONS = {
-  tiff: true, ifd0: { pick: [0x8825] }, ifd1: false, exif: false, gps: { pick: TAGS },
+  tiff: true, ifd0: { pick: [0x8825, 0x8769, 'Artist'] }, ifd1: false, exif: { pick: ['DateTimeOriginal', 'SubSecTimeOriginal', 'OffsetTimeOriginal'] }, gps: { pick: TAGS },
   xmp: false, icc: false, iptc: false, jfif: false, ihdr: false,
   makerNote: false, userComment: false, interop: false,
   translateKeys: true, translateValues: false, reviveValues: false,
@@ -47,7 +48,8 @@ export async function readExifGps(file, { parse } = {}) {
       return immutable({ state: supportedName ? 'error' : 'unsupported-format', errorCode: supportedName ? 'invalid-image-header' : 'unsupported-gps-format', candidate: null });
     }
     const reader = parse || (await import('exifr/dist/full.esm.mjs')).parse;
-    return normalizeExifGps(await reader(file, OPTIONS));
+    const tags = await reader(file, OPTIONS) || {};
+    return immutable({ ...normalizeExifGps(tags), metadataEvidence: exifCaptureEvidence(tags) });
   } catch {
     return immutable({ state: 'error', errorCode: 'gps-read-failed', candidate: null });
   }

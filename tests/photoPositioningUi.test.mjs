@@ -31,7 +31,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
     await Promise.all(photos.map((file) => writeFile(file, gpsPng())));
     await writeFile(gmi, Buffer.from(await gmiFile([{ hyperlink: 'h:1(link:"a.png") h:2(link:"b.png") ' },
       { hyperlink: 'h:1(link:"a.png") h:2(link:"missing.png") ' }]).arrayBuffer()));
-    await writeFile(gml, `<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy>${names.slice(0, 2).map((name, index) => `<gml:featureMember><app:Skråfoto gml:id="photo-${index}"><app:fotolink>${name}</app:fotolink><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>581930 6566000 0</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember>`).join('')}</gml:FeatureCollection>`);
+    await writeFile(gml, `<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy>${names.slice(0, 2).map((name, index) => `<gml:featureMember><app:Skråfoto gml:id="photo-${index}"><app:fotolink>${name}</app:fotolink><app:fotograferingstidspunkt>2026-05-12T14:33:02</app:fotograferingstidspunkt><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>581930 6566000 0</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember>`).join('')}</gml:FeatureCollection>`);
     try {
       await start(browser);
       await click(browser, 'Bilder', 'document');
@@ -98,6 +98,11 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert(!await browser.evaluate(`Array.from(${spatial}.querySelectorAll('button')).some(button=>/^Bruk (EXIF|GML)-posisjon/.test(button.innerText))`));
       await selectPhoto(browser, 'b.png');
       assert(await browser.evaluate(`${spatial}.innerText.includes('Gjeldende posisjon (GML)')`));
+      assert(await browser.evaluate(`document.querySelector('[data-accepted-metadata=captureTime]').textContent.includes('Ukjent')`));
+      await browser.evaluate(`document.querySelector('section[aria-label="Opptaksmetadata"] details').open=true`);
+      await click(browser, 'Bruk GML som opptakstid', 'document');
+      assert(await browser.evaluate(`document.querySelector('[data-accepted-metadata=captureTime]').textContent.includes('2026-05-12T14:33:02 (GML)')`));
+
       await selectPhoto(browser, 'c.png');
       assert(await browser.evaluate(`${spatial}.innerText.includes('Gjeldende posisjon (Manuell)')`));
 

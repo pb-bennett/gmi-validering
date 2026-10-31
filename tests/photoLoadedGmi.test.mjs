@@ -129,6 +129,7 @@ test('append/recheck reuses existing assets, preserves manual current/direction 
   assert.equal(result.layer.assetCount, 2); assert.equal(result.layer.photoCount, 3);
   assert.equal(env.session.getFile(duplicate), null);
   assert.strictEqual(env.session.getPhoto(id).spatial.current, before.spatial.current);
+  assert.strictEqual(env.session.getPhoto(id).captureMetadata, before.captureMetadata);
   assert.strictEqual(env.session.getPhoto(id).direction, before.direction);
   assert.equal(result.layer.spatialSources.length, 1);
   await env.begin(result.layer.id);
@@ -178,12 +179,17 @@ test('cancel during source read or thumbnail/EXIF work releases draft and late w
 
 test('successful source survives survey removal with accurate detached binding and unchanged current/original', async () => {
   const env = await setup(); await env.begin(); const [id] = env.session.importFiles([image('a.png')]).acceptedIds;
+  env.session.setCaptureMetadata(null, [id], 'photographer', 'Retained');
+  env.session.setCaptureMetadata(null, [id], 'captureTime', '2026-05-12');
+  const draftMetadata = env.session.getPhoto(id).captureMetadata;
   const result = env.session.applyLoadedGmiImport(env.session.reviewLoadedGmiImport());
+  assert.strictEqual(env.session.getPhoto(id).captureMetadata, draftMetadata);
   env.session.applyManualPlacement(env.session.beginManualPlacement(result.layer.id, id), { crs: 'EPSG:4326', longitude: 10, latitude: 60 });
   const before = env.session.getPhoto(id), file = env.session.getFile(id);
   env.surveyLayers.delete('survey'); env.reconcile();
   assert.equal(env.session.getLayer(result.layer.id).spatialSources[0].loadedBinding.live, false);
   assert.strictEqual(env.session.getPhoto(id).spatial.current, before.spatial.current);
+  assert.strictEqual(env.session.getPhoto(id).captureMetadata, before.captureMetadata);
   assert.strictEqual(env.session.getFile(id), file);
   assert.equal(env.session.getGmiPhotoAssociations(result.layer.id, id).length, 1);
   env.session.clear();

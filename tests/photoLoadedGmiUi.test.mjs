@@ -18,7 +18,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
   { skip: !chromePath || !app, timeout: 240000 }, async (t) => {
     const root = path.resolve(tmpdir()), directory = await mkdtemp(path.join(root, 'photo-loaded-gmi-ui-'));
     const source = path.join(directory, 'Synthetic delivery.gmi');
-    const bytes = gpsPng().toString('base64');
+    const bytes = gpsPng({ captureTime: '2026:05:12 14:33:02', artist: 'Synthetic Artist' }).toString('base64');
     await writeFile(source, Buffer.from(gmiText([linked('A/a.png'), linked('A/a.png'), linked('B/a.png'), linked('dup.png'),
       linked('absent.png'), linked('../unsafe.png'), linked('flat.png'), linked('line.png', { scope: 'line' })]), 'latin1'));
     const browser = await openTestChrome();
@@ -110,6 +110,41 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
       await click(browser, 'Behold alle gjeldende'); await click(browser, 'Foreslå GMI for viste'); await click(browser, 'Neste');
       await click(browser, 'Bruk valgte posisjoner for 4 plasseringer');
       await browser.waitFor(`!${sourceWizard} && document.querySelectorAll('.photo-camera-marker').length===4`);
+      await t.test('canonical metadata: manual, adopt, clear, deduplicated batch and shared repeated occurrences', async () => {
+        const inspector = `document.querySelector('.photo-workspace-inspector')`;
+        const setValue = async (label, value) => browser.evaluate(`(() => {
+          const input=document.querySelector('input[aria-label="${label}"]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});
+          input.dispatchEvent(new Event('input',{bubbles:true}));
+        })()`);
+        const accepted = (field, value) => browser.waitFor(`${inspector}.querySelector('[data-accepted-metadata="${field}"]').textContent.includes(${JSON.stringify(value)})`);
+        const rows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li')).filter(li=>li.querySelector('button')?.getAttribute('aria-label')==='Vis a.png' && li.innerText.includes('Flere plasseringer')).map(li=>li.dataset.photoId)`);
+        await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[0]}"] button').click()`);
+        await accepted('captureTime', 'Ukjent');
+        await setValue('Fotograf', 'Manual Artist'); await click(browser, 'Lagre fotograf', inspector);
+        await accepted('photographer', 'Manual Artist');
+        await setValue('Opptakstid', '2026-06-01T10:20:30+02:00'); await click(browser, 'Lagre opptakstid', inspector);
+        await accepted('captureTime', '2026-06-01T10:20:30+02:00');
+        await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] button').click()`);
+        await accepted('photographer', 'Manual Artist'); await accepted('captureTime', '2026-06-01T10:20:30+02:00');
+        await browser.evaluate(`document.querySelector('section[aria-label="Opptaksmetadata"]').querySelectorAll('details').forEach(d=>d.open=true)`);
+        await click(browser, 'Bruk EXIF som opptakstid', inspector); await accepted('captureTime', '2026-05-12T14:33:02 (EXIF)');
+        await click(browser, 'Bruk EXIF som fotograf', inspector); await accepted('photographer', 'Synthetic Artist (EXIF)');
+        await click(browser, 'Nullstill opptakstid', inspector); await accepted('captureTime', 'Ukjent');
+        await click(browser, 'Nullstill fotograf', inspector); await accepted('photographer', 'Ukjent');
+        await click(browser, 'Velg alle viste', 'document');
+        await browser.waitFor(`document.querySelector('details[aria-label="Felles opptaksmetadata"]')?.textContent.includes('7 unike bilder')`);
+        await browser.evaluate(`document.querySelector('details[aria-label="Felles opptaksmetadata"]').open=true`);
+        await setValue('Felles fotograf', 'Batch Artist'); await click(browser, 'Sett fotograf for valgte bilder', 'document');
+        await setValue('Felles opptakstid', '2026-07-02T11:12:13'); await click(browser, 'Sett opptakstid for valgte bilder', 'document');
+        const allRows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(li=>li.dataset.photoId)`);
+        for (const id of allRows) {
+          await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').click()`);
+          await accepted('photographer', 'Batch Artist'); await accepted('captureTime', '2026-07-02T11:12:13');
+        }
+        await click(browser, 'Fjern valg', 'document');
+        assert.equal(await browser.evaluate('photoWfsCalls'), 2);
+      });
       await t.test('repeated image occurrences select independently with one original URL; current GMI inspector, preview and panes remain', async () => {
         const rows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li')).filter(li=>li.querySelector('button')?.getAttribute('aria-label')==='Vis a.png' && li.innerText.includes('Flere plasseringer')).map(li=>li.dataset.photoId)`);
         assert.equal(rows.length, 2);
@@ -134,6 +169,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 8);
         assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'), 4);
         assert.equal(await browser.evaluate('photoWfsCalls'), 2);
+        assert(await browser.evaluate(`document.querySelector('[data-accepted-metadata=photographer]').textContent.includes('Batch Artist')`));
       });
       await t.test('ordinary Bilder import still works independently and does not fetch WFS', async () => {
         await click(browser, 'Tilbake til appen', 'document'); await click(browser, 'Bilder', 'document');
