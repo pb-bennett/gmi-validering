@@ -68,7 +68,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await browser.waitFor(`${markerCount} === 148`);
     checks.push('visibility hides/shows all markers without unmounting map or changing counts');
 
-    const markerTitle = await browser.evaluate('document.querySelector(".photo-camera-marker").title.replace(/^Vis bilde: /, "")');
+    const markerTitle = await browser.evaluate('document.querySelector(".photo-camera-marker").title.replace(/^Vis bilde: /, "").split(" · ")[0]');
     await browser.evaluate('document.querySelector(".photo-camera-marker").focus()');
     await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
     await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });

@@ -206,7 +206,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
               .filter(({box}) => box.left > map.left && box.right < map.right && box.top > map.top && box.bottom < map.bottom);
             markers.sort((a,b) => markers.filter(c => Math.hypot(c.box.x-b.box.x,c.box.y-b.box.y) < 30).length
               - markers.filter(c => Math.hypot(c.box.x-a.box.x,c.box.y-a.box.y) < 30).length);
-            const marker = markers[0].marker; marker.click(); return marker.title.replace(/^Vis bilde: /,'');
+            const marker = markers[0].marker; marker.click(); return marker.title.replace(/^Vis bilde: /,'').split(' · ')[0];
           })()`);
           await browser.waitFor(`${inspector}.querySelector('h3').innerText === ${JSON.stringify(densePhoto)}`);
           await browser.waitFor(`document.querySelector('.photo-camera-marker-selected').title.includes(${JSON.stringify(densePhoto)})`);
@@ -217,13 +217,13 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       }
       await assertWorkspaceLayout(1024, 620); await screenshot('photo-workspace-short'); await checkImageViewer('short');
       await assertWorkspaceLayout(390, 700); await screenshot('photo-workspace-narrow'); await checkImageViewer('narrow'); await assertWorkspaceLayout(1680, 900);
-      const clickedWorkspacePhoto = await browser.evaluate(`(() => { const marker = document.querySelectorAll('.photo-camera-marker')[3]; marker.click(); return marker.title.replace(/^Vis bilde: /, ''); })()`);
+      const clickedWorkspacePhoto = await browser.evaluate(`(() => { const marker = document.querySelectorAll('.photo-camera-marker')[3]; marker.click(); return marker.title.replace(/^Vis bilde: /, '').split(' · ')[0]; })()`);
       await browser.waitFor(`${inspector}.querySelector('h3').innerText === ${JSON.stringify(clickedWorkspacePhoto)}`);
       assert(!await browser.evaluate('Boolean(document.querySelector(".photo-map-popup"))'));
       checks.push('layer-card entry, 148 collection records, active/batch independence, selected marker, provenance and one live original URL');
       await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       assert.equal(await browser.evaluate(originalCount), 0);
-      const markerTitle = await browser.evaluate('document.querySelector(".photo-camera-marker").title.replace(/^Vis bilde: /, "")');
+      const markerTitle = await browser.evaluate('document.querySelector(".photo-camera-marker").title.replace(/^Vis bilde: /, "").split(" · ")[0]');
       const originalsBeforePopup = await browser.evaluate('window.__photoUrlAudit.originalCreated');
       await browser.evaluate('document.querySelector(".photo-camera-marker").focus()');
       await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });

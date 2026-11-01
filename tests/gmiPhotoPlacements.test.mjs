@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { buildPhotoMapFeatures } from '../src/lib/photos/photoMapFeatures.mjs';
+import { photoPositionSourceKind, photoPositionSourcePresentation } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { gmiFile, gmiText, realGrammarFamilies, sevenGuid, sharedFilename, sharedGuids } from './helpers/gmiPhotoFixtures.mjs';
 import { gmiPointPosition, parseGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
 import { projectCoordinateToWgs84 } from '../src/lib/map/coordinateProjection.js';
@@ -42,6 +43,28 @@ function apply(context, ticket, kind = 'gmi') {
   assert(session.applySourceWorkflowPositions(ticket, plan, requests).ok);
   return plan;
 }
+
+test('shared original occurrences keep independent marker colors through move cancellation, manual commit and GMI replacement', async () => {
+  const context = await setup(), { session, layer, files } = context;
+  const ticket = await save(context, gmiFile(objects(2)));
+  apply(context, ticket);
+  const [a, b] = session.getLayerPhotos(layer.id);
+  assert.equal(a.assetId, b.assetId);
+  assert.strictEqual(session.getFile(a.id), files[0]);
+  assert.strictEqual(session.getFile(b.id), files[0]);
+  const presentation = (id) => photoPositionSourcePresentation(photoPositionSourceKind(session.getPhoto(id)));
+  const before = presentation(b.id);
+  session.cancelManualPlacement(session.beginManualPlacement(layer.id, b.id));
+  assert.strictEqual(presentation(b.id), before, 'cancel retains the accepted source and color');
+  assert(session.applyManualPlacement(session.beginManualPlacement(layer.id, b.id), point(12)).ok);
+  assert.equal(presentation(a.id).kind, 'gmi');
+  assert.equal(presentation(b.id).kind, 'manual');
+  assert.notEqual(presentation(a.id).color, presentation(b.id).color);
+  assert.equal(buildPhotoMapFeatures([session.getLayer(layer.id)], session.getLayerPhotos).length, 2);
+  session.acceptCandidates(layer.id, [{ photoId: b.id, candidateId: session.getPhoto(b.id).spatial.candidates.find((candidate) => candidate.kind === 'gmi').id }]);
+  assert.strictEqual(presentation(b.id), presentation(a.id), 'explicit replacement restores GMI presentation');
+  session.clear();
+});
 
 for (const count of [1, 2, 3, 7, 20, 30]) test(`${count} distinct point references produce ${count} occurrences, shared asset and distinct marker IDs only after explicit apply`, async () => {
   const context = await setup(), { session, layer, files, created } = context;

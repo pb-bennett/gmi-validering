@@ -167,6 +167,8 @@ test('FOTO direction: native slider, N/E/S/W geometry, explicit transactions, so
       assert(await browser.evaluate(`Array.from(${editor}.querySelectorAll('button')).find(e=>e.innerText==='Bruk retning').disabled`));
       await number(90); await browser.evaluate(`${editor}.querySelector('input[type=range]').focus()`);
       await key('Escape',27); await browser.waitFor(`!${editor}`); await assertHeading(90, false);
+      // Leaflet clips off-screen polylines. Focus pans the accepted marker into view before checking connector endpoints.
+      await browser.evaluate('document.querySelector(".photo-camera-marker-selected").focus()'); await settle();
       // Both transaction starts discard the other proposal.
       await begin(); await number(180); await click('Flytt på kartet'); await browser.waitFor('document.querySelector(".photo-placement-active")');
       assert.equal(await browser.evaluate(editor), null); await assertHeading(90, false);

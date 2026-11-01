@@ -42,9 +42,8 @@
 .photo-collection-inspector:has(.photo-spatial-inspector) .photo-collection-facts { max-height: none; overflow: visible; }
 .photo-spatial-inspector { flex: none; padding-top: 0.5rem; border-top: 1px solid var(--gmi-border); }
 .photo-gml-details { max-height: 6rem; overflow: auto; }
-.photo-camera-marker { color: #315f7c; background: transparent; border: 0; display: grid; place-items: center; }
+.photo-camera-marker { background: transparent; border: 0; display: grid; place-items: center; }
 .photo-camera-marker svg { overflow: visible; filter: drop-shadow(0 1px 1px #15233544); }
-.photo-camera-marker-selected { color: #075e9a; }
 .photo-camera-marker-selected svg { filter: drop-shadow(0 1px 2px #15233566); }
 /* Center children explicitly: Leaflet can load its display:block marker rule later. */
 .photo-camera-marker .photo-camera-glyph, .photo-camera-marker .photo-direction-indicator { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
