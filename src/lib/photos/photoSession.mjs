@@ -5,6 +5,7 @@ import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, 
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
 import { acceptManualPhotoDirection, acceptEvidencePhotoDirection, emptyDirection } from './photoDirection.mjs';
 import { planEvidenceAdoption } from './photoEvidenceAdoption.mjs';
+import { MANUAL_FILL_FIELDS, normalizeManualPhotoFill, planManualPhotoFill } from './photoManualFill.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
@@ -627,6 +628,30 @@ export function createPhotoSession({
       for (const [assetId, accepted] of changes) updateAsset(assetId, (asset) => ({ captureMetadata: immutable({ ...asset.captureMetadata, [field]: accepted }) }));
       if (changes.length) publish();
       return { ok: true, assetIds: ids };
+    },
+    fillMissingPhotoValues(layerId, field, input, photoIds = null) {
+      if (!MANUAL_FILL_FIELDS.includes(field)) return { ok: false, error: 'invalid-field' };
+      const members = layers.get(layerId)?.photoIds || [];
+      const photos = members.map((id) => {
+        const record = records.get(id);
+        return { ...record, captureMetadata: assets.get(record.assetId).captureMetadata };
+      });
+      const plan = planManualPhotoFill(photos, field, photoIds ?? members);
+      const value = normalizeManualPhotoFill(field, input);
+      if (value === null) return { ok: false, error: 'invalid-value', ...plan, counts: { ...plan.counts, adopted: 0, invalidInput: 1 } };
+      const acceptedAt = Date.now();
+      for (const target of plan.targets) {
+        if (field === 'direction') records.set(target.photoId, { ...records.get(target.photoId),
+          direction: acceptManualPhotoDirection(value, acceptedAt, { mode: 'bulk' }) });
+        else {
+          const asset = assets.get(target.assetId);
+          assets.set(target.assetId, { ...asset, captureMetadata: immutable({ ...asset.captureMetadata, [field]: {
+            value, provenance: { kind: 'manual', mode: 'bulk' }, acceptedAt,
+          } }) });
+        }
+      }
+      if (plan.targets.length) publish();
+      return { ok: true, ...plan, counts: { ...plan.counts, adopted: plan.targets.length, invalidInput: 0 } };
     },
     adoptSourceEvidence(layerId, field, kind = 'exif', photoIds = null) {
       if (!['captureTime', 'photographer', 'direction'].includes(field) || !['exif', 'gml'].includes(kind)) return { ok: false, error: 'invalid-field' };

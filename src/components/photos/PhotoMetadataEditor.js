@@ -9,22 +9,22 @@ const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-stro
 const display = (field, value) => field === 'captureTime' ? value?.iso : value;
 const sourceLabel = (kind) => ({ manual: 'Manuell', exif: 'EXIF', gml: 'GML' })[kind] || kind;
 
-function MetadataForm({ layerId, photoIds, field, label, accepted, batch = false }) {
+function MetadataForm({ layerId, photoIds, field, label, accepted }) {
   const [message, setMessage] = useState('');
   return <form className="space-y-1" onSubmit={(event) => {
     event.preventDefault();
     const result = photoSession.setCaptureMetadata(layerId, photoIds, field, new FormData(event.currentTarget).get('value'));
     setMessage(result.ok ? `${result.assetIds.length} unike bilder oppdatert.` : 'Ugyldig verdi. Bruk gyldig ISO-dato eller dato og klokkeslett.');
   }}>
-    <label className="block">{batch ? `Felles ${label.toLowerCase()}` : label}
-      <input className="block w-full border border-gmi-border-strong px-1" name="value" aria-label={batch ? `Felles ${label.toLowerCase()}` : label}
+    <label className="block">{label}
+      <input className="block w-full border border-gmi-border-strong px-1" name="value" aria-label={label}
         defaultValue={display(field, accepted?.value) || ''} placeholder={field === 'captureTime' ? '2026-05-12T14:33:02 (ev. +02:00)' : 'Navn'} required />
     </label>
     {field === 'captureTime' && <p>ISO-dato eller dato og tid. Utelat tidssone hvis ukjent.</p>}
-    <button className={control} type="submit">{batch ? `Sett ${label.toLowerCase()} for valgte bilder` : `Lagre ${label.toLowerCase()}`}</button>
-    {!batch && <button className={control} type="button" disabled={!accepted} onClick={() => {
+    <button className={control} type="submit">{`Lagre ${label.toLowerCase()}`}</button>
+    <button className={control} type="button" disabled={!accepted} onClick={() => {
       photoSession.setCaptureMetadata(layerId, photoIds, field, null); setMessage('');
-    }}>{`Nullstill ${label.toLowerCase()}`}</button>}
+    }}>{`Nullstill ${label.toLowerCase()}`}</button>
     {message && <p role="status">{message}</p>}
   </form>;
 }
@@ -56,7 +56,5 @@ export function PhotoMetadataBatch({ photos, selectedIds, layerId }) {
   if (!count) return null;
   return <details className="p-2 text-xs" aria-label="Felles opptaksmetadata"><summary>Opptaksmetadata for {count} unike bilder</summary>
     <PhotoEvidenceActions photos={photos} layerId={layerId} selectedIds={selectedIds} />
-    <p>Overskriver valgt felt for {count} unike bilder, også deres øvrige plasseringer.</p>
-    {fields.map(([field, label]) => <MetadataForm key={field} layerId={layerId} photoIds={selected.map((photo) => photo.id)} field={field} label={label} batch />)}
   </details>;
 }

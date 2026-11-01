@@ -8,10 +8,14 @@ export function normalizePhotoDirection(degrees) {
   return ((Math.round(degrees % 360) % 360) + 360) % 360;
 }
 
-export function acceptManualPhotoDirection(degrees, acceptedAt = Date.now()) {
-  const normalized = normalizePhotoDirection(degrees);
+export function normalizeExactPhotoDirection(degrees) {
+  return Number.isFinite(degrees) && degrees >= 0 && degrees <= 360 ? (degrees === 360 || degrees === 0 ? 0 : degrees) : null;
+}
+
+export function acceptManualPhotoDirection(degrees, acceptedAt = Date.now(), { mode = null } = {}) {
+  const normalized = mode === 'bulk' ? normalizeExactPhotoDirection(degrees) : normalizePhotoDirection(degrees);
   return normalized === null ? null : immutable({ current: {
-    degrees: normalized, basis: { kind: 'manual' }, acceptance: 'manual', acceptedAt,
+    degrees: normalized, basis: { kind: 'manual', ...(mode ? { mode } : {}) }, acceptance: 'manual', acceptedAt,
   } });
 }
 

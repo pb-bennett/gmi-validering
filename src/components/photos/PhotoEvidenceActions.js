@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { planEvidenceAdoption } from '@/lib/photos/photoEvidenceAdoption.mjs';
+import PhotoManualFillActions from './PhotoManualFillActions';
 
 const actions = [
   ['captureTime', 'exif', 'EXIF-tid'], ['photographer', 'exif', 'EXIF-fotograf'],
@@ -37,5 +38,6 @@ export default function PhotoEvidenceActions({ photos, layerId, selectedIds, onA
       </div>;
     })}
     {message && <p role="status">{message}</p>}
+    <PhotoManualFillActions photos={photos} layerId={layerId} selectedIds={selectedIds} onFill={onAdopt} />
   </section>;
 }

@@ -27,7 +27,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
     const folder = async () => browser.evaluate(`(() => {
       const data=Uint8Array.from(atob(${JSON.stringify(bytes)}), c=>c.charCodeAt(0)), transfer=new DataTransfer();
       for(const relative of ['A/a.png','B/a.png','X/dup.png','Y/dup.png','flat.png','line.png','extra.png']) {
-        const original=relative==='flat.png'?Uint8Array.from(atob(${JSON.stringify(unresolvedBytes)}),c=>c.charCodeAt(0)):data;
+        const original=['flat.png','line.png'].includes(relative)?Uint8Array.from(atob(${JSON.stringify(unresolvedBytes)}),c=>c.charCodeAt(0)):data;
         const file=new File([original], relative.split('/').at(-1), {type:'image/png'});
         Object.defineProperty(file,'webkitRelativePath',{value:'Delivery/'+relative}); transfer.items.add(file);
       }
@@ -113,7 +113,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
       await click(browser, 'Behold alle gjeldende'); await click(browser, 'Foreslå GMI for viste'); await click(browser, 'Neste');
       await click(browser, 'Bruk valgte posisjoner for 4 plasseringer');
       await browser.waitFor(`!${sourceWizard} && document.querySelectorAll('.photo-camera-marker').length===4`);
-      await t.test('bulk export readiness: grouped blockers, unique assets, repeated direction, preserved manual values and unresolved evidence', async () => {
+      await t.test('bulk export readiness: evidence first, manual fallback, correct ownership, preserved values and zero remaining metadata blockers', async () => {
         const scope = `document.querySelector('.photo-export-dialog')`;
         const inspector = `document.querySelector('.photo-workspace-inspector')`;
         const rows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).filter(li=>li.querySelector('button')?.getAttribute('aria-label')==='Vis a.png' && li.innerText.includes('Flere plasseringer')).map(li=>li.dataset.photoId)`);
@@ -131,14 +131,26 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await count('direction-required'),3);
         assert.equal(await browser.evaluate(`${scope}.querySelector('[data-diagnostic-code="direction-required"]').open`),false);
         assert.equal(await browser.evaluate(`${scope}.querySelector('[data-diagnostic-code="direction-required"]').querySelectorAll('li').length`),3);
-        await click(browser,'Bruk EXIF-tid for alle mulige (5)',scope);
+        assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('[data-manual-fill] input')).every(input=>input.value==='')`));
+        await click(browser,'Bruk EXIF-tid for alle mulige (4)',scope);
         assert.equal(await browser.evaluate(`Boolean(${scope}.querySelector('[aria-label="Eksportforhåndsvisning"]'))`),false);
         await preview(); assert.equal(await count('capture-time-required'),1);
-        await click(browser,'Bruk EXIF-fotograf for alle mulige (6)',scope);
-        await click(browser,'Bruk EXIF-retning for alle mulige (6)',scope);
+        await click(browser,'Bruk EXIF-fotograf for alle mulige (5)',scope);
+        await click(browser,'Bruk EXIF-retning for alle mulige (5)',scope);
         await preview(); assert.equal(await count('direction-required'),1);
         assert.equal(await count('capture-time-required'),1);
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
+        for (const [field,value] of [['captureTime','2026-09-17T10:30:02.125+02:00'],['photographer',' Fallback   Artist '],['direction','0']]) {
+          assert(await browser.evaluate(`${scope}.querySelector('[data-manual-fill="${field}"] button').textContent.includes('2 manglende')`));
+          await browser.evaluate(`(() => {const form=${scope}.querySelector('[data-manual-fill="${field}"]');form.elements.value.value=${JSON.stringify(value)};form.requestSubmit();})()`);
+          assert.equal(await browser.evaluate(`Boolean(${scope}.querySelector('[data-manual-fill="${field}"]'))`),false);
+          assert.equal(await browser.evaluate(`Boolean(${scope}.querySelector('[aria-label="Eksportforhåndsvisning"]'))`),false);
+        }
+        assert(await browser.evaluate(`${scope}.textContent.includes('Lag eksportforhåndsvisning igjen')`));
+        await preview(); assert.equal(await count('capture-time-required'),0); assert.equal(await count('direction-required'),0);
+        assert.equal(await browser.evaluate(`${scope}.querySelectorAll('[data-manual-fill]').length`),0);
+        assert.equal(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`),false);
+        assert(await browser.evaluate(`${scope}.textContent.includes('7 unike bilder i laget · 8 forekomster')`));
         await click(browser,'Lukk eksport',scope);
         await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[0]}"] button').click()`);
         assert(await browser.evaluate(`${inspector}.querySelector('[data-accepted-metadata="captureTime"]').textContent.includes('2025-01-02T01:02:03 (Manuell)')`));
@@ -173,17 +185,26 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await click(browser, 'Velg alle viste', 'document');
         await browser.waitFor(`document.querySelector('details[aria-label="Felles opptaksmetadata"]')?.textContent.includes('7 unike bilder')`);
         await browser.evaluate(`document.querySelector('details[aria-label="Felles opptaksmetadata"]').open=true`);
-        await setValue('Felles fotograf', 'Batch Artist'); await click(browser, 'Sett fotograf for valgte bilder', 'document');
-        await setValue('Felles opptakstid', '2026-07-02T11:12:13'); await click(browser, 'Sett opptakstid for valgte bilder', 'document');
         const allRows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(li=>li.dataset.photoId)`);
+        const before = {};
         for (const id of allRows) {
           await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').click()`);
-          await accepted('photographer', 'Batch Artist'); await accepted('captureTime', '2026-07-02T11:12:13');
+          before[id] = await browser.evaluate(`Object.fromEntries(Array.from(${inspector}.querySelectorAll('[data-accepted-metadata]')).map(e=>[e.dataset.acceptedMetadata,e.textContent]))`);
+        }
+        await setValue('Manuell fotograf for manglende', 'Batch Artist');
+        await click(browser, 'Bruk manuell fotograf på 1 manglende bilder', 'document');
+        await setValue('Manuell opptakstid for manglende', '2026-07-02T11:12:13');
+        await click(browser, 'Bruk manuell opptakstid på 1 manglende bilder', 'document');
+        for (const id of allRows) {
+          await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').click()`);
+          for (const [field, value] of [['photographer','Batch Artist'],['captureTime','2026-07-02T11:12:13']]) {
+            await accepted(field, before[id][field].includes('Ukjent') ? value : before[id][field]);
+          }
         }
         await click(browser, 'Fjern valg', 'document');
         assert.equal(await browser.evaluate('photoWfsCalls'), 2);
       });
-      await t.test('experimental dual export: explicit profiles, blocked legacy, truthful-context controls, shared originals and WFS isolation', async () => {
+      await t.test('experimental dual export: explicit profiles, ready Legacy, truthful-context controls, shared originals and WFS isolation', async () => {
         const scope = `document.querySelector('.photo-export-dialog')`;
         const setExport = async (label, value) => browser.evaluate(`(() => {
           const e=document.querySelector('[aria-label="${label}"]');
@@ -210,16 +231,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await browser.evaluate(`${scope}.querySelector('select[aria-label="Eksportprofil"]').value`), '');
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Lag eksportforhåndsvisning').disabled`));
         await setExport('Eksportprofil', 'legacy2019'); await preview();
-        assert(await browser.evaluate(`${scope}.textContent.includes('Legacy krever godtatt retning')`));
-        assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
-        await click(browser, 'Lukk eksport', scope);
-        const placed = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).filter(li=>Array.from(li.querySelectorAll('span')).some(s=>s.textContent==='Plassert')).map(li=>li.dataset.photoId)`);
-        assert.equal(placed.length, 4);
-        for(const id of placed) {
-          await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').click()`);
-          await click(browser, 'Juster retning', 'document'); await click(browser, 'Bruk retning', 'document');
-        }
-        await click(browser, 'Eksporter', 'document'); await setExport('Eksportprofil','legacy2019'); await preview();
+        assert.equal(await browser.evaluate(`${scope}.querySelectorAll('[data-diagnostic-code="capture-time-required"], [data-diagnostic-code="direction-required"]').length`),0);
         assert(await browser.evaluate(`${scope}.innerText.includes('4 planlagte features · 3 vedlegg · 1 delte originalbilder')`));
         assert(await browser.evaluate(`${scope}.innerText.includes('4 utelatt/uplassert')`));
         assert(await browser.evaluate(`${scope}.innerText.includes('Gemini-kompatibilitet er ikke verifisert')`));
@@ -227,6 +239,9 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(Object.keys(legacy).length,4);
         const legacyXml=strFromU8(legacy['photos.gml']);
         assert.equal((legacyXml.match(/<app:Skråfoto /g)||[]).length,4); assert(legacyXml.includes('<app:fotograf>Batch Artist</app:fotograf>'));
+        for (const degrees of [0,90,359.875]) assert(legacyXml.includes(`<app:retningsverdi>${degrees}</app:retningsverdi>`));
+        assert(legacyXml.includes('2026-09-17T10:30:02.125+02:00'));
+        for(const [name,data] of Object.entries(legacy))if(name!=='photos.gml')assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
         await setExport('Eksportprofil','asbuilt52'); await preview();
         assert(await browser.evaluate(`${scope}.textContent.includes('Datafangstdato: oppgi')`));
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
@@ -248,10 +263,11 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         const modern = await download('asbuilt52');
         const modernXml=strFromU8(modern['photos.gml']);assert(!modernXml.includes('<app:fotoinformasjon>')); assert(modernXml.includes('Synthetic export dataset'));
         assert.equal((modernXml.match(/<app:Skråfoto /g)||[]).length,4);
-        for(const [name,data] of Object.entries(modern))if(name!=='photos.gml')assert.deepEqual(data,Uint8Array.from(Buffer.from(name.endsWith('/flat.png')?unresolvedBytes:bytes,'base64')));
+        for(const [name,data] of Object.entries(modern))if(name!=='photos.gml')assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
         assert.equal(await browser.evaluate('photoWfsCalls'),2);
         await click(browser,'Lukk eksport',scope);
       });
+      let expectedPhotographerAfterAppend;
       await t.test('repeated image occurrences select independently with one original URL; current GMI inspector, preview and panes remain', async () => {
         const rows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li')).filter(li=>li.querySelector('button')?.getAttribute('aria-label')==='Vis a.png' && li.innerText.includes('Flere plasseringer')).map(li=>li.dataset.photoId)`);
         assert.equal(rows.length, 2);
@@ -264,6 +280,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         }
         assert.equal(urls[0], urls[1]);
         assert.equal(await browser.evaluate('getComputedStyle(document.querySelector(".leaflet-photo-markers-pane")).zIndex'), '620');
+        expectedPhotographerAfterAppend = await browser.evaluate(`document.querySelector('[data-accepted-metadata=photographer]').textContent`);
         await click(browser, 'Tilbake til appen', 'document');
       });
       await t.test('append reuses existing assets and recheck does not multiply occurrences or issue WFS requests', async () => {
@@ -276,7 +293,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 8);
         assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'), 4);
         assert.equal(await browser.evaluate('photoWfsCalls'), 2);
-        assert(await browser.evaluate(`document.querySelector('[data-accepted-metadata=photographer]').textContent.includes('Batch Artist')`));
+        assert.equal(await browser.evaluate(`document.querySelector('[data-accepted-metadata=photographer]').textContent`),expectedPhotographerAfterAppend);
       });
       await t.test('ordinary Bilder import still works independently and does not fetch WFS', async () => {
         await click(browser, 'Tilbake til appen', 'document'); await click(browser, 'Bilder', 'document');
