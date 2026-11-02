@@ -50,7 +50,7 @@ export default function PhotoExportDialog({ layerId, onClose }) {
     <label>Profil<select aria-label="Eksportprofil" value={profile} onChange={(event) => { invalidate(); setProfile(event.target.value); }}>
       <option value="">Velg profil</option>{Object.entries(PHOTO_EXPORT_PROFILES).map(([key, item]) => <option value={key} key={key}>{item.label}</option>)}
     </select></label>
-    <label>Koordinatsystem<select aria-label="Eksport-CRS" value={crs} onChange={(event) => { invalidate(); setCrs(event.target.value); }}><option>EPSG:25832</option><option>EPSG:25833</option></select></label>
+    {profile === 'gemini-legacy2019' ? <p>EPSG:5972 · XYZ · Z=0 er en kompatibilitetsplassholder, ikke målt høyde. Opptakstid er valgfri; retning kreves. Pakk ut ZIP og importer photos.gml med Attachments-mappen ved siden av.</p> : <label>Koordinatsystem<select aria-label="Eksport-CRS" value={crs} onChange={(event) => { invalidate(); setCrs(event.target.value); }}><option>EPSG:25832</option><option>EPSG:25833</option></select></label>}
     {profile === 'legacy2019' && <p>Legacy krever godtatt opptakstid med sekunder og godtatt retning. Ukjent retning er ikke nord.</p>}
     {profile === 'asbuilt52' && <fieldset><legend>Påkrevd AsBuilt-eksportkontekst</legend>
       <p>Oppgi sannferdige verdier for alle eksporterte forekomster. Dette fylles ikke fra bildet eller GMI. Eksperimentell 2D-geometri uten Z. Fotograf utelates fordi komplett moderne bildeinformasjon mangler.</p>
@@ -60,8 +60,8 @@ export default function PhotoExportDialog({ layerId, onClose }) {
         </select>
         : <input type={type} aria-label={`Eksport ${label}`} value={context[key] || ''} onChange={(event) => { invalidate(); setContext({ ...context, [key]: event.target.value }); }} />}</label>)}
     </fieldset>}
-    <p>Attachments/&lt;filnavn&gt; med skråstrek er appens testkonvensjon. Retning antas eksperimentelt å være grader med klokken fra geografisk nord (1/1).</p>
-    <PhotoEvidenceActions photos={photoSession.getLayerPhotos(layerId)} layerId={layerId} onAdopt={invalidate} />
+    {profile !== 'gemini-legacy2019' && <p>Attachments/&lt;filnavn&gt; med skråstrek er appens testkonvensjon. Retning antas eksperimentelt å være grader med klokken fra geografisk nord (1/1).</p>}
+    <PhotoEvidenceActions photos={photoSession.getLayerPhotos(layerId)} layerId={layerId} onAdopt={invalidate} exportProfile={profile} />
     <button className={control} type="button" disabled={!profile || !layer || busy} onClick={async () => {
       const token = ++operation.current.version; setBusy(true); setPlan(null); setMessage('Bygger forhåndsvisning …');
       try {
@@ -74,6 +74,7 @@ export default function PhotoExportDialog({ layerId, onClose }) {
       <p>{plan.counts.uniqueImages} unike bilder i laget · {plan.counts.totalOccurrences} forekomster · {plan.counts.placed} plassert · {plan.counts.excluded} utelatt/uplassert</p>
       <p>{plan.counts.features} planlagte features · {plan.counts.attachments} vedlegg · {plan.counts.sharedAttachments} delte originalbilder</p>
       {!live && <p role="alert">Fotolaget eller godtatte data er endret. Lag en ny forhåndsvisning.</p>}
+      {plan.profile === 'gemini-legacy2019' && <p>{plan.crs} · 3D · {plan.counts.compatibilityZCount} Z-plassholdere · {plan.counts.missingTimestampCount} uten full opptakstid · {plan.counts.timezoneTransformCount} tidssoneendringer. Bildeinformasjon utelates.</p>}
       <h3>Blokkerende feil ({plan.errors.length})</h3><Diagnostics items={plan.errors} />
       <h3>Advarsler ({plan.warnings.length})</h3><Diagnostics items={plan.warnings} />
       <details><summary>Vedleggsnavn og endringer</summary><ul>{plan.assets.map((asset) => <li key={asset.assetId}>{asset.originalFilename} → {asset.exportFilename}</li>)}</ul></details>
@@ -84,7 +85,7 @@ export default function PhotoExportDialog({ layerId, onClose }) {
           if (token !== operation.current.version) return;
           if (!plan.isLive()) throw new Error('Eksportplanen er utdatert. Lag en ny forhåndsvisning.');
           const url = URL.createObjectURL(blob); urls.current.add(url);
-          const a = document.createElement('a'); a.href = url; a.download = `photos-${profile}-${crs.slice(5)}.zip`;
+          const a = document.createElement('a'); a.href = url; a.download = `photos-${profile}-${plan.crs.slice(5)}.zip`;
           document.body.append(a); a.click(); a.remove();
           setTimeout(() => { URL.revokeObjectURL(url); urls.current.delete(url); }, 1000);
           setMessage('ZIP-pakken er klar for lokal Gemini-testing. Importresultat er ikke verifisert.');

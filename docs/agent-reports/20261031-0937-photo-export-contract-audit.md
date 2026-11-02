@@ -467,3 +467,8 @@ ElementTree inspected public XSD/example structure, sequences/base types/cardina
 Real official photo schemas define the vocabulary, direction semantics and photographer field. They do not establish a safe complete mapping of the application's multiple object-derived placements, supply missing mandatory modern context, or prove receiver compatibility. These are semantic/interoperability blockers, not XML formatting details.
 
 Resolve section24 with the recipient/schema authority, record one approved contract and eligibility/mapping decision, then implement the scoped plan/serializer under section20's acceptance criteria. Writing the complete exporter now would require guessing or silent information loss. Stop here; no exporter or domain changes were made.
+
+
+## 2026-11-02 empirical compatibility continuation
+
+Direct read-only inspection of an accepted contractor delivery found 40 legacy photo features, 14 without capture timestamps, all with XYZ points, envelope-only EPSG:5972, filename names, empty namespaces and Windows attachment links. Independent Legacy XSD validation reports exactly 14 missing-time errors in that accepted file. A separate experimental `gemini-legacy2019` profile now reproduces these conventions without changing the standards profiles or accepted photo state. It uses explicitly disclosed export-only zero Z and local timestamp lexical transformations. Actual generated-package Gemini VA acceptance remains pending manual import. See [evidence, comparison, implementation and manual acceptance matrix](20261102-0928-gemini-va-photo-export-compatibility.md).

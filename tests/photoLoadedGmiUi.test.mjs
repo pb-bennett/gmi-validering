@@ -1,3 +1,4 @@
+import { assertGeminiConventions } from './helpers/geminiPhotoConventions.mjs';
 import { unzipSync, strFromU8 } from 'fflate';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -217,10 +218,10 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
           await browser.waitFor(`${scope}.querySelector('section[aria-label="Eksportforhåndsvisning"]') && !${scope}.innerText.includes('Bygger forhåndsvisning')`);
         };
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: directory });
-        const download = async (profile) => {
+        const download = async (profile, crs = '25832') => {
           await click(browser, 'Last ned testpakke', scope);
           await browser.waitFor(`${scope}.innerText.includes('ZIP-pakken er klar')`);
-          const file=path.join(directory,`photos-${profile}-25832.zip`);
+          const file=path.join(directory,`photos-${profile}-${crs}.zip`);
           for(let attempt=0;attempt<100;attempt++) {
             try { return unzipSync(new Uint8Array(await readFile(file))); }
             catch { await new Promise(resolve=>setTimeout(resolve,100)); }
@@ -242,6 +243,16 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         for (const degrees of [0,90,359.875]) assert(legacyXml.includes(`<app:retningsverdi>${degrees}</app:retningsverdi>`));
         assert(legacyXml.includes('2026-09-17T10:30:02.125+02:00'));
         for(const [name,data] of Object.entries(legacy))if(name!=='photos.gml')assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
+        await setExport('Eksportprofil', 'gemini-legacy2019'); await preview();
+        assert(await browser.evaluate(`${scope}.innerText.includes('EPSG:5972') && ${scope}.innerText.includes('Z-plassholdere')`));
+        assert.equal(await browser.evaluate(`${scope}.querySelectorAll('[data-diagnostic-code="capture-time-required"]').length`), 0);
+        const gemini = await download('gemini-legacy2019', '5972');
+        const geminiXml = strFromU8(gemini['photos.gml']);
+        assertGeminiConventions(geminiXml);
+        assert(geminiXml.includes('2026-09-17T10:30:02</app:fotograferingstidspunkt>'));
+        assert(!geminiXml.includes('fotoinformasjon'));
+        assert.equal(Object.keys(gemini).length, 4);
+        for (const [name, data] of Object.entries(gemini)) if (name !== 'photos.gml') assert.deepEqual(data, legacy[name]);
         await setExport('Eksportprofil','asbuilt52'); await preview();
         assert(await browser.evaluate(`${scope}.textContent.includes('Datafangstdato: oppgi')`));
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));

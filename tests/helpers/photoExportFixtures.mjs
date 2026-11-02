@@ -8,13 +8,13 @@ import { gpsPng } from './photoGpsFixtures.mjs';
 export const syntheticContext = { surveyDate: '2026-05-12', datasetName: 'Synthetic & dataset', projectName: 'Synthetic <project>',
   horizontalMethod: '99', verticalMethod: '99', surveyReason: 'nytt', surveyConditions: 'åpenGrøft' };
 
-export async function exportFixture({ names = ['Grøft æ image.png'], repeated = false, unplaced = false, direction = 0, time = '2026-05-12T14:33:02', photographer = 'Synthetic & <Artist>', ...options } = {}) {
+export async function exportFixture({ files = null, names = ['Grøft æ image.png'], repeated = false, unplaced = false, direction = 0, time = '2026-05-12T14:33:02', photographer = 'Synthetic & <Artist>', ...options } = {}) {
   let id = 0;
   const session = createPhotoSession({ createId: () => `export-${++id}`, yieldJob: () => new Promise((resolve) => setImmediate(resolve)),
     createThumbnail: async () => ({ thumbnailBlob: new Blob(['preview']), dimensions: { width: 1, height: 1 } }),
     extractGps: async () => ({ state: 'no-gps', candidate: null }),
     urls: { createObjectURL: () => 'blob:synthetic', revokeObjectURL() {} }, ...options });
-  session.importFiles(names.map((name) => new File([gpsPng()], name, { type: 'image/png' })));
+  session.importFiles(files || names.map((name) => new File([gpsPng()], name, { type: 'image/png' })));
   const layer = session.createLayer();
   if (repeated) {
     await session.stageLayerSource(layer.id, gmiFile([{ hyperlink: `h:1(link:"${names[0]}") ` }, { hyperlink: `h:1(link:"${names[0]}") ` }]), 'gmi');

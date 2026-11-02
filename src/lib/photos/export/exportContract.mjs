@@ -3,6 +3,7 @@ import { normalizeCaptureTime } from '../photoCaptureMetadata.mjs';
 
 export const PHOTO_EXPORT_PROFILES = Object.freeze({
   legacy2019: Object.freeze({ label: 'Legacy Skråfoto 2019', namespace: 'http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101', schema: 'LedningsnettEtablertEllerFlyttet.xsd' }),
+  'gemini-legacy2019': Object.freeze({ label: 'Gemini VA · Skråfoto 2019 (eksperimentell)', namespace: 'http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101', schema: 'LedningsnettEtablertEllerFlyttet.xsd' }),
   asbuilt52: Object.freeze({ label: 'Norsk Vann AsBuilt 5.2', namespace: 'https://skjema.geonorge.no/SOSI/produktspesifikasjon/Norskvann-Asbuilt/5.2', schema: 'Asbuilt.xsd' }),
 });
 export const EXPORT_CONTEXT_FIELDS = Object.freeze([

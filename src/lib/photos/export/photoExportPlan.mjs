@@ -44,12 +44,14 @@ export function formatExportCoordinate(value) {
 }
 
 export async function buildPhotoExportPlan(snapshot, configuration, { transform = proj4 } = {}) {
-  const profile = configuration.profile, crs = configuration.crs;
+  const profile = configuration.profile, gemini = profile === 'gemini-legacy2019';
+  const crs = gemini ? 'EPSG:5972' : configuration.crs;
+  const horizontalCrs = gemini ? 'EPSG:25832' : crs;
   const context = Object.fromEntries(EXPORT_CONTEXT_FIELDS.map(({ key }) => [key, String(configuration.context?.[key] ?? '').trim()]));
   const errors = [], warnings = [];
   const error = (code, message, occurrenceId, assetId) => errors.push({ code, message, occurrenceId, assetId });
   if (!Object.hasOwn(PHOTO_EXPORT_PROFILES, profile)) error('invalid-profile', 'Velg en eksportprofil eksplisitt.');
-  if (!['EPSG:25832', 'EPSG:25833'].includes(crs)) error('invalid-crs', 'Velg EPSG:25832 eller EPSG:25833.');
+  if (!gemini && !['EPSG:25832', 'EPSG:25833'].includes(horizontalCrs)) error('invalid-crs', 'Velg EPSG:25832 eller EPSG:25833.');
   if (profile === 'asbuilt52') errors.push(...validateExportContext(context));
   const all = [...snapshot.occurrences].sort((a, b) => compareExportKeys(a.occurrenceId, b.occurrenceId));
   const excluded = all.filter((row) => !row.current).map((row) => ({ occurrenceId: row.occurrenceId, reason: 'unplaced' }));
@@ -68,7 +70,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
       try { asset.checksum = await digestHex(await asset.file.arrayBuffer()); }
       catch { error('file-read-failed', `${asset.originalFilename}: originalfilen kunne ikke leses og hashes.`); }
     }
-    if (!fullCaptureTime(asset.metadata?.captureTime)) error(asset.metadata?.captureTime ? 'capture-time-precision' : 'capture-time-required', `${asset.originalFilename}: godtatt opptakstid med sekunder kreves.`, undefined, asset.assetId);
+    if (!gemini && !fullCaptureTime(asset.metadata?.captureTime)) error(asset.metadata?.captureTime ? 'capture-time-precision' : 'capture-time-required', `${asset.originalFilename}: godtatt opptakstid med sekunder kreves.`, undefined, asset.assetId);
     const photographer = asset.metadata?.photographer?.value;
     if (profile === 'legacy2019' && photographer && !isXmlText(photographer)) error('invalid-xml-text', `${asset.originalFilename}: fotograf inneholder ugyldige XML-tegn.`);
     if (profile === 'asbuilt52' && photographer) warnings.push({ code: 'photographer-omitted', assetId: asset.assetId,
@@ -79,14 +81,16 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   for (const row of placed) {
     let point = null;
     try {
-      if (!isPhotoPosition(row.current.position) || !['EPSG:25832', 'EPSG:25833'].includes(crs)) throw new Error();
-      const coordinates = transform('EPSG:4326', crs, [row.current.position.longitude, row.current.position.latitude]);
-      point = { easting: formatExportCoordinate(coordinates[0]), northing: formatExportCoordinate(coordinates[1]) };
+      if (!isPhotoPosition(row.current.position) || !['EPSG:25832', 'EPSG:25833'].includes(horizontalCrs)) throw new Error();
+      const coordinates = transform('EPSG:4326', horizontalCrs, [row.current.position.longitude, row.current.position.latitude]);
+      const format = gemini ? (value) => { if (!Number.isFinite(value) || Math.abs(value) >= 1e21) throw new Error(); return value.toFixed(6).replace(/^-0\.000000$/, '0.000000'); } : formatExportCoordinate;
+      point = { easting: format(coordinates[0]), northing: format(coordinates[1]), ...(gemini ? { z: '0.000000' } : {}) };
     } catch { error('projection-failed', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): posisjonen kan ikke projiseres.`, row.occurrenceId); }
     if (row.direction && (!Number.isFinite(row.direction.degrees) || row.direction.degrees < 0 || row.direction.degrees >= 360)) error('invalid-direction', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): ugyldig godtatt retning.`, row.occurrenceId);
-    if (profile === 'legacy2019' && !row.direction) error('direction-required', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): Legacy krever godtatt retning.`, row.occurrenceId);
+    if ((profile === 'legacy2019' || gemini) && !row.direction) error('direction-required', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): Legacy krever godtatt retning.`, row.occurrenceId);
     const guid = await exportGuid(`occurrence:${snapshot.layer.id}:${row.occurrenceId}`);
-    occurrences.push({ ...row, point, guid, featureId: `photo-${guid}`, geometryId: `point-${guid}` });
+    occurrences.push({ ...row, point, guid, featureId: gemini ? `id${guid}` : `photo-${guid}`,
+      geometryId: gemini ? `id${await exportGuid(`geometry:${snapshot.layer.id}:${row.occurrenceId}`)}` : `point-${guid}` });
   }
   const associationCount = new Set(all.flatMap((row) => row.associations.map((link) => JSON.stringify([row.assetId, link.sourceId, link.object.objectKey])))).size;
   if (associationCount) warnings.push({ code: 'associations-omitted', message: `${associationCount} objektkoblinger beholdes i appen, men er ikke med i denne testeksporten.` });
@@ -96,11 +100,20 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   if (sharedAttachments) warnings.push({ code: 'shared-attachments', message: `${sharedAttachments} originalbilder deles av flere separate forekomst-features.` });
   warnings.push({ code: 'experimental-mapping', message: 'Eksperimentell forekomstbevarende mapping: én godtatt forekomst = én Skråfoto-feature. Ingen ny kameraposisjon utledes. Gemini-kompatibilitet er ikke verifisert.' });
   warnings.push({ code: 'direction-assumption', message: 'Eksperimentell retningsantakelse: med klokken i grader fra geografisk nord (enhet 1, referanse 1).' });
-  warnings.push({ code: 'path-convention', message: 'Attachments/<filnavn> med skråstrek er appens testkonvensjon, ikke et dokumentert Gemini-krav.' });
+  if (!gemini) warnings.push({ code: 'path-convention', message: 'Attachments/<filnavn> med skråstrek er appens testkonvensjon, ikke et dokumentert Gemini-krav.' });
   if (profile === 'asbuilt52') warnings.push({ code: 'experimental-2d', message: 'Eksperimentell 2D AsBuilt-fotogeometri uten Z. Gemini-aksept er ukjent.' });
+  const missingTimestampCount = occurrences.filter((row) => !fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime)).length;
+  const timezoneTransformCount = occurrences.filter((row) => /(?:Z|[+-]\d{2}:\d{2})$/.test(fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime) || '')).length;
+  if (gemini) {
+    warnings.push({ code: 'compatibility-z', message: `${occurrences.length} XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde.` });
+    warnings.push({ code: 'compatibility-time', message: `${missingTimestampCount} features uten full opptakstid. ${timezoneTransformCount} tidssone-suffikser fjernes; lokal klokketid beholdes. Brøkdelsekunder utelates for å matche referansen. Godtatte data endres ikke.` });
+    warnings.push({ code: 'compatibility-metadata', message: `${assets.filter((asset) => asset.metadata?.photographer).length} godtatte fotografverdier utelates; bildeinformasjon eksporteres ikke.` });
+    warnings.push({ code: 'compatibility-import', message: 'Pakk ut ZIP. Importer photos.gml med Attachments-mappen ved siden av. XML bruker Attachments\\filnavn. Gemini-import må testes manuelt.' });
+  }
   if (!snapshot.isLive()) error('stale-plan', 'Fotolaget eller godtatte data er endret. Lag en ny forhåndsvisning.');
-  const plan = freezeExportData({ version: 1, profile, crs, context, layer: snapshot.layer, assets, occurrences, attachments, excluded, warnings, errors,
+  const plan = freezeExportData({ version: 1, profile, crs, context, collectionId: gemini ? `id${await exportGuid(`collection:${snapshot.layer.id}`)}` : 'photo-collection', layer: snapshot.layer, assets, occurrences, attachments, excluded, warnings, errors,
     counts: { uniqueImages: snapshot.assets.length, totalOccurrences: all.length, placed: placed.length, excluded: excluded.length,
+      missingTimestampCount, timezoneTransformCount, compatibilityZCount: gemini ? occurrences.length : 0,
       features: occurrences.length, attachments: attachments.length, sharedAttachments, associationCount },
     isLive: snapshot.isLive });
   issuedPlans.add(plan);

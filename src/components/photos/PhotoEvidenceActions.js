@@ -11,7 +11,7 @@ const actions = [
 ];
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs disabled:opacity-40';
 
-export default function PhotoEvidenceActions({ photos, layerId, selectedIds, onAdopt }) {
+export default function PhotoEvidenceActions({ photos, layerId, selectedIds, onAdopt, exportProfile }) {
   const [message, setMessage] = useState('');
   const ids = selectedIds || photos.map((photo) => photo.id);
   const selected = new Set(ids);
@@ -21,6 +21,7 @@ export default function PhotoEvidenceActions({ photos, layerId, selectedIds, onA
     <h3>Eksportberedskap · {selectedIds ? 'valgte bilder' : 'hele FOTO-laget'}</h3>
     <p>{unique.length} unike bilder undersøkt · {chosen.length} forekomster.</p>
     <p>{unique.filter((photo) => !photo.captureMetadata.captureTime).length} bilder mangler godtatt opptakstid · {chosen.filter((photo) => !photo.direction.current).length} forekomster mangler godtatt retning.</p>
+    {exportProfile === 'gemini-legacy2019' && <p>Gemini-testprofil: manglende opptakstid blokkerer ikke eksport. Retning kreves for plasserte forekomster.</p>}
     <p>Fyller bare ukjente verdier. Ulike brukbare kildeverdier krever gjennomgang. Uplasserte bilder er også med; eksport utelater dem til posisjon er godtatt.</p>
     <p>EXIF-retning gjelder originalbildets kameraobservasjon. For delte bilder brukes samme retning på hver valgt, ukjent forekomst. Dette dokumenterer ikke separate kameraobservasjoner ved objektplasseringene.</p>
     {actions.map(([field, kind, label]) => {

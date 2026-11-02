@@ -45,18 +45,40 @@ function asbuiltFeature(plan, occurrence, asset, attachment) {
     // siblings have no canonical accepted values in the current photo domain.
     + tag(3, 'fotolink', attachment.path) + direction(occurrence, true);
 }
+function geminiFeature(occurrence, asset, attachment) {
+  const time = fullCaptureTime(asset.metadata?.captureTime)?.replace(/(?:Z|[+-]\d{2}:\d{2})$/, '').replace(/\.\d+$/, '');
+  return `      <gml:name>${escape(attachment.filename)}</gml:name>\n`
+    + '      <app:fotograferingspunkt>\n'
+    + `        <gml:Point gml:id="${occurrence.geometryId}" srsDimension="3">\n`
+    + `          <gml:pos>${occurrence.point.easting} ${occurrence.point.northing} ${occurrence.point.z}</gml:pos>\n`
+    + '        </gml:Point>\n      </app:fotograferingspunkt>\n'
+    + tag(3, 'fotolink', attachment.path.replaceAll('/', '\\')) + direction(occurrence, false)
+    + '      <app:identifikasjon>\n        <app:Identifikasjon>\n'
+    + tag(5, 'lokalId', occurrence.guid) + '          <app:navnerom/>\n'
+    + '        </app:Identifikasjon>\n      </app:identifikasjon>\n'
+    + (time ? tag(3, 'fotograferingstidspunkt', time) : '');
+}
+function geminiBounds(plan) {
+  // Values are export-only XYZ. Zero is not accepted or measured camera height.
+  const points = plan.occurrences.map(({ point }) => [Number(point.easting), Number(point.northing), Number(point.z)]);
+  const corner = (operation) => [0, 1, 2].map((axis) => points.reduce((value, point) => operation(value, point[axis]), points[0][axis]).toFixed(6)).join(' ');
+  return '  <gml:boundedBy>\n    <gml:Envelope srsDimension="3" srsName="urn:ogc:def:crs:EPSG::5972">\n'
+    + `      <gml:lowerCorner>${corner(Math.min)}</gml:lowerCorner>\n      <gml:upperCorner>${corner(Math.max)}</gml:upperCorner>\n`
+    + '    </gml:Envelope>\n  </gml:boundedBy>\n';
+}
 export function serializePhotoExport(plan) {
   assertExportablePlan(plan);
-  const profile = PHOTO_EXPORT_PROFILES[plan.profile];
-  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+  const profile = PHOTO_EXPORT_PROFILES[plan.profile], gemini = plan.profile === 'gemini-legacy2019';
+  let xml = (gemini ? '<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n' : '<?xml version="1.0" encoding="UTF-8"?>\n')
     + '<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" '
-    + `xmlns:app="${profile.namespace}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" `
-    + `xsi:schemaLocation="${profile.namespace} ${profile.namespace}/${profile.schema}" gml:id="photo-collection">\n`;
+    + `xmlns:app="${profile.namespace}" ${gemini ? 'xmlns:xlink="http://www.w3.org/1999/xlink" ' : ''}xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" `
+    + `xsi:schemaLocation="${profile.namespace} ${profile.namespace}/${profile.schema}" gml:id="${plan.collectionId}">\n`;
+  if (gemini) xml += geminiBounds(plan);
   const assets = new Map(plan.assets.map((asset) => [asset.assetId, asset]));
   const attachments = new Map(plan.attachments.map((attachment) => [attachment.assetId, attachment]));
   for (const occurrence of plan.occurrences) {
     xml += `  <gml:featureMember>\n    <app:Skråfoto gml:id="${occurrence.featureId}">\n`;
-    xml += (plan.profile === 'legacy2019' ? legacyFeature : asbuiltFeature)(plan, occurrence, assets.get(occurrence.assetId), attachments.get(occurrence.assetId));
+    xml += gemini ? geminiFeature(occurrence, assets.get(occurrence.assetId), attachments.get(occurrence.assetId)) : (plan.profile === 'legacy2019' ? legacyFeature : asbuiltFeature)(plan, occurrence, assets.get(occurrence.assetId), attachments.get(occurrence.assetId));
     xml += '    </app:Skråfoto>\n  </gml:featureMember>\n';
   }
   return xml + '</gml:FeatureCollection>\n';
