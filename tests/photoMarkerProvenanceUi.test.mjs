@@ -24,6 +24,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
     const legend = 'document.querySelector(".photo-position-legend")';
     const markers = 'Array.from(document.querySelectorAll(".photo-camera-marker"))';
     const selected = 'document.querySelector(".photo-camera-marker-selected")';
+    const cursor = () => browser.evaluate('getComputedStyle(document.querySelector(".leaflet-container")).cursor');
     const sourceOfSelected = () => browser.evaluate(`${selected}?.querySelector('.photo-camera-glyph').dataset.positionSource`);
     const select = async (id) => {
       await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').click()`);
@@ -32,16 +33,20 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
     const move = async (commit) => {
       await click('Flytt på kartet');
       await browser.waitFor('document.querySelector(".photo-placement-active")');
+      assert.equal(await cursor(), 'crosshair');
       await browser.evaluate('new Promise(resolve=>setTimeout(resolve,450))');
       const box = await browser.evaluate('document.querySelector(".leaflet-container").getBoundingClientRect().toJSON()');
       const x = box.left + box.width / 2 + 70, y = box.top + box.height / 2 + 50;
       await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
       await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
       await browser.waitFor('document.querySelector(".photo-proposed-marker")');
+      assert.equal(await cursor(), 'crosshair');
+      assert.equal(await browser.evaluate('getComputedStyle(document.querySelector(".photo-proposed-marker")).cursor'), 'grab');
       assert.equal(await sourceOfSelected(), 'gmi', 'proposal does not change accepted source');
       assert.equal(await browser.evaluate('document.querySelector(".photo-proposed-marker .photo-camera-glyph")'), null);
       await click(commit ? 'Bruk plassering' : 'Avbryt', 'document.querySelector(".photo-manual-controls")');
       await browser.waitFor('!document.querySelector(".photo-proposed-marker")');
+      assert.notEqual(await cursor(), 'crosshair');
     };
     const screenshot = async (name) => {
       if (!process.env.PHOTO_SCREENSHOT_DIR) return;
@@ -63,6 +68,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
       await browser.waitFor('document.body.innerText.includes("Marker survey") && document.querySelector(".leaflet-container")');
       await browser.waitFor('document.body.innerText.includes("Tegnforklaring")');
       await t.test('normal survey legend retained; unplaced evidence produces no camera', async () => {
+        assert.notEqual(await cursor(), 'crosshair');
         assert.equal(await browser.evaluate(`Boolean(${legend})`), false);
         await click('Bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
         await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', photos);
@@ -108,6 +114,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           assert.equal(await sourceOfSelected(), source.kind);
         }
         await click('Juster retning'); await browser.waitFor('document.querySelector(".photo-direction-editor")');
+        assert.notEqual(await cursor(), 'crosshair');
         await click('Bruk retning', 'document.querySelector(".photo-direction-controls")');
         await browser.waitFor('document.querySelector(".photo-direction-indicator[data-proposed=false]")');
         assert.equal(await sourceOfSelected(), 'manual');
@@ -127,23 +134,48 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           assert.deepEqual(await browser.evaluate(`${markers}.map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['exif', 'gmi', 'gml', 'manual']);
           assert(await browser.evaluate(`(() => {const map=document.querySelector('.leaflet-container').getBoundingClientRect();return ${markers}.every(e=>{const b=e.getBoundingClientRect();return b.left>=map.left && b.right<=map.right && b.top>=map.top && b.bottom<=map.bottom});})()`), 'all four markers are inside the rendered map');
           await browser.waitFor('Array.from(document.querySelectorAll(".leaflet-tile")).every(e=>e.complete && e.naturalWidth>0)');
+          for (const id of [gmlPhoto.id, repeated[0].id]) {
+            await select(id);
+            await screenshot(`photo-provenance-selected-${id === gmlPhoto.id ? 'gml' : 'gmi'}-${width}x${height}`);
+          }
           await screenshot(`photo-provenance-${width}x${height}`);
           await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile(true))})`);
           await browser.waitFor('Array.from(document.querySelectorAll(".leaflet-tile")).every(e=>e.complete && e.naturalWidth>0)');
           await browser.evaluate('new Promise(resolve=>setTimeout(resolve,500))');
           await screenshot(`photo-provenance-dark-${width}x${height}`);
+          await click('Flytt på kartet');
+          await browser.waitFor('document.querySelector(".photo-placement-active")');
+          assert.equal(await cursor(), 'crosshair');
+          await screenshot(`photo-placement-active-${width}x${height}`);
+          await browser.evaluate('document.querySelector(".leaflet-container").focus()');
+          await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+          await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+          await browser.waitFor('document.querySelector(".photo-proposed-marker")');
+          assert.equal(await cursor(), 'crosshair');
+          await screenshot(`photo-placement-proposal-${width}x${height}`);
+          await click('Avbryt', 'document.querySelector(".photo-manual-controls")');
+          await browser.waitFor('!document.querySelector(".photo-placement-active")');
+          assert.notEqual(await cursor(), 'crosshair');
           await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile())})`);
         }
       });
       await t.test('hidden layer, repeated workspace exits/entries, manual to GMI replacement and reset have no stale legend', async () => {
+        await click('Flytt p\u00e5 kartet');
+        await browser.waitFor('document.querySelector(".photo-placement-active")');
+        assert.equal(await cursor(), 'crosshair');
         await browser.evaluate('document.querySelector("input[aria-label^=\\\"Vis fotokartlag\\\"]").click()');
-        await browser.waitFor(`${markers}.length===0`); assert(await browser.evaluate(`Boolean(${legend})`));
+        await browser.waitFor(`${markers}.length===0 && !document.querySelector('.photo-placement-active')`);
+        assert.notEqual(await cursor(), 'crosshair'); assert(await browser.evaluate(`Boolean(${legend})`));
         await browser.evaluate('document.querySelector("input[aria-label^=\\\"Vis fotokartlag\\\"]").click()');
         await browser.waitFor(`${markers}.length===4`);
         await applyPhotoSourcePositions(browser, 'gmi', { photoId: repeated[1].id });
         assert.equal(await sourceOfSelected(), 'gmi');
         for (let i = 0; i < 3; i++) {
+          await click('Flytt på kartet');
+          await browser.waitFor('document.querySelector(".photo-placement-active")');
+          assert.equal(await cursor(), 'crosshair');
           await click('Tilbake til appen'); await browser.waitFor(`!${legend} && document.body.innerText.includes('Tegnforklaring')`);
+          assert.notEqual(await cursor(), 'crosshair');
           await click('Bildemodul'); await browser.waitFor(legend);
           assert.equal(await browser.evaluate('document.body.innerText.includes("Tegnforklaring")'), false);
         }
@@ -152,6 +184,8 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await browser.waitFor('document.querySelector("button[aria-label=\\\"Nullstill og last opp ny\\\"]")');
         await browser.evaluate('document.querySelector("button[aria-label=\\\"Nullstill og last opp ny\\\"]").click()');
         await browser.waitFor(`!${legend} && !document.querySelector('.photo-workspace-shell') && ${markers}.length===0`);
+        assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-placement-active"))'), false);
+        if (await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))')) assert.notEqual(await cursor(), 'crosshair');
       });
     } finally {
       await browser.close();

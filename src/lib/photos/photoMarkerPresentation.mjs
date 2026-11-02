@@ -3,7 +3,7 @@ import { normalizePhotoDirection } from './photoDirection.mjs';
 export const PHOTO_POSITION_SOURCES = Object.freeze([
   Object.freeze({ kind: 'exif', label: 'EXIF', color: '#19785b' }),
   Object.freeze({ kind: 'gmi', label: 'GMI', color: '#2463b5' }),
-  Object.freeze({ kind: 'gml', label: 'GML', color: '#7946b5' }),
+  Object.freeze({ kind: 'gml', label: 'GML', color: '#a03b82' }),
   Object.freeze({ kind: 'manual', label: 'Manuell', color: '#b06a08' }),
 ]);
 const unknownSource = Object.freeze({ kind: 'unknown', label: 'Ukjent', color: '#64748b' });

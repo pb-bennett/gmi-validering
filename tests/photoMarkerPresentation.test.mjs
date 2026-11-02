@@ -82,3 +82,7 @@ test('legend and markers share classification/palette/glyph; workspace wiring is
   assert.match(markers, /title=\{accessibleLabel\} alt=\{accessibleLabel\} keyboard/);
   assert.match(markers, /plassering: \$\{source.label\}/);
 });
+
+test('provenance palette keeps established sources and separates magenta GML from blue GMI', () => {
+  assert.deepEqual(PHOTO_POSITION_SOURCES.map(({ color }) => color), ['#19785b', '#2463b5', '#a03b82', '#b06a08']);
+});
