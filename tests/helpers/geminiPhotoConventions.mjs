@@ -1,5 +1,6 @@
-﻿import { DOMParser } from '@xmldom/xmldom';
+import { DOMParser } from '@xmldom/xmldom';
 import assert from 'node:assert/strict';
+export const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 export const elements = (node) => [...node.childNodes].filter((child) => child.nodeType === 1);
 export function assertGeminiConventions(xml) {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
@@ -12,7 +13,10 @@ export function assertGeminiConventions(xml) {
   assert.equal(envelope.getAttribute('srsName'), 'urn:ogc:def:crs:EPSG::5972');
   const photos = all('Skråfoto'); assert(photos.length);
   const ids = all('*').map((node) => node.getAttribute('gml:id')).filter(Boolean);
+  assert.equal(ids.length, 1 + photos.length * 2);
   assert.equal(ids.length, new Set(ids).size);
+  // Gemini/FME rejected UUIDv5 lokalId as "not a valid guid"; UUIDv4 reached GeoFoto.
+  for (const id of ids) { assert(id.startsWith('id')); assert.match(id.slice(2), uuidV4); }
   for (const photo of photos) {
     assert.equal(photo.namespaceURI, 'http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101');
     const children = elements(photo), names = children.map((node) => node.localName);

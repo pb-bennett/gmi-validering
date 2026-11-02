@@ -50,7 +50,7 @@ function geminiFeature(occurrence, asset, attachment) {
   return `      <gml:name>${escape(attachment.filename)}</gml:name>\n`
     + '      <app:fotograferingspunkt>\n'
     + `        <gml:Point gml:id="${occurrence.geometryId}" srsDimension="3">\n`
-    + `          <gml:pos>${occurrence.point.easting} ${occurrence.point.northing} ${occurrence.point.z}</gml:pos>\n`
+    + `          <gml:pos srsDimension="3">${occurrence.point.easting} ${occurrence.point.northing} ${occurrence.point.z}</gml:pos>\n`
     + '        </gml:Point>\n      </app:fotograferingspunkt>\n'
     + tag(3, 'fotolink', attachment.path.replaceAll('/', '\\')) + direction(occurrence, false)
     + '      <app:identifikasjon>\n        <app:Identifikasjon>\n'
@@ -71,8 +71,9 @@ export function serializePhotoExport(plan) {
   const profile = PHOTO_EXPORT_PROFILES[plan.profile], gemini = plan.profile === 'gemini-legacy2019';
   let xml = (gemini ? '<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n' : '<?xml version="1.0" encoding="UTF-8"?>\n')
     + '<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" '
+    + (gemini ? `gml:id="${plan.collectionId}" ` : '')
     + `xmlns:app="${profile.namespace}" ${gemini ? 'xmlns:xlink="http://www.w3.org/1999/xlink" ' : ''}xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" `
-    + `xsi:schemaLocation="${profile.namespace} ${profile.namespace}/${profile.schema}" gml:id="${plan.collectionId}">\n`;
+    + `xsi:schemaLocation="${profile.namespace} ${profile.namespace}/${profile.schema}"${gemini ? '' : ` gml:id="${plan.collectionId}"`}>\n`;
   if (gemini) xml += geminiBounds(plan);
   const assets = new Map(plan.assets.map((asset) => [asset.assetId, asset]));
   const attachments = new Map(plan.attachments.map((attachment) => [attachment.assetId, attachment]));

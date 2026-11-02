@@ -1,7 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { unzipSync } from 'fflate';
+import assert from 'node:assert/strict';
+import { assertGeminiConventions } from './geminiPhotoConventions.mjs';
+import { unzipSync, strFromU8 } from 'fflate';
 import { openTestChrome } from './chromeHarness.mjs';
 import { exportFixture } from './photoExportFixtures.mjs';
 import { buildPhotoExportPackage } from '../../src/lib/photos/export/photoExportPackage.mjs';
@@ -24,6 +26,13 @@ try {
   f.session.setCaptureMetadata(f.layerId, [f.ids[0]], 'captureTime', '2026-05-12T14:33:02.123+02:00');
   const plan = await f.plan({ profile: 'gemini-legacy2019' });
   const bytes = new Uint8Array(await (await buildPhotoExportPackage(plan)).arrayBuffer());
+  const entries = unzipSync(bytes);
+  assertGeminiConventions(strFromU8(entries['photos.gml']));
+  assert.deepEqual(Object.keys(entries), ['photos.gml', ...plan.attachments.map((a) => a.path)]);
+  for (const attachment of plan.attachments) {
+    const asset = plan.assets.find((row) => row.assetId === attachment.assetId);
+    assert.deepEqual(entries[attachment.path], new Uint8Array(await asset.file.arrayBuffer()));
+  }
   await writeFile(path.join(root, 'gemini-compatibility-synthetic.zip'), bytes);
   for (const [name, data] of Object.entries(unzipSync(bytes))) {
     const target = path.join(root, 'extracted', name); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, data);

@@ -47,6 +47,14 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   const profile = configuration.profile, gemini = profile === 'gemini-legacy2019';
   const crs = gemini ? 'EPSG:5972' : configuration.crs;
   const horizontalCrs = gemini ? 'EPSG:25832' : crs;
+  const usedGuids = new Set();
+  const geminiGuid = () => {
+    // Gemini/FME rejected UUIDv5 lokalId; UUIDv4 was accepted into GeoFoto.
+    const guid = globalThis.crypto.randomUUID();
+    if (usedGuids.has(guid)) throw new Error('Eksport-GUID er ikke unik. Lag en ny forhåndsvisning.');
+    usedGuids.add(guid);
+    return guid;
+  };
   const context = Object.fromEntries(EXPORT_CONTEXT_FIELDS.map(({ key }) => [key, String(configuration.context?.[key] ?? '').trim()]));
   const errors = [], warnings = [];
   const error = (code, message, occurrenceId, assetId) => errors.push({ code, message, occurrenceId, assetId });
@@ -88,9 +96,9 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
     } catch { error('projection-failed', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): posisjonen kan ikke projiseres.`, row.occurrenceId); }
     if (row.direction && (!Number.isFinite(row.direction.degrees) || row.direction.degrees < 0 || row.direction.degrees >= 360)) error('invalid-direction', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): ugyldig godtatt retning.`, row.occurrenceId);
     if ((profile === 'legacy2019' || gemini) && !row.direction) error('direction-required', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): Legacy krever godtatt retning.`, row.occurrenceId);
-    const guid = await exportGuid(`occurrence:${snapshot.layer.id}:${row.occurrenceId}`);
+    const guid = gemini ? geminiGuid() : await exportGuid(`occurrence:${snapshot.layer.id}:${row.occurrenceId}`);
     occurrences.push({ ...row, point, guid, featureId: gemini ? `id${guid}` : `photo-${guid}`,
-      geometryId: gemini ? `id${await exportGuid(`geometry:${snapshot.layer.id}:${row.occurrenceId}`)}` : `point-${guid}` });
+      geometryId: gemini ? `id${geminiGuid()}` : `point-${guid}` });
   }
   const associationCount = new Set(all.flatMap((row) => row.associations.map((link) => JSON.stringify([row.assetId, link.sourceId, link.object.objectKey])))).size;
   if (associationCount) warnings.push({ code: 'associations-omitted', message: `${associationCount} objektkoblinger beholdes i appen, men er ikke med i denne testeksporten.` });
@@ -111,7 +119,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
     warnings.push({ code: 'compatibility-import', message: 'Pakk ut ZIP. Importer photos.gml med Attachments-mappen ved siden av. XML bruker Attachments\\filnavn. Gemini-import må testes manuelt.' });
   }
   if (!snapshot.isLive()) error('stale-plan', 'Fotolaget eller godtatte data er endret. Lag en ny forhåndsvisning.');
-  const plan = freezeExportData({ version: 1, profile, crs, context, collectionId: gemini ? `id${await exportGuid(`collection:${snapshot.layer.id}`)}` : 'photo-collection', layer: snapshot.layer, assets, occurrences, attachments, excluded, warnings, errors,
+  const plan = freezeExportData({ version: 1, profile, crs, context, collectionId: gemini ? `id${geminiGuid()}` : 'photo-collection', layer: snapshot.layer, assets, occurrences, attachments, excluded, warnings, errors,
     counts: { uniqueImages: snapshot.assets.length, totalOccurrences: all.length, placed: placed.length, excluded: excluded.length,
       missingTimestampCount, timezoneTransformCount, compatibilityZCount: gemini ? occurrences.length : 0,
       features: occurrences.length, attachments: attachments.length, sharedAttachments, associationCount },

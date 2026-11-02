@@ -1,5 +1,7 @@
 # Experimental Gemini VA photo delivery compatibility
 
+Current acceptance update (2026-11-02): the user reports successful Foto mapping and GeoFoto import after replacing UUIDv5 export identities with UUIDv4. See the dated acceptance continuation below; earlier pending/UUIDv5 statements describe the initial implementation. The updated production exporter still needs one untouched UI-package import.
+
 Starting HEAD: `d005e1f Refine photo marker colors and placement cursor`. Root `C:\GitHub\gmi-validering-test`, branch `feature/photo-workspace`, clean worktree confirmed before edits. No sub-agents, commits or pushes. Reference: `C:\GitHub\gmi-validering-test\REF_FILES\GML-leveranse`.
 
 ## Evidence and privacy
@@ -140,7 +142,35 @@ For actual current FOTO data: open Eksporter, choose **Gemini VA · Skråfoto 20
 | Timestamp | Two local second timestamps, one absent; note importer interpretation | Pending |
 | Shared attachment | Two occurrences reference one original without loss/merging | Pending |
 
-## Remaining uncertainty
+## Remaining uncertainty (initial implementation; superseded in part below)
 
 Actual Gemini VA import acceptance is **pending user manual testing**. This work identifies exact structural differences, not a proven causal failure mechanism. Envelope-only CRS, Windows links, name, XYZ and optional time are empirically motivated hypotheses, not certified/general importer requirements. Shared occurrences, zero-height interpretation, true/grid north semantics, Unicode edge cases, empty namespace handling and local timestamp interpretation still need manual inspection. If the bundle fails, use controlled one-convention-at-a-time experiments; do not reinterpret XSD success as desktop acceptance. No AsBuilt-specific Gemini work, state/persistence changes, object relationships, source ranking, topology, 3D display, vendor-support contact or other deferred work was implemented.
 
+
+
+## 2026-11-02 acceptance continuation: UUIDv4 / Gemini VA-FME
+
+**Empirically confirmed Gemini VA/FME compatibility behavior**, based on the user's controlled manual test supplied for this task. Classification: **Experimentally accepted in the user's tested Gemini VA/FME import path**. This is not certification, universal Gemini support, or a claim of standards purity. Exact Gemini VA build and FME version were not supplied; older reports' software version references must not be substituted for the tested version. No returned conversion artifact or log was independently supplied/read in this task; the following sequence is user-reported empirical evidence.
+
+Initial app-generated compatibility package: Gemini/FME reported `Translation Successful`, but returned no usable Foto rows. Conversion diagnostics showed all four generated Skråfoto rejected with `SOSI.SOSI_Objekt.identifikasjon.lokalId is not a valid guid`. Their generated localIds were UUIDv5. Server translation success therefore did not establish usable photo output.
+
+Controlled experiment: all export UUIDs were replaced with RFC 4122 UUIDv4 values while the rest of the then-current experimental package was preserved. Gemini discovered all four Foto records, populated GUIDs, zoomed to their extent, displayed photo symbols, completed import, and registered the photos in the GeoFoto database/map layer. This demonstrates the complete package -> FME conversion -> Foto mapping -> Gemini VA import -> GeoFoto workflow for that controlled package.
+
+| Finding / experiment | Evidence classification |
+| --- | --- |
+| UUIDv5 feature lokalId rejection versus UUIDv4 acceptance | Confirmed blocker in the tested path; not a universal rule for every Gemini version |
+| Collection/Point UUIDv4 | Present in successful package and now generated; logs specifically identify feature lokalId, not those other identities independently |
+| gml:pos srsDimension=3 | Present in successful package; earlier dimension-only experiment did not resolve the failure |
+| Contractor root attribute order | Present in successful package; earlier order-only experiment did not resolve the failure |
+| Non-degenerate/nonzero-Z envelope | Earlier experiment failed to resolve the issue; no causal necessity established |
+| Zero-Z geometry/envelope behavior | Successful package convention retained; zero is compatibility-only, never measured camera height |
+
+Starting code at `ed73ec2` lacked the manually tested pos dimension attribute and contractor root attribute order. This fix explicitly carries those two successful manual refinements into Gemini-only serialization while changing GUID policy. Their necessity is still unproven. The root now orders xmlns:gml, gml:id, xmlns:app, xmlns:xlink, xmlns:xsi, schemaLocation, as the read-only contractor file does. Point and pos both declare dimension 3.
+
+The compatibility plan now calls platform `crypto.randomUUID()` for separate collection, feature and Point identities. Feature `gml:id` is `id` plus the exact localId UUID. IDs are allocated once while building the frozen plan, checked for document uniqueness, and never regenerated during XML serialization or packaging. Rebuilding a plan requests fresh UUIDv4 values. Export GUIDs do not enter photoSession or persistence. Legacy/AsBuilt retain their deterministic UUIDv5 policy and exact serialized bytes. No UI GUID control or UI redesign was added.
+
+The optional read-only reference comparator verifies 81/81 UUIDv4 collection/feature/Point IDs and 40 matching feature/localId relationships. No private UUIDs, filenames or coordinates are copied into fixtures. Missing capture time remains intentionally supported: the working reference omits it on 14/40 photos, and the official Legacy XSD still requires it. This discrepancy remains visible rather than being normalized away.
+
+Remaining uncertainty is now narrower: the UUID version is the confirmed blocker; XML dimension/header and envelope experiments are not equally likely explanations after the controlled result. Actual equivalence of the updated production code and the manually patched package awaits one final **unmodified UI download** import. Duplicate/shared originals, other Gemini/FME versions and broader dataset combinations are not independently certified by the four-photo success.
+
+Final manual acceptance: deploy/update the app, generate **Gemini VA · Skråfoto 2019 (eksperimentell)** from the UI, extract ZIP, import untouched `photos.gml` with sibling `Attachments`, and confirm Foto rows plus final registration in GeoFoto. Record conversion diagnostics, feature/photo counts and attachment opening. See [GUID-fix implementation and validation](20261102-1036-gemini-va-photo-guid-acceptance-fix.md).
