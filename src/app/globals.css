@@ -4,7 +4,7 @@
 /* Intermediate, session-only Bilder shell. Both panes retain their own scroll. */
 .photo-collection-dialog {
   width: 94vw;
-  max-width: none;
+  max-width: 1500px;
   height: 94dvh;
   max-height: calc(100dvh - 1rem);
   margin: auto;

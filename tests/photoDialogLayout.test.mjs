@@ -23,7 +23,7 @@ test('rendered FOTO dialog retains accepted desktop geometry and responsive pane
     await writeFile(path.join(process.env.PHOTO_SCREENSHOT_DIR, `${name}.png`), Buffer.from(data, 'base64'));
   };
   const checkViewports = async (mode) => {
-    for (const [width, height] of [[1680, 900], [1024, 620], [390, 700]]) {
+    for (const [width, height] of [[1920, 1080], [1280, 720], [2560, 1440], [1680, 900], [1024, 620], [390, 700]]) {
       await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
       results.push(await assertPhotoDialogLayout(browser, `${mode} ${width}x${height}`));
     }

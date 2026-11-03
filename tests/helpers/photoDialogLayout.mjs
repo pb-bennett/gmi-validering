@@ -17,7 +17,7 @@ export async function assertPhotoDialogLayout(browser, label) {
   })()`);
   const { viewport, dialog, body, gallery, inspector } = geometry;
   const narrow = viewport.width <= 700;
-  const expectedWidth = narrow ? viewport.width - 16 : viewport.width * 0.94;
+  const expectedWidth = narrow ? viewport.width - 16 : Math.min(viewport.width * 0.94, 1500);
   const expectedHeight = narrow ? viewport.height - 16 : viewport.height * 0.94;
   const context = `${label}: ${JSON.stringify(geometry)}`;
   // Bounds-only assertions miss a shrink-to-fit dialog at (0,0).
