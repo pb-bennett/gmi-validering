@@ -27,7 +27,7 @@ function RemovePhotosConfirmation({ count, occurrences, onCancel, onConfirm }) {
   </dialog>;
 }
 
-export default function PhotoWorkspaceCollection({ layer, photos, workspace, dispatch, onExit, onAddPhotos, onBeforeDialog, onOpenSources }) {
+export default function PhotoWorkspaceCollection({ layer, photos, workspace, dispatch, onExit, onAddPhotos, onBeforeDialog, onOpenSources, importNotice, onDismissNotice }) {
   const [filter, setFilter] = useState('all');
   const [removalIds, setRemovalIds] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -35,6 +35,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, workspace, dis
   const shown = photos.filter((photo) => filter === 'all' || (filter === 'placed') === Boolean(photo.spatial.current));
   const removalCount = removalIds?.filter((id) => layer.photoIds.includes(id)).length || 0;
   return <section className="photo-workspace-collection" aria-label="Bildemodul">
+    {importNotice && <div role="status" className="p-3 text-sm">{importNotice} <button type="button" className={control} aria-label="Lukk importmelding" onClick={onDismissNotice}>Lukk</button></div>}
     <header><div className="flex items-center justify-between gap-2"><h1 title={layer.name}>{layer.name}</h1><button type="button" className={control} onClick={onExit}>Tilbake til appen</button></div>
       <p>{layer.assetCount ?? layer.photoCount} {(layer.assetCount ?? layer.photoCount) === 1 ? 'bilde' : 'bilder'}{layer.assetCount < layer.photoCount ? ` · ${layer.photoCount} plasseringer` : ''} · {layer.placedCount} plassert · {layer.unplacedCount} uplassert</p>
       <p className="sr-only">{layer.exifCandidateCount} bilder med EXIF GPS</p>

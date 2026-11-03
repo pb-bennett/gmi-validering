@@ -248,7 +248,7 @@ function FutureContent() {
             </div>
             <h4 className="mt-3 text-base font-bold text-gmi-navy">Redigering av feltverdier i GMI-filer</h4>
             <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
-              Det vurderes også støtte for å gjøre enkle endringer i feltverdier direkte i opplastede GMI-filer. Målet er å kunne korrigere eller supplere egenskaper uten å endre geometrien, med tydelig skille mellom originaldata og redigerte verdier før filen lastes ned på nytt.
+              Det vurderes også støtte for å gjøre enkle endringer i feltverdier direkte i åpnede GMI-filer. Målet er å kunne korrigere eller supplere egenskaper uten å endre geometrien, med tydelig skille mellom originaldata og redigerte verdier før filen lastes ned på nytt.
             </p>
           </div>
           <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">

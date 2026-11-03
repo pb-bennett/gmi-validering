@@ -12,7 +12,7 @@ export async function assertPhotoDialogLayout(browser, label) {
       body: body.getBoundingClientRect().toJSON(), display: getComputedStyle(body).display,
       columns: getComputedStyle(body).gridTemplateColumns,
       gallery: dialog.querySelector('.photo-collection-gallery').getBoundingClientRect().toJSON(),
-      inspector: dialog.querySelector('.photo-collection-inspector').getBoundingClientRect().toJSON()
+      inspector: dialog.querySelector('.photo-collection-inspector')?.getBoundingClientRect().toJSON()
     };
   })()`);
   const { viewport, dialog, body, gallery, inspector } = geometry;
@@ -27,6 +27,7 @@ export async function assertPhotoDialogLayout(browser, label) {
   assert(Math.abs(dialog.top - (viewport.height - dialog.height) / 2) <= 2, context);
   assert(dialog.right <= viewport.width && dialog.bottom <= viewport.height, context);
   assert.equal(geometry.display, 'grid', context);
+  if (!inspector) { assert(gallery.width > 0 && gallery.height > 0, context); return geometry; }
   assert(gallery.width > 0 && gallery.height > 0 && inspector.width > 0 && inspector.height > 0, context);
   if (narrow) {
     assert(Math.abs(gallery.left - inspector.left) <= 2 && Math.abs(gallery.width - inspector.width) <= 2, context);

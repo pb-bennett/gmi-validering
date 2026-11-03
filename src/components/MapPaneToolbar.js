@@ -95,9 +95,9 @@ export default function MapPaneToolbar({ onReset, onShare, showShare }) {
                   {paneMode === MapToolbarMode.CONSTRAINED ? null : 'Del'}
                 </ToolbarButton>
               )}
-              <ToolbarButton ref={resetButtonRef} onClick={reset} aria-label="Nullstill og last opp ny">
+              <ToolbarButton ref={resetButtonRef} onClick={reset} aria-label="Nullstill og åpne ny fil">
                 <ArrowClockwiseIcon aria-hidden="true" size={16} />
-                <span>Nullstill og last opp ny</span>
+                <span>Nullstill og åpne ny fil</span>
               </ToolbarButton>
             </>
           )}
@@ -129,9 +129,9 @@ export default function MapPaneToolbar({ onReset, onShare, showShare }) {
             </ToolbarButton>
           )}
           {paneMode === MapToolbarMode.NARROW && (
-            <ToolbarButton onClick={reset} className="w-full justify-start" aria-label="Nullstill og last opp ny">
+            <ToolbarButton onClick={reset} className="w-full justify-start" aria-label="Nullstill og åpne ny fil">
               <ArrowClockwiseIcon aria-hidden="true" size={16} />
-              <span>Nullstill og last opp ny</span>
+              <span>Nullstill og åpne ny fil</span>
             </ToolbarButton>
           )}
           {showTestModeControls && <TestModeControl />}

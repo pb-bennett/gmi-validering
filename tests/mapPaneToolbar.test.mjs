@@ -157,11 +157,11 @@ test('overflow is keyboard-dismissible, restores focus, and retains the full res
   assert.match(toolbar, /overflowTriggerRef\.current\?\.focus\(\)/);
   assert.match(toolbar, /pointerdown/);
   assert.equal((toolbar.match(/<TestModeControl \/>/g) || []).length, 2);
-  assert.match(toolbar, /<span>Nullstill og last opp ny<\/span>/);
+  assert.match(toolbar, /<span>Nullstill og åpne ny fil<\/span>/);
   assert.match(toolbar, /onReset\(\)/);
   assert.match(toolbar, /onShare\(\)/);
   assert.match(toolbar, /aria-label="Del app"/);
-  assert.match(toolbar, /aria-label="Nullstill og last opp ny"/);
+  assert.match(toolbar, /aria-label="Nullstill og åpne ny fil"/);
 });
 
 test('map controls are descendants of the map pane, beside rather than inside the inspector', async () => {
@@ -261,7 +261,7 @@ test('start-screen Testmodus host and map toolbar are mutually exclusive and sha
   ]);
   const uploadBranch = page.slice(page.indexOf("{parsingStatus !== 'done'"), page.indexOf('{/* Main App Layout'));
   const mapBranch = page.slice(page.indexOf('{/* Main App Layout'));
-  assert.match(uploadBranch, /Last opp og valider GMI-filer[\s\S]*?<TestModeControl \/>[\s\S]*?<FileUpload \/>/);
+  assert.match(uploadBranch, /Åpne og valider GMI-filer[\s\S]*?<TestModeControl \/>[\s\S]*?<FileUpload \/>/);
   assert.match(mapBranch, /<MapPaneToolbar/);
   assert.match(page, /<TestModeActivation \/>/);
   assert.match(testControl, /isTestModeActivation\(params\)[\s\S]*?updateSettings\(\{ testMode: true \}\)/);

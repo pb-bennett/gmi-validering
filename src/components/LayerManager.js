@@ -70,13 +70,13 @@ export default function LayerManager({ onAddFile, onOpenPhotoLayer, onAddGmiPhot
     return (
       <div className="p-3 text-center">
         <p className="mb-3 text-sm text-gmi-text-muted">
-          Ingen filer lastet opp ennå.
+          Ingen filer er åpnet ennå.
         </p>
         <button
           onClick={onAddFile}
           className="gmi-primary-control gmi-focus-ring px-4 py-2 text-sm font-medium"
         >
-          Last opp fil
+          Åpne fil
         </button>
       </div>
     );

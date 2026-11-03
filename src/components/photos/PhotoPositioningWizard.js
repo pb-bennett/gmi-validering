@@ -18,17 +18,12 @@ const metres = (distance) => distance < .1 && distance > .01 ? 'under 0,1 m'
 const actionLabel = (row) => row.action === 'move' ? `Flyttes ca. ${metres(row.distanceMetres)}` : row.action === 'same' ? 'Samme posisjon' : 'Plasseres';
 const sourceLabels = { gmi: 'GMI – objektenes bildereferanser', gml: 'GML – bildeposisjoner' };
 const savedMessage = 'Kilder og koblinger er lagret. Posisjoner er ikke endret.';
-const readErrors = {
-  'invalid-xml': 'GML-filen er ikke gyldig XML.', 'invalid-gmi': 'Filen kunne ikke leses som en gyldig GMI-fil.',
-  'unsupported-gml-profile': 'Velg en GML-fil med Skråfoto i Terrain-formatet fra 2019.',
-  'gml-too-large': 'GML-filen er for stor (maks. 10 MiB).', 'gmi-too-large': 'GMI-filen er for stor (maks. 10 MiB).',
-  'gml-doctype-not-supported': 'GML med eksterne entiteter eller dokumenttype støttes ikke.',
-};
+import { readErrors } from '@/lib/photos/photoImportPresentation.mjs';
 
-export default function PhotoPositioningWizard({ layer, photos, review, initialSourceId, focusedPhotoId, initialPositions = false, onClose }) {
+export default function PhotoPositioningWizard({ layer, photos, review, initialSourceId, focusedPhotoId, onClose }) {
   const dialogRef = useRef(null), inputRef = useRef(null), ticketRef = useRef(null);
   const editedIds = useRef(new Set());
-  const [step, setStep] = useState(initialPositions ? 3 : initialSourceId ? 2 : 1);
+  const [step, setStep] = useState(initialSourceId ? 2 : 1);
   const [kind, setKind] = useState('gml');
   const [plan, setPlan] = useState(null), [choices, setChoices] = useState({});
   const [notice, setNotice] = useState(''), [error, setError] = useState('');
@@ -50,22 +45,15 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
     const dialog = dialogRef.current, opener = document.activeElement;
     const ticket = photoSession.beginSourceWorkflow(layer.id);
     ticketRef.current = ticket;
-    const opened = () => {
-      if (!initialPositions || ticketRef.current !== ticket || !dialog.open) return;
-      const next = photoSession.reviewSourceWorkflowPositions(ticket);
-      if (next) { setPlan(next); setChoices(photoSourcePositionChoices(next)); setStep(3); setNotice(savedMessage); }
-    };
-    dialog.addEventListener('toggle', opened, { once: true });
     dialog.showModal();
     if (initialSourceId) photoSession.recheckLayerSource(layer.id, initialSourceId);
     return () => {
       ticketRef.current = null;
       photoSession.endSourceWorkflow(ticket);
-      dialog.removeEventListener('toggle', opened);
       dialog.close();
       if (opener?.isConnected) opener.focus();
     };
-  }, [layer.id, initialSourceId, initialPositions]);
+  }, [layer.id, initialSourceId]);
   useEffect(() => {
     if (!photoSession.sourceWorkflowIsLive(ticketRef.current)) onClose();
   }, [layer.photoIds, onClose]);

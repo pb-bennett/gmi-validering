@@ -1,3 +1,4 @@
+import { createLayerWithoutPlacement, waitForThumbnails, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, mkdir, writeFile, readdir, rm } from 'node:fs/promises';
@@ -36,9 +37,10 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       await start(browser);
       await click(browser, 'Bilder', 'document');
       await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', photos);
-      await browser.waitFor('!document.querySelector(".photo-collection-notice [role=status]").innerText.includes("Lager miniatyrbilder")');
-      await click(browser, 'Opprett fotokartlag (3 bilder)', 'document');
-      await click(browser, 'Bildemodul', 'document');
+      await waitForThumbnails(browser);
+      await createLayerWithoutPlacement(browser);
+
+
       await browser.waitFor('document.querySelector(".photo-workspace-collection")?.innerText.includes("3 bilder med EXIF")');
       assert.equal(await browser.evaluate(markerCount), 0);
       await selectPhoto(browser, 'c.png');
@@ -151,12 +153,11 @@ test('real 148-photo import retains GML/EXIF evidence until central explicit sou
       assert.equal(photos.length, 148);
       await click(browser, 'Bilder', 'document');
       await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', photos);
-      await setPhotoFiles(browser, 'input[aria-label="Velg GML med bildeposisjoner"]', [realGml]);
-      await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("148 treff")');
-      await click(browser, 'Opprett fotokartlag (148 bilder)', 'document');
+      await createLayerWithoutPlacement(browser);
+      await retainGmlInWorkspace(browser, realGml);
       await browser.waitFor('document.querySelector(".leaflet-container")');
       assert.equal(await browser.evaluate(markerCount), 0);
-      await click(browser, 'Bildemodul', 'document');
+
       await browser.waitFor('document.querySelector(".photo-workspace-collection")?.innerText.includes("148 bilder med EXIF")');
       await openPhotoSources(browser);
       await click(browser, 'Kontroller tilgjengelige posisjoner');

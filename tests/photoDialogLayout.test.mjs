@@ -1,3 +1,4 @@
+import { createLayerWithoutPlacement } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -60,9 +61,9 @@ test('rendered FOTO dialog retains accepted desktop geometry and responsive pane
     await checkViewports('populated importer');
     await screenshot('photo-dialog-populated-desktop');
     assert.equal(await browser.evaluate('document.querySelectorAll(".photo-collection-card").length'), 3);
-    await click('Opprett fotokartlag (3 bilder)');
+    await createLayerWithoutPlacement(browser);
     await browser.waitFor('!document.querySelector("dialog[open]")');
-    await click('Bildemodul');
+
     await browser.waitFor('document.querySelector(".photo-workspace-shell")');
     assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 3);
     await click('Legg til bilder');

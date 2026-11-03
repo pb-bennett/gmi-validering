@@ -1,3 +1,4 @@
+import { createLayerWithoutPlacement, waitForThumbnails, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
@@ -59,9 +60,9 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
       assert.equal(photos.length,148);
       await click('Bilder'); await browser.waitFor(`${dialog}?.open`);
       await files('input[aria-label="Velg bildefiler"]',photos);
-      await files('input[aria-label="Velg GML med bildeposisjoner"]',[gmlPath]);
-      await browser.waitFor(`${dialog}.innerText.includes('148 treff') && ${dialog}.innerText.includes('148 bilder med EXIF GPS')`,45000);
-      await click('Opprett fotokartlag (148 bilder)',dialog); await browser.waitFor(`!${dialog}`); await click('Bildemodul');
+      await waitForThumbnails(browser);
+      await createLayerWithoutPlacement(browser);
+      await retainGmlInWorkspace(browser,gmlPath);
       await applyPhotoSourcePositions(browser, 'gml');
       await browser.waitFor(`${collection}===148`);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list img").length===148',45000);
@@ -72,18 +73,17 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
       await click('Fjern fra lag','document.querySelector(".photo-remove-confirmation")'); await browser.waitFor(`${collection}===142`);
       const beforeMarkers = await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'); assert.equal(beforeMarkers,142);
       await openAppend(); await files('input[aria-label="Velg bildefiler"]',photos);
-      await browser.waitFor(`${appendButton}.innerText==='Legg til 6 bilder i laget'`);
+      await browser.waitFor(`${appendButton}.innerText==='Neste'`);
       assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-append-status=skipped]').length`),142);
       assert(await browser.evaluate(`${dialog}.querySelector('.photo-append-summary').innerText.includes('6 nye bilder') && ${dialog}.querySelector('.photo-append-summary').innerText.includes('142 bilder finnes allerede')`));
       await click('Velg alle',dialog);
       assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('.photo-batch-toggle[aria-pressed=true]').length`),6);
       assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-append-status=skipped] .photo-batch-toggle[aria-pressed=true]').length`),0);
       await browser.evaluate(`${dialog}.querySelector('[data-append-status=skipped] .photo-collection-card').click()`);
-      await browser.waitFor(`${dialog}.querySelector('.photo-spatial-inspector').innerText.includes('GPS leses bare hvis')`);
-      assert(!await browser.evaluate(`${dialog}.querySelector('.photo-spatial-inspector').innerText.includes('EXIF kandidat')`));
-      await files('input[aria-label="Velg GML med bildeposisjoner"]',[gmlPath]);
-      await browser.waitFor(`${dialog}.innerText.includes('6 treff') && ${dialog}.innerText.includes('6 bilder med EXIF GPS')`,45000);
-      assert(!await browser.evaluate(`${dialog}.querySelector('.photo-spatial-inspector').innerText.includes('GML i importen')`));
+      assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('.photo-spatial-inspector').length`),0);
+
+      await waitForThumbnails(browser);
+
       await browser.waitFor(`${dialog}.querySelector('.photo-collection-original img')?.complete && ${dialog}.querySelector('.photo-collection-original img').naturalWidth > 0`,45000);
       await assertPhotoDialogLayout(browser,'append 148 with 142 skipped');
       for (const [width,height] of [[1680,900],[1024,620],[390,700]]) {
@@ -96,16 +96,17 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
       await cancel(); assert.equal(await browser.evaluate(collection),142); assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'),142);
       checks.push('148 incoming / 142 existing: six new, 142 visibly skipped, select-all selects six; skipped inspector has no EXIF/GML; cancel retains 142');
       await openAppend(); await files('input[aria-label="Velg bildefiler"]',photos);
-      await files('input[aria-label="Velg GML med bildeposisjoner"]',[gmlPath]); await browser.waitFor(`${dialog}.innerText.includes('6 treff')`);
-      await click('Legg til 6 bilder i laget',dialog); await browser.waitFor(`${collection}===148`);
+      await waitForThumbnails(browser);
+      await createLayerWithoutPlacement(browser); await browser.waitFor(`${collection}===148`);
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'),142, 'append does not accept GML positions');
+      await retainGmlInWorkspace(browser,gmlPath);
       await applyPhotoSourcePositions(browser, 'gml');
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'),148);
       const after = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(e=>({id:e.dataset.photoId,filename:e.querySelector('.photo-workspace-filename').title,thumbnail:e.querySelector('img')?.src}))`);
       before.slice(6).forEach(photo=>assert.deepEqual(after.find(e=>e.id===photo.id),photo));
       checks.push('confirmed six-only append returns to exactly 148 members/markers; remaining original identities/thumbnails preserved');
       await openAppend(); await files('input[aria-label="Velg bildefiler"]',photos);
-      await browser.waitFor(`${appendButton}.innerText==='Legg til 0 bilder i laget'`);
+      await browser.waitFor(`${appendButton}.innerText==='Neste'`);
       assert(await browser.evaluate(`${appendButton}.disabled`)); assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-append-status=skipped]').length`),148);
       await click('Velg alle',dialog); assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('.photo-batch-toggle[aria-pressed=true]').length`),0);
       for (const [width,height] of [[1680,900],[1024,620],[390,700]]) {
@@ -119,7 +120,7 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
         const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));const transfer=new DataTransfer();
         transfer.items.add(new File([blob],${JSON.stringify(path.basename(photos[0]))},{type:'image/png'}));
         const input=document.querySelector('input[aria-label="Velg bildefiler"]');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-      await browser.waitFor(`${dialog}.innerText.includes('Like filnavn i importen (1)')`);
+      await browser.waitFor(`${dialog}.innerText.includes('Like filnavn (1)')`);
       assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-append-status=skipped]').length`),149);
       assert(await browser.evaluate(`${appendButton}.disabled`)); await click('Velg alle',dialog);
       assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('.photo-batch-toggle[aria-pressed=true]').length`),0);
@@ -130,16 +131,16 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
         await browser.send('Input.dispatchKeyEvent',{type:'keyUp',key:name,code,windowsVirtualKeyCode:code==='Enter'?13:32});
       };
       await key('Enter','Enter');
-      await browser.waitFor(`${appendButton}.innerText==='Legg til 1 bilde i laget'`);
+      await browser.waitFor(`${appendButton}.innerText==='Neste'`);
       assert(!await browser.evaluate(`${appendButton}.disabled`));
       assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-append-status=override]').length`),1);
       assert.equal(await browser.evaluate(`${dialog}.querySelector('[data-append-status=override] .photo-append-badge').innerText`),'Legges til');
       await uniformCards('override active');
-      await key(' ','Space'); await browser.waitFor(`${appendButton}.innerText==='Legg til 0 bilder i laget'`);
+      await key(' ','Space'); await browser.waitFor(`${appendButton}.innerText==='Neste'`);
       assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-append-status=override]').length`),0);
-      await key('Enter','Enter'); await browser.waitFor(`${appendButton}.innerText==='Legg til 1 bilde i laget'`);
+      await key('Enter','Enter'); await browser.waitFor(`${appendButton}.innerText==='Neste'`);
       await click('Velg alle',dialog); assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('.photo-batch-toggle[aria-pressed=true]').length`),1);
-      await screenshot('append-one-deliberate-override'); await click('Legg til 1 bilde i laget',dialog); await browser.waitFor(`${collection}===149`);
+      await screenshot('append-one-deliberate-override'); await createLayerWithoutPlacement(browser); await browser.waitFor(`${collection}===149`);
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'),148,'explicit duplicate remains unplaced without an accepted position');
       await browser.waitFor('document.querySelector(".photo-workspace-list li:last-child img")');
       await browser.evaluate('document.querySelector(".photo-workspace-list li:last-child button").click()');

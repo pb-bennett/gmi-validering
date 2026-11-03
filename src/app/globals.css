@@ -23,7 +23,6 @@
 .layer-type-badge { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 2.75rem; height: 1.125rem; border: 1px solid var(--gmi-border-strong); border-radius: 0.25rem; background: var(--gmi-surface-soft); color: var(--gmi-text-muted); font-size: 9px; font-weight: 700; letter-spacing: 0.025em; }
 .layer-type-badge-photo { background: var(--gmi-cyan-soft); border-color: var(--gmi-interactive); color: var(--gmi-interactive); }
 .photo-collection-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.75rem 1rem; flex: none; }
-.photo-collection-notice { padding: 0.5rem 1rem; flex: none; }
 .photo-collection-rejections { max-height: 5rem; overflow: auto; }
 .photo-collection-body { display: grid; grid-template-columns: minmax(0, 42fr) minmax(0, 58fr); flex: 1; min-height: 0; }
 .photo-collection-gallery { overflow: auto; min-height: 0; min-width: 0; padding: 0.75rem; overscroll-behavior: contain; background: var(--gmi-surface-soft); }
@@ -52,7 +51,7 @@
   .photo-collection-dialog { width: calc(100vw - 1rem); height: calc(100dvh - 1rem); }
   .photo-collection-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr); }
   .photo-collection-inspector { border-left: 0; border-top: 1px solid var(--gmi-border); }
-  .photo-collection-header, .photo-collection-notice { padding: 0.5rem 0.75rem; }
+  .photo-collection-header { padding: 0.5rem 0.75rem; }
   .photo-collection-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   .photo-collection-facts { max-height: 30%; }
 }

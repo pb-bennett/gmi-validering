@@ -1,3 +1,4 @@
+import { createLayerWithoutPlacement, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdir, mkdir, writeFile } from 'node:fs/promises';
@@ -49,7 +50,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
     const syntheticGml = async (filename, late = false) => {
       const xml = `<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy><gml:featureMember><app:Skråfoto gml:id="extra"><app:fotolink>Attachments\\${filename}</app:fotolink><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>${late ? '582142 6566396 0' : '581932.579311 6566001.891835 0'}</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember></gml:FeatureCollection>`;
       await browser.evaluate(`(() => { const transfer = new DataTransfer(); transfer.items.add(new File([${JSON.stringify(xml)}], ${JSON.stringify(late ? 'changed.gml' : 'addition.gml')}));
-        const input = document.querySelector(${JSON.stringify(late ? 'input[aria-label="Velg GML-kilde"]' : 'input[aria-label="Velg GML med bildeposisjoner"]')});
+        const input = document.querySelector(${JSON.stringify('input[aria-label="Velg GML-kilde"]')});
         input.files = transfer.files; input.dispatchEvent(new Event('change', {bubbles:true})); })()`);
     };
     const selectPhoto = async (filename) => {
@@ -147,20 +148,18 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert.equal(photos.length, 148);
       await click('Bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
       await assertPhotoDialogLayout(browser, 'empty real-corpus importer');
-      await inputFiles('input[aria-label="Velg GML med bildeposisjoner"]', [gmlPath]);
-      await browser.waitFor('document.querySelector("dialog").innerText.includes("148 uten bilde")');
       await inputFiles('input[aria-label="Velg bildefiler"]', photos);
-      await browser.waitFor('document.querySelector("dialog").innerText.includes("148 treff")');
       await assertPhotoDialogLayout(browser, 'populated real-corpus importer');
-      await click('Opprett fotokartlag (148 bilder)');
+      await createLayerWithoutPlacement(browser);
+        await retainGmlInWorkspace(browser, gmlPath);
       assert.equal(await browser.evaluate(markerCount), 0); await applyPhotoSourcePositions(browser, 'gml');
       await browser.waitFor(`${markerCount} === 148`);
       await browser.waitFor('/Zoom: (1[6-8])/.test(document.body.innerText)');
+      await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       const locations = await browser.evaluate('new Set(Array.from(document.querySelectorAll(".photo-camera-marker")).map(e => e.style.transform)).size');
       assert(locations > 120 && locations <= 136); await browser.waitFor(`${originalCount} === 0`);
       await screenshot('photo-workspace-normal-map'); checks.push(`148 markers, ${locations} rounded pixel locations; 136 geographic positions checked independently`);
       await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-      await browser.waitFor('document.body.innerText.includes("148 bilder med EXIF GPS")', 45000);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list img").length === 148');
       await browser.waitFor(`${originalCount} === 1`);
       assert.equal(await browser.evaluate(collectionCount), 148); assert(await browser.evaluate(current('GML')));
@@ -247,9 +246,10 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert.equal(await browser.evaluate(collectionCount), 148);
       await click('Legg til bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
       await syntheticPhotos(['addition-placed.png', 'addition-one.png', 'addition-two.png']);
-      await syntheticGml('addition-placed.png'); await browser.waitFor('document.querySelector("dialog").innerText.includes("1 treff")');
+
       await assertPhotoDialogLayout(browser, 'populated add-to-layer importer');
-      await click('Legg til 3 bilder i laget'); await browser.waitFor(`${collectionCount} === 151 && ${markerCount} === 148`);
+      await createLayerWithoutPlacement(browser); await browser.waitFor(`${collectionCount} === 151 && ${markerCount} === 148`);
+      await openPhotoSources(browser); await syntheticGml('addition-placed.png', true); await savePhotoSource(browser); await closePhotoSources(browser);
       await applyPhotoSourcePositions(browser, 'gml', { filename: 'addition-placed.png' }); await browser.waitFor(`${markerCount} === 149`);
       await selectPhoto('addition-one.png'); await checkImageViewer('landscape', false); await togglePhoto('addition-one.png'); await togglePhoto('addition-two.png');
       await click('Fjern fra lag'); await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
@@ -291,9 +291,8 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert.equal(await browser.evaluate(markerCount), 0); assert.equal(await browser.evaluate(originalCount), 0);
 
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await inputFiles('input[aria-label="Velg bildefiler"]', photos);
-      await browser.waitFor('document.querySelector("dialog").innerText.includes("148 bilder med EXIF GPS")', 45000);
-      await click('Opprett fotokartlag (148 bilder)'); await browser.waitFor('document.body.innerText.includes("148 uplassert")');
-      assert.equal(await browser.evaluate(markerCount), 0); await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+      await createLayerWithoutPlacement(browser); await browser.waitFor('document.body.innerText.includes("148 uplassert")');
+      assert.equal(await browser.evaluate(markerCount), 0);  await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       await stagePhotoSource(browser, gmlPath); await savePhotoSource(browser);
       assert.equal(await browser.evaluate(markerCount), 0, 'source checkpoint leaves photos unplaced');
       await applyPhotoSourcePositions(browser, 'gml'); await browser.waitFor(`${markerCount} === 148`);
@@ -303,7 +302,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       checks.push('photos-only EXIF and late real GML remain candidate-only; all 148 explicitly accepted in batch; reversible source basis');
 
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await syntheticPhotos(['empty-layer.png']);
-      await click('Opprett fotokartlag (1 bilder)'); await browser.waitFor('!document.querySelector("dialog[open]")'); await click('Bildemodul');
+      await createLayerWithoutPlacement(browser); await browser.waitFor('!document.querySelector("dialog[open]")');
       await browser.waitFor('document.querySelector(".photo-workspace-shell")'); await click('Velg alle viste'); await click('Fjern fra lag');
       await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")'); await click('Fjern fra lag', 'document.querySelector(".photo-remove-confirmation")');
       await browser.waitFor(`${collectionCount} === 0`);
@@ -312,7 +311,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert(await browser.evaluate('Boolean(document.querySelector("section[aria-label^=Fotokartlag]"))')); await deleteLayer();
       checks.push('final member removal retains empty FOTO layer and map; separate layer deletion');
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await inputFiles('input[aria-label="Velg bildefiler"]', [photos[0]]);
-      await click('Opprett fotokartlag (1 bilder)'); await browser.waitFor('!document.querySelector("dialog[open]")'); await click('Bildemodul');
+      await createLayerWithoutPlacement(browser); await browser.waitFor('!document.querySelector("dialog[open]")');
       await browser.waitFor('document.querySelector(".photo-workspace-shell")'); await browser.send('Page.reload');
       await browser.waitFor('document.body.innerText.includes("Bilder") && !document.querySelector(".photo-workspace-shell, section[aria-label^=Fotokartlag]")');
       assert.equal(await browser.evaluate(markerCount), 0); assert.equal(await browser.evaluate(originalCount), 0);

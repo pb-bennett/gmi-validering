@@ -1,3 +1,4 @@
+import { createLayerWithoutPlacement, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdir, mkdir, writeFile } from 'node:fs/promises';
@@ -86,15 +87,11 @@ test('manual FOTO placement: real corpus, click/drag/keyboard, transactions, sou
       const create = async positioned => {
         await click('Bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
         await inputFiles('input[aria-label="Velg bildefiler"]',photos);
-        if (positioned) {
-          await inputFiles('input[aria-label="Velg GML med bildeposisjoner"]',[gml]);
-          await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("148 treff")');
-        }
-        await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("148 bilder med EXIF GPS")',45000);
         // URL assertions below isolate the inspector from temporary decoder URLs.
         await browser.waitFor('document.querySelectorAll(".photo-collection-card img").length===148',60000);
-        await click('Opprett fotokartlag (148 bilder)');
-        await click('Bildemodul'); await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length===148');
+        await createLayerWithoutPlacement(browser);
+        if (positioned) await retainGmlInWorkspace(browser, gml);
+         await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length===148');
         if (positioned) await applyPhotoSourcePositions(browser, 'gml');
         await browser.waitFor('document.querySelector(".photo-collection-original img")?.naturalWidth>0');
         await browser.waitFor('window.__originalUrls.size===1');

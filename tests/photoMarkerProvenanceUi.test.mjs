@@ -1,3 +1,4 @@
+import { createLayerWithoutPlacement, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -72,11 +73,10 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert.equal(await browser.evaluate(`Boolean(${legend})`), false);
         await click('Bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
         await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', photos);
-        await setPhotoFiles(browser, 'input[aria-label="Velg GML med bildeposisjoner"]', [gml]);
-        await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("3 bilder med EXIF GPS")');
-        await click('Opprett fotokartlag (3 bilder)');
+        await createLayerWithoutPlacement(browser);
+        await retainGmlInWorkspace(browser, gml);
         assert.equal(await browser.evaluate(`${markers}.length`), 0);
-        await click('Bildemodul'); await browser.waitFor(legend);
+         await browser.waitFor(legend);
         assert.equal(await browser.evaluate('document.body.innerText.includes("Tegnforklaring")'), false);
       });
       await stagePhotoSource(browser, gmi, 'gmi'); await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser);
@@ -181,8 +181,8 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         }
         await click('Tilbake til appen');
         await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
-        await browser.waitFor('document.querySelector("button[aria-label=\\\"Nullstill og last opp ny\\\"]")');
-        await browser.evaluate('document.querySelector("button[aria-label=\\\"Nullstill og last opp ny\\\"]").click()');
+        await browser.waitFor('document.querySelector("button[aria-label=\\\"Nullstill og åpne ny fil\\\"]")');
+        await browser.evaluate('document.querySelector("button[aria-label=\\\"Nullstill og åpne ny fil\\\"]").click()');
         await browser.waitFor(`!${legend} && !document.querySelector('.photo-workspace-shell') && ${markers}.length===0`);
         assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-placement-active"))'), false);
         if (await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))')) assert.notEqual(await cursor(), 'crosshair');

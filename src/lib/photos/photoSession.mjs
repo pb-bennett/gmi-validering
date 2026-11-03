@@ -1,3 +1,4 @@
+import { importPlacementRequests, previewImportPlacement, summarizeImportOutcome } from './photoImportOutcome.mjs';
 import { emptyCaptureMetadata, normalizeCaptureTime, normalizePhotographer, gmlCaptureEvidence } from './photoCaptureMetadata.mjs';
 import { classifyPhotoFile, createPhotoThumbnail } from './imagePreview.mjs';
 import { readExifGps } from './exifGps.mjs';
@@ -65,6 +66,7 @@ export function createPhotoSession({
   let draftTargetLayerId = null;
   let loadedImport = null;
   const loadedPlans = new WeakMap();
+  const importPreviews = new WeakMap();
   const appendOverrideIds = new Set();
   const sourceReviews = new Map();
   const sourceRequests = new Map();
@@ -348,7 +350,7 @@ export function createPhotoSession({
     publish();
   }
 
-  function planGmiAssociations(layer, source, associationLedger) {
+  function planGmiAssociations(layer, source, associationLedger, occurrenceId = () => createId()) {
     const layerId = layer.id, sourceId = source.id;
     const existing = layer.spatialSources.some((item) => item.id === sourceId);
     const additions = [], replacements = new Map(), memberList = [...layer.photoIds];
@@ -365,7 +367,7 @@ export function createPhotoSession({
           .filter((record) => record.assetId === assetId);
         let record = peers.find((item) => item.occurrence?.key === key);
         if (record?.occurrence.sourceId === sourceId) continue;
-        record = record || peers.find((item) => !item.occurrence) || makeOccurrence(assetId, createId());
+        record = record || peers.find((item) => !item.occurrence) || makeOccurrence(assetId, occurrenceId(assetId, key));
         const occurrence = immutable({ key, assetId, sourceId, sourceFingerprint: source.fingerprint,
           sourceFilename: source.filename, objectKey: object.objectKey, object,
           referenceIds: association.referenceIds, references: source.references.filter((ref) => association.referenceIds.includes(ref.id)),
@@ -394,8 +396,15 @@ export function createPhotoSession({
 
   return {
     getSnapshot: () => snapshot,
-    async beginLoadedGmiImport({ binding, read, isLive }, targetLayerId = null) {
-      if (!isLive(binding) || !this.beginImport(targetLayerId)) return false;
+    async beginLoadedGmiImport(args, targetLayerId = null) {
+      if (!args.isLive(args.binding) || !this.beginImport(targetLayerId)) return false;
+      return this.setDraftGmiSource(args);
+    },
+    clearDraftGmiSource() { loadedImport = null; publish(); },
+    clearDraftPositioningGml() { gmlRequest++; positioning = EMPTY_PHOTO_SNAPSHOT.positioning; publish(); },
+    async setDraftGmiSource({ binding = null, read, isLive = () => true, file }) {
+      if (!isLive(binding)) return false;
+      if (file) read = () => makeSource(file, 'gmi');
       const operation = { binding, isLive, state: 'pending', source: null, errorCode: null };
       loadedImport = operation;
       publish();
@@ -403,23 +412,91 @@ export function createPhotoSession({
         const parsed = await read();
         if (loadedImport !== operation || !isLive(binding)) return false;
         const id = `photo-gmi-${createId()}`;
-        operation.source = immutable({ ...parsed, id, kind: 'gmi', filename: binding.filename, importedAt: Date.now(),
+        operation.source = immutable({ ...parsed, id, kind: 'gmi', filename: binding?.filename || file?.name, importedAt: Date.now(),
           references: parsed.references.map((reference) => ({ ...reference, id: `${id}:${reference.id}` })),
-          loadedBinding: { ...binding, live: true } });
+          ...(binding ? { loadedBinding: { ...binding, live: true } } : {}) });
         operation.state = 'ready';
         publish(); return true;
-      } catch {
+      } catch (error) {
         if (loadedImport !== operation) return false;
-        operation.state = 'error'; operation.errorCode = 'loaded-source-unavailable';
+        operation.state = 'error'; operation.errorCode = error.code || 'loaded-source-unavailable';
         publish(); return false;
       }
+    },
+    previewImport({ loadedReview = null, placement }) {
+      if (!importIds.length && !draftTargetLayerId) return null;
+      if (loadedImport && (!loadedReview || loadedPlans.get(loadedReview)?.operation !== loadedImport)) return null;
+      const target = draftTargetLayerId ? layers.get(draftTargetLayerId) : null;
+      if (draftTargetLayerId && !target) return null;
+      const incoming = loadedReview?.includedIds || appendPolicy()?.appendableIds || importIds;
+      let photoIds = [...(target?.photoIds || []), ...incoming];
+      let sources = [...(target?.spatialSources || [])];
+      let projected = photoIds.map((id) => records.get(id));
+      if (loadedReview) {
+        const source = { ...loadedReview.source, associationLedger: loadedReview.associationLedger };
+        const plan = planGmiAssociations(target ? { ...target, photoIds } : { id: 'draft', photoIds, spatialSources: [] }, source, loadedReview.associationLedger, (assetId, key) => `preview:${assetId}:${key}`);
+        photoIds = plan.photoIds; sources = plan.layer.spatialSources;
+        projected = photoIds.map((id) => plan.replacements.get(id) || records.get(id) || plan.additions.find((photo) => photo.id === id));
+      }
+      if (positioning.source) {
+        const source = positioning.source;
+        const matches = matchPhotoReferences(source.entries, assetPhotos(incoming)).matches;
+        projected = projected.map((photo) => {
+          const candidates = matches.filter((match) => match.status === 'matched' && match.photoId === photo.assetId).map((match) => {
+            const entry = source.entries.find((item) => item.id === match.entryId);
+            return createPhotoCandidate({ ...entry, id: `${source.id}:${entry.id}`, kind: 'gml', sourceId: source.id, sourceEntryId: entry.id });
+          });
+          return candidates.length ? { ...photo, spatial: { ...photo.spatial, candidates: [...photo.spatial.candidates, ...candidates] } } : photo;
+        });
+        sources = [...sources, source];
+      }
+      const plan = planPhotoSourcePositions(projected, sources);
+      const included = new Set(incoming);
+      const skipped = new Set(appendPolicy()?.skippedIds);
+      const excludedPhotos = importIds.filter((id) => !included.has(id)).map((id) => ({ ...records.get(id),
+        importExclusionReason: skipped.has(id) ? 'Finnes allerede i fotolaget og hoppes over.' : 'Ikke nevnt i GMI-filen.' }));
+      const rows = previewImportPlacement({ plan, placement, gmiReview: loadedReview, excludedPhotos });
+      const preview = { rows, outcome: summarizeImportOutcome(rows, loadedReview) };
+      importPreviews.set(preview, { generation, ids: [...importIds], positioning, loadedImport, target, eligible: [...incoming],
+        records: [...(target?.photoIds || []), ...importIds].map((id) => [id, records.get(id).spatial]), placement: JSON.stringify(placement) });
+      return preview;
+    },
+    completeImport({ loadedReview = null, placement, preview }) {
+      const guard = importPreviews.get(preview);
+      if (!guard || guard.generation !== generation || guard.positioning !== positioning || guard.loadedImport !== loadedImport
+        || guard.target !== (layers.get(draftTargetLayerId) || null) || guard.placement !== JSON.stringify(placement)
+        || JSON.stringify(guard.eligible) !== JSON.stringify(loadedReview?.includedIds || appendPolicy()?.appendableIds || importIds)
+        || guard.ids.length !== importIds.length || guard.ids.some((id, index) => id !== importIds[index])
+        || guard.records.some(([id, spatial]) => records.get(id)?.spatial !== spatial)) return { ok: false, error: 'review-changed' };
+      if (placement.kind !== 'none' && importIds.some((id) => records.get(id).spatial.exifRead.state === 'pending')) return { ok: false, error: 'pending-exif' };
+      const appended = Boolean(draftTargetLayerId);
+      const addedCount = loadedReview?.includedIds.length ?? appendPolicy()?.appendableIds.length ?? importIds.length;
+      const result = loadedImport ? this.applyLoadedGmiImport(loadedReview) : { ok: true, layer: draftTargetLayerId ? this.appendImport() : this.createLayer() };
+      if (!result.ok || !result.layer) return { ok: false, error: result.error || 'import-refused' };
+      let placementError = false;
+      if (placement.kind !== 'none') {
+        const ticket = this.beginSourceWorkflow(result.layer.id);
+        try {
+          const plan = this.reviewSourceWorkflowPositions(ticket);
+          if (!plan) placementError = true;
+          else {
+            const requests = importPlacementRequests(plan, placement);
+            if (requests.length) placementError = !this.applySourceWorkflowPositions(ticket, plan, requests).ok;
+          }
+        } catch { placementError = true; }
+        finally { this.endSourceWorkflow(ticket); }
+      }
+      const photos = this.getLayerPhotos(result.layer.id);
+      const groups = Map.groupBy(photos, (photo) => photo.assetId);
+      const placed = [...groups.values()].filter((group) => group.every((photo) => photo.spatial.current)).length;
+      return { ok: true, append: appended, addedCount, layer: this.getLayer(result.layer.id), outcome: { total: groups.size, placed, unplaced: groups.size - placed }, placementError };
     },
     setLoadedGmiTarget(layerId = null) {
       if (!loadedImport || (layerId && !layers.has(layerId))) return false;
       draftTargetLayerId = layerId; appendOverrideIds.clear(); publish(); return true;
     },
     reconcileLoadedGmiBindings(isLive) {
-      if (loadedImport && !isLive(loadedImport.binding)) {
+      if (loadedImport?.binding && !isLive(loadedImport.binding)) {
         const binding = loadedImport.binding;
         clearImport();
         loadedImport = { binding, state: 'error', errorCode: 'loaded-source-unavailable', source: null };

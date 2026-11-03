@@ -1,3 +1,4 @@
+import { createLayerWithoutPlacement, waitForThumbnails, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, mkdir, writeFile, readdir, rm } from 'node:fs/promises';
@@ -46,11 +47,11 @@ function actions(browser) {
   const create = async (photos, gml) => {
     await click('Bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
     await input('input[aria-label="Velg bildefiler"]', photos);
-    if (gml) { await input('input[aria-label="Velg GML med bildeposisjoner"]', [gml]); await browser.waitFor('document.querySelector(".photo-collection-dialog").innerText.includes("1 treff")'); }
-    await browser.waitFor(`!document.querySelector('.photo-collection-notice [role=status]').innerText.includes('Lager miniatyrbilder')`, 60000);
-    await click(`Opprett fotokartlag (${photos.length} bilder)`);
-    await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-    if (gml) await applyPhotoSourcePositions(browser, 'gml');
+
+    await waitForThumbnails(browser);
+    await createLayerWithoutPlacement(browser);
+     await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+    if (gml) { await retainGmlInWorkspace(browser, gml); await applyPhotoSourcePositions(browser, 'gml'); }
   };
   return { click, input, summary, open, select, start, create };
 }
@@ -154,7 +155,7 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
       // Explicit append + recheck, with no automatic association on append.
       const later = path.join(directory, 'later.jpg'); await writeFile(later, bytes);
       await click('Legg til bilder'); await input('input[aria-label="Velg bildefiler"]', [later]);
-      await click('Legg til 1 bilde i laget'); await select('later.jpg'); assert.equal(await browser.evaluate(inspector), null);
+      await createLayerWithoutPlacement(browser); await select('later.jpg'); assert.equal(await browser.evaluate(inspector), null);
       await browser.evaluate('document.querySelector(".photo-workspace-sources > details").open=true');
       await click('Kontroller på nytt', 'Array.from(document.querySelectorAll(".photo-workspace-source-item")).find(item=>item.innerText.includes("associations.gmi"))');
       await browser.waitFor(`${dialog}?.querySelector('.photo-gmi-summary')`);

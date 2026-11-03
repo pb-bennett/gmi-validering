@@ -1,3 +1,4 @@
+import { createLayerWithoutPlacement, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdir, mkdir, writeFile } from 'node:fs/promises';
@@ -43,12 +44,10 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await click('Bilder');
     await browser.waitFor('document.querySelector("dialog[open]")');
     await assertPhotoDialogLayout(browser, 'empty real-corpus importer');
-    await inputFiles('input[aria-label="Velg GML med bildeposisjoner"]', [gmlPath]);
-    await browser.waitFor('document.querySelector("dialog").innerText.includes("148 uten bilde")');
     await inputFiles('input[aria-label="Velg bildefiler"]', photos);
-    await browser.waitFor('document.querySelector("dialog").innerText.includes("148 treff")');
     await assertPhotoDialogLayout(browser, 'populated real-corpus importer');
-    await click('Opprett fotokartlag (148 bilder)');
+    await createLayerWithoutPlacement(browser);
+        await retainGmlInWorkspace(browser, gmlPath);
     assert.equal(await browser.evaluate(markerCount), 0, 'import retains GML evidence without positions');
     await applyPhotoSourcePositions(browser, 'gml');
     await browser.waitFor(`${markerCount} === 148`);
@@ -58,6 +57,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     const renderedLocations = await browser.evaluate('new Set(Array.from(document.querySelectorAll(".photo-camera-marker")).map(e => e.style.transform)).size');
     assert(renderedLocations <= 136 && renderedLocations > 120);
     checks.push(`148 marker records; initial photo fit; ${renderedLocations} rounded pixel locations (136 geographic positions verified separately)`);
+    await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
     await screenshot('photo-spatial-map');
 
     await browser.evaluate(`document.querySelector('input[aria-label^="Vis lag"]').click()`);
@@ -76,7 +76,6 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     assert(!await browser.evaluate('Boolean(document.querySelector("dialog[open]"))'));
     await click('Åpne i bildemodul');
     await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-    await browser.waitFor('document.body.innerText.includes("148 bilder med EXIF GPS")', 45000);
     assert(await browser.evaluate(`document.querySelector('.photo-collection-inspector').innerText.includes(${JSON.stringify(markerTitle)})`));
     assert(await browser.evaluate('document.body.innerText.includes("Gjeldende posisjon (GML)")'));
     for (const kind of ['GML', 'EXIF']) await browser.evaluate(`Array.from(document.querySelectorAll('summary')).find(e => e.innerText === 'Kildeinformasjon (${kind})').click()`);
@@ -85,7 +84,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await screenshot('photo-spatial-inspector');
     await applyPhotoSourcePositions(browser, 'exif', { filename: markerTitle });
     await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (EXIF)")');
-    await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await click('Bildemodul');
+    await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
     await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (EXIF)")');
     await applyPhotoSourcePositions(browser, 'gml', { filename: markerTitle });
     await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (GML)")');
@@ -109,11 +108,10 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
 
     await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")');
     await inputFiles('input[aria-label="Velg bildefiler"]', photos);
-    await browser.waitFor('document.querySelector("dialog").innerText.includes("148 bilder med EXIF GPS")', 45000);
-    await click('Opprett fotokartlag (148 bilder)');
+    await createLayerWithoutPlacement(browser);
     await browser.waitFor('document.body.innerText.includes("148 uplassert") && document.querySelector(".leaflet-container")');
     assert.equal(await browser.evaluate(markerCount), 0);
-    await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+     await browser.waitFor('document.querySelector(".photo-workspace-shell")');
     await applyPhotoSourcePositions(browser, 'exif', { filename: await browser.evaluate('document.querySelector(".photo-workspace-inspector h3").innerText') }); await click('Tilbake til appen');
     await browser.waitFor(`${markerCount} === 1`);
     assert(await browser.evaluate('document.body.innerText.includes("1 plassert") && document.body.innerText.includes("147 uplassert")'));
@@ -145,13 +143,13 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     checks.push('GMI/SOSI/KOF survey import, fitting and explicit photo geographic locate coexist');
     await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
 
-    await click('Nullstill og last opp ny');
+    await click('Nullstill og åpne ny fil');
     await browser.waitFor(`!document.querySelector('section[aria-label^="Fotokartlag"]') && !document.querySelector('.leaflet-container')`);
     assert.equal(await browser.evaluate(markerCount), 0);
     checks.push('application reset releases FOTO/map state and returns to upload');
     await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")');
     await inputFiles('input[aria-label="Velg bildefiler"]', [photos[0]]);
-    await click('Opprett fotokartlag (1 bilder)');
+    await createLayerWithoutPlacement(browser);
     await browser.waitFor(`document.querySelector('section[aria-label^="Fotokartlag"]')`);
 
     await browser.send('Page.reload');

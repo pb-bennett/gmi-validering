@@ -16,18 +16,19 @@ function formatSize(size) {
     : `${(size / 1024).toLocaleString('nb-NO', { maximumFractionDigits: 1 })} kB`;
 }
 
-export default function PhotoCollectionPanel({ photos, selectedId, batchSelectedIds, onInspect = photoSession.select, appendStatus }) {
+export default function PhotoCollectionPanel({ photos, selectedId, batchSelectedIds, onInspect = photoSession.select, appendStatus, toolbar, emptyState }) {
   const collisions = new Set(appendStatus?.targetCollisions.map((item) => item.photoId));
   const skipped = new Set(appendStatus?.skippedIds);
   return (
     <section className="photo-collection-gallery" aria-label="Alle importerte bilder">
-      {photos.length === 0 ? (
+      {toolbar}
+      {photos.length === 0 ? (emptyState || (
         <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-gmi-text-muted">
           <h3 className="text-lg font-semibold text-gmi-navy">Ingen bilder ennå</h3>
           <p className="max-w-sm text-sm">Importer flere bilder eller slipp dem her. Nye importer legges til i samlingen.</p>
           <p className="text-xs">Forhåndsvisning: JPEG, PNG og WebP.</p>
         </div>
-      ) : (
+      )) : (
         <ul className="photo-collection-grid">
           {photos.map((photo) => (
             <li key={photo.id} data-photo-id={photo.id} data-append-status={collisions.has(photo.id) ? skipped.has(photo.id) ? 'skipped' : 'override' : undefined} className="relative min-w-0">
@@ -61,11 +62,11 @@ export default function PhotoCollectionPanel({ photos, selectedId, batchSelected
               </button>}
               {batchSelectedIds && (
                 <button type="button" className="photo-batch-toggle gmi-focus-ring"
-                  aria-label={`Velg ${photo.originalFilename} for fjerning`}
+                  aria-label={`Velg ${photo.originalFilename}`}
                   aria-pressed={batchSelectedIds.includes(photo.id)}
                   title="Velg for fjerning; klikk bildet for å inspisere"
                   onClick={() => photoSession.toggleBatchSelection(photo.id)}>
-                  <span className="photo-batch-circle" aria-hidden="true"><span /></span>
+                  <span className="photo-batch-circle" aria-hidden="true">{batchSelectedIds.includes(photo.id) ? <CheckIcon size={16} /> : null}</span>
                 </button>
               )}
             </li>
@@ -76,7 +77,7 @@ export default function PhotoCollectionPanel({ photos, selectedId, batchSelected
   );
 }
 
-export function SelectedPhotoInspector({ photo, layerId, onLocate, proposedEntry, manualPlacement, directionEditor, onOpenSources, enableLargeView = false }) {
+export function SelectedPhotoInspector({ photo, layerId, onLocate, manualPlacement, directionEditor, onOpenSources, enableLargeView = false }) {
   const imageRef = useRef(null);
   const [inspectionFailed, setInspectionFailed] = useState(false);
   const [largeImageUrl, setLargeImageUrl] = useState(null);
@@ -130,7 +131,7 @@ export function SelectedPhotoInspector({ photo, layerId, onLocate, proposedEntry
         </dl>
       )}
       {photo && <PhotoMetadataEditor photo={photo} layerId={layerId} />}
-      {photo && <PhotoSpatialInspector photo={photo} layerId={layerId} onLocate={onLocate} proposedEntry={proposedEntry} manualPlacement={manualPlacement} directionEditor={directionEditor} onOpenSources={onOpenSources} />}
+      {photo && <PhotoSpatialInspector photo={photo} layerId={layerId} onLocate={onLocate} manualPlacement={manualPlacement} directionEditor={directionEditor} onOpenSources={onOpenSources} />}
       {largeImageUrl && photo?.dimensions && <PhotoImageViewer src={largeImageUrl} filename={photo.originalFilename}
         dimensions={photo.dimensions} onClose={() => setLargeImageUrl(null)} />}
     </section>

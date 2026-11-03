@@ -1,3 +1,4 @@
+import { createLayerWithoutPlacement, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -44,9 +45,9 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
       await click(browser, 'Bilder', 'document');
       await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', files);
-      await browser.waitFor('!document.querySelector(".photo-collection-notice [role=status]").innerText.includes("Lager miniatyrbilder")');
-      await click(browser, 'Opprett fotokartlag (3 bilder)', 'document');
-      await click(browser, 'Bildemodul', 'document');
+      await waitForThumbnails(browser);
+      await createLayerWithoutPlacement(browser);
+
       await browser.waitFor('document.querySelector(".photo-workspace-collection")?.innerText.includes("3 bilder med EXIF")');
       assert.equal(await browser.evaluate(markers), 0);
       await stagePhotoSource(browser, sourceFile, 'gmi');
