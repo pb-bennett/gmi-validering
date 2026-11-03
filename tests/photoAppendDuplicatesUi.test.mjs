@@ -5,7 +5,7 @@ import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { assertPhotoDialogLayout } from './helpers/photoDialogLayout.mjs';
-import { applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
+import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
 
 const applicationUrl = process.env.PHOTO_UI_URL, gmlPath = process.env.PHOTO_GML_FIXTURE;
 test('real append duplicate correction: 148 minus six, reimport 148 adds six only; zero-new blocked, override explicit',
@@ -13,9 +13,8 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
     const browser = await openTestChrome(), checks = [];
     const dialog = 'document.querySelector(".photo-collection-dialog")';
     const collection = 'document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length';
-    const click = (label, scope = 'document') => browser.evaluate(`(() => {
-      const button=Array.from(${scope}.querySelectorAll('button')).find(e=>e.innerText.trim()===${JSON.stringify(label)});
-      if(!button || button.disabled)throw new Error('Unavailable: '+${JSON.stringify(label)});button.click();})()`);
+    // Visible text first, then icon-only accessible names; workspace tools open through Verktøy.
+    const click = (label, scope = 'document') => clickSourceControl(browser, label, scope);
     const files = async (selector, paths) => {
       const { root } = await browser.send('DOM.getDocument');
       const { nodeId } = await browser.send('DOM.querySelector', { nodeId: root.nodeId, selector });
@@ -67,8 +66,10 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
       await browser.waitFor(`${collection}===148`);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list img").length===148',45000);
       const before = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(e=>({id:e.dataset.photoId,filename:e.querySelector('.photo-workspace-filename').title,thumbnail:e.querySelector('img')?.src}))`);
+      // Removal selection is its own mode, entered from Verktøy.
+      await click('Fjern bilder fra laget'); await browser.waitFor('document.querySelector(".photo-removal-bar")');
       await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list input')).slice(0,6).forEach(e=>e.click())`);
-      await click('Fjern fra lag','document.querySelector(".photo-workspace-selected-actions")');
+      await browser.evaluate('document.querySelector(".photo-removal-primary").click()');
       await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
       await click('Fjern fra lag','document.querySelector(".photo-remove-confirmation")'); await browser.waitFor(`${collection}===142`);
       const beforeMarkers = await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'); assert.equal(beforeMarkers,142);
@@ -140,11 +141,14 @@ test('real append duplicate correction: 148 minus six, reimport 148 adds six onl
       assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-append-status=override]').length`),0);
       await key('Enter','Enter'); await browser.waitFor(`${appendButton}.innerText==='Neste'`);
       await click('Velg alle',dialog); assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('.photo-batch-toggle[aria-pressed=true]').length`),1);
+      const priorIds = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(e=>e.dataset.photoId)`);
       await screenshot('append-one-deliberate-override'); await createLayerWithoutPlacement(browser); await browser.waitFor(`${collection}===149`);
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'),148,'explicit duplicate remains unplaced without an accepted position');
-      await browser.waitFor('document.querySelector(".photo-workspace-list li:last-child img")');
-      await browser.evaluate('document.querySelector(".photo-workspace-list li:last-child button").click()');
-      await browser.waitFor('document.querySelector(".photo-collection-inspector").innerText.includes("320 × 200") && document.querySelector(".photo-spatial-inspector").innerText.includes("Ingen EXIF GPS")');
+      // The list is sorted by filename, so find the appended occurrence by identity, not by position.
+      const added = `Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).find(e=>!${JSON.stringify(priorIds)}.includes(e.dataset.photoId))`;
+      await browser.waitFor(`${added}?.querySelector('img')`);
+      await browser.evaluate(`${added}.querySelector('.photo-workspace-row').click()`);
+      await browser.waitFor('document.querySelector(".photo-workspace-inspector").innerText.includes("320 × 200") && document.querySelector(".photo-workspace-inspector section[aria-label=Plassering]").textContent.includes("Ingen EXIF GPS")');
       checks.push('full repeat: 148 skipped / zero new, confirmation disabled at desktop/short/narrow; incoming-batch duplicate separately flagged; a distinct same-name PNG deliberately overridden adds exactly one, yielding 149 members and 148 current markers');
       assert.deepEqual(browser.events.filter(e=>e.method==='Runtime.exceptionThrown').map(e=>e.params.exceptionDetails.text),[]);
       console.log(JSON.stringify({appendDuplicateChecks:checks},null,2));

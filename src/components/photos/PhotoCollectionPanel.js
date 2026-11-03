@@ -1,13 +1,9 @@
 'use client';
 
 /* eslint-disable @next/next/no-img-element -- Local Blob URLs must render in the browser without server image optimization. */
-import { useEffect, useRef, useState } from 'react';
-import { ArrowsOutIcon, CheckIcon, PlusIcon } from '@phosphor-icons/react';
+import { CheckIcon, PlusIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPreviewMessage } from '@/lib/photos/imagePreview.mjs';
-import PhotoMetadataEditor from './PhotoMetadataEditor';
-import PhotoSpatialInspector from './PhotoSpatialInspector';
-import PhotoImageViewer from './PhotoImageViewer';
 import './photoCollectionPanel.css';
 
 function formatSize(size) {
@@ -73,67 +69,6 @@ export default function PhotoCollectionPanel({ photos, selectedId, batchSelected
           ))}
         </ul>
       )}
-    </section>
-  );
-}
-
-export function SelectedPhotoInspector({ photo, layerId, onLocate, manualPlacement, directionEditor, onOpenSources, enableLargeView = false }) {
-  const imageRef = useRef(null);
-  const [inspectionFailed, setInspectionFailed] = useState(false);
-  const [largeImageUrl, setLargeImageUrl] = useState(null);
-  const canInspect = photo?.preview.state === 'ready'
-    || (photo?.preview.errorCode === 'thumbnail-failed' && Boolean(photo?.dimensions));
-  const assetId = photo?.assetId || photo?.id;
-
-  useEffect(() => {
-    if (!canInspect) return;
-    const file = photoSession.getAssetFile(assetId);
-    const image = imageRef.current;
-    if (!file || !image) return;
-    const url = URL.createObjectURL(file);
-    image.src = url;
-    return () => {
-      image.removeAttribute('src');
-      URL.revokeObjectURL(url);
-    };
-  }, [assetId, canInspect]);
-
-  return (
-    <section className="photo-collection-inspector" aria-label="Bilde som vises">
-      <h3 className="truncate text-sm font-semibold text-gmi-navy" title={photo?.originalFilename}>
-        {photo?.originalFilename || 'Velg et bilde'}
-      </h3>
-      <div className="photo-collection-original">
-        {photo && canInspect ? (
-          <>
-            <img ref={imageRef} alt={photo.originalFilename} decoding="async" onError={() => setInspectionFailed(true)} hidden={inspectionFailed} />
-            {enableLargeView && !inspectionFailed && <button type="button" className="photo-preview-open gmi-focus-ring" title="Vis stort" aria-label="Vis stort" onClick={() => {
-              const src = imageRef.current?.getAttribute('src'); if (src) setLargeImageUrl(src);
-            }}><ArrowsOutIcon size={20} aria-hidden="true" /></button>}
-            {inspectionFailed && <p className="p-4 text-sm text-gmi-text-muted">Originalbildet kunne ikke vises.</p>}
-          </>
-        ) : (
-          <p className="p-6 text-center text-sm text-gmi-text-muted">
-            {!photo ? 'Velg et bilde fra samlingen for å se originalen her.'
-              : photo.preview.state === 'pending' ? 'Forhåndsvisningen klargjøres …'
-                : photoPreviewMessage(photo.preview.errorCode)}
-          </p>
-        )}
-      </div>
-      {photo && (
-        <dl className="photo-collection-facts text-xs text-gmi-text-muted">
-          <div><dt>Filnavn</dt><dd className="break-all">{photo.originalFilename}</dd></div>
-          {photo.sourceRelativePath && <div><dt>Relativ sti</dt><dd className="break-all">{photo.sourceRelativePath}</dd></div>}
-          <div><dt>Størrelse</dt><dd>{formatSize(photo.size)}</dd></div>
-          <div><dt>MIME/type</dt><dd className="break-all">{photo.mimeType || 'Ikke oppgitt'}</dd></div>
-          <div><dt>Bildedimensjoner</dt><dd>{photo.dimensions ? `${photo.dimensions.width} × ${photo.dimensions.height} px` : 'Ikke tilgjengelig'}</dd></div>
-          <div><dt>Sist endret</dt><dd>{new Date(photo.lastModified).toLocaleString('nb-NO')}</dd></div>
-        </dl>
-      )}
-      {photo && <PhotoMetadataEditor photo={photo} layerId={layerId} />}
-      {photo && <PhotoSpatialInspector photo={photo} layerId={layerId} onLocate={onLocate} manualPlacement={manualPlacement} directionEditor={directionEditor} onOpenSources={onOpenSources} />}
-      {largeImageUrl && photo?.dimensions && <PhotoImageViewer src={largeImageUrl} filename={photo.originalFilename}
-        dimensions={photo.dimensions} onClose={() => setLargeImageUrl(null)} />}
     </section>
   );
 }

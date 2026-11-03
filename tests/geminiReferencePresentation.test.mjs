@@ -152,7 +152,7 @@ test('MapInner/LayerManager mount independent components without modifying surve
     read('../src/lib/gemini-wfs/geminiReferencePresentation.mjs'),
     read('../src/components/gemini-wfs/GeminiInspectionSide.js'),
   ]);
-  assert.match(map, /<GeminiReferenceLayer inspectionEnabled=\{!measureMode && !photoPlacement && !photoDirectionEdit\}/); assert.match(manager, /<GeminiReferenceCard onOpenConnection=\{onOpenGemini\}/);
+  assert.match(map, /<GeminiReferenceLayer inspectionEnabled=\{!measureMode && !photoEdit\}/); assert.match(manager, /<GeminiReferenceCard onOpenConnection=\{onOpenGemini\}/);
   assert.match(map, /name="layer-highlight-casing" style=\{\{ zIndex: 390/);
   assert.match(map, /<AuthenticatedWmsLayer/); assert.match(manager, /setMapOverlayVisibility\(\s*'geminiWms'/);
   assert.match(layer, /<Fragment key=\{resultVersion\}>/);

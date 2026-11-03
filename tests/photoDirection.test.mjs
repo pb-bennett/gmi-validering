@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
-import { acceptManualPhotoDirection, normalizePhotoDirection, photoDirectionLabel } from '../src/lib/photos/photoDirection.mjs';
-import { cameraMarkerOptions, proposalMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
+import { acceptManualPhotoDirection, normalizePhotoDirection, photoDirectionCompassWord, photoDirectionLabel, photoDirectionSpokenLabel } from '../src/lib/photos/photoDirection.mjs';
+import { cameraMarkerOptions, thumbnailMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { planPhotoPositioning, photoPositioningRequests } from '../src/lib/photos/photoPositioning.mjs';
 
 const point = { crs: 'EPSG:4326', longitude: 10.43, latitude: 59.22 };
@@ -24,6 +25,7 @@ async function createLayer(session) {
   await until(() => session.getLayerPhotos(layer.id).every(photo => photo.preview.state === 'ready' && photo.spatial.exifRead.state !== 'pending'));
   return { layer, ids };
 }
+const edit = (session, layerId, photoId, change) => session.applyPhotoEdits(session.beginPhotoEdits(layerId), [{ photoId, ...change }]);
 
 test('direction normalization distinguishes unknown from explicit north and freezes manual provenance', () => {
   for (const [input, expected] of [[0, 0], [359, 359], [360, 0], [-1, 359], [-360, 0], [721, 1], [41.6, 42], [359.8, 0]]) {
@@ -36,47 +38,64 @@ test('direction normalization distinguishes unknown from explicit north and free
     assert.equal(normalizePhotoDirection(invalid), null);
     assert.equal(acceptManualPhotoDirection(invalid), null);
   }
-  assert.equal(photoDirectionLabel(null), 'Ikke angitt');
-  for (const [degrees, label] of [[0, 'N'], [45, 'NE'], [90, 'E'], [135, 'SE'], [180, 'S'], [225, 'SW'], [270, 'W'], [315, 'NW']]) {
-    assert.equal(photoDirectionLabel(degrees), `${degrees}° ${label}`);
-  }
 });
 
-test('legacy GML raw zero stays evidence; begin/cancel unknown writes nothing; apply north publishes exactly once', async () => {
+test('direction labels use Norwegian compass letters and spoken words', async () => {
+  assert.equal(photoDirectionLabel(null), 'Ikke angitt');
+  assert.equal(photoDirectionSpokenLabel(null), 'Ikke angitt');
+  assert.equal(photoDirectionCompassWord(null), null);
+  const expected = [[0, 'N', 'nord'], [45, 'NØ', 'nordøst'], [90, 'Ø', 'øst'], [135, 'SØ', 'sørøst'], [180, 'S', 'sør'],
+    [225, 'SV', 'sørvest'], [270, 'V', 'vest'], [315, 'NV', 'nordvest'], [359, 'N', 'nord']];
+  for (const [degrees, letters, word] of expected) {
+    assert.equal(photoDirectionLabel(degrees), `${degrees}° ${letters}`);
+    assert.equal(photoDirectionCompassWord(degrees), word);
+    assert.equal(photoDirectionSpokenLabel(degrees), `${degrees} grader, ${word}`);
+  }
+  assert.equal(photoDirectionLabel(123), '123° SØ');
+  assert.equal(photoDirectionLabel(359.875), '359,875° N', 'exact evidence values are not rounded for display');
+  assert.equal(photoDirectionLabel(22.5), '22,5° NØ');
+  assert.equal(photoDirectionLabel(360), '0° N');
+  assert.equal(photoDirectionSpokenLabel(1), '1 grad, nord');
+  const module = await readFile(new URL('../src/lib/photos/photoDirection.mjs', import.meta.url), 'utf8');
+  for (const english of ["'NE'", "'SE'", "'SW'", "'NW'", "'E'", "'W'"]) assert(!module.includes(english), english);
+});
+
+test('legacy GML raw zero stays evidence; begin/end writes nothing; staged north applies and publishes exactly once', async () => {
   const session = setup(), { layer, ids } = await createLayer(session);
   assert(session.getLayerPhotos(layer.id).every(photo => photo.direction.current === null));
-  const before = session.getPhoto(ids[0]), ticket = session.beginDirectionEdit(layer.id, ids[0]);
-  assert.equal(ticket.expectedCurrent?.degrees ?? 0, 0, 'temporary editor starts north');
+  const before = session.getPhoto(ids[0]), ticket = session.beginPhotoEdits(layer.id);
+  assert.equal(ticket.baseline[ids[0]].direction, null, 'unknown is never an implicit north');
   assert.strictEqual(session.getPhoto(ids[0]).direction, before.direction);
-  session.cancelDirectionEdit(ticket);
+  session.endPhotoEdits(ticket);
   assert.equal(session.getPhoto(ids[0]).direction.current, null);
-  assert.equal(session.applyDirectionEdit(ticket, 0).ok, false);
-  const next = session.beginDirectionEdit(layer.id, ids[0]);
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0], degrees: 0 }]).error, 'session-ended');
+  const next = session.beginPhotoEdits(layer.id);
   let publications = 0; const unsubscribe = session.subscribe(() => publications++);
-  assert.equal(session.applyDirectionEdit(next, 0).ok, true);
+  assert.equal(session.applyPhotoEdits(next, [{ photoId: ids[0], degrees: 0 }]).ok, true);
   assert.equal(publications, 1); unsubscribe();
   const photo = session.getPhoto(ids[0]);
   assert.equal(photo.direction.current.degrees, 0);
+  assert.equal(photo.direction.current.basis.kind, 'manual');
   assert.strictEqual(photo.spatial, before.spatial);
   assert.deepEqual(photo.spatial.candidates.find(candidate => candidate.kind === 'gml').raw, raw);
-  assert.equal(session.applyDirectionEdit(next, 90).ok, false, 'consumed once');
+  assert.equal(session.applyPhotoEdits(next, [{ photoId: ids[0], degrees: 90 }]).ok, false, 'consumed once');
   assert.strictEqual(session.getPhoto(ids[1]).direction.current, null);
   session.clear();
 });
 
-test('known direction begin/proposal/cancel retains exact 42; apply 90 changes only direction', async () => {
+test('known direction retains exact 42 until commit; apply 90 changes only direction', async () => {
   const session = setup(), { layer, ids } = await createLayer(session);
-  session.applyDirectionEdit(session.beginDirectionEdit(layer.id, ids[0]), 42);
-  const before = session.getPhoto(ids[0]), ticket = session.beginDirectionEdit(layer.id, ids[0]);
-  assert.equal(ticket.expectedCurrent.degrees, 42);
-  // Temporary slider proposals are UI values, never domain writes.
+  assert(edit(session, layer.id, ids[0], { degrees: 42 }).ok);
+  const before = session.getPhoto(ids[0]), ticket = session.beginPhotoEdits(layer.id);
+  assert.strictEqual(ticket.baseline[ids[0]].direction, before.direction.current);
+  // Staged values live outside the session; nothing is written before apply.
   for (const proposed of [90, 180, 270, 359]) {
     assert.equal(normalizePhotoDirection(proposed), proposed);
     assert.strictEqual(session.getPhoto(ids[0]).direction, before.direction);
   }
-  session.cancelDirectionEdit(ticket);
+  session.endPhotoEdits(ticket);
   assert.strictEqual(session.getPhoto(ids[0]).direction, before.direction);
-  assert(session.applyDirectionEdit(session.beginDirectionEdit(layer.id, ids[0]), 90).ok);
+  assert(edit(session, layer.id, ids[0], { degrees: 90 }).ok);
   const after = session.getPhoto(ids[0]);
   assert.equal(after.direction.current.degrees, 90);
   for (const key of ['spatial', 'preview', 'dimensions']) assert.strictEqual(after[key], before[key]);
@@ -85,10 +104,10 @@ test('known direction begin/proposal/cancel retains exact 42; apply 90 changes o
 
 test('manual move, candidate acceptance, GML/EXIF wizard and source attachment retain the exact accepted direction', async () => {
   const session = setup(), { layer, ids } = await createLayer(session);
-  session.applyDirectionEdit(session.beginDirectionEdit(layer.id, ids[0]), 42);
+  assert(edit(session, layer.id, ids[0], { degrees: 42 }).ok);
   const direction = session.getPhoto(ids[0]).direction;
   const preserved = () => assert.strictEqual(session.getPhoto(ids[0]).direction, direction);
-  session.applyManualPlacement(session.beginManualPlacement(layer.id, ids[0]), { ...point, longitude: 10.432 }); preserved();
+  assert(edit(session, layer.id, ids[0], { position: { ...point, longitude: 10.432 } }).ok); preserved();
   for (const kind of ['gml', 'exif']) {
     const candidate = session.getPhoto(ids[0]).spatial.candidates.find(candidate => candidate.kind === kind);
     session.acceptCandidates(layer.id, [{ photoId: ids[0], candidateId: candidate.id }]); preserved();
@@ -97,45 +116,54 @@ test('manual move, candidate acceptance, GML/EXIF wizard and source attachment r
     assert(session.applyPhotoPositioning(layer.id, { kind, sourceId: plan.sourceId, memberIds: plan.memberIds,
       requests: photoPositioningRequests(plan, [ids[0]]) }).ok); preserved();
   }
-  const ticket = session.beginDirectionEdit(layer.id, ids[0]);
+  // A canonical position change after begin conflicts even for a direction-only change; nothing is written.
+  const ticket = session.beginPhotoEdits(layer.id);
   session.acceptCandidates(layer.id, [{ photoId: ids[0], candidateId: session.getPhoto(ids[0]).spatial.candidates.find(candidate => candidate.kind === 'gml').id }]);
-  assert(session.directionEditIsLive(ticket), 'position identity is independent of direction');
-  const position = session.getPhoto(ids[0]).spatial;
-  session.applyDirectionEdit(ticket, 90);
-  assert.strictEqual(session.getPhoto(ids[0]).spatial, position);
+  assert(session.photoEditsAreLive(ticket), 'a canonical change elsewhere does not end the session');
+  const spatial = session.getPhoto(ids[0]).spatial;
+  const conflict = session.applyPhotoEdits(ticket, [{ photoId: ids[0], degrees: 90 }]);
+  assert.equal(conflict.error, 'edit-conflict');
+  assert.deepEqual(conflict.staleIds, [ids[0]]);
+  preserved(); assert.strictEqual(session.getPhoto(ids[0]).spatial, spatial);
+  assert(session.applyPhotoEdits(ticket, [{ photoId: ids[1], degrees: 90 }]).ok, 'an unaffected occurrence still commits');
+  preserved(); assert.strictEqual(session.getPhoto(ids[0]).spatial, spatial);
   session.clear();
 });
 
-for (const action of ['remove', 'delete', 'reset', 'hidden', 'cancel', 'new-direction', 'start-placement']) test(`direction stale apply rejected after ${action}`, async () => {
+for (const action of ['remove', 'delete', 'reset', 'end', 'new-session', 'direction-change']) test(`direction stale apply rejected after ${action}`, async () => {
   const session = setup(), { layer, ids } = await createLayer(session);
-  const ticket = session.beginDirectionEdit(layer.id, ids[0]);
+  const ticket = session.beginPhotoEdits(layer.id);
   if (action === 'remove') session.removeLayerPhotos(layer.id, [ids[0]], { confirmed: true });
   if (action === 'delete') session.deleteLayer(layer.id);
   if (action === 'reset') session.clear();
-  if (action === 'hidden') { session.setLayerVisibility(layer.id, false); session.setLayerVisibility(layer.id, true); }
-  if (action === 'cancel') session.cancelDirectionEdit(ticket);
-  if (action === 'new-direction') session.beginDirectionEdit(layer.id, ids[0]);
-  if (action === 'start-placement') session.beginManualPlacement(layer.id, ids[0]);
+  if (action === 'end') session.endPhotoEdits(ticket);
+  if (action === 'new-session') session.beginPhotoEdits(layer.id);
+  if (action === 'direction-change') session.fillMissingPhotoValues(layer.id, 'direction', 12, [ids[0]]);
   const before = session.getPhoto(ids[0])?.direction;
-  assert.equal(session.directionEditIsLive(ticket), false);
-  assert.equal(session.applyDirectionEdit(ticket, 90).ok, false);
+  const result = session.applyPhotoEdits(ticket, [{ photoId: ids[0], degrees: 90 }]);
+  assert.equal(result.ok, false);
+  if (['remove', 'direction-change'].includes(action)) {
+    assert.equal(result.error, 'edit-conflict'); assert.deepEqual(result.staleIds, [ids[0]]);
+    assert(session.photoEditsAreLive(ticket), 'a conflict writes nothing and keeps the session for the user to resolve');
+  } else assert.equal(session.photoEditsAreLive(ticket), false);
   assert.strictEqual(session.getPhoto(ids[0])?.direction, before);
   session.clear();
 });
 
-test('starting direction cancels placement at domain boundary; fabricated/foreign/wrong-owner/nonfinite applies rejected', async () => {
+test('visibility no longer participates in liveness; fabricated/foreign/wrong-owner/nonfinite applies rejected', async () => {
   const session = setup(), { layer, ids } = await createLayer(session);
   const other = setup(), otherLayer = await createLayer(other);
-  const placement = session.beginManualPlacement(layer.id, ids[0]);
-  const ticket = session.beginDirectionEdit(layer.id, ids[0]);
-  assert.equal(session.applyManualPlacement(placement, point).ok, false);
-  assert.equal(session.beginDirectionEdit('missing', ids[0]), null);
-  assert.equal(session.beginDirectionEdit(layer.id, 'missing'), null);
-  assert.equal(session.applyDirectionEdit({ ...ticket }, 90).ok, false);
-  assert.equal(session.applyDirectionEdit(other.beginDirectionEdit(otherLayer.layer.id, otherLayer.ids[0]), 90).ok, false);
-  for (const degrees of [NaN, Infinity, -Infinity, null, '90']) assert.equal(session.applyDirectionEdit(ticket, degrees).error, 'invalid-direction');
+  const ticket = session.beginPhotoEdits(layer.id);
+  session.setLayerVisibility(layer.id, false); session.setLayerVisibility(layer.id, true);
+  assert(session.photoEditsAreLive(ticket), 'Edit mode forces visibility; a toggle is not a data conflict');
+  assert.equal(session.beginPhotoEdits('missing'), null);
+  assert.equal(session.applyPhotoEdits({ ...ticket }, [{ photoId: ids[0], degrees: 90 }]).error, 'session-ended');
+  assert.equal(session.applyPhotoEdits(other.beginPhotoEdits(otherLayer.layer.id), [{ photoId: otherLayer.ids[0], degrees: 90 }]).ok, false);
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: 'missing', degrees: 90 }]).error, 'edit-conflict');
+  for (const degrees of [NaN, Infinity, -Infinity, '90']) assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0], degrees }]).error, 'invalid-change');
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0] }]).error, 'invalid-change');
   assert.equal(session.getPhoto(ids[0]).direction.current, null);
-  assert(session.applyDirectionEdit(ticket, 360).ok);
+  assert(session.applyPhotoEdits(ticket, [{ photoId: ids[0], degrees: 360 }]).ok);
   assert.equal(session.getPhoto(ids[0]).direction.current.degrees, 0);
   session.clear(); other.clear();
 });
@@ -147,11 +175,11 @@ test('late metadata/thumbnail completion does not invalidate direction or overwr
   const session = setup({ extractGps: () => { started++; return gps; }, createThumbnail: () => { started++; return thumbnail; } });
   const id = session.importFiles([new File(['original'], 'a.jpg')]).acceptedIds[0], layer = session.createLayer();
   await until(() => started === 2);
-  const ticket = session.beginDirectionEdit(layer.id, id);
+  const ticket = session.beginPhotoEdits(layer.id);
   finishGps({ state: 'viable', candidate: { status: 'viable', position: point } });
   await until(() => session.getPhoto(id).spatial.exifRead.state === 'viable');
-  assert(session.directionEditIsLive(ticket));
-  session.applyDirectionEdit(ticket, 0);
+  assert(session.photoEditsAreLive(ticket));
+  assert(session.applyPhotoEdits(ticket, [{ photoId: id, degrees: 0 }]).ok);
   const direction = session.getPhoto(id).direction;
   finishThumbnail({ thumbnailBlob: new Blob(['thumb']), dimensions: { width: 1, height: 1 } });
   await until(() => session.getPhoto(id).preview.state === 'ready');
@@ -160,15 +188,16 @@ test('late metadata/thumbnail completion does not invalidate direction or overwr
   session.clear();
 });
 
-test('unknown/unselected icons have no north arrow; all variants retain geometric center anchors', () => {
+test('unknown direction draws no arrow; any known direction draws one in every mode, selected or not', () => {
   for (const selected of [false, true]) {
     assert(!cameraMarkerOptions({ selected }).html.includes('photo-direction-indicator'));
+    assert(!thumbnailMarkerOptions({ selected }).html.includes('photo-direction-indicator'));
+    for (const degrees of [0, 90, 180, 270]) {
+      assert(cameraMarkerOptions({ selected, degrees }).html.includes(`rotate(${degrees} 32 32)`));
+      assert(thumbnailMarkerOptions({ selected, degrees }).html.includes(`rotate(${degrees} 50 50)`));
+    }
   }
-  assert(!cameraMarkerOptions({ degrees: 0 }).html.includes('photo-direction-indicator'));
-  for (const degrees of [0, 90, 180, 270]) {
-    assert(cameraMarkerOptions({ selected: true, degrees }).html.includes(`rotate(${degrees} 32 32)`));
-  }
-  for (const options of [cameraMarkerOptions(), cameraMarkerOptions({ selected: true }), cameraMarkerOptions({ selected: true, degrees: 90 }), proposalMarkerOptions]) {
+  for (const options of [cameraMarkerOptions(), cameraMarkerOptions({ selected: true }), cameraMarkerOptions({ selected: true, degrees: 90 }), thumbnailMarkerOptions({ degrees: 90 })]) {
     assert.deepEqual(options.iconAnchor, options.iconSize.map(size => size / 2));
   }
 });

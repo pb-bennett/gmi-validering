@@ -4,7 +4,7 @@ import { classifyPhotoFile, createPhotoThumbnail } from './imagePreview.mjs';
 import { readExifGps } from './exifGps.mjs';
 import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, emptySpatial, immutable, isPhotoPosition, photoSpatialCounts } from './photoSpatial.mjs';
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
-import { acceptManualPhotoDirection, acceptEvidencePhotoDirection, emptyDirection } from './photoDirection.mjs';
+import { acceptManualPhotoDirection, acceptEvidencePhotoDirection, emptyDirection, normalizePhotoDirection } from './photoDirection.mjs';
 import { planEvidenceAdoption } from './photoEvidenceAdoption.mjs';
 import { MANUAL_FILL_FIELDS, normalizeManualPhotoFill, planManualPhotoFill } from './photoManualFill.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
@@ -39,11 +39,9 @@ export function createPhotoSession({
   // current position, direction and exact referring point, with shared metadata views.
   const assets = new Map();
   const workflowMembers = new WeakMap();
-  const manualTickets = new WeakSet();
-  const directionTickets = new WeakSet();
-  // Only one editing transaction is live; starting either kind invalidates the other.
-  let editVersion = 0;
-  const manualVisibilityVersions = new Map();
+  // One Edit-mode transaction per FOTO layer: a ticket of baseline identities, never staged values.
+  const editSessions = new Map();
+  let editSerial = 0;
   // Each asset has exactly one owner: the current import or one created FOTO layer.
   // Transfer changes membership, never copies the File or invalidates thumbnail work.
   const layers = new Map();
@@ -139,22 +137,11 @@ export function createPhotoSession({
     return immutable({ ...source, ledger });
   }
 
-  function manualPlacementIsLive(ticket) {
-    return Boolean(ticket && manualTickets.has(ticket) && ticket.generation === generation
-      && ticket.editVersion === editVersion
-      && ticket.visibilityVersion === (manualVisibilityVersions.get(ticket.layerId) || 0)
-      && layers.get(ticket.layerId)?.visible
-      && layers.get(ticket.layerId)?.photoIds.includes(ticket.photoId)
-      && records.get(ticket.photoId)?.spatial.current === ticket.expectedCurrent);
-  }
-
-  function directionEditIsLive(ticket) {
-    return Boolean(ticket && directionTickets.has(ticket) && ticket.generation === generation
-      && ticket.editVersion === editVersion
-      && ticket.visibilityVersion === (manualVisibilityVersions.get(ticket.layerId) || 0)
-      && layers.get(ticket.layerId)?.visible
-      && layers.get(ticket.layerId)?.photoIds.includes(ticket.photoId)
-      && records.get(ticket.photoId)?.direction.current === ticket.expectedCurrent);
+  // Visibility is not part of liveness: Edit mode forces its layer visible, and data
+  // integrity rests on generation, registration and per-occurrence identity.
+  function photoEditsAreLive(ticket) {
+    return Boolean(ticket && ticket.generation === generation && editSessions.get(ticket.layerId) === ticket
+      && layers.has(ticket.layerId));
   }
 
   function transferDraft() {
@@ -646,42 +633,50 @@ export function createPhotoSession({
       publish();
       return { ok: true, acceptedIds: [...seen] };
     },
-    beginManualPlacement(layerId, photoId) {
-      if (!layers.get(layerId)?.visible || !layers.get(layerId)?.photoIds.includes(photoId)) return null;
-      const ticket = Object.freeze({ layerId, photoId, generation, editVersion: ++editVersion, visibilityVersion: manualVisibilityVersions.get(layerId) || 0, expectedCurrent: records.get(photoId).spatial.current });
-      manualTickets.add(ticket);
+    beginPhotoEdits(layerId) {
+      const layer = layers.get(layerId);
+      if (!layer?.photoIds.length) return null;
+      const baseline = Object.freeze(Object.fromEntries(layer.photoIds.map((id) => [id, Object.freeze({
+        current: records.get(id).spatial.current, direction: records.get(id).direction.current,
+      })])));
+      const ticket = Object.freeze({ id: `photo-edit-${++editSerial}`, layerId, generation, baseline });
+      // A newer session for the same layer supersedes the previous ticket.
+      editSessions.set(layerId, ticket);
       return ticket;
     },
-    manualPlacementIsLive,
-    cancelManualPlacement(ticket) { if (ticket) manualTickets.delete(ticket); },
-    applyManualPlacement(ticket, position) {
-      if (!manualPlacementIsLive(ticket)) return { ok: false, error: 'placement-changed' };
-      const live = records.get(ticket.photoId);
-      const spatial = acceptManualPhotoPosition(live.spatial, position);
-      if (!spatial) return { ok: false, error: 'invalid-position' };
-      // Only current changes; the latest preview, metadata and source evidence survive.
-      updateRecord(ticket.photoId, () => ({ spatial }));
-      manualTickets.delete(ticket);
-      publish();
-      return { ok: true };
+    photoEditsAreLive,
+    endPhotoEdits(ticket) {
+      if (ticket && editSessions.get(ticket.layerId) === ticket) editSessions.delete(ticket.layerId);
     },
-    beginDirectionEdit(layerId, photoId) {
-      if (!layers.get(layerId)?.visible || !layers.get(layerId)?.photoIds.includes(photoId)) return null;
-      const ticket = Object.freeze({ layerId, photoId, generation, editVersion: ++editVersion,
-        visibilityVersion: manualVisibilityVersions.get(layerId) || 0, expectedCurrent: records.get(photoId).direction.current });
-      directionTickets.add(ticket);
-      return ticket;
-    },
-    directionEditIsLive,
-    cancelDirectionEdit(ticket) { if (ticket) directionTickets.delete(ticket); },
-    applyDirectionEdit(ticket, degrees) {
-      if (!directionEditIsLive(ticket)) return { ok: false, error: 'direction-changed' };
-      const direction = acceptManualPhotoDirection(degrees);
-      if (!direction) return { ok: false, error: 'invalid-direction' };
-      updateRecord(ticket.photoId, () => ({ direction }));
-      directionTickets.delete(ticket);
-      publish();
-      return { ok: true };
+    // Validate every staged change before any write, then commit and publish once.
+    // Conflicts are detected by identity, like the source workflow; nothing is ever partially applied.
+    applyPhotoEdits(ticket, changes) {
+      if (!photoEditsAreLive(ticket)) return { ok: false, error: 'session-ended' };
+      if (!Array.isArray(changes)) return { ok: false, error: 'invalid-change' };
+      const layer = layers.get(ticket.layerId);
+      const staleIds = [], seen = new Set(), writes = [];
+      for (const change of changes) {
+        const { photoId } = change || {};
+        const hasPosition = change?.position !== undefined, hasDegrees = change?.degrees !== undefined && change?.degrees !== null;
+        if (!photoId || seen.has(photoId) || (!hasPosition && !hasDegrees)) return { ok: false, error: 'invalid-change' };
+        seen.add(photoId);
+        if (hasPosition && !isPhotoPosition(change.position)) return { ok: false, error: 'invalid-change' };
+        const degrees = hasDegrees ? normalizePhotoDirection(change.degrees) : null;
+        if (hasDegrees && degrees === null) return { ok: false, error: 'invalid-change' };
+        const baseline = ticket.baseline[photoId], live = records.get(photoId);
+        if (!baseline || !live || !layer.photoIds.includes(photoId) || live.spatial.current !== baseline.current
+          || live.direction.current !== baseline.direction) { staleIds.push(photoId); continue; }
+        writes.push({ photoId, position: hasPosition ? change.position : null, degrees });
+      }
+      if (staleIds.length) return { ok: false, error: 'edit-conflict', staleIds };
+      const acceptedAt = Date.now();
+      for (const { photoId, position, degrees } of writes) updateRecord(photoId, (live) => ({
+        ...(position ? { spatial: acceptManualPhotoPosition(live.spatial, position, acceptedAt) } : {}),
+        ...(degrees !== null ? { direction: acceptManualPhotoDirection(degrees, acceptedAt) } : {}),
+      }));
+      editSessions.delete(ticket.layerId);
+      if (writes.length) publish();
+      return { ok: true, changedIds: writes.map((write) => write.photoId) };
     },
     // Owner-scoped, deduplicated asset writes. Stale occurrences are ignored;
     // invalid values and stale evidence fail before any write.
@@ -1066,13 +1061,11 @@ export function createPhotoSession({
     setLayerVisibility(id, visible) {
       const layer = layers.get(id);
       if (!layer || layer.visible === visible) return;
-      manualVisibilityVersions.set(id, (manualVisibilityVersions.get(id) || 0) + 1);
       layers.set(id, Object.freeze({ ...layer, visible }));
       publish();
     },
     setAllLayersVisible(visible) {
       for (const [id, layer] of layers) {
-        if (layer.visible !== visible) manualVisibilityVersions.set(id, (manualVisibilityVersions.get(id) || 0) + 1);
         layers.set(id, Object.freeze({ ...layer, visible }));
       }
       publish();
@@ -1082,6 +1075,7 @@ export function createPhotoSession({
       if (!layer) return;
       layers.delete(id);
       sourceWorkflows.delete(id);
+      editSessions.delete(id);
       sourceReviews.delete(id); sourceRequests.delete(id);
       release(layer.photoIds);
       if (draftTargetLayerId === id) clearImport();
@@ -1096,6 +1090,7 @@ export function createPhotoSession({
       release(Array.from(records.keys()));
       layers.clear();
       sourceWorkflows.clear();
+      editSessions.clear();
       sourceReviews.clear(); sourceRequests.clear(); draftTargetLayerId = null;
       appendOverrideIds.clear();
       importIds = [];

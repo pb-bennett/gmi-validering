@@ -8,12 +8,17 @@ import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiFile, realGrammarFamilies, sharedGuids, sharedFilename, sevenGuid } from './helpers/gmiPhotoFixtures.mjs';
 import { extractHyperlinkFilenames } from '../src/lib/hyperlinkFilenames.mjs';
-import { stagePhotoSource, savePhotoSource, closePhotoSources, openPhotoSources, applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
+import { stagePhotoSource, savePhotoSource, closePhotoSources, openPhotoSources, applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
+import { KEYS, commandBar, dragSelectedMarker, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL, corpus = process.env.GMI_PHOTO_CORPUS;
 const dialog = 'document.querySelector(".photo-positioning-wizard")';
-const spatial = 'document.querySelector(".photo-spatial-inspector")';
-const inspector = 'document.querySelector(".photo-gmi-inspector")';
+// Read-only inspector sections: Plassering (occurrence) and Koblinger (asset associations).
+const spatial = 'document.querySelector(".photo-workspace-inspector section[aria-label=Plassering]")';
+const inspector = 'document.querySelector(".photo-workspace-inspector section[aria-label=Koblinger]")';
+const linkCount = `${inspector}.querySelectorAll('.photo-inspector-links > li').length`;
+const fact = (term) => `Array.from(${spatial}.querySelectorAll('dt')).find((e) => e.innerText === ${JSON.stringify(term)})?.nextElementSibling.innerText.trim()`;
+const currentSource = (label) => `${fact('Kilde')} === ${JSON.stringify(label)}`;
 const link = (filename) => `h:1(link:"Attachments\\${filename}") `;
 
 function actions(browser) {
@@ -32,8 +37,8 @@ function actions(browser) {
     await browser.waitFor(`${dialog}.querySelector('.photo-gmi-summary')`);
   };
   const select = async (filename) => {
-    await browser.evaluate(`document.querySelector(${JSON.stringify(`.photo-workspace-list button[aria-label="Vis ${filename}"]`)}).click()`);
-    await browser.waitFor(`document.querySelector('.photo-workspace-inspector h3').innerText===${JSON.stringify(filename)}`);
+    await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-row')).find((e) => e.getAttribute('aria-label').startsWith(${JSON.stringify(`${filename},`)})).click()`);
+    await browser.waitFor(`document.querySelector('.photo-workspace-inspector h2').innerText===${JSON.stringify(filename)}`);
   };
   const start = async () => {
     if (!welcomeResetInstalled) {
@@ -84,19 +89,32 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
     const gmi = path.join(directory, 'associations.gmi'); await writeFile(gmi, Buffer.from(await gmiFile(objects).arrayBuffer()));
     const gml = path.join(directory, 'positions.gml');
     await writeFile(gml, `<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy><gml:featureMember><app:Skråfoto gml:id="shared"><app:fotolink>${sharedFilename}</app:fotolink><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>581930 6566000 0</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember></gml:FeatureCollection>`);
-    const evidence = () => browser.evaluate(`({ position:Array.from(${spatial}.querySelectorAll('p')).find(e=>e.innerText.includes('(WGS84)'))?.innerText,
-      direction:document.querySelector('.photo-direction-accepted').innerText,
-      candidates:Array.from(${spatial}.querySelectorAll('pre')).filter(e=>!e.closest('details').querySelector('summary').innerText.includes('(GMI)')).map(e=>e.textContent),
+    const evidence = () => browser.evaluate(`({ position:${fact('Koordinater')},
+      direction:${fact('Retning')},
+      candidates:Array.from(${spatial}.querySelectorAll('.photo-inspector-raw')).filter(e=>!e.querySelector('p').textContent.startsWith('GMI')).map(e=>e.querySelector('pre').textContent),
       image:document.querySelector('.photo-collection-original img')?.src })`);
     const showAssociations = async () => browser.evaluate(`${inspector}.querySelectorAll('details').forEach(e=>e.open=true)`);
+    const setDirection = async (degrees) => {
+      await enterEditMode(browser);
+      await browser.evaluate(`(() => {const input=${commandBar}.querySelector('input[type=number]'); input.focus();
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(String(degrees))}); input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      await pressKey(browser, 'Enter', KEYS.Enter);
+      await browser.waitFor(`${editTarget}?.querySelector('.photo-direction-indicator[data-degrees="${degrees}"]')`);
+      await saveEdits(browser);
+    };
+    const sourceCards = async () => {
+      await clickSourceControl(browser, 'Kilder og koblinger', 'document');
+      await browser.waitFor('document.querySelector(".photo-sources-info[open]")');
+      const count = await browser.evaluate('document.querySelectorAll(".photo-sources-card").length');
+      await clickSourceControl(browser, 'Lukk', 'document.querySelector(".photo-sources-info")');
+      await browser.waitFor('!document.querySelector(".photo-sources-info[open]")');
+      return count;
+    };
     try {
       await browser.send('Emulation.setDeviceMetricsOverride', { width:1680, height:900, deviceScaleFactor:1, mobile:false });
       await start(); await create(paths, gml); await select(sharedFilename);
-      await browser.waitFor(`${spatial}.innerText.includes('Gjeldende posisjon (GML)')`);
-      await click('Juster retning');
-      await browser.evaluate(`(() => {const input=document.querySelector('.photo-direction-editor input[type=number]');
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'123'); input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-      await click('Bruk retning'); await browser.waitFor('!document.querySelector(".photo-direction-editor")');
+      await browser.waitFor(currentSource('GML'));
+      await setDirection(123);
       const before = await evidence();
       await open(gmi);
       assert.deepEqual(await summary(), { 'Objekter analysert':8, 'Objekter med bildereferanser':7, 'Referanser funnet':14,
@@ -118,63 +136,61 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
       assert(details.includes('Målet er en mappe uten filnavn.')); assert(details.includes(unicode));
       assert(details.includes('associations.gmi')); assert(details.includes('2 mulige bilder i laget'));
       await click('Avbryt', dialog); await browser.waitFor(`!${dialog}`);
-      assert.equal(await browser.evaluate(inspector), null);
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-source-item").length'), 1, 'only the import GML is retained after cancelling GMI');
+      assert.equal(await browser.evaluate(linkCount), 0);
+      assert.equal(await sourceCards(), 1, 'only the import GML is retained after cancelling GMI');
       assert.deepEqual(await evidence(), before);
       await open(gmi); await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(`!${dialog}`);
       await showAssociations();
-      assert((await browser.evaluate(`${inspector}.innerText`)).includes('2 objekter'));
+      assert.equal(await browser.evaluate(linkCount), 2);
       for (const guid of sharedGuids) assert((await browser.evaluate(`${inspector}.innerText`)).includes(guid));
       assert.deepEqual(await evidence(), before);
       assert.equal(await browser.evaluate(`document.querySelectorAll('button[aria-label="Fjern lag"]').length`), 0);
       for (const filename of seven) {
         await select(filename); await showAssociations();
         assert((await browser.evaluate(`${inspector}.innerText`)).includes(sevenGuid));
-        assert((await browser.evaluate(`${spatial}.innerText`)).includes('Uplassert'));
+        assert.equal(await browser.evaluate(fact('Status')), 'Uplassert');
       }
       await select(sharedFilename); await showAssociations();
-      await applyPhotoSourcePositions(browser, 'exif', { filename: sharedFilename }); assert((await browser.evaluate(`${spatial}.innerText`)).includes('Gjeldende posisjon (EXIF)'));
-      assert((await browser.evaluate(`${inspector}.innerText`)).includes('2 objekter'));
+      await applyPhotoSourcePositions(browser, 'exif', { filename: sharedFilename }); assert(await browser.evaluate(currentSource('EXIF')));
+      assert.equal(await browser.evaluate(linkCount), 2);
       await applyPhotoSourcePositions(browser, 'gml', { filename: sharedFilename });
-      await click('Flytt på kartet');
-      const mapBox = await browser.evaluate('document.querySelector(".leaflet-container").getBoundingClientRect().toJSON()');
-      const x = mapBox.left + mapBox.width / 2 + 60, y = mapBox.top + mapBox.height / 2 + 30;
-      await browser.send('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',buttons:1,clickCount:1});
-      await browser.send('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',buttons:0,clickCount:1});
-      await browser.waitFor('document.querySelector(".photo-proposed-marker")');
-      await browser.evaluate('document.querySelector(".photo-proposed-marker").focus()');
-      await browser.send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowRight',windowsVirtualKeyCode:39});
-      await browser.send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowRight',windowsVirtualKeyCode:39});
-      await click('Bruk plassering'); await browser.waitFor(`${spatial}.innerText.includes('Gjeldende posisjon (Manuell)')`);
-      assert.equal(await browser.evaluate('document.querySelector(".photo-direction-accepted").innerText'), '123°');
-      assert((await browser.evaluate(`${inspector}.innerText`)).includes('2 objekter'));
+      // Move in Edit mode: a drag plus a keyboard nudge on the focused marker, committed once.
+      await enterEditMode(browser);
+      await dragSelectedMarker(browser, 60, 30);
+      await browser.waitFor('document.querySelector("[data-edit-count]")');
+      await browser.evaluate(`${editTarget}.focus()`);
+      await pressKey(browser, 'ArrowRight', KEYS.ArrowRight);
+      await saveEdits(browser); await browser.waitFor(currentSource('Manuell'));
+      assert.equal(await browser.evaluate(fact('Retning')), '123° SØ');
+      assert.equal(await browser.evaluate(linkCount), 2);
       await browser.evaluate('document.querySelector(".photo-preview-open").click()'); await browser.waitFor('document.querySelector(".photo-image-viewer[open]")');
       await browser.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',windowsVirtualKeyCode:27});
       await browser.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',windowsVirtualKeyCode:27});
       await browser.waitFor('!document.querySelector(".photo-image-viewer")');
       // Explicit append + recheck, with no automatic association on append.
       const later = path.join(directory, 'later.jpg'); await writeFile(later, bytes);
-      await click('Legg til bilder'); await input('input[aria-label="Velg bildefiler"]', [later]);
-      await createLayerWithoutPlacement(browser); await select('later.jpg'); assert.equal(await browser.evaluate(inspector), null);
-      await browser.evaluate('document.querySelector(".photo-workspace-sources > details").open=true');
-      await click('Kontroller på nytt', 'Array.from(document.querySelectorAll(".photo-workspace-source-item")).find(item=>item.innerText.includes("associations.gmi"))');
+      await clickSourceControl(browser, 'Legg til bilder', 'document'); await input('input[aria-label="Velg bildefiler"]', [later]);
+      await createLayerWithoutPlacement(browser); await select('later.jpg'); assert.equal(await browser.evaluate(linkCount), 0);
+      // Per-source recheck lives in step 1 of Koble og posisjoner bilder.
+      await openPhotoSources(browser);
+      await click('Kontroller på nytt', `Array.from(${dialog}.querySelectorAll('.photo-source-inventory section[data-source-id]')).find(item=>item.innerText.includes("associations.gmi"))`);
       await browser.waitFor(`${dialog}?.querySelector('.photo-gmi-summary')`);
       assert.equal((await summary())['Ikke matchet'], 0); assert.equal((await summary()).Tvetydig, 1);
-      await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(inspector);
-      await showAssociations(); assert((await browser.evaluate(`${inspector}.innerText`)).includes('TYPE: DFOT'));
+      await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(`${linkCount} === 1`);
+      await showAssociations(); assert((await browser.evaluate(`${inspector}.innerText`)).includes('Type DFOT'));
       // Same byte revision reimport becomes a recheck, without duplicating objects.
       await open(gmi); await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(`!${dialog}`);
-      assert((await browser.evaluate(`${inspector}.innerText`)).includes('1 objekt'));
+      assert.equal(await browser.evaluate(linkCount), 1);
       const revised = path.join(directory,'revision.gmi');
       await writeFile(revised, Buffer.from(await gmiFile(objects.map((object)=>({...object,xyz:'581940 6566005 1'}))).arrayBuffer()));
       await open(revised); await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(`!${dialog}`);
       await select(sharedFilename); await showAssociations();
-      assert((await browser.evaluate(`${inspector}.innerText`)).includes('4 objekter'));
+      assert.equal(await browser.evaluate(linkCount), 4);
       assert((await browser.evaluate(`${inspector}.innerText`)).includes('revision.gmi'));
       await openPhotoSources(browser); await click('Fjern kilde', dialog); await click('Fjern GMI-kilde', dialog); await closePhotoSources(browser);
-      await showAssociations(); assert((await browser.evaluate(`${inspector}.innerText`)).includes('2 objekter'));
+      await showAssociations(); assert.equal(await browser.evaluate(linkCount), 2);
       await openPhotoSources(browser); await click('Fjern kilde', dialog); await click('Fjern GMI-kilde', dialog); await closePhotoSources(browser);
-      await browser.waitFor(`!${inspector}`);
+      await browser.waitFor(`${linkCount} === 0`);
       console.log(JSON.stringify({ gmiBrowserAcceptance:'synthetic images with pinned real reference evidence', layouts:['1680x900','1366x768','1280x720','1024x768','1440x600'],
         checks:'analysis/summary, explicit confirmation/cancel, 2-object photo, 7-photo object, Unicode, invalid directory, unmatched/ambiguous, unchanged positions/direction/preview, GML/EXIF/manual, lightbox, append/recheck, duplicate source, revisions, removal, no GMI map layer' }));
     } catch (error) {
@@ -203,13 +219,13 @@ test('private G01/G04 browser: real GMI sources and photos, 94/31 matched occurr
         await open(gmi);
         assert.equal((await summary())['Matchet (referanser)'],matched);
         assert.equal((await summary())['Ugyldig referanse'],matched===94 ? 1 : 0);
-        await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(inspector);
+        await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser); await browser.waitFor(`${linkCount} > 0`);
         await browser.evaluate(`${inspector}.querySelectorAll('details').forEach(e=>e.open=true)`);
         const text = await browser.evaluate(`${inspector}.innerText`);
-        assert(text.includes(`${expectedObjects} ${expectedObjects===1?'objekt':'objekter'}`));
+        assert.equal(await browser.evaluate(linkCount), expectedObjects);
         assert(text.includes(path.basename(gmi)));
-        assert((await browser.evaluate(`${spatial}.innerText`)).includes('Uplassert'));
-        assert.equal(await browser.evaluate('document.querySelector(".photo-direction-accepted").innerText'),'Ikke angitt');
+        assert.equal(await browser.evaluate(fact('Status')), 'Uplassert');
+        assert.equal(await browser.evaluate(fact('Retning')),'Ikke angitt');
         assert.equal(await browser.evaluate(`document.querySelectorAll('button[aria-label="Fjern lag"]').length`),0);
         console.log(JSON.stringify({realGmiBrowser:relative,photos:photos.length,matchedReferences:matched,inspectedObjects:expectedObjects}));
       }

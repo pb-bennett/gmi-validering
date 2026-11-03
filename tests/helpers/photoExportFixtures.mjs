@@ -23,8 +23,8 @@ export async function exportFixture({ files = null, names = ['Grøft æ image.pn
   }
   const ids = session.getLayer(layer.id).photoIds;
   if (!unplaced) for (const [index, photoId] of ids.entries()) {
-    assert(session.applyManualPlacement(session.beginManualPlacement(layer.id, photoId), { crs: 'EPSG:4326', longitude: 10.43555 + index * .001, latitude: 59.2251222222 }).ok);
-    if (direction !== null) assert(session.applyDirectionEdit(session.beginDirectionEdit(layer.id, photoId), direction).ok);
+    assert(session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: photoId, position: { crs: 'EPSG:4326', longitude: 10.43555 + index * .001, latitude: 59.2251222222 } }]).ok);
+    if (direction !== null) assert(session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: photoId, degrees: direction }]).ok);
   }
   if (time !== null) session.setCaptureMetadata(layer.id, ids, 'captureTime', time);
   if (photographer !== null) session.setCaptureMetadata(layer.id, ids, 'photographer', photographer);

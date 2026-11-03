@@ -5,7 +5,19 @@ export const clickImport = (browser, text) => clickSourceControl(browser,text,im
 export async function addImportFiles(browser, files, {folder=false}={}) {
  await setPhotoFiles(browser,folder?'input[aria-label="Velg mappe"]':'input[aria-label="Velg bildefiler"]',files);
 }
-export const waitForThumbnails = (browser) => browser.waitFor(`${importDialog}?.dataset.thumbnailsPending === '0'`,60000);
+export async function waitForThumbnails(browser) {
+ // Headless Chrome can stop supplying canvas encoder idle deadlines after map
+ // teardown: toBlob then takes its ~1 s fallback per image. Keep rendering
+ // frames during this bounded wait; decoding and the 60 s assertion stay real.
+ await browser.evaluate(`(() => {
+   const frame = () => { window.__photoThumbnailFrameRequest = requestAnimationFrame(frame); };
+   window.__photoThumbnailFrameRequest = requestAnimationFrame(frame);
+ })()`);
+ try { await browser.waitFor(`${importDialog}?.dataset.thumbnailsPending === '0'`,60000); }
+ finally {
+   await browser.evaluate('cancelAnimationFrame(window.__photoThumbnailFrameRequest); delete window.__photoThumbnailFrameRequest;');
+ }
+}
 export async function chooseImportPlacement(browser, kind) {
  if(await browser.evaluate(`${importDialog}?.querySelector('[aria-current="step"]')?.textContent.includes('Bilder')`)) await clickImport(browser,'Neste');
  await browser.evaluate(`(() => {const input=${importDialog}.querySelector('input[name="import-placement"][value="${kind}"]'); if(!input||input.disabled)throw new Error('Unavailable placement ${kind}');input.click();})()`);

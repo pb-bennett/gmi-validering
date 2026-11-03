@@ -54,9 +54,9 @@ test('shared original occurrences keep independent marker colors through move ca
   assert.strictEqual(session.getFile(b.id), files[0]);
   const presentation = (id) => photoPositionSourcePresentation(photoPositionSourceKind(session.getPhoto(id)));
   const before = presentation(b.id);
-  session.cancelManualPlacement(session.beginManualPlacement(layer.id, b.id));
+  session.endPhotoEdits(session.beginPhotoEdits(layer.id));
   assert.strictEqual(presentation(b.id), before, 'cancel retains the accepted source and color');
-  assert(session.applyManualPlacement(session.beginManualPlacement(layer.id, b.id), point(12)).ok);
+  assert(session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: b.id, position: point(12) }]).ok);
   assert.equal(presentation(a.id).kind, 'gmi');
   assert.equal(presentation(b.id).kind, 'manual');
   assert.notEqual(presentation(a.id).color, presentation(b.id).color);
@@ -109,7 +109,7 @@ for (const kinds of [['gmi'], ['gmi', 'exif'], ['gmi', 'gml'], ['gmi', 'gml', 'e
 for (const kind of ['manual', 'exif', 'gml', 'gmi']) test(`accepted ${kind} current stays identical and defaults to keep after GMI confirmation`, async () => {
   const context = await setup(), { session, layer, ids } = context;
   const ticket = session.beginSourceWorkflow(layer.id);
-  if (kind === 'manual') session.applyManualPlacement(session.beginManualPlacement(layer.id, ids[0]), point(12));
+  if (kind === 'manual') session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: ids[0], position: point(12) }]);
   else {
     if (kind === 'gmi') await save(context, gmiFile(objects(1)), 'gmi', ticket);
     if (kind === 'gml') await save(context, new File(['positions'], 'positions.gml'), 'gml', ticket);
@@ -234,16 +234,16 @@ for (const kind of ['exif', 'gml']) test(`shared ${kind} evidence applies indepe
 
 test('manual movement and direction are per occurrence; existing accepted values default to keep current', async () => {
   const context = await setup(), { session, layer, ids } = context;
-  session.applyManualPlacement(session.beginManualPlacement(layer.id, ids[0]), point(12));
-  session.applyDirectionEdit(session.beginDirectionEdit(layer.id, ids[0]), 42);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: ids[0], position: point(12) }]);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: ids[0], degrees: 42 }]);
   const before = session.getPhoto(ids[0]), ticket = await save(context), plan = session.reviewSourceWorkflowPositions(ticket);
   assert.equal(plan.rows[0].defaultChoice, '');
   assert.strictEqual(session.getPhoto(ids[0]).spatial.current, before.spatial.current);
   assert.strictEqual(session.getPhoto(ids[0]).direction, before.direction);
   apply(context, ticket);
   const [a, b] = session.getLayerPhotos(layer.id), bCurrent = b.spatial.current;
-  session.applyManualPlacement(session.beginManualPlacement(layer.id, a.id), point(13));
-  session.applyDirectionEdit(session.beginDirectionEdit(layer.id, b.id), 100);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: a.id, position: point(13) }]);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: b.id, degrees: 100 }]);
   assert.strictEqual(session.getPhoto(b.id).spatial.current, bCurrent);
   assert.equal(session.getPhoto(a.id).direction.current.degrees, 42);
   assert.equal(session.getPhoto(b.id).direction.current.degrees, 100);
@@ -342,7 +342,7 @@ for (const invalidate of ['membership', 'current', 'source', 'reset', 'operation
   const plan = session.reviewSourceWorkflowPositions(ticket), photos = session.getLayerPhotos(layer.id);
   const requests = plan.rows.map((row) => ({ photoId: row.photoId, candidateId: row.options.find((item) => item.kind === 'gmi').id }));
   if (invalidate === 'membership') session.removeLayerPhotos(layer.id, [photos[1].id], { confirmed: true });
-  if (invalidate === 'current') session.applyManualPlacement(session.beginManualPlacement(layer.id, photos[1].id), point(14));
+  if (invalidate === 'current') session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: photos[1].id, position: point(14) }]);
   if (invalidate === 'source') session.removeGmiSource(layer.id, photos[0].occurrence.sourceId, { confirmed: true });
   if (invalidate === 'reset') session.clear();
   if (invalidate === 'operation') session.beginSourceWorkflow(layer.id);
@@ -376,7 +376,7 @@ test('late metadata/preview survives removal of first occurrence, shares evidenc
   const ticket = await save(context);
   apply(context, ticket);
   const [, survivor] = session.getLayerPhotos(layer.id);
-  session.applyDirectionEdit(session.beginDirectionEdit(layer.id, survivor.id), 75);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: survivor.id, degrees: 75 }]);
   session.removeLayerPhotos(layer.id, ids, { confirmed: true });
   const current = session.getPhoto(survivor.id).spatial.current;
   finishGps({ state: 'viable', candidate: { status: 'viable', position: point() } });

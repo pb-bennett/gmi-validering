@@ -30,20 +30,52 @@ async function ready(session) {
   assert.fail('queue did not finish');
 }
 
-test('workspace active photo and batch selection are independent, with next-photo fallback and exit/reopen', () => {
+test('workspace active photo and removal selection are independent, with next-photo fallback and exit/reopen', () => {
   let state = photoWorkspaceReducer(emptyPhotoWorkspace, { type: 'enter', layerId: 'layer', photoIds: ['a', 'b', 'c'], photoId: 'b' });
-  state = photoWorkspaceReducer(state, { type: 'toggle', photoId: 'c' });
+  assert.equal(state.mode, 'browse');
+  assert.strictEqual(photoWorkspaceReducer(state, { type: 'toggle-removal', photoId: 'c' }), state, 'removal selection only exists in removal mode');
+  state = photoWorkspaceReducer(state, { type: 'mode', mode: 'remove' });
+  state = photoWorkspaceReducer(state, { type: 'toggle-removal', photoId: 'c' });
   assert.equal(state.activePhotoId, 'b');
   state = photoWorkspaceReducer(state, { type: 'active', photoId: 'a' });
-  assert.deepEqual(state.selectedIds, ['c']);
+  assert.deepEqual(state.removalIds, ['c']);
   state = photoWorkspaceReducer(state, { type: 'reconcile', layer: { photoIds: ['b', 'c'] } });
   assert.equal(state.activePhotoId, 'b');
+  state = photoWorkspaceReducer(state, { type: 'reconcile', layer: { photoIds: ['b'] } });
+  assert.deepEqual(state.removalIds, [], 'reconcile drops removal ids for missing occurrences');
   state = photoWorkspaceReducer(state, { type: 'reconcile', layer: { photoIds: [] } });
-  assert.equal(state.activePhotoId, null); assert.deepEqual(state.selectedIds, []);
+  assert.equal(state.activePhotoId, null); assert.deepEqual(state.removalIds, []);
   assert.deepEqual(photoWorkspaceReducer(state, { type: 'exit' }), emptyPhotoWorkspace);
   assert.equal(photoWorkspaceReducer(state, { type: 'reconcile', layer: null }).layerId, null);
   state = photoWorkspaceReducer(emptyPhotoWorkspace, { type: 'enter', layerId: 'layer', photoIds: ['a', 'b', 'c', 'd'], photoId: 'b' });
   assert.equal(photoWorkspaceReducer(state, { type: 'reconcile', layer: { photoIds: ['c', 'd'] } }).activePhotoId, 'c');
+  assert.strictEqual(photoWorkspaceReducer(state, { type: 'reconcile', layer: { photoIds: state.photoIds } }), state, 'unchanged membership is a no-op');
+});
+
+test('workspace modes, filter and sort are transient presentation and never change selection', () => {
+  let state = photoWorkspaceReducer(emptyPhotoWorkspace, { type: 'enter', layerId: 'layer', photoIds: ['a', 'b'], photoId: 'a' });
+  state = photoWorkspaceReducer(state, { type: 'mode', mode: 'remove' });
+  state = photoWorkspaceReducer(state, { type: 'select-removal', photoIds: ['a', 'b', 'stranger'] });
+  assert.deepEqual(state.removalIds, ['a', 'b']);
+  state = photoWorkspaceReducer(state, { type: 'mode', mode: 'browse' });
+  assert.deepEqual(state.removalIds, [], 'leaving removal mode clears its selection');
+  state = photoWorkspaceReducer(state, { type: 'filter', filter: { changed: true } });
+  assert.equal(state.filter.changed, false, 'the changed filter only exists in Edit mode');
+  state = photoWorkspaceReducer(state, { type: 'mode', mode: 'edit' });
+  state = photoWorkspaceReducer(state, { type: 'filter', filter: { changed: true, placement: 'gmi', missingDirection: 1, placementBogus: 'x' } });
+  assert.deepEqual(state.filter, { placement: 'gmi', missingDirection: true, missingCaptureTime: false, repeated: false, changed: true });
+  state = photoWorkspaceReducer(state, { type: 'filter', filter: { placement: 'nonsense' } });
+  assert.equal(state.filter.placement, 'gmi');
+  state = photoWorkspaceReducer(state, { type: 'sort', sort: 'capture-desc' });
+  assert.equal(state.activePhotoId, 'a');
+  state = photoWorkspaceReducer(state, { type: 'mode', mode: 'browse' });
+  assert.equal(state.filter.changed, false, 'leaving Edit mode drops the changed filter');
+  assert.equal(state.filter.placement, 'gmi');
+  state = photoWorkspaceReducer(state, { type: 'reset-view' });
+  assert.equal(state.sort, 'filename-asc'); assert.equal(state.filter.placement, 'all');
+  assert.strictEqual(photoWorkspaceReducer(state, { type: 'mode', mode: 'unknown' }), state);
+  const reentered = photoWorkspaceReducer(photoWorkspaceReducer(state, { type: 'exit' }), { type: 'enter', layerId: 'layer', photoIds: ['a'], photoId: 'a' });
+  assert.equal(reentered.mode, 'browse'); assert.equal(reentered.sort, 'filename-asc');
 });
 
 test('target import cancellation leaves owner unchanged; append transfers pending writers and preserves existing evidence', async () => {

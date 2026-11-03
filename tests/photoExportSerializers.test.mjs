@@ -60,7 +60,7 @@ test('unknown direction blocks legacy; modern omits it, unknown photographer omi
   try {
     const legacy = await f.plan(); assert(legacy.errors.some((item) => item.code === 'direction-required')); assert.throws(() => serializePhotoExport(legacy));
     const xml = serializePhotoExport(await f.plan({ profile: 'asbuilt52' })); assert(!xml.includes('retningsvektor')); assert(!xml.includes('fotoinformasjon'));
-    f.session.applyDirectionEdit(f.session.beginDirectionEdit(f.layerId, f.ids[0]), 90);
+    f.session.applyPhotoEdits(f.session.beginPhotoEdits(f.layerId), [{ photoId: f.ids[0], degrees: 90 }]);
     assert(!serializePhotoExport(await f.plan()).includes('fotoinformasjon'));
   } finally { f.session.clear(); }
 });
@@ -79,7 +79,7 @@ test('all four accepted cardinal bearings remain exact; invalid XML photographer
   const f = await exportFixture();
   try {
     for (const degrees of [0, 90, 180, 270]) {
-      f.session.applyDirectionEdit(f.session.beginDirectionEdit(f.layerId, f.ids[0]), degrees);
+      f.session.applyPhotoEdits(f.session.beginPhotoEdits(f.layerId), [{ photoId: f.ids[0], degrees: degrees }]);
       for (const profile of ['legacy2019', 'asbuilt52']) assert.equal(text(parse(serializePhotoExport(await f.plan({ profile }))), 'retningsverdi'), String(degrees));
     }
     f.session.setCaptureMetadata(f.layerId, f.ids, 'photographer', 'Invalid\u0000XML');

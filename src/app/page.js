@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useState, useEffect, useRef, useReducer } from 'react';
+import { startTransition, useState, useEffect, useEffectEvent, useMemo, useRef, useReducer } from 'react';
 import dynamic from 'next/dynamic';
 import { EnvelopeSimpleIcon, ImagesIcon, InfoIcon, GearSixIcon, PlusIcon, XIcon } from '@phosphor-icons/react';
 import FileUpload from '@/components/FileUpload';
@@ -10,11 +10,20 @@ import usePhotoSession from '@/components/photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { loadedGmiSources } from '@/lib/photos/loadedGmiSource.mjs';
 import { emptyPhotoWorkspace, photoWorkspaceReducer } from '@/lib/photos/photoWorkspaceState.mjs';
-import usePhotoManualPlacement from '@/components/photos/usePhotoManualPlacement';
-import usePhotoDirectionEdit from '@/components/photos/usePhotoDirectionEdit';
+import { photoWorkspaceView } from '@/lib/photos/photoWorkspaceView.mjs';
+import { canRedoPhotoEdit, canUndoPhotoEdit, changedPhotoIds, effectivePhoto, emptyPhotoEditState, photoEditChanges, photoEditIsActive,
+  photoEditReducer } from '@/lib/photos/photoEditSession.mjs';
+import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import PhotoWorkspaceCollection from '@/components/photos/PhotoWorkspaceCollection';
 import PhotoPositioningWizard from '@/components/photos/PhotoPositioningWizard';
-import { SelectedPhotoInspector } from '@/components/photos/PhotoCollectionPanel';
+import PhotoWorkspaceInspector from '@/components/photos/PhotoWorkspaceInspector';
+import PhotoCaptureMetadataDialog from '@/components/photos/PhotoCaptureMetadataDialog';
+import PhotoSourcesInfoDialog from '@/components/photos/PhotoSourcesInfoDialog';
+import PhotoExportDialog from '@/components/photos/PhotoExportDialog';
+import PhotoWorkspaceToast from '@/components/photos/PhotoWorkspaceToast';
+import PhotoEditCommandBar from '@/components/photos/PhotoEditCommandBar';
+import PhotoEditBoundaryDialog from '@/components/photos/PhotoEditBoundaryDialog';
+import usePhotoMapDisplayPreference from '@/components/photos/usePhotoMapDisplayPreference';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import ZValidationModal from '@/components/ZValidationModal';
 import InclineAnalysisModal from '@/components/InclineAnalysisModal';
@@ -128,68 +137,162 @@ export default function Home() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAppInfo, setShowAppInfo] = useState(false);
   const [photoImport, setPhotoImport] = useState(null);
-  const [importNotice, setImportNotice] = useState('');
   const surveyLayers = useStore((state) => state.layers);
-  const manualPlacement = usePhotoManualPlacement();
-  const directionEdit = usePhotoDirectionEdit();
-  const cancelPhotoEditing = () => { manualPlacement.cancel(); directionEdit.cancel(); };
-  const placementEditor = { ...manualPlacement, begin: (layerId, photoId) => {
-    directionEdit.cancel(); manualPlacement.begin(layerId, photoId);
-  } };
-  const directionEditor = { ...directionEdit, begin: (layerId, photoId) => {
-    manualPlacement.cancel(); directionEdit.begin(layerId, photoId);
-  } };
-  const [photoWorkspace, rawDispatchPhotoWorkspace] = useReducer(photoWorkspaceReducer, emptyPhotoWorkspace);
-  const dispatchPhotoWorkspace = (action) => {
-    if (['active', 'enter', 'exit'].includes(action.type)) cancelPhotoEditing();
-    rawDispatchPhotoWorkspace(action);
-  };
+  const [photoWorkspace, dispatchPhotoWorkspace] = useReducer(photoWorkspaceReducer, emptyPhotoWorkspace);
+  // Staged Edit-mode values and undo/redo live here, never in photoSession; the session only holds the ticket.
+  const [photoEdit, dispatchPhotoEdit] = useReducer(photoEditReducer, emptyPhotoEditState);
+  const photoEditTicketRef = useRef(null);
+  const photoEditStateRef = useRef(photoEdit);
+  useEffect(() => { photoEditStateRef.current = photoEdit; });
+  const photoMapCenterRef = useRef(null);
+  const [photoMapDisplay, setPhotoMapDisplay] = usePhotoMapDisplayPreference();
+  const [photoNotice, setPhotoNotice] = useState(null);
+  const [photoDialog, setPhotoDialog] = useState(null);
+  const [photoBoundary, setPhotoBoundary] = useState(null);
+  const [photoAnnouncement, setPhotoAnnouncement] = useState('');
+  const [photoPanRequest, setPhotoPanRequest] = useState(null);
+  const notifyPhoto = (text, tone = 'success', action = null) => setPhotoNotice({ id: `${Date.now()}-${Math.random()}`, text, tone, action });
+  const dismissPhotoNotice = (id) => setPhotoNotice((notice) => notice?.id === id ? null : notice);
   const workspaceLayer = photoLayers.find((layer) => layer.id === photoWorkspace.layerId);
-  const workspacePhotos = workspaceLayer ? photoSession.getLayerPhotos(workspaceLayer.id) : [];
-  const activeWorkspacePhoto = workspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
+  // photoLayers is a new array on every publish, so every derived photo list follows the session snapshot.
+  const workspacePhotos = useMemo(() => photoLayers.some((layer) => layer.id === photoWorkspace.layerId)
+    ? photoSession.getLayerPhotos(photoWorkspace.layerId) : [], [photoLayers, photoWorkspace.layerId]);
+  const photoEditing = Boolean(workspaceLayer) && photoWorkspace.mode === 'edit' && photoEditIsActive(photoEdit);
+  const effectiveWorkspacePhotos = useMemo(() => photoEditing ? workspacePhotos.map((photo) => effectivePhoto(photo, photoEdit)) : workspacePhotos,
+    [photoEditing, workspacePhotos, photoEdit]);
+  const changedIds = useMemo(() => new Set(photoEditing ? changedPhotoIds(photoEdit) : []), [photoEditing, photoEdit]);
+  const workspaceView = useMemo(() => photoWorkspaceView(effectiveWorkspacePhotos, photoWorkspace, { changedIds }),
+    [effectiveWorkspacePhotos, photoWorkspace, changedIds]);
+  const activeWorkspacePhoto = effectiveWorkspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
+  const activeSiblings = activeWorkspacePhoto ? effectiveWorkspacePhotos.filter((photo) => photo.assetId === activeWorkspacePhoto.assetId) : [];
   const [photoSourceWorkflow, setPhotoSourceWorkflow] = useState(null);
   const sourceWorkflowLayer = photoLayers.find((layer) => layer.id === photoSourceWorkflow?.layerId);
-  const openPhotoSources = (context = {}) => {
-    if (!workspaceLayer) return;
-    cancelPhotoEditing();
-    setPhotoSourceWorkflow({ layerId: workspaceLayer.id, ...context });
-  };
   const [photoLocateRequest, setPhotoLocateRequest] = useState(null);
   const photoTriggerRef = useRef(null);
-  const openPhotos = (event) => {
-    cancelPhotoEditing();
+
+  const endPhotoEditSession = () => {
+    const ticket = photoEditTicketRef.current;
+    photoEditTicketRef.current = null;
+    if (ticket) photoSession.endPhotoEdits(ticket);
+    dispatchPhotoEdit({ type: 'end' });
+    dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
+  };
+  const enterPhotoEditMode = () => {
+    if (!workspaceLayer || photoWorkspace.mode === 'edit') return;
+    const hidden = !workspaceLayer.visible;
+    if (hidden) photoSession.setLayerVisibility(workspaceLayer.id, true);
+    const ticket = photoSession.beginPhotoEdits(workspaceLayer.id);
+    if (!ticket) return;
+    photoEditTicketRef.current = ticket;
+    dispatchPhotoEdit({ type: 'start', ticket });
+    dispatchPhotoWorkspace({ type: 'mode', mode: 'edit' });
+    if (hidden) notifyPhoto('Laget vises mens du redigerer', 'info');
+  };
+  // One commit for the whole session: every change is validated before anything is written.
+  const savePhotoEdits = (then = null) => {
+    const ticket = photoEditTicketRef.current;
+    const changes = photoEditChanges(photoEdit);
+    // The commit's own publish ends the registration; the subscriber must not treat it as an external end.
+    photoEditTicketRef.current = null;
+    const result = photoSession.applyPhotoEdits(ticket, changes);
+    if (result.ok) {
+      dispatchPhotoEdit({ type: 'end' });
+      dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
+      setPhotoBoundary(null);
+      if (changes.length) notifyPhoto(`Endringer lagret for ${changes.length} ${changes.length === 1 ? 'bilde' : 'bilder'}`);
+      then?.();
+      return;
+    }
+    if (result.error === 'edit-conflict') {
+      photoEditTicketRef.current = ticket;
+      setPhotoBoundary({ variant: 'conflict', staleIds: result.staleIds, then });
+      return;
+    }
+    endPhotoEditSession();
+    setPhotoBoundary(null);
+    notifyPhoto('Redigeringen ble avsluttet fordi fotolaget ble endret.', 'error');
+  };
+  const discardPhotoEdits = (then = null) => { endPhotoEditSession(); setPhotoBoundary(null); then?.(); };
+  // The single unsaved-changes boundary: every action that leaves Edit mode or opens a photo-data tool.
+  const requestWorkspaceAction = (run = () => {}) => {
+    if (photoWorkspace.mode === 'remove') dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
+    if (photoWorkspace.mode !== 'edit') { run(); return; }
+    if (!changedPhotoIds(photoEdit).length) { endPhotoEditSession(); run(); return; }
+    setPhotoBoundary({ variant: 'boundary', then: run });
+  };
+  const stagePhotoEdit = (photoId, field, value, coalesceKey = null) => dispatchPhotoEdit({ type: 'stage', photoId, field, value, coalesceKey, at: Date.now() });
+  const selectWorkspacePhoto = (photoId, { pan = false } = {}) => {
+    dispatchPhotoWorkspace({ type: 'active', photoId });
+    if (pan && workspaceLayer) setPhotoPanRequest({ layerId: workspaceLayer.id, photoId, at: Date.now() });
+  };
+  // Undo/redo select the affected occurrence and announce; selection itself is never history.
+  const travelPhotoEdit = (direction) => {
+    const entry = (direction === 'undo' ? photoEdit.past : photoEdit.future).at(-1);
+    if (!entry) return;
+    dispatchPhotoEdit({ type: direction });
+    selectWorkspacePhoto(entry.photoId, { pan: true });
+    const filename = workspacePhotos.find((photo) => photo.id === entry.photoId)?.originalFilename || 'bildet';
+    const what = entry.field === 'position' ? `flytting av ${filename}` : `retning for ${filename}`;
+    setPhotoAnnouncement(`${direction === 'undo' ? 'Angret' : 'Gjorde om'} ${what}`);
+  };
+  const openPhotoSources = (context = {}) => {
+    if (!workspaceLayer) return;
+    requestWorkspaceAction(() => setPhotoSourceWorkflow({ layerId: workspaceLayer.id, ...context }));
+  };
+  const beginNewPhotoImport = (opener) => {
     setPhotoSourceWorkflow(null);
     photoSession.beginImport();
-    photoTriggerRef.current = event.currentTarget;
+    photoTriggerRef.current = opener;
     setPhotoImport({ kind: 'new', targetLayerId: null });
+  };
+  const openPhotos = (event) => {
+    const opener = event.currentTarget;
+    requestWorkspaceAction(() => beginNewPhotoImport(opener));
   };
   const openLoadedGmiPhotos = (layerId, event) => {
     const ticket = loadedGmiSources.begin(layerId);
     if (!ticket) return;
-    cancelPhotoEditing(); setPhotoSourceWorkflow(null);
+    setPhotoSourceWorkflow(null);
     photoTriggerRef.current = event.currentTarget;
     setPhotoImport({ kind: 'gmi-layer', gmiLayerId: layerId, targetLayerId: null });
     void photoSession.beginLoadedGmiImport({ binding: ticket.binding,
       read: () => loadedGmiSources.read(ticket), isLive: loadedGmiSources.isLive });
   };
-  const openPhotoLayer = (id, opener, photoId = null) => {
+  const enterPhotoLayer = (id, opener, photoId) => {
     const layer = photoSession.getLayer(id);
     if (!layer) return;
     if (opener) photoTriggerRef.current = opener;
     closeDataInspector();
+    setPhotoDialog(null);
     dispatchPhotoWorkspace({ type: 'enter', layerId: id, photoId, photoIds: layer.photoIds });
     useStore.getState().setActiveViewTab('map');
   };
-  const exitPhotoWorkspace = () => {
+  const openPhotoLayer = (id, opener, photoId = null) => {
+    if (id !== photoWorkspace.layerId) requestWorkspaceAction(() => enterPhotoLayer(id, opener, photoId));
+    else enterPhotoLayer(id, opener, photoId);
+  };
+  const exitPhotoWorkspace = () => requestWorkspaceAction(() => {
     setPhotoSourceWorkflow(null);
+    setPhotoDialog(null);
+    setPhotoNotice(null);
     dispatchPhotoWorkspace({ type: 'exit' });
     if (photoTriggerRef.current?.isConnected) photoTriggerRef.current.focus();
-  };
-  const addPhotosToLayer = (event) => {
-    cancelPhotoEditing();
+  });
+  const addPhotosToLayer = (opener) => requestWorkspaceAction(() => {
     if (!photoSession.beginImport(workspaceLayer?.id)) return;
-    photoTriggerRef.current = event.currentTarget;
+    photoTriggerRef.current = opener;
     setPhotoImport({ kind: 'append', targetLayerId: workspaceLayer.id });
+  });
+  // Placeholder entry point for the later metadata/export overhaul. Intentionally does nothing yet.
+  const openCompletePhotoDetails = () => {};
+  const runWorkspaceTool = (tool, opener) => {
+    if (tool === 'add') addPhotosToLayer(opener);
+    else if (tool === 'edit') { if (photoWorkspace.mode !== 'edit') requestWorkspaceAction(enterPhotoEditMode); }
+    else if (tool === 'sources') openPhotoSources();
+    else if (tool === 'info') requestWorkspaceAction(() => setPhotoDialog('info'));
+    else if (tool === 'complete') openCompletePhotoDetails();
+    else if (tool === 'export') requestWorkspaceAction(() => setPhotoDialog('export'));
+    else if (tool === 'remove') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'remove' }));
   };
   const closePhotos = () => {
     photoSession.cancelImport();
@@ -203,7 +306,21 @@ export default function Home() {
   useEffect(() => photoSession.subscribe(() => {
     setPhotoLocateRequest((request) => request && !photoSession.getLayer(request.layerId)?.photoIds.includes(request.photoId) ? null : request);
     setPhotoSourceWorkflow((workflow) => workflow && !photoSession.getLayer(workflow.layerId) ? null : workflow);
-    rawDispatchPhotoWorkspace({ type: 'reconcile', layers: photoSession.getSnapshot().photoLayers });
+    dispatchPhotoWorkspace({ type: 'reconcile', layers: photoSession.getSnapshot().photoLayers });
+    const ticket = photoEditTicketRef.current;
+    if (!ticket) return;
+    if (!photoSession.photoEditsAreLive(ticket)) {
+      photoEditTicketRef.current = null;
+      dispatchPhotoEdit({ type: 'end' });
+      dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
+      setPhotoBoundary(null);
+      setPhotoNotice({ id: `${Date.now()}`, text: 'Redigeringen ble avsluttet fordi fotolaget ble endret.', tone: 'error', action: null });
+      return;
+    }
+    const live = photoSession.getLayer(ticket.layerId).photoIds;
+    const dropped = changedPhotoIds(photoEditStateRef.current).filter((id) => !live.includes(id)).length;
+    dispatchPhotoEdit({ type: 'reconcile', livePhotoIds: live });
+    if (dropped) setPhotoNotice({ id: `${Date.now()}`, text: `${dropped} ${dropped === 1 ? 'endring ble' : 'endringer ble'} fjernet fordi bildet ikke lenger finnes.`, tone: 'error', action: null });
   }), []);
   useEffect(() => photoSession.subscribe(() => {
     if (photoImport?.targetLayerId && !photoSession.getLayer(photoImport.targetLayerId)) setPhotoImport(null);
@@ -213,9 +330,36 @@ export default function Home() {
     setPhotoImport(null);
     useStore.getState().toggleFieldValidation(false);
     openPhotoLayer(result.layer.id);
-    setImportNotice(result.placementError ? 'Bildene er lagt til, men posisjonene ble ikke brukt. Kontroller kildene i fotolaget.'
-      : `${append ? `${result.addedCount} bilder er lagt til.` : 'Fotolaget er opprettet.'} ${result.outcome.placed} av ${result.outcome.total} bilder er plassert.`);
+    if (result.placementError) notifyPhoto('Bildene er lagt til, men posisjonene ble ikke brukt. Kontroller kildene i fotolaget.', 'error',
+      { label: 'Koble og posisjoner bilder…', run: () => setPhotoSourceWorkflow({ layerId: result.layer.id }) });
+    else notifyPhoto(`${append ? `${result.addedCount} bilder er lagt til.` : 'Fotolaget er opprettet.'} ${result.outcome.placed} av ${result.outcome.total} bilder er plassert.`);
   };
+  // Edit mode keyboard: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y; Escape after tooltips, gestures and menus.
+  const onPhotoWorkspaceKey = useEffectEvent((event) => {
+    if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
+    const typing = event.target?.closest?.('input, textarea, select, [contenteditable="true"]');
+    const key = event.key?.toLowerCase();
+    if (photoEditing && (event.ctrlKey || event.metaKey) && !event.altKey && (key === 'z' || (key === 'y' && event.ctrlKey))) {
+      if (typing) return;
+      event.preventDefault();
+      travelPhotoEdit(key === 'z' && !event.shiftKey ? 'undo' : 'redo');
+      return;
+    }
+    if (event.key !== 'Escape') return;
+    if (photoEditing) { event.preventDefault(); requestWorkspaceAction(); }
+    else if (photoWorkspace.mode === 'remove') { event.preventDefault(); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); }
+  });
+  const photoKeysActive = Boolean(workspaceLayer) && photoWorkspace.mode !== 'browse';
+  useEffect(() => {
+    if (!photoKeysActive) return undefined;
+    const listener = (event) => onPhotoWorkspaceKey(event);
+    document.addEventListener('keydown', listener);
+    return () => document.removeEventListener('keydown', listener);
+  }, [photoKeysActive]);
+  const photoEditConnectors = useMemo(() => photoEditing ? effectiveWorkspacePhotos.filter((photo) => photo.staged?.position
+    && isPhotoPosition(photo.saved?.current?.position) && workspaceView.visibleIds.has(photo.id)).map((photo) => ({ photoId: photo.id, positions: [
+    [photo.saved.current.position.latitude, photo.saved.current.position.longitude],
+    [photo.spatial.current.position.latitude, photo.spatial.current.position.longitude]] })) : [], [photoEditing, effectiveWorkspacePhotos, workspaceView]);
   const attachLoadedGmi = (layerId) => {
     const ticket = loadedGmiSources.begin(layerId);
     if (ticket) void photoSession.setDraftGmiSource({ binding: ticket.binding, read: () => loadedGmiSources.read(ticket), isLive: loadedGmiSources.isLive });
@@ -373,6 +517,9 @@ export default function Home() {
   const handleReset = () => {
     setPhotoImport(null);
     setPhotoLocateRequest(null);
+    // An explicit global reset: staged edits are lost with the whole photo session.
+    if (photoEditTicketRef.current) endPhotoEditSession();
+    setPhotoDialog(null); setPhotoBoundary(null); setPhotoNotice(null);
     dispatchPhotoWorkspace({ type: 'exit' });
     closeDataInspector();
     resetAll();
@@ -397,6 +544,31 @@ export default function Home() {
         photos={photoSession.getLayerPhotos(sourceWorkflowLayer.id)} review={sourceReviews[sourceWorkflowLayer.id]}
         initialSourceId={photoSourceWorkflow.sourceId} focusedPhotoId={photoSourceWorkflow.photoId}
         onClose={() => setPhotoSourceWorkflow(null)} />}
+      {workspaceLayer && !photoImport && photoDialog === 'info' && <PhotoSourcesInfoDialog layer={workspaceLayer} photos={workspacePhotos}
+        onClose={() => setPhotoDialog(null)} onOpenSources={() => { setPhotoDialog(null); openPhotoSources(); }} />}
+      {workspaceLayer && !photoImport && photoDialog === 'export' && <PhotoExportDialog layerId={workspaceLayer.id} onClose={() => setPhotoDialog(null)} />}
+      {workspaceLayer && !photoImport && photoDialog === 'metadata' && activeWorkspacePhoto && <PhotoCaptureMetadataDialog key={activeWorkspacePhoto.assetId}
+        photo={workspacePhotos.find((photo) => photo.id === activeWorkspacePhoto.id)} layerId={workspaceLayer.id} occurrenceCount={activeSiblings.length}
+        onClose={() => setPhotoDialog(null)} onSaved={(text) => notifyPhoto(text)} />}
+      {photoBoundary && photoEditing && <PhotoEditBoundaryDialog variant={photoBoundary.variant} changedCount={changedIds.size} staleCount={photoBoundary.staleIds?.length || 0}
+        onContinue={() => setPhotoBoundary(null)} onDiscard={() => discardPhotoEdits(photoBoundary.then)}
+        onSave={() => {
+          if (photoBoundary.variant === 'conflict') {
+            // Drop only the conflicting occurrences, then retry the same session for the rest.
+            const stale = photoBoundary.staleIds, then = photoBoundary.then;
+            const changes = photoEditChanges(photoEdit).filter((change) => !stale.includes(change.photoId));
+            dispatchPhotoEdit({ type: 'drop', photoIds: stale });
+            const ticket = photoEditTicketRef.current;
+            photoEditTicketRef.current = null;
+            const result = photoSession.applyPhotoEdits(ticket, changes);
+            if (result.ok) {
+              dispatchPhotoEdit({ type: 'end' }); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); setPhotoBoundary(null);
+              notifyPhoto(`Endringer lagret for ${changes.length} ${changes.length === 1 ? 'bilde' : 'bilder'}`);
+              then?.();
+            } else if (result.error === 'edit-conflict') { photoEditTicketRef.current = ticket; setPhotoBoundary({ variant: 'conflict', staleIds: result.staleIds, then }); }
+            else { endPhotoEditSession(); setPhotoBoundary(null); notifyPhoto('Redigeringen ble avsluttet fordi fotolaget ble endret.', 'error'); }
+          } else savePhotoEdits(photoBoundary.then);
+        }} />}
       {/* Floating Stats Button */}
       {!workspaceLayer && !(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
       <button
@@ -561,14 +733,14 @@ export default function Home() {
           <TerrainFetcher />
 
           <WorkspaceShell
-            sidebarWidth={workspaceLayer ? 280 : sidebarWidth}
+            sidebarWidth={workspaceLayer ? 272 : sidebarWidth}
             photoWorkspace={Boolean(workspaceLayer)}
             onOpenAppInfo={(event) => openAppInfo('about', event.currentTarget)}
             appInfoTriggerRef={appInfoTriggerRef}
             onOpenPhotos={openPhotos}
-            sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos} importNotice={importNotice} onDismissNotice={() => setImportNotice('')}
-              workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace}
-              onExit={exitPhotoWorkspace} onAddPhotos={addPhotosToLayer} onBeforeDialog={cancelPhotoEditing} onOpenSources={openPhotoSources} /> : fieldValidationOpen ? (
+            sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={effectiveWorkspacePhotos}
+              view={workspaceView} workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace} editing={photoEditing} changedIds={changedIds}
+              onExit={exitPhotoWorkspace} onTool={runWorkspaceTool} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} /> : fieldValidationOpen ? (
               <FieldValidationSidebar
                 sidebarWidth={sidebarWidth}
                 canDockInspector={canDockInspector}
@@ -614,14 +786,25 @@ export default function Home() {
                   }}
                 >
                   <MapView onZoomChange={setZoomLevel} onOpenPhoto={(layerId, photoId, opener) => openPhotoLayer(layerId, opener, photoId)}
-                    photoWorkspaceSelection={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId } : null}
-                    onSelectPhoto={(photoId) => dispatchPhotoWorkspace({ type: 'active', photoId })}
-                    photoPlacement={manualPlacement.transaction} onPhotoPropose={manualPlacement.propose}
-                    photoDirectionEdit={directionEdit.transaction}
+                    photoWorkspace={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId, activeAssetId: activeWorkspacePhoto?.assetId || null,
+                      photos: effectiveWorkspacePhotos, visibleIds: workspaceView.visibleIds, displayMode: photoMapDisplay, onDisplayModeChange: setPhotoMapDisplay,
+                      zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null } : null}
+                    onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
+                    photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,
+                      onAnnounce: setPhotoAnnouncement, centerRef: photoMapCenterRef } : null}
                     photoLocateRequest={photoLocateRequest} onPhotoLocateHandled={() => setPhotoLocateRequest(null)} />
-                  {hasPhotoLayers && !hasSurveyData && photoLayers.every((layer) => layer.placedCount === 0) && (
+                  {photoEditing && <div className="photo-edit-command-anchor">
+                    <PhotoEditCommandBar photo={activeWorkspacePhoto || null} siblingCount={activeSiblings.length} changedCount={changedIds.size}
+                      canUndo={canUndoPhotoEdit(photoEdit)} canRedo={canRedoPhotoEdit(photoEdit)} onUndo={() => travelPhotoEdit('undo')} onRedo={() => travelPhotoEdit('redo')}
+                      onSave={() => savePhotoEdits()} onDiscard={() => setPhotoBoundary({ variant: 'discard' })} onExit={() => requestWorkspaceAction()}
+                      onStage={stagePhotoEdit} onMapCenter={() => photoMapCenterRef.current?.()} announcement={photoAnnouncement} />
+                  </div>}
+                  {workspaceLayer && photoNotice && <div className="photo-workspace-toast-anchor">
+                    <PhotoWorkspaceToast key={photoNotice.id} notice={photoNotice} onDismiss={dismissPhotoNotice} />
+                  </div>}
+                  {hasPhotoLayers && !hasSurveyData && !photoEditing && photoLayers.every((layer) => layer.placedCount === 0) && (
                     <div className="pointer-events-none absolute bottom-16 left-3 right-3 rounded-lg border border-gmi-border bg-gmi-surface/95 p-3 text-center text-xs text-gmi-text-muted">
-                      {workspaceLayer ? 'Bildene er uplassert. Velg «Koble og posisjoner bilder» for å kontrollere GML eller EXIF GPS.' : 'Bildene er uplassert. Åpne bildemodulen for å kontrollere og bruke posisjoner.'}
+                      {workspaceLayer ? 'Bildene er uplassert. Bruk «Verktøy» → «Koble og posisjoner bilder…» for GMI, GML eller EXIF GPS, eller plasser dem i «Rediger bilder».' : 'Bildene er uplassert. Åpne bildemodulen for å kontrollere og bruke posisjoner.'}
                     </div>
                   )}
 
@@ -702,7 +885,9 @@ export default function Home() {
           </div>
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
-            {!photoImport && <SelectedPhotoInspector key={activeWorkspacePhoto?.assetId || 'empty'} photo={activeWorkspacePhoto} layerId={workspaceLayer.id} onLocate={locatePhoto} manualPlacement={placementEditor} directionEditor={directionEditor} onOpenSources={openPhotoSources} enableLargeView />}
+            {!photoImport && <PhotoWorkspaceInspector key={activeWorkspacePhoto?.assetId || 'empty'} photo={activeWorkspacePhoto} layer={workspaceLayer}
+              siblings={activeSiblings} editing={photoEditing} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} onLocate={locatePhoto}
+              onEditMetadata={() => requestWorkspaceAction(() => setPhotoDialog('metadata'))} />}
           </aside> : <div id="validation-v2-field-inspector-root" className="contents" />}
         </div>
             )}

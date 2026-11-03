@@ -25,11 +25,12 @@ import 'leaflet/dist/leaflet.css';
 import useStore from '@/lib/store';
 import usePhotoSession from './photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
-import { buildPhotoMapFeatures } from '@/lib/photos/photoMapFeatures.mjs';
+import { buildPhotoMapItems } from '@/lib/photos/photoMapFeatures.mjs';
 import PhotoMarkersLayer from './photos/PhotoMarkersLayer';
 import GeminiReferenceLayer from './gemini-wfs/GeminiReferenceLayer';
-import PhotoManualPlacementLayer from './photos/PhotoManualPlacementLayer';
+import PhotoEditLayer from './photos/PhotoEditLayer';
 import PhotoMapController from './photos/PhotoMapController';
+import MapLifecycleGuard from './MapLifecycleGuard';
 import { useShallow } from 'zustand/react/shallow';
 import { analyzeIncline } from '@/lib/analysis/incline';
 import {
@@ -1128,9 +1129,14 @@ function FeatureHoverTooltip({ controllerRef, resetKey }) {
   return null;
 }
 
-export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspaceSelection, onSelectPhoto, photoPlacement, onPhotoPropose, photoDirectionEdit }) {
+export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspace, onSelectPhoto, photoPanRequest, photoEdit }) {
+  // photoLayers is a new array on every session publish, so this is one presentation pass per snapshot
+  // (or workspace view change); markers never re-read the session per feature.
   const { photoLayers } = usePhotoSession();
-  const photoFeatures = buildPhotoMapFeatures(photoLayers, photoSession.getLayerPhotos);
+  const workspacePhotos = photoWorkspace?.photos, workspaceVisibleIds = photoWorkspace?.visibleIds, workspaceLayerId = photoWorkspace?.layerId;
+  const photoItems = useMemo(() => buildPhotoMapItems(photoLayers, photoSession.getLayerPhotos, workspaceLayerId ? {
+    photosByLayer: new Map([[workspaceLayerId, workspacePhotos]]), include: { layerId: workspaceLayerId, ids: workspaceVisibleIds },
+  } : {}), [photoLayers, workspaceLayerId, workspacePhotos, workspaceVisibleIds]);
   const hoverControllerRef = useRef(null);
   const data = useStore((state) => state.data);
   const multiLayerModeEnabled = useStore(
@@ -2186,10 +2192,12 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
         controllerRef={hoverControllerRef}
         resetKey={`${geoJsonDataKey}-${styleVersionKey}`}
       />
+      <MapLifecycleGuard />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
-      <GeminiReferenceLayer inspectionEnabled={!measureMode && !photoPlacement && !photoDirectionEdit} hoverControllerRef={hoverControllerRef} />
-      <PhotoMarkersLayer features={photoFeatures} onOpenPhoto={onOpenPhoto} photoWorkspaceSelection={photoWorkspaceSelection} onSelectPhoto={onSelectPhoto} placementActive={Boolean(photoPlacement)} directionEdit={photoDirectionEdit} />
-      <PhotoManualPlacementLayer transaction={photoPlacement} onPropose={onPhotoPropose} />
+      <GeminiReferenceLayer inspectionEnabled={!measureMode && !photoEdit} hoverControllerRef={hoverControllerRef} />
+      <PhotoMarkersLayer items={photoItems} onOpenPhoto={onOpenPhoto} workspace={photoWorkspace} onSelectPhoto={onSelectPhoto} />
+      {photoEdit && <PhotoEditLayer photo={photoEdit.photo} displayMode={photoWorkspace?.displayMode} connectors={photoEdit.connectors}
+        onStage={photoEdit.onStage} onAnnounce={photoEdit.onAnnounce} centerRef={photoEdit.centerRef} />}
       <LayersControl
         key={`layers-control-${customWmsConfig?.url ?? 'none'}`}
         position="topright"
@@ -2307,8 +2315,8 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       <FeatureHighlighter geoJsonData={geoJsonData} />
       <FieldValidationZoomHandler geoJsonData={geoJsonData} />
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}
-      <PhotoMapController features={photoFeatures} hasSurveyData={Boolean(data) || layerOrder.length > 0}
-        locateRequest={photoLocateRequest} onLocateHandled={onPhotoLocateHandled} />
+      <PhotoMapController items={photoItems} hasSurveyData={Boolean(data) || layerOrder.length > 0}
+        locateRequest={photoLocateRequest} onLocateHandled={onPhotoLocateHandled} panRequest={photoPanRequest} />
       <MapSizeInvalidator />
       <ZoomToFeatureHandler />
       <MapCenterHandler />

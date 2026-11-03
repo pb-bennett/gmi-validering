@@ -52,7 +52,7 @@ for (const [field, input] of Object.entries(inputs)) test(`${field}: invalid inp
   const f = await setup(), s = f.session;
   try {
     const photos = s.getLayerPhotos(f.layerId), id = photos[0].id;
-    if (field === 'direction') s.applyDirectionEdit(s.beginDirectionEdit(f.layerId, id), 0);
+    if (field === 'direction') s.applyPhotoEdits(s.beginPhotoEdits(f.layerId), [{ photoId: id, degrees: 0 }]);
     else s.setCaptureMetadata(f.layerId, [id], field, field === 'captureTime' ? '2024-01-01' : 'Existing');
     const before = accepted(s.getPhoto(id), field);
     const failed = s.fillMissingPhotoValues(f.layerId, field, field === 'direction' ? Infinity : '');

@@ -139,7 +139,7 @@ test('direction explicit adoption per occurrence: repeated disclosure counts, ma
   try {
     const { layerId, photos } = await repeated(s), ids = photos.map((photo) => photo.id);
     assert(photos.every((photo) => !photo.direction.current));
-    s.applyDirectionEdit(s.beginDirectionEdit(layerId, ids[0]), 90);
+    s.applyPhotoEdits(s.beginPhotoEdits(layerId), [{ photoId: ids[0], degrees: 90 }]);
     const manual = s.getPhoto(ids[0]).direction.current;
     const result = s.adoptSourceEvidence(layerId, 'direction');
     assert.equal(result.counts.adopted, 2); assert.equal(result.counts.alreadyAccepted, 1); assert.equal(result.counts.repeatedApplications, 1);
@@ -176,7 +176,7 @@ test('hundreds of diagnostics group without losing detail; asset capture and occ
   const s = setup();
   try {
     const { layerId, photos } = await repeated(s);
-    for (const photo of photos) s.applyManualPlacement(s.beginManualPlacement(layerId, photo.id), { crs: 'EPSG:4326', longitude: 10, latitude: 59 });
+    for (const photo of photos) s.applyPhotoEdits(s.beginPhotoEdits(layerId), [{ photoId: photo.id, position: { crs: 'EPSG:4326', longitude: 10, latitude: 59 } }]);
     const config = { profile: 'legacy2019', crs: 'EPSG:25832' };
     const plan = await buildPhotoExportPlan(capturePhotoExportSnapshot(s, layerId), config);
     const groups = groupPhotoExportDiagnostics(plan.errors);
@@ -204,7 +204,7 @@ test('fractional true-north direction remains exact in both XML profiles', async
   try {
     const [id] = s.importFiles([image('a.png', { direction: 359.875 })]).acceptedIds, layer = s.createLayer();
     await settle(s, layer.id);
-    s.applyManualPlacement(s.beginManualPlacement(layer.id, id), { crs: 'EPSG:4326', longitude: 10, latitude: 59 });
+    s.applyPhotoEdits(s.beginPhotoEdits(layer.id), [{ photoId: id, position: { crs: 'EPSG:4326', longitude: 10, latitude: 59 } }]);
     s.adoptSourceEvidence(layer.id, 'captureTime'); s.adoptSourceEvidence(layer.id, 'direction');
     for (const profile of ['legacy2019', 'asbuilt52']) {
       const plan = await buildPhotoExportPlan(capturePhotoExportSnapshot(s, layer.id), { profile, crs: 'EPSG:25832', context: syntheticContext });

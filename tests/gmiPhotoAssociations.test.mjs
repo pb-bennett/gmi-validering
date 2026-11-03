@@ -166,8 +166,8 @@ test('source confirmation/cancel are atomic and retain current, direction, previ
   const session = setup();
   const original = photoFile('a.jpg'), photoId = session.importFiles([original]).acceptedIds[0], layer = session.createLayer();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  session.applyManualPlacement(session.beginManualPlacement(layer.id, photoId), { crs: 'EPSG:4326', latitude: 59, longitude: 10 });
-  session.applyDirectionEdit(session.beginDirectionEdit(layer.id, photoId), 123);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: photoId, position: { crs: 'EPSG:4326', latitude: 59, longitude: 10 } }]);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: photoId, degrees: 123 }]);
   const before = session.getPhoto(photoId);
   const file = gmiFile([{ hyperlink: link('a.jpg') }]);
   await session.stageLayerSource(layer.id, file, 'gmi');
@@ -234,8 +234,8 @@ test('manual move, GML/EXIF acceptance and direction edits preserve both source 
     session.acceptCandidates(layer.id, [{ photoId, candidateId: candidate.id }]);
     assert.deepEqual(session.getGmiPhotoAssociations(layer.id, photoId), originalEdges);
   }
-  session.applyManualPlacement(session.beginManualPlacement(layer.id, photoId), position);
-  session.applyDirectionEdit(session.beginDirectionEdit(layer.id, photoId), 90);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: photoId, position: position }]);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: photoId, degrees: 90 }]);
   assert.deepEqual(session.getGmiPhotoAssociations(layer.id, photoId), originalEdges);
   assert(session.removeGmiSource(layer.id, originalEdges[0].sourceId, { confirmed: true }));
   assert.equal(session.getGmiPhotoAssociations(layer.id, photoId).length, 1);

@@ -24,6 +24,7 @@ async function layerWithSources(session) {
   await until(() => session.getLayer(layer.id).exifCandidateCount === 2);
   return { layer, ids };
 }
+const move = (session, layerId, photoId, position) => session.applyPhotoEdits(session.beginPhotoEdits(layerId), [{ photoId, position }]);
 
 test('manual current normalizes geography, deeply freezes metadata and creates no source candidate', () => {
   const spatial = emptySpatial();
@@ -34,33 +35,34 @@ test('manual current normalizes geography, deeply freezes metadata and creates n
   for (const invalid of [null, { ...moved, latitude: 91 }, { ...moved, longitude: Infinity }, { ...moved, longitude: NaN }, { ...moved, crs: 'EPSG:3857' }, { ...moved, latitude: '59' }]) assert.equal(acceptManualPhotoPosition(spatial, invalid), null);
 });
 
-test('unplaced begin/cancel is a no-op; apply publishes once and counts/features change immediately', () => {
+test('unplaced begin/end is a no-op; apply publishes once and counts/features change immediately', () => {
   const session = setup();
   const id = session.importFiles([new File(['a'], 'a.jpg')]).acceptedIds[0], layer = session.createLayer();
-  const ticket = session.beginManualPlacement(layer.id, id);
-  assert.equal(session.getPhoto(id).spatial.current, null);
-  session.cancelManualPlacement(ticket);
-  assert.equal(session.applyManualPlacement(ticket, moved).ok, false);
-  const next = session.beginManualPlacement(layer.id, id);
   let publishes = 0; const unsubscribe = session.subscribe(() => publishes++);
-  assert.equal(session.applyManualPlacement(next, moved).ok, true);
+  const ticket = session.beginPhotoEdits(layer.id);
+  assert.equal(session.getPhoto(id).spatial.current, null);
+  session.endPhotoEdits(ticket);
+  assert.equal(publishes, 0, 'begin/end never publish');
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: id, position: moved }]).ok, false);
+  const next = session.beginPhotoEdits(layer.id);
+  assert.equal(session.applyPhotoEdits(next, [{ photoId: id, position: moved }]).ok, true);
   assert.equal(publishes, 1); unsubscribe();
   assert.equal(session.getLayer(layer.id).placedCount, 1);
   assert.equal(buildPhotoMapFeatures([session.getLayer(layer.id)], session.getLayerPhotos).length, 1);
-  assert.equal(session.applyManualPlacement(next, originalPosition).ok, false, 'ticket consumed once');
+  assert.equal(session.applyPhotoEdits(next, [{ photoId: id, position: originalPosition }]).ok, false, 'session consumed once');
   session.clear();
 });
 
-test('move cancellation keeps exact current; repeated manual/source switching preserves evidence, Files, preview and other members', async () => {
+test('ending a move keeps exact current; repeated manual/source switching preserves evidence, Files, preview and other members', async () => {
   const session = setup(); const { layer, ids } = await layerWithSources(session);
   const before = session.getPhoto(ids[0]); const file = session.getFile(ids[0]); const other = session.getPhoto(ids[1]);
-  const ticket = session.beginManualPlacement(layer.id, ids[0]);
-  assert.strictEqual(ticket.expectedCurrent, before.spatial.current);
-  session.cancelManualPlacement(ticket);
+  const ticket = session.beginPhotoEdits(layer.id);
+  assert.strictEqual(ticket.baseline[ids[0]].current, before.spatial.current);
+  session.endPhotoEdits(ticket);
   assert.strictEqual(session.getPhoto(ids[0]).spatial.current, before.spatial.current);
   const evidence = before.spatial.candidates;
   for (let i = 0; i < 3; i++) {
-    assert.equal(session.applyManualPlacement(session.beginManualPlacement(layer.id, ids[0]), moved).ok, true);
+    assert.equal(move(session, layer.id, ids[0], moved).ok, true);
     const manual = session.getPhoto(ids[0]);
     assert.equal(manual.spatial.current.basis.kind, 'manual');
     assert.strictEqual(manual.spatial.candidates, evidence); assert.strictEqual(session.getFile(ids[0]), file);
@@ -76,18 +78,18 @@ test('move cancellation keeps exact current; repeated manual/source switching pr
   session.clear();
 });
 
-for (const action of ['remove', 'delete', 'reset', 'hidden', 'current-change', 'explicit-cancel']) test(`stale proposal rejected after ${action}`, async () => {
+for (const action of ['remove', 'delete', 'reset', 'current-change', 'explicit-end']) test(`stale move rejected after ${action}`, async () => {
   const session = setup(); const { layer, ids } = await layerWithSources(session);
-  const ticket = session.beginManualPlacement(layer.id, ids[0]);
+  const ticket = session.beginPhotoEdits(layer.id);
   if (action === 'remove') session.removeLayerPhotos(layer.id, [ids[0]], { confirmed: true });
   if (action === 'delete') session.deleteLayer(layer.id);
   if (action === 'reset') session.clear();
-  if (action === 'hidden') { session.setLayerVisibility(layer.id, false); session.setLayerVisibility(layer.id, true); }
   if (action === 'current-change') session.acceptCandidates(layer.id, [{ photoId: ids[0], candidateId: `${ids[0]}:exif` }]);
-  if (action === 'explicit-cancel') session.cancelManualPlacement(ticket);
-  assert.equal(session.manualPlacementIsLive(ticket), false);
+  if (action === 'explicit-end') session.endPhotoEdits(ticket);
   const before = session.getPhoto(ids[0])?.spatial.current;
-  assert.equal(session.applyManualPlacement(ticket, moved).ok, false);
+  const result = session.applyPhotoEdits(ticket, [{ photoId: ids[0], position: moved }]);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, ['remove', 'current-change'].includes(action) ? 'edit-conflict' : 'session-ended');
   assert.strictEqual(session.getPhoto(ids[0])?.spatial.current, before);
   session.clear();
 });
@@ -95,27 +97,38 @@ for (const action of ['remove', 'delete', 'reset', 'hidden', 'current-change', '
 test('invalid, fabricated, foreign-session and wrong-owner requests cannot write current', async () => {
   const session = setup(); const { layer, ids } = await layerWithSources(session);
   const otherSession = setup(); const other = await layerWithSources(otherSession);
-  assert.equal(session.beginManualPlacement('missing', ids[0]), null);
-  assert.equal(session.beginManualPlacement(layer.id, 'missing'), null);
-  const ticket = session.beginManualPlacement(layer.id, ids[0]);
-  assert.equal(session.applyManualPlacement({ ...ticket }, moved).ok, false);
-  assert.equal(session.applyManualPlacement(otherSession.beginManualPlacement(other.layer.id, other.ids[0]), moved).ok, false);
-  assert.equal(session.applyManualPlacement(ticket, { ...moved, latitude: 91 }).error, 'invalid-position');
-  assert.strictEqual(session.getPhoto(ids[0]).spatial.current, ticket.expectedCurrent);
-  assert.equal(session.applyManualPlacement(ticket, moved).ok, true);
+  assert.equal(session.beginPhotoEdits('missing'), null);
+  const ticket = session.beginPhotoEdits(layer.id);
+  assert.equal(session.applyPhotoEdits({ ...ticket }, [{ photoId: ids[0], position: moved }]).ok, false);
+  assert.equal(session.applyPhotoEdits(otherSession.beginPhotoEdits(other.layer.id), [{ photoId: other.ids[0], position: moved }]).ok, false);
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: 'not-a-member', position: moved }]).error, 'edit-conflict', 'non-member occurrence is never in this baseline');
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0], position: { ...moved, latitude: 91 } }]).error, 'invalid-change');
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0], position: moved }, { photoId: ids[0], degrees: 9 }]).error, 'invalid-change', 'duplicate occurrence');
+  assert.strictEqual(session.getPhoto(ids[0]).spatial.current, ticket.baseline[ids[0]].current);
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0], position: moved }]).ok, true);
   session.clear(); otherSession.clear();
 });
 
-test('late EXIF and thumbnails preserve manual current and do not invalidate a live ticket', async () => {
+test('invalid change anywhere fails before any write (no partial apply)', async () => {
+  const session = setup(); const { layer, ids } = await layerWithSources(session);
+  const ticket = session.beginPhotoEdits(layer.id);
+  const before = ids.map((id) => session.getPhoto(id).spatial.current);
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0], position: moved }, { photoId: ids[1], degrees: NaN }]).error, 'invalid-change');
+  assert.deepEqual(ids.map((id) => session.getPhoto(id).spatial.current), before);
+  assert(session.photoEditsAreLive(ticket));
+  session.clear();
+});
+
+test('late EXIF and thumbnails preserve manual current and do not invalidate a live session', async () => {
   const thumbnail = deferred(), gps = deferred(); let started = 0;
   const session = setup({ createThumbnail: () => { started++; return thumbnail.promise; }, extractGps: () => { started++; return gps.promise; } });
   const id = session.importFiles([new File(['original'], 'a.jpg')]).acceptedIds[0], layer = session.createLayer();
   await until(() => started === 2);
-  const ticket = session.beginManualPlacement(layer.id, id);
+  const ticket = session.beginPhotoEdits(layer.id);
   gps.resolve({ state: 'viable', candidate: { status: 'viable', position: originalPosition } });
   await until(() => session.getPhoto(id).spatial.exifRead.state === 'viable');
-  assert(session.manualPlacementIsLive(ticket));
-  assert.equal(session.applyManualPlacement(ticket, moved).ok, true);
+  assert(session.photoEditsAreLive(ticket));
+  assert.equal(session.applyPhotoEdits(ticket, [{ photoId: id, position: moved }]).ok, true);
   const current = session.getPhoto(id).spatial.current;
   thumbnail.resolve({ dimensions: { width: 1, height: 1 }, thumbnailBlob: new Blob(['thumb']) });
   await until(() => session.getPhoto(id).preview.state === 'ready');
@@ -124,13 +137,12 @@ test('late EXIF and thumbnails preserve manual current and do not invalidate a l
   session.clear();
 });
 
-
 test('both async readers finishing after manual acceptance retain the exact manual current', async () => {
   const thumbnail = deferred(), gps = deferred(); let started = 0;
   const session = setup({ createThumbnail: () => { started++; return thumbnail.promise; }, extractGps: () => { started++; return gps.promise; } });
   const id = session.importFiles([new File(['original'], 'a.jpg')]).acceptedIds[0], layer = session.createLayer();
   await until(() => started === 2);
-  assert.equal(session.applyManualPlacement(session.beginManualPlacement(layer.id, id), moved).ok, true);
+  assert.equal(move(session, layer.id, id, moved).ok, true);
   const current = session.getPhoto(id).spatial.current;
   gps.resolve({ state: 'viable', candidate: { status: 'viable', position: originalPosition } });
   thumbnail.resolve({ dimensions: { width: 1, height: 1 }, thumbnailBlob: new Blob(['thumb']) });

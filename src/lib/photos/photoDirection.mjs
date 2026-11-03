@@ -34,9 +34,30 @@ export function acceptEvidencePhotoDirection(evidence, agreeingEvidence = [evide
     tag: evidence.tag, raw: evidence.raw, evidence: agreeingEvidence }, acceptance: 'source', acceptedAt } });
 }
 
+// Norwegian compass sectors of 45°, clockwise from geographic north.
+const COMPASS_LETTERS = Object.freeze(['N', 'NØ', 'Ø', 'SØ', 'S', 'SV', 'V', 'NV']);
+const COMPASS_WORDS = Object.freeze(['nord', 'nordøst', 'øst', 'sørøst', 'sør', 'sørvest', 'vest', 'nordvest']);
+const compassSector = (normalized) => Math.round(normalized / 45) % 8;
+
 export function photoDirectionLabel(degrees) {
+  // Exact accepted values (EXIF or bulk fill) keep their decimals; interactive edits are integers.
+  const exact = normalizeExactPhotoDirection(degrees);
+  if (exact !== null && !Number.isInteger(exact)) {
+    return `${exact.toLocaleString('nb-NO', { maximumFractionDigits: 3 })}° ${COMPASS_LETTERS[compassSector(exact)]}`;
+  }
   const normalized = normalizePhotoDirection(degrees);
   if (normalized === null) return 'Ikke angitt';
-  const cardinal = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(normalized / 45) % 8];
-  return `${normalized}° ${cardinal}`;
+  return `${normalized}° ${COMPASS_LETTERS[compassSector(normalized)]}`;
+}
+
+export function photoDirectionCompassWord(degrees) {
+  const normalized = normalizePhotoDirection(degrees);
+  return normalized === null ? null : COMPASS_WORDS[compassSector(normalized)];
+}
+
+// Full words for assistive technology, e.g. slider aria-valuetext.
+export function photoDirectionSpokenLabel(degrees) {
+  const normalized = normalizePhotoDirection(degrees);
+  if (normalized === null) return 'Ikke angitt';
+  return `${normalized} ${normalized === 1 ? 'grad' : 'grader'}, ${COMPASS_WORDS[compassSector(normalized)]}`;
 }

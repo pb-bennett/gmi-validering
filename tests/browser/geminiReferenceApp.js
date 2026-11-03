@@ -46,7 +46,7 @@ useStore.setState({ data, layers: { survey: { id: 'survey', data, file: { name: 
   ui: { ...useStore.getState().ui, mapBaseLayer: 'Ingen', mapOverlayVisibility: { eiendomsgrenser: false, geminiWms: true } } });
 const photoId = photoSession.importFiles([new File(['synthetic'], 'Synthetic photo.heic')]).acceptedIds[0];
 const photoLayer = photoSession.createLayer();
-photoSession.applyManualPlacement(photoSession.beginManualPlacement(photoLayer.id, photoId), { crs: 'EPSG:4326', longitude: 10.43555, latitude: 59.2251222222 });
+photoSession.applyPhotoEdits(photoSession.beginPhotoEdits(photoLayer.id), [{ photoId, position: { crs: 'EPSG:4326', longitude: 10.43555, latitude: 59.2251222222 } }]);
 
 function App() {
   return <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', height: '100vh' }}>

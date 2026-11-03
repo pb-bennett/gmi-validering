@@ -71,14 +71,14 @@ test('actual reset clears created FOTO layers and a new temporary import togethe
   assert.equal(photoSession.getFile(two), null);
 });
 
-test('actual application reset clears accepted direction and invalidates its pending ticket', () => {
+test('actual application reset clears accepted direction and invalidates its pending edit session', () => {
   const id = photoSession.importFiles([new File(['one'], 'one.heic')]).acceptedIds[0];
   const layer = photoSession.createLayer();
-  assert(photoSession.applyDirectionEdit(photoSession.beginDirectionEdit(layer.id, id), 0).ok);
-  const ticket = photoSession.beginDirectionEdit(layer.id, id);
+  assert(photoSession.applyPhotoEdits(photoSession.beginPhotoEdits(layer.id), [{ photoId: id, degrees: 0 }]).ok);
+  const ticket = photoSession.beginPhotoEdits(layer.id);
   assert.equal(photoSession.getPhoto(id).direction.current.degrees, 0);
   useStore.getState().resetAll();
-  assert.equal(photoSession.directionEditIsLive(ticket), false);
-  assert.equal(photoSession.applyDirectionEdit(ticket, 90).ok, false);
+  assert.equal(photoSession.photoEditsAreLive(ticket), false);
+  assert.equal(photoSession.applyPhotoEdits(ticket, [{ photoId: id, degrees: 90 }]).ok, false);
   assert.equal(photoSession.getPhoto(id), null);
 });

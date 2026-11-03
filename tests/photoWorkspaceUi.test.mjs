@@ -5,17 +5,15 @@ import { readdir, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { assertPhotoDialogLayout } from './helpers/photoDialogLayout.mjs';
-import { applyPhotoSourcePositions, openPhotoSources, closePhotoSources, stagePhotoSource, savePhotoSource } from './helpers/photoSourceWorkflow.mjs';
+import { applyPhotoSourcePositions, openPhotoSources, closePhotoSources, stagePhotoSource, savePhotoSource, clickSourceControl, sourceWizard } from './helpers/photoSourceWorkflow.mjs';
 
 const applicationUrl = process.env.PHOTO_UI_URL;
 const gmlPath = process.env.PHOTO_GML_FIXTURE;
 test('real FOTO workspace: popup, selection, append/remove, late sources, batch, layout and lifecycle',
   { skip: !chromePath || !applicationUrl || !gmlPath, timeout: 240000 }, async () => {
     const browser = await openTestChrome(), checks = [];
-    const click = async (text, scope = 'document') => browser.evaluate(`(() => {
-      const button = Array.from(${scope}.querySelectorAll('button')).find(e => e.innerText.trim() === ${JSON.stringify(text)});
-      if (!button || button.disabled) throw new Error('Unavailable button: ' + ${JSON.stringify(text)}); button.click();
-    })()`);
+    // Visible text first, then icon-only accessible names; workspace tools open through Verktøy.
+    const click = async (text, scope = 'document') => clickSourceControl(browser, text, scope);
     const inputFiles = async (selector, files) => {
       const { root } = await browser.send('DOM.getDocument');
       const { nodeId } = await browser.send('DOM.querySelector', { nodeId: root.nodeId, selector });
@@ -25,7 +23,14 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
     const collectionCount = 'document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length';
     const inspector = 'document.querySelector(".photo-workspace-inspector")';
     const originalCount = 'window.__photoUrlAudit.originals.size';
-    const current = (kind) => `${inspector}.innerText.includes("Gjeldende posisjon (${kind})")`;
+    const current = (kind) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find(e=>e.innerText==='Kilde')?.nextElementSibling.innerText.trim()===${JSON.stringify(kind)}`;
+    const sourceCards = async () => {
+      await click('Kilder og koblinger'); await browser.waitFor('document.querySelector(".photo-sources-info[open]")');
+      const count = await browser.evaluate('document.querySelectorAll(".photo-sources-card").length');
+      await click('Lukk', 'document.querySelector(".photo-sources-info")'); await browser.waitFor('!document.querySelector(".photo-sources-info[open]")');
+      return count;
+    };
+    const removalMode = async () => { await click('Fjern bilder fra laget'); await browser.waitFor('document.querySelector(".photo-removal-bar")'); };
     const screenshot = async (name) => {
       if (!process.env.PHOTO_SCREENSHOT_DIR) return;
       await browser.waitFor(`!document.querySelector('.leaflet-container.leaflet-zoom-anim') && Array.from(document.querySelectorAll('.leaflet-tile')).every(image => image.complete)`);
@@ -54,15 +59,15 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
         input.files = transfer.files; input.dispatchEvent(new Event('change', {bubbles:true})); })()`);
     };
     const selectPhoto = async (filename) => {
-      await browser.evaluate(`document.querySelector(${JSON.stringify(`.photo-workspace-list button[aria-label="Vis ${filename}"]`)}).click()`);
-      await browser.waitFor(`${inspector}.querySelector('h3').innerText === ${JSON.stringify(filename)}`);
+      await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-row')).find(e => e.getAttribute('aria-label').startsWith(${JSON.stringify(`${filename},`)})).click()`);
+      await browser.waitFor(`${inspector}.querySelector('h2').innerText === ${JSON.stringify(filename)}`);
     };
-    const togglePhoto = async (filename) => browser.evaluate(`document.querySelector(${JSON.stringify(`.photo-workspace-list input[aria-label="Velg ${filename}"]`)}).click()`);
+    const togglePhoto = async (filename) => browser.evaluate(`document.querySelector(${JSON.stringify(`.photo-workspace-list input[aria-label="Velg ${filename} for fjerning"]`)}).click()`);
     const checkImageViewer = async (label, closeWithEscape = true) => {
       await browser.waitFor(`(() => { const image = ${inspector}.querySelector('.photo-collection-original img'); return image?.complete && image.naturalWidth > 0; })()`);
       const original = await browser.evaluate(`${inspector}.querySelector('.photo-collection-original img').src`);
       const created = await browser.evaluate('window.__photoUrlAudit.originalCreated');
-      const filename = await browser.evaluate(`${inspector}.querySelector('h3').innerText`);
+      const filename = await browser.evaluate(`${inspector}.querySelector('h2').innerText`);
       await browser.evaluate('document.querySelector(".photo-preview-open").click()'); await browser.waitFor('document.querySelector(".photo-image-viewer[open]")');
       await browser.waitFor('document.querySelector(".photo-image-viewer img").complete');
       // ResizeObserver measures the opened top-layer viewport before fitting.
@@ -99,7 +104,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
         await browser.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
       } else await browser.evaluate(`${viewer}.querySelector('button[aria-label="Lukk bildevisning"]').click()`);
       await browser.waitFor('!document.querySelector(".photo-image-viewer")');
-      assert.equal(await browser.evaluate(`${inspector}.querySelector('h3').innerText`), filename);
+      assert.equal(await browser.evaluate(`${inspector}.querySelector('h2').innerText`), filename);
       assert.equal(await browser.evaluate(originalCount), 1);
       assert.equal(await browser.evaluate('window.__photoUrlAudit.originalCreated'), created);
       checks.push(`image viewer ${label}: same original URL, fit/zoom/100%/pan/wheel, close preserves photo`);
@@ -122,7 +127,8 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
         assert(Math.abs(layout.map.right - layout.right.left) < 2);
         assert(layout.map.width > layout.left.width && layout.map.width > layout.right.width);
         assert(layout.right.right <= width + 1);
-        if (width === 1680) { assert(layout.right.width >= 460 && layout.right.width <= 520); assert.equal(layout.left.width, 280); }
+        // Planned widths: 272 px left pane; inspector clamp(400px, 32vw, 560px).
+        if (width === 1680) { assert(layout.right.width >= 400 && layout.right.width <= 560, JSON.stringify(layout.right)); assert.equal(layout.left.width, 272); }
       } else {
         assert(layout.map.top >= layout.left.bottom - 1); assert(layout.right.top >= layout.map.bottom - 1);
         await browser.evaluate(`${inspector}.scrollIntoView({block:'start'})`);
@@ -164,9 +170,10 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       await browser.waitFor(`${originalCount} === 1`);
       assert.equal(await browser.evaluate(collectionCount), 148); assert(await browser.evaluate(current('GML')));
       await browser.waitFor(`(() => { const image = ${inspector}.querySelector('.photo-collection-original img'); return image?.complete && image.naturalWidth > 0 && image.getBoundingClientRect().height >= 200; })()`);
-      const first = await browser.evaluate(`${inspector}.querySelector('h3').innerText`), second = path.basename(photos[1]);
-      await togglePhoto(first); await selectPhoto(second);
-      assert(await browser.evaluate(`document.querySelector(${JSON.stringify(`input[aria-label="Velg ${first}"]`)}).checked`));
+      const first = await browser.evaluate(`${inspector}.querySelector('h2').innerText`), second = path.basename(photos[1]);
+      // Batch selection only exists in removal mode and stays independent of the active photo.
+      await removalMode(); await togglePhoto(first); await selectPhoto(second);
+      assert(await browser.evaluate(`document.querySelector(${JSON.stringify(`input[aria-label="Velg ${first} for fjerning"]`)}).checked`));
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker-selected").length'), 1);
       assert(await browser.evaluate(`document.querySelector('.photo-camera-marker-selected').title.includes(${JSON.stringify(second)})`));
       assert.equal(await browser.evaluate(originalCount), 1);
@@ -180,12 +187,11 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert.equal(await browser.evaluate("document.querySelector('.photo-camera-marker:not(.photo-camera-marker-selected) svg').getBoundingClientRect().width"), 16);
       assert.equal(await browser.evaluate("document.querySelector('.photo-camera-marker-selected svg').getBoundingClientRect().width"), 22);
       assert(await browser.evaluate("Number(document.querySelector('.photo-camera-marker-selected').style.zIndex) > Math.max(...Array.from(document.querySelectorAll('.photo-camera-marker:not(.photo-camera-marker-selected)')).map(e => Number(e.style.zIndex)))"));
-      for (const kind of ['GML', 'EXIF']) await browser.evaluate(`Array.from(${inspector}.querySelectorAll('summary')).find(e => e.innerText === 'Kildeinformasjon (${kind})').click()`);
+      await browser.evaluate(`Array.from(${inspector}.querySelectorAll('summary')).find(e => e.innerText === 'Tekniske kildedata').click()`);
       assert(await browser.evaluate(`${inspector}.innerText.includes('EPSG:5972') && ${inspector}.innerText.includes('GPSLatitude')`));
-      await click('Fjern valg'); await assertWorkspaceLayout(1680, 900);
-      assert(!await browser.evaluate("Boolean(document.querySelector('.photo-workspace-selected-actions'))"));
-      assert(!await browser.evaluate("document.querySelector('.photo-workspace-sources > details').open"));
-      assert(await browser.evaluate("document.querySelector('.photo-workspace-sources summary').innerText.includes('1 kilde')"));
+      await click('Avbryt', 'document.querySelector(".photo-removal-bar")'); await assertWorkspaceLayout(1680, 900);
+      assert(!await browser.evaluate("Boolean(document.querySelector('.photo-removal-bar, .photo-workspace-list input'))"));
+      assert.equal(await sourceCards(), 1);
       assert(await browser.evaluate("document.querySelector('.photo-workspace-list').getBoundingClientRect().height > innerHeight / 2"));
       await screenshot('photo-workspace-desktop'); await checkImageViewer('portrait');
       const oldOriginal = await browser.evaluate(`${inspector}.querySelector('.photo-collection-original img').src`);
@@ -207,17 +213,17 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
               - markers.filter(c => Math.hypot(c.box.x-a.box.x,c.box.y-a.box.y) < 30).length);
             const marker = markers[0].marker; marker.click(); return marker.title.replace(/^Vis bilde: /,'').split(' · ')[0];
           })()`);
-          await browser.waitFor(`${inspector}.querySelector('h3').innerText === ${JSON.stringify(densePhoto)}`);
+          await browser.waitFor(`${inspector}.querySelector('h2').innerText === ${JSON.stringify(densePhoto)}`);
           await browser.waitFor(`document.querySelector('.photo-camera-marker-selected').title.includes(${JSON.stringify(densePhoto)})`);
           await screenshot('photo-workspace-dense-selected');
-          await click('Zoom til posisjon', inspector);
+          await browser.evaluate(`${inspector}.querySelector('.photo-inspector-locate').click()`);
           await browser.waitFor("document.body.innerText.includes('Zoom: 18')");
         }
       }
       await assertWorkspaceLayout(1024, 620); await screenshot('photo-workspace-short'); await checkImageViewer('short');
       await assertWorkspaceLayout(390, 700); await screenshot('photo-workspace-narrow'); await checkImageViewer('narrow'); await assertWorkspaceLayout(1680, 900);
       const clickedWorkspacePhoto = await browser.evaluate(`(() => { const marker = document.querySelectorAll('.photo-camera-marker')[3]; marker.click(); return marker.title.replace(/^Vis bilde: /, '').split(' · ')[0]; })()`);
-      await browser.waitFor(`${inspector}.querySelector('h3').innerText === ${JSON.stringify(clickedWorkspacePhoto)}`);
+      await browser.waitFor(`${inspector}.querySelector('h2').innerText === ${JSON.stringify(clickedWorkspacePhoto)}`);
       assert(!await browser.evaluate('Boolean(document.querySelector(".photo-map-popup"))'));
       checks.push('layer-card entry, 148 collection records, active/batch independence, selected marker, provenance and one live original URL');
       await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
@@ -235,8 +241,8 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       const popupThumbnail = await browser.evaluate('document.querySelector(".photo-map-popup img").src');
       assert(await browser.evaluate(`document.querySelector('.photo-map-popup').innerText.includes(${JSON.stringify(markerTitle)})`));
       await screenshot('photo-workspace-compact-popup'); await click('Åpne i bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-      assert.equal(await browser.evaluate(`${inspector}.querySelector('h3').innerText`), markerTitle);
-      assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(`.photo-workspace-list button[aria-label="Vis ${markerTitle}"]`)}).querySelector('img').src`), popupThumbnail);
+      assert.equal(await browser.evaluate(`${inspector}.querySelector('h2').innerText`), markerTitle);
+      assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-row')).find(e => e.getAttribute('aria-label').startsWith(${JSON.stringify(`${markerTitle},`)})).querySelector('img').src`), popupThumbnail);
       checks.push('normal marker opens compact popup only, reuses thumbnail, creates no original URL; popup enters workspace at exact photo');
 
       await click('Legg til bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
@@ -251,23 +257,26 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       await createLayerWithoutPlacement(browser); await browser.waitFor(`${collectionCount} === 151 && ${markerCount} === 148`);
       await openPhotoSources(browser); await syntheticGml('addition-placed.png', true); await savePhotoSource(browser); await closePhotoSources(browser);
       await applyPhotoSourcePositions(browser, 'gml', { filename: 'addition-placed.png' }); await browser.waitFor(`${markerCount} === 149`);
-      await selectPhoto('addition-one.png'); await checkImageViewer('landscape', false); await togglePhoto('addition-one.png'); await togglePhoto('addition-two.png');
-      await click('Fjern fra lag'); await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
+      await selectPhoto('addition-one.png'); await checkImageViewer('landscape', false);
+      await removalMode(); await togglePhoto('addition-one.png'); await togglePhoto('addition-two.png');
+      await browser.evaluate('document.querySelector(".photo-removal-primary").click()'); await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
       assert(await browser.evaluate('document.querySelector(".photo-remove-confirmation").innerText.includes("2 bilder")'));
       assert.equal(await browser.evaluate(collectionCount), 151);
       await click('Avbryt', 'document.querySelector(".photo-remove-confirmation")'); await browser.waitFor('!document.querySelector("dialog[open]")');
       assert.equal(await browser.evaluate(collectionCount), 151);
-      await click('Fjern fra lag'); await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
+      await browser.evaluate('document.querySelector(".photo-removal-primary").click()'); await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
       await click('Fjern fra lag', 'document.querySelector(".photo-remove-confirmation")'); await browser.waitFor(`${collectionCount} === 149`);
-      assert.equal(await browser.evaluate(`${inspector}.querySelector('h3').innerText`), 'addition-placed.png');
-      await togglePhoto('addition-placed.png'); await click('Fjern fra lag'); await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
+      assert.equal(await browser.evaluate(`${inspector}.querySelector('h2').innerText`), 'addition-placed.png');
+      await removalMode(); await togglePhoto('addition-placed.png');
+      await browser.evaluate('document.querySelector(".photo-removal-primary").click()'); await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
       assert(await browser.evaluate('document.querySelector(".photo-remove-confirmation").innerText.includes("Fjern bildet")'));
       await click('Fjern fra lag', 'document.querySelector(".photo-remove-confirmation")'); await browser.waitFor(`${collectionCount} === 148 && ${markerCount} === 148`);
       assert.equal(await browser.evaluate(originalCount), 1);
       checks.push('append cancel/confirm with incoming-only GML; batch/single removal confirmation, active fallback, counts/resources and layer retained');
 
-      await browser.evaluate("document.querySelector('.photo-workspace-sources > details').open = true");
-      await click('Kontroller på nytt', 'document.querySelector(".photo-workspace-source-item")');
+      // Per-source recheck lives in step 1 of Koble og posisjoner bilder.
+      await openPhotoSources(browser);
+      await click('Kontroller på nytt', `${sourceWizard}.querySelector('.photo-source-inventory section[data-source-id]')`);
       await browser.waitFor('document.querySelector(".photo-positioning-wizard")?.innerText.includes("Kilden finnes i laget")');
       await savePhotoSource(browser); await closePhotoSources(browser);
       await stagePhotoSource(browser, gmlPath); await closePhotoSources(browser);
@@ -277,21 +286,21 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       await applyPhotoSourcePositions(browser, 'gml', { filename: first, sourceFilename: 'changed.gml' });
       await selectPhoto(first);
       assert(await browser.evaluate(current('GML')));
-      assert.equal(await browser.evaluate(`${inspector}.querySelectorAll('.photo-spatial-inspector > div').length`), 3);
+      assert.equal(await browser.evaluate(`${inspector}.querySelectorAll('.photo-inspector-raw').length`), 3);
       assert(await browser.evaluate(`${inspector}.innerText.includes('changed.gml')`));
       await applyPhotoSourcePositions(browser, 'exif'); await browser.waitFor(current('EXIF'));
       await applyPhotoSourcePositions(browser, 'gml', { sourceFilename: path.basename(gmlPath) }); await browser.waitFor(current('GML'));
       assert.equal(await browser.evaluate(markerCount), 148);
-      await browser.evaluate(`document.querySelector('input[aria-label^="Vis fotokartlag"]').click()`); await browser.waitFor(`${markerCount} === 0`);
+      await browser.evaluate(`document.querySelector('.photo-workspace-visibility').click()`); await browser.waitFor(`${markerCount} === 0`);
       assert(await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))'));
-      await browser.evaluate(`document.querySelector('input[aria-label^="Vis fotokartlag"]').click()`); await browser.waitFor(`${markerCount} === 148`);
+      await browser.evaluate(`document.querySelector('.photo-workspace-visibility').click()`); await browser.waitFor(`${markerCount} === 148`);
       await screenshot('photo-workspace-dense-selection');
       checks.push('duplicate GML diagnosed; changed source requires explicit wizard confirmation; reversible 148-photo GML/EXIF and visibility');
       await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await deleteLayer();
       assert.equal(await browser.evaluate(markerCount), 0); assert.equal(await browser.evaluate(originalCount), 0);
 
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await inputFiles('input[aria-label="Velg bildefiler"]', photos);
-      await createLayerWithoutPlacement(browser); await browser.waitFor('document.body.innerText.includes("148 uplassert")');
+      await createLayerWithoutPlacement(browser); await browser.waitFor('document.querySelector(".photo-workspace-counts")?.innerText.includes("148 bilder · 0 plassert")');
       assert.equal(await browser.evaluate(markerCount), 0);  await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       await stagePhotoSource(browser, gmlPath); await savePhotoSource(browser);
       assert.equal(await browser.evaluate(markerCount), 0, 'source checkpoint leaves photos unplaced');
@@ -303,7 +312,8 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
 
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await syntheticPhotos(['empty-layer.png']);
       await createLayerWithoutPlacement(browser); await browser.waitFor('!document.querySelector("dialog[open]")');
-      await browser.waitFor('document.querySelector(".photo-workspace-shell")'); await click('Velg alle viste'); await click('Fjern fra lag');
+      await browser.waitFor('document.querySelector(".photo-workspace-shell")'); await removalMode(); await click('Velg alle viste');
+      await browser.evaluate('document.querySelector(".photo-removal-primary").click()');
       await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")'); await click('Fjern fra lag', 'document.querySelector(".photo-remove-confirmation")');
       await browser.waitFor(`${collectionCount} === 0`);
       assert(await browser.evaluate('document.body.innerText.includes("Laget er tomt")')); assert(await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))'));

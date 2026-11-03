@@ -5,7 +5,7 @@ import { readdir, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { assertPhotoDialogLayout } from './helpers/photoDialogLayout.mjs';
-import { applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
+import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
 
 // Opt-in production UI acceptance; private originals stay outside the repository.
 const applicationUrl = process.env.PHOTO_UI_URL;
@@ -13,7 +13,8 @@ const gmlPath = process.env.PHOTO_GML_FIXTURE;
 test('production FOTO UI: real corpus markers, provenance, locate, visibility, ownership and survey coexistence', { skip: !chromePath || !applicationUrl || !gmlPath, timeout: 180000 }, async () => {
   const browser = await openTestChrome();
   const checks = [];
-  const click = async (text) => browser.evaluate(`(() => { const button = Array.from(document.querySelectorAll('button')).find(e => e.innerText.trim() === ${JSON.stringify(text)}); if (!button || button.disabled) throw new Error('Unavailable button: ' + ${JSON.stringify(text)}); button.click(); })()`);
+  // Visible text first, then icon-only accessible names; workspace tools open through Verktøy.
+  const click = async (text) => clickSourceControl(browser, text, 'document');
   const inputFiles = async (selector, files) => {
     const { root } = await browser.send('DOM.getDocument');
     const { nodeId } = await browser.send('DOM.querySelector', { nodeId: root.nodeId, selector });
@@ -21,6 +22,9 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await browser.send('DOM.setFileInputFiles', { nodeId, files });
   };
   const markerCount = 'document.querySelectorAll(".photo-camera-marker").length';
+  const placementSource = `Array.from(document.querySelectorAll('.photo-workspace-inspector section[aria-label=Plassering] dt')).find(e=>e.innerText==='Kilde')?.nextElementSibling.innerText.trim()`;
+  const markerSource = (filename) => `Array.from(document.querySelectorAll('.photo-camera-marker')).find(e=>e.title.startsWith(${JSON.stringify(`Vis bilde: ${filename} `)}))?.querySelector('[data-position-source]').dataset.positionSource`;
+  const locateCurrent = () => browser.evaluate('document.querySelector(".photo-workspace-inspector .photo-inspector-locate").click()');
   const screenshot = async (name) => {
     if (!process.env.PHOTO_SCREENSHOT_DIR) return;
     await mkdir(process.env.PHOTO_SCREENSHOT_DIR, { recursive: true });
@@ -77,30 +81,36 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await click('Åpne i bildemodul');
     await browser.waitFor('document.querySelector(".photo-workspace-shell")');
     assert(await browser.evaluate(`document.querySelector('.photo-collection-inspector').innerText.includes(${JSON.stringify(markerTitle)})`));
-    assert(await browser.evaluate('document.body.innerText.includes("Gjeldende posisjon (GML)")'));
-    for (const kind of ['GML', 'EXIF']) await browser.evaluate(`Array.from(document.querySelectorAll('summary')).find(e => e.innerText === 'Kildeinformasjon (${kind})').click()`);
-    assert(await browser.evaluate('document.body.innerText.includes("EPSG:5972") && document.body.innerText.includes("GPSLatitude")'));
-    await browser.evaluate('document.querySelector(".photo-spatial-inspector").scrollIntoView({block:"start"})');
+    assert.equal(await browser.evaluate(placementSource), 'GML');
+    // Raw GML/EXIF evidence stays available read-only under Tekniske kildedata.
+    await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-inspector summary')).find(e => e.innerText === 'Tekniske kildedata').click()`);
+    assert(await browser.evaluate('document.querySelector(".photo-workspace-inspector").innerText.includes("EPSG:5972") && document.querySelector(".photo-workspace-inspector").innerText.includes("GPSLatitude")'));
+    await browser.evaluate('document.querySelector(".photo-workspace-inspector section[aria-label=Plassering]").scrollIntoView({block:"start"})');
     await screenshot('photo-spatial-inspector');
     await applyPhotoSourcePositions(browser, 'exif', { filename: markerTitle });
-    await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (EXIF)")');
+    await browser.waitFor(`${placementSource} === 'EXIF'`);
     await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
-    await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (EXIF)")');
+    await browser.waitFor(`${markerSource(markerTitle)} === 'exif'`);
     await applyPhotoSourcePositions(browser, 'gml', { filename: markerTitle });
-    await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (GML)")');
+    // Called from the main map, the helper enters and leaves the workspace; reopen it at the same photo.
+    await browser.waitFor(`${markerSource(markerTitle)} === 'gml'`);
+    await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+    await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-row')).find(e => e.getAttribute('aria-label').startsWith(${JSON.stringify(`${markerTitle},`)})).click()`);
+    await browser.waitFor(`${placementSource} === 'GML'`);
     for (const [width, height] of [[1024, 620], [390, 700]]) {
       await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
       assert(await browser.evaluate('document.querySelector(".photo-workspace-shell").getBoundingClientRect().width === innerWidth'));
-      await browser.evaluate('Array.from(document.querySelectorAll("button")).find(e => e.innerText === "Kontroller kilder og posisjon").scrollIntoView({block:"center"})');
-      assert(await browser.evaluate('Array.from(document.querySelectorAll("button")).find(e => e.innerText === "Kontroller kilder og posisjon").getBoundingClientRect().bottom <= window.innerHeight'));
+      await browser.evaluate('document.querySelector(".photo-inspector-action").scrollIntoView({block:"center"})');
+      assert(await browser.evaluate('document.querySelector(".photo-inspector-action").getBoundingClientRect().bottom <= window.innerHeight'));
     }
     await browser.send('Emulation.setDeviceMetricsOverride', { width: 1680, height: 900, deviceScaleFactor: 1, mobile: false });
     checks.push('marker focuses correct photo; provenance visible; candidate acceptance preserved on reopen');
-    for (const button of ['Zoom til posisjon', 'Zoom til GML', 'Zoom til EXIF']) {
-      await click(button); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+    // The current position and every other viable candidate (here EXIF) have their own locate controls.
+    for (const label of [`Zoom til ${markerTitle} på kartet`, `Zoom til EXIF-posisjon for ${markerTitle}`]) {
+      await click(label); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       await browser.waitFor('document.body.innerText.includes("Zoom: 18")');
       assert.equal(await browser.evaluate(markerCount), 148);
-      await browser.waitFor('document.body.innerText.includes("Gjeldende posisjon (GML)")');
+      await browser.waitFor(`${placementSource} === 'GML'`);
     }
     checks.push('current/GML/EXIF locate retain workspace, markers and accepted basis');
     await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await deleteLayer();
@@ -109,10 +119,10 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")');
     await inputFiles('input[aria-label="Velg bildefiler"]', photos);
     await createLayerWithoutPlacement(browser);
-    await browser.waitFor('document.body.innerText.includes("148 uplassert") && document.querySelector(".leaflet-container")');
+    await browser.waitFor('document.querySelector(".photo-workspace-counts")?.innerText.includes("148 bilder · 0 plassert") && document.querySelector(".leaflet-container")');
     assert.equal(await browser.evaluate(markerCount), 0);
      await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-    await applyPhotoSourcePositions(browser, 'exif', { filename: await browser.evaluate('document.querySelector(".photo-workspace-inspector h3").innerText') }); await click('Tilbake til appen');
+    await applyPhotoSourcePositions(browser, 'exif', { filename: await browser.evaluate('document.querySelector(".photo-workspace-inspector h2").innerText') }); await click('Tilbake til appen');
     await browser.waitFor(`${markerCount} === 1`);
     assert(await browser.evaluate('document.body.innerText.includes("1 plassert") && document.body.innerText.includes("147 uplassert")'));
     checks.push('all 148 EXIF candidates stay unplaced without GML; explicit acceptance creates exactly one marker');
@@ -136,7 +146,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     assert.equal(await browser.evaluate(markerCount), 1);
     await screenshot('photo-survey-coexistence');
     await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-    await click('Zoom til EXIF'); await browser.waitFor('!document.querySelector("dialog[open]")');
+    await locateCurrent(); await browser.waitFor('!document.querySelector("dialog[open]")');
     await browser.waitFor('document.body.innerText.includes("Zoom: 18")');
     assert(await browser.evaluate('(() => { const point = document.querySelector(".photo-camera-marker").getBoundingClientRect(); const map = document.querySelector(".leaflet-container").getBoundingClientRect(); return point.left >= map.left && point.right <= map.right && point.top >= map.top && point.bottom <= map.bottom; })()'));
     assert.equal(await browser.evaluate(markerCount), 1);
@@ -150,7 +160,8 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")');
     await inputFiles('input[aria-label="Velg bildefiler"]', [photos[0]]);
     await createLayerWithoutPlacement(browser);
-    await browser.waitFor(`document.querySelector('section[aria-label^="Fotokartlag"]')`);
+    assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 1,
+      'the new layer opens in the workspace after reset');
 
     await browser.send('Page.reload');
     await browser.waitFor(`document.body.innerText.includes('Bilder') && !document.querySelector('section[aria-label^="Fotokartlag"]')`);

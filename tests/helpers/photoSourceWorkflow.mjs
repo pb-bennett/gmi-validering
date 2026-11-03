@@ -1,9 +1,28 @@
 import assert from 'node:assert/strict';
 
 export const sourceWizard = 'document.querySelector(".photo-positioning-wizard")';
-export const clickSourceControl = (browser, label, scope = sourceWizard) => browser.evaluate(`(() => {
-  const button=Array.from(${scope}.querySelectorAll('button')).find(item=>item.innerText.trim()===${JSON.stringify(label)});
-  if(!button || button.disabled) throw new Error('Unavailable source control: '+${JSON.stringify(label)}); button.click();
+// Former FOTO sidebar actions now live in the workspace Verktøy menu.
+export const PHOTO_TOOL_LABELS = Object.freeze({
+  'Legg til bilder': 'Legg til bilder…', 'Koble og posisjoner bilder': 'Koble og posisjoner bilder…', Eksporter: 'Eksporter…',
+  'Rediger bilder': 'Rediger bilder', 'Kilder og koblinger': 'Kilder og koblinger', 'Fjern bilder fra laget': 'Fjern bilder fra laget…',
+  'Fullfør opplysninger': 'Fullfør opplysninger…',
+});
+// Visible text first, then the accessible name of icon-only controls; workspace tools open through Verktøy.
+export const clickSourceControl = (browser, label, scope = sourceWizard) => browser.evaluate(`(async () => {
+  const label=${JSON.stringify(label)}, root=${scope}, tools=${JSON.stringify(PHOTO_TOOL_LABELS)};
+  const frame=()=>new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+  const find=()=>{const buttons=Array.from(root.querySelectorAll('button'));
+    return buttons.find(item=>item.innerText.trim()===label) || buttons.find(item=>item.getAttribute('aria-label')===label);};
+  let button=find();
+  const tool=tools[label] || (Object.values(tools).includes(label) ? label : null);
+  if((!button || button.closest('.photo-tools-popup')) && tool && root===document && document.querySelector('.photo-tools-trigger')){
+    const trigger=document.querySelector('.photo-tools-trigger');
+    if(trigger.getAttribute('aria-expanded')!=='true') trigger.click();
+    for(let i=0;i<30 && !document.querySelector('.photo-tools-popup');i++) await frame();
+    button=Array.from(document.querySelectorAll('.photo-tools-popup [role=menuitem]')).find(item=>item.querySelector('.photo-tools-item-label').innerText.trim()===tool);
+  }
+  if(!button || button.disabled || button.getAttribute('aria-disabled')==='true') throw new Error('Unavailable source control: '+label);
+  button.click();
 })()`);
 
 export async function setPhotoFiles(browser, selector, files) {

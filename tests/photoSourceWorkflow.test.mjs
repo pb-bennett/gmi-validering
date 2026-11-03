@@ -30,7 +30,7 @@ async function save(session, layer, ticket, file, kind = 'gml') {
 
 test('GMI checkpoint then EXIF batch in the same operation preserves direction, evidence and originals', async () => {
   const { session, layer, ids } = await setup();
-  session.applyDirectionEdit(session.beginDirectionEdit(layer.id, ids[0]), 0);
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: ids[0], degrees: 0 }]);
   const before = ids.map((id) => session.getPhoto(id)), files = ids.map((id) => session.getFile(id));
   const ticket = session.beginSourceWorkflow(layer.id);
   const source = await save(session, layer, ticket, gmiFile([{ hyperlink: 'h:1(link:"a.jpg") ' }, { hyperlink: 'h:1(link:"a.jpg") h:2(link:"missing.jpg") ' }]), 'gmi');
@@ -64,7 +64,7 @@ test('GMI checkpoint then EXIF batch in the same operation preserves direction, 
 
 test('GML checkpoint retains evidence only; mixed source apply preserves an accepted manual current by default', async () => {
   const { session, layer, ids } = await setup();
-  session.applyManualPlacement(session.beginManualPlacement(layer.id, ids[2]), point(12));
+  session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: ids[2], position: point(12) }]);
   const manual = session.getPhoto(ids[2]).spatial.current;
   const ticket = session.beginSourceWorkflow(layer.id);
   await save(session, layer, ticket, gml());
@@ -145,7 +145,7 @@ for (const change of ['current', 'membership', 'source-removal', 'source-recheck
     const plan = session.reviewSourceWorkflowPositions(ticket);
     const requests = [{ photoId: ids[0], candidateId: plan.rows[0].options.find((item) => item.sourceId === source.id).id },
       { photoId: ids[1], candidateId: `${ids[1]}:exif` }];
-    if (change === 'current') session.applyManualPlacement(session.beginManualPlacement(layer.id, ids[1]), point(15));
+    if (change === 'current') session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: ids[1], position: point(15) }]);
     if (change === 'membership') session.removeLayerPhotos(layer.id, [ids[2]], { confirmed: true });
     if (change === 'source-removal') { const gmi = await save(session, layer, ticket, gmiFile([{ hyperlink: 'h:1(link:"a.jpg") ' }]), 'gmi'); session.removeGmiSource(layer.id, gmi.id, { confirmed: true }); }
     if (change === 'source-recheck') session.recheckLayerSource(layer.id, source.id);
@@ -248,17 +248,16 @@ test('an invalid later GML entry aborts the source checkpoint before any candida
 
 test('product UI has one source workflow and inspector has no direct source acceptance', async () => {
   const read = (file) => readFile(new URL(`../src/${file}`, import.meta.url), 'utf8');
-  const [page, workspace, inspector, wizard] = await Promise.all([read('app/page.js'), read('components/photos/PhotoWorkspaceCollection.js'),
-    read('components/photos/PhotoSpatialInspector.js'), read('components/photos/PhotoPositioningWizard.js')]);
+  const [page, workspace, tools, inspector, wizard] = await Promise.all([read('app/page.js'), read('components/photos/PhotoWorkspaceCollection.js'),
+    read('components/photos/PhotoWorkspaceToolsMenu.js'), read('components/photos/PhotoWorkspaceInspector.js'), read('components/photos/PhotoPositioningWizard.js')]);
   assert.equal((page.match(/<PhotoPositioningWizard\b/g) || []).length, 1);
-  assert.match(workspace, /Koble og posisjoner bilder/);
-  assert.match(workspace, /onOpenSources\(\{ sourceId: source.id \}\)/);
+  assert.match(tools, /'Koble og posisjoner bilder…'/);
+  assert.match(workspace, /<PhotoWorkspaceToolsMenu/);
   assert.doesNotMatch(workspace + page, /PhotoGmiDialog|Koble GMI-referanser/);
-  assert.doesNotMatch(inspector, /acceptCandidates|Bruk .*?-posisjon/);
-  assert.match(inspector, /Kontroller kilder og posisjon/);
-  assert.match(inspector, /PhotoManualPlacementControls/);
-  assert.match(inspector, /PhotoDirectionControls/);
-  assert.match(page, /cancelPhotoEditing\(\);\s*setPhotoSourceWorkflow/);
+  assert.doesNotMatch(inspector, /acceptCandidates|adoptSourceEvidence|setCaptureMetadata|applyPhotoEdits|Bruk .*?-posisjon/);
+  assert.doesNotMatch(inspector, /Kontroller kilder og posisjon|PhotoManualPlacementControls|PhotoDirectionControls/);
+  // Opening the wizard always passes through the single unsaved-changes boundary.
+  assert.match(page, /requestWorkspaceAction\(\(\) => setPhotoSourceWorkflow\(/);
   assert.match(wizard, /\['Kilder', 'Koblinger', 'Posisjoner', 'Oppsummer'\]/);
   assert.match(wizard, /Oppdater kontrollen/);
   assert.doesNotMatch(wizard, /acceptCandidates|applyPhotoPositioning\(/);

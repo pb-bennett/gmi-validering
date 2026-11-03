@@ -62,8 +62,8 @@ test('workspace-wide WFS fetches only survey coverage: loaded-GMI photo import/e
   await geminiSession.fetch(); assert.equal(calls.length, 2);
   await begin(id); const [photoId] = photoSession.importFiles([new File(['synthetic'], 'a.png')]).acceptedIds;
   const result = photoSession.applyLoadedGmiImport(photoSession.reviewLoadedGmiImport()); assert(result.ok);
-  photoSession.applyManualPlacement(photoSession.beginManualPlacement(result.layer.id, photoId), { crs: 'EPSG:4326', longitude: 10, latitude: 60 });
-  photoSession.applyDirectionEdit(photoSession.beginDirectionEdit(result.layer.id, photoId), 90);
+  photoSession.applyPhotoEdits(photoSession.beginPhotoEdits(result.layer.id), [{ photoId: photoId, position: { crs: 'EPSG:4326', longitude: 10, latitude: 60 } }]);
+  photoSession.applyPhotoEdits(photoSession.beginPhotoEdits(result.layer.id), [{ photoId: photoId, degrees: 90 }]);
   await begin(id, result.layer.id); photoSession.importFiles([new File(['synthetic'], 'a.png')]);
   assert(photoSession.applyLoadedGmiImport(photoSession.reviewLoadedGmiImport()).ok);
   photoSession.setLayerVisibility(result.layer.id, false); photoSession.setLayerVisibility(result.layer.id, true);

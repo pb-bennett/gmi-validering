@@ -110,9 +110,8 @@ test('later GML/EXIF evidence, append, recheck, source removal, position/directi
   s.recheckLayerSource(layer.id, gmi.id); const review = s.getSnapshot().sourceReviews[layer.id];
   s.applyGmiAssociations(layer.id, { confirmed: true, sourceId: gmi.id, memberIds: review.memberIds, associationLedger: review.associationLedger });
   s.beginImport(layer.id); s.importFiles([image('b.png')]); s.appendImport();
-  const ticket = s.beginManualPlacement(layer.id, ids[0]);
-  assert(s.applyManualPlacement(ticket, { crs: 'EPSG:4326', longitude: 10, latitude: 59 }).ok);
-  assert(s.applyDirectionEdit(s.beginDirectionEdit(layer.id, ids[0]), 125).ok);
+  assert(s.applyPhotoEdits(s.beginPhotoEdits(layer.id), [{ photoId: ids[0], position: { crs: 'EPSG:4326', longitude: 10, latitude: 59 } }]).ok);
+  assert(s.applyPhotoEdits(s.beginPhotoEdits(layer.id), [{ photoId: ids[0], degrees: 125 }]).ok);
   s.removeGmiSource(layer.id, gmi.id, { confirmed: true });
   assert.equal(s.getPhoto(ids[1]).captureMetadata, accepted);
   s.clear(); assert.equal(s.getPhoto(ids[0]), null);

@@ -8,9 +8,11 @@ import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
 import { sourceWizard, clickSourceControl as click, setPhotoFiles, openPhotoSources, closePhotoSources, stagePhotoSource, savePhotoSource } from './helpers/photoSourceWorkflow.mjs';
+import { KEYS, commandBar, dragSelectedMarker, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL;
-const inspector = 'document.querySelector(".photo-spatial-inspector")';
+const inspector = 'document.querySelector(".photo-workspace-inspector")';
+const fact = (term) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find((e) => e.innerText === ${JSON.stringify(term)})?.nextElementSibling.innerText.trim()`;
 const markers = 'document.querySelectorAll(".photo-camera-marker").length';
 
 test('GMI point placements: two checkpoints, shared image/resource, exact object provenance, independent manual/direction, recheck and removal',
@@ -31,7 +33,16 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').click()`);
       await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').getAttribute('aria-pressed')==='true'`);
     };
-    const positionText = () => browser.evaluate(`${inspector}.querySelector('p.text-gmi-text-muted:not(.break-all)').innerText`);
+    const positionText = () => browser.evaluate(fact('Koordinater'));
+    const occurrenceContext = () => browser.evaluate(`${inspector}.querySelector('.photo-occurrence-switcher [aria-pressed=true]').innerText`);
+    const removeOccurrence = async (id) => {
+      await click(browser, 'Fjern bilder fra laget', 'document');
+      await browser.waitFor('document.querySelector(".photo-removal-bar")');
+      await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] input').click()`);
+      await browser.evaluate(`document.querySelector('.photo-removal-primary').click()`);
+      await click(browser, 'Fjern fra lag', 'document.querySelector(".photo-remove-confirmation")');
+      await browser.waitFor('!document.querySelector(".photo-removal-bar")');
+    };
     const imageUrl = () => browser.evaluate('document.querySelector(".photo-collection-original img").src');
     const openProvenance = async () => browser.evaluate(`${inspector}.querySelectorAll('details').forEach(item=>item.open=true)`);
     try {
@@ -48,7 +59,9 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await waitForThumbnails(browser);
       await createLayerWithoutPlacement(browser);
 
-      await browser.waitFor('document.querySelector(".photo-workspace-collection")?.innerText.includes("3 bilder med EXIF")');
+      await click(browser, 'Kilder og koblinger', 'document');
+      await browser.waitFor(`Array.from(document.querySelectorAll('.photo-sources-info[open] dl > div')).find((e) => e.querySelector('dt').innerText === 'Bilder med EXIF GPS')?.querySelector('dd').innerText === '3'`);
+      await click(browser, 'Lukk', 'document.querySelector(".photo-sources-info")');
       assert.equal(await browser.evaluate(markers), 0);
       await stagePhotoSource(browser, sourceFile, 'gmi');
       assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Gjentas')`));
@@ -99,8 +112,11 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
           && Number(getComputedStyle(pane).zIndex)>Number(getComputedStyle(survey).zIndex)
           && Number(getComputedStyle(pane).zIndex)<Number(getComputedStyle(document.querySelector('.leaflet-tooltip-pane')).zIndex);
       })()`), 'photo icons above loaded GMI markers, below tooltip/popups');
-      assert(await browser.evaluate('document.querySelector(".photo-workspace-collection header").innerText.includes("3 bilder · 4 plasseringer · 3 plassert · 1 uplassert")'));
+      assert(await browser.evaluate('document.querySelector(".photo-workspace-collection header").innerText.includes("3 bilder · 3 plassert · 4 plasseringer")'));
       const [a, b] = repeated.map((row) => row.id);
+      // Kum A shares exact coordinates with b.png: clicking a stack whose member is active cycles,
+      // so start from a photo outside the stack to test plain marker selection.
+      await select(rows.find((row) => row.filename === 'line.png').id);
       for (const row of repeated) {
         const label = row.id === a ? 'Kum A' : 'Kum B';
         await browser.evaluate(`Array.from(document.querySelectorAll('.photo-camera-marker')).find(marker=>marker.title.includes(${JSON.stringify(label)})).click()`);
@@ -108,7 +124,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       }
       await select(a); await openProvenance();
       assert(await browser.evaluate(`${inspector}.innerText.includes(${JSON.stringify(guids[0])})`));
-      assert(await browser.evaluate(`${inspector}.querySelector('.photo-occurrence-context').innerText.includes('Kum A')`));
+      assert((await occurrenceContext()).includes('Kum A'));
       await browser.waitFor('document.querySelector(".photo-collection-original img")?.complete');
       const original = await imageUrl(), created = await browser.evaluate('window.__originalCreated');
       await browser.evaluate('document.querySelector(".photo-preview-open").click()');
@@ -117,28 +133,26 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await click(browser, 'Lukk', 'document.querySelector(".photo-image-viewer")');
       const aPosition = await positionText();
       await select(b); await openProvenance();
-      assert(await browser.evaluate(`${inspector}.querySelector('.photo-occurrence-context').innerText.includes('Kum B')`));
+      assert((await occurrenceContext()).includes('Kum B'));
       assert.equal(await imageUrl(), original);
       assert.equal(await browser.evaluate('window.__originalCreated'), created);
       const bPosition = await positionText();
       assert.notEqual(aPosition, bPosition);
-      await click(browser, 'Flytt på kartet', inspector);
-      const box = await browser.evaluate('document.querySelector(".leaflet-container").getBoundingClientRect().toJSON()');
-      const x = box.left + box.width / 2 + 35, y = box.top + box.height / 2 + 15;
-      await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
-      await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
-      await browser.waitFor('document.querySelector(".photo-proposed-marker")');
+      // Move and direction for occurrence B in one Edit-mode session; the sibling A is untouched.
+      await enterEditMode(browser);
       assert(await browser.evaluate(`Number(getComputedStyle(document.querySelector('.leaflet-photo-placement-pane')).zIndex)>Number(getComputedStyle(document.querySelector('.leaflet-photo-markers-pane')).zIndex)`));
-      await click(browser, 'Bruk plassering', inspector);
-      assert(await browser.evaluate(`${inspector}.innerText.includes('Gjeldende posisjon (Manuell)')`));
-      await click(browser, 'Juster retning', inspector);
-      await browser.evaluate(`(() => {const input=document.querySelector('.photo-direction-editor input[type=number]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'75');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-      await click(browser, 'Bruk retning', inspector);
+      await dragSelectedMarker(browser, 35, 15);
+      await browser.waitFor('document.querySelector("[data-edit-count]")');
+      await browser.evaluate(`(() => {const input=${commandBar}.querySelector('input[type=number]');input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'75');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      await pressKey(browser, 'Enter', KEYS.Enter);
+      await browser.waitFor(`${editTarget}?.querySelector('.photo-direction-indicator[data-degrees="75"]')`);
+      await saveEdits(browser);
+      assert.equal(await browser.evaluate(fact('Kilde')), 'Manuell');
       await select(a);
       assert.equal(await positionText(), aPosition);
-      assert.equal(await browser.evaluate('document.querySelector(".photo-direction-accepted").innerText'), 'Ikke angitt');
+      assert.equal(await browser.evaluate(fact('Retning')), 'Ikke angitt');
       await select(b);
-      assert.equal(await browser.evaluate('document.querySelector(".photo-direction-accepted").innerText'), '75°');
+      assert.equal(await browser.evaluate(fact('Retning')), '75° Ø');
       assert(await browser.evaluate(`Boolean(document.querySelector('.leaflet-photo-markers-pane .photo-camera-marker-selected .photo-direction-indicator[data-degrees="75"]'))`));
       await openPhotoSources(browser);
       await click(browser, 'Kontroller tilgjengelige posisjoner');
@@ -148,16 +162,12 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await click(browser, 'Kontroller på nytt');
       await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser);
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 4);
-      await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${a}"] input').click()`);
-      await click(browser, 'Fjern fra lag', 'document.querySelector(".photo-workspace-collection")');
-      await click(browser, 'Fjern fra lag', 'document.querySelector(".photo-remove-confirmation")');
+      await removeOccurrence(a);
       assert.equal(await browser.evaluate(markers), 2);
       await select(b);
       assert.equal(await imageUrl(), original);
       assert.equal(await browser.evaluate('window.__assetUrls.size'), 1);
-      await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${b}"] input').click()`);
-      await click(browser, 'Fjern fra lag', 'document.querySelector(".photo-workspace-collection")');
-      await click(browser, 'Fjern fra lag', 'document.querySelector(".photo-remove-confirmation")');
+      await removeOccurrence(b);
       assert.equal(await browser.evaluate(`window.__assetUrls.has(${JSON.stringify(original)})`), false);
       assert.equal(await browser.evaluate(markers), 1);
     } finally {

@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import useStore from '@/lib/store';
 import LayerHighlightPanel from './LayerHighlightPanel';
-import PhotoPositionLegend from './photos/PhotoPositionLegend';
+import PhotoMapDisplayCard from './photos/PhotoMapDisplayCard';
 
 const MapInner = dynamic(() => import('./MapInner'), {
   ssr: false,
@@ -49,7 +49,8 @@ export default function MapView(props) {
   return (
     <div className="relative h-full w-full">
       <MapInner {...props} />
-      {props.photoWorkspaceSelection ? <PhotoPositionLegend /> : <MapLegend />}
+      {props.photoWorkspace ? <PhotoMapDisplayCard mode={props.photoWorkspace.displayMode} onModeChange={props.photoWorkspace.onDisplayModeChange}
+        zoom={props.photoWorkspace.zoom} editing={props.photoWorkspace.editing} /> : <MapLegend />}
       <LayerHighlightPanel />
 
       {outlierPromptOpen &&

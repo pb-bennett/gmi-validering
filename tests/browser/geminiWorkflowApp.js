@@ -79,7 +79,7 @@ useStore.setState({ data: normalData(), layers: { survey: layer() }, layerOrder:
   ui: { ...useStore.getState().ui, mapBaseLayer: 'Ingen', mapOverlayVisibility: { eiendomsgrenser: false, geminiWms: true } } });
 const photoId = photoSession.importFiles([new File(['synthetic'], 'Synthetic photo.heic')]).acceptedIds[0];
 const photoLayer = photoSession.createLayer();
-photoSession.applyManualPlacement(photoSession.beginManualPlacement(photoLayer.id, photoId), { crs: 'EPSG:4326', longitude: 10.43555, latitude: 59.2251222222 });
+photoSession.applyPhotoEdits(photoSession.beginPhotoEdits(photoLayer.id), [{ photoId, position: { crs: 'EPSG:4326', longitude: 10.43555, latitude: 59.2251222222 } }]);
 
 function App() {
   const [dialog, setDialog] = useState(null), [wmsOpen, setWmsOpen] = useState(false);

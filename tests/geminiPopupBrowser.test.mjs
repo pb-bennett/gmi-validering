@@ -206,12 +206,12 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
       await browser.evaluate('geminiWorkflow.useStore.getState().toggleMeasureMode()');
       await browser.waitFor('document.querySelector(".gmi-gemini-reference-line").style.pointerEvents === "auto"');
     });
-    await t.test('manual photo placement and direction editing suppress inspection and preserve their ownership', async () => {
+    await t.test('photo Edit mode suppresses inspection and owns placement clicks', async () => {
       await clickReference('Point'); await opened();
-      await browser.evaluate(`geminiWorkflow.audit.setMapMode({photoDirectionEdit:{ticket:{photoId:'synthetic',layerId:'synthetic'},degrees:42}})`); await closed();
+      await browser.evaluate(`geminiWorkflow.audit.setMapMode({photoEdit:{photo:null,connectors:[],onStage:()=>{}}})`); await closed();
       await clickReference('Point'); assert.equal(await count(popup), 0);
-      await browser.evaluate(`geminiWorkflow.audit.setMapMode({photoPlacement:{ticket:{},position:null},onPhotoPropose:()=>{geminiWorkflow.audit.proposed=(geminiWorkflow.audit.proposed||0)+1}})`);
-      await browser.waitFor('document.querySelector(".photo-placement-active")');
+      await browser.evaluate(`geminiWorkflow.audit.setMapMode({photoEdit:{photo:{id:'synthetic',spatial:{current:null},direction:{current:null}},connectors:[],onStage:()=>{geminiWorkflow.audit.proposed=(geminiWorkflow.audit.proposed||0)+1}}})`);
+      await browser.waitFor('document.querySelector(".photo-edit-placing")');
       await clickReference('LineString'); assert.equal(await count(popup), 0);
       assert.equal(await browser.evaluate('geminiWorkflow.audit.proposed'), 1);
       await browser.evaluate('geminiWorkflow.audit.setMapMode({})');

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { PHOTO_POSITION_SOURCES, photoPositionSourceKind, photoPositionSourcePresentation, cameraMarkerOptions, proposalMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
+import { PHOTO_DIRECTION_COLOR, PHOTO_POSITION_SOURCES, PHOTO_STAGED_DASH, PHOTO_THUMBNAIL_MIN_ZOOM, photoMarkerIconKey, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible, cameraMarkerOptions, thumbnailMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { acceptPhotoCandidate, acceptManualPhotoPosition, emptySpatial } from '../src/lib/photos/photoSpatial.mjs';
 import { buildPhotoMapFeatures } from '../src/lib/photos/photoMapFeatures.mjs';
 
@@ -10,22 +10,25 @@ const candidates = ['exif', 'gmi', 'gml'].map((kind) => ({ id: kind, kind, statu
 const photo = (kind) => ({ spatial: kind === 'manual' ? acceptManualPhotoPosition({ ...emptySpatial(), candidates }, position)
   : acceptPhotoCandidate({ ...emptySpatial(), candidates }, kind) });
 
-for (const source of PHOTO_POSITION_SOURCES) test(`accepted ${source.kind}: central presentation survives selection, accepted/proposed direction and unrelated evidence`, () => {
+for (const source of PHOTO_POSITION_SOURCES) test(`accepted ${source.kind}: central presentation survives selection, accepted/staged direction and unrelated evidence`, () => {
   const occurrence = photo(source.kind);
   assert.equal(photoPositionSourceKind(occurrence), source.kind);
   assert.strictEqual(photoPositionSourcePresentation(photoPositionSourceKind(occurrence)), source);
-  for (const selected of [false, true]) for (const proposed of [false, true]) {
-    const options = cameraMarkerOptions({ sourceKind: source.kind, selected, degrees: 42, proposed });
+  for (const selected of [false, true]) for (const staged of [false, true]) {
+    const options = cameraMarkerOptions({ sourceKind: source.kind, selected, degrees: 42, directionStaged: staged, staged });
     assert(options.html.includes(`fill="${source.color}"`));
     assert(options.html.includes(`data-position-source="${source.kind}"`));
     assert.equal(options.html.includes('r="14"'), selected, 'selection has its own outlined ring');
     assert.equal(options.className.includes('photo-camera-marker-selected'), selected);
     assert.deepEqual(options.iconSize, [30, 30]);
     assert.deepEqual(options.iconAnchor, [15, 15]);
-    if (selected) {
-      assert(options.html.includes('stroke="white" stroke-width="5"'), 'arrow has independent white casing');
-      assert(options.html.includes(`stroke="${proposed ? '#a34c00' : '#075e9a'}"`));
-    }
+    // Direction is drawn whether selected or not, in navy with a white halo; staged is a dashed shaft.
+    assert(options.html.includes('stroke="white" stroke-width="5"'), 'arrow has independent white casing');
+    assert(options.html.includes(`stroke="${PHOTO_DIRECTION_COLOR}"`));
+    assert.equal(options.html.includes(`stroke-dasharray="${PHOTO_STAGED_DASH}"`), staged);
+    assert.equal(options.html.includes('stroke-linecap="butt"'), staged, 'dashes keep visible gaps');
+    assert.equal(options.html.includes('photo-marker-staged-dot'), staged);
+    assert(!options.html.includes('#a34c00') && !options.html.includes('#075e9a'), 'retired orange/blue arrow colours');
   }
 });
 
@@ -56,30 +59,65 @@ test('source replacement derives presentation each time; unplaced/hidden evidenc
   }
 });
 
-test('proposal crosshair remains separate from accepted manual camera', () => {
-  const accepted = cameraMarkerOptions({ sourceKind: 'manual' });
-  assert.equal(proposalMarkerOptions.className, 'photo-proposed-marker');
-  assert(!proposalMarkerOptions.html.includes('photo-camera-glyph'));
-  assert(!proposalMarkerOptions.html.includes('data-position-source'));
-  assert.notEqual(proposalMarkerOptions.html, accepted.html);
+test('thumbnail icons: 44 px cover crop, provenance border, independent selected ring, neutral fallback and no unsafe URLs', () => {
+  for (const source of [...PHOTO_POSITION_SOURCES, photoPositionSourcePresentation('unknown')]) for (const selected of [false, true]) {
+    const options = thumbnailMarkerOptions({ sourceKind: source.kind, selected, thumbnailUrl: 'blob:http://app/thumb-1', degrees: 120 });
+    assert.deepEqual(options.iconSize, [44, 44]); assert.deepEqual(options.iconAnchor, [22, 22]);
+    assert(options.html.includes(`style="--photo-source:${source.color}"`), 'source border colour');
+    assert(options.html.includes(`data-position-source="${source.kind}"`));
+    assert(options.html.includes('<img src="blob:http://app/thumb-1" alt="" decoding="async" draggable="false">'));
+    assert.equal(options.className.includes('photo-marker-selected'), selected, 'selected ring is a modifier, the border stays');
+    assert(options.html.includes('rotate(120 50 50)'), 'arrow drawn outside the thumbnail box');
+  }
+  const fallback = thumbnailMarkerOptions({ sourceKind: 'gmi', thumbnailUrl: null });
+  assert(!fallback.html.includes('<img')); assert(fallback.html.includes('photo-thumb-fallback'));
+  assert(fallback.html.includes('data-thumbnail="fallback"'));
+  for (const unsafe of ['javascript:alert(1)', 'https://example.test/a.jpg', '"><script>', 42]) {
+    const html = thumbnailMarkerOptions({ thumbnailUrl: unsafe }).html;
+    assert(!html.includes('<img') && !html.includes('<script'), String(unsafe));
+  }
+  assert(thumbnailMarkerOptions({ editing: true, selected: true }).html.includes('photo-thumb-anchor'), 'exact point shown while editing');
 });
 
-test('legend and markers share classification/palette/glyph; workspace wiring is stateless and adds no actions', async () => {
+test('sibling, staged and stack modifiers; identical presentation shares one cache key', () => {
+  const sibling = cameraMarkerOptions({ sourceKind: 'gmi', sibling: true });
+  assert(sibling.className.includes('photo-marker-sibling')); assert(sibling.html.includes('photo-sibling-ring'));
+  assert(!cameraMarkerOptions({ sibling: true, selected: true }).className.includes('photo-marker-sibling'), 'selected wins over sibling');
+  assert(cameraMarkerOptions({ stackCount: 3 }).html.includes('<span class="photo-marker-stack" aria-hidden="true">3</span>'));
+  assert(!cameraMarkerOptions({ stackCount: 1 }).html.includes('photo-marker-stack'));
+  assert(thumbnailMarkerOptions({ stackCount: 120 }).html.includes('>99<'));
+  const base = { sourceKind: 'gmi', degrees: 90, selected: false };
+  assert.equal(photoMarkerIconKey('markers', base), photoMarkerIconKey('markers', { ...base, degrees: 450 }));
+  assert.equal(photoMarkerIconKey('markers', { ...base, thumbnailUrl: 'blob:a' }), photoMarkerIconKey('markers', { ...base, thumbnailUrl: 'blob:b' }), 'markers ignore thumbnails');
+  assert.notEqual(photoMarkerIconKey('thumbnails', { ...base, thumbnailUrl: 'blob:a' }), photoMarkerIconKey('thumbnails', { ...base, thumbnailUrl: 'blob:b' }));
+  for (const change of [{ selected: true }, { degrees: 91 }, { degrees: null }, { staged: true }, { directionStaged: true }, { sibling: true }, { stackCount: 2 }, { sourceKind: 'exif' }, { editing: true }]) {
+    assert.notEqual(photoMarkerIconKey('markers', base), photoMarkerIconKey('markers', { ...base, ...change }), JSON.stringify(change));
+  }
+});
+
+test('thumbnail zoom threshold starts at 16 and falls back to markers below it', () => {
+  assert.equal(PHOTO_THUMBNAIL_MIN_ZOOM, 16);
+  assert.equal(photoThumbnailsVisible('thumbnails', 15.9), false);
+  assert.equal(photoThumbnailsVisible('thumbnails', 16), true);
+  assert.equal(photoThumbnailsVisible('thumbnails', 19), true);
+  assert.equal(photoThumbnailsVisible('markers', 19), false);
+  assert.equal(photoThumbnailsVisible('thumbnails', undefined), false);
+});
+
+test('display card and markers share classification/palette/glyph; marker layer reads a pre-built presentation', async () => {
   const read = (name) => readFile(new URL(`../src/${name}`, import.meta.url), 'utf8');
-  const [legend, view, markers, page] = await Promise.all([
-    read('components/photos/PhotoPositionLegend.js'), read('components/MapView.js'),
-    read('components/photos/PhotoMarkersLayer.js'), read('app/page.js'),
+  const [card, view, markers] = await Promise.all([
+    read('components/photos/PhotoMapDisplayCard.js'), read('components/MapView.js'), read('components/photos/PhotoMarkersLayer.js'),
   ]);
   assert.deepEqual(PHOTO_POSITION_SOURCES.map((source) => source.label), ['EXIF', 'GMI', 'GML', 'Manuell']);
   assert.equal(new Set(PHOTO_POSITION_SOURCES.map((source) => source.color)).size, 4);
-  assert.match(legend, /PHOTO_POSITION_SOURCES\.map/);
-  assert.match(legend, /photoCameraGlyph\(\{ sourceKind: kind/);
-  assert.match(legend, /aria-label="Bildeplassering"/);
-  assert.doesNotMatch(legend, /<button|<input|onClick|useState|useEffect/);
-  assert.match(view, /props\.photoWorkspaceSelection \? <PhotoPositionLegend \/> : <MapLegend \/>/);
-  assert.match(page, /photoWorkspaceSelection=\{workspaceLayer \? \{ layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId \} : null\}/);
+  assert.match(card, /PHOTO_POSITION_SOURCES\.map/);
+  assert.match(card, /photoCameraGlyph\(\{ sourceKind: kind/);
+  assert.match(card, /aria-label="Bilder på kartet"/);
+  assert.match(view, /<PhotoMapDisplayCard/);
+  assert.doesNotMatch(view, /PhotoPositionLegend/);
+  assert.doesNotMatch(markers, /photoSession\.getPhoto/, 'no per-marker session lookups');
   assert.match(markers, /photoPositionSourceKind\(photo\)/);
-  assert.match(markers, /title=\{accessibleLabel\} alt=\{accessibleLabel\} keyboard/);
   assert.match(markers, /plassering: \$\{source.label\}/);
 });
 

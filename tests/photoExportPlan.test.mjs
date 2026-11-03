@@ -65,7 +65,7 @@ test('unplaced excluded and reported; all-unplaced plan blocks; placed invalid d
     const empty = await f.plan(); assert.equal(empty.counts.excluded, 1); assert.equal(empty.attachments.length, 0);
     assert(empty.errors.some((item) => item.code === 'no-placed-photos'));
     f.session.beginImport(f.layerId); f.session.importFiles([new File(['image'], 'extra.png')]); f.session.appendImport();
-    f.session.applyManualPlacement(f.session.beginManualPlacement(f.layerId, f.ids[0]), { crs: 'EPSG:4326', longitude: 10, latitude: 59 });
+    f.session.applyPhotoEdits(f.session.beginPhotoEdits(f.layerId), [{ photoId: f.ids[0], position: { crs: 'EPSG:4326', longitude: 10, latitude: 59 } }]);
     const partial = await f.plan(); assert.equal(partial.counts.excluded, 1); assert.equal(partial.counts.features, 1);
     assert.equal(partial.attachments.length, 1);
   } finally { f.session.clear(); }
@@ -93,8 +93,8 @@ for (const action of ['metadata', 'direction', 'position', 'append', 'remove', '
   try {
     const snapshot = capturePhotoExportSnapshot(f.session, f.layerId), plan = await f.plan();
     if (action === 'metadata') f.session.setCaptureMetadata(f.layerId, f.ids, 'photographer', 'Changed');
-    if (action === 'direction') f.session.applyDirectionEdit(f.session.beginDirectionEdit(f.layerId, f.ids[0]), 90);
-    if (action === 'position') f.session.applyManualPlacement(f.session.beginManualPlacement(f.layerId, f.ids[0]), { crs: 'EPSG:4326', longitude: 11, latitude: 59 });
+    if (action === 'direction') f.session.applyPhotoEdits(f.session.beginPhotoEdits(f.layerId), [{ photoId: f.ids[0], degrees: 90 }]);
+    if (action === 'position') f.session.applyPhotoEdits(f.session.beginPhotoEdits(f.layerId), [{ photoId: f.ids[0], position: { crs: 'EPSG:4326', longitude: 11, latitude: 59 } }]);
     if (action === 'append') { f.session.beginImport(f.layerId); f.session.importFiles([new File(['image'], 'new.png')]); f.session.appendImport(); }
     if (action === 'remove') f.session.removeLayerPhotos(f.layerId, f.ids, { confirmed: true });
     if (action === 'delete') f.session.deleteLayer(f.layerId);

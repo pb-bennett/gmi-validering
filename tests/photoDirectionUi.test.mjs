@@ -5,8 +5,9 @@ import { readdir, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
-import { applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
+import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
+import { KEYS, commandBar, discardEdits, dragSelectedMarker, editKnob, editTarget, elementCentre, enterEditMode, pressKey, rotateSelected, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 const corpus = process.env.PHOTO_GML_FIXTURE;
@@ -25,94 +26,52 @@ async function fixture() {
   return { directory, photos, gml };
 }
 
-test('FOTO direction: native slider, N/E/S/W geometry, explicit transactions, source independence, safety and connector anchors',
-  { skip: !chromePath || !app, timeout: 240000 }, async () => {
+test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, staged vs accepted, transactions, source independence and layouts',
+  { skip: !chromePath || !app, timeout: 300000 }, async () => {
     const files = await fixture(), browser = await openTestChrome(), screenshots = [];
-    const spatial = 'document.querySelector(".photo-spatial-inspector")';
-    const controls = 'document.querySelector(".photo-direction-controls")';
-    const indicator = 'document.querySelector(".photo-direction-indicator")';
-    const editor = 'document.querySelector(".photo-direction-editor")';
-    const accepted = () => browser.evaluate(`${controls}.querySelector('.photo-direction-accepted').innerText`);
-    const evidence = () => browser.evaluate(`Array.from(${spatial}.querySelectorAll('pre')).map(e=>e.textContent)`);
-    const position = () => browser.evaluate(`Array.from(${spatial}.querySelectorAll('p')).find(e=>e.innerText.includes('(WGS84)')).innerText`);
-    const click = (text, scope = 'document') => browser.evaluate(`(() => {
-      const button=Array.from(${scope}.querySelectorAll('button')).find(e=>e.innerText.trim()===${JSON.stringify(text)});
-      if(!button || button.disabled) throw new Error('Unavailable: '+${JSON.stringify(text)});button.click(); })()`);
-    const inputFiles = async (selector, files) => {
-      const { root } = await browser.send('DOM.getDocument');
-      const { nodeId } = await browser.send('DOM.querySelector', { nodeId: root.nodeId, selector });
-      assert(nodeId, selector); await browser.send('DOM.setFileInputFiles', { nodeId, files });
-    };
+    const inspector = 'document.querySelector(".photo-workspace-inspector")';
+    const fact = (term) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find(e=>e.innerText===${JSON.stringify(term)})?.nextElementSibling.innerText.trim()`;
+    const accepted = () => browser.evaluate(fact('Retning'));
+    const position = () => browser.evaluate(fact('Koordinater'));
+    const evidence = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('.photo-inspector-raw pre')).map(e=>e.textContent)`);
+    const selectedIcon = `(${editTarget} || document.querySelector('.photo-camera-marker-selected'))`;
+    const indicator = `${selectedIcon}?.querySelector('.photo-direction-indicator')`;
+    const click = (text, scope = 'document') => clickSourceControl(browser, text, scope);
     const frames = () => browser.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     const settle = async () => { await browser.evaluate('new Promise(resolve=>setTimeout(resolve,400))'); await frames(); };
-    const begin = async () => {
-      await browser.waitFor('document.querySelector(".photo-direction-start") && !document.querySelector(".photo-direction-start").disabled');
-      await click('Juster retning'); await browser.waitFor(editor);
-    };
-    const cancel = async () => { await click('Avbryt', controls); await browser.waitFor(`!${editor}`); };
-    const apply = async () => { await click('Bruk retning', controls); await browser.waitFor(`!${editor}`); };
-    const key = async (key, windowsVirtualKeyCode) => {
-      await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key, windowsVirtualKeyCode });
-      await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key, windowsVirtualKeyCode });
-    };
-    const number = async degrees => {
-      // Native setter/input event drives React's normal field handler, without access to session writes.
-      await browser.evaluate(`(() => {const input=${editor}.querySelector('input[type=number]');
+    const editCount = 'Number(document.querySelector("[data-edit-count]")?.innerText.match(/\\d+/)?.[0] || 0)';
+    const number = async (degrees) => {
+      await browser.evaluate(`(() => {const input=${commandBar}.querySelector('input[type=number]'); input.focus();
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(String(degrees))});
         input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-      await browser.waitFor(`${editor}.querySelector('input[type=number]').value===${JSON.stringify(String(degrees))}`);
+      await pressKey(browser, 'Enter', KEYS.Enter);
+      await browser.evaluate('document.activeElement.blur()');
       await frames();
     };
-    const dragSlider = async degrees => {
-      await browser.evaluate(`${editor}.querySelector('input[type=range]').scrollIntoView({block:'center'})`);
-      const { box, value } = await browser.evaluate(`({box:${editor}.querySelector('input[type=range]').getBoundingClientRect().toJSON(),value:Number(${editor}.querySelector('input[type=range]').value)})`);
-      const x = box.left + 8 + (box.width - 16) * value / 359, y = box.top + box.height / 2;
-      const target = box.left + 8 + (box.width - 16) * degrees / 359;
-      await browser.send('Input.dispatchMouseEvent', { type:'mousePressed', x, y, button:'left', buttons:1, clickCount:1 });
-      for (let i = 1; i <= 5; i++) await browser.send('Input.dispatchMouseEvent', { type:'mouseMoved', x:x+(target-x)*i/5, y, button:'left', buttons:1 });
-      await browser.send('Input.dispatchMouseEvent', { type:'mouseReleased', x:target, y, button:'left', buttons:0, clickCount:1 });
-      await frames();
-      const actual = await browser.evaluate(`Number(${editor}.querySelector('input[type=range]').value)`);
-      assert(Math.abs(actual - degrees) <= 2, `Dragged slider ${actual} ≈ ${degrees}`);
-      return actual;
-    };
-    const assertHeading = async (degrees, proposed) => {
+    // The arrow rotates inside its SVG around the geographic anchor: 0° = up/north, clockwise.
+    const assertHeading = async (degrees, staged) => {
       await browser.waitFor(`${indicator}?.dataset.degrees===${JSON.stringify(String(degrees))}`);
       const geometry = await browser.evaluate(`(() => { const svg=${indicator}, g=svg.querySelector('g');
         const origin=new DOMPoint(32,32).matrixTransform(svg.getScreenCTM());
         const tip=new DOMPoint(32,3).matrixTransform(g.getScreenCTM());
         const marker=svg.parentElement.getBoundingClientRect();
-        return {dx:tip.x-origin.x,dy:tip.y-origin.y,x:origin.x-(marker.left+marker.width/2),y:origin.y-(marker.top+marker.height/2),proposed:svg.dataset.proposed}; })()`);
+        return {dx:tip.x-origin.x,dy:tip.y-origin.y,x:origin.x-(marker.left+marker.width/2),y:origin.y-(marker.top+marker.height/2),staged:svg.dataset.staged}; })()`);
       const radians = degrees * Math.PI / 180;
-      assert(Math.abs(geometry.dx - 29 * Math.sin(radians)) < 0.1);
-      assert(Math.abs(geometry.dy + 29 * Math.cos(radians)) < 0.1);
+      assert(Math.abs(geometry.dx - 29 * Math.sin(radians)) < 0.1, JSON.stringify(geometry));
+      assert(Math.abs(geometry.dy + 29 * Math.cos(radians)) < 0.1, JSON.stringify(geometry));
       assert(Math.abs(geometry.x) < 0.01 && Math.abs(geometry.y) < 0.01, 'rotation origin equals photo geographic anchor');
-      assert.equal(geometry.proposed, String(proposed));
+      assert.equal(geometry.staged, String(staged));
     };
-    const assertAnchors = async (connector = false) => {
+    const assertAnchors = async () => {
       const result = await browser.evaluate(`(() => {
         const center=e=>{const b=e.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2};};
-        const icons=Array.from(document.querySelectorAll('.photo-camera-marker,.photo-proposed-marker'));
-        const offset=e=>{const marker=center(e),svg=e.querySelector('svg.photo-camera-glyph')||e.querySelector('svg'),b=svg.getBBox();
+        const icons=Array.from(document.querySelectorAll('.photo-camera-marker'));
+        const offset=e=>{const marker=center(e),svg=e.querySelector('svg.photo-camera-glyph'),b=svg.getBBox();
           const glyph=new DOMPoint(b.x+b.width/2,b.y+b.height/2).matrixTransform(svg.getScreenCTM());return Math.hypot(marker.x-glyph.x,marker.y-glyph.y);};
-        const offsets=icons.map(offset);
-        // Reproduce Leaflet's late display:block rule; the graphic must still meet its center anchor.
-        const prior=icons.map(e=>e.style.display);icons.forEach(e=>e.style.display='block');
-        const blockOffsets=icons.map(offset);icons.forEach((e,i)=>e.style.display=prior[i]);
-        const line=document.querySelector('.photo-placement-connector');
-        const endpoints=line?[line.getPointAtLength(0),line.getPointAtLength(line.getTotalLength())].map(p=>new DOMPoint(p.x,p.y).matrixTransform(line.getScreenCTM())):[];
-        const markers=[document.querySelector('.photo-camera-marker-selected'),document.querySelector('.photo-proposed-marker')];
-        return {maxOffset:Math.max(...offsets,...blockOffsets),offsets,blockOffsets,variants:icons.map(e=>e.className),endpointErrors:endpoints.map((p,i)=>{const c=center(markers[i]);return Math.hypot(p.x-c.x,p.y-c.y);})}; })()`);
-      assert(result.maxOffset < 0.01, 'normal/selected/proposal graphic bounds coincide with icon anchors, including display:block: '+JSON.stringify(result));
-      if (connector) { assert.equal(result.endpointErrors.length, 2); assert(result.endpointErrors.every(error => error <= 1.5), JSON.stringify(result)); }
-      return result;
-    };
-    const mapClick = async (dx, dy) => {
-      const box = await browser.evaluate('document.querySelector(".leaflet-container").getBoundingClientRect().toJSON()');
-      const x = box.left + box.width / 2 + dx, y = box.top + box.height / 2 + dy;
-      await browser.send('Input.dispatchMouseEvent', { type:'mousePressed', x, y, button:'left', buttons:1, clickCount:1 });
-      await browser.send('Input.dispatchMouseEvent', { type:'mouseReleased', x, y, button:'left', buttons:0, clickCount:1 });
-      await browser.waitFor('document.querySelector(".photo-proposed-marker")'); await frames();
+        const prior=icons.map(e=>e.style.display), offsets=icons.map(offset);
+        icons.forEach(e=>e.style.display='block'); const blockOffsets=icons.map(offset); icons.forEach((e,i)=>e.style.display=prior[i]);
+        return {maxOffset:Math.max(...offsets,...blockOffsets),count:icons.length}; })()`);
+      assert(result.maxOffset < 0.01, 'graphic bounds coincide with icon anchors, including display:block: ' + JSON.stringify(result));
     };
     const screenshot = async name => {
       if (!process.env.PHOTO_SCREENSHOT_DIR) return;
@@ -121,7 +80,10 @@ test('FOTO direction: native slider, N/E/S/W geometry, explicit transactions, so
       const filename = path.join(process.env.PHOTO_SCREENSHOT_DIR, `${name}.png`);
       await writeFile(filename, Buffer.from(data, 'base64')); screenshots.push(filename);
     };
-    const select = async index => { await browser.evaluate(`document.querySelectorAll('.photo-workspace-list li button')[${index}].click()`); await browser.waitFor(`!${editor}`); };
+    const select = async index => {
+      await browser.evaluate(`document.querySelectorAll('.photo-workspace-list .photo-workspace-row')[${index}].click()`);
+      await browser.waitFor(`document.querySelectorAll('.photo-workspace-list .photo-workspace-row')[${index}].getAttribute('aria-pressed')==='true'`);
+    };
     try {
       await browser.send('Emulation.setDeviceMetricsOverride', { width:1680, height:900, deviceScaleFactor:1, mobile:false });
       await browser.send('Page.navigate', { url:app+'?testmodus=1' });
@@ -129,125 +91,114 @@ test('FOTO direction: native slider, N/E/S/W geometry, explicit transactions, so
       await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
       const create = async () => {
         await click('Bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
-        await inputFiles('input[aria-label="Velg bildefiler"]', files.photos);
+        const { root } = await browser.send('DOM.getDocument');
+        const { nodeId } = await browser.send('DOM.querySelector', { nodeId: root.nodeId, selector: 'input[aria-label="Velg bildefiler"]' });
+        await browser.send('DOM.setFileInputFiles', { nodeId, files: files.photos });
         await browser.waitFor(`document.querySelectorAll('.photo-collection-card img').length===${files.photos.length}`, 60000);
         await createLayerWithoutPlacement(browser);
         await retainGmlInWorkspace(browser, files.gml);
-         await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+        await browser.waitFor('document.querySelector(".photo-workspace-shell")');
         await applyPhotoSourcePositions(browser, 'gml');
         await browser.waitFor(`document.querySelectorAll('.photo-camera-marker').length===${files.photos.length}`);
+        await select(0);
         await browser.waitFor(`document.querySelector('.photo-collection-original img')?.naturalWidth>0`);
-        await click('Zoom til posisjon', spatial); await settle();
+        await click(await browser.evaluate(`${inspector}.querySelector('.photo-inspector-locate').getAttribute('aria-label')`)); await settle();
       };
       await create();
-      assert.equal(await accepted(), 'Ikke angitt'); assert.equal(await browser.evaluate(indicator), null);
+      assert.equal(await accepted(), 'Ikke angitt'); assert.equal(await browser.evaluate(`Boolean(${indicator})`), false);
       const originalPosition = await position(), originalEvidence = await evidence();
-      assert(originalEvidence.some(text => text.includes('"valueText": "0"')));
-      await assertAnchors(); await begin();
-      assert.equal(await accepted(), 'Ikke angitt'); await assertHeading(0, true);
-      for (const degrees of [0,90,180,270]) {
-        const dragged = await dragSlider(degrees); await assertHeading(dragged, true);
+      assert(originalEvidence.some(text => text.includes('"valueText": "0"')), 'GML raw zero stays evidence');
+      await assertAnchors();
+
+      // Unknown stays unknown: the ghost knob draws no arrow until a value is staged explicitly.
+      await enterEditMode(browser);
+      assert(await browser.evaluate(`${editKnob}.classList.contains('photo-edit-knob-ghost')`));
+      assert.equal(await browser.evaluate(`Boolean(${indicator})`), false);
+      for (const degrees of [0, 90, 180, 270]) {
         await number(degrees); await assertHeading(degrees, true);
-        assert.equal(await accepted(), 'Ikke angitt'); assert.equal(await position(), originalPosition);
-        await screenshot(`direction-proposed-${degrees}-1680`);
+        assert.equal(await position(), originalPosition);
+        await screenshot(`direction-staged-${degrees}-1680`);
       }
-      await cancel(); assert.equal(await accepted(), 'Ikke angitt'); assert.equal(await browser.evaluate(indicator), null);
-      await begin(); await dragSlider(45); await number(45); await apply();
-      assert.equal(await accepted(), '45°'); await assertHeading(45, false);
-      await begin(); for (const degrees of [120,220,350]) await dragSlider(degrees);
-      await cancel(); assert.equal(await accepted(), '45°'); await assertHeading(45, false);
-      await begin(); await number(42); await apply(); assert.equal(await accepted(), '42°');
-      await begin(); await number(90); await apply(); await assertHeading(90, false);
-      // Native keyboard stepping and explicit wrap buttons.
-      await begin(); await browser.evaluate(`${editor}.querySelector('input[type=range]').focus()`);
-      await key('Home',36); await assertHeading(0, true); await key('ArrowRight',39); await assertHeading(1, true);
-      await key('End',35); await assertHeading(359, true);
-      await click('+1°',controls); await assertHeading(0,true); await click('−1°',controls); await assertHeading(359,true);
-      await number('');
-      assert(await browser.evaluate(`Array.from(${editor}.querySelectorAll('button')).find(e=>e.innerText==='Bruk retning').disabled`));
-      await number(90); await browser.evaluate(`${editor}.querySelector('input[type=range]').focus()`);
-      await key('Escape',27); await browser.waitFor(`!${editor}`); await assertHeading(90, false);
-      // Leaflet clips off-screen polylines. Focus pans the accepted marker into view before checking connector endpoints.
-      await browser.evaluate('document.querySelector(".photo-camera-marker-selected").focus()'); await settle();
-      // Both transaction starts discard the other proposal.
-      await begin(); await number(180); await click('Flytt på kartet'); await browser.waitFor('document.querySelector(".photo-placement-active")');
-      assert.equal(await browser.evaluate(editor), null); await assertHeading(90, false);
-      for (const [dx,dy] of [[90,40],[-70,50],[50,-70],[-60,-50]]) { await mapClick(dx,dy); await assertAnchors(true); }
-      // Drag and keyboard adjust only the placement proposal, retaining accepted heading/position.
-      const box = await browser.evaluate('document.querySelector(".photo-proposed-marker").getBoundingClientRect().toJSON()');
-      const beforeDrag = await browser.evaluate('document.querySelector(".photo-manual-controls").innerText');
-      const x = box.left + 16, y = box.top + 16;
-      await browser.send('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',buttons:1,clickCount:1});
-      for(let i=1;i<=5;i++) await browser.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:x+i*5,y:y+i*3,button:'left',buttons:1});
-      await browser.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:x+25,y:y+15,button:'left',buttons:0,clickCount:1});
-      await browser.waitFor(`document.querySelector('.photo-manual-controls').innerText!==${JSON.stringify(beforeDrag)}`);
-      await browser.evaluate('document.querySelector(".photo-proposed-marker").focus()');
-      const beforeKey = await browser.evaluate('document.querySelector(".photo-manual-controls").innerText');
-      await key('ArrowRight',39); await browser.waitFor(`document.querySelector('.photo-manual-controls').innerText!==${JSON.stringify(beforeKey)}`);
-      await assertAnchors(true); assert.equal(await position(),originalPosition); await assertHeading(90,false);
-      await screenshot('direction-placement-connector-1680');
-      await begin(); assert.equal(await browser.evaluate('document.querySelector(".photo-proposed-marker")'), null);
-      assert.equal(await browser.evaluate('document.querySelector(".photo-placement-active")'), null); await cancel();
-      await click('Flytt på kartet'); await mapClick(80,40); await click('Bruk plassering','document.querySelector(".photo-manual-controls")');
-      await browser.waitFor(`${spatial}.innerText.includes('Gjeldende posisjon (Manuell)')`);
-      assert.equal(await accepted(),'90°'); await assertHeading(90,false); assert.notEqual(await position(),originalPosition);
-      const activeFilename = await browser.evaluate('document.querySelector(".photo-workspace-inspector h3").innerText');
-      await applyPhotoSourcePositions(browser, 'gml', { filename: activeFilename }); assert.equal(await position(),originalPosition); assert.equal(await accepted(),'90°');
-      await applyPhotoSourcePositions(browser, 'exif', { filename: activeFilename }); assert.equal(await accepted(),'90°'); assert.deepEqual(await evidence(),originalEvidence);
-      // Wizard only changes positions; it cancels any direction proposal before opening.
-      await begin(); await number(180); await click('Koble og posisjoner bilder'); await browser.waitFor('document.querySelector(".photo-positioning-wizard[open]")');
-      assert.equal(await browser.evaluate(editor),null);
-      await applyPhotoSourcePositions(browser, 'exif'); assert.equal(await accepted(),'90°');
-      await select(1); assert.equal(await accepted(),'Ikke angitt'); assert.equal(await browser.evaluate(indicator),null);
-      await begin(); await apply(); assert.equal(await accepted(),'0°'); await assertHeading(0,false);
-      await begin(); await number(200); await select(0); assert.equal(await accepted(),'90°'); await assertHeading(90,false);
-      for (const [width,height] of [[1024,620],[390,700]]) {
-        await browser.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false}); await settle();
-        await begin(); await dragSlider(270); await number(270); await assertHeading(270,true); await assertAnchors();
+      await rotateSelected(browser, 45);
+      await browser.waitFor(`Math.abs(Number(${indicator}?.dataset.degrees) - 45) <= 2`);
+      await discardEdits(browser);
+      assert.equal(await accepted(), 'Ikke angitt'); assert.equal(await browser.evaluate(`Boolean(${indicator})`), false);
+
+      await enterEditMode(browser); await number(45); await saveEdits(browser);
+      assert.equal(await accepted(), '45° NØ'); await assertHeading(45, false);
+      await enterEditMode(browser); for (const degrees of [120, 220, 350]) await number(degrees);
+      await discardEdits(browser); assert.equal(await accepted(), '45° NØ'); await assertHeading(45, false);
+      await enterEditMode(browser); await number(42); await saveEdits(browser); assert.equal(await accepted(), '42° NØ');
+      await enterEditMode(browser); await number(90); await saveEdits(browser); await assertHeading(90, false);
+      assert.equal(await position(), originalPosition); assert.deepEqual(await evidence(), originalEvidence);
+
+      // Keyboard on the knob (slider): ±1, Shift ±15; an empty numeric value never clears a direction.
+      await enterEditMode(browser);
+      await pressKey(browser, 'Shift', { code: 'ShiftLeft', keyCode: 16 }); await browser.evaluate(`${editKnob}.focus()`);
+      await pressKey(browser, 'ArrowRight', KEYS.ArrowRight); await assertHeading(91, true);
+      await pressKey(browser, 'ArrowLeft', { ...KEYS.ArrowLeft, modifiers: 8 }); await assertHeading(76, true);
+      await number(''); await assertHeading(76, true);
+      await discardEdits(browser); await assertHeading(90, false);
+
+      // A staged move never changes the accepted direction; both commit together.
+      await enterEditMode(browser);
+      await dragSelectedMarker(browser, 80, 40);
+      await browser.waitFor(`${editCount} === 1`);
+      await assertHeading(90, false);
+      await saveEdits(browser);
+      assert.equal(await accepted(), '90° Ø'); assert.notEqual(await position(), originalPosition);
+      assert.equal(await browser.evaluate(fact('Kilde')), 'Manuell');
+      const activeFilename = await browser.evaluate(`${inspector}.querySelector('h2').innerText`);
+      await applyPhotoSourcePositions(browser, 'gml', { filename: activeFilename }); assert.equal(await position(), originalPosition); assert.equal(await accepted(), '90° Ø');
+      await applyPhotoSourcePositions(browser, 'exif', { filename: activeFilename }); assert.equal(await accepted(), '90° Ø'); assert.deepEqual(await evidence(), originalEvidence);
+
+      // Staging survives selection changes; occurrences are independent; explicit north is a real value.
+      await enterEditMode(browser);
+      await select(1); assert.equal(await accepted(), 'Ikke angitt'); assert.equal(await browser.evaluate(`Boolean(${indicator})`), false);
+      await number(0); await assertHeading(0, true);
+      await select(0); await assertHeading(90, false);
+      await select(1); await assertHeading(0, true);
+      await saveEdits(browser); assert.equal(await accepted(), '0° N'); await assertHeading(0, false);
+
+      for (const [width, height] of [[1024, 620], [390, 700]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor:1, mobile:false }); await settle();
+        await enterEditMode(browser); await number(270); await assertHeading(270, true); await assertAnchors();
         assert(await browser.evaluate('document.querySelector(".photo-workspace-shell").scrollWidth<=innerWidth+1'));
-        await browser.evaluate(`${editor}.querySelector('button:last-of-type').scrollIntoView({block:'center'})`);
-        assert(await browser.evaluate(`${editor}.querySelector('button:last-of-type').getBoundingClientRect().bottom<=innerHeight`));
-        await screenshot(`direction-editor-${width}`); await cancel(); await assertHeading(90,false);
+        await screenshot(`direction-edit-${width}`); await discardEdits(browser); await assertHeading(0, false);
       }
-      await browser.send('Emulation.setDeviceMetricsOverride',{width:1680,height:900,deviceScaleFactor:1,mobile:false}); await settle();
-      await click('Zoom til posisjon',spatial); await settle();
-      // Zoom changes geographic projection, never heading/anchor.
-      await browser.evaluate('document.querySelector(".leaflet-control-zoom-in").click()'); await settle(); await assertHeading(90,false); await assertAnchors();
+      await browser.send('Emulation.setDeviceMetricsOverride', { width:1680, height:900, deviceScaleFactor:1, mobile:false }); await settle();
+      await select(0);
+      await click(await browser.evaluate(`${inspector}.querySelector('.photo-inspector-locate').getAttribute('aria-label')`)); await settle();
+      // Zoom and pan change projection, never heading or anchor.
+      await browser.evaluate('document.querySelector(".leaflet-control-zoom-in").click()'); await settle(); await assertHeading(90, false); await assertAnchors();
       const map = await browser.evaluate('document.querySelector(".leaflet-container").getBoundingClientRect().toJSON()');
-      const panX = map.left + map.width / 2, panY = map.top + map.height / 2;
+      const start = { x: map.left + map.width / 2 + 120, y: map.top + map.height / 2 + 120 };
       const beforePan = await browser.evaluate('document.querySelector(".leaflet-map-pane").style.transform');
-      await browser.send('Input.dispatchMouseEvent',{type:'mousePressed',x:panX,y:panY,button:'left',buttons:1,clickCount:1});
-      for(let i=1;i<=5;i++) { await browser.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:panX+i*10,y:panY+i*6,button:'left',buttons:1}); await frames(); }
-      await browser.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:panX+50,y:panY+30,button:'left',buttons:0,clickCount:1});
-      await settle(); assert.notEqual(await browser.evaluate('document.querySelector(".leaflet-map-pane").style.transform'),beforePan);
-      await assertHeading(90,false); await assertAnchors();
-      await begin(); await number(180); await click('Legg til bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
-      assert.equal(await browser.evaluate(editor),null); await click('Avbryt','document.querySelector(".photo-collection-dialog")'); assert.equal(await accepted(),'90°');
-      await begin(); await browser.evaluate('document.querySelector(".photo-workspace-collection header input").click()');
-      await browser.waitFor(`!${editor}`); assert.equal(await accepted(),'90°');
-      await browser.evaluate('document.querySelector(".photo-workspace-collection header input").click()');
-      await begin(); await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
-      assert.equal(await browser.evaluate(editor),null); assert.equal(await browser.evaluate(indicator),null);
-      await click('Bildemodul'); await browser.waitFor(controls); assert.equal(await accepted(),'90°');
-      await begin(); await number(180); await browser.evaluate('document.querySelector(".photo-workspace-active input").click()'); await click('Fjern fra lag');
-      assert.equal(await browser.evaluate(editor),null); await click('Fjern fra lag','document.querySelector(".photo-remove-confirmation")');
-      await browser.waitFor(`document.querySelectorAll('.photo-camera-marker').length===${files.photos.length-1}`);
-      await begin(); await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
-      await browser.evaluate(`document.querySelector('button[aria-label^="Fjern fotokartlag"]').click()`); await click('Fjern');
-      await browser.waitFor('!document.querySelector("section[aria-label^=Fotokartlag]")'); assert.equal(await browser.evaluate(indicator),null);
-      await create(); await begin(); await number(90); await browser.send('Page.reload');
+      await browser.send('Input.dispatchMouseEvent', { type:'mousePressed', x:start.x, y:start.y, button:'left', buttons:1, clickCount:1 });
+      for (let i = 1; i <= 5; i++) { await browser.send('Input.dispatchMouseEvent', { type:'mouseMoved', x:start.x+i*10, y:start.y+i*6, button:'left', buttons:1 }); await frames(); }
+      await browser.send('Input.dispatchMouseEvent', { type:'mouseReleased', x:start.x+50, y:start.y+30, button:'left', buttons:0, clickCount:1 });
+      await settle(); assert.notEqual(await browser.evaluate('document.querySelector(".leaflet-map-pane").style.transform'), beforePan);
+      await assertHeading(90, false); await assertAnchors();
+
+      // Staged direction never leaks: boundary on Legg til bilder, and a reload loses the uncommitted session.
+      await enterEditMode(browser); await number(180);
+      await click('Legg til bilder'); await browser.waitFor('document.querySelector(".photo-edit-boundary[open]")');
+      await click('Forkast endringer', 'document.querySelector(".photo-edit-boundary")');
+      await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
+      await click('Avbryt', 'document.querySelector(".photo-collection-dialog")');
+      assert.equal(await accepted(), '90° Ø');
+      await enterEditMode(browser); await number(180); await browser.send('Page.reload');
       await browser.waitFor('!document.querySelector(".photo-workspace-shell") && !document.querySelector(".photo-direction-indicator")');
-      console.log(JSON.stringify({fixture:corpus?'real Ekenesstokken':'synthetic',photos:files.photos.length,checks:'slider drag, numeric/±1/native keyboard, unknown/north, cardinal geometry, apply/cancel, position/source/wizard independence, selection/visibility/dialog/exit/removal/delete/reload safety, connector SVG centers/endpoints, desktop/short/narrow layouts',screenshots}));
+      console.log(JSON.stringify({ fixture: corpus ? 'real Ekenesstokken' : 'synthetic', photos: files.photos.length,
+        checks: 'unknown/ghost, N/Ø/S/V geometry, staged dashed vs accepted solid, discard/save, knob drag/keyboard, numeric, move independence, source independence, occurrence independence, zoom/pan, boundary, reload', screenshots }));
     } catch (error) {
-      console.log(await browser.evaluate(`({editor:${editor}?.innerText,spatial:${spatial}?.innerText,
-        paths:Array.from(document.querySelectorAll('.leaflet-overlay-pane path,.leaflet-photo-placement-pane path')).map(e=>e.outerHTML),
-        placement:document.querySelector('.leaflet-photo-placement-pane')?.innerHTML})`));
+      console.log(await browser.evaluate(`({bar:${commandBar}?.innerText,inspector:${inspector}?.innerText?.slice(0,1500)})`).catch(() => null));
       throw error;
     } finally {
       await browser.close();
-      if(files.directory) {
-        if(path.dirname(path.resolve(files.directory))!==tempRoot || !path.basename(files.directory).startsWith('gmi-photo-direction-')) throw new Error('Unsafe fixture path');
-        await rm(files.directory,{recursive:true,force:true});
+      if (files.directory) {
+        if (path.dirname(path.resolve(files.directory)) !== tempRoot || !path.basename(files.directory).startsWith('gmi-photo-direction-')) throw new Error('Unsafe fixture path');
+        await rm(files.directory, { recursive: true, force: true });
       }
     }
   });

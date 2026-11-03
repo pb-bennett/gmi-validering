@@ -118,8 +118,8 @@ test('append/recheck reuses existing assets, preserves manual current/direction 
   const env = await setup([linked('a.png'), linked('a.png'), linked('later.png')]); await env.begin();
   const [id] = env.session.importFiles([image('a.png')]).acceptedIds;
   const first = env.session.applyLoadedGmiImport(env.session.reviewLoadedGmiImport()); assert(first.ok);
-  env.session.applyManualPlacement(env.session.beginManualPlacement(first.layer.id, id), { crs: 'EPSG:4326', longitude: 10, latitude: 60 });
-  env.session.applyDirectionEdit(env.session.beginDirectionEdit(first.layer.id, id), 42);
+  env.session.applyPhotoEdits(env.session.beginPhotoEdits(first.layer.id), [{ photoId: id, position: { crs: 'EPSG:4326', longitude: 10, latitude: 60 } }]);
+  env.session.applyPhotoEdits(env.session.beginPhotoEdits(first.layer.id), [{ photoId: id, degrees: 42 }]);
   const before = env.session.getPhoto(id);
   await env.begin(first.layer.id);
   const duplicate = env.session.importFiles([image('a.png'), image('later.png')]).acceptedIds[0];
@@ -184,7 +184,7 @@ test('successful source survives survey removal with accurate detached binding a
   const draftMetadata = env.session.getPhoto(id).captureMetadata;
   const result = env.session.applyLoadedGmiImport(env.session.reviewLoadedGmiImport());
   assert.strictEqual(env.session.getPhoto(id).captureMetadata, draftMetadata);
-  env.session.applyManualPlacement(env.session.beginManualPlacement(result.layer.id, id), { crs: 'EPSG:4326', longitude: 10, latitude: 60 });
+  env.session.applyPhotoEdits(env.session.beginPhotoEdits(result.layer.id), [{ photoId: id, position: { crs: 'EPSG:4326', longitude: 10, latitude: 60 } }]);
   const before = env.session.getPhoto(id), file = env.session.getFile(id);
   env.surveyLayers.delete('survey'); env.reconcile();
   assert.equal(env.session.getLayer(result.layer.id).spatialSources[0].loadedBinding.live, false);
