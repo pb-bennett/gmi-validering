@@ -4,6 +4,7 @@ import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const position = { crs: 'EPSG:4326', latitude: 60, longitude: 10 };
+const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
 async function setup(options = {}) {
   let id = 0;
   const session = createPhotoSession({ createId: () => String(++id), yieldJob: tick,
@@ -14,6 +15,37 @@ async function setup(options = {}) {
   for (let i = 0; i < 100 && session.getSnapshot().photos.some((p) => p.spatial.exifRead.state === 'pending'); i++) await tick();
   return session;
 }
+test('switching GMI to GML and GML to EXIF preserves photos and invalidates pending reads', async () => {
+ const lateGmi = deferred(), lateGml = deferred();
+ const session = await setup({ parseGml: (file) => file.name === 'late.gml' ? lateGml.promise : { entries: [], issues: [] } });
+ const photos = session.getSnapshot().photos.map((photo) => photo.id), file = session.getFile(photos[0]);
+ const pendingGmi = session.setDraftGmiSource({ read: () => lateGmi.promise });
+ session.clearDraftGmiSource(); session.clearDraftPositioningGml();
+ assert(await session.importPositioningGml(new File(['x'], 'chosen.gml')));
+ lateGmi.resolve({ references: [] }); assert.equal(await pendingGmi, false);
+ assert.equal(session.getSnapshot().loadedImport, null);
+ assert.equal(session.getSnapshot().positioning.source.filename, 'chosen.gml');
+ const pendingGml = session.importPositioningGml(new File(['x'], 'late.gml'));
+ session.clearDraftGmiSource(); session.clearDraftPositioningGml();
+ lateGml.resolve({ entries: [], issues: [] }); assert.equal(await pendingGml, false);
+ assert.equal(session.getSnapshot().positioning.state, 'empty');
+ assert.deepEqual(session.getSnapshot().photos.map((photo) => photo.id), photos); assert.equal(session.getFile(photos[0]), file);
+ const placement = { kind: 'exif' }, preview = session.previewImport({ placement });
+ assert.equal(session.completeImport({ placement, preview }).ok, true); session.clear();
+});
+for (const kind of ['gmi', 'gml']) test(`replacement ${kind.toUpperCase()} wins over an older pending read`, async () => {
+ const late = deferred();
+ const session = await setup({ parseGml: (file) => file.name === 'late.gml' ? late.promise : { entries: [], issues: [] } });
+ const before = session.getSnapshot().photos.map((photo) => photo.id);
+ const pending = kind === 'gmi' ? session.setDraftGmiSource({ read: () => late.promise }) : session.importPositioningGml(new File(['x'], 'late.gml'));
+ if (kind === 'gmi') await session.setDraftGmiSource({ file: gmiFile([{ hyperlink: 'h:1(link:"a.jpg") ' }], 'replacement.gmi') });
+ else await session.importPositioningGml(new File(['x'], 'replacement.gml'));
+ const chosen = kind === 'gmi' ? session.getSnapshot().loadedImport.source : session.getSnapshot().positioning.source;
+ late.resolve({ references: [], entries: [], issues: [] }); assert.equal(await pending, false);
+ assert.equal((kind === 'gmi' ? session.getSnapshot().loadedImport.source : session.getSnapshot().positioning.source), chosen);
+ assert.equal(chosen.filename, `replacement.${kind}`); assert.deepEqual(session.getSnapshot().photos.map((photo) => photo.id), before);
+ assert.equal(session.getSnapshot().photoLayers.length, 0); session.clear();
+});
 for (const kind of ['none', 'exif', 'gml', 'gmi']) test(`${kind}: preview/commit parity and workspace-owned files`, async () => {
   const session = await setup();
   if (kind === 'gml') await session.importPositioningGml(new File(['x'], 'p.gml'));

@@ -2,7 +2,13 @@ export const initialImportState = (context) => ({ step: 'photos', placement: { k
 export function importSteps(context, placement) {
   return context.kind === 'gmi-layer' ? ['photos', 'review'] : ['photos', 'placement', ...(placement.kind === 'none' ? [] : ['review'])];
 }
+export function canNavigateBack(context, state, step) {
+  const steps = importSteps(context, state.placement);
+  const index = steps.indexOf(step);
+  return index >= 0 && index < steps.indexOf(state.step);
+}
 export function importWizardReducer(state, action) {
+  if (action.type === 'back') return canNavigateBack(action.context, state, action.step) ? { ...state, step: action.step } : state;
   if (action.type === 'step') return { ...state, step: action.step };
   if (action.type === 'placement') return { ...state, placement: { ...state.placement, ...action.placement } };
   if (action.type === 'include') return { ...state, includeUnreferenced: action.value };

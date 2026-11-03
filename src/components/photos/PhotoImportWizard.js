@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { ImagesIcon, FolderOpenIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
-import { initialImportState, importSteps, importWizardReducer, canAdvance } from '@/lib/photos/photoImportWizardState.mjs';
+import { initialImportState, importSteps, importWizardReducer, canAdvance, canNavigateBack } from '@/lib/photos/photoImportWizardState.mjs';
 import usePhotoSession from './usePhotoSession';
 import PhotoCollectionPanel from './PhotoCollectionPanel';
 import PhotoImportPreview from './PhotoImportPreview';
@@ -28,7 +28,14 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
   const advance = canAdvance(state.step, session, state);
   const final = state.step === 'review' || (state.step === 'placement' && state.placement.kind === 'none');
   const primary = final ? (session.draftTargetLayerId ? 'Legg til i fotolaget' : 'Opprett fotolag') : 'Neste';
-  const addFiles = (files) => { setError(''); photoSession.importFiles(Array.from(files)); };
+  const addFiles = (files) => {
+    if (!files?.length) return;
+    setError(''); photoSession.importFiles(Array.from(files));
+  };
+  const navigateBack = (step) => {
+    dispatch({ type: 'back', context, step });
+    setError('');
+  };
   useEffect(() => {
     const dialog = dialogRef.current;
     const opener = openerRef?.current || document.activeElement;
@@ -65,12 +72,24 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
     {session.duplicateNames.length > 0 && <details><summary>Like filnavn ({session.duplicateNames.length})</summary>{session.duplicateNames.map((item) => <p key={item.filename}>{item.filename}</p>)}</details>}
   </div>;
   return <dialog ref={dialogRef} className="photo-collection-dialog bg-gmi-surface text-gmi-text shadow-2xl" aria-labelledby="photo-collection-title" data-thumbnails-pending={photos.filter((photo) => photo.preview.state === 'pending').length} data-exif-pending={photos.filter((photo) => photo.spatial.exifRead.state === 'pending').length}
-    onCancel={(event) => { event.preventDefault(); onClose(); }}
+    onCancel={(event) => {
+      // File inputs emit a bubbling cancel event when their native picker is dismissed.
+      // Only a cancel targeted at this dialog (Escape) cancels the import session.
+      if (event.target !== event.currentTarget) return;
+      event.preventDefault(); onClose();
+    }}
     onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); }}
     onDrop={(event) => { event.preventDefault(); event.stopPropagation(); if (state.step === 'photos') addFiles(event.dataTransfer.files); }}>
     <div className="photo-collection-frame">
       <header className="photo-collection-header"><div><h2 id="photo-collection-title">Legg til bilder</h2><p className="text-sm text-gmi-text-muted">{context.kind === 'gmi-layer' ? `Til ${session.loadedImport?.binding?.filename || ''}` : target ? `Legg til i ${target.name}` : 'Nytt fotolag'}</p></div><button type="button" className="gmi-focus-ring" aria-label="Lukk bilder" onClick={onClose}><XIcon size={22} /></button></header>
-      <ol className="photo-import-steps" aria-label="Steg">{steps.map((step, index) => <li key={step} aria-current={step === state.step ? 'step' : undefined}>{index + 1}. {{ photos: 'Bilder', placement: 'Plassering', review: 'Kontroll' }[step]}</li>)}</ol>
+      <ol className="photo-import-steps" aria-label="Steg">{steps.map((step, index) => {
+        const label = { photos: 'Bilder', placement: 'Plassering', review: 'Kontroll' }[step];
+        return <li key={step} aria-current={step === state.step ? 'step' : undefined}>
+          {canNavigateBack(context, state, step)
+            ? <button type="button" className="gmi-compact-button gmi-focus-ring" aria-label={`Gå tilbake til ${label}`} onClick={() => navigateBack(step)}>{index + 1}. {label}</button>
+            : <span>{index + 1}. {label}</span>}
+        </li>;
+      })}</ol>
       <h3 ref={heading} tabIndex={-1} className="photo-import-heading">{{ photos: 'Bilder', placement: 'Plassering', review: 'Kontroll' }[state.step]}</h3>
       {state.step === 'photos' && session.loadedImport?.state === 'error' && <p role="alert" className="px-4">GMI-laget er ikke lenger tilgjengelig. Avbryt og start på nytt fra GMI-laget.</p>}
       {!photos.length && session.lastImport?.rejectedNames.length > 0 && <p role="alert" className="px-4">Ingen bilder ble lagt til. Avviste filer: {session.lastImport.rejectedNames.join(', ')}</p>}
@@ -91,8 +110,8 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
       </div>}
       <footer className="photo-import-footer border-t border-gmi-border">
         <div className="mr-auto text-sm" id="photo-import-status" role="status">{error || advance.reason || (preview ? `${preview.outcome.total} bilder · ${preview.outcome.placed} plassert · ${preview.outcome.unplaced} uten posisjon` : '')}</div>
-        <button type="button" className="gmi-compact-button gmi-focus-ring" onClick={onClose}>Avbryt</button>
-        {state.step !== 'photos' && <button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => { dispatch({ type: 'step', step: steps[steps.indexOf(state.step) - 1] }); setError(''); }}>Tilbake</button>}
+        <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border px-3 py-2 text-gmi-text-muted" onClick={onClose}>Avbryt</button>
+        {state.step !== 'photos' && <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong bg-gmi-surface px-4 py-2" onClick={() => navigateBack(steps[steps.indexOf(state.step) - 1])}>Tilbake</button>}
         <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4" disabled={!advance.ok || (final && (!preview || (!target && !preview.outcome.total)))} aria-describedby="photo-import-status" onClick={() => {
           if (!final) { dispatch({ type: 'step', step: steps[steps.indexOf(state.step) + 1] }); return; }
           const result = photoSession.completeImport({ loadedReview: review, placement: state.placement, preview });

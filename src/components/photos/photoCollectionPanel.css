@@ -5,6 +5,8 @@
 
 .photo-import-steps { display:flex; gap:2rem; padding:.5rem 1rem; flex:none; border-bottom:1px solid var(--gmi-border); }
 .photo-import-steps [aria-current] { font-weight:700; text-decoration:underline; text-underline-offset:5px; }
+.photo-import-steps li { display:flex; align-items:center; }
+.photo-import-steps button { text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
 .photo-import-heading { padding:.5rem 1rem; font-weight:600; flex:none; }
 .photo-import-step-body { flex:1; min-height:0; overflow:auto; padding:1rem; }
 .photo-import-empty { display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; gap:1rem; text-align:center; padding:2rem; }
@@ -15,6 +17,7 @@
 .photo-import-source { padding:1rem; border:1px solid var(--gmi-border-strong); border-radius:.75rem; margin-bottom:.75rem; }
 .photo-import-source:has(input:checked) { border-color:var(--gmi-interactive); background:var(--gmi-cyan-soft); }
 .photo-import-source p { margin:.5rem 0 0 1.4rem; }
+.photo-import-source-actions { margin:.75rem 0 0 1.4rem; }
 .photo-import-placement, .photo-import-review { max-width:1000px; margin:0 auto; }
 .photo-import-outcome { font-size:1.4rem; font-weight:600; }
 .photo-import-figures { display:flex; gap:3rem; margin:1rem 0; }
