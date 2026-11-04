@@ -74,7 +74,7 @@ test('inspector is read-only by construction; metadata writes live only in the f
   assert.match(dialog, /photoSession\.setCaptureMetadata\(/);
   assert.doesNotMatch(dialog, /applyPhotoEdits|beginPhotoEdits/, 'capture metadata is never part of the Edit transaction');
   const labels = [...tools.matchAll(/label: '([^']+)'/g)].map((match) => match[1]);
-  assert.deepEqual(labels, ['Legg til bilder…', 'Rediger bilder', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Fjern bilder fra laget…']);
+  assert.deepEqual(labels, ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Fjern bilder fra laget…']);
   assert(!labels.some((label) => /opptaksdata/i.test(label)), 'photo-specific actions stay out of Verktøy');
   assert.match(tools, /'Fullfør opplysninger…'/);
 });

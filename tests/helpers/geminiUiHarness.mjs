@@ -53,3 +53,15 @@ export async function serveGeminiWorkflowApp() {
     return { url: `http://127.0.0.1:${server.address().port}`, close };
   } catch (error) { await close(); throw error; }
 }
+
+// Pass 1B: the WFS card starts collapsed; its visibility rows and secondary actions live in the expanded part.
+// Click a control by accessible name, opening the card first (as a user would) when the control is not shown.
+export const clickGeminiControl = (browser, label) => browser.evaluate(`(async () => {
+  const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  const find = () => document.querySelector('button[aria-label=' + JSON.stringify(${JSON.stringify(label)}) + ']');
+  if (!find()) {
+    const toggle = document.querySelector('section[aria-label="Eksisterende anlegg · Gemini WFS"] button[aria-expanded=false][aria-controls]');
+    if (toggle) { toggle.click(); for (let i = 0; i < 30 && !find(); i++) await frame(); }
+  }
+  find().click();
+})()`);

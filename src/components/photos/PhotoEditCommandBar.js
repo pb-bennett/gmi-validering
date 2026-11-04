@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { ArrowUUpLeftIcon, ArrowUUpRightIcon, CrosshairIcon } from '@phosphor-icons/react';
+import { ArrowUUpLeftIcon, ArrowUUpRightIcon, CrosshairIcon, CursorClickIcon } from '@phosphor-icons/react';
 import PhotoIconButton from './PhotoIconButton';
 import { photoPositionDistance } from '@/lib/photos/photoPositioning.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
@@ -39,16 +39,17 @@ function DirectionField({ photo, onStage }) {
 }
 
 export default function PhotoEditCommandBar({ photo, siblingCount = 1, changedCount, canUndo, canRedo, onUndo, onRedo, onSave, onDiscard, onExit,
-  onStage, onMapCenter, announcement = '' }) {
+  onStage, onMapCenter, announcement = '', clickMove = false, onClickMove, stackCount = 1 }) {
   const placed = Boolean(photo) && isPhotoPosition(photo.spatial?.current?.position);
   const savedPosition = photo?.saved?.current?.position;
   const moved = placed && photo?.staged?.position && savedPosition ? photoPositionDistance(savedPosition, photo.spatial.current.position) : null;
   const hint = !photo ? 'Velg et bilde i listen eller på kartet.'
-    : placed ? 'Dra bildet for å flytte. Dra håndtaket for å endre retning.'
-      : `Klikk i kartet for å plassere ${photo.originalFilename}.`;
+    : clickMove ? `Klikk i kartet der ${photo.originalFilename} skal stå. Esc avbryter.`
+      : placed ? 'Dra bildet for å flytte. Dra håndtaket for å endre retning.'
+        : `Klikk i kartet for å plassere ${photo.originalFilename}.`;
   return <div className="photo-edit-command-bar gmi-elevated-surface">
-    <div role="toolbar" aria-label="Redigering av bilder" className="photo-edit-command-row">
-      <span className="photo-edit-status"><strong>Redigerer</strong>{changedCount > 0 && <> · <span data-edit-count>{changedCount} endret</span></>}</span>
+    <div role="toolbar" aria-label="Juster plassering og retning" className="photo-edit-command-row">
+      <span className="photo-edit-status"><strong>Justerer</strong>{changedCount > 0 && <> · <span data-edit-count>{changedCount} endret</span></>}</span>
       <PhotoIconButton icon={ArrowUUpLeftIcon} label="Angre" tooltip={canUndo ? 'Angre' : 'Angre – ingen endringer å angre'}
         unavailable={!canUndo} keyshortcuts="Control+Z" onClick={onUndo} className="photo-edit-icon" />
       <PhotoIconButton icon={ArrowUUpRightIcon} label="Gjør om" tooltip={canRedo ? 'Gjør om' : 'Gjør om – ingenting å gjøre om'}
@@ -60,8 +61,12 @@ export default function PhotoEditCommandBar({ photo, siblingCount = 1, changedCo
       </> : <button type="button" className={`${textButton} border-gmi-border-strong bg-gmi-surface`} onClick={onExit}>Avslutt redigering</button>}
     </div>
     <div className="photo-edit-context-row">
-      <p className="photo-edit-hint">{hint}{siblingCount > 1 && <> <span className="photo-edit-sibling-note">Dette bildet har {siblingCount} plasseringer. Du endrer bare denne.</span></>}</p>
+      <p className="photo-edit-hint">{hint}{siblingCount > 1 && <> <span className="photo-edit-sibling-note">Dette bildet har {siblingCount} plasseringer. Du endrer bare denne.</span></>}
+        {stackCount > 1 && !clickMove && <> <span className="photo-edit-stack-note" data-stack-count={stackCount}>{stackCount} bilder på samme sted: klikk bildet for å velge neste, eller velg i listen.</span></>}</p>
       {photo && <span className="photo-edit-context-actions">
+        {/* Non-drag alternative for crowded places: the next map click moves this photo, through other markers. */}
+        {placed && <button type="button" aria-pressed={clickMove} className={`${textButton} border-gmi-border-strong bg-gmi-surface${clickMove ? ' gmi-selected-control' : ''}`}
+          onClick={() => onClickMove?.(!clickMove)}><CursorClickIcon size={14} weight="regular" aria-hidden="true" />Flytt med klikk</button>}
         <button type="button" className={`${textButton} border-gmi-border-strong bg-gmi-surface`} onClick={() => {
           const centre = onMapCenter?.();
           if (centre) onStage(photo.id, 'position', centre);

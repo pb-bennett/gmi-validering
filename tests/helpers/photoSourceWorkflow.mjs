@@ -4,7 +4,7 @@ export const sourceWizard = 'document.querySelector(".photo-positioning-wizard")
 // Former FOTO sidebar actions now live in the workspace Verktøy menu.
 export const PHOTO_TOOL_LABELS = Object.freeze({
   'Legg til bilder': 'Legg til bilder…', 'Koble og posisjoner bilder': 'Koble og posisjoner bilder…', Eksporter: 'Eksporter…',
-  'Rediger bilder': 'Rediger bilder', 'Kilder og koblinger': 'Kilder og koblinger', 'Fjern bilder fra laget': 'Fjern bilder fra laget…',
+  'Juster plassering og retning': 'Juster plassering og retning', 'Kilder og koblinger': 'Kilder og koblinger', 'Fjern bilder fra laget': 'Fjern bilder fra laget…',
   'Fullfør opplysninger': 'Fullfør opplysninger…',
 });
 // Visible text first, then the accessible name of icon-only controls; workspace tools open through Verktøy.
@@ -14,6 +14,10 @@ export const clickSourceControl = (browser, label, scope = sourceWizard) => brow
   const find=()=>{const buttons=Array.from(root.querySelectorAll('button'));
     return buttons.find(item=>item.innerText.trim()===label) || buttons.find(item=>item.getAttribute('aria-label')===label);};
   let button=find();
+  // Pass 1B moved the new-photo-layer import out of the shared header into the layer list («Legg til bilder»).
+  // Outside the workspace the old «Bilder» entry is the same action; inside it there is no such shortcut.
+  if(!button && label==='Bilder' && root===document && !document.querySelector('.photo-workspace-shell'))
+    button=document.querySelector('.layer-manager-add-actions button[aria-haspopup=dialog]');
   const tool=tools[label] || (Object.values(tools).includes(label) ? label : null);
   if((!button || button.closest('.photo-tools-popup')) && tool && root===document && document.querySelector('.photo-tools-trigger')){
     const trigger=document.querySelector('.photo-tools-trigger');

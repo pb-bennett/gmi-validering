@@ -7,6 +7,8 @@ import { LINE_LEGEND_ITEMS, getLineLegendSwatchStyle } from '@/lib/map/lineStyle
 import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import { useMapPanePresentation } from './MapPanePresentationProvider';
+import usePhotoSession from './photos/usePhotoSession';
+import { PhotoMapDisplayModes } from './photos/PhotoMapDisplayCard';
 
 /**
  * MapLegend — Floating legend overlay for the map
@@ -16,7 +18,10 @@ import { useMapPanePresentation } from './MapPanePresentationProvider';
  * Only shows symbols that are present in the current data.
  * In multi-layer mode, merges categories from all visible layers.
  */
-export default function MapLegend() {
+export default function MapLegend({ photoDisplay = null }) {
+  const { photoLayers } = usePhotoSession();
+  // Photo display modes belong with the other map display controls, not in another floating panel.
+  const showPhotoModes = Boolean(photoDisplay) && photoLayers.some((layer) => layer.visible && layer.placedCount > 0);
   const { legendCollapsed: isCollapsed, toggleLegend } = useMapPanePresentation();
   const data = useStore((state) => state.data);
   const layers = useStore((state) => state.layers);
@@ -151,7 +156,7 @@ export default function MapLegend() {
     : !!data;
   const hasVisibleLegend = hasData && visibleLegendItems.length > 0;
 
-  if (!hasVisibleLegend) {
+  if (!hasVisibleLegend && !showPhotoModes) {
     return null;
   }
 
@@ -184,6 +189,11 @@ export default function MapLegend() {
       {/* Legend items */}
       {!isCollapsed && (
         <div className="max-h-80 overflow-y-auto p-2">
+          {showPhotoModes && <section aria-label="Bilder på kartet" className={`photo-map-legend-photos px-1${hasVisibleLegend ? ' mb-3 border-b border-gmi-border pb-2' : ''}`} data-legend-photos>
+            <div className="mb-1.5 text-xs font-semibold text-gmi-text-muted">Bilder</div>
+            <PhotoMapDisplayModes mode={photoDisplay.mode} onModeChange={photoDisplay.onChange} zoom={photoDisplay.zoom} />
+          </section>}
+          {hasVisibleLegend && <>
           <div className="mb-2 px-1 text-xs font-semibold text-gmi-text-muted">
             Punktsymboler
           </div>
@@ -236,6 +246,7 @@ export default function MapLegend() {
               Markert objekt
             </span>
           </div>
+          </>}
         </div>
       )}
     </div>

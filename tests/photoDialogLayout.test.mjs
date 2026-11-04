@@ -1,4 +1,5 @@
 import { createLayerWithoutPlacement } from './helpers/photoImportWizard.mjs';
+import { clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -66,7 +67,8 @@ test('rendered FOTO dialog retains accepted desktop geometry and responsive pane
 
     await browser.waitFor('document.querySelector(".photo-workspace-shell")');
     assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 3);
-    await click('Legg til bilder');
+    // Appending to this layer is Verktøy → «Legg til bilder…» since Pass 1.
+    await clickSourceControl(browser, 'Legg til bilder', 'document');
     await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
     await checkViewports('target-layer empty importer');
     await browser.evaluate(`(async () => {

@@ -8,6 +8,9 @@ import PhotoCollectionPanel from './PhotoCollectionPanel';
 import PhotoImportPreview from './PhotoImportPreview';
 import PhotoImportPlacementStep from './PhotoImportPlacementStep';
 import PhotoImportReviewStep from './PhotoImportReviewStep';
+import PhotoWizardSteps from './PhotoWizardSteps';
+
+const STEP_LABELS = { photos: 'Bilder', placement: 'Plassering', review: 'Kontroll' };
 
 export default function PhotoImportWizard({ context, onClose, onComplete, openerRef, loadedSources = [], onLoadedSource }) {
   const session = usePhotoSession();
@@ -82,15 +85,9 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
     onDrop={(event) => { event.preventDefault(); event.stopPropagation(); if (state.step === 'photos') addFiles(event.dataTransfer.files); }}>
     <div className="photo-collection-frame">
       <header className="photo-collection-header"><div><h2 id="photo-collection-title">Legg til bilder</h2><p className="text-sm text-gmi-text-muted">{context.kind === 'gmi-layer' ? `Til ${session.loadedImport?.binding?.filename || ''}` : target ? `Legg til i ${target.name}` : 'Nytt fotolag'}</p></div><button type="button" className="gmi-focus-ring" aria-label="Lukk bilder" onClick={onClose}><XIcon size={22} /></button></header>
-      <ol className="photo-import-steps" aria-label="Steg">{steps.map((step, index) => {
-        const label = { photos: 'Bilder', placement: 'Plassering', review: 'Kontroll' }[step];
-        return <li key={step} aria-current={step === state.step ? 'step' : undefined}>
-          {canNavigateBack(context, state, step)
-            ? <button type="button" className="gmi-compact-button gmi-focus-ring" aria-label={`Gå tilbake til ${label}`} onClick={() => navigateBack(step)}>{index + 1}. {label}</button>
-            : <span>{index + 1}. {label}</span>}
-        </li>;
-      })}</ol>
-      <h3 ref={heading} tabIndex={-1} className="photo-import-heading">{{ photos: 'Bilder', placement: 'Plassering', review: 'Kontroll' }[state.step]}</h3>
+      <PhotoWizardSteps steps={steps.map((step) => ({ key: step, label: STEP_LABELS[step] }))} current={state.step}
+        canGoBack={(step) => canNavigateBack(context, state, step)} onBack={navigateBack} />
+      <h3 ref={heading} tabIndex={-1} className="photo-import-heading">{STEP_LABELS[state.step]}</h3>
       {state.step === 'photos' && session.loadedImport?.state === 'error' && <p role="alert" className="px-4">GMI-laget er ikke lenger tilgjengelig. Avbryt og start på nytt fra GMI-laget.</p>}
       {!photos.length && session.lastImport?.rejectedNames.length > 0 && <p role="alert" className="px-4">Ingen bilder ble lagt til. Avviste filer: {session.lastImport.rejectedNames.join(', ')}</p>}
       <input hidden ref={inputRef} type="file" multiple accept="image/*" aria-label="Velg bildefiler" onChange={(event) => { addFiles(event.target.files); event.target.value = ''; }} />

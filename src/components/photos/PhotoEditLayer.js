@@ -16,23 +16,28 @@ import './photoEdit.css';
 
 const KNOB_DISTANCE = 56;
 const DRAG_THRESHOLD = 3;
+const CLICK_AFTER_DRAG_MS = 250;
 const positionFrom = (latlng) => ({ crs: 'EPSG:4326', longitude: latlng.wrap().lng, latitude: latlng.lat });
 const OVERLAY_SELECTOR = '.leaflet-control, .photo-edit-knob, .leaflet-photo-markers-pane .leaflet-marker-icon, .leaflet-photo-placement-pane .leaflet-marker-icon';
 
 // Unplaced selected photo: one click (never a pan) stages its position. Enter on the focused map uses the centre.
-function PlacementCapture({ active, onPlace }) {
+// throughMarkers (explicit «Flytt med klikk» for a placed photo): photo markers no longer catch the click, so a
+// crowded spot can be targeted exactly; Escape leaves the mode without staging anything.
+function PlacementCapture({ active, throughMarkers = false, onPlace, onCancel }) {
   const map = useMap();
-  const latest = useRef(onPlace);
-  useEffect(() => { latest.current = onPlace; });
+  const latest = useRef({ onPlace, onCancel });
+  useEffect(() => { latest.current = { onPlace, onCancel }; });
   useEffect(() => {
     if (!active) return undefined;
     const container = map.getContainer();
+    const overlay = throughMarkers ? '.leaflet-control, .photo-edit-knob' : OVERLAY_SELECTOR;
     map.closePopup();
     container.classList.add('photo-edit-placing');
+    if (throughMarkers) container.classList.add('photo-edit-click-move');
     let pointerStart = null, pointerDragged = false;
     const down = (event) => {
       pointerDragged = false;
-      pointerStart = event.target.closest(OVERLAY_SELECTOR) ? null : { x: event.clientX, y: event.clientY, id: event.pointerId };
+      pointerStart = event.target.closest(overlay) ? null : { x: event.clientX, y: event.clientY, id: event.pointerId };
     };
     const move = (event) => {
       if (pointerStart?.id === event.pointerId && Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > DRAG_THRESHOLD) pointerDragged = true;
@@ -40,15 +45,21 @@ function PlacementCapture({ active, onPlace }) {
     const up = (event) => { move(event); pointerStart = null; };
     // Capture before Leaflet's feature, survey highlight and measure handlers. Photo markers still select.
     const click = (event) => {
-      if (event.target.closest(OVERLAY_SELECTOR)) return;
+      if (event.target.closest(overlay)) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (pointerDragged || map.dragging?.moved() || map.boxZoom?.moved()) return;
-      latest.current(positionFrom(map.mouseEventToLatLng(event)));
+      latest.current.onPlace(positionFrom(map.mouseEventToLatLng(event)));
     };
     const keyboard = (event) => {
       if (event.key !== 'Enter' || event.target !== container) return;
       event.preventDefault(); event.stopImmediatePropagation();
-      latest.current(positionFrom(map.getCenter()));
+      latest.current.onPlace(positionFrom(map.getCenter()));
+    };
+    // Escape order: this explicit mode is left first, before the page-level Edit-mode boundary.
+    const escape = (event) => {
+      if (!throughMarkers || event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      latest.current.onCancel?.();
     };
     container.addEventListener('pointerdown', down, true);
     container.addEventListener('pointermove', move, true);
@@ -56,13 +67,15 @@ function PlacementCapture({ active, onPlace }) {
     container.addEventListener('pointercancel', up, true);
     container.addEventListener('click', click, true);
     container.addEventListener('keydown', keyboard, true);
+    document.addEventListener('keydown', escape, true);
     return () => {
-      container.classList.remove('photo-edit-placing');
+      container.classList.remove('photo-edit-placing', 'photo-edit-click-move');
+      document.removeEventListener('keydown', escape, true);
       container.removeEventListener('pointerdown', down, true); container.removeEventListener('pointermove', move, true);
       container.removeEventListener('pointerup', up, true); container.removeEventListener('pointercancel', up, true);
       container.removeEventListener('click', click, true); container.removeEventListener('keydown', keyboard, true);
     };
-  }, [map, active]);
+  }, [map, active, throughMarkers]);
   return null;
 }
 
@@ -205,26 +218,32 @@ function RotationKnob({ photoId, filename, lat, lng, degrees, innerRadius, onSta
 
 // The actual selected marker is the move handle. Its icon/position props are frozen from dragstart to
 // dragend so React can never call setIcon/setLatLng (which would abort Leaflet's drag) mid-gesture.
-function EditableMarker({ photo, mode, onStage, onAnnounce, knobApi, connectorRef }) {
+// A plain click (no drag) on a stacked selection selects the next occurrence at the same coordinates,
+// exactly like stack cycling outside Edit mode; it never moves anything.
+function EditableMarker({ photo, mode, stackIds = [], onSelectPhoto, onStage, onAnnounce, knobApi, connectorRef }) {
   const map = useMap();
   const ref = useRef(null);
   const { latitude: lat, longitude: lng } = photo.spatial.current.position;
   const savedPosition = photo.saved ? photo.saved.current?.position : photo.spatial.current.position;
   const icon = photoMarkerIcon(mode, { sourceKind: photoPositionSourceKind(photo), selected: true, degrees: photo.direction?.current?.degrees ?? null,
-    staged: Boolean(photo.staged), directionStaged: Boolean(photo.staged?.direction), editing: true, thumbnailUrl: photo.preview?.thumbnailUrl || null });
+    staged: Boolean(photo.staged), directionStaged: Boolean(photo.staged?.direction), editing: true, thumbnailUrl: photo.preview?.thumbnailUrl || null,
+    stackCount: stackIds.length });
   const position = useMemo(() => [lat, lng], [lat, lng]);
   const [frozen, setFrozen] = useState(null);
   const latest = useRef(null);
   const gesture = useRef(null);
+  const dragEndedAt = useRef(-Infinity);
   const label = photoMarkerLabel(photo);
-  useEffect(() => { latest.current = { icon, position, photoId: photo.id, savedPosition, onStage, onAnnounce }; });
+  useEffect(() => { latest.current = { icon, position, photoId: photo.id, savedPosition, onStage, onAnnounce, stackIds, onSelectPhoto }; });
   useEffect(() => {
     const element = ref.current?.getElement();
     if (!element) return;
     element.dataset.photoId = photo.id; element.dataset.editTarget = 'true'; element.dataset.displayMode = mode;
-    element.setAttribute('aria-label', `${label}. Dra eller bruk piltastene for å flytte.`);
+    element.dataset.stackCount = String(stackIds.length || 1);
+    const stack = stackIds.length > 1 ? ` ${stackIds.length} bilder på samme sted; klikk for å velge neste.` : '';
+    element.setAttribute('aria-label', `${label}. Dra eller bruk piltastene for å flytte.${stack}`);
     element.removeAttribute('title');
-  }, [icon, label, mode, photo.id]);
+  }, [icon, label, mode, photo.id, stackIds.length]);
   // A gesture that ended without a staged change must leave the marker where React says it is.
   useEffect(() => { if (!frozen) ref.current?.setLatLng(position); }, [frozen, position]);
   useEffect(() => {
@@ -267,7 +286,16 @@ function EditableMarker({ photo, mode, onStage, onAnnounce, knobApi, connectorRe
       if (!active) return;
       const latlng = event.target.getLatLng();
       active.finish(latlng);
+      // Staging re-renders the icon; Leaflet's setIcon replaces its drag handler, so it can no longer tell that
+      // the trailing click belongs to this drag. Never let that click cycle the stack.
+      dragEndedAt.current = performance.now();
       latest.current.onStage(latest.current.photoId, 'position', positionFrom(latlng));
+    },
+    click: () => {
+      // A plain click only: not during a gesture and not the click that ends a drag.
+      const { stackIds: ids, photoId, onSelectPhoto: select } = latest.current;
+      if (gesture.current || ids.length < 2 || performance.now() - dragEndedAt.current < CLICK_AFTER_DRAG_MS) return;
+      select?.(ids[(ids.indexOf(photoId) + 1) % ids.length]);
     },
     keydown: (event) => {
       const original = event.originalEvent;
@@ -284,7 +312,8 @@ function EditableMarker({ photo, mode, onStage, onAnnounce, knobApi, connectorRe
     draggable keyboard zIndexOffset={1500} eventHandlers={handlers} />;
 }
 
-export default function PhotoEditLayer({ photo, displayMode, connectors = [], onStage, onAnnounce, centerRef }) {
+export default function PhotoEditLayer({ photo, displayMode, connectors = [], stackIds = [], onSelectPhoto, clickMove = false, onClickMoveEnd,
+  onStage, onAnnounce, centerRef }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
@@ -305,8 +334,11 @@ export default function PhotoEditLayer({ photo, displayMode, connectors = [], on
       pane={PHOTO_PLACEMENT_PANE} className="photo-edit-connector" pathOptions={{ color: PHOTO_STAGED_COLOR, weight: 1.5, dashArray: '4 4', opacity: 0.85 }} />)}
     {placed && saved && <Polyline ref={connectorRef} positions={[[saved.latitude, saved.longitude], [current.latitude, current.longitude]]} interactive={false}
       pane={PHOTO_PLACEMENT_PANE} className="photo-edit-connector photo-edit-connector-selected" pathOptions={{ color: PHOTO_STAGED_COLOR, weight: 1.5, dashArray: '4 4', opacity: 0.9 }} />}
-    <PlacementCapture active={Boolean(photo) && !placed} onPlace={(position) => onStage(photo.id, 'position', position)} />
-    {placed && <EditableMarker key={photo.id} photo={photo} mode={mode} onStage={onStage} onAnnounce={onAnnounce} knobApi={knobApi} connectorRef={connectorRef} />}
+    <PlacementCapture active={Boolean(photo) && (!placed || clickMove)} throughMarkers={placed && clickMove}
+      onPlace={(position) => { onStage(photo.id, 'position', position); if (clickMove) onClickMoveEnd?.(); }}
+      onCancel={() => { onClickMoveEnd?.(); onAnnounce?.('Flytting med klikk ble avbrutt'); }} />
+    {placed && <EditableMarker key={photo.id} photo={photo} mode={mode} stackIds={stackIds} onSelectPhoto={onSelectPhoto} onStage={onStage} onAnnounce={onAnnounce}
+      knobApi={knobApi} connectorRef={connectorRef} />}
     {placed && <RotationKnob key={`knob:${photo.id}`} photoId={photo.id} filename={photo.originalFilename || 'Bilde'} lat={current.latitude} lng={current.longitude}
       degrees={photo.direction?.current?.degrees ?? null} innerRadius={mode === 'thumbnails' ? 26 : 14} onStage={onStage} onAnnounce={onAnnounce} apiRef={knobApi} />}
   </Pane>;

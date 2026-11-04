@@ -39,6 +39,8 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
     const unhover = () => browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 1070, button: 'none', buttons: 0 });
     // Keyboard modality first, so programmatic focus matches :focus-visible exactly like Tab.
     const keyboardFocus = async (expression) => { await pressKey(browser, 'Shift', { code: 'ShiftLeft', keyCode: 16 }); await browser.evaluate(`(${expression}).focus()`); };
+    // The inspector's detailed groups start collapsed; a user opens them to read provenance.
+    const openInspectorDetails = () => browser.evaluate(`${inspector}.querySelectorAll('details').forEach((e) => { e.open = true; })`);
     const fingerprint = () => browser.evaluate(`JSON.stringify({ rows: Array.from(document.querySelectorAll('.photo-workspace-row')).map((e) => e.getAttribute('aria-label')),
       markers: Array.from(document.querySelectorAll('.leaflet-marker-icon[data-photo-id]')).map((e) => [e.dataset.photoId, e.dataset.lat, e.dataset.lng, e.querySelector('[data-position-source]')?.dataset.positionSource, e.querySelector('.photo-direction-indicator')?.dataset.degrees || null]).sort() })`);
     try {
@@ -55,14 +57,20 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
       await t.test('quiet left pane: back arrow, compact counts, Verktøy, filter/sort; toast instead of a permanent banner', async () => {
         const text = await browser.evaluate('document.querySelector(".photo-workspace-collection").innerText');
         for (const removed of ['Velg alle viste', 'Kilder og koblinger ·', 'Opptaksmetadata for', 'Lukk importmelding', 'Vis på kartet', 'Eksporter', 'Legg til bilder']) assert(!text.includes(removed), removed);
-        assert.match(text, /4 bilder · 2 plassert · 5 plasseringer/);
+        // Unique assets · placements, and unplaced separately; no third competing count.
+        assert.match(text, /4 bilder · 5 plasseringer/);
+        assert.match(text, /3 uplassert/);
+        assert.doesNotMatch(text, /\d+ plassert ·/);
         const back = await browser.evaluate(`(() => { const b = document.querySelector('.photo-workspace-back'); return { label: b.getAttribute('aria-label'), tip: b.dataset.iconTooltip, title: b.getAttribute('title'), text: b.innerText.trim() }; })()`);
         assert.deepEqual(back, { label: 'Tilbake til appen', tip: 'Tilbake til appen', title: null, text: '' });
+        assert(await browser.evaluate(`parseFloat(getComputedStyle(document.querySelector('.photo-workspace-back')).borderTopWidth) >= 1`), 'back arrow has a visible button treatment');
+        const tools = await browser.evaluate(`(() => { const b = document.querySelector('.photo-tools-trigger'); return { label: b.getAttribute('aria-label'), tip: b.dataset.iconTooltip, text: b.innerText.trim(), icons: b.querySelectorAll('svg').length }; })()`);
+        assert.deepEqual(tools, { label: 'Verktøy', tip: 'Verktøy', text: '', icons: 2 }, 'Verktøy is a wrench + chevron icon button');
         assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-toast")?.getAttribute("role")'), 'status');
         assert.match(await browser.evaluate('document.querySelector(".photo-workspace-toast").innerText'), /Fotolaget er opprettet/);
         const listTop = await browser.evaluate(`document.querySelector('.photo-workspace-list').getBoundingClientRect().top - document.querySelector('.photo-workspace-collection').getBoundingClientRect().top`);
         assert(listTop < 150, `list starts ${listTop}px below the pane top`);
-        assert.equal(await browser.evaluate('Math.round(document.querySelector(".workspace-left").getBoundingClientRect().width)'), 272);
+        assert.equal(await browser.evaluate('Math.round(document.querySelector(".workspace-left").getBoundingClientRect().width)'), 316);
         await screenshot('01-workspace-1920');
         await browser.waitFor('!document.querySelector(".photo-workspace-toast")', 9000);
       });
@@ -77,7 +85,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
             focused: document.activeElement?.dataset.tool }; })()`);
         assert.deepEqual(menu.groups, ['Bilder', 'Posisjoner og kilder', 'Eksport', 'Fjerning']);
         assert.equal(menu.separators, 3);
-        assert.deepEqual(menu.items.map((item) => item.label), ['Legg til bilder…', 'Rediger bilder', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Fjern bilder fra laget…']);
+        assert.deepEqual(menu.items.map((item) => item.label), ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Fjern bilder fra laget…']);
         assert(menu.items.every((item) => item.svg && item.disabled === null && item.tip === null), 'every item: icon, enabled, no tooltip');
         assert.equal(new Set(menu.items.map((item) => item.className)).size, 1, 'Fullfør opplysninger… is styled exactly like every other item');
         assert(!menu.items.some((item) => /opptaksdata/i.test(item.label)));
@@ -116,7 +124,11 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await browser.evaluate(`${eye}.click()`);
         await browser.waitFor(`${eye}.getAttribute('aria-label').startsWith('Skjul fotolaget')`);
         await blur();
-        for (const selector of ['.photo-tools-trigger', '.photo-inspector-action']) {
+        await hover('document.querySelector(".photo-tools-trigger")');
+        await browser.waitFor('document.querySelector(".photo-icon-tooltip")');
+        assert.equal(await tooltipText(), 'Verktøy', 'the icon-only Verktøy trigger has a hover tooltip');
+        await unhover(); await browser.waitFor('!document.querySelector(".photo-icon-tooltip")');
+        for (const selector of ['.photo-inspector-action']) {
           assert.equal(await browser.evaluate(`document.querySelector('${selector}').dataset.iconTooltip ?? null`), null);
           await hover(`document.querySelector('${selector}')`); await wait(450);
           assert.equal(await tooltipText(), null, `${selector} has visible text and no tooltip`);
@@ -181,7 +193,15 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await selectPhotoRow(browser, ids.shared1);
         const switcher = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.photo-occurrence-switcher button')).map((b) => [b.innerText, b.getAttribute('aria-pressed')])`);
         assert.deepEqual(switcher, [['1 · KUM · AnleggsID K0', 'true'], ['2 · KUM · AnleggsID K1', 'false']]);
+        // Progressive disclosure: detailed groups start collapsed, and their summaries still say what is inside.
+        assert.deepEqual(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('details[data-disclosure]')).map((e) => [e.dataset.disclosure, e.open])`),
+          [['placement-provenance', false], ['placement-alternatives', false], ['placement-technical', false], ['links', false], ['file', false]]);
+        assert.match(await browser.evaluate(`${inspector}.querySelector('section[aria-label=Koblinger] summary').innerText`), /Koblinger\s*2\s*denne plasseringen: KUM · AnleggsID K0/);
+        assert.equal(await browser.evaluate(`${inspector}.innerText.includes('Denne plasseringen')`), false, 'association cards are collapsed by default');
+        assert(await browser.evaluate(`${inspector}.textContent.includes('Denne plasseringen')`), 'collapsed information is retained');
+        await browser.evaluate(`${inspector}.querySelector('section[aria-label=Koblinger] summary').click()`);
         assert(await browser.evaluate(`${inspector}.innerText.includes('Denne plasseringen')`));
+        await browser.evaluate(`${inspector}.querySelector('section[aria-label=Koblinger] summary').click()`);
         await browser.evaluate(`${inspector}.querySelectorAll('.photo-occurrence-switcher button')[1].click()`);
         await browser.waitFor(`${row(ids.shared2)}.querySelector('button').getAttribute('aria-pressed') === 'true'`);
         await screenshot('03-inspector-repeated');
@@ -197,7 +217,9 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await browser.evaluate(`${dialog}.querySelector('input[value="evidence:exif:captureTime"]').click()`);
         await clickText(browser, 'Lagre', dialog);
         await browser.waitFor(`!${dialog}`);
-        assert.match(await browser.evaluate(`${inspector}.innerText`), /Opptakstid\s+12\.05\.2026 14:33:02 · tidssone ukjent\s+Kilde\s+EXIF DateTimeOriginal/);
+        assert.match(await browser.evaluate(`${inspector}.innerText`), /Opptakstid\s+12\.05\.2026 14:33:02 · tidssone ukjent/);
+        await openInspectorDetails();
+        assert.match(await browser.evaluate(`${inspector}.innerText`), /Opptakstid fra\s+EXIF DateTimeOriginal/);
         assert.match(await browser.evaluate('document.querySelector(".photo-workspace-toast")?.innerText || ""'), /Opptaksdata lagret for IMG_2\.png/);
         await clickText(browser, 'Rediger opptaksdata…'); await browser.waitFor(dialog);
         await browser.evaluate(`${dialog}.querySelector('input[value="other"]').click()`);
@@ -209,7 +231,9 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await setInput(`${dialog}.querySelector('select')`, '+02:00');
         await clickText(browser, 'Lagre', dialog);
         await browser.waitFor(`!${dialog}`);
-        assert.match(await browser.evaluate(`${inspector}.innerText`), /14\.05\.2026 10:11:12 \(\+02:00\)\s+Kilde\s+Manuell/);
+        assert.match(await browser.evaluate(`${inspector}.innerText`), /14\.05\.2026 10:11:12 \(\+02:00\)/);
+        await openInspectorDetails();
+        assert.match(await browser.evaluate(`${inspector}.innerText`), /Opptakstid fra\s+Manuell/);
         await clickText(browser, 'Rediger opptaksdata…'); await browser.waitFor(dialog);
         await browser.evaluate(`${dialog}.querySelector('input[value="remove"]').click()`);
         await pressKey(browser, 'Escape', KEYS.Escape);
@@ -226,7 +250,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert(await browser.evaluate('Boolean(document.querySelector(".photo-workspace-editing-pill"))'));
         assert.deepEqual(await browser.evaluate(`({ disabled: document.querySelector('.photo-workspace-visibility').getAttribute('aria-disabled'), tip: document.querySelector('.photo-workspace-visibility').dataset.iconTooltip })`),
           { disabled: 'true', tip: 'Fotolaget vises mens du redigerer' });
-        assert.equal(await browser.evaluate(`${commandBar}.querySelector('[role=toolbar]').getAttribute('aria-label')`), 'Redigering av bilder');
+        assert.equal(await browser.evaluate(`${commandBar}.querySelector('[role=toolbar]').getAttribute('aria-label')`), 'Juster plassering og retning');
         assert.match(await browser.evaluate(`${commandBar}.innerText`), /Avslutt redigering/);
         assert.deepEqual(await browser.evaluate(`Array.from(${commandBar}.querySelectorAll('.photo-edit-icon')).map((b) => [b.getAttribute('aria-label'), b.getAttribute('aria-disabled'), b.dataset.iconTooltip, b.getAttribute('aria-keyshortcuts')])`),
           [['Angre', 'true', 'Angre – ingen endringer å angre', 'Control+Z'], ['Gjør om', 'true', 'Gjør om – ingenting å gjøre om', 'Control+Shift+Z Control+Y']]);
@@ -258,7 +282,9 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert(await browser.evaluate(`Boolean(${editTarget}.querySelector('.photo-marker-staged-dot'))`));
         assert(await browser.evaluate(`document.querySelector('.photo-edit-connector-selected')?.getTotalLength() > 50`));
         assert.match(await browser.evaluate(`${commandBar}.innerText`), /Flyttet ca\. \d/);
-        assert.match(await browser.evaluate(`${inspector}.innerText`), /Grunnlag\s+Endret – ikke lagret\s+Lagret\s+59\.\d+° N/);
+        assert.match(await browser.evaluate(`${inspector}.innerText`), /Lagret\s+59\.\d+° N/);
+        await openInspectorDetails();
+        assert.match(await browser.evaluate(`${inspector}.innerText`), /Grunnlag\s+Endret – ikke lagret/);
         assert(await browser.evaluate(`Boolean(${row(ids.IMG_10)}.querySelector('.photo-workspace-changed'))`));
         assert(!await browser.evaluate(`${commandBar}.querySelector('.photo-edit-icon').hasAttribute('aria-disabled')`), 'undo available');
         assert.equal(exceptions().length, 0);
@@ -376,11 +402,11 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert(await browser.evaluate(`Boolean(${commandBar})`), 'still editing');
       });
 
-      await t.test('Back, Verktøy, header Bilder and Rediger opptaksdata… all hit the boundary', async () => {
+      await t.test('Back, Verktøy and Rediger opptaksdata… all hit the boundary; the shared header has no Bilder button', async () => {
+        assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('.workspace-left > header button')).some((b) => /Bilder/.test(b.innerText))`), false);
         for (const [name, action] of [
           ['back', () => browser.evaluate('document.querySelector(".photo-workspace-back").click()')],
           ['tools', () => openTool(browser, 'Eksporter…')],
-          ['header', () => clickText(browser, 'Bilder', 'document.querySelector("header") || document')],
           ['metadata', () => clickText(browser, 'Rediger opptaksdata…')],
         ]) {
           await action();
@@ -423,6 +449,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert.equal(await browser.evaluate(`${marker(ids.IMG_10)}.querySelector('[data-position-source]').dataset.positionSource`), 'manual');
         assert.match(await browser.evaluate(`${row(ids.IMG_10)}.innerText`), /Manuell · 200° S$/m);
         await selectPhotoRow(browser, ids.IMG_10);
+        await openInspectorDetails();
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Grunnlag\s+Manuelt plassert/);
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Andre mulige posisjoner \(1\)/, 'EXIF evidence is kept as a candidate');
         await pressKey(browser, 'z', { code: 'KeyZ', keyCode: 90, modifiers: CTRL });
@@ -516,8 +543,8 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
           const toastOverlaps = toast ? controls.filter((e) => !toast.contains(e) && hits(box(toast), box(e))).map((e) => e.className || e.innerText) : [];
           return { left: Math.round(box(document.querySelector('.workspace-left')).width), inspector: Math.round(box(document.querySelector('.photo-workspace-inspector')).width),
             inside: bar.left >= map.left && bar.right <= map.right, overlaps, toastOverlaps, scroll: document.documentElement.scrollWidth > innerWidth }; })()`);
-        assert.equal(layout.left, 272);
-        assert(layout.inspector >= 400 && layout.inspector <= 420, String(layout.inspector));
+        assert(layout.left >= 292 && layout.left <= 300, String(layout.left));
+        assert(layout.inspector >= 380 && layout.inspector <= 400, String(layout.inspector));
         assert(layout.inside && !layout.overlaps.length && !layout.toastOverlaps.length && !layout.scroll, JSON.stringify(layout));
         await screenshot('07-edit-1280');
         await discardEdits(browser);

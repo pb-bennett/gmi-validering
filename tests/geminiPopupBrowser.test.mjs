@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { writeFile } from 'node:fs/promises';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
-import { serveGeminiWorkflowApp } from './helpers/geminiUiHarness.mjs';
+import { clickGeminiControl, serveGeminiWorkflowApp } from './helpers/geminiUiHarness.mjs';
 
 test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { skip: !chromePath, timeout: 180000 }, async (t) => {
   const app = await serveGeminiWorkflowApp(); let browser;
@@ -11,7 +11,7 @@ test('M6 read-only inspection in real React/Leaflet through the M5 workflow', { 
     await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 850, deviceScaleFactor: 1, mobile: false });
     await browser.send('Page.navigate', { url: app.url });
     await browser.waitFor('globalThis.geminiWorkflow?.audit.map && document.querySelector(".photo-camera-marker")');
-    const clickButton = (label) => browser.evaluate(`document.querySelector('button[aria-label=${JSON.stringify(label)}]').click()`);
+    const clickButton = (label) => clickGeminiControl(browser, label);
     const count = (selector) => browser.evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
     const requests = () => browser.evaluate('geminiWorkflow.audit.calls.length');
     const settle = () => browser.waitFor('!geminiWorkflow.audit.map._animatingZoom && !geminiWorkflow.audit.map._panAnim?._inProgress');

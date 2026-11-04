@@ -7,6 +7,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { clickGeminiControl } from './helpers/geminiUiHarness.mjs';
 
 const require = createRequire(import.meta.url);
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -67,7 +68,7 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
     };
     const click = async (label) => {
       if (label === 'Zoom til Gemini-referanse') await settleMap();
-      await browser.evaluate(`document.querySelector('button[aria-label=${JSON.stringify(label)}]').click()`);
+      await clickGeminiControl(browser, label);
       if (label === 'Zoom til Gemini-referanse') await settleMap();
     };
     const seeded = async (mode = 'pair') => {
@@ -80,6 +81,19 @@ test('M4 actual React/Leaflet sidebar and map acceptance, synthetic session only
       assert.equal(await count(line), 1); assert.equal(await count(point), 1);
       const text = await browser.evaluate(`document.querySelector(${JSON.stringify(card)}).innerText`);
       assert.match(text, /Eksisterende anlegg · Gemini WFS/); assert.match(text, /1 omr/);
+      // Pass 1B: compact collapsed card with a WFS badge and concise counts; rows only when expanded.
+      assert.match(text, /WFS/); assert.match(text, /1 ledn\. · 1 punkt/);
+      assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(card)} + ' [aria-label="Lagtype WFS"]')?.className`), 'layer-type-badge layer-type-badge-wfs');
+      assert.equal(await count(`${card} [aria-label="Ledninger: 1"]`), 0);
+      assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(card)} + ' button[aria-controls]').getAttribute('aria-expanded')`), 'false');
+      const visibleBefore = [await count(line), await count(point), await browser.evaluate('geminiAcceptance.audit.requests')];
+      await browser.evaluate(`document.querySelector(${JSON.stringify(card)} + ' button[aria-controls]').click()`);
+      await browser.waitFor(`document.querySelector(${JSON.stringify(card)} + ' [aria-label="Ledninger: 1"]')`);
+      assert.deepEqual([await count(line), await count(point), await browser.evaluate('geminiAcceptance.audit.requests')], visibleBefore, 'expanding changes no visibility and fetches nothing');
+      await browser.evaluate(`document.querySelector(${JSON.stringify(card)} + ' button[aria-controls]').click()`);
+      await browser.waitFor(`!document.querySelector(${JSON.stringify(card)} + ' [aria-label="Ledninger: 1"]')`);
+      assert.deepEqual([await count(line), await count(point), await browser.evaluate('geminiAcceptance.audit.requests')], visibleBefore, 'collapsing changes no visibility and fetches nothing');
+      await browser.evaluate(`document.querySelector(${JSON.stringify(card)} + ' button[aria-controls]').click()`);
       assert.equal(await count(`${card} [aria-label="Ledninger: 1"]`), 1);
       assert.equal(await count(`${card} [aria-label="Punkter: 1"]`), 1);
       assert.equal(await browser.evaluate('geminiAcceptance.audit.requests'), 2);

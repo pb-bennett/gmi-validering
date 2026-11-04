@@ -17,7 +17,7 @@ async function start(browser) {
   await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
 }
 const spatial = 'document.querySelector(".photo-workspace-inspector")';
-const fact = (section, term) => `Array.from(${spatial}.querySelectorAll('section[aria-label=${section}] dt')).find(e=>e.innerText===${JSON.stringify(term)})?.nextElementSibling.innerText.trim()`;
+const fact = (section, term) => `Array.from(${spatial}.querySelectorAll('section[aria-label=${section}] dt')).find(e=>e.textContent===${JSON.stringify(term)})?.nextElementSibling.textContent.trim()`;
 const currentIs = (kind) => `${fact('Plassering', 'Kilde')}===${JSON.stringify(kind)}`;
 const linkCount = `${spatial}.querySelectorAll('section[aria-label=Koblinger] .photo-inspector-links > li').length`;
 // Sources and EXIF counts moved from the sidebar into the read-only Kilder og koblinger dialog.
@@ -25,7 +25,7 @@ const sourcesInfo = async (browser) => {
   await click(browser, 'Kilder og koblinger', 'document');
   await browser.waitFor('document.querySelector(".photo-sources-info[open]")');
   const info = await browser.evaluate(`({ cards: document.querySelectorAll('.photo-sources-card').length,
-    exif: Number(Array.from(document.querySelectorAll('.photo-sources-info dl > div')).find(e=>e.querySelector('dt').innerText==='Bilder med EXIF GPS')?.querySelector('dd').innerText) })`);
+    exif: Number(Array.from(document.querySelectorAll('.photo-sources-info dl > div')).find(e=>e.querySelector('dt').textContent==='Bilder med EXIF GPS')?.querySelector('dd').textContent) })`);
   await click(browser, 'Lukk', 'document.querySelector(".photo-sources-info")');
   await browser.waitFor('!document.querySelector(".photo-sources-info[open]")');
   return info;
@@ -58,7 +58,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert.equal(await browser.evaluate(markerCount), 0);
       await selectPhoto(browser, 'c.png');
       // Manual placement of an unplaced photo happens in Edit mode and is committed with Lagre endringer.
-      await click(browser, 'Rediger bilder', 'document');
+      await click(browser, 'Juster plassering og retning', 'document');
       await browser.waitFor('document.querySelector(".leaflet-container.photo-edit-placing")');
       const box = await browser.evaluate('document.querySelector(".leaflet-container").getBoundingClientRect().toJSON()');
       const x = box.left + box.width / 2, y = box.top + box.height / 2;
@@ -122,7 +122,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       await browser.evaluate(`Array.from(document.querySelectorAll('.photo-metadata-dialog[open] .photo-metadata-body > fieldset'))[0].querySelector('input[type=radio][value^="evidence:"]').click()`);
       await click(browser, 'Lagre', 'document.querySelector(".photo-metadata-dialog[open]")');
       await browser.waitFor(`${fact('Opptak', 'Opptakstid')}==='12.05.2026 14:33:02 · tidssone ukjent'`);
-      assert.match(await browser.evaluate(`Array.from(${spatial}.querySelectorAll('section[aria-label=Opptak] dt')).find(e=>e.innerText==='Kilde').nextElementSibling.innerText`), /^GML/);
+      assert.match(await browser.evaluate(`Array.from(${spatial}.querySelectorAll('section[aria-label=Opptak] dt')).find(e=>/^(Opptakstid|Fotograf) fra$/.test(e.textContent)).nextElementSibling.textContent`), /^GML/);
 
       await selectPhoto(browser, 'c.png');
       assert(await browser.evaluate(currentIs('Manuell')));

@@ -12,7 +12,7 @@ import { KEYS, commandBar, dragSelectedMarker, editTarget, enterEditMode, pressK
 
 const app = process.env.PHOTO_UI_URL;
 const inspector = 'document.querySelector(".photo-workspace-inspector")';
-const fact = (term) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find((e) => e.innerText === ${JSON.stringify(term)})?.nextElementSibling.innerText.trim()`;
+const fact = (term) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find((e) => e.textContent === ${JSON.stringify(term)})?.nextElementSibling.textContent.trim()`;
 const markers = 'document.querySelectorAll(".photo-camera-marker").length';
 
 test('GMI point placements: two checkpoints, shared image/resource, exact object provenance, independent manual/direction, recheck and removal',
@@ -60,7 +60,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await createLayerWithoutPlacement(browser);
 
       await click(browser, 'Kilder og koblinger', 'document');
-      await browser.waitFor(`Array.from(document.querySelectorAll('.photo-sources-info[open] dl > div')).find((e) => e.querySelector('dt').innerText === 'Bilder med EXIF GPS')?.querySelector('dd').innerText === '3'`);
+      await browser.waitFor(`Array.from(document.querySelectorAll('.photo-sources-info[open] dl > div')).find((e) => e.querySelector('dt').textContent === 'Bilder med EXIF GPS')?.querySelector('dd').textContent === '3'`);
       await click(browser, 'Lukk', 'document.querySelector(".photo-sources-info")');
       assert.equal(await browser.evaluate(markers), 0);
       await stagePhotoSource(browser, sourceFile, 'gmi');
@@ -112,7 +112,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
           && Number(getComputedStyle(pane).zIndex)>Number(getComputedStyle(survey).zIndex)
           && Number(getComputedStyle(pane).zIndex)<Number(getComputedStyle(document.querySelector('.leaflet-tooltip-pane')).zIndex);
       })()`), 'photo icons above loaded GMI markers, below tooltip/popups');
-      assert(await browser.evaluate('document.querySelector(".photo-workspace-collection header").innerText.includes("3 bilder · 3 plassert · 4 plasseringer")'));
+      assert(await browser.evaluate('document.querySelector(".photo-workspace-collection header").innerText.includes("3 bilder · 4 plasseringer") && document.querySelector(".photo-workspace-collection header").innerText.includes("1 uplassert")'));
       const [a, b] = repeated.map((row) => row.id);
       // Kum A shares exact coordinates with b.png: clicking a stack whose member is active cycles,
       // so start from a photo outside the stack to test plain marker selection.
@@ -126,11 +126,19 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       assert(await browser.evaluate(`${inspector}.innerText.includes(${JSON.stringify(guids[0])})`));
       assert((await occurrenceContext()).includes('Kum A'));
       await browser.waitFor('document.querySelector(".photo-collection-original img")?.complete');
-      const original = await imageUrl(), created = await browser.evaluate('window.__originalCreated');
+      const original = await imageUrl(), opened = await browser.evaluate('window.__originalCreated');
       await browser.evaluate('document.querySelector(".photo-preview-open").click()');
-      await browser.waitFor('document.querySelector(".photo-image-viewer[open]")');
-      assert.equal(await browser.evaluate('document.querySelector(".photo-image-viewer img").src'), original);
+      await browser.waitFor('document.querySelector(".photo-image-viewer[open] img")?.src');
+      // Pass 1B: the full-screen viewer can navigate between assets, so it owns exactly one original URL
+      // for the photo it shows (never one per photo), and revokes it when it closes.
+      const viewerUrl = await browser.evaluate('document.querySelector(".photo-image-viewer img").src');
+      assert.notEqual(viewerUrl, original);
+      assert(await browser.evaluate(`window.__assetUrls.has(${JSON.stringify(viewerUrl)})`));
+      assert.equal(await browser.evaluate('window.__originalCreated'), opened + 1);
       await click(browser, 'Lukk', 'document.querySelector(".photo-image-viewer")');
+      await browser.waitFor(`!window.__assetUrls.has(${JSON.stringify(viewerUrl)})`);
+      assert(await browser.evaluate(`window.__assetUrls.has(${JSON.stringify(original)})`), 'the inspector keeps its own URL');
+      const created = await browser.evaluate('window.__originalCreated');
       const aPosition = await positionText();
       await select(b); await openProvenance();
       assert((await occurrenceContext()).includes('Kum B'));

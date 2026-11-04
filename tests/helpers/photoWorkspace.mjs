@@ -9,7 +9,7 @@ export const openTool = (browser, label) => clickSourceControl(browser, label, '
 export const clickText = (browser, label, scope = 'document') => clickSourceControl(browser, label, scope);
 
 export async function enterEditMode(browser) {
-  await openTool(browser, 'Rediger bilder');
+  await openTool(browser, 'Juster plassering og retning');
   await browser.waitFor(commandBar);
 }
 
@@ -29,8 +29,23 @@ export async function mouseDrag(browser, from, to, { steps = 8, release = true }
   if (release) await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button: 'left', buttons: 0, clickCount: 1 });
 }
 
+// Selecting a photo pans the map to it; grabbing the marker mid-animation can press on empty map instead.
+export async function waitForStableEditTarget(browser, timeoutMs = 5000) {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    const stable = await browser.evaluate(`(async () => { const read = () => { const box = ${editTarget}?.getBoundingClientRect(); return box ? box.left + ',' + box.top : null; };
+      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      // Unchanged over several frames and ~200 ms: a pan requested by the last action may start a frame later.
+      const first = read(); await frame(); await frame(); await new Promise((resolve) => setTimeout(resolve, 200)); await frame();
+      return first !== null && first === read(); })()`);
+    if (stable) return;
+  }
+  throw new Error('The selected marker kept moving');
+}
+
 export async function dragSelectedMarker(browser, dx, dy, options) {
   await browser.waitFor(editTarget);
+  await waitForStableEditTarget(browser);
   const from = await elementCentre(browser, editTarget);
   await mouseDrag(browser, from, { x: from.x + dx, y: from.y + dy }, options);
 }

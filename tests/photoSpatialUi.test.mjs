@@ -22,7 +22,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await browser.send('DOM.setFileInputFiles', { nodeId, files });
   };
   const markerCount = 'document.querySelectorAll(".photo-camera-marker").length';
-  const placementSource = `Array.from(document.querySelectorAll('.photo-workspace-inspector section[aria-label=Plassering] dt')).find(e=>e.innerText==='Kilde')?.nextElementSibling.innerText.trim()`;
+  const placementSource = `Array.from(document.querySelectorAll('.photo-workspace-inspector section[aria-label=Plassering] dt')).find(e=>e.textContent==='Kilde')?.nextElementSibling.textContent.trim()`;
   const markerSource = (filename) => `Array.from(document.querySelectorAll('.photo-camera-marker')).find(e=>e.title.startsWith(${JSON.stringify(`Vis bilde: ${filename} `)}))?.querySelector('[data-position-source]').dataset.positionSource`;
   const locateCurrent = () => browser.evaluate('document.querySelector(".photo-workspace-inspector .photo-inspector-locate").click()');
   const screenshot = async (name) => {
@@ -55,7 +55,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     assert.equal(await browser.evaluate(markerCount), 0, 'import retains GML evidence without positions');
     await applyPhotoSourcePositions(browser, 'gml');
     await browser.waitFor(`${markerCount} === 148`);
-    await browser.waitFor('document.querySelector(".leaflet-container") && document.body.innerText.includes("148 plassert")');
+    await browser.waitFor('document.querySelector(".leaflet-container") && document.querySelector(".photo-workspace-counts")?.innerText === "148 bilder"');
     await browser.waitFor('/Zoom: (1[6-8])/.test(document.body.innerText)');
     // Leaflet rounds pixel offsets; nearby distinct coordinates may share a pixel.
     const renderedLocations = await browser.evaluate('new Set(Array.from(document.querySelectorAll(".photo-camera-marker")).map(e => e.style.transform)).size');
@@ -67,7 +67,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await browser.evaluate(`document.querySelector('input[aria-label^="Vis lag"]').click()`);
     await browser.waitFor(`${markerCount} === 0`);
     assert(await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))'));
-    assert(await browser.evaluate('document.body.innerText.includes("148 plassert")'));
+    assert(await browser.evaluate('document.body.innerText.includes("148 plassert")'), 'the main-app layer card keeps its placed count');
     await browser.evaluate(`document.querySelector('input[aria-label^="Vis lag"]').click()`);
     await browser.waitFor(`${markerCount} === 148`);
     checks.push('visibility hides/shows all markers without unmounting map or changing counts');
@@ -119,7 +119,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")');
     await inputFiles('input[aria-label="Velg bildefiler"]', photos);
     await createLayerWithoutPlacement(browser);
-    await browser.waitFor('document.querySelector(".photo-workspace-counts")?.innerText.includes("148 bilder · 0 plassert") && document.querySelector(".leaflet-container")');
+    await browser.waitFor('document.querySelector(".photo-workspace-counts")?.innerText.includes("148 bilder") && document.querySelector(".photo-workspace-counts")?.innerText.includes("148 uplassert") && document.querySelector(".leaflet-container")');
     assert.equal(await browser.evaluate(markerCount), 0);
      await browser.waitFor('document.querySelector(".photo-workspace-shell")');
     await applyPhotoSourcePositions(browser, 'exif', { filename: await browser.evaluate('document.querySelector(".photo-workspace-inspector h2").innerText') }); await click('Tilbake til appen');

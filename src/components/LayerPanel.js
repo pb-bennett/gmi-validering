@@ -11,8 +11,10 @@ import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
 import { getLayerHighlightStyle } from '@/lib/map/layerHighlight.mjs';
+import PhotoIconButton from './photos/PhotoIconButton';
 import {
   ArrowCounterClockwiseIcon,
+  CameraPlusIcon,
   CaretDownIcon,
   CornersOutIcon,
   TableIcon,
@@ -1263,6 +1265,14 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
           </div>
 
           <div className="ml-auto flex items-center gap-1">
+            {/* Connects photos to this GMI layer's object references; never a separate new FOTO import. */}
+            {isLoadedGmiSurveyLayer(layer) && (() => {
+              const available = Boolean(onAddGmiPhotos) && loadedGmiSources.available(layerId);
+              return <PhotoIconButton icon={CameraPlusIcon} size={14} label="Koble bilder til GMI-laget"
+                tooltip={available ? 'Koble bilder til GMI-laget' : 'Koble bilder til GMI-laget – originalfilen er ikke tilgjengelig i denne økten. Last GMI-filen inn på nytt.'}
+                unavailable={!available} aria-haspopup="dialog" data-gmi-photo-action={layerId} className="layer-card-icon-button"
+                onClick={(event) => { event.stopPropagation(); onAddGmiPhotos?.(layerId, event); }} />;
+            })()}
             {/* Zoom to layer */}
             <button
               onClick={(e) => {
@@ -1299,12 +1309,6 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
           </div>
         </div>
 
-        {isLoadedGmiSurveyLayer(layer) && <div className="px-3 pb-2">
-          <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs"
-            disabled={!onAddGmiPhotos || !loadedGmiSources.available(layerId)}
-            title={loadedGmiSources.available(layerId) ? 'Velg bilder til referansene i dette GMI-laget' : 'Originalkilden er ikke tilgjengelig i denne ?kten. Last GMI-filen inn p? nytt.'}
-            aria-label={`Legg til bilder fra ${layer.name}`} onClick={(event) => onAddGmiPhotos?.(layerId, event)}>Legg til bilder</button>
-        </div>}
         {showRemoveConfirm && (
           <div className="fixed inset-0 z-10002 flex items-center justify-center bg-gmi-ink/50 p-4">
             <div className="w-full max-w-sm rounded-xl border border-gmi-border bg-gmi-surface shadow-xl">

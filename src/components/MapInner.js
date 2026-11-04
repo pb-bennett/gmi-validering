@@ -1129,7 +1129,7 @@ function FeatureHoverTooltip({ controllerRef, resetKey }) {
   return null;
 }
 
-export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspace, onSelectPhoto, photoPanRequest, photoEdit }) {
+export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspace, onSelectPhoto, photoPanRequest, photoEdit, photoDisplay }) {
   // photoLayers is a new array on every session publish, so this is one presentation pass per snapshot
   // (or workspace view change); markers never re-read the session per feature.
   const { photoLayers } = usePhotoSession();
@@ -2195,8 +2195,9 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       <MapLifecycleGuard />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
       <GeminiReferenceLayer inspectionEnabled={!measureMode && !photoEdit} hoverControllerRef={hoverControllerRef} />
-      <PhotoMarkersLayer items={photoItems} onOpenPhoto={onOpenPhoto} workspace={photoWorkspace} onSelectPhoto={onSelectPhoto} />
+      <PhotoMarkersLayer items={photoItems} onOpenPhoto={onOpenPhoto} workspace={photoWorkspace} displayMode={photoDisplay?.mode} onSelectPhoto={onSelectPhoto} />
       {photoEdit && <PhotoEditLayer photo={photoEdit.photo} displayMode={photoWorkspace?.displayMode} connectors={photoEdit.connectors}
+        stackIds={photoEdit.stackIds} onSelectPhoto={onSelectPhoto} clickMove={photoEdit.clickMove} onClickMoveEnd={photoEdit.onClickMoveEnd}
         onStage={photoEdit.onStage} onAnnounce={photoEdit.onAnnounce} centerRef={photoEdit.centerRef} />}
       <LayersControl
         key={`layers-control-${customWmsConfig?.url ?? 'none'}`}

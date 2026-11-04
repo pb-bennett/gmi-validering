@@ -17,7 +17,7 @@ const dialog = 'document.querySelector(".photo-positioning-wizard")';
 const spatial = 'document.querySelector(".photo-workspace-inspector section[aria-label=Plassering]")';
 const inspector = 'document.querySelector(".photo-workspace-inspector section[aria-label=Koblinger]")';
 const linkCount = `${inspector}.querySelectorAll('.photo-inspector-links > li').length`;
-const fact = (term) => `Array.from(${spatial}.querySelectorAll('dt')).find((e) => e.innerText === ${JSON.stringify(term)})?.nextElementSibling.innerText.trim()`;
+const fact = (term) => `Array.from(${spatial}.querySelectorAll('dt')).find((e) => e.textContent === ${JSON.stringify(term)})?.nextElementSibling.textContent.trim()`;
 const currentSource = (label) => `${fact('Kilde')} === ${JSON.stringify(label)}`;
 const link = (filename) => `h:1(link:"Attachments\\${filename}") `;
 

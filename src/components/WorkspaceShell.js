@@ -5,7 +5,6 @@ export default function WorkspaceShell({
   sidebarWidth,
   onOpenAppInfo,
   appInfoTriggerRef,
-  onOpenPhotos,
   primary,
   bottomDock,
   bottomDockOpen,
@@ -14,7 +13,7 @@ export default function WorkspaceShell({
   return (
     <div className={`flex h-screen w-screen overflow-hidden bg-gmi-surface-soft${photoWorkspace ? ' photo-workspace-shell' : ''}`}>
       <div className="workspace-left flex h-full flex-none flex-col overflow-hidden" style={{ width: `${sidebarWidth}px` }}>
-        <ProductHeader onOpenAppInfo={onOpenAppInfo} appInfoTriggerRef={appInfoTriggerRef} onOpenPhotos={onOpenPhotos} />
+        <ProductHeader onOpenAppInfo={onOpenAppInfo} appInfoTriggerRef={appInfoTriggerRef} />
         <div className="min-h-0 flex-1">
           {sidebar}
         </div>

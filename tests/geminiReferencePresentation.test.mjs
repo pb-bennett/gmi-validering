@@ -123,6 +123,15 @@ test('pane and restrained shared-token styles remain below existing survey/photo
   assert.equal(GEMINI_REFERENCE_Z_INDEX, 380);
   assert(GEMINI_REFERENCE_Z_INDEX < 390 && 390 < 400 && 400 < 600 && 600 < PHOTO_MARKER_Z_INDEX && PHOTO_MARKER_Z_INDEX < PHOTO_PLACEMENT_Z_INDEX);
   assert(!LAYER_HIGHLIGHT_PALETTE.includes(GEMINI_WFS_HALO.color));
+  // The first automatic GMI colours must be far from the WFS indigo in hue, not only different hex values.
+  const hue = (hex) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (h * 60 + 360) % 360; };
+  const distance = (a, b) => { const delta = Math.abs(hue(a) - hue(b)) % 360; return Math.min(delta, 360 - delta); };
+  assert(distance(LAYER_HIGHLIGHT_PALETTE[0], GEMINI_WFS_HALO.color) >= 90, 'first GMI colour contrasts with WFS');
+  assert(distance(LAYER_HIGHLIGHT_PALETTE[1], GEMINI_WFS_HALO.color) >= 45, 'second GMI colour contrasts with WFS');
+  assert.equal(LAYER_HIGHLIGHT_PALETTE.at(-1), '#8B5CF6', 'violet, nearest the WFS indigo, is assigned last');
 });
 
 test('external source marking shares normalization and remains isolated across refresh/reset', () => {
@@ -170,5 +179,10 @@ test('MapInner/LayerManager mount independent components without modifying surve
   assert.doesNotMatch(card, /setCredentials|\.fetch\(|addLayer|localStorage|sessionStorage|setState|normalizeFeature/);
   assert.match(card, /if \(!session.result && session.connectionStatus !== 'connected'\) return null/); assert.match(card, /aria-pressed=\{visible\}/);
   assert.match(card, /disabled=\{!bounds\}/); assert.match(card, /gmi-focus-ring/);
-  assert.doesNotMatch(card, /LayerTypeBadge|LayerPanel|password|username/);
+  // The WFS badge reuses the shared badge presentation with an explicit type; the card never infers a survey type.
+  assert.match(card, /<LayerTypeBadge type="WFS" \/>/);
+  assert.doesNotMatch(card, /getLayerType|LayerPanel|password|username/);
+  // Collapsing is presentation only: the toggle never touches visibility or requests.
+  assert.match(card, /setExpanded\(\(value\) => !value\)/);
+  assert.match(card, /aria-expanded=\{expanded\}/);
 });

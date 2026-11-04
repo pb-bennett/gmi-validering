@@ -1,6 +1,7 @@
 import { photoPositionSourceKind } from './photoMarkerPresentation.mjs';
 import { gmiObjectContext } from './photoImportOutcome.mjs';
 import { isPhotoPosition } from './photoSpatial.mjs';
+import { photoAssetSequence } from './photoStacks.mjs';
 import { DEFAULT_PHOTO_FILTER, DEFAULT_PHOTO_SORT, photoFilterIsDefault } from './photoWorkspaceState.mjs';
 
 export const PHOTO_SORT_MODES = Object.freeze([
@@ -98,8 +99,10 @@ export function photoWorkspaceView(photos, { activePhotoId = null, filter = DEFA
   const pinned = active && !rows.includes(active) ? active : null;
   const visibleIds = new Set(rows.map((photo) => photo.id));
   if (pinned) visibleIds.add(pinned.id);
+  // Full-screen navigation follows the list's sort order across the whole layer, independent of the filter.
+  const assetSequence = photoAssetSequence([...entries].sort(comparators[sortKey]).map((entry) => entry.photo));
   return {
-    rows, pinned, visibleIds, sort: sortKey, hasObjects,
+    rows, pinned, visibleIds, assetSequence, sort: sortKey, hasObjects,
     filterActive: !photoFilterIsDefault(filter), sortActive: sortKey !== DEFAULT_PHOTO_SORT,
     summary: photoFilterSummary(filter), shownCount: rows.length, totalCount: photos.length,
     counts: { ...photoPlacementCounts(photos),

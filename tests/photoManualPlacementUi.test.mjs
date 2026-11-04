@@ -16,7 +16,7 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
     const popupCount = 'document.querySelectorAll(".photo-map-popup").length';
     const editCount = 'Number(document.querySelector("[data-edit-count]")?.innerText.match(/\\d+/)?.[0] || 0)';
     const click = (text, scope = 'document') => clickSourceControl(browser, text, scope);
-    const fact = (term) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find(e=>e.innerText===${JSON.stringify(term)})?.nextElementSibling.innerText.trim()`;
+    const fact = (term) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find(e=>e.textContent===${JSON.stringify(term)})?.nextElementSibling.textContent.trim()`;
     const inputFiles = async (selector, files) => {
       const { root } = await browser.send('DOM.getDocument');
       const { nodeId } = await browser.send('DOM.querySelector', { nodeId: root.nodeId, selector });
@@ -122,7 +122,7 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
       await saveEdits(browser); await browser.waitFor(`${markerCount}===1`);
       assert.equal(await browser.evaluate(fact('Kilde')),'Manuell');
       assert.equal(await browser.evaluate('document.querySelector(".leaflet-tile-pane").style.transform'),beforeZoom,'no fit jumps after first manual placement');
-      assert(await browser.evaluate('document.querySelector(".photo-workspace-collection header").innerText.includes("1 plassert")'));
+      assert(await browser.evaluate(`(() => { const n = document.querySelectorAll('.photo-workspace-list .photo-workspace-unplaced').length, c = document.querySelector('.photo-workspace-unplaced-count'); return n === 0 ? !c : c?.innerText === n + ' uplassert'; })()`));
       assert.equal(await browser.evaluate(`window.__originalCreatedByName.get(${JSON.stringify(inspectedName)})`),initialOriginalCreated,'placement does not create original URLs');
 
       // Staged changes survive selection; every data tool is behind the save/discard boundary.

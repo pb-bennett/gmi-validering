@@ -34,28 +34,26 @@ test('new layers receive stable default styles and remain off until toggled', ()
   assert.equal(state.layers[first].highlightAll, false);
   assert.equal(state.layers[second].highlightAll, false);
   assert.deepEqual(state.layers[first].highlightStyle, {
-    color: '#D946EF', opacity: 0.55, spread: 4,
-  });
-  assert.deepEqual(state.layers[second].highlightStyle, {
     color: '#F59E0B', opacity: 0.55, spread: 4,
   });
-  assert.equal(state.layers[first].defaultHighlightColor, '#D946EF');
-  assert.equal(state.layers[second].defaultHighlightColor, '#F59E0B');
-  assert.notEqual(state.layers[first].highlightStyle.color, '#00BFD8');
-  assert.notEqual(state.layers[second].highlightStyle.color, '#00BFD8');
+  assert.deepEqual(state.layers[second].highlightStyle, {
+    color: '#00BFD8', opacity: 0.55, spread: 4,
+  });
+  assert.equal(state.layers[first].defaultHighlightColor, '#F59E0B');
+  assert.equal(state.layers[second].defaultHighlightColor, '#00BFD8');
   assert.deepEqual(LAYER_HIGHLIGHT_PALETTE.slice(0, 3), [
-    '#D946EF', '#F59E0B', '#00BFD8',
+    '#F59E0B', '#00BFD8', '#D946EF',
   ]);
   assert.equal(state.layers[first].highlightStyle.opacity, 0.55);
   assert.equal(state.layers[first].highlightStyle.spread, 4);
   const third = add('third.gmi');
-  assert.equal(useStore.getState().layers[third].highlightStyle.color, '#00BFD8');
+  assert.equal(useStore.getState().layers[third].highlightStyle.color, '#D946EF');
   state.toggleLayerVisibility(first);
-  assert.equal(useStore.getState().layers[second].highlightStyle.color, '#F59E0B');
+  assert.equal(useStore.getState().layers[second].highlightStyle.color, '#00BFD8');
   state.removeLayer(first);
-  assert.equal(useStore.getState().layers[second].highlightStyle.color, '#F59E0B');
+  assert.equal(useStore.getState().layers[second].highlightStyle.color, '#00BFD8');
   const fourth = add('fourth.gmi');
-  assert.equal(useStore.getState().layers[fourth].highlightStyle.color, '#D946EF');
+  assert.equal(useStore.getState().layers[fourth].highlightStyle.color, '#F59E0B');
   useStore.getState().toggleLayerHighlightAll(second);
   assert.equal(useStore.getState().layers[second].highlightAll, true);
 });

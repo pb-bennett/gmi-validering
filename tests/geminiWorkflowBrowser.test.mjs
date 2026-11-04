@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { writeFile } from 'node:fs/promises';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
-import { serveGeminiWorkflowApp } from './helpers/geminiUiHarness.mjs';
+import { clickGeminiControl, serveGeminiWorkflowApp } from './helpers/geminiUiHarness.mjs';
 
 test('M5 native form, explicit retrieval, errors, refresh and disconnect with real React/Leaflet', {
   skip: !chromePath, timeout: 180000,
@@ -14,7 +14,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
     await browser.send('Page.navigate', { url: app.url });
     await browser.waitFor('globalThis.geminiWorkflow?.audit.map && document.querySelector(".photo-camera-marker")');
     const dialog = 'dialog[aria-labelledby="gemini-va-heading"]', card = 'section[aria-label="Eksisterende anlegg · Gemini WFS"]';
-    const click = async (label) => browser.evaluate(`document.querySelector('button[aria-label=${JSON.stringify(label)}]').click()`);
+    const click = async (label) => clickGeminiControl(browser, label);
     const count = (selector) => browser.evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
     const requests = () => browser.evaluate('geminiWorkflow.audit.calls.length');
     const open = async () => {

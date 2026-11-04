@@ -15,7 +15,6 @@ import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { formatPhotoCaptureTime, formatPhotoCoordinates, formatPhotoMoveDistance, photoDirectionSourceLabel, photoMetadataConflict,
   photoMetadataSourceLabel, photoPlacementBasisLabel, photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoIconButton from './PhotoIconButton';
-import PhotoImageViewer from './PhotoImageViewer';
 import './photoCollectionPanel.css';
 
 function formatSize(size) {
@@ -35,13 +34,14 @@ function CaptureValue({ field, accepted }) {
   return <>{formatted?.text || accepted.value.iso}{formatted?.notes.length ? <span className="photo-inspector-note"> · {formatted.notes.join(' · ')}</span> : null}</>;
 }
 
-function Preview({ photo }) {
+// The preview's height follows the image's own aspect ratio (capped by the viewport), so portrait photos
+// are shown large without cropping and landscape photos use the full inspector width.
+function Preview({ photo, onOpenViewer }) {
   const imageRef = useRef(null);
   const [inspectionFailed, setInspectionFailed] = useState(false);
-  const [largeImageUrl, setLargeImageUrl] = useState(null);
   const canInspect = photo?.preview.state === 'ready' || (photo?.preview.errorCode === 'thumbnail-failed' && Boolean(photo?.dimensions));
   const assetId = photo?.assetId || photo?.id;
-  // The inspector owns the one original-file URL for the selected asset; siblings share it.
+  // The inspector owns the one inline original-file URL for the selected asset; siblings share it.
   useEffect(() => {
     if (!canInspect) return undefined;
     const file = photoSession.getAssetFile(assetId), image = imageRef.current;
@@ -50,17 +50,40 @@ function Preview({ photo }) {
     image.src = url;
     return () => { image.removeAttribute('src'); URL.revokeObjectURL(url); };
   }, [assetId, canInspect]);
-  return <div className="photo-collection-original">
+  const { width, height } = photo?.dimensions || {};
+  const orientation = width && height ? (height > width ? 'portrait' : width > height ? 'landscape' : 'square') : 'unknown';
+  return <div className="photo-collection-original photo-inspector-preview" data-orientation={orientation}
+    style={width && height ? { '--photo-aspect': `${width} / ${height}` } : undefined}>
     {photo && canInspect ? <>
       <img ref={imageRef} alt={photo.originalFilename} decoding="async" onError={() => setInspectionFailed(true)} hidden={inspectionFailed} />
-      {!inspectionFailed && <PhotoIconButton icon={ArrowsOutIcon} size={20} label={`Vis ${photo.originalFilename} stort`} tooltip="Vis stort"
-        className="photo-preview-open" onClick={() => { const src = imageRef.current?.getAttribute('src'); if (src) setLargeImageUrl(src); }} />}
+      {!inspectionFailed && photo.dimensions && <PhotoIconButton icon={ArrowsOutIcon} size={20} label={`Vis ${photo.originalFilename} i fullskjerm`}
+        tooltip="Vis stort" aria-haspopup="dialog" className="photo-preview-open" onClick={() => onOpenViewer?.()} />}
       {inspectionFailed && <p className="p-4 text-sm text-gmi-text-muted">Originalbildet kunne ikke vises.</p>}
     </> : <p className="p-6 text-center text-sm text-gmi-text-muted">
       {!photo ? 'Velg et bilde i listen eller på kartet for å se det her.' : photo.preview.state === 'pending' ? 'Forhåndsvisningen klargjøres …' : photoPreviewMessage(photo.preview.errorCode)}
     </p>}
-    {largeImageUrl && photo?.dimensions && <PhotoImageViewer src={largeImageUrl} filename={photo.originalFilename} dimensions={photo.dimensions} onClose={() => setLargeImageUrl(null)} />}
   </div>;
+}
+
+// Disclosure state survives switching photos (the inspector remounts per asset) for this page session only.
+const openDisclosures = new Set();
+const rememberToggle = (id) => (event) => { if (event.currentTarget.open) openDisclosures.add(id); else openDisclosures.delete(id); };
+
+function Disclosure({ id, summary, children }) {
+  return <details className="photo-inspector-disclosure" data-disclosure={id} open={openDisclosures.has(id) || undefined} onToggle={rememberToggle(id)}>
+    <summary>{summary}</summary>
+    <div className="photo-inspector-disclosure-body">{children}</div>
+  </details>;
+}
+
+// A whole section that starts collapsed (GMI associations, file details): its heading is the summary.
+function CollapsibleSection({ id, title, count = null, scope, children }) {
+  return <section className="photo-inspector-section photo-inspector-collapsible" aria-label={title}>
+    <details data-disclosure={id} open={openDisclosures.has(id) || undefined} onToggle={rememberToggle(id)}>
+      <summary><h3>{title}{count !== null && <span className="photo-inspector-count">{count}</span>}{scope && <span className="photo-inspector-scope">{scope}</span>}</h3></summary>
+      <div className="photo-inspector-disclosure-body">{children}</div>
+    </details>
+  </section>;
 }
 
 function Section({ title, scope, children, className = '' }) {
@@ -72,7 +95,9 @@ function Section({ title, scope, children, className = '' }) {
 
 // Read-only in place: navigation (preview, locate, occurrence switcher), disclosures, and exactly one
 // contextual action that opens the focused metadata dialog. Nothing is edited inside the inspector itself.
-export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], editing = false, onSelect, onLocate, onEditMetadata }) {
+// Photo first: the default view is the photo, its status chips, coordinates and concise capture data.
+// Provenance, evidence, associations, file details and raw diagnostics are kept, one click away.
+export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], editing = false, onSelect, onLocate, onEditMetadata, onOpenViewer }) {
   if (!photo) return <section className="photo-collection-inspector photo-workspace-inspector-body" aria-label="Bilde som vises">
     <h2 className="truncate text-sm font-semibold text-gmi-navy">Velg et bilde</h2>
     <Preview photo={null} />
@@ -88,6 +113,7 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
   const links = gmiPhotoAssociations(layer, photo.id);
   const filename = photo.originalFilename;
   const occurrenceObjectKey = photo.occurrence?.objectKey;
+  const thisLink = links.find(({ association }) => association.objectKey === occurrenceObjectKey);
   return <section className="photo-collection-inspector photo-workspace-inspector-body" aria-label="Bilde som vises" data-photo-id={photo.id}>
     <header className="photo-inspector-header">
       <h2 className="truncate text-sm font-semibold text-gmi-navy" title={photo.sourceRelativePath || filename}>{filename}</h2>
@@ -99,7 +125,7 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
         </button>)}
       </div>}
     </header>
-    <Preview photo={photo} />
+    <Preview photo={photo} onOpenViewer={onOpenViewer} />
     <ul className="photo-inspector-chips" aria-label="Oppsummering">
       <li>{placed ? <><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />Plassert · {source.label}</> : 'Uplassert'}</li>
       <li>{direction ? `Retning ${photoDirectionLabel(direction.degrees)}` : 'Uten retning'}</li>
@@ -110,23 +136,24 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
     <Section title="Plassering" scope="gjelder denne plasseringen">
       <div className="photo-inspector-locate-row">
         <dl className="photo-inspector-facts">
-          <Fact term="Status">{placed ? 'Plassert' : 'Uplassert'}</Fact>
-          {placed && <Fact term="Kilde"><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />{source.label}</Fact>}
-          {placed && <Fact term="Koordinater">{formatPhotoCoordinates(current.position)}</Fact>}
-          {placed && <Fact term="Grunnlag">{photoPlacementBasisLabel(current)}{current.acceptedAt ? ` · ${formatTimestamp(current.acceptedAt)}` : ''}</Fact>}
+          <Fact term="Koordinater">{placed ? formatPhotoCoordinates(current.position) : 'Ikke plassert'}</Fact>
           {staged?.position && <Fact term="Lagret">{saved.current ? `${formatPhotoCoordinates(saved.current.position)} · ${formatPhotoMoveDistance(photoPositionDistance(saved.current.position, current.position))} unna` : 'Uplassert'}</Fact>}
-          {basis?.sourceFilename && <Fact term="Kildefil"><span className="break-all">{basis.sourceFilename}</span></Fact>}
+          {staged?.direction && <Fact term="Lagret retning">{saved.direction ? photoDirectionLabel(saved.direction.degrees) : 'Ikke angitt'}</Fact>}
         </dl>
         <PhotoIconButton icon={CrosshairIcon} label={`Zoom til ${filename} på kartet`} tooltip={placed ? 'Zoom til bildet' : 'Zoom til bildet – bildet er ikke plassert'}
           unavailable={!placed} className="photo-inspector-locate" onClick={() => onLocate?.({ layerId: layer.id, photoId: photo.id, ...(staged?.position ? { position: current.position } : {}) })} />
       </div>
-      <dl className="photo-inspector-facts">
-        <Fact term="Retning">{direction ? photoDirectionLabel(direction.degrees) : 'Ikke angitt'}</Fact>
-        {direction && <Fact term="Kilde">{photoDirectionSourceLabel(direction)}{direction.acceptedAt ? ` · ${formatTimestamp(direction.acceptedAt)}` : ''}</Fact>}
-        {staged?.direction && <Fact term="Lagret">{saved.direction ? photoDirectionLabel(saved.direction.degrees) : 'Ikke angitt'}</Fact>}
-      </dl>
-      {others.length > 0 && <details className="photo-inspector-disclosure">
-        <summary>Andre mulige posisjoner ({others.length})</summary>
+      <Disclosure id="placement-provenance" summary="Kilde, grunnlag og retning">
+        <dl className="photo-inspector-facts">
+          <Fact term="Status">{placed ? 'Plassert' : 'Uplassert'}</Fact>
+          {placed && <Fact term="Kilde"><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />{source.label}</Fact>}
+          {placed && <Fact term="Grunnlag">{photoPlacementBasisLabel(current)}{current.acceptedAt ? ` · ${formatTimestamp(current.acceptedAt)}` : ''}</Fact>}
+          {basis?.sourceFilename && <Fact term="Kildefil"><span className="break-all">{basis.sourceFilename}</span></Fact>}
+          <Fact term="Retning">{direction ? photoDirectionLabel(direction.degrees) : 'Ikke angitt'}</Fact>
+          {direction && <Fact term="Retningskilde">{photoDirectionSourceLabel(direction)}{direction.acceptedAt ? ` · ${formatTimestamp(direction.acceptedAt)}` : ''}</Fact>}
+        </dl>
+      </Disclosure>
+      {others.length > 0 && <Disclosure id="placement-alternatives" summary={`Andre mulige posisjoner (${others.length})`}>
         <ul className="photo-inspector-candidates">{others.map((candidate) => {
           const distance = placed ? photoPositionDistance(current.position, candidate.position) : null;
           const kind = photoSourceLabel(candidate.kind);
@@ -140,9 +167,8 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
               className="photo-inspector-locate" onClick={() => onLocate?.({ layerId: layer.id, photoId: photo.id, candidateId: candidate.id })} />
           </li>;
         })}</ul>
-      </details>}
-      <details className="photo-inspector-disclosure">
-        <summary>Tekniske kildedata</summary>
+      </Disclosure>}
+      <Disclosure id="placement-technical" summary="Tekniske kildedata">
         <p>{exifGpsMessage(photo.spatial.exifRead.state, photo.spatial.exifRead.errorCode)}</p>
         {photo.spatial.candidates.map((candidate) => <div key={candidate.id} className="photo-inspector-raw">
           <p>{photoSourceLabel(candidate.kind)}{candidate.status !== 'viable' ? ' · Kan ikke brukes' : ''}{candidate.id === basis?.id ? ' · I bruk' : ''}{candidate.sourceFilename ? ` · ${candidate.sourceFilename}` : ''}</p>
@@ -152,36 +178,38 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
           <pre>{JSON.stringify({ raw: candidate.raw, crs: candidate.crsResolution, transform: candidate.transform }, null, 2)}</pre>
         </div>)}
         {!photo.spatial.candidates.length && <p>Ingen kildeposisjoner er registrert.</p>}
-      </details>
-      {photo.directionEvidence?.length > 0 && <details className="photo-inspector-disclosure">
-        <summary>Retningsdata fra bildet</summary>
+      </Disclosure>
+      {photo.directionEvidence?.length > 0 && <Disclosure id="direction-evidence" summary="Retningsdata fra bildet">
         {photo.directionEvidence.map((item) => <p key={item.id}><code>{JSON.stringify(item.raw)}</code> · {item.status === 'usable' ? `${item.value}° fra geografisk nord`
           : item.status === 'unsupported-reference' ? 'Ukjent eller magnetisk referanse; krever gjennomgang.' : 'Ugyldig retningsverdi.'}</p>)}
-      </details>}
+      </Disclosure>}
     </Section>
 
     <Section title="Opptak" scope="gjelder bildet (alle plasseringer)">
       <dl className="photo-inspector-facts">
         <Fact term="Opptakstid"><CaptureValue field="captureTime" accepted={capture.captureTime} /></Fact>
-        {capture.captureTime && <Fact term="Kilde">{photoMetadataSourceLabel('captureTime', capture.captureTime.provenance)}</Fact>}
         <Fact term="Fotograf"><CaptureValue field="photographer" accepted={capture.photographer} /></Fact>
-        {capture.photographer && <Fact term="Kilde">{photoMetadataSourceLabel('photographer', capture.photographer.provenance)}</Fact>}
       </dl>
       {photoMetadataConflict(photo, 'captureTime') && <p className="photo-inspector-warning" role="note">Kildene oppgir ulike opptakstider.</p>}
-      {photo.metadataEvidence?.length > 0 && <details className="photo-inspector-disclosure">
-        <summary>Kildeverdier</summary>
-        <ul className="photo-inspector-evidence">{photo.metadataEvidence.map((evidence) => <li key={evidence.id}>
+      {(capture.captureTime || capture.photographer || photo.metadataEvidence?.length > 0) && <Disclosure id="capture-evidence"
+        summary={photo.metadataEvidence?.length ? `Kilder og kildeverdier (${photo.metadataEvidence.length})` : 'Kilder'}>
+        <dl className="photo-inspector-facts">
+          {capture.captureTime && <Fact term="Opptakstid fra">{photoMetadataSourceLabel('captureTime', capture.captureTime.provenance)}</Fact>}
+          {capture.photographer && <Fact term="Fotograf fra">{photoMetadataSourceLabel('photographer', capture.photographer.provenance)}</Fact>}
+        </dl>
+        {photo.metadataEvidence?.length > 0 && <ul className="photo-inspector-evidence">{photo.metadataEvidence.map((evidence) => <li key={evidence.id}>
           <strong>{evidence.field === 'captureTime' ? 'Opptakstid' : 'Fotograf'} · {photoSourceLabel(evidence.kind)}</strong>{evidence.sourceFilename ? ` · ${evidence.sourceFilename}` : ''}
           <p>{evidence.value ? (evidence.field === 'captureTime' ? formatPhotoCaptureTime(evidence.value)?.text || evidence.value.iso : evidence.value) : 'Kan ikke tolkes sikkert; beholdt som rå kildedata.'}</p>
           <p className="photo-inspector-note">Rå verdi: {evidenceRaw(evidence.raw)}</p>
-        </li>)}</ul>
-      </details>}
+        </li>)}</ul>}
+      </Disclosure>}
       <button type="button" className="photo-inspector-action gmi-compact-button gmi-focus-ring" aria-haspopup="dialog" onClick={onEditMetadata}>
         <PencilSimpleIcon size={15} weight="regular" aria-hidden="true" />Rediger opptaksdata…
       </button>
     </Section>
 
-    <Section title="Koblinger">
+    <CollapsibleSection id="links" title="Koblinger" count={links.length}
+      scope={thisLink ? `denne plasseringen: ${gmiObjectContext(thisLink.object)}` : links.length ? null : 'ingen GMI-objekter'}>
       {links.length ? <ul className="photo-inspector-links">{links.map(({ association, sourceFilename, object }) => {
         const identifiers = Object.entries(object.identifiers || {}).filter(([, value]) => value !== null && value !== undefined && String(value).trim());
         return <li key={association.id} data-object-key={object.objectKey}>
@@ -194,9 +222,9 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
           <details><summary>Tekniske detaljer</summary><p className="break-all">GUID: {object.guid || 'Ikke oppgitt'}</p></details>
         </li>;
       })}</ul> : <p className="photo-inspector-note">Ikke koblet til GMI-objekter.</p>}
-    </Section>
+    </CollapsibleSection>
 
-    <Section title="Fil">
+    <CollapsibleSection id="file" title="Fil" scope={photo.dimensions ? `${photo.dimensions.width} × ${photo.dimensions.height} px · ${formatSize(photo.size)}` : formatSize(photo.size)}>
       <dl className="photo-inspector-facts">
         <Fact term="Filnavn"><span className="break-all">{filename}</span></Fact>
         <Fact term="Relativ sti">{photo.sourceRelativePath ? <span className="break-all">{photo.sourceRelativePath}</span> : null}</Fact>
@@ -206,6 +234,6 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
         <Fact term="Fil sist endret">{formatTimestamp(photo.lastModified)}</Fact>
       </dl>
       <p className="photo-inspector-note">Originalfilen endres ikke.</p>
-    </Section>
+    </CollapsibleSection>
   </section>;
 }

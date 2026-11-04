@@ -115,9 +115,11 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
           tooltip={editing ? 'Fotolaget vises mens du redigerer' : layer.visible ? 'Skjul fotolag' : 'Vis fotolag'}
           unavailable={editing} onClick={() => photoSession.setLayerVisibility(layer.id, !layer.visible)} className="photo-workspace-visibility" />
       </div>
+      {/* Unique assets first; placements only when an asset is used more than once; unplaced only when there are any. */}
       <p className="photo-workspace-counts">
-        {plural(assetCount, 'bilde', 'bilder')} · {view.counts.placed} plassert{repeats ? ` · ${layer.photoCount} plasseringer` : ''}
-        {editing && <span className="photo-workspace-editing-pill">Redigerer</span>}
+        <span>{plural(assetCount, 'bilde', 'bilder')}{repeats ? ` · ${plural(layer.photoCount, 'plassering', 'plasseringer')}` : ''}</span>
+        {view.counts.unplaced > 0 && <span className="photo-workspace-unplaced-count">{view.counts.unplaced} uplassert</span>}
+        {editing && <span className="photo-workspace-editing-pill">Justerer</span>}
       </p>
       <div className="photo-workspace-toolbar">
         <PhotoWorkspaceToolsMenu occurrenceCount={layer.photoCount} onSelect={onTool} />

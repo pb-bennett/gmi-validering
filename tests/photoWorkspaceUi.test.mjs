@@ -23,7 +23,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
     const collectionCount = 'document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length';
     const inspector = 'document.querySelector(".photo-workspace-inspector")';
     const originalCount = 'window.__photoUrlAudit.originals.size';
-    const current = (kind) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find(e=>e.innerText==='Kilde')?.nextElementSibling.innerText.trim()===${JSON.stringify(kind)}`;
+    const current = (kind) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find(e=>e.textContent==='Kilde')?.nextElementSibling.textContent.trim()===${JSON.stringify(kind)}`;
     const sourceCards = async () => {
       await click('Kilder og koblinger'); await browser.waitFor('document.querySelector(".photo-sources-info[open]")');
       const count = await browser.evaluate('document.querySelectorAll(".photo-sources-card").length');
@@ -72,17 +72,18 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       await browser.waitFor('document.querySelector(".photo-image-viewer img").complete');
       // ResizeObserver measures the opened top-layer viewport before fitting.
       await browser.waitFor('parseInt(document.querySelector(".photo-image-viewer output").innerText) < 100');
-      assert.equal(await browser.evaluate('document.querySelector(".photo-image-viewer img").src'), original);
-      assert.equal(await browser.evaluate(originalCount), 1); assert.equal(await browser.evaluate('window.__photoUrlAudit.originalCreated'), created);
+      // Pass 1B: the viewer navigates across assets, so it owns exactly one original URL for the shown photo.
+      assert.notEqual(await browser.evaluate('document.querySelector(".photo-image-viewer img").src'), original);
+      assert.equal(await browser.evaluate(originalCount), 2); assert.equal(await browser.evaluate('window.__photoUrlAudit.originalCreated'), created + 1);
       const viewer = 'document.querySelector(".photo-image-viewer")';
       const zoomValue = async () => browser.evaluate(`parseInt(${viewer}.querySelector('output').innerText)`);
       const fitValue = await zoomValue();
       assert(fitValue > 0 && fitValue < 100);
-      await browser.evaluate(`${viewer}.querySelector('button[aria-label="Zoom inn i bildet"]').click()`);
+      await browser.evaluate(`${viewer}.querySelector('button[aria-label="Zoom inn"]').click()`);
       assert(await zoomValue() > fitValue);
-      await browser.evaluate(`${viewer}.querySelector('button[aria-label="Zoom ut i bildet"]').click()`);
+      await browser.evaluate(`${viewer}.querySelector('button[aria-label="Zoom ut"]').click()`);
       assert.equal(await zoomValue(), fitValue);
-      await click('100 %', viewer); assert.equal(await zoomValue(), 100);
+      await click('Faktisk størrelse (100 %)', viewer); assert.equal(await zoomValue(), 100);
       const area = await browser.evaluate(`${viewer}.querySelector('.photo-image-viewer-viewport').getBoundingClientRect().toJSON()`);
       const x = area.left + area.width / 2, y = area.top + area.height / 2;
       const beforePan = await browser.evaluate(`${viewer}.querySelector('img').style.transform`);
@@ -105,9 +106,9 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       } else await browser.evaluate(`${viewer}.querySelector('button[aria-label="Lukk bildevisning"]').click()`);
       await browser.waitFor('!document.querySelector(".photo-image-viewer")');
       assert.equal(await browser.evaluate(`${inspector}.querySelector('h2').innerText`), filename);
-      assert.equal(await browser.evaluate(originalCount), 1);
-      assert.equal(await browser.evaluate('window.__photoUrlAudit.originalCreated'), created);
-      checks.push(`image viewer ${label}: same original URL, fit/zoom/100%/pan/wheel, close preserves photo`);
+      assert.equal(await browser.evaluate(originalCount), 1, 'the viewer revoked its URL; the inspector keeps its own');
+      assert.equal(await browser.evaluate('window.__photoUrlAudit.originalCreated'), created + 1);
+      checks.push(`image viewer ${label}: one viewer-owned original URL revoked on close, fit/zoom/100%/pan/wheel, close preserves photo`);
     };
     const deleteLayer = async () => {
       await browser.evaluate(`document.querySelector('button[aria-label^="Fjern fotokartlag"]').click()`);
@@ -120,15 +121,16 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
         scrollWidth: document.querySelector('.photo-workspace-shell').scrollWidth,
       }; })()`);
       assert.equal(layout.shell.width, width); assert(layout.scrollWidth <= width + 1, JSON.stringify(layout));
-      assert(await browser.evaluate(`(() => { const header = document.querySelector('.workspace-left > header'); const brand = header.querySelector('h1 span'); const images = Array.from(header.querySelectorAll('button')).find(button => button.innerText === 'Bilder'); return brand.getBoundingClientRect().right <= images.getBoundingClientRect().left; })()`), 'workspace header branding must not overlap Bilder');
+      // Pass 1B: the shared header is branding + app info only; new photo imports start from the layer list.
+      assert(await browser.evaluate(`(() => { const header = document.querySelector('.workspace-left > header'); const brand = header.querySelector('h1 span'), info = header.querySelector('button'); return !Array.from(header.querySelectorAll('button')).some((b) => b.innerText.includes('Bilder')) && brand.getBoundingClientRect().right <= info.getBoundingClientRect().left; })()`), 'workspace header branding must not overlap the info button');
       assert(layout.map.width > 0 && layout.map.height > 200 && layout.right.width > 0);
       if (width > 700) {
         assert(Math.abs(layout.left.right - layout.map.left) < 2);
         assert(Math.abs(layout.map.right - layout.right.left) < 2);
         assert(layout.map.width > layout.left.width && layout.map.width > layout.right.width);
         assert(layout.right.right <= width + 1);
-        // Planned widths: 272 px left pane; inspector clamp(400px, 32vw, 560px).
-        if (width === 1680) { assert(layout.right.width >= 400 && layout.right.width <= 560, JSON.stringify(layout.right)); assert.equal(layout.left.width, 272); }
+        // Pass 1B widths: left pane clamp(292px, 23vw, 316px); inspector clamp(380px, 30vw, 560px).
+        if (width === 1680) { assert(layout.right.width >= 380 && layout.right.width <= 560, JSON.stringify(layout.right)); assert.equal(layout.left.width, 316); }
       } else {
         assert(layout.map.top >= layout.left.bottom - 1); assert(layout.right.top >= layout.map.bottom - 1);
         await browser.evaluate(`${inspector}.scrollIntoView({block:'start'})`);
@@ -300,7 +302,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert.equal(await browser.evaluate(markerCount), 0); assert.equal(await browser.evaluate(originalCount), 0);
 
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await inputFiles('input[aria-label="Velg bildefiler"]', photos);
-      await createLayerWithoutPlacement(browser); await browser.waitFor('document.querySelector(".photo-workspace-counts")?.innerText.includes("148 bilder · 0 plassert")');
+      await createLayerWithoutPlacement(browser); await browser.waitFor('document.querySelector(".photo-workspace-counts")?.innerText.includes("148 bilder") && document.querySelector(".photo-workspace-counts")?.innerText.includes("148 uplassert")');
       assert.equal(await browser.evaluate(markerCount), 0);  await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       await stagePhotoSource(browser, gmlPath); await savePhotoSource(browser);
       assert.equal(await browser.evaluate(markerCount), 0, 'source checkpoint leaves photos unplaced');

@@ -46,7 +46,9 @@ test('start-state AppInfo actions stay in the upload card while popup decision r
 });
 
 test('shared working header and both Kontakt actions use the one page-owned modal', () => {
-  assert.match(shellSource, /<ProductHeader onOpenAppInfo=\{onOpenAppInfo\} appInfoTriggerRef=\{appInfoTriggerRef\} onOpenPhotos=\{onOpenPhotos\} \/>/);
+  // Pass 1B: the header is branding + app info only; new photo imports start from the layer list.
+  assert.match(shellSource, /<ProductHeader onOpenAppInfo=\{onOpenAppInfo\} appInfoTriggerRef=\{appInfoTriggerRef\} \/>/);
+  assert.doesNotMatch(shellSource + headerSource, /onOpenPhotos|ImagesIcon/);
   assert.match(headerSource, /<BrandWordmark \/>/);
   assert.match(headerSource, /<InfoIcon\b/);
   assert.match(headerSource, /items-center justify-between gap-2/);

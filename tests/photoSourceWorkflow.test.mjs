@@ -258,7 +258,57 @@ test('product UI has one source workflow and inspector has no direct source acce
   assert.doesNotMatch(inspector, /Kontroller kilder og posisjon|PhotoManualPlacementControls|PhotoDirectionControls/);
   // Opening the wizard always passes through the single unsaved-changes boundary.
   assert.match(page, /requestWorkspaceAction\(\(\) => setPhotoSourceWorkflow\(/);
-  assert.match(wizard, /\['Kilder', 'Koblinger', 'Posisjoner', 'Oppsummer'\]/);
+  // One wizard presentation: the positioning workflow reuses the import wizard's step list and source cards.
+  assert.match(wizard, /\['Kilder', 'Koblinger', 'Plassering', 'Kontroll'\]/);
+  assert.match(wizard, /<PhotoWizardSteps/); assert.match(wizard, /<PhotoSourceOption/);
+  assert.match(wizard, /photo-collection-dialog photo-positioning-wizard/);
   assert.match(wizard, /Oppdater kontrollen/);
   assert.doesNotMatch(wizard, /acceptCandidates|applyPhotoPositioning\(/);
+});
+
+test('Pass 1B: a GMI layer already loaded in the app is a source-workflow source, with the same lifecycle as a file', async () => {
+  const { parseGmiPhotoSource } = await import('../src/lib/photos/gmiPhotoSource.mjs');
+  const { session, layer, ids } = await setup();
+  const file = gmiFile([{ hyperlink: 'h:1(link:"a.jpg") ' }, { hyperlink: 'h:1(link:"b.jpg") ' }], 'loaded.gmi');
+  const binding = Object.freeze({ layerId: 'survey-1', inputId: 'input-1', filename: 'loaded.gmi' });
+  let live = true, reads = 0;
+  const loaded = { binding, isLive: () => live, read: async () => { reads++; return parseGmiPhotoSource(file); } };
+  const before = ids.map((id) => session.getPhoto(id));
+
+  // Staging is review-only: nothing is attached, no position or evidence changes.
+  const ticket = session.beginSourceWorkflow(layer.id);
+  assert.equal(await session.stageLayerSource(layer.id, loaded, 'gmi'), true);
+  const review = session.getSnapshot().sourceReviews[layer.id];
+  assert.equal(review.state, 'ready'); assert.equal(review.source.kind, 'gmi'); assert.equal(review.source.filename, 'loaded.gmi');
+  assert.deepEqual({ ...review.source.loadedBinding }, { ...binding, live: true });
+  assert.equal(review.associationLedger.summary.matchedPhotoCount, 2);
+  assert.equal(session.getLayer(layer.id).spatialSources.length, 0);
+  ids.forEach((id, index) => assert.strictEqual(session.getPhoto(id).spatial, before[index].spatial));
+
+  // Keeping it attaches the source and links; positions still need explicit acceptance.
+  assert.equal(session.saveSourceWorkflowSource(ticket, review).ok, true);
+  const [source] = session.getLayer(layer.id).spatialSources;
+  assert.equal(source.kind, 'gmi'); assert.equal(source.fingerprint, (await parseGmiPhotoSource(file)).fingerprint);
+  ids.forEach((id, index) => assert.strictEqual(session.getPhoto(id).spatial.current, before[index].spatial.current));
+  const plan = session.reviewSourceWorkflowPositions(ticket);
+  assert(plan.rows.some((row) => row.options.some((option) => option.kind === 'gmi')), 'GMI positions are proposals only');
+
+  // The same layer again is detected as the attached source (the wizard then rechecks instead of duplicating).
+  assert.equal(await session.stageLayerSource(layer.id, loaded, 'gmi'), false);
+  assert.equal(session.getSnapshot().sourceReviews[layer.id].errorCode, 'duplicate-source');
+  assert.equal(session.getSnapshot().sourceReviews[layer.id].attachedSourceId, source.id);
+  session.cancelLayerSourceReview(layer.id);
+
+  // A layer that is no longer live is rejected before and after the read; nothing is attached.
+  live = false;
+  assert.equal(await session.stageLayerSource(layer.id, loaded, 'gmi'), false);
+  assert.equal(session.getSnapshot().sourceReviews[layer.id].errorCode, 'loaded-source-unavailable');
+  live = true;
+  const stale = { ...loaded, read: async () => { live = false; return parseGmiPhotoSource(file); } };
+  assert.equal(await session.stageLayerSource(layer.id, stale, 'gmi'), false);
+  assert.equal(session.getSnapshot().sourceReviews[layer.id].errorCode, 'loaded-source-unavailable');
+  assert.equal(session.getLayer(layer.id).spatialSources.length, 1);
+  session.endSourceWorkflow(ticket);
+  assert(reads >= 2);
+  session.clear();
 });

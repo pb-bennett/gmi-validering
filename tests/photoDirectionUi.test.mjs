@@ -30,7 +30,7 @@ test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, stag
   { skip: !chromePath || !app, timeout: 300000 }, async () => {
     const files = await fixture(), browser = await openTestChrome(), screenshots = [];
     const inspector = 'document.querySelector(".photo-workspace-inspector")';
-    const fact = (term) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find(e=>e.innerText===${JSON.stringify(term)})?.nextElementSibling.innerText.trim()`;
+    const fact = (term) => `Array.from(${inspector}.querySelectorAll('section[aria-label=Plassering] dt')).find(e=>e.textContent===${JSON.stringify(term)})?.nextElementSibling.textContent.trim()`;
     const accepted = () => browser.evaluate(fact('Retning'));
     const position = () => browser.evaluate(fact('Koordinater'));
     const evidence = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('.photo-inspector-raw pre')).map(e=>e.textContent)`);

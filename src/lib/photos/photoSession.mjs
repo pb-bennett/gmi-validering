@@ -121,6 +121,14 @@ export function createPhotoSession({
     } : {}), id, kind, fingerprint, filename: file.name, importedAt: Date.now() });
   }
 
+  // One shape for a GMI source read from an already-loaded survey layer, in import and in the source workflow.
+  function loadedGmiSource(parsed, binding, file = null) {
+    const id = `photo-gmi-${createId()}`;
+    return immutable({ ...parsed, id, kind: 'gmi', filename: binding?.filename || file?.name, importedAt: Date.now(),
+      references: parsed.references.map((reference) => ({ ...reference, id: `${id}:${reference.id}` })),
+      ...(binding ? { loadedBinding: { ...binding, live: true } } : {}) });
+  }
+
   function attachSource(source, photoIds) {
     const ledger = matchPhotoReferences(source.entries, assetPhotos(photoIds));
     for (const match of ledger.matches) {
@@ -398,10 +406,7 @@ export function createPhotoSession({
       try {
         const parsed = await read();
         if (loadedImport !== operation || !isLive(binding)) return false;
-        const id = `photo-gmi-${createId()}`;
-        operation.source = immutable({ ...parsed, id, kind: 'gmi', filename: binding?.filename || file?.name, importedAt: Date.now(),
-          references: parsed.references.map((reference) => ({ ...reference, id: `${id}:${reference.id}` })),
-          ...(binding ? { loadedBinding: { ...binding, live: true } } : {}) });
+        operation.source = loadedGmiSource(parsed, binding, file);
         operation.state = 'ready';
         publish(); return true;
       } catch (error) {
@@ -790,7 +795,8 @@ export function createPhotoSession({
       positioning = Object.freeze({ ...positioning, state: positioning.source ? 'ready' : 'empty', errorCode: null });
       publish();
     },
-    async stageLayerSource(layerId, file, kind = 'gml') {
+    // input: a File, or { binding, read, isLive } for a GMI layer already loaded in the app (same as import).
+    async stageLayerSource(layerId, input, kind = 'gml') {
       if (!layers.has(layerId)) return false;
       const ownerGeneration = generation;
       const request = (sourceRequests.get(layerId) || 0) + 1;
@@ -799,7 +805,14 @@ export function createPhotoSession({
       sourceReviews.set(layerId, Object.freeze({ ...previous, state: 'pending', errorCode: null }));
       publish();
       try {
-        const source = await makeSource(file, kind);
+        let source;
+        if (typeof input?.read === 'function') {
+          const isLive = input.isLive || (() => true);
+          if (!isLive(input.binding)) throw Object.assign(new Error('loaded-source-unavailable'), { code: 'loaded-source-unavailable' });
+          const parsed = await input.read();
+          if (!isLive(input.binding)) throw Object.assign(new Error('loaded-source-unavailable'), { code: 'loaded-source-unavailable' });
+          source = loadedGmiSource(parsed, input.binding);
+        } else source = await makeSource(input, kind);
         if (generation !== ownerGeneration || !layers.has(layerId) || sourceRequests.get(layerId) !== request) return false;
         const attached = layers.get(layerId).spatialSources.find((item) => item.fingerprint === source.fingerprint);
         if (attached) {

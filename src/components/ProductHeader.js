@@ -1,21 +1,13 @@
-import { ImagesIcon, InfoIcon } from '@phosphor-icons/react';
+import { InfoIcon } from '@phosphor-icons/react';
 import { CURRENT_APP_VERSION } from '@/data/appReleases.mjs';
 import BrandWordmark from './BrandWordmark';
 
-export default function ProductHeader({ onOpenAppInfo, appInfoTriggerRef, onOpenPhotos }) {
+// Branding only. New photo imports start from the layer list (Legg til bilder), not from the header.
+export default function ProductHeader({ onOpenAppInfo, appInfoTriggerRef }) {
   return (
     <header className="relative z-10 h-[76px] flex-none border-b border-gmi-border bg-gmi-surface px-3 py-2">
       <div className="flex h-full min-w-0 items-center justify-between gap-2">
         <BrandWordmark />
-        <button
-          type="button"
-          onClick={onOpenPhotos}
-          title="Importer bilder til nytt fotokartlag"
-          aria-haspopup="dialog"
-          className="gmi-compact-button gmi-focus-ring inline-flex min-h-9 flex-none items-center gap-1 border border-gmi-border-strong px-2 text-xs font-medium"
-        >
-          <ImagesIcon size={16} aria-hidden="true" />Bilder
-        </button>
         <button
           ref={appInfoTriggerRef}
           type="button"

@@ -1,14 +1,15 @@
 'use client';
 
 import { Fragment, useEffect, useId, useRef, useState } from 'react';
-import { CaretDownIcon, ExportIcon, InfoIcon, ListChecksIcon, MapPinAreaIcon, PencilSimpleIcon, PlusIcon, TrashIcon, WrenchIcon } from '@phosphor-icons/react';
+import { ArrowsOutCardinalIcon, CaretDownIcon, ExportIcon, InfoIcon, ListChecksIcon, MapPinAreaIcon, PlusIcon, TrashIcon, WrenchIcon } from '@phosphor-icons/react';
+import { usePhotoIconTooltip } from './PhotoIconButton';
 
 // Workspace- and layer-level tools only. Photo-specific actions (Rediger opptaksdata…) stay in the inspector.
 // Labels ending in … open a dialog or workflow; labels without it change mode or show information.
 export const PHOTO_WORKSPACE_TOOLS = Object.freeze([
   { group: 'Bilder', items: [
     { key: 'add', label: 'Legg til bilder…', icon: PlusIcon },
-    { key: 'edit', label: 'Rediger bilder', icon: PencilSimpleIcon, needsPhotos: true },
+    { key: 'edit', label: 'Juster plassering og retning', icon: ArrowsOutCardinalIcon, needsPhotos: true },
   ] },
   { group: 'Posisjoner og kilder', items: [
     { key: 'sources', label: 'Koble og posisjoner bilder…', icon: MapPinAreaIcon, needsPhotos: true },
@@ -27,6 +28,7 @@ export default function PhotoWorkspaceToolsMenu({ occurrenceCount, onSelect }) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const triggerRef = useRef(null), menuRef = useRef(null);
+  usePhotoIconTooltip(triggerRef, 'Verktøy', 'Verktøy');
   const items = () => Array.from(menuRef.current?.querySelectorAll('[role=menuitem]') || []);
   const close = (restoreFocus = true) => { setOpen(false); if (restoreFocus) triggerRef.current?.focus(); };
 
@@ -54,11 +56,13 @@ export default function PhotoWorkspaceToolsMenu({ occurrenceCount, onSelect }) {
   };
 
   return <div className="photo-tools-menu">
+    {/* Icon-only trigger: the name and tooltip carry «Verktøy»; the chevron shows that it opens a menu. */}
     <button ref={triggerRef} type="button" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined}
+      aria-label="Verktøy" data-icon-tooltip="Verktøy"
       className={`photo-tools-trigger gmi-compact-button gmi-focus-ring${open ? ' gmi-selected-control' : ''}`}
       onClick={() => setOpen((value) => !value)}
       onKeyDown={(event) => { if (event.key === 'ArrowDown' && !open) { event.preventDefault(); setOpen(true); } }}>
-      <WrenchIcon size={16} weight="regular" aria-hidden="true" /><span>Verktøy</span><CaretDownIcon size={12} weight="regular" aria-hidden="true" />
+      <WrenchIcon size={18} weight="regular" aria-hidden="true" /><CaretDownIcon size={12} weight="regular" aria-hidden="true" />
     </button>
     {open && <div ref={menuRef} id={menuId} role="menu" aria-label="Verktøy for fotolaget" className="photo-tools-popup gmi-elevated-surface" onKeyDown={onMenuKeyDown}>
       {PHOTO_WORKSPACE_TOOLS.map((group, groupIndex) => <Fragment key={group.group}>

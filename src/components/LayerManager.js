@@ -10,7 +10,7 @@ import usePhotoSession from './photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { getWorkspaceLayerEntries } from '@/lib/layerPresentation.mjs';
 import fieldsData from '@/data/fields.json';
-import { CaretDownIcon, PlusIcon } from '@phosphor-icons/react';
+import { CaretDownIcon, ImagesIcon, PlusIcon } from '@phosphor-icons/react';
 
 /**
  * LayerManager - Manages multiple file layers
@@ -20,7 +20,7 @@ import { CaretDownIcon, PlusIcon } from '@phosphor-icons/react';
  * - Add file button
  * - Expandable LayerPanel for each layer
  */
-export default function LayerManager({ onAddFile, onOpenPhotoLayer, onAddGmiPhotos, onOpenGemini }) {
+export default function LayerManager({ onAddFile, onAddPhotos, onOpenPhotoLayer, onAddGmiPhotos, onOpenGemini }) {
   const { photoLayers } = usePhotoSession();
   const layers = useStore((state) => state.layers);
   const layerOrder = useStore(
@@ -222,17 +222,28 @@ export default function LayerManager({ onAddFile, onOpenPhotoLayer, onAddGmiPhot
         )}
       </div>
 
-      {/* Add file button */}
+      {/* Two different imports: an ordinary survey file, or photos into a NEW FOTO layer.
+          Appending to an existing FOTO layer stays in that layer's workspace (Verktøy → Legg til bilder…). */}
       <div
-        className="border-t border-gmi-border bg-gmi-surface px-3 py-2"
+        className="layer-manager-add-actions border-t border-gmi-border bg-gmi-surface px-3 py-2"
       >
         <button
+          type="button"
           onClick={onAddFile}
-          className="gmi-compact-button gmi-focus-ring flex w-full items-center justify-center gap-2 border border-gmi-border-strong bg-gmi-surface px-3 py-2 text-xs font-medium"
+          className="gmi-compact-button gmi-focus-ring flex min-w-0 flex-1 items-center justify-center gap-1.5 border border-gmi-border-strong bg-gmi-surface px-2 py-2 text-xs font-medium"
         >
-          <PlusIcon size={16} weight="regular" aria-hidden="true" />
-          Legg til fil
+          <PlusIcon size={16} weight="regular" aria-hidden="true" className="shrink-0" />
+          <span className="truncate">Legg til fil</span>
         </button>
+        {onAddPhotos && <button
+          type="button"
+          onClick={(event) => onAddPhotos(event)}
+          aria-haspopup="dialog"
+          className="gmi-compact-button gmi-focus-ring flex min-w-0 flex-1 items-center justify-center gap-1.5 border border-gmi-border-strong bg-gmi-surface px-2 py-2 text-xs font-medium"
+        >
+          <ImagesIcon size={16} weight="regular" aria-hidden="true" className="shrink-0" />
+          <span className="truncate">Legg til bilder</span>
+        </button>}
       </div>
     </div>
   );

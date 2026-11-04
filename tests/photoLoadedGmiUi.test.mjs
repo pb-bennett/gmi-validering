@@ -38,7 +38,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
       input.files=transfer.files; input.dispatchEvent(new Event('change',{bubbles:true}));
     })()`);
     const openEntry = async () => {
-      await browser.evaluate(`document.querySelector('button[aria-label="Legg til bilder fra Synthetic delivery.gmi"]').click()`);
+      await browser.evaluate(`document.querySelector('button[aria-label="Koble bilder til GMI-laget"]').click()`);
       await browser.waitFor('document.querySelector("dialog.photo-collection-dialog") && !document.body.innerText.includes("Klargjør bildereferanser")');
     };
     try {
@@ -61,8 +61,8 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
       await browser.waitFor('document.querySelector("button[aria-label=Lukk]")');
       await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
       await setPhotoFiles(browser, 'input[type=file]', [source]);
-      await browser.waitFor('document.querySelector("button[aria-label=\\\"Legg til bilder fra Synthetic delivery.gmi\\\"]")');
-      const inspectorFact = (section, term) => `Array.from(document.querySelectorAll('.photo-workspace-inspector section[aria-label=${section}] dt')).find((e) => e.innerText === ${JSON.stringify(term)})?.nextElementSibling.innerText.trim()`;
+      await browser.waitFor('document.querySelector("button[aria-label=\\\"Koble bilder til GMI-laget\\\"]")');
+      const inspectorFact = (section, term) => `Array.from(document.querySelectorAll('.photo-workspace-inspector section[aria-label=${section}] dt')).find((e) => e.textContent === ${JSON.stringify(term)})?.nextElementSibling.textContent.trim()`;
       const repeatedRows = () => browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).filter((li) => /^a\\.png, .*plassering \\d av \\d/.test(li.querySelector('.photo-workspace-row').getAttribute('aria-label'))).map((li) => li.dataset.photoId)`);
       const selectRow = (id) => browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] .photo-workspace-row').click()`);
       const metadataDialog = 'document.querySelector(".photo-metadata-dialog[open]")';
@@ -85,7 +85,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await browser.waitFor(`!${metadataDialog}`);
       };
       const setDirection = async (degrees) => {
-        await clickSourceControl(browser, 'Rediger bilder', 'document');
+        await clickSourceControl(browser, 'Juster plassering og retning', 'document');
         await browser.waitFor('document.querySelector(".photo-edit-command-bar")');
         await browser.evaluate(`(() => { const input = document.querySelector('.photo-edit-command-bar input[type=number]'); input.focus();
           Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(String(degrees))}); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
@@ -96,7 +96,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await browser.waitFor('!document.querySelector(".photo-edit-command-bar")');
       };
       await t.test('ordinary loaded GMI exposes a usable photo action; reference state is connected through the real form', async () => {
-        assert.equal(await browser.evaluate('document.querySelector("button[aria-label=\\\"Legg til bilder fra Synthetic delivery.gmi\\\"]").disabled'), false);
+        assert.equal(await browser.evaluate('document.querySelector("button[aria-label=\\\"Koble bilder til GMI-laget\\\"]").getAttribute("aria-disabled")'), null);
         await browser.evaluate('document.querySelector("button[aria-label=\\\"Åpne Gemini WFS\\\"]").click()');
         await browser.waitFor('document.querySelector("#gemini-wfs-url")');
         await browser.evaluate(`(() => {const form=document.querySelector('#gemini-va-connection-form');
@@ -169,7 +169,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await click(browser,'Lukk eksport',scope);
         await selectRow(rows[0]);
         await browser.waitFor(`${inspectorFact('Opptak', 'Opptakstid')} === '02.01.2025 01:02:03 · tidssone ukjent'`);
-        assert.equal(await browser.evaluate(inspectorFact('Opptak', 'Kilde')), 'Manuell');
+        assert.equal(await browser.evaluate(inspectorFact('Opptak', 'Opptakstid fra')), 'Manuell');
         assert.equal(await browser.evaluate(inspectorFact('Plassering', 'Retning')), '90° Ø');
         await selectRow(rows[1]);
         await browser.waitFor(`${inspectorFact('Plassering', 'Retning')} === '359,875° N'`);
@@ -190,7 +190,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await accepted('photographer', 'Manual Artist'); await accepted('captureTime', '01.06.2026 10:20:30 (+02:00)');
         await editMetadata({ time: 'evidence:', name: 'evidence:' });
         await accepted('captureTime', '12.05.2026 14:33:02 · tidssone ukjent'); await accepted('photographer', 'Synthetic Artist');
-        assert.equal(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('section[aria-label=Opptak] dt')).filter((e) => e.innerText === 'Kilde').map((e) => e.nextElementSibling.innerText).join('|')`), 'EXIF DateTimeOriginal|EXIF Artist');
+        assert.equal(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('section[aria-label=Opptak] dt')).filter((e) => /^(Opptakstid|Fotograf) fra$/.test(e.textContent)).map((e) => e.nextElementSibling.textContent).join('|')`), 'EXIF DateTimeOriginal|EXIF Artist');
         await editMetadata({ time: 'remove', name: 'remove' });
         await accepted('captureTime', 'Ikke angitt'); await accepted('photographer', 'Ikke angitt');
         const allRows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(li=>li.dataset.photoId)`);

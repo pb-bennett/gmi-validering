@@ -1,10 +1,13 @@
+// Automatic survey colours, in assignment order. Orange first and violet last: the Gemini WFS
+// reference uses an indigo halo, so the first GMI layers must stay clearly distinct from it.
+// Only new layers read this order; existing or manually chosen colours are never rewritten.
 export const LAYER_HIGHLIGHT_PALETTE = [
-  '#D946EF',
   '#F59E0B',
   '#00BFD8',
-  '#8B5CF6',
-  '#14B8A6',
+  '#D946EF',
   '#64748B',
+  '#14B8A6',
+  '#8B5CF6',
 ];
 
 export const DEFAULT_HIGHLIGHT_OPACITY = 0.55;

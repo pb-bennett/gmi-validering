@@ -13,37 +13,43 @@ import { photoMarkerIcon } from './photoMarkerIcons';
 const PREVIEW_DELAY_MS = 250;
 const hoverCapable = () => typeof window !== 'undefined' && window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
-export function photoMarkerLabel(photo) {
+export function photoMarkerLabel(photo, stackCount = 1) {
   const source = photoPositionSourcePresentation(photoPositionSourceKind(photo));
   const filename = photo?.originalFilename || 'Bilde';
   const context = photo?.repeatGroup?.occurrenceCount > 1
     ? ` · plassering ${photo.repeatGroup.occurrenceIndex} av ${photo.repeatGroup.occurrenceCount}${photo.occurrence ? ` · ${gmiObjectLabel(photo.occurrence.object)}` : ''}` : '';
   const direction = photo?.direction?.current ? ` · retning ${photoDirectionLabel(photo.direction.current.degrees)}` : '';
-  return `Vis bilde: ${filename}${context} · plassering: ${source.label}${direction}`;
+  const stack = stackCount > 1 ? ` · ${stackCount} bilder på samme sted` : '';
+  return `Vis bilde: ${filename}${context} · plassering: ${source.label}${direction}${stack}`;
 }
 
 // The presentation model is derived once per render from already-built photos: no session lookups per marker.
+// Exact-coordinate stacks are grouped per FOTO layer (workspace and main map alike). In Edit mode the selected
+// occurrence is drawn by PhotoEditLayer instead; it still counts as a stack member and carries the stack badge
+// there, so no hidden member below it shows a second, smaller count.
 function markerModels(items, workspace, thumbnails) {
   const stacks = new Map();
-  const workspaceItems = workspace ? items.filter((item) => item.layerId === workspace.layerId && item.photo.id !== workspace.hiddenPhotoId) : [];
-  for (const item of workspaceItems) {
+  for (const item of items) {
+    if (workspace && item.layerId !== workspace.layerId) continue;
     const [lng, lat] = item.feature.geometry.coordinates;
-    const key = `${lat}|${lng}`;
+    const key = `${item.layerId}|${lat}|${lng}`;
     if (!stacks.has(key)) stacks.set(key, []);
     stacks.get(key).push(item.photo);
   }
   const stackTop = new Map();
   for (const [key, members] of stacks) {
     if (members.length < 2) continue;
-    stackTop.set(key, members.find((photo) => photo.id === workspace.photoId) || members.findLast((photo) => photo.staged) || members.at(-1));
+    if (workspace?.hiddenPhotoId && members.some((photo) => photo.id === workspace.hiddenPhotoId)) continue;
+    stackTop.set(key, members.find((photo) => photo.id === workspace?.photoId) || members.findLast((photo) => photo.staged) || members.at(-1));
   }
   return items.flatMap((item) => {
     const { layerId, photo, feature } = item;
     const inWorkspace = workspace?.layerId === layerId;
     if (inWorkspace && photo.id === workspace.hiddenPhotoId) return [];
     const [lng, lat] = feature.geometry.coordinates;
-    const members = inWorkspace ? stacks.get(`${lat}|${lng}`) : null;
-    const top = members && stackTop.get(`${lat}|${lng}`);
+    const stackKey = `${layerId}|${lat}|${lng}`;
+    const members = stacks.get(stackKey) || null;
+    const top = members && stackTop.get(stackKey);
     const selected = inWorkspace && photo.id === workspace.photoId;
     const options = {
       sourceKind: photoPositionSourceKind(photo), selected, degrees: photo.direction?.current?.degrees ?? null,
@@ -52,20 +58,23 @@ function markerModels(items, workspace, thumbnails) {
       stackCount: top === photo ? members.length : 1, editing: false,
       thumbnailUrl: photo.preview?.thumbnailUrl || null,
     };
-    const mode = inWorkspace && thumbnails ? 'thumbnails' : 'markers';
+    // Workspace: miniatures for the workspace layer only. Main map: for every visible FOTO layer.
+    const mode = thumbnails && (!workspace || inWorkspace) ? 'thumbnails' : 'markers';
     return [{ markerKey: feature.id, layerId, photoId: photo.id, lat, lng, mode, icon: photoMarkerIcon(mode, options),
       zIndexOffset: selected ? 1000 : photo.staged ? 500 : top === photo ? 100 : 0,
-      label: photoMarkerLabel(photo), inWorkspace,
+      label: photoMarkerLabel(photo, top === photo ? members.length : 1), inWorkspace,
       // Edit mode: other FOTO layers are context only, so no popup can switch layers by accident.
       interactive: !(workspace?.editing && !inWorkspace),
       stackIds: top === photo ? members.map((member) => member.id).join('\n') : '',
       thumbnailUrl: options.thumbnailUrl, filename: photo.originalFilename || 'Bilde',
-      popupPhoto: inWorkspace || workspace?.editing ? null : photo }];
+      // Main map: inspection only. A stack's popup pages through its members; it never edits.
+      popupPhoto: inWorkspace || workspace?.editing ? null : photo,
+      popupStack: !inWorkspace && !workspace?.editing && top === photo ? members : null }];
   });
 }
 
 const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat, lng, mode, icon, zIndexOffset, label, inWorkspace,
-  interactive, stackIds, thumbnailUrl, filename, popupPhoto, actions }) {
+  interactive, stackIds, thumbnailUrl, filename, popupPhoto, popupStack, actions }) {
   const ref = useRef(null);
   const position = useMemo(() => [lat, lng], [lat, lng]);
   const eventHandlers = useMemo(() => ({
@@ -105,16 +114,18 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
   return <Marker ref={ref} key={markerKey} position={position} pane={PHOTO_MARKER_PANE} icon={icon} zIndexOffset={zIndexOffset}
     interactive={interactive} keyboard={interactive} eventHandlers={eventHandlers}>
     {popupPhoto && <Popup pane="popupPane" maxWidth={230} minWidth={190}>
-      <PhotoMapPopup photo={popupPhoto} onOpen={() => actions.current.openPhoto(layerId, photoId)} />
+      <PhotoMapPopup photo={popupPhoto} stack={popupStack} onOpen={(shownId) => actions.current.openPhoto(layerId, shownId || photoId)} />
     </Popup>}
   </Marker>;
 });
 
-export default function PhotoMarkersLayer({ items, workspace = null, onOpenPhoto, onSelectPhoto }) {
+// displayMode: the shared Markører/Miniatyrer preference. In the workspace it applies to the workspace layer;
+// on the main map to every visible FOTO layer, with the same zoom-16 fallback to ordinary markers.
+export default function PhotoMarkersLayer({ items, workspace = null, displayMode = 'markers', onOpenPhoto, onSelectPhoto }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
-  const thumbnails = Boolean(workspace) && photoThumbnailsVisible(workspace.displayMode, zoom);
+  const thumbnails = photoThumbnailsVisible(workspace ? workspace.displayMode : displayMode, zoom);
   const models = markerModels(items, workspace, thumbnails);
   const actions = useRef(null);
   const preview = useRef({ tooltip: null, timer: null, element: null });
