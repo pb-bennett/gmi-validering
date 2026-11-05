@@ -5,7 +5,7 @@ import { createDisplayPreviewCache, DISPLAY_PREVIEW_JPEG_QUALITY, DISPLAY_PREVIE
 import { readExifGps } from './exifGps.mjs';
 import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, emptySpatial, immutable, isPhotoPosition, photoSpatialCounts } from './photoSpatial.mjs';
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
-import { acceptManualPhotoDirection, acceptEvidencePhotoDirection, emptyDirection, normalizePhotoDirection } from './photoDirection.mjs';
+import { acceptManualPhotoDirection, acceptEvidencePhotoDirection, emptyDirection, gmlDirectionEvidence, normalizePhotoDirection } from './photoDirection.mjs';
 import { planEvidenceAdoption } from './photoEvidenceAdoption.mjs';
 import { MANUAL_FILL_FIELDS, normalizeManualPhotoFill, planManualPhotoFill } from './photoManualFill.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
@@ -143,7 +143,8 @@ export function createPhotoSession({
       updateAsset(match.photoId, (live) => {
         if (live.spatial.candidates.some((item) => item.sourceId === source.id && item.sourceEntryId === entry.id)) return {};
         const spatial = Object.freeze({ ...live.spatial, candidates: Object.freeze([...live.spatial.candidates, candidate]) });
-        return { spatial, metadataEvidence: immutable([...live.metadataEvidence, ...gmlCaptureEvidence(source, entry)]) };
+        return { spatial, metadataEvidence: immutable([...live.metadataEvidence, ...gmlCaptureEvidence(source, entry)]),
+          directionEvidence: immutable([...live.directionEvidence, ...gmlDirectionEvidence(source, entry)]) };
       });
     }
     return immutable({ ...source, ledger });
@@ -262,7 +263,7 @@ export function createPhotoSession({
         try { result = await extractGps(record.file); }
         catch { result = { state: 'error', errorCode: 'gps-read-failed', candidate: null }; }
         if (!token.cancelled && updateAsset(job.id, (live) => ({
-          directionEvidence: immutable(result.directionEvidence || []),
+          directionEvidence: immutable([...live.directionEvidence.filter((item) => item.kind !== 'exif'), ...(result.directionEvidence || [])]),
           metadataEvidence: immutable([...live.metadataEvidence.filter((item) => item.kind !== 'exif'), ...(result.metadataEvidence || [])]),
           spatial: Object.freeze({
             ...live.spatial,
@@ -735,14 +736,15 @@ export function createPhotoSession({
       if (plan.targets.length) publish();
       return { ok: true, ...plan, counts: { ...plan.counts, adopted: plan.targets.length, invalidInput: 0 } };
     },
-    adoptSourceEvidence(layerId, field, kind = 'exif', photoIds = null) {
+    // includeZero is the explicit acceptance of GML 0°, which the default action never offers.
+    adoptSourceEvidence(layerId, field, kind = 'exif', photoIds = null, { includeZero = false } = {}) {
       if (!['captureTime', 'photographer', 'direction'].includes(field) || !['exif', 'gml'].includes(kind)) return { ok: false, error: 'invalid-field' };
       const members = layers.get(layerId)?.photoIds || [];
       const photos = members.map((id) => {
         const record = records.get(id), asset = assets.get(record.assetId);
         return { ...record, captureMetadata: asset.captureMetadata, metadataEvidence: asset.metadataEvidence, directionEvidence: asset.directionEvidence };
       });
-      const plan = planEvidenceAdoption(photos, field, kind, photoIds || members);
+      const plan = planEvidenceAdoption(photos, field, kind, photoIds || members, { includeZero });
       const acceptedAt = Date.now();
       for (const target of plan.targets) {
         if (field === 'direction') records.set(target.photoId, { ...records.get(target.photoId),
@@ -1000,7 +1002,7 @@ export function createPhotoSession({
         assets.set(id, {
           file, originalFilename: file.name, mimeType: file.type || null,
           size: file.size, lastModified: file.lastModified, importedAt: Date.now(), source: 'local-file',
-          dimensions: null, captureMetadata: emptyCaptureMetadata(), metadataEvidence: immutable([]),
+          dimensions: null, captureMetadata: emptyCaptureMetadata(), metadataEvidence: immutable([]), directionEvidence: immutable([]),
           sourceRelativePath: file.webkitRelativePath || null,
           spatial: emptySpatial(),
           preview: Object.freeze({ state: errorCode ? 'error' : 'pending', thumbnailUrl: null, errorCode }),

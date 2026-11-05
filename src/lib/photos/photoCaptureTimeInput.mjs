@@ -18,6 +18,10 @@ export function captureTimeFields(iso) {
   return { date, time: minutes ? `${minutes}:${seconds || '00'}` : '', zone: preset ? offset || '' : 'other', customOffset: preset ? '' : offset || '' };
 }
 
+// The time control needs seconds, so a minute-precision value prefills ":00". That prefill is a starting
+// point and no recorded second: while the field still shows it, saving would invent the seconds.
+export const hasPlaceholderSeconds = (value, fields) => value?.precision === 'minute' && fields.time === captureTimeFields(value.iso).time;
+
 // Returns { ok, value } where value is the canonical normalized capture time, or { ok:false, error }.
 export function composeCaptureTime({ date = '', time = '', zone = '', customOffset = '' }) {
   if (!date) return { ok: false, error: 'missing-date' };

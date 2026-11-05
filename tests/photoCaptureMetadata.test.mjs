@@ -135,9 +135,33 @@ test('EXIF uncertainty is retained raw, local original time stays local, unrelat
   assert.equal(evidence[1].value, 'Kari Nordmann');
   assert.equal(evidence[1].raw, '  Kari   Nordmann ');
   assert.equal(evidence.length, 2);
-  for (const tags of [{ DateTimeOriginal: '2026:02:30 10:00:00' }, { DateTimeOriginal: '2026:05:12 14:33:02', OffsetTimeOriginal: '?' }, { DateTimeOriginal: '2026:05:12 14:33:02', SubSecTimeOriginal: 'abc' }]) {
+  for (const tags of [{ DateTimeOriginal: '2026:02:30 10:00:00' }, { DateTimeOriginal: '2026:02:30 10:00:00', SubSecTimeOriginal: '12', OffsetTimeOriginal: '+02:00' }, { DateTimeOriginal: 'uncertain' }]) {
     const [item] = exifCaptureEvidence(tags);
-    assert.equal(item.value, null); assert.deepEqual(item.raw, tags);
+    assert.equal(item.value, null); assert.deepEqual(item.raw, tags); assert.deepEqual(item.issues, []);
   }
   assert.deepEqual(exifCaptureEvidence({ DateTime: '2026:05:12 14:33:02', OwnerName: 'Not photographer' }), []);
+});
+
+// D5: a valid clock survives a malformed supplementary tag. That information becomes unknown and nothing is invented.
+for (const [name, extra, iso, precision, offset, issues] of [
+  ['malformed offset', { OffsetTimeOriginal: '?' }, '2026-05-12T14:33:02', 'second', null, ['invalid-offset']],
+  ['placeholder offset', { OffsetTimeOriginal: '  :  ' }, '2026-05-12T14:33:02', 'second', null, ['invalid-offset']],
+  ['out-of-range offset', { OffsetTimeOriginal: '+99:00' }, '2026-05-12T14:33:02', 'second', null, ['invalid-offset']],
+  ['malformed subsecond', { SubSecTimeOriginal: 'abc' }, '2026-05-12T14:33:02', 'second', null, ['invalid-subsecond']],
+  ['both malformed', { SubSecTimeOriginal: 'abc', OffsetTimeOriginal: '?' }, '2026-05-12T14:33:02', 'second', null, ['invalid-subsecond', 'invalid-offset']],
+  ['good subsecond, malformed offset', { SubSecTimeOriginal: '012', OffsetTimeOriginal: '?' }, '2026-05-12T14:33:02.012', 'fraction', null, ['invalid-offset']],
+  ['malformed subsecond, good offset', { SubSecTimeOriginal: 'abc', OffsetTimeOriginal: '+02:00' }, '2026-05-12T14:33:02+02:00', 'second', '+02:00', ['invalid-subsecond']],
+  ['good tags', { SubSecTimeOriginal: '012', OffsetTimeOriginal: '+02:00' }, '2026-05-12T14:33:02.012+02:00', 'fraction', '+02:00', []],
+]) test(`EXIF ${name}: the clock is kept, what is unknown is marked, and raw tags stay`, () => {
+  const tags = { DateTimeOriginal: '2026:05:12 14:33:02', ...extra };
+  const [item] = exifCaptureEvidence(tags);
+  assert.equal(item.value.iso, iso); assert.equal(item.value.precision, precision);
+  assert.equal(item.value.offset, offset); assert.equal(item.value.timezoneKnown, Boolean(offset));
+  assert.deepEqual(item.issues, issues); assert.deepEqual(item.raw, tags);
+});
+
+test('EXIF supplementary tags cannot extend a clock that is too coarse to carry them', () => {
+  const [dateOnly] = exifCaptureEvidence({ DateTimeOriginal: '2026-05-12', SubSecTimeOriginal: '5', OffsetTimeOriginal: '+02:00' });
+  assert.equal(dateOnly.value.iso, '2026-05-12'); assert.equal(dateOnly.value.precision, 'date');
+  assert.deepEqual(dateOnly.issues, ['invalid-subsecond', 'invalid-offset']);
 });

@@ -12,7 +12,7 @@ import { photoPositionDistance } from '@/lib/photos/photoPositioning.mjs';
 import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
 import { gmiPhotoAssociations } from '@/lib/photos/gmiPhotoSource.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
-import { formatPhotoCaptureTime, formatPhotoCoordinates, formatPhotoMoveDistance, photoDirectionSourceLabel, photoMetadataConflict,
+import { formatPhotoCaptureTime, formatPhotoCoordinates, formatPhotoMoveDistance, photoCaptureTimeStatus, photoDirectionEvidenceText, photoDirectionSourceLabel, photoMetadataConflict,
   photoMetadataSourceLabel, photoPlacementBasisLabel, photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoIconButton from './PhotoIconButton';
 import './photoCollectionPanel.css';
@@ -129,7 +129,7 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
     <ul className="photo-inspector-chips" aria-label="Oppsummering">
       <li>{placed ? <><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />Plassert · {source.label}</> : 'Uplassert'}</li>
       <li>{direction ? `Retning ${photoDirectionLabel(direction.degrees)}` : 'Uten retning'}</li>
-      <li>{capture.captureTime ? 'Opptakstid kjent' : 'Uten opptakstid'}</li>
+      <li>{photoCaptureTimeStatus(photo)}</li>
       {editing && staged && <li className="photo-inspector-chip-staged">Endret – ikke lagret</li>}
     </ul>
 
@@ -179,9 +179,8 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
         </div>)}
         {!photo.spatial.candidates.length && <p>Ingen kildeposisjoner er registrert.</p>}
       </Disclosure>
-      {photo.directionEvidence?.length > 0 && <Disclosure id="direction-evidence" summary="Retningsdata fra bildet">
-        {photo.directionEvidence.map((item) => <p key={item.id}><code>{JSON.stringify(item.raw)}</code> · {item.status === 'usable' ? `${item.value}° fra geografisk nord`
-          : item.status === 'unsupported-reference' ? 'Ukjent eller magnetisk referanse; krever gjennomgang.' : 'Ugyldig retningsverdi.'}</p>)}
+      {photo.directionEvidence?.length > 0 && <Disclosure id="direction-evidence" summary="Retningsdata fra kilder">
+        {photo.directionEvidence.map((item) => <p key={item.id}><code>{JSON.stringify(item.raw)}</code> · {photoDirectionEvidenceText(item)}</p>)}
       </Disclosure>}
     </Section>
 

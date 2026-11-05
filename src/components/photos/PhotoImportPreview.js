@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowsOutIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPreviewMessage } from '@/lib/photos/imagePreview.mjs';
+import { formatPhotoCaptureTime } from '@/lib/photos/photoPresentation.mjs';
 import PhotoImageViewer from './PhotoImageViewer';
 const formatSize = (size) => `${(size / 1024).toLocaleString('nb-NO', { maximumFractionDigits: 1 })} kB`;
 export default function PhotoImportPreview({ photo, enableLargeView = true }) {
@@ -54,7 +55,7 @@ export default function PhotoImportPreview({ photo, enableLargeView = true }) {
         {photo.sourceRelativePath?.includes('/') && <div><dt>Mappe</dt><dd>{photo.sourceRelativePath.slice(0, photo.sourceRelativePath.lastIndexOf('/'))}</dd></div>}
         <div><dt>Størrelse</dt><dd>{formatSize(photo.size)}</dd></div>
         <div><dt>Oppløsning</dt><dd>{photo.dimensions ? `${photo.dimensions.width} × ${photo.dimensions.height} px` : 'Ikke tilgjengelig'}</dd></div>
-        {photo.metadataEvidence?.filter((item) => item.kind === 'exif' && ['captureTime', 'photographer'].includes(item.field)).map((item) => <div key={item.id}><dt>{item.field === 'captureTime' ? 'Tatt' : 'Fotograf'}</dt><dd>{item.field === 'captureTime' ? (item.value?.iso ? new Date(item.value.iso.replace(/Z$|[+-]\d{2}:\d{2}$/, '') + 'Z').toLocaleString('nb-NO', { timeZone: 'UTC' }) : '') : String(item.value)}</dd></div>)}
+        {photo.metadataEvidence?.filter((item) => item.kind === 'exif' && ['captureTime', 'photographer'].includes(item.field)).map((item) => <div key={item.id}><dt>{item.field === 'captureTime' ? 'Tatt' : 'Fotograf'}</dt><dd>{item.field === 'captureTime' ? formatPhotoCaptureTime(item.value)?.text ?? '' : String(item.value)}</dd></div>)}
         <div><dt>GPS</dt><dd>{photo.spatial.exifRead.state === 'pending' ? 'Leses …' : photo.spatial.candidates.some((item) => item.kind === 'exif' && item.status === 'viable') ? 'Har posisjon' : photo.spatial.exifRead.state === 'no-gps' ? 'Ingen posisjon' : 'Kan ikke brukes'}</dd></div>
         {photo.directionEvidence?.some((item) => item.status === 'usable') && <div><dt>Retning</dt><dd>Har kompassretning</dd></div>}
       </dl>}

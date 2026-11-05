@@ -20,8 +20,41 @@ export function normalizeCaptureTime(input) {
     timezoneKnown: Boolean(zone), offset: zone || null });
 }
 
+// The recorded clock to whole seconds. Subseconds never decide agreement, because a source may simply
+// not carry them, and nothing here reads the host timezone or converts between offsets.
+const wallClock = (value) => value.iso.replace(/(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/, '');
+const zone = (value) => value.offset?.replace(/^[+-]00:00$/, 'Z') ?? null;
+
+// Agreement is the same clock at the lower precision of the two, with no known difference in offset.
+// 12:33:02Z and 14:33:02+02:00 are the same instant but stay distinct: their exported clocks differ.
+export function captureTimesAgree(a, b) {
+  const clocks = [wallClock(a), wallClock(b)], zones = [zone(a), zone(b)];
+  return (clocks[0].startsWith(clocks[1]) || clocks[1].startsWith(clocks[0]))
+    && (!zones[0] || !zones[1] || zones[0] === zones[1]);
+}
+
+// Every pair must agree. Agreement is not transitive: +01:00 and +02:00 can both match an unknown
+// offset, and 14:33:02 and 14:33:03 can both match 14:33, without matching each other.
+export const allCaptureTimesAgree = (values) => values.every((value, index) =>
+  values.slice(index + 1).every((other) => captureTimesAgree(value, other)));
+
 export function normalizePhotographer(input) {
   return typeof input === 'string' ? input.replace(/\s+/gu, ' ').trim() || null : null;
+}
+
+// A valid DateTimeOriginal survives a malformed supplementary tag. The clock then simply knows less:
+// no offset means timezone unknown, no subsecond means second precision. Raw tags stay with the evidence.
+function exifCaptureValue(clock, subsecond, offset) {
+  let value = normalizeCaptureTime(clock);
+  if (!value) return { value: null, issues: [] };
+  const issues = [];
+  const extend = (suffix, valid, issue) => {
+    const extended = valid ? normalizeCaptureTime(`${value.iso}${suffix}`) : null;
+    if (extended) value = extended; else issues.push(issue);
+  };
+  if (subsecond !== undefined) extend(`.${subsecond}`, /^\d{1,9}$/.test(String(subsecond)), 'invalid-subsecond');
+  if (offset !== undefined) extend(offset, /^(Z|[+-]\d{2}:\d{2})$/.test(String(offset)), 'invalid-offset');
+  return { value, issues };
 }
 
 export function exifCaptureEvidence(tags = {}) {
@@ -29,11 +62,7 @@ export function exifCaptureEvidence(tags = {}) {
   if (tags.DateTimeOriginal !== undefined) {
     const raw = Object.fromEntries(['DateTimeOriginal', 'SubSecTimeOriginal', 'OffsetTimeOriginal'].filter((key) => tags[key] !== undefined).map((key) => [key, tags[key]]));
     const base = typeof tags.DateTimeOriginal === 'string' ? tags.DateTimeOriginal.trim().replace(/^(\d{4}):(\d{2}):(\d{2}) /, '$1-$2-$3T') : '';
-    const sub = tags.SubSecTimeOriginal;
-    const offset = tags.OffsetTimeOriginal;
-    const validExtras = (sub === undefined || /^\d{1,9}$/.test(String(sub))) && (offset === undefined || /^(Z|[+-]\d{2}:\d{2})$/.test(String(offset)));
-    const value = validExtras ? normalizeCaptureTime(`${base}${sub === undefined ? '' : `.${sub}`}${offset === undefined ? '' : offset}`) : null;
-    evidence.push({ id: 'exif:captureTime', field: 'captureTime', kind: 'exif', tag: 'DateTimeOriginal', raw, value });
+    evidence.push({ id: 'exif:captureTime', field: 'captureTime', kind: 'exif', tag: 'DateTimeOriginal', raw, ...exifCaptureValue(base, tags.SubSecTimeOriginal, tags.OffsetTimeOriginal) });
   }
   if (tags.Artist !== undefined) evidence.push({ id: 'exif:photographer', field: 'photographer', kind: 'exif', tag: 'Artist', raw: tags.Artist, value: normalizePhotographer(tags.Artist) });
   return immutable(evidence);

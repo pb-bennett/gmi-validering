@@ -29,9 +29,25 @@ export function exifDirectionEvidence(tags = {}) {
     value: status === 'usable' ? (degrees === 360 ? 0 : degrees) : null }]);
 }
 
+// Unit 1 and reference 1 are clockwise degrees from geographic north, the only form used without conversion.
+// A value of exactly 0 is kept apart as usable-zero: it can be genuine north, or what a source system wrote
+// because no direction was recorded. An absent direction yields no evidence, never a zero.
+export function gmlDirectionEvidence(source, entry) {
+  const raw = entry.raw?.direction;
+  if (!raw || [raw.valueText, raw.unitText, raw.referenceText].every((text) => text === null || text === undefined)) return immutable([]);
+  const text = raw.valueText?.trim();
+  const degrees = /^\d+(?:\.\d+)?$/.test(text ?? '') ? normalizeExactPhotoDirection(Number(text)) : null;
+  const verified = raw.unitText?.trim() === '1' && raw.referenceText?.trim() === '1';
+  const status = degrees === null ? 'invalid' : !verified ? 'unsupported-reference' : degrees === 0 ? 'usable-zero' : 'usable';
+  return immutable([{ id: `${source.id}:${entry.id}:direction`, field: 'direction', kind: 'gml', tag: 'retningsverdi',
+    sourceId: source.id, sourceFilename: source.filename, sourceEntryId: entry.id, raw, status,
+    value: status.startsWith('usable') ? degrees : null }]);
+}
+
 export function acceptEvidencePhotoDirection(evidence, agreeingEvidence = [evidence], acceptedAt = Date.now()) {
   return immutable({ current: { degrees: evidence.value, basis: { kind: evidence.kind, evidenceId: evidence.id,
-    tag: evidence.tag, raw: evidence.raw, evidence: agreeingEvidence }, acceptance: 'source', acceptedAt } });
+    tag: evidence.tag, raw: evidence.raw, ...(evidence.sourceId ? { sourceId: evidence.sourceId, sourceFilename: evidence.sourceFilename,
+      sourceEntryId: evidence.sourceEntryId } : {}), evidence: agreeingEvidence }, acceptance: 'source', acceptedAt } });
 }
 
 // Norwegian compass sectors of 45°, clockwise from geographic north.

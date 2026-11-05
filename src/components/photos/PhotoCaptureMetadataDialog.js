@@ -3,14 +3,15 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { normalizePhotographer } from '@/lib/photos/photoCaptureMetadata.mjs';
-import { captureTimeFields, composeCaptureTime } from '@/lib/photos/photoCaptureTimeInput.mjs';
+import { captureTimeFields, composeCaptureTime, hasPlaceholderSeconds } from '@/lib/photos/photoCaptureTimeInput.mjs';
 import { formatPhotoCaptureTime, photoMetadataSourceLabel, photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoCaptureTimeField from './PhotoCaptureTimeField';
 
 const button = 'gmi-compact-button gmi-focus-ring min-h-9 border px-3 py-1.5 text-sm font-medium';
 const timeText = (value) => formatPhotoCaptureTime(value)?.text || value?.iso || '';
 const TIME_ERRORS = { 'missing-date': 'Velg en dato.', 'invalid-offset': 'Skriv forskyvningen som +HH:MM eller −HH:MM.',
-  'offset-without-time': 'Tidssone krever klokkeslett.', 'invalid-value': 'Ugyldig dato eller klokkeslett.' };
+  'offset-without-time': 'Tidssone krever klokkeslett.', 'invalid-value': 'Ugyldig dato eller klokkeslett.',
+  'missing-seconds': 'Kilden har ikke sekunder. Oppgi sekunder.' };
 
 // The initial choice reflects the accepted value: the matching evidence, or "Annen verdi" for a manual value.
 function initialChoice(accepted, evidence) {
@@ -35,13 +36,16 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
   const timeEvidence = (photo.metadataEvidence || []).filter((item) => item.field === 'captureTime');
   const nameEvidence = (photo.metadataEvidence || []).filter((item) => item.field === 'photographer');
   const [timeChoice, setTimeChoice] = useState(() => initialChoice(accepted.captureTime, timeEvidence));
-  const [timeFields, setTimeFields] = useState(() => captureTimeFields(accepted.captureTime?.value.iso || timeEvidence.find((item) => item.value)?.value.iso));
+  const timePrefill = accepted.captureTime?.value || timeEvidence.find((item) => item.value)?.value;
+  const [timeFields, setTimeFields] = useState(() => captureTimeFields(timePrefill?.iso));
+  const [timeEdited, setTimeEdited] = useState(false);
   const [nameChoice, setNameChoice] = useState(() => initialChoice(accepted.photographer, nameEvidence));
   const [nameText, setNameText] = useState(() => accepted.photographer?.value || nameEvidence.find((item) => item.value)?.value || '');
   const [errors, setErrors] = useState({});
   // Untouched fields are never written, so Save alone can never turn evidence provenance into "manual".
   const [touched, setTouched] = useState({});
   const touch = (field, setter) => (value) => { setTouched((previous) => ({ ...previous, [field]: true })); setter(value); };
+  const changeTimeFields = touch('captureTime', (fields) => { if (fields.time !== timeFields.time) setTimeEdited(true); setTimeFields(fields); });
 
   useEffect(() => {
     const dialog = ref.current, opener = document.activeElement;
@@ -59,6 +63,7 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
       return { write: current?.provenance?.evidenceId === evidenceId ? null : { input: null, evidenceId } };
     }
     if (field === 'captureTime') {
+      if (!timeEdited && hasPlaceholderSeconds(timePrefill, manualInput)) return { error: TIME_ERRORS['missing-seconds'] };
       const composed = composeCaptureTime(manualInput);
       if (!composed.ok) return { error: TIME_ERRORS[composed.error] };
       const same = current?.provenance?.kind === 'manual' && current.value.iso === composed.value.iso;
@@ -96,7 +101,7 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
             {photoSourceLabel(evidence.kind)}{evidence.sourceFilename ? ` · ${evidence.sourceFilename}` : ''}: {evidence.value ? timeText(evidence.value) : `${typeof evidence.raw === 'string' ? evidence.raw : JSON.stringify(evidence.raw)} (kan ikke tolkes sikkert)`}
           </Choice>)}
           <Choice name={`${id}-time`} value="other" checked={timeChoice === 'other'} onChange={touch('captureTime', setTimeChoice)}>Annen verdi</Choice>
-          {timeChoice === 'other' && <PhotoCaptureTimeField value={timeFields} onChange={touch('captureTime', setTimeFields)} error={errors.captureTime} />}
+          {timeChoice === 'other' && <PhotoCaptureTimeField value={timeFields} onChange={changeTimeFields} error={errors.captureTime} />}
           {accepted.captureTime && <Choice name={`${id}-time`} value="remove" checked={timeChoice === 'remove'} onChange={touch('captureTime', setTimeChoice)} className="photo-metadata-remove">
             Fjern godtatt opptakstid <span className="photo-metadata-consequence">Kan blokkere eksport for Legacy og AsBuilt.</span>
           </Choice>}

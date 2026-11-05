@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { captureTimeFields, composeCaptureTime, CAPTURE_TIMEZONE_OPTIONS } from '../src/lib/photos/photoCaptureTimeInput.mjs';
+import { captureTimeFields, composeCaptureTime, CAPTURE_TIMEZONE_OPTIONS, hasPlaceholderSeconds } from '../src/lib/photos/photoCaptureTimeInput.mjs';
 import { normalizeCaptureTime } from '../src/lib/photos/photoCaptureMetadata.mjs';
-import { formatPhotoCaptureTime, formatPhotoCoordinates, formatPhotoMoveDistance, photoDirectionSourceLabel, photoMetadataConflict,
+import { formatPhotoCaptureTime, formatPhotoCoordinates, formatPhotoMoveDistance, photoCaptureTimeStatus, photoDirectionSourceLabel, photoMetadataConflict,
   photoMetadataSourceLabel, photoPlacementBasisLabel } from '../src/lib/photos/photoPresentation.mjs';
 import { resolvePhotoLocate } from '../src/lib/photos/photoMapFeatures.mjs';
 
@@ -15,6 +15,37 @@ test('capture time is shown exactly as recorded, with precision and unknown-time
   assert.deepEqual(formatPhotoCaptureTime(normalizeCaptureTime('2026-05-12')), { text: '12.05.2026', notes: ['bare dato'] });
   assert.equal(formatPhotoCaptureTime(normalizeCaptureTime('2026-09-17T10:30:02.125+02:00')).text, '17.09.2026 10:30:02,125 (+02:00)');
   assert.equal(formatPhotoCaptureTime(null), null);
+});
+
+test('the capture-time chip separates accepted, available in a source and unknown', () => {
+  const evidence = (value) => ({ field: 'captureTime', value: value ? normalizeCaptureTime(value) : null });
+  const accepted = { value: normalizeCaptureTime('2026-05-12T14:33:02'), provenance: { kind: 'manual' } };
+  assert.equal(photoCaptureTimeStatus({ captureMetadata: { captureTime: accepted }, metadataEvidence: [evidence('2026-05-12T14:33:03')] }), 'Opptakstid kjent');
+  assert.equal(photoCaptureTimeStatus({ captureMetadata: { captureTime: null }, metadataEvidence: [evidence('2026-05-12T14:33:02')] }), 'Opptakstid i kilde');
+  assert.equal(photoCaptureTimeStatus({ captureMetadata: { captureTime: null }, metadataEvidence: [evidence(null)] }), 'Uten opptakstid');
+  assert.equal(photoCaptureTimeStatus({ captureMetadata: { captureTime: null }, metadataEvidence: [{ field: 'photographer', value: 'Kari' }] }), 'Uten opptakstid');
+  assert.equal(photoCaptureTimeStatus({ captureMetadata: { captureTime: null }, metadataEvidence: [] }), 'Uten opptakstid');
+  assert.equal(photoCaptureTimeStatus({}), 'Uten opptakstid');
+});
+
+test('a minute-precision value has placeholder seconds until the time field changes', () => {
+  const minute = normalizeCaptureTime('2026-05-12T14:33');
+  const fields = captureTimeFields(minute.iso);
+  assert.equal(hasPlaceholderSeconds(minute, fields), true);
+  assert.equal(hasPlaceholderSeconds(minute, { ...fields, date: '2026-05-13', zone: '+02:00' }), true, 'other fields do not supply seconds');
+  assert.equal(hasPlaceholderSeconds(minute, { ...fields, time: '14:33:41' }), false);
+  assert.equal(hasPlaceholderSeconds(minute, { ...fields, time: '' }), false, 'clearing the time saves a date and invents nothing');
+  for (const iso of ['2026-05-12', '2026-05-12T14:33:00', '2026-05-12T14:33:02.5']) {
+    const value = normalizeCaptureTime(iso);
+    assert.equal(hasPlaceholderSeconds(value, captureTimeFields(iso)), false, iso);
+  }
+  assert.equal(hasPlaceholderSeconds(undefined, fields), false);
+});
+
+test('the import preview uses the shared capture-time formatter, with no host-date conversion', async () => {
+  const preview = await readFile(new URL('../src/components/photos/PhotoImportPreview.js', import.meta.url), 'utf8');
+  assert(preview.includes('formatPhotoCaptureTime(item.value)'));
+  assert(!preview.includes('toLocaleString(\'nb-NO\', { timeZone'));
 });
 
 test('native date/time/timezone fields round-trip; Unknown is the default and offsets are never guessed', () => {

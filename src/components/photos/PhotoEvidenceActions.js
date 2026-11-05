@@ -7,7 +7,7 @@ import PhotoManualFillActions from './PhotoManualFillActions';
 
 const actions = [
   ['captureTime', 'exif', 'EXIF-tid'], ['photographer', 'exif', 'EXIF-fotograf'],
-  ['direction', 'exif', 'EXIF-retning'], ['captureTime', 'gml', 'GML-tid'],
+  ['direction', 'exif', 'EXIF-retning'], ['captureTime', 'gml', 'GML-tid'], ['direction', 'gml', 'GML-retning'],
 ];
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs disabled:opacity-40';
 
@@ -27,7 +27,7 @@ export default function PhotoEvidenceActions({ photos, layerId, selectedIds, onA
     {actions.map(([field, kind, label]) => {
       const { counts } = planEvidenceAdoption(photos, field, kind, ids);
       return <div key={`${field}:${kind}`} data-evidence-action={`${kind}:${field}`}>
-        <p>{label}: {counts.eligible} kan brukes · {counts.alreadyAccepted} allerede godtatt · {counts.missing} uten kildeverdi{field === 'direction' ? ` (${counts.missingAssets} bilder)` : ''} · {counts.unusable + counts.insufficientPrecision} ugyldig/utilstrekkelig presisjon · {counts.unsupportedReference} ukjent/magnetisk referanse · {counts.conflicting} i konflikt.</p>
+        <p>{label}: {counts.eligible} kan brukes · {counts.alreadyAccepted} allerede godtatt · {counts.missing} uten kildeverdi{field === 'direction' ? ` (${counts.missingAssets} bilder)` : ''} · {counts.unusable + counts.insufficientPrecision} ugyldig/utilstrekkelig presisjon · {counts.unsupportedReference} ukjent/magnetisk referanse{counts.zeroNeedsReview > 0 ? ` · ${counts.zeroNeedsReview} med 0°, som kan bety at retningen mangler` : ''} · {counts.conflicting} i konflikt.</p>
         {field === 'direction' && <p>{counts.repeatedApplications} mulige anvendelser på forekomster med delt originalbilde.</p>}
         <button type="button" className={control} disabled={!counts.eligible} onClick={() => {
           const result = photoSession.adoptSourceEvidence(layerId, field, kind, ids);
