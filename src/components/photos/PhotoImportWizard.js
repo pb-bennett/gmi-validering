@@ -3,6 +3,9 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { ImagesIcon, FolderOpenIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { initialImportState, importSteps, importWizardReducer, canAdvance, canNavigateBack } from '@/lib/photos/photoImportWizardState.mjs';
+import FileDropOverlay from '@/components/FileDropOverlay';
+import useFileDragTracker from '@/components/useFileDragTracker';
+import { hasFileDrag } from '@/lib/fileDragState.mjs';
 import usePhotoSession from './usePhotoSession';
 import PhotoCollectionPanel from './PhotoCollectionPanel';
 import PhotoImportPreview from './PhotoImportPreview';
@@ -16,6 +19,7 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
   const session = usePhotoSession();
   const [state, dispatch] = useReducer(importWizardReducer, context, initialImportState);
   const [error, setError] = useState('');
+  const { active: fileDragActive, tracker: fileDrag } = useFileDragTracker();
   const dialogRef = useRef(null), inputRef = useRef(null), folderRef = useRef(null), heading = useRef(null);
   const photos = session.photos;
   const target = session.photoLayers.find((layer) => layer.id === session.draftTargetLayerId);
@@ -31,6 +35,7 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
   const advance = canAdvance(state.step, session, state);
   const final = state.step === 'review' || (state.step === 'placement' && state.placement.kind === 'none');
   const primary = final ? (session.draftTargetLayerId ? 'Legg til i fotolaget' : 'Opprett fotolag') : 'Neste';
+  const acceptsDrop = state.step === 'photos';
   const addFiles = (files) => {
     if (!files?.length) return;
     setError(''); photoSession.importFiles(Array.from(files));
@@ -81,9 +86,16 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
       if (event.target !== event.currentTarget) return;
       event.preventDefault(); onClose();
     }}
-    onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); }}
-    onDrop={(event) => { event.preventDefault(); event.stopPropagation(); if (state.step === 'photos') addFiles(event.dataTransfer.files); }}>
+    onDragEnter={(event) => { if (acceptsDrop && hasFileDrag(event)) fileDrag.enter(); }}
+    onDragLeave={(event) => { if (acceptsDrop && hasFileDrag(event)) fileDrag.leave(); }}
+    onDragOver={(event) => {
+      event.preventDefault(); event.stopPropagation();
+      if (!hasFileDrag(event)) return;
+      if (acceptsDrop) fileDrag.over(); else event.dataTransfer.dropEffect = 'none';
+    }}
+    onDrop={(event) => { event.preventDefault(); event.stopPropagation(); fileDrag.reset(); if (acceptsDrop) addFiles(event.dataTransfer.files); }}>
     <div className="photo-collection-frame">
+      {fileDragActive && <FileDropOverlay contained icon={ImagesIcon} title="Slipp bilder her" />}
       <header className="photo-collection-header"><div><h2 id="photo-collection-title">Legg til bilder</h2><p className="text-sm text-gmi-text-muted">{context.kind === 'gmi-layer' ? `Til ${session.loadedImport?.binding?.filename || ''}` : target ? `Legg til i ${target.name}` : 'Nytt fotolag'}</p></div><button type="button" className="gmi-focus-ring" aria-label="Lukk bilder" onClick={onClose}><XIcon size={22} /></button></header>
       <PhotoWizardSteps steps={steps.map((step) => ({ key: step, label: STEP_LABELS[step] }))} current={state.step}
         canGoBack={(step) => canNavigateBack(context, state, step)} onBack={navigateBack} />

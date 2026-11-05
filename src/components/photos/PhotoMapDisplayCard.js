@@ -1,7 +1,7 @@
 'use client';
 
 import { CameraIcon, ImageSquareIcon } from '@phosphor-icons/react';
-import { PHOTO_POSITION_SOURCES, PHOTO_THUMBNAIL_MIN_ZOOM, photoCameraGlyph, photoSourceGlyph, photoLegendArrow, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { PHOTO_POSITION_SOURCES, PHOTO_THUMBNAIL_MIN_ZOOM, photoCameraGlyph, photoLegendArrow, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 
 const MODES = [['markers', 'Markører', CameraIcon], ['thumbnails', 'Miniatyrer', ImageSquareIcon]];
 
@@ -36,8 +36,9 @@ export default function PhotoMapDisplayCard({ mode, onModeChange, zoom, editing 
       <ul className="photo-map-display-legend">
         {PHOTO_POSITION_SOURCES.map(({ kind, label, color }) => (
           <li key={kind} data-legend-source={kind}>
-            <span className="photo-map-display-swatch" style={{ color }} dangerouslySetInnerHTML={{ __html: photoThumbnailsVisible(mode, zoom)
-              ? photoSourceGlyph(kind, 16) : photoCameraGlyph({ sourceKind: kind, size: 16 }) }} />
+            {photoThumbnailsVisible(mode, zoom)
+              ? <span className="photo-map-display-swatch"><span className="photo-source-dot" style={{ '--photo-source': color }} /></span>
+              : <span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ sourceKind: kind, size: 16 }) }} />}
             <span>{label}</span>
           </li>
         ))}

@@ -10,6 +10,8 @@ import { formatPhotoMoveDistance } from '@/lib/photos/photoPresentation.mjs';
 import './photoEdit.css';
 
 const textButton = 'photo-edit-button gmi-compact-button gmi-focus-ring';
+// Not gmi-compact-button: its light hover background would combine with the primary control's light text.
+const primaryButton = 'photo-edit-button gmi-primary-control gmi-focus-ring';
 
 function DirectionField({ photo, onStage }) {
   const id = useId();
@@ -60,7 +62,7 @@ export default function PhotoEditCommandBar({ photo, siblingCount = 1, changedCo
       {changedCount > 0 ? <>
         {/* Narrow maps hide the second word visually; the accessible name stays complete. */}
         <button type="button" aria-label="Forkast endringer" className={`${textButton} border-gmi-border-strong bg-gmi-surface`} onClick={onDiscard}>Forkast<span className="photo-edit-long">&nbsp;endringer</span></button>
-        <button type="button" aria-label="Lagre endringer" className={`${textButton} gmi-primary-control border-gmi-navy`} onClick={onSave}><CheckIcon size={14} weight="regular" aria-hidden="true" />Lagre<span className="photo-edit-long">&nbsp;endringer</span></button>
+        <button type="button" aria-label="Lagre endringer" className={primaryButton} onClick={onSave}><CheckIcon size={14} weight="regular" aria-hidden="true" />Lagre<span className="photo-edit-long">&nbsp;endringer</span></button>
       </> : <button type="button" className={`${textButton} border-gmi-border-strong bg-gmi-surface`} onClick={onExit}>Avslutt redigering</button>}
       </span>
     </div>

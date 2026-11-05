@@ -61,7 +61,7 @@ export function photoLegendArrow({ staged = false } = {}) {
   return `<svg class="photo-legend-arrow" aria-hidden="true" width="20" height="20" viewBox="0 0 20 20"><path d="${shaft}${head}" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="${shaft}" fill="none" stroke="${PHOTO_DIRECTION_COLOR}" stroke-width="2.25" stroke-linecap="${staged ? 'butt' : 'round'}"${staged ? ' stroke-dasharray="2.5 2"' : ''}/><path d="${head}" fill="none" stroke="${PHOTO_DIRECTION_COLOR}" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-// Phosphor Regular Camera / Cube / FileCode / Hand / Question paths, also used by the thumbnail legend.
+// Phosphor Regular Camera / Cube / FileCode / Hand / Question paths for the photo popup's placement line.
 // Static SVG keeps the shared Leaflet icon model DOM-free and does not render React per marker.
 const sourceGlyphPaths = Object.freeze({
   exif: 'M208,56H180.28L166.65,35.56A8,8,0,0,0,160,32H96a8,8,0,0,0-6.65,3.56L75.71,56H48A24,24,0,0,0,24,80V192a24,24,0,0,0,24,24H208a24,24,0,0,0,24-24V80A24,24,0,0,0,208,56Zm8,136a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V80a8,8,0,0,1,8-8H80a8,8,0,0,0,6.66-3.56L100.28,48h55.43l13.63,20.44A8,8,0,0,0,176,72h32a8,8,0,0,1,8,8ZM128,88a44,44,0,1,0,44,44A44.05,44.05,0,0,0,128,88Zm0,72a28,28,0,1,1,28-28A28,28,0,0,1,128,160Z',
@@ -106,7 +106,8 @@ export function thumbnailMarkerOptions({ sourceKind = 'unknown', selected = fals
   return { className: `photo-thumb-marker${modifiers ? ` ${modifiers}` : ''}`,
     iconSize: [PHOTO_THUMBNAIL_SIZE, PHOTO_THUMBNAIL_SIZE], iconAnchor: [PHOTO_THUMBNAIL_SIZE / 2, PHOTO_THUMBNAIL_SIZE / 2], popupAnchor: [0, -24],
     html: photoDirectionArrow({ degrees, staged: directionStaged, mode: 'thumbnails' })
-      + `<div class="photo-thumb" data-position-source="${source.kind}" data-thumbnail="${url ? 'ready' : 'fallback'}" style="--photo-source:${source.color}">${image}<span class="photo-thumb-source" role="img" aria-label="${photoPositionSourceDescription(source.kind)}">${photoSourceGlyph(source.kind)}</span></div>`
+      + `<div class="photo-thumb" data-position-source="${source.kind}" data-thumbnail="${url ? 'ready' : 'fallback'}" style="--photo-source:${source.color}">${image}</div>`
+      + `<span class="photo-source-dot photo-thumb-source" role="img" aria-label="${photoPositionSourceDescription(source.kind)}" style="--photo-source:${source.color}"></span>`
       + (editing && selected ? '<span class="photo-thumb-anchor" aria-hidden="true"></span>' : '') + stagedDot(staged) + stackBadge(stackCount) };
 }
 

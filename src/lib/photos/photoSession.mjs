@@ -1,6 +1,7 @@
 import { importPlacementRequests, previewImportPlacement, summarizeImportOutcome } from './photoImportOutcome.mjs';
 import { emptyCaptureMetadata, normalizeCaptureTime, normalizePhotographer, gmlCaptureEvidence } from './photoCaptureMetadata.mjs';
-import { classifyPhotoFile, createPhotoThumbnail } from './imagePreview.mjs';
+import { classifyPhotoFile, createPhotoThumbnail, THUMBNAIL_MAX_EDGE } from './imagePreview.mjs';
+import { createDisplayPreviewCache, DISPLAY_PREVIEW_JPEG_QUALITY, DISPLAY_PREVIEW_MAX_EDGE } from './photoDisplayPreviews.mjs';
 import { readExifGps } from './exifGps.mjs';
 import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, emptySpatial, immutable, isPhotoPosition, photoSpatialCounts } from './photoSpatial.mjs';
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
@@ -38,6 +39,9 @@ export function createPhotoSession({
   // Assets own File, preview and shared EXIF/GML evidence. Records are occurrences:
   // current position, direction and exact referring point, with shared metadata views.
   const assets = new Map();
+  // Map inspection previews: same decoder as thumbnails, bigger output, owned and released here with the asset.
+  const displayPreviews = createDisplayPreviewCache({ urls, createPreview: (file, { signal }) => createThumbnail(file, {
+    maxEdge: DISPLAY_PREVIEW_MAX_EDGE, quality: DISPLAY_PREVIEW_JPEG_QUALITY, signal }) });
   const workflowMembers = new WeakMap();
   // One Edit-mode transaction per FOTO layer: a ticket of baseline identities, never staged values.
   const editSessions = new Map();
@@ -326,6 +330,7 @@ export function createPhotoSession({
     for (const id of removed) {
       const record = assets.get(id);
       if (record?.preview.thumbnailUrl) urls.revokeObjectURL(record.preview.thumbnailUrl);
+      displayPreviews.drop(id);
       assets.delete(id);
     }
   }
@@ -757,6 +762,14 @@ export function createPhotoSession({
     },
     getFile: fileFor,
     getAssetFile: (assetId) => assets.get(assetId)?.file || null,
+    // Resolves to a URL owned by the session, or null: callers keep showing the thumbnail until then.
+    async requestDisplayPreview(assetId, options) {
+      const asset = assets.get(assetId);
+      if (asset?.preview.state !== 'ready') return null;
+      // Originals no bigger than the thumbnail have nothing more to offer.
+      if (Math.max(asset.dimensions?.width || 0, asset.dimensions?.height || 0) <= THUMBNAIL_MAX_EDGE) return asset.preview.thumbnailUrl;
+      return displayPreviews.request(assetId, asset.file, options);
+    },
     getPhoto: (id) => records.has(id) ? publicPhoto(records.get(id)) : null,
     getLayerPhotos(layerId) {
       const layer = layers.get(layerId);

@@ -50,6 +50,9 @@
 .photo-edit-history, .photo-edit-commit-actions { display: inline-flex; align-items: center; gap: 4px; }
 .photo-edit-commit-actions { gap: 6px; padding-left: 8px; border-left: 1px solid var(--gmi-border); }
 .photo-edit-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 1px solid var(--gmi-border-strong); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.photo-edit-button.gmi-primary-control { border-color: var(--gmi-navy); }
+.photo-edit-button.gmi-primary-control:hover:not(:disabled) { opacity: 1; background: #24324f; border-color: #24324f; }
+.photo-edit-button.gmi-primary-control:active:not(:disabled) { opacity: 1; background: #020618; border-color: #020618; }
 .photo-edit-icon.photo-icon-button { width: 32px; height: 32px; border: 1px solid var(--gmi-border); border-radius: 8px; }
 .photo-edit-context-row { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--gmi-border); }
 .photo-edit-hint { margin: 0; min-width: 0; font-size: 11px; line-height: 1.45; color: var(--gmi-text-muted); overflow-wrap: anywhere; }

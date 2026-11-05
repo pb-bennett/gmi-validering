@@ -8,6 +8,7 @@ import { SOSIParser } from '@/lib/parsing/sosiParser';
 import { KOFParser } from '@/lib/parsing/kofParser';
 import { decodeGmiBytes } from '@/lib/parsing/gmiDecoding';
 import { createGmiPhotoSource } from '@/lib/photos/gmiPhotoSource.mjs';
+import { hasFileDrag, surveyFileDragAccepted, surveyFileDropAccepted } from '@/lib/fileDragState.mjs';
 import {
   classifyCrs,
 } from '@/lib/telemetry/classifiers.mjs';
@@ -329,12 +330,13 @@ export default function FileUpload({
 
   const onDragOver = useCallback((e) => {
     e.preventDefault();
-    setIsDragging(true);
+    setIsDragging(hasFileDrag(e) && surveyFileDragAccepted(e.dataTransfer));
   }, []);
 
   const onDragLeave = useCallback((e) => {
     e.preventDefault();
-    setIsDragging(false);
+    // Moving between the zone's own children is not leaving it.
+    if (!e.currentTarget.contains(e.relatedTarget)) setIsDragging(false);
   }, []);
 
   const onDrop = useCallback(
@@ -342,7 +344,7 @@ export default function FileUpload({
       e.preventDefault();
       setIsDragging(false);
 
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (surveyFileDropAccepted(e.dataTransfer)) {
         handleFile(e.dataTransfer.files[0]);
       }
     },

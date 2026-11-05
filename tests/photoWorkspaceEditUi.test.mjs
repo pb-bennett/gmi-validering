@@ -482,7 +482,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await hover(`document.querySelector('.photo-thumb-marker[data-photo-id="${ids.IMG_2}"]')`);
         await browser.waitFor('document.querySelector(".photo-thumb-preview img")');
         assert.equal(await browser.evaluate('getComputedStyle(document.querySelector(".photo-thumb-preview img")).objectFit'), 'contain');
-        assert.equal(await browser.evaluate('document.querySelector(".photo-thumb-preview figcaption").innerText'), 'IMG_2.png');
+        assert.equal(await browser.evaluate('document.querySelector(".photo-thumb-preview-name").innerText'), 'IMG_2.png');
         await screenshot('06-thumbnails-hover');
         await unhover(); await browser.waitFor('!document.querySelector(".photo-thumb-preview")');
         // Touch device: (hover: none). No hover preview; a tap selects and the inspector shows the full image.

@@ -239,13 +239,14 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert(await browser.evaluate(`Boolean(document.querySelector('.leaflet-popup-pane .photo-map-popup'))`), 'photo popup sits above the marker pane');
       await browser.waitFor(`(() => { const popup = document.querySelector('.leaflet-popup'); const image = popup?.querySelector('.photo-map-popup img'); return popup && getComputedStyle(popup).opacity === '1' && popup.getBoundingClientRect().top >= 0 && image?.complete && image.naturalWidth > 0; })()`);
       assert(!await browser.evaluate('Boolean(document.querySelector("dialog[open], .photo-workspace-shell"))'));
-      assert.equal(await browser.evaluate(originalCount), 0); assert.equal(await browser.evaluate('window.__photoUrlAudit.originalCreated'), originalsBeforePopup);
-      const popupThumbnail = await browser.evaluate('document.querySelector(".photo-map-popup img").src');
+      // Pass 1D: the popup decodes one display preview from the original. Its temporary URL is revoked at once, and exactly one is made.
+      await browser.waitFor('Math.max(document.querySelector(".photo-map-popup img").naturalWidth, document.querySelector(".photo-map-popup img").naturalHeight) === 800');
+      assert.equal(await browser.evaluate(originalCount), 0); assert.equal(await browser.evaluate('window.__photoUrlAudit.originalCreated'), originalsBeforePopup + 1);
       assert(await browser.evaluate(`document.querySelector('.photo-map-popup').innerText.includes(${JSON.stringify(markerTitle)})`));
       await screenshot('photo-workspace-compact-popup'); await click('Åpne i bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       assert.equal(await browser.evaluate(`${inspector}.querySelector('h2').innerText`), markerTitle);
-      assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-row')).find(e => e.getAttribute('aria-label').startsWith(${JSON.stringify(`${markerTitle},`)})).querySelector('img').src`), popupThumbnail);
-      checks.push('normal marker opens compact popup only, reuses thumbnail, creates no original URL; popup enters workspace at exact photo');
+      assert(await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-row')).find(e => e.getAttribute('aria-label').startsWith(${JSON.stringify(`${markerTitle},`)})).querySelector('img').naturalHeight <= 320`), 'the list keeps the session thumbnail');
+      checks.push('normal marker opens compact popup only, decodes one display preview, leaves no live original URL; popup enters workspace at exact photo');
 
       await click('Legg til bilder'); await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
       await syntheticPhotos(['cancelled.png']); await browser.waitFor('document.querySelector(".photo-collection-thumbnail img")');

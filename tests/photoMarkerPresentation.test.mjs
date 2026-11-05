@@ -127,18 +127,18 @@ test('provenance palette keeps established sources and separates magenta GML fro
 
 
 test('thumbnail source badges distinguish all four sources without colour, alongside stacks, selection and edit handles', () => {
-  const glyphs = new Set();
+  const dots = new Set();
   for (const source of PHOTO_POSITION_SOURCES) {
     for (const selected of [false, true]) for (const stackCount of [1, 6]) {
       const thumb = thumbnailMarkerOptions({ sourceKind: source.kind, selected, stackCount, editing: selected, staged: true, degrees: 225 });
-      assert.match(thumb.html, /class="photo-thumb-source" role="img" aria-label="/);
+      assert.match(thumb.html, /class="photo-source-dot photo-thumb-source" role="img" aria-label="/);
       assert(thumb.html.includes(source.kind === 'manual' ? 'Manuelt plassert' : `Plassering fra ${source.label}`));
-      assert(thumb.html.includes(`data-source-glyph="${source.kind}"`));
+      assert(!thumb.html.includes('data-source-glyph'), 'thumbnails carry a dot, never a square source glyph');
       assert.equal(thumb.html.includes('photo-marker-stack'), stackCount > 1);
       assert.equal(thumb.html.includes('photo-thumb-anchor'), selected);
       assert(!cameraMarkerOptions({ sourceKind: source.kind, selected, stackCount }).html.includes('photo-thumb-source'), 'ordinary markers unchanged');
-      glyphs.add(thumb.html.match(/class="photo-source-glyph"[^>]*><path d="([^"]+)"/)[1]);
+      dots.add(thumb.html.match(/photo-thumb-source"[^>]*style="--photo-source:([^"]+)"/)[1]);
     }
   }
-  assert.equal(glyphs.size, 4, 'each source has a different shape');
+  assert.equal(dots.size, 4, 'each source has its own colour');
 });

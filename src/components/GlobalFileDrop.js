@@ -1,49 +1,52 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ProhibitIcon } from '@phosphor-icons/react';
 import { useFileLoader } from '@/components/FileUpload';
+import FileDropOverlay from '@/components/FileDropOverlay';
+import useFileDragTracker from '@/components/useFileDragTracker';
+import { hasFileDrag, surveyFileDragAccepted, surveyFileDropAccepted } from '@/lib/fileDragState.mjs';
 
-const hasFiles = (event) => {
-  const types = Array.from(event?.dataTransfer?.types || []);
-  return types.includes('Files');
-};
-
+// The app's only window-level file drop. While disabled (FOTO workspace, import wizard, parsing) there is no
+// drop region: file drags stay refused here, so a stray drop cannot navigate away from the in-memory session.
 export default function GlobalFileDrop({ enabled = true }) {
   const { handleFile } = useFileLoader();
-  const [isDragging, setIsDragging] = useState(false);
-  const dragCounter = useRef(0);
+  const { active, tracker } = useFileDragTracker();
+  const [accepted, setAccepted] = useState(true);
 
   useEffect(() => {
-    if (!enabled) return;
-
     const onDragEnter = (e) => {
-      if (!hasFiles(e)) return;
+      if (!hasFileDrag(e)) return;
       e.preventDefault();
-      dragCounter.current += 1;
-      setIsDragging(true);
+      if (!enabled) return;
+      setAccepted(surveyFileDragAccepted(e.dataTransfer));
+      tracker.enter();
     };
 
     const onDragOver = (e) => {
-      if (!hasFiles(e)) return;
+      if (!hasFileDrag(e)) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
+      if (!enabled) { e.dataTransfer.dropEffect = 'none'; return; }
+      // A drag can resume without a new dragenter, so this keeps the message current too.
+      const fileAccepted = surveyFileDragAccepted(e.dataTransfer);
+      e.dataTransfer.dropEffect = fileAccepted ? 'copy' : 'none';
+      setAccepted(fileAccepted);
+      tracker.over();
     };
 
     const onDragLeave = (e) => {
-      if (!hasFiles(e)) return;
+      if (!hasFileDrag(e)) return;
       e.preventDefault();
-      dragCounter.current -= 1;
-      if (dragCounter.current <= 0) {
-        dragCounter.current = 0;
-        setIsDragging(false);
-      }
+      if (enabled) tracker.leave();
     };
 
     const onDrop = (e) => {
-      if (!hasFiles(e)) return;
+      if (!hasFileDrag(e)) return;
+      // The overlay lets drops reach the page, so a FileUpload zone may already have handled this one.
+      const handled = e.defaultPrevented;
       e.preventDefault();
-      dragCounter.current = 0;
-      setIsDragging(false);
+      tracker.reset();
+      if (!enabled || handled || !surveyFileDropAccepted(e.dataTransfer)) return;
 
       const file = e.dataTransfer?.files?.[0];
       if (file) {
@@ -61,38 +64,13 @@ export default function GlobalFileDrop({ enabled = true }) {
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('dragleave', onDragLeave);
       window.removeEventListener('drop', onDrop);
-      dragCounter.current = 0;
-      setIsDragging(false);
+      tracker.reset();
     };
-  }, [enabled, handleFile]);
+  }, [enabled, handleFile, tracker]);
 
-  if (!enabled || !isDragging) return null;
+  if (!enabled || !active) return null;
 
-  return (
-    <div className="fixed inset-0 z-[10005] flex items-center justify-center bg-gmi-ink/40 backdrop-blur-sm">
-      <div className="w-[90%] max-w-2xl rounded-xl border-2 border-dashed border-gmi-interactive bg-gmi-surface/95 p-10 text-center shadow-xl">
-        <div className="flex flex-col items-center gap-3">
-          <svg
-            className="w-14 h-14 text-gmi-interactive"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-            />
-          </svg>
-          <div className="text-xl font-semibold text-gmi-navy">
-            Slipp filen for å laste inn
-          </div>
-          <div className="text-sm text-gmi-text-muted">
-            Støtter .gmi, .sos/.sosi og .kof
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return accepted
+    ? <FileDropOverlay title="Slipp filer her for å importere" hint="Støtter .gmi, .sos/.sosi og .kof, én fil om gangen" />
+    : <FileDropOverlay refused icon={ProhibitIcon} title="Denne filtypen kan ikke importeres her" hint="Støtter .gmi, .sos/.sosi og .kof. Bilder legges til med bildeimporten." />;
 }

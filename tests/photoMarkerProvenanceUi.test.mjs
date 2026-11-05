@@ -153,7 +153,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile())})`);
         }
       });
-      await t.test('Pass 1C: all source badges render in workspace/main-map thumbnails, with selected ring and direction intact', async () => {
+      await t.test('Pass 1D: all source dots render in workspace/main-map thumbnails, with selected ring and direction intact', async () => {
         await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
         await browser.evaluate(`${legend}.querySelector('[data-mode=thumbnails]').click()`);
         for (let i = 0; i < 8 && !await browser.evaluate('Boolean(document.querySelector(".photo-thumb-marker"))'); i++) {
@@ -161,23 +161,24 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           await browser.evaluate('new Promise(resolve=>setTimeout(resolve,350))');
         }
         const badges = () => browser.evaluate(`Array.from(document.querySelectorAll('.photo-thumb-marker')).map(e => ({
-          kind:e.querySelector('.photo-source-glyph').dataset.sourceGlyph, label:e.querySelector('.photo-thumb-source').getAttribute('aria-label'),
+          kind:e.querySelector('.photo-thumb').dataset.positionSource, label:e.querySelector('.photo-thumb-source').getAttribute('aria-label'),
           size:e.getBoundingClientRect().width, border:getComputedStyle(e.querySelector('.photo-thumb')).borderTopColor,
-          inside:(() => {const a=e.querySelector('.photo-thumb-source').getBoundingClientRect(), b=e.querySelector('.photo-thumb').getBoundingClientRect(); return a.left>=b.left && a.right<=b.right && a.top>=b.top && a.bottom<=b.bottom;})() })).sort((a,b)=>a.kind.localeCompare(b.kind))`);
+          dot:getComputedStyle(e.querySelector('.photo-thumb-source')).backgroundColor, glyphs:e.querySelectorAll('.photo-source-glyph').length,
+          corner:(() => {const a=e.querySelector('.photo-thumb-source').getBoundingClientRect(), b=e.querySelector('.photo-thumb').getBoundingClientRect(); return a.width<=8 && a.height<=8 && Math.abs(a.left-b.left)<=2 && Math.abs(a.bottom-b.bottom)<=2;})() })).sort((a,b)=>a.kind.localeCompare(b.kind))`);
         await browser.waitFor('document.querySelectorAll(".photo-thumb-source").length === 4');
         const baseline = await badges();
         assert.deepEqual(baseline.map(e=>e.kind), ['exif','gmi','gml','manual']);
-        assert(baseline.every(e=>e.size===44 && e.inside));
+        assert(baseline.every(e=>e.size===44 && e.corner && e.dot===e.border && e.glyphs===0), JSON.stringify(baseline));
         for (const source of PHOTO_POSITION_SOURCES) {
           const id = source.kind === 'exif' ? exif.id : source.kind === 'gml' ? gmlPhoto.id : repeated[source.kind === 'gmi' ? 0 : 1].id;
           await select(id);
-          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-source-glyph").dataset.sourceGlyph'), source.kind);
+          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-thumb").dataset.positionSource'), source.kind);
           assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-thumb-source").getAttribute("aria-label")'), source.kind==='manual'?'Manuelt plassert':`Plassering fra ${source.label}`);
         }
         assert(await browser.evaluate('Boolean(document.querySelector(".photo-marker-selected .photo-direction-indicator"))'));
         await screenshot('pass1c-four-source-thumbnails-workspace');
         await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
-        assert.deepEqual(await badges(), baseline, 'main map reuses exactly the same source badges and borders');
+        assert.deepEqual(await badges(), baseline, 'main map reuses exactly the same source dots and borders');
         await screenshot('pass1c-four-source-thumbnails-main-map');
         await click('Bildemodul'); await browser.waitFor(legend);
         await browser.evaluate(`${legend}.querySelector('[data-mode=markers]').click()`);

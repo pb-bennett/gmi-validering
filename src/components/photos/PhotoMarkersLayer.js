@@ -4,13 +4,15 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Marker, Pane, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import PhotoMapPopup from './PhotoMapPopup';
-import { photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { photoPositionSourceDescription, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
 import { gmiObjectLabel } from '@/lib/photos/gmiPhotoSource.mjs';
 import { PHOTO_MARKER_PANE, PHOTO_MARKER_Z_INDEX } from '@/lib/photos/photoMapPanes.mjs';
+import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoMarkerIcon } from './photoMarkerIcons';
 
 const PREVIEW_DELAY_MS = 250;
+const PREVIEW_SIZE = 220;
 const hoverCapable = () => typeof window !== 'undefined' && window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
 export function photoMarkerLabel(photo, stackCount = 1) {
@@ -21,6 +23,29 @@ export function photoMarkerLabel(photo, stackCount = 1) {
   const direction = photo?.direction?.current ? ` · retning ${photoDirectionLabel(photo.direction.current.degrees)}` : '';
   const stack = stackCount > 1 ? ` · ${stackCount} bilder på samme sted` : '';
   return `Vis bilde: ${filename}${context} · plassering: ${source.label}${direction}${stack}`;
+}
+
+// The frame takes the photo's final size before the image loads, so Leaflet positions the tooltip only once.
+function previewContent({ thumbnailUrl, filename, photoWidth, photoHeight, sourceKind }) {
+  const source = photoPositionSourcePresentation(sourceKind);
+  const content = document.createElement('figure');
+  const frame = document.createElement('div');
+  frame.className = 'photo-thumb-preview-frame';
+  if (photoWidth > photoHeight && photoHeight > 0) frame.style.height = `${Math.round(PREVIEW_SIZE * photoHeight / photoWidth)}px`;
+  const image = document.createElement('img');
+  image.src = thumbnailUrl; image.alt = ''; image.decoding = 'sync'; image.draggable = false;
+  frame.append(image);
+  const dot = document.createElement('span');
+  dot.className = 'photo-source-dot'; dot.style.setProperty('--photo-source', source.color);
+  dot.setAttribute('role', 'img'); dot.setAttribute('aria-label', photoPositionSourceDescription(source.kind));
+  const name = document.createElement('span');
+  name.className = 'photo-thumb-preview-name'; name.textContent = filename;
+  const label = document.createElement('span');
+  label.className = 'photo-thumb-preview-source'; label.textContent = source.label; label.setAttribute('aria-hidden', 'true');
+  const caption = document.createElement('figcaption');
+  caption.append(dot, name, label);
+  content.append(frame, caption);
+  return { content, image };
 }
 
 // The presentation model is derived once per render from already-built photos: no session lookups per marker.
@@ -66,7 +91,8 @@ function markerModels(items, workspace, thumbnails) {
       // Edit mode: other FOTO layers are context only, so no popup can switch layers by accident.
       interactive: !(workspace?.editing && !inWorkspace),
       stackIds: top === photo ? members.map((member) => member.id).join('\n') : '',
-      thumbnailUrl: options.thumbnailUrl, filename: photo.originalFilename || 'Bilde',
+      thumbnailUrl: options.thumbnailUrl, filename: photo.originalFilename || 'Bilde', assetId: photo.assetId,
+      photoWidth: photo.dimensions?.width || 0, photoHeight: photo.dimensions?.height || 0, sourceKind: options.sourceKind,
       // Main map: inspection only. A stack's popup pages through its members; it never edits.
       popupPhoto: inWorkspace || workspace?.editing ? null : photo,
       popupStack: !inWorkspace && !workspace?.editing && top === photo ? members : null }];
@@ -74,7 +100,7 @@ function markerModels(items, workspace, thumbnails) {
 }
 
 const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat, lng, mode, icon, zIndexOffset, label, inWorkspace,
-  interactive, stackIds, thumbnailUrl, filename, popupPhoto, popupStack, popupWidth, popupHeight, actions }) {
+  interactive, stackIds, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, popupPhoto, popupStack, popupWidth, popupHeight, actions }) {
   const ref = useRef(null);
   const popupRef = useRef(null);
   useEffect(() => {
@@ -106,7 +132,7 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
     // Thumbnail mode shows its own preview; a native title would duplicate it.
     if (mode === 'thumbnails') element.removeAttribute('title'); else element.title = label;
     if (mode !== 'thumbnails' || !interactive) return undefined;
-    const preview = { lat, lng, thumbnailUrl, filename, element };
+    const preview = { lat, lng, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, element };
     const marker = ref.current;
     // Overlapping miniatures: the hovered one comes to the front imperatively, without React state.
     const enter = () => { marker.setZIndexOffset(Math.max(zIndexOffset, 800)); if (hoverCapable()) actions.current.schedulePreview(preview); };
@@ -119,7 +145,7 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
       element.removeEventListener('focus', focus); element.removeEventListener('blur', leave);
       leave();
     };
-  }, [actions, icon, label, mode, interactive, layerId, photoId, lat, lng, thumbnailUrl, filename, zIndexOffset]);
+  }, [actions, icon, label, mode, interactive, layerId, photoId, lat, lng, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, zIndexOffset]);
   return <Marker ref={ref} key={markerKey} position={position} pane={PHOTO_MARKER_PANE} icon={icon} zIndexOffset={zIndexOffset}
     interactive={interactive} keyboard={interactive} eventHandlers={eventHandlers}>
     {popupPhoto && <Popup ref={popupRef} pane="popupPane" className="photo-map-viewer-popup" maxWidth={popupWidth} minWidth={popupWidth}
@@ -141,28 +167,29 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
   const thumbnails = photoThumbnailsVisible(workspace ? workspace.displayMode : displayMode, zoom);
   const models = markerModels(items, workspace, thumbnails);
   const actions = useRef(null);
-  const preview = useRef({ tooltip: null, timer: null, element: null });
+  const preview = useRef({ tooltip: null, timer: null, element: null, request: null });
 
   useEffect(() => {
     const state = preview.current;
     state.tooltip = L.tooltip({ direction: 'top', offset: [0, -26], className: 'photo-thumb-preview', opacity: 1, interactive: false });
-    return () => { clearTimeout(state.timer); if (state.tooltip && map.hasLayer(state.tooltip)) map.closeTooltip(state.tooltip); };
+    return () => { clearTimeout(state.timer); state.request?.abort(); if (state.tooltip && map.hasLayer(state.tooltip)) map.closeTooltip(state.tooltip); };
   }, [map]);
 
   useEffect(() => {
     const state = preview.current;
-    const open = ({ lat, lng, thumbnailUrl, filename, element }) => {
+    const open = ({ lat, lng, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, element }) => {
       clearTimeout(state.timer);
       if (!thumbnailUrl || map.getContainer().classList.contains('photo-edit-gesture') || map.getContainer().querySelector('.photo-map-viewer-popup')) return;
-      const content = document.createElement('figure');
-      const image = document.createElement('img');
-      image.src = thumbnailUrl; image.alt = ''; image.decoding = 'async'; image.draggable = false;
-      const caption = document.createElement('figcaption');
-      caption.textContent = filename;
-      content.append(image, caption);
+      state.request?.abort();
+      const { content, image } = previewContent({ thumbnailUrl, filename, photoWidth, photoHeight, sourceKind });
       state.element = element;
       state.tooltip.setLatLng([lat, lng]).setContent(content);
       map.openTooltip(state.tooltip);
+      const request = new AbortController();
+      state.request = request;
+      photoSession.requestDisplayPreview(assetId, { signal: request.signal }).then((url) => {
+        if (url && !request.signal.aborted) image.src = url;
+      });
     };
     actions.current = {
       select: (photoId, stackIds) => {
@@ -176,12 +203,15 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
       openPreview: open,
       clearPreview: () => {
         clearTimeout(state.timer);
+        state.request?.abort();
         if (state.tooltip && map.hasLayer(state.tooltip)) map.closeTooltip(state.tooltip);
         state.element = null;
       },
       closePreview: (element) => {
         clearTimeout(state.timer);
-        if (state.element === element && state.tooltip && map.hasLayer(state.tooltip)) map.closeTooltip(state.tooltip);
+        if (state.element !== element) return;
+        state.request?.abort();
+        if (state.tooltip && map.hasLayer(state.tooltip)) map.closeTooltip(state.tooltip);
       },
     };
   });

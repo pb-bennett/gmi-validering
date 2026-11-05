@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [modal, page, sidebar, shell, stats, legend, toolbar, appInfo, globalDrop] = await Promise.all([
+const [modal, page, sidebar, shell, stats, legend, toolbar, appInfo, globalCss] = await Promise.all([
   readFile(new URL('../src/components/DataDisplayModal.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/app/page.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/components/Sidebar.js', import.meta.url), 'utf8'),
@@ -11,7 +11,7 @@ const [modal, page, sidebar, shell, stats, legend, toolbar, appInfo, globalDrop]
   readFile(new URL('../src/components/MapLegend.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/components/MapPaneToolbar.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/components/AppInfoModal.js', import.meta.url), 'utf8'),
-  readFile(new URL('../src/components/GlobalFileDrop.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8'),
 ]);
 
 test('Datautforsker is a viewport-fixed sibling of the workspace, above app chrome', () => {
@@ -22,7 +22,7 @@ test('Datautforsker is a viewport-fixed sibling of the workspace, above app chro
   assert.match(sidebar, /className="relative z-\[10000\]/);
   assert.match(stats, /fixed inset-0 z-\[10003\]/);
   assert.match(appInfo, /fixed inset-0 z-\[10050\]/);
-  assert.match(globalDrop, /fixed inset-0 z-\[10005\]/);
+  assert.match(globalCss, /\.file-drop-overlay \{ position: fixed; inset: 10px; z-index: 10005;/);
   assert.match(page, /fixed inset-0 z-\[10001\]/);
   assert.match(page, /zIndex: 10002/);
   assert.match(legend, /absolute bottom-20 right-4 z-1000/);

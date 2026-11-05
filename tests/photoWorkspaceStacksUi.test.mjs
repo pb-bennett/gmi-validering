@@ -436,14 +436,14 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
           await browser.evaluate(`${inspector}.querySelector('.photo-inspector-locate').click()`);
           await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length === 8');
           await browser.waitFor(`document.querySelector('.photo-marker-selected .photo-marker-stack')?.innerText === '6'`);
-          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-source-glyph").dataset.sourceGlyph'), kind);
+          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-thumb").dataset.positionSource'), kind);
           const clear = await browser.evaluate(`(() => {const marker=document.querySelector('.photo-marker-selected'), source=marker.querySelector('.photo-thumb-source').getBoundingClientRect(), stack=marker.querySelector('.photo-marker-stack').getBoundingClientRect();
             return source.right<=stack.left || source.left>=stack.right || source.bottom<=stack.top || source.top>=stack.bottom;})()`);
-          assert(clear, 'source badge and stack count never overlap');
+          assert(clear, 'source dot and stack count never overlap');
           await screenshot(`pass1c-stack-${kind}-workspace`);
           await clickText(browser, 'Tilbake til appen');
           await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
-          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-stack").closest(".leaflet-marker-icon").querySelector(".photo-source-glyph").dataset.sourceGlyph'), kind);
+          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-stack").closest(".leaflet-marker-icon").querySelector(".photo-thumb").dataset.positionSource'), kind);
           await screenshot(`pass1c-stack-${kind}-main`);
           await clickText(browser, 'Bildemodul');
           await browser.waitFor(inspector);

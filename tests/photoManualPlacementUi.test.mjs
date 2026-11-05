@@ -206,12 +206,12 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
       await browser.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:markerBox.left+15,y:markerBox.top+15,button:'left',buttons:0,clickCount:1});
       await browser.waitFor('document.querySelector(".photo-map-popup")');
       assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-collection-dialog"))'),false);
-      assert.equal(await browser.evaluate('window.__originalUrls.size'),0);
+      await browser.waitFor('window.__originalUrls.size===0',5000); // A popup's display preview holds only a brief decoding URL.
       for(const [value,code,number] of [['Enter','Enter',13],[' ','Space',32]]) {
         await click('Lukk bildeforhåndsvisning');
         await browser.evaluate('document.querySelector(".photo-camera-marker").focus()');
         await pressKey(browser,value,{code,keyCode:number}); await browser.waitFor('document.querySelector(".photo-map-popup")');
-        assert.equal(await browser.evaluate('window.__originalUrls.size'),0);
+        await browser.waitFor('window.__originalUrls.size===0',5000); // A popup's display preview holds only a brief decoding URL.
       }
       await click('Åpne i bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       await enterEditMode(browser); await dragSelectedMarker(browser, 30, 30); await browser.waitFor(`${editCount}===1`);

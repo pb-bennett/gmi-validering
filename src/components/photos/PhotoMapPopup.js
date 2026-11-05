@@ -1,14 +1,30 @@
 'use client';
 
-/* eslint-disable @next/next/no-img-element -- Reuse the session thumbnail; never create an original URL for map inspection. */
+/* eslint-disable @next/next/no-img-element -- Session-owned blob URLs: the thumbnail, then its display preview. */
 import { useEffect, useState } from 'react';
 import { ArrowSquareOutIcon, CaretLeftIcon, CaretRightIcon, XIcon } from '@phosphor-icons/react';
 import { photoCaptureTime } from '@/lib/photos/photoPresentation.mjs';
+import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPositionSourceDescription, photoPositionSourceKind, photoPositionSourcePresentation, photoSourceGlyph } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
 import PhotoIconButton from './PhotoIconButton';
 import PhotoOccurrenceContext from './PhotoOccurrenceContext';
 import './photoWorkspace.css';
+
+// The thumbnail shows at once; the sharper preview replaces it, but only for the photo it was requested for.
+function useDisplayPreview({ assetId, preview }) {
+  const [loaded, setLoaded] = useState(null);
+  const thumbnailUrl = preview.thumbnailUrl;
+  useEffect(() => {
+    if (!thumbnailUrl) return undefined;
+    const request = new AbortController();
+    photoSession.requestDisplayPreview(assetId, { signal: request.signal }).then((url) => {
+      if (url && !request.signal.aborted) setLoaded({ assetId, url });
+    });
+    return () => request.abort();
+  }, [assetId, thumbnailUrl]);
+  return loaded?.assetId === assetId ? loaded.url : thumbnailUrl;
+}
 
 // Main-map inspection only. A stack (identical coordinates) pages through its members inside one popup.
 export default function PhotoMapPopup({ photo: topPhoto, stack = null, onOpen, onClose, onLayout }) {
@@ -17,11 +33,12 @@ export default function PhotoMapPopup({ photo: topPhoto, stack = null, onOpen, o
   const photo = members[Math.min(index, members.length - 1)] || topPhoto;
   const captureTime = photoCaptureTime(photo);
   const source = photoPositionSourcePresentation(photoPositionSourceKind(photo));
+  const imageUrl = useDisplayPreview(photo);
   useEffect(() => { onLayout?.(); }, [photo.id, onLayout]);
   const page = (step) => setIndex((value) => (value + step + members.length) % members.length);
   return <div className="photo-map-popup" data-photo-id={photo.id}>
     <div className="photo-map-popup-preview">
-      {photo.preview.thumbnailUrl ? <img src={photo.preview.thumbnailUrl} alt={photo.originalFilename} onLoad={onLayout} /> : <span>Forhåndsvisning mangler</span>}
+      {imageUrl ? <img src={imageUrl} alt={photo.originalFilename} onLoad={onLayout} /> : <span>Forhåndsvisning mangler</span>}
       <PhotoIconButton icon={XIcon} label="Lukk bildeforhåndsvisning" onClick={onClose} className="photo-map-popup-close" />
     </div>
     <div className="photo-map-popup-body" key={photo.id}>
