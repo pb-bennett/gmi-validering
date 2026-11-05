@@ -43,21 +43,36 @@
 @media (max-width: 1150px) and (min-width: 701px) {
   .photo-edit-command-anchor { top: 160px; left: 8px; right: 8px; }
 }
-.photo-edit-command-bar { pointer-events: auto; display: grid; gap: 4px; max-width: 100%; padding: 6px 8px; border-radius: 10px; box-shadow: 0 10px 28px #0206182e; font-size: 12px; }
-@container (max-width: 470px) {
-  .photo-edit-long { display: none; }
-  .photo-edit-hint { flex-basis: 100%; }
-}
-.photo-edit-command-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
-.photo-edit-status { margin-right: 4px; white-space: nowrap; color: var(--gmi-navy); }
-.photo-edit-icon.photo-icon-button { border: 1px solid var(--gmi-border-strong); border-radius: 8px; }
-.photo-edit-context-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-top: 4px; border-top: 1px solid var(--gmi-border); }
-.photo-edit-hint { margin: 0; flex: 1 1 14rem; min-width: 0; color: var(--gmi-text-muted); }
+.photo-edit-command-bar { pointer-events: auto; display: grid; gap: 8px; width: 760px; max-width: 100%; padding: 10px; border-radius: 10px; box-shadow: 0 10px 28px #0206182e; font-size: 12px; }
+.photo-edit-command-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.photo-edit-status { flex: 1; white-space: nowrap; color: var(--gmi-text-muted); }
+.photo-edit-status strong { font-weight: 600; color: var(--gmi-navy); }
+.photo-edit-history, .photo-edit-commit-actions { display: inline-flex; align-items: center; gap: 4px; }
+.photo-edit-commit-actions { gap: 6px; padding-left: 8px; border-left: 1px solid var(--gmi-border); }
+.photo-edit-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 1px solid var(--gmi-border-strong); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.photo-edit-icon.photo-icon-button { width: 32px; height: 32px; border: 1px solid var(--gmi-border); border-radius: 8px; }
+.photo-edit-context-row { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--gmi-border); }
+.photo-edit-hint { margin: 0; min-width: 0; font-size: 11px; line-height: 1.45; color: var(--gmi-text-muted); overflow-wrap: anywhere; }
 .photo-edit-sibling-note { color: #854d0e; }
-.photo-edit-context-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.photo-edit-direction-field { display: inline-flex; align-items: center; gap: 4px; }
+.photo-edit-context-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.photo-edit-direction-field { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--gmi-text-muted); }
 .photo-edit-direction-field input { width: 4.25rem; min-height: 32px; padding: 0 6px; border: 1px solid var(--gmi-border-strong); border-radius: 6px; background: var(--gmi-surface); }
 .photo-edit-moved { margin: 0; width: 100%; color: var(--gmi-interactive); font-weight: 500; }
+@container (max-width: 560px) {
+  .photo-edit-long { display: none; }
+  .photo-edit-command-bar { padding: 8px; }
+  .photo-edit-button { padding-inline: 8px; }
+}
+@container (max-width: 410px) {
+  .photo-edit-context-actions { gap: 4px; }
+  .photo-edit-context-actions .photo-edit-button { font-size: 11px; padding-inline: 6px; gap: 4px; }
+  .photo-edit-direction-field input { width: 3.5rem; }
+  .photo-edit-direction-field { margin-left: 0; }
+}
+@container (max-width: 350px) {
+  .photo-edit-status { flex-basis: calc(100% - 84px); }
+  .photo-edit-commit-actions { margin-left: auto; padding-left: 0; border-left: 0; }
+}
 
 /* Unsaved-changes boundary. */
 .photo-edit-boundary { margin: auto; width: min(480px, calc(100vw - 32px)); padding: 20px; border: 1px solid var(--gmi-border-strong); border-radius: 10px; background: var(--gmi-surface, #fff); color: var(--gmi-text, #24364b); }

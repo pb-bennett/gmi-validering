@@ -208,7 +208,8 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
       assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-collection-dialog"))'),false);
       assert.equal(await browser.evaluate('window.__originalUrls.size'),0);
       for(const [value,code,number] of [['Enter','Enter',13],[' ','Space',32]]) {
-        await browser.evaluate('document.querySelector(".leaflet-popup-close-button").click();document.querySelector(".photo-camera-marker").focus()');
+        await click('Lukk bildeforhåndsvisning');
+        await browser.evaluate('document.querySelector(".photo-camera-marker").focus()');
         await pressKey(browser,value,{code,keyCode:number}); await browser.waitFor('document.querySelector(".photo-map-popup")');
         assert.equal(await browser.evaluate('window.__originalUrls.size'),0);
       }

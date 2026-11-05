@@ -6,9 +6,10 @@ import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
 import { solidPng } from './helpers/photoImageFixtures.mjs';
-import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
+import { gpsPng } from './helpers/photoGpsFixtures.mjs';
+import { applyPhotoSourcePositions, closePhotoSources, savePhotoSource, setPhotoFiles, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { chooseImportPlacement, createLayerWithPlacement, importDialog, waitForThumbnails } from './helpers/photoImportWizard.mjs';
-import { KEYS, clickText, commandBar, discardEdits, editTarget, elementCentre, enterEditMode, mouseDrag, pressKey, selectPhotoRow } from './helpers/photoWorkspace.mjs';
+import { KEYS, clickText, commandBar, discardEdits, editTarget, elementCentre, enterEditMode, mouseDrag, pressKey, saveEdits, selectPhotoRow, waitForStableEditTarget } from './helpers/photoWorkspace.mjs';
 
 // Pass 1B acceptance: six photos referenced by one GMI object share exactly one position, plus one photo
 // used by two other objects. Synthetic, non-customer fixtures with real portrait/landscape dimensions.
@@ -24,10 +25,13 @@ const editCount = () => `Number(document.querySelector('[data-edit-count]')?.inn
 async function createFixtures() {
   const root = path.resolve(tmpdir()), prefix = 'photo-pass1b-', directory = await mkdtemp(path.join(root, prefix));
   const files = [];
+  const metadata = gpsPng();
+  const exifChunk = metadata.subarray(33, 33 + 12 + metadata.readUInt32BE(33));
   for (const [index, name] of STACK.entries()) {
     const portrait = index % 2 === 0;
     const file = path.join(directory, name);
-    await writeFile(file, solidPng(portrait ? 600 : 900, portrait ? 900 : 600, [60 + index * 30, 120, 200 - index * 20]));
+    const image = solidPng(portrait ? 600 : 900, portrait ? 900 : 600, [60 + index * 30, 120, 200 - index * 20]);
+    await writeFile(file, Buffer.concat([image.subarray(0, 33), exifChunk, image.subarray(33)]));
     files.push(file);
   }
   const solo = path.join(directory, 'solo.png');
@@ -39,7 +43,10 @@ async function createFixtures() {
     { label: 'K1', hyperlink: 'h:1(link:"solo.png") ', xyz: '581990 6566000 1' },
     { label: 'K2', hyperlink: 'h:1(link:"solo.png") ', xyz: '581930 6566060 1' },
   ]));
-  return { files, gmi, cleanup: async () => {
+  const gml = path.join(directory, 'stack-positions.gml');
+  await writeFile(gml, '<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy>'
+    + STACK.map((name, i) => `<gml:featureMember><app:Skråfoto gml:id="p${i}"><app:fotolink>${name}</app:fotolink><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>581950 6566020 0</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember>`).join('') + '</gml:FeatureCollection>');
+  return { files, gmi, gml, cleanup: async () => {
     if (path.dirname(path.resolve(directory)) !== root || !path.basename(directory).startsWith(prefix)) throw new Error('Unsafe fixture path');
     await rm(directory, { recursive: true, force: true });
   } };
@@ -125,6 +132,55 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         assert.doesNotMatch(text, /MIME\/type/);
         assert(await browser.evaluate(`${inspector}.textContent.includes('MIME/type') && ${inspector}.textContent.includes('GUID')`), 'file details and identifiers are kept');
         assert.match(await browser.evaluate(`${inspector}.querySelector('section[aria-label=Fil] summary').innerText`), /900 × 600 px/);
+      });
+
+      await t.test('Pass 1C: disclosure scrollbars never change preview geometry, portrait or landscape', async () => {
+        for (const name of ['stack-1.png', 'stack-2.png']) {
+          await selectPhotoRow(browser, ids[name]);
+          let transitions = 0;
+          for (const height of [1200, 1080, 900, 768, 720]) {
+            await setViewport(1366, height);
+            const measure = () => browser.evaluate(`(() => { const e = ${inspector}, r = e.querySelector('.photo-inspector-preview').getBoundingClientRect();
+              return { x:r.x, width:r.width, height:r.height, overflow:e.scrollHeight > e.clientHeight, gutter:getComputedStyle(e).scrollbarGutter, fit:getComputedStyle(e.querySelector('img')).objectFit }; })()`);
+            await browser.evaluate(`${inspector}.querySelectorAll('details').forEach(e => e.open = false)`); await wait(80);
+            const before = await measure();
+            await browser.evaluate(`${inspector}.querySelectorAll('details').forEach(e => e.open = true)`); await wait(80);
+            const after = await measure();
+            assert.equal(after.gutter, 'stable'); assert.equal(after.fit, 'contain');
+            for (const key of ['x', 'width', 'height']) assert.equal(after[key], before[key], `${name} ${height}: stable ${key}`);
+            if (!before.overflow && after.overflow) transitions++;
+            await browser.evaluate(`${inspector}.querySelectorAll('details').forEach(e => e.open = false); ${inspector}.scrollTop = 0`);
+          }
+          assert(transitions > 0, `${name}: exercised fitting-to-overflowing content`);
+        }
+        await setViewport(1920, 1080);
+      });
+
+      await t.test('Pass 1C: command groups fit laptop/narrow maps; controls and selected photo stay reachable', async () => {
+        await selectPhotoRow(browser, ids['stack-4.png']);
+        await enterEditMode(browser);
+        await clickText(browser, 'Flytt til kartsenter', commandBar);
+        await browser.waitFor(`${editCount()} === 1`);
+        for (const [width, height] of [[1920,1080], [1366,768], [1280,720], [1024,620]]) {
+          await setViewport(width, height);
+          // Re-select requests the existing overlay-aware pan using the resized command bar.
+          await selectPhotoRow(browser, ids['stack-2.png']);
+          await selectPhotoRow(browser, ids['stack-4.png']);
+          await waitForStableEditTarget(browser);
+          const layout = await browser.evaluate(`(() => { const bar = ${commandBar}, b = bar.getBoundingClientRect(), map = document.querySelector('.leaflet-container').getBoundingClientRect();
+            const controls = Array.from(bar.querySelectorAll('button,input'));
+            return { width:b.width, height:b.height, inside:b.left>=map.left && b.right<=map.right && b.top>=map.top && b.bottom<=map.bottom,
+              overflow:bar.scrollWidth > bar.clientWidth, groups:bar.querySelectorAll('[role=group]').length,
+              reachable:controls.every(e => { const r=e.getBoundingClientRect(); return r.left>=b.left && r.right<=b.right && r.top>=b.top && r.bottom<=b.bottom && e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)); }) }; })()`);
+          assert(layout.inside && !layout.overflow && layout.reachable && layout.groups === 3 && layout.height <= 220, `${width}: ${JSON.stringify(layout)}`);
+          const selected = await elementCentre(browser, editTarget);
+          assert.equal(await hitAt(selected), ids['stack-4.png'], 'selected photo stays clear of overlays');
+          await screenshot(`pass1c-command-${width}`);
+        }
+        await clickText(browser, 'Angre', commandBar); await browser.waitFor(`${editCount()} === 0`);
+        await clickText(browser, 'Gjør om', commandBar); await browser.waitFor(`${editCount()} === 1`);
+        await discardEdits(browser);
+        await setViewport(1920,1080);
       });
 
       await t.test('Edit mode: each of six stacked occurrences is selectable from the list, on top and draggable', async () => {
@@ -281,6 +337,43 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         assert.equal(await browser.evaluate('document.querySelector(".photo-marker-stack")?.innerText'), '6');
         assert.equal(await browser.evaluate('document.querySelectorAll("[data-edit-target], .leaflet-marker-draggable").length'), 0, 'no spatial editing on the main map');
         await screenshot('main-thumbnails');
+        await hover('document.querySelector(".photo-marker-stack").closest(".leaflet-marker-icon")');
+        await browser.waitFor('document.querySelector(".photo-thumb-preview")');
+        await click(await elementCentre(browser, 'document.querySelector(".photo-marker-stack").closest(".leaflet-marker-icon")'));
+        await browser.waitFor('document.querySelector(".photo-map-popup")');
+        await browser.waitFor('!document.querySelector(".photo-thumb-preview")'); // Leaflet fades a removed tooltip before detaching its DOM.
+        assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-thumb-preview"))'), false, 'click closes the active hover preview');
+        for (const [width, height] of [[1920,1080], [1366,768], [1280,720], [768,620]]) {
+          await setViewport(width, height);
+          const orientations = new Set();
+          for (let i = 0; i < 6; i++) {
+            await browser.waitFor('document.querySelector(".photo-map-popup-preview img")?.complete');
+            await wait(350); // Leaflet auto-pan after the new image orientation is laid out.
+            const layout = await browser.evaluate(`(() => { const popup=document.querySelector('.photo-map-viewer-popup').getBoundingClientRect(), map=document.querySelector('.leaflet-container').getBoundingClientRect(), image=document.querySelector('.photo-map-popup-preview img'), box=image.getBoundingClientRect();
+              return { inside:popup.left>=map.left && popup.right<=map.right && popup.top>=map.top && popup.bottom<=map.bottom, popupHeight:popup.height,
+                width:box.width, fit:getComputedStyle(image).objectFit, orientation:image.naturalWidth>image.naturalHeight?'landscape':'portrait',
+                source:document.querySelector('.photo-map-popup-placement').innerText, details:document.querySelector('.photo-map-popup-details').open,
+                margins:Array.from(document.querySelectorAll('.photo-map-popup p')).map(e=>getComputedStyle(e).marginBlock), bodyHeight:document.querySelector('.photo-map-popup-body').getBoundingClientRect().height }; })()`);
+            assert(layout.inside && layout.width >= 300 && layout.fit === 'contain' && !layout.details, `${width} popup: ${JSON.stringify(layout)}`);
+            assert(layout.margins.every(m=>m==='0px') && layout.bodyHeight < 130, 'compact body overrides Leaflet paragraph margins');
+            assert.match(layout.source, /Plassering fra GMI/);
+            if (!orientations.has(layout.orientation)) await screenshot(`pass1c-popup-${width}-${layout.orientation}`);
+            orientations.add(layout.orientation);
+            await clickText(browser, 'Neste bilde på samme sted', 'document.querySelector(".photo-map-popup")');
+          }
+          assert.equal(orientations.size, 2, 'same-location paging covers portrait and landscape');
+          await browser.evaluate('document.querySelector(".photo-map-popup-details").open = true');
+          await wait(350);
+          assert(await browser.evaluate('document.querySelector(".photo-map-popup-details").innerText.includes("GUID")'), 'technical identification is accessible on demand');
+          const fits = await browser.evaluate(`(() => { const p=document.querySelector('.photo-map-viewer-popup').getBoundingClientRect(), m=document.querySelector('.leaflet-container').getBoundingClientRect(); return p.top>=m.top && p.bottom<=m.bottom; })()`);
+          assert(fits, 'expanded details remain inside the map');
+          await browser.evaluate('document.querySelector(".photo-map-popup-details").open = false');
+        }
+        await setViewport(1920,1080);
+        await clickText(browser, 'Lukk bildeforhåndsvisning', 'document.querySelector(".photo-map-popup")');
+        await browser.waitFor('!document.querySelector(".photo-map-popup")');
+        await unhover(); await hover('document.querySelector(".photo-marker-stack").closest(".leaflet-marker-icon")');
+        await browser.waitFor('document.querySelector(".photo-thumb-preview")');
         await click(await elementCentre(browser, 'document.querySelector(".photo-marker-stack").closest(".leaflet-marker-icon")'));
         await browser.waitFor('document.querySelector(".photo-map-popup")');
         const pager = () => browser.evaluate('document.querySelector(".photo-map-popup-stack span").innerText');
@@ -294,6 +387,18 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         assert.equal(await activeId(), ids[shown], 'the paged photo opens in the workspace');
         await browser.evaluate('document.querySelector(".photo-workspace-back").click()');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+        for (const [key, occurrence] of [['solo1', '1 av 2'], ['solo2', '2 av 2']]) {
+          await click(await elementCentre(browser, `document.querySelector('.leaflet-marker-icon[data-photo-id="${ids[key]}"]')`));
+          await browser.waitFor(`document.querySelector('.photo-map-popup')?.dataset.photoId === ${JSON.stringify(ids[key])}`);
+          assert.match(await browser.evaluate('document.querySelector(".photo-map-popup .photo-occurrence-context").innerText'), /Flere plasseringer.*Samme bilde/);
+          assert((await browser.evaluate('document.querySelector(".photo-map-popup .photo-occurrence-context").innerText')).includes(occurrence));
+          assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-map-popup-stack"))'), false, 'multiple placements of one asset do not invent a same-location stack');
+          await clickText(browser, 'Åpne i bildemodul', 'document.querySelector(".photo-map-popup")');
+          await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+          assert.equal(await activeId(), ids[key], 'opens this exact occurrence of the shared asset');
+          await clickText(browser, 'Tilbake til appen');
+          await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+        }
         for (let i = 0; i < 6 && await browser.evaluate('Boolean(document.querySelector(".photo-thumb-marker"))'); i++) {
           await browser.evaluate('document.querySelector(".leaflet-control-zoom-out").click()'); await wait(400);
         }
@@ -322,6 +427,45 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         }
         await setViewport(1920, 1080);
         assert.equal(exceptions().length, 0, JSON.stringify(exceptions().map((event) => event.params.exceptionDetails.text)));
+      });
+      await t.test('Pass 1C: real six-photo stacks carry each provenance badge in both map surfaces', async () => {
+        await clickText(browser, 'Bildemodul');
+        await browser.waitFor(inspector);
+        const verify = async (kind) => {
+          await selectPhotoRow(browser, ids['stack-1.png']);
+          await browser.evaluate(`${inspector}.querySelector('.photo-inspector-locate').click()`);
+          await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length === 8');
+          await browser.waitFor(`document.querySelector('.photo-marker-selected .photo-marker-stack')?.innerText === '6'`);
+          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-source-glyph").dataset.sourceGlyph'), kind);
+          const clear = await browser.evaluate(`(() => {const marker=document.querySelector('.photo-marker-selected'), source=marker.querySelector('.photo-thumb-source').getBoundingClientRect(), stack=marker.querySelector('.photo-marker-stack').getBoundingClientRect();
+            return source.right<=stack.left || source.left>=stack.right || source.bottom<=stack.top || source.top>=stack.bottom;})()`);
+          assert(clear, 'source badge and stack count never overlap');
+          await screenshot(`pass1c-stack-${kind}-workspace`);
+          await clickText(browser, 'Tilbake til appen');
+          await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-stack").closest(".leaflet-marker-icon").querySelector(".photo-source-glyph").dataset.sourceGlyph'), kind);
+          await screenshot(`pass1c-stack-${kind}-main`);
+          await clickText(browser, 'Bildemodul');
+          await browser.waitFor(inspector);
+        };
+        await verify('gmi');
+        await applyPhotoSourcePositions(browser, 'exif');
+        await verify('exif');
+        await stagePhotoSource(browser, fixtures.gml, 'gml'); await savePhotoSource(browser, 'gml'); await closePhotoSources(browser);
+        await applyPhotoSourcePositions(browser, 'gml');
+        await verify('gml');
+        // Pan empty map before using the existing centre action, so every member gets the same new manual position.
+        const mapCentre = await elementCentre(browser, 'document.querySelector(".leaflet-container")');
+        await mouseDrag(browser, { x:mapCentre.x-80, y:mapCentre.y+80 }, { x:mapCentre.x-40, y:mapCentre.y+110 });
+        await enterEditMode(browser);
+        for (const name of STACK) {
+          await selectPhotoRow(browser, ids[name]); await waitForStableEditTarget(browser);
+          await clickText(browser, 'Flytt til kartsenter', commandBar);
+        }
+        assert.equal(await browser.evaluate(editCount()), 6);
+        await saveEdits(browser);
+        await verify('manual');
+        assert.equal(exceptions().length, 0);
       });
     } finally {
       await browser.close();

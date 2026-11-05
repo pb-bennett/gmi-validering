@@ -74,11 +74,20 @@ function markerModels(items, workspace, thumbnails) {
 }
 
 const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat, lng, mode, icon, zIndexOffset, label, inWorkspace,
-  interactive, stackIds, thumbnailUrl, filename, popupPhoto, popupStack, actions }) {
+  interactive, stackIds, thumbnailUrl, filename, popupPhoto, popupStack, popupWidth, popupHeight, actions }) {
   const ref = useRef(null);
+  const popupRef = useRef(null);
+  useEffect(() => {
+    const popup = popupRef.current;
+    if (!popup) return;
+    // Leaflet popup sizing options are construction-only in React Leaflet; keep the viewer inside a resized map.
+    Object.assign(popup.options, { minWidth: popupWidth, maxWidth: popupWidth, maxHeight: popupHeight });
+    if (popup.isOpen()) popup.update();
+  }, [popupWidth, popupHeight]);
   const position = useMemo(() => [lat, lng], [lat, lng]);
   const eventHandlers = useMemo(() => ({
     click: () => { if (inWorkspace) actions.current.select(photoId, stackIds); },
+    popupopen: () => actions.current.clearPreview(),
     keydown: (event) => {
       if (!['Enter', ' '].includes(event.originalEvent?.key)) return;
       event.originalEvent.preventDefault();
@@ -113,8 +122,11 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
   }, [actions, icon, label, mode, interactive, layerId, photoId, lat, lng, thumbnailUrl, filename, zIndexOffset]);
   return <Marker ref={ref} key={markerKey} position={position} pane={PHOTO_MARKER_PANE} icon={icon} zIndexOffset={zIndexOffset}
     interactive={interactive} keyboard={interactive} eventHandlers={eventHandlers}>
-    {popupPhoto && <Popup pane="popupPane" maxWidth={230} minWidth={190}>
-      <PhotoMapPopup photo={popupPhoto} stack={popupStack} onOpen={(shownId) => actions.current.openPhoto(layerId, shownId || photoId)} />
+    {popupPhoto && <Popup ref={popupRef} pane="popupPane" className="photo-map-viewer-popup" maxWidth={popupWidth} minWidth={popupWidth}
+      maxHeight={popupHeight} closeButton={false} autoPanPadding={[24, 24]}>
+      <PhotoMapPopup photo={popupPhoto} stack={popupStack} onClose={() => ref.current?.closePopup()}
+        onLayout={() => popupRef.current?.update()}
+        onOpen={(shownId) => actions.current.openPhoto(layerId, shownId || photoId)} />
     </Popup>}
   </Marker>;
 });
@@ -124,7 +136,8 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
 export default function PhotoMarkersLayer({ items, workspace = null, displayMode = 'markers', onOpenPhoto, onSelectPhoto }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
-  useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
+  const [mapSize, setMapSize] = useState(() => map.getSize());
+  useMapEvents({ zoomend: () => setZoom(map.getZoom()), resize: () => setMapSize(map.getSize()) });
   const thumbnails = photoThumbnailsVisible(workspace ? workspace.displayMode : displayMode, zoom);
   const models = markerModels(items, workspace, thumbnails);
   const actions = useRef(null);
@@ -140,7 +153,7 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
     const state = preview.current;
     const open = ({ lat, lng, thumbnailUrl, filename, element }) => {
       clearTimeout(state.timer);
-      if (!thumbnailUrl || map.getContainer().classList.contains('photo-edit-gesture')) return;
+      if (!thumbnailUrl || map.getContainer().classList.contains('photo-edit-gesture') || map.getContainer().querySelector('.photo-map-viewer-popup')) return;
       const content = document.createElement('figure');
       const image = document.createElement('img');
       image.src = thumbnailUrl; image.alt = ''; image.decoding = 'async'; image.draggable = false;
@@ -161,6 +174,11 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
       openPhoto: (layerId, photoId) => { map.closePopup(); onOpenPhoto?.(layerId, photoId); },
       schedulePreview: (target) => { clearTimeout(state.timer); state.timer = setTimeout(() => open(target), PREVIEW_DELAY_MS); },
       openPreview: open,
+      clearPreview: () => {
+        clearTimeout(state.timer);
+        if (state.tooltip && map.hasLayer(state.tooltip)) map.closeTooltip(state.tooltip);
+        state.element = null;
+      },
       closePreview: (element) => {
         clearTimeout(state.timer);
         if (state.element === element && state.tooltip && map.hasLayer(state.tooltip)) map.closeTooltip(state.tooltip);
@@ -170,7 +188,8 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
 
   return (
     <Pane name={PHOTO_MARKER_PANE} style={{ zIndex: PHOTO_MARKER_Z_INDEX }}>
-      {models.map((model) => <PhotoMarker key={`${model.markerKey}:${model.interactive ? 'i' : 'n'}`} {...model} actions={actions} />)}
+      {models.map((model) => <PhotoMarker key={`${model.markerKey}:${model.interactive ? 'i' : 'n'}`} {...model}
+        popupWidth={Math.min(340, Math.max(160, mapSize.x - 64))} popupHeight={Math.max(160, mapSize.y - 80)} actions={actions} />)}
     </Pane>
   );
 }

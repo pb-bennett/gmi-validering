@@ -153,6 +153,37 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile())})`);
         }
       });
+      await t.test('Pass 1C: all source badges render in workspace/main-map thumbnails, with selected ring and direction intact', async () => {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
+        await browser.evaluate(`${legend}.querySelector('[data-mode=thumbnails]').click()`);
+        for (let i = 0; i < 8 && !await browser.evaluate('Boolean(document.querySelector(".photo-thumb-marker"))'); i++) {
+          await browser.evaluate('document.querySelector(".leaflet-control-zoom-in").click()');
+          await browser.evaluate('new Promise(resolve=>setTimeout(resolve,350))');
+        }
+        const badges = () => browser.evaluate(`Array.from(document.querySelectorAll('.photo-thumb-marker')).map(e => ({
+          kind:e.querySelector('.photo-source-glyph').dataset.sourceGlyph, label:e.querySelector('.photo-thumb-source').getAttribute('aria-label'),
+          size:e.getBoundingClientRect().width, border:getComputedStyle(e.querySelector('.photo-thumb')).borderTopColor,
+          inside:(() => {const a=e.querySelector('.photo-thumb-source').getBoundingClientRect(), b=e.querySelector('.photo-thumb').getBoundingClientRect(); return a.left>=b.left && a.right<=b.right && a.top>=b.top && a.bottom<=b.bottom;})() })).sort((a,b)=>a.kind.localeCompare(b.kind))`);
+        await browser.waitFor('document.querySelectorAll(".photo-thumb-source").length === 4');
+        const baseline = await badges();
+        assert.deepEqual(baseline.map(e=>e.kind), ['exif','gmi','gml','manual']);
+        assert(baseline.every(e=>e.size===44 && e.inside));
+        for (const source of PHOTO_POSITION_SOURCES) {
+          const id = source.kind === 'exif' ? exif.id : source.kind === 'gml' ? gmlPhoto.id : repeated[source.kind === 'gmi' ? 0 : 1].id;
+          await select(id);
+          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-source-glyph").dataset.sourceGlyph'), source.kind);
+          assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-thumb-source").getAttribute("aria-label")'), source.kind==='manual'?'Manuelt plassert':`Plassering fra ${source.label}`);
+        }
+        assert(await browser.evaluate('Boolean(document.querySelector(".photo-marker-selected .photo-direction-indicator"))'));
+        await screenshot('pass1c-four-source-thumbnails-workspace');
+        await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+        assert.deepEqual(await badges(), baseline, 'main map reuses exactly the same source badges and borders');
+        await screenshot('pass1c-four-source-thumbnails-main-map');
+        await click('Bildemodul'); await browser.waitFor(legend);
+        await browser.evaluate(`${legend}.querySelector('[data-mode=markers]').click()`);
+        await browser.waitFor(`${markers}.length === 4`);
+        await select(repeated[1].id); // Restore this suite's manual-occurrence selection after re-entering the workspace.
+      });
       await t.test('hidden layer, repeated workspace exits/entries, manual to GMI replacement and reset have no stale display card', async () => {
         const visibility = 'document.querySelector(".photo-workspace-visibility")';
         await enterEditMode(browser);
