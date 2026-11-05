@@ -1,8 +1,9 @@
 import proj4 from 'proj4';
 import '../../map/coordinateProjection.js';
 import { isPhotoPosition } from '../photoSpatial.mjs';
-import { PHOTO_EXPORT_PROFILES, EXPORT_CONTEXT_FIELDS, fullCaptureTime, freezeExportData, isXmlText, validateExportContext } from './exportContract.mjs';
+import { fullCaptureTime, freezeExportData } from './exportContract.mjs';
 import { compareExportKeys, digestHex, exportGuid, planAttachmentNames } from './attachmentNames.mjs';
+import { evaluatePhotoExportRules, normalizeExportContext } from './photoExportRules.mjs';
 
 const issuedPlans = new WeakSet();
 
@@ -55,17 +56,20 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
     usedGuids.add(guid);
     return guid;
   };
-  const context = Object.fromEntries(EXPORT_CONTEXT_FIELDS.map(({ key }) => [key, String(configuration.context?.[key] ?? '').trim()]));
+  const context = normalizeExportContext(configuration.context);
   const errors = [], warnings = [];
   const error = (code, message, occurrenceId, assetId) => errors.push({ code, message, occurrenceId, assetId });
-  if (!Object.hasOwn(PHOTO_EXPORT_PROFILES, profile)) error('invalid-profile', 'Velg en eksportprofil eksplisitt.');
-  if (!gemini && !['EPSG:25832', 'EPSG:25833'].includes(horizontalCrs)) error('invalid-crs', 'Velg EPSG:25832 eller EPSG:25833.');
-  if (profile === 'asbuilt52') errors.push(...validateExportContext(context));
+  // Shared with readiness. Each owner's diagnostics are placed where the plan reaches that owner, which keeps
+  // the established order around the checks only the plan can make. Keys carry the kind of owner, because an
+  // unrepeated photo's occurrence ID is the same as its asset ID.
+  const rules = evaluatePhotoExportRules({ profile, crs, context, assets: snapshot.assets, occurrences: snapshot.occurrences });
+  const owner = (item) => item.occurrenceId ? `occurrence:${item.occurrenceId}` : item.assetId ? `asset:${item.assetId}` : 'layer';
+  const ruleErrors = Map.groupBy(rules.errors, owner), ruleWarnings = Map.groupBy(rules.warnings, owner);
+  const applyRules = (key) => { errors.push(...(ruleErrors.get(key) || [])); warnings.push(...(ruleWarnings.get(key) || [])); };
   const all = [...snapshot.occurrences].sort((a, b) => compareExportKeys(a.occurrenceId, b.occurrenceId));
   const excluded = all.filter((row) => !row.current).map((row) => ({ occurrenceId: row.occurrenceId, reason: 'unplaced' }));
   const placed = all.filter((row) => row.current);
-  if (!placed.length) error('no-placed-photos', 'Ingen forekomster har godtatt posisjon.');
-  if (excluded.length) warnings.push({ code: 'unplaced-excluded', message: `${excluded.length} uplasserte forekomster er utelatt.` });
+  applyRules('layer');
   const selectedAssets = new Set(placed.map((row) => row.assetId));
   const assets = [...snapshot.assets].filter((asset) => selectedAssets.has(asset.assetId)).map((asset) => ({ ...asset })).sort((a, b) => compareExportKeys(a.assetId, b.assetId));
   let attachments = [];
@@ -78,11 +82,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
       try { asset.checksum = await digestHex(await asset.file.arrayBuffer()); }
       catch { error('file-read-failed', `${asset.originalFilename}: originalfilen kunne ikke leses og hashes.`); }
     }
-    if (!gemini && !fullCaptureTime(asset.metadata?.captureTime)) error(asset.metadata?.captureTime ? 'capture-time-precision' : 'capture-time-required', `${asset.originalFilename}: godtatt opptakstid med sekunder kreves.`, undefined, asset.assetId);
-    const photographer = asset.metadata?.photographer?.value;
-    if (profile === 'legacy2019' && photographer && !isXmlText(photographer)) error('invalid-xml-text', `${asset.originalFilename}: fotograf inneholder ugyldige XML-tegn.`);
-    if (profile === 'asbuilt52' && photographer) warnings.push({ code: 'photographer-omitted', assetId: asset.assetId,
-      message: `${asset.originalFilename}: fotograf utelates i AsBuilt 5.2 fordi godtatt brennvidde og kameratype mangler.` });
+    applyRules(`asset:${asset.assetId}`);
   }
   const byAsset = new Map(assets.map((asset) => [asset.assetId, asset]));
   const occurrences = [];
@@ -94,8 +94,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
       const format = gemini ? (value) => { if (!Number.isFinite(value) || Math.abs(value) >= 1e21) throw new Error(); return value.toFixed(6).replace(/^-0\.000000$/, '0.000000'); } : formatExportCoordinate;
       point = { easting: format(coordinates[0]), northing: format(coordinates[1]), ...(gemini ? { z: '0.000000' } : {}) };
     } catch { error('projection-failed', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): posisjonen kan ikke projiseres.`, row.occurrenceId); }
-    if (row.direction && (!Number.isFinite(row.direction.degrees) || row.direction.degrees < 0 || row.direction.degrees >= 360)) error('invalid-direction', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): ugyldig godtatt retning.`, row.occurrenceId);
-    if ((profile === 'legacy2019' || gemini) && !row.direction) error('direction-required', `${byAsset.get(row.assetId)?.originalFilename || row.assetId} (${row.occurrenceId}): Legacy krever godtatt retning.`, row.occurrenceId);
+    applyRules(`occurrence:${row.occurrenceId}`);
     const guid = gemini ? geminiGuid() : await exportGuid(`occurrence:${snapshot.layer.id}:${row.occurrenceId}`);
     occurrences.push({ ...row, point, guid, featureId: gemini ? `id${guid}` : `photo-${guid}`,
       geometryId: gemini ? `id${geminiGuid()}` : `point-${guid}` });
@@ -114,7 +113,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   const timezoneTransformCount = occurrences.filter((row) => /(?:Z|[+-]\d{2}:\d{2})$/.test(fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime) || '')).length;
   if (gemini) {
     warnings.push({ code: 'compatibility-z', message: `${occurrences.length} XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde.` });
-    warnings.push({ code: 'compatibility-time', message: `${missingTimestampCount} features uten full opptakstid. ${timezoneTransformCount} tidssone-suffikser fjernes; lokal klokketid beholdes. Brøkdelsekunder utelates for å matche referansen. Godtatte data endres ikke.` });
+    warnings.push({ code: 'compatibility-time', message: `${missingTimestampCount} features uten full opptakstid får ikke opptakstid i GML-filen. ${timezoneTransformCount} tidssone-suffikser fjernes, og klokkeslettet endres ikke: UTC-tid blir stående som UTC, uten tidssone. Brøkdelsekunder utelates for å matche referansen. Godtatte data endres ikke.` });
     warnings.push({ code: 'compatibility-metadata', message: `${assets.filter((asset) => asset.metadata?.photographer).length} godtatte fotografverdier utelates; bildeinformasjon eksporteres ikke.` });
     warnings.push({ code: 'compatibility-import', message: 'Pakk ut ZIP. Importer photos.gml med Attachments-mappen ved siden av. XML bruker Attachments\\filnavn. Gemini-import må testes manuelt.' });
   }

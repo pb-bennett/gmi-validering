@@ -117,6 +117,13 @@ test('private corpus in the real app: explicit EXIF adoption with the GML attach
     assert.match(await browser.evaluate(`${evidenceRow('exif:captureTime')}.innerText`), new RegExp(`EXIF-tid: ${total} kan brukes[\\s\\S]*0 i konflikt`));
     assert.match(await browser.evaluate(`${evidenceRow('gml:captureTime')}.innerText`), new RegExp(`GML-tid: ${total} kan brukes[\\s\\S]*0 i konflikt`));
     assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), new RegExp(`GML-retning: 0 kan brukes[\\s\\S]*${total} med 0°`));
+    // F3: before adoption the preview says the times exist, and diagnostics carry readable labels.
+    await browser.evaluate(`(() => { const select = ${exportDialog}.querySelector('[aria-label="Eksportprofil"]'); select.value = 'gemini-legacy2019'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await clickSourceControl(browser, 'Lag eksportforhåndsvisning', exportDialog);
+    await browser.waitFor(`${exportDialog}.querySelector('[data-readiness-note="capture-time-in-source"]')`, 120000);
+    assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-readiness-note="capture-time-in-source"]').innerText`), `${total} bilder mangler opptakstid, men tiden finnes i EXIF.`);
+    assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-time"] summary').innerText`), /^Opptakstid i Gemini-filen/);
+    assert(!await browser.evaluate(`${exportDialog}.textContent.includes('Legacy krever godtatt retning')`), 'direction-required names no profile');
     await clickSourceControl(browser, `Bruk EXIF-tid for alle mulige (${total})`, exportDialog);
     await browser.waitFor(`${evidenceRow('exif:captureTime')}.innerText.includes('${total} allerede godtatt')`);
 

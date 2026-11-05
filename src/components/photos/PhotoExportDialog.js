@@ -8,6 +8,7 @@ import { PHOTO_EXPORT_PROFILES, EXPORT_CONTEXT_FIELDS, ASBUILT_CODES } from '@/l
 import usePhotoSession from './usePhotoSession';
 import PhotoEvidenceActions from './PhotoEvidenceActions';
 import { groupPhotoExportDiagnostics } from '@/lib/photos/export/photoExportDiagnostics.mjs';
+import { photoExportReadiness } from '@/lib/photos/export/photoExportReadiness.mjs';
 import './photoExport.css';
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs disabled:opacity-40';
@@ -43,6 +44,7 @@ export default function PhotoExportDialog({ layerId, onClose }) {
   const invalidate = () => { operation.current.version++; setPlan(null); setBusy(false); setMessage(''); };
   const live = plan?.isLive();
   const layer = photoSession.getLayer(layerId);
+  const timesInSource = plan && photoExportReadiness(photoSession.getLayerPhotos(layerId), { profile, crs, context }).notes.find((note) => note.code === 'capture-time-in-source');
   return <dialog ref={ref} className="photo-export-dialog" aria-labelledby="photo-export-title" onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <header><h2 id="photo-export-title">Eksperimentell fotoeksport</h2><button type="button" className={control} onClick={onClose}>Lukk eksport</button></header>
     <p>Gemini-kompatibilitet er ikke verifisert for noen av profilene. Pakken er til lokal importtesting.</p>
@@ -50,7 +52,7 @@ export default function PhotoExportDialog({ layerId, onClose }) {
     <label>Profil<select aria-label="Eksportprofil" value={profile} onChange={(event) => { invalidate(); setProfile(event.target.value); }}>
       <option value="">Velg profil</option>{Object.entries(PHOTO_EXPORT_PROFILES).map(([key, item]) => <option value={key} key={key}>{item.label}</option>)}
     </select></label>
-    {profile === 'gemini-legacy2019' ? <p>EPSG:5972 · XYZ · Z=0 er en kompatibilitetsplassholder, ikke målt høyde. Opptakstid er valgfri; retning kreves. Pakk ut ZIP og importer photos.gml med Attachments-mappen ved siden av.</p> : <label>Koordinatsystem<select aria-label="Eksport-CRS" value={crs} onChange={(event) => { invalidate(); setCrs(event.target.value); }}><option>EPSG:25832</option><option>EPSG:25833</option></select></label>}
+    {profile === 'gemini-legacy2019' ? <p>EPSG:5972 · XYZ · Z=0 er en kompatibilitetsplassholder, ikke målt høyde. Manglende opptakstid stopper ikke eksporten, men skjemaet krever den; retning kreves. Pakk ut ZIP og importer photos.gml med Attachments-mappen ved siden av.</p> : <label>Koordinatsystem<select aria-label="Eksport-CRS" value={crs} onChange={(event) => { invalidate(); setCrs(event.target.value); }}><option>EPSG:25832</option><option>EPSG:25833</option></select></label>}
     {profile === 'legacy2019' && <p>Legacy krever godtatt opptakstid med sekunder og godtatt retning. Ukjent retning er ikke nord.</p>}
     {profile === 'asbuilt52' && <fieldset><legend>Påkrevd AsBuilt-eksportkontekst</legend>
       <p>Oppgi sannferdige verdier for alle eksporterte forekomster. Dette fylles ikke fra bildet eller GMI. Eksperimentell 2D-geometri uten Z. Fotograf utelates fordi komplett moderne bildeinformasjon mangler.</p>
@@ -75,6 +77,7 @@ export default function PhotoExportDialog({ layerId, onClose }) {
       <p>{plan.counts.features} planlagte features · {plan.counts.attachments} vedlegg · {plan.counts.sharedAttachments} delte originalbilder</p>
       {!live && <p role="alert">Fotolaget eller godtatte data er endret. Lag en ny forhåndsvisning.</p>}
       {plan.profile === 'gemini-legacy2019' && <p>{plan.crs} · 3D · {plan.counts.compatibilityZCount} Z-plassholdere · {plan.counts.missingTimestampCount} uten full opptakstid · {plan.counts.timezoneTransformCount} tidssoneendringer. Bildeinformasjon utelates.</p>}
+      {timesInSource && <p data-readiness-note={timesInSource.code}>{timesInSource.message}</p>}
       <h3>Blokkerende feil ({plan.errors.length})</h3><Diagnostics items={plan.errors} />
       <h3>Advarsler ({plan.warnings.length})</h3><Diagnostics items={plan.warnings} />
       <details><summary>Vedleggsnavn og endringer</summary><ul>{plan.assets.map((asset) => <li key={asset.assetId}>{asset.originalFilename} → {asset.exportFilename}</li>)}</ul></details>
