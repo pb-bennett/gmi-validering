@@ -37,14 +37,14 @@ const CAPTURE_STATES = Object.freeze(['accepted', 'adoptable', 'conflict', 'part
 // Direction is owned by the occurrence. GML 0° is reported apart and never counts as a known direction.
 function classifyDirection(photo) {
   const accepted = photo.direction?.current || null;
-  if (accepted) return { state: isValidExportDirection(accepted) ? 'accepted' : 'invalid', accepted, adoptableKinds: [] };
+  if (accepted) return { state: isValidExportDirection(accepted) ? 'accepted' : 'invalid', accepted, adoptableKinds: [], sourcePending: readingExif(photo) };
   const results = SOURCE_KINDS.map((kind) => [kind, evidenceEligibility(photo, 'direction', kind).status]);
   const has = (status) => results.some(([, item]) => item === status);
   const adoptableKinds = results.filter(([, status]) => status === 'eligible').map(([kind]) => kind);
   const zeroNeedsReview = has('zeroNeedsReview');
   const state = has('conflicting') ? 'conflict' : adoptableKinds.length ? 'adoptable' : zeroNeedsReview ? 'zero-review'
     : readingExif(photo) ? 'pending' : has('unsupportedReference') ? 'unsupported' : has('unusable') ? 'unusable' : 'none';
-  return { state, accepted, adoptableKinds, zeroNeedsReview };
+  return { state, accepted, adoptableKinds, zeroNeedsReview, sourcePending: readingExif(photo) };
 }
 const DIRECTION_STATES = Object.freeze(['accepted', 'adoptable', 'conflict', 'zero-review', 'unsupported', 'unusable', 'invalid', 'pending', 'none']);
 

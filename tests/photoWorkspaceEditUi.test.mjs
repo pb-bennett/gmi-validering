@@ -75,7 +75,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await browser.waitFor('!document.querySelector(".photo-workspace-toast")', 9000);
       });
 
-      await t.test('Verktøy menu: grouping, icons, placeholder Fullfør opplysninger…, keyboard and no photo-specific items', async () => {
+      await t.test('Verktøy menu: grouping, icons, Fullfør opplysninger… opens its tool, keyboard and no photo-specific items', async () => {
         await browser.evaluate('document.querySelector(".photo-tools-trigger").click()');
         await browser.waitFor('document.querySelector(".photo-tools-popup[role=menu]")');
         const menu = await browser.evaluate(`(() => { const m = document.querySelector('.photo-tools-popup');
@@ -99,8 +99,12 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await browser.waitFor('!document.querySelector(".photo-tools-popup")');
         assert(await browser.evaluate('document.activeElement === document.querySelector(".photo-tools-trigger")'));
         await openTool(browser, 'Fullfør opplysninger…');
-        await wait(150);
-        assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-tools-popup") || document.querySelector("dialog[open]"))'), false, 'placeholder closes the menu and opens nothing');
+        await browser.waitFor('document.querySelector(".photo-completion-dialog[open]")');
+        assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-tools-popup"))'), false, 'the menu closes');
+        await browser.evaluate('document.querySelector(".photo-completion-dialog[open] .photo-import-footer .gmi-primary-control").click()');
+        await browser.waitFor('!document.querySelector(".photo-completion-dialog")');
+        assert(await browser.evaluate('document.activeElement === document.querySelector(".photo-tools-trigger")'), 'focus returns to Verktøy');
+        await browser.evaluate('document.activeElement.blur()');
       });
 
       await t.test('icon-only controls: hover and focus tooltips, no title, state-aware eye; text controls have none', async () => {

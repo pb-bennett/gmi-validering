@@ -3,15 +3,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { normalizePhotographer } from '@/lib/photos/photoCaptureMetadata.mjs';
-import { captureTimeFields, composeCaptureTime, hasPlaceholderSeconds } from '@/lib/photos/photoCaptureTimeInput.mjs';
+import { CAPTURE_TIME_ERRORS, captureTimeFields, captureTimeHelp, composeCaptureTime, hasPlaceholderSeconds } from '@/lib/photos/photoCaptureTimeInput.mjs';
 import { formatPhotoCaptureTime, photoMetadataSourceLabel, photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoCaptureTimeField from './PhotoCaptureTimeField';
 
 const button = 'gmi-compact-button gmi-focus-ring min-h-9 border px-3 py-1.5 text-sm font-medium';
 const timeText = (value) => formatPhotoCaptureTime(value)?.text || value?.iso || '';
-const TIME_ERRORS = { 'missing-date': 'Velg en dato.', 'invalid-offset': 'Skriv forskyvningen som +HH:MM eller −HH:MM.',
-  'offset-without-time': 'Tidssone krever klokkeslett.', 'invalid-value': 'Ugyldig dato eller klokkeslett.',
-  'missing-seconds': 'Kilden har ikke sekunder. Oppgi sekunder.' };
 
 // The initial choice reflects the accepted value: the matching evidence, or "Annen verdi" for a manual value.
 function initialChoice(accepted, evidence) {
@@ -29,7 +26,7 @@ function Choice({ name, value, checked, onChange, children, disabled = false, cl
 
 // Asset-level capture metadata for the selected photo. A canonical, explicit replacement written with
 // setCaptureMetadata on save; it is never part of the Edit-mode transaction.
-export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceCount = 1, onClose, onSaved }) {
+export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceCount = 1, exportProfile, onClose, onSaved }) {
   const ref = useRef(null);
   const id = useId();
   const accepted = photo.captureMetadata || {};
@@ -39,6 +36,8 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
   const timePrefill = accepted.captureTime?.value || timeEvidence.find((item) => item.value)?.value;
   const [timeFields, setTimeFields] = useState(() => captureTimeFields(timePrefill?.iso));
   const [timeEdited, setTimeEdited] = useState(false);
+  // A genuine :00 looks exactly like the prefill, so it is confirmed outright. It is saved as manual, never as the source's value.
+  const [zeroSecondsConfirmed, setZeroSecondsConfirmed] = useState(false);
   const [nameChoice, setNameChoice] = useState(() => initialChoice(accepted.photographer, nameEvidence));
   const [nameText, setNameText] = useState(() => accepted.photographer?.value || nameEvidence.find((item) => item.value)?.value || '');
   const [errors, setErrors] = useState({});
@@ -46,6 +45,7 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
   const [touched, setTouched] = useState({});
   const touch = (field, setter) => (value) => { setTouched((previous) => ({ ...previous, [field]: true })); setter(value); };
   const changeTimeFields = touch('captureTime', (fields) => { if (fields.time !== timeFields.time) setTimeEdited(true); setTimeFields(fields); });
+  const secondsUnknown = !timeEdited && hasPlaceholderSeconds(timePrefill, timeFields);
 
   useEffect(() => {
     const dialog = ref.current, opener = document.activeElement;
@@ -63,9 +63,9 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
       return { write: current?.provenance?.evidenceId === evidenceId ? null : { input: null, evidenceId } };
     }
     if (field === 'captureTime') {
-      if (!timeEdited && hasPlaceholderSeconds(timePrefill, manualInput)) return { error: TIME_ERRORS['missing-seconds'] };
+      if (secondsUnknown && !zeroSecondsConfirmed) return { error: CAPTURE_TIME_ERRORS['missing-seconds'] };
       const composed = composeCaptureTime(manualInput);
-      if (!composed.ok) return { error: TIME_ERRORS[composed.error] };
+      if (!composed.ok) return { error: CAPTURE_TIME_ERRORS[composed.error] };
       const same = current?.provenance?.kind === 'manual' && current.value.iso === composed.value.iso;
       return { write: same ? null : { input: composed.value.iso } };
     }
@@ -89,7 +89,8 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
     onClose();
   };
 
-  return <dialog ref={ref} className="photo-metadata-dialog" aria-labelledby={`${id}-title`} onCancel={(event) => { event.preventDefault(); onClose(); }}>
+  // onClose covers a close the browser makes by itself: without a user action since the last Escape it skips cancel.
+  return <dialog ref={ref} className="photo-metadata-dialog" aria-labelledby={`${id}-title`} onCancel={(event) => { event.preventDefault(); onClose(); }} onClose={onClose}>
     <form onSubmit={save} className="photo-metadata-form">
       <header><h2 id={`${id}-title`}>Rediger opptaksdata</h2><p className="break-all">{photo.originalFilename}</p></header>
       <div className="photo-metadata-body">
@@ -101,7 +102,11 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
             {photoSourceLabel(evidence.kind)}{evidence.sourceFilename ? ` · ${evidence.sourceFilename}` : ''}: {evidence.value ? timeText(evidence.value) : `${typeof evidence.raw === 'string' ? evidence.raw : JSON.stringify(evidence.raw)} (kan ikke tolkes sikkert)`}
           </Choice>)}
           <Choice name={`${id}-time`} value="other" checked={timeChoice === 'other'} onChange={touch('captureTime', setTimeChoice)}>Annen verdi</Choice>
-          {timeChoice === 'other' && <PhotoCaptureTimeField value={timeFields} onChange={changeTimeFields} error={errors.captureTime} />}
+          {timeChoice === 'other' && <PhotoCaptureTimeField value={timeFields} onChange={changeTimeFields} error={errors.captureTime} help={captureTimeHelp(exportProfile)} />}
+          {timeChoice === 'other' && secondsUnknown && <label className="photo-metadata-seconds">
+            <input type="checkbox" checked={zeroSecondsConfirmed} onChange={(event) => { setZeroSecondsConfirmed(event.target.checked); setErrors((previous) => ({ ...previous, captureTime: undefined })); }} />
+            <span>Sekundene er 00 <span className="photo-metadata-consequence">Kilden oppgir bare minutter. Dette lagres som din manuelle verdi, ikke som kildens.</span></span>
+          </label>}
           {accepted.captureTime && <Choice name={`${id}-time`} value="remove" checked={timeChoice === 'remove'} onChange={touch('captureTime', setTimeChoice)} className="photo-metadata-remove">
             Fjern godtatt opptakstid <span className="photo-metadata-consequence">Kan blokkere eksport for Legacy og AsBuilt.</span>
           </Choice>}

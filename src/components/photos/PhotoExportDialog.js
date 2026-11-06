@@ -20,12 +20,13 @@ function Diagnostics({ items }) {
   </details>);
 }
 
-export default function PhotoExportDialog({ layerId, onClose }) {
+// Only the AsBuilt context is shared with Fullfør opplysninger. Profile and CRS are still chosen here each time, as before.
+export default function PhotoExportDialog({ layerId, initialContext, onContextChange, onClose }) {
   usePhotoSession();
   const ref = useRef(null), operation = useRef({ version: 0 });
   const [profile, setProfile] = useState('');
   const [crs, setCrs] = useState('EPSG:25832');
-  const [context, setContext] = useState({});
+  const [context, setContext] = useState(initialContext || {});
   const [plan, setPlan] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -42,6 +43,7 @@ export default function PhotoExportDialog({ layerId, onClose }) {
     };
   }, []);
   const invalidate = () => { operation.current.version++; setPlan(null); setBusy(false); setMessage(''); };
+  const changeContext = (key, value) => { invalidate(); const next = { ...context, [key]: value }; setContext(next); onContextChange?.(next); };
   const live = plan?.isLive();
   const layer = photoSession.getLayer(layerId);
   const timesInSource = plan && photoExportReadiness(photoSession.getLayerPhotos(layerId), { profile, crs, context }).notes.find((note) => note.code === 'capture-time-in-source');
@@ -57,10 +59,10 @@ export default function PhotoExportDialog({ layerId, onClose }) {
     {profile === 'asbuilt52' && <fieldset><legend>Påkrevd AsBuilt-eksportkontekst</legend>
       <p>Oppgi sannferdige verdier for alle eksporterte forekomster. Dette fylles ikke fra bildet eller GMI. Eksperimentell 2D-geometri uten Z. Fotograf utelates fordi komplett moderne bildeinformasjon mangler.</p>
       {EXPORT_CONTEXT_FIELDS.map(({ key, label, type }) => <label key={key}>{label}{type === 'code'
-        ? <select aria-label={`Eksport ${label}`} value={context[key] || ''} onChange={(event) => { invalidate(); setContext({ ...context, [key]: event.target.value }); }}>
+        ? <select aria-label={`Eksport ${label}`} value={context[key] || ''} onChange={(event) => changeContext(key, event.target.value)}>
           <option value="">Velg kode</option>{ASBUILT_CODES[key].map((item) => <option key={item.value} value={item.value}>{item.value} · {item.label}</option>)}
         </select>
-        : <input type={type} aria-label={`Eksport ${label}`} value={context[key] || ''} onChange={(event) => { invalidate(); setContext({ ...context, [key]: event.target.value }); }} />}</label>)}
+        : <input type={type} aria-label={`Eksport ${label}`} value={context[key] || ''} onChange={(event) => changeContext(key, event.target.value)} />}</label>)}
     </fieldset>}
     {profile !== 'gemini-legacy2019' && <p>Attachments/&lt;filnavn&gt; med skråstrek er appens testkonvensjon. Retning antas eksperimentelt å være grader med klokken fra geografisk nord (1/1).</p>}
     <PhotoEvidenceActions photos={photoSession.getLayerPhotos(layerId)} layerId={layerId} onAdopt={invalidate} exportProfile={profile} />

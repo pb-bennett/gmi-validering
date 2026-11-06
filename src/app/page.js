@@ -15,6 +15,7 @@ import { canRedoPhotoEdit, canUndoPhotoEdit, changedPhotoIds, effectivePhoto, em
   photoEditReducer } from '@/lib/photos/photoEditSession.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { photoStackMembers } from '@/lib/photos/photoStacks.mjs';
+import { photoExportConfigFor, reconcilePhotoExportConfig, updatePhotoExportConfig } from '@/lib/photos/photoExportConfig.mjs';
 import PhotoWorkspaceCollection from '@/components/photos/PhotoWorkspaceCollection';
 import PhotoPositioningWizard from '@/components/photos/PhotoPositioningWizard';
 import PhotoWorkspaceInspector from '@/components/photos/PhotoWorkspaceInspector';
@@ -22,6 +23,7 @@ import PhotoWorkspaceViewer from '@/components/photos/PhotoWorkspaceViewer';
 import PhotoCaptureMetadataDialog from '@/components/photos/PhotoCaptureMetadataDialog';
 import PhotoSourcesInfoDialog from '@/components/photos/PhotoSourcesInfoDialog';
 import PhotoExportDialog from '@/components/photos/PhotoExportDialog';
+import PhotoCompletionDialog from '@/components/photos/PhotoCompletionDialog';
 import PhotoWorkspaceToast from '@/components/photos/PhotoWorkspaceToast';
 import PhotoEditCommandBar from '@/components/photos/PhotoEditCommandBar';
 import PhotoEditBoundaryDialog from '@/components/photos/PhotoEditBoundaryDialog';
@@ -150,6 +152,9 @@ export default function Home() {
   const [photoMapDisplay, setPhotoMapDisplay] = usePhotoMapDisplayPreference();
   const [photoNotice, setPhotoNotice] = useState(null);
   const [photoDialog, setPhotoDialog] = useState(null);
+  // Transient per-layer export choices, shared by Fullfør opplysninger and the export dialog. Never persisted.
+  const [photoExportConfigs, setPhotoExportConfigs] = useState(() => new Map());
+  const photoToolOpenerRef = useRef(null);
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [photoBoundary, setPhotoBoundary] = useState(null);
   // Non-drag move for crowded places: the next map click moves the selected placed photo. Bound to one occurrence.
@@ -293,14 +298,14 @@ export default function Home() {
     photoTriggerRef.current = opener;
     setPhotoImport({ kind: 'append', targetLayerId: workspaceLayer.id });
   });
-  // Placeholder entry point for the later metadata/export overhaul. Intentionally does nothing yet.
-  const openCompletePhotoDetails = () => {};
+  const changePhotoExportConfig = (layerId, patch) => setPhotoExportConfigs((configs) => updatePhotoExportConfig(configs, layerId, patch));
+  const openCompletePhotoDetails = (opener) => requestWorkspaceAction(() => { photoToolOpenerRef.current = opener; setPhotoDialog('complete'); });
   const runWorkspaceTool = (tool, opener) => {
     if (tool === 'add') addPhotosToLayer(opener);
     else if (tool === 'edit') { if (photoWorkspace.mode !== 'edit') requestWorkspaceAction(enterPhotoEditMode); }
     else if (tool === 'sources') openPhotoSources();
     else if (tool === 'info') requestWorkspaceAction(() => setPhotoDialog('info'));
-    else if (tool === 'complete') openCompletePhotoDetails();
+    else if (tool === 'complete') openCompletePhotoDetails(opener);
     else if (tool === 'export') requestWorkspaceAction(() => setPhotoDialog('export'));
     else if (tool === 'remove') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'remove' }));
   };
@@ -317,6 +322,7 @@ export default function Home() {
     setPhotoLocateRequest((request) => request && !photoSession.getLayer(request.layerId)?.photoIds.includes(request.photoId) ? null : request);
     setPhotoSourceWorkflow((workflow) => workflow && !photoSession.getLayer(workflow.layerId) ? null : workflow);
     dispatchPhotoWorkspace({ type: 'reconcile', layers: photoSession.getSnapshot().photoLayers });
+    setPhotoExportConfigs((configs) => reconcilePhotoExportConfig(configs, photoSession.getSnapshot().photoLayers.map((layer) => layer.id)));
     const ticket = photoEditTicketRef.current;
     if (!ticket) return;
     if (!photoSession.photoEditsAreLive(ticket)) {
@@ -568,7 +574,11 @@ export default function Home() {
         loadedSources={loadedGmiLayers} loadedSourceInput={loadedGmiInput} onClose={() => setPhotoSourceWorkflow(null)} />}
       {workspaceLayer && !photoImport && photoDialog === 'info' && <PhotoSourcesInfoDialog layer={workspaceLayer} photos={workspacePhotos}
         onClose={() => setPhotoDialog(null)} onOpenSources={() => { setPhotoDialog(null); openPhotoSources(); }} />}
-      {workspaceLayer && !photoImport && photoDialog === 'export' && <PhotoExportDialog layerId={workspaceLayer.id} onClose={() => setPhotoDialog(null)} />}
+      {workspaceLayer && !photoImport && photoDialog === 'export' && <PhotoExportDialog layerId={workspaceLayer.id} initialContext={photoExportConfigFor(photoExportConfigs, workspaceLayer.id).context}
+        onContextChange={(context) => changePhotoExportConfig(workspaceLayer.id, { context })} onClose={() => setPhotoDialog(null)} />}
+      {workspaceLayer && !photoImport && photoDialog === 'complete' && <PhotoCompletionDialog key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos}
+        config={photoExportConfigFor(photoExportConfigs, workspaceLayer.id)} onConfigChange={(patch) => changePhotoExportConfig(workspaceLayer.id, patch)} openerRef={photoToolOpenerRef}
+        onOpenSources={() => { setPhotoDialog(null); openPhotoSources(); }} onClose={() => setPhotoDialog(null)} />}
       {workspaceLayer && !photoImport && photoViewerOpen && activeWorkspacePhoto?.dimensions && <PhotoWorkspaceViewer photo={activeWorkspacePhoto}
         photos={effectiveWorkspacePhotos} assetSequence={workspaceView.assetSequence} onClose={() => setPhotoViewerOpen(false)}
         onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} />}

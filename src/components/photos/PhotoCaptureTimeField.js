@@ -1,12 +1,12 @@
 'use client';
 
 import { useId } from 'react';
-import { CAPTURE_TIMEZONE_OPTIONS } from '@/lib/photos/photoCaptureTimeInput.mjs';
+import { CAPTURE_TIMEZONE_OPTIONS, captureTimeHelp } from '@/lib/photos/photoCaptureTimeInput.mjs';
 
 const input = 'gmi-focus-ring rounded border border-gmi-border-strong bg-gmi-surface px-2 py-1 text-sm';
 
 // Controlled: value = { date, time, zone, customOffset } from captureTimeFields/composeCaptureTime.
-export default function PhotoCaptureTimeField({ value, onChange, error = null, legend = 'Opptakstid' }) {
+export default function PhotoCaptureTimeField({ value, onChange, error = null, legend = 'Opptakstid', help = captureTimeHelp() }) {
   const id = useId();
   const set = (patch) => onChange({ ...value, ...patch });
   return <fieldset className="photo-capture-time-field">
@@ -22,7 +22,7 @@ export default function PhotoCaptureTimeField({ value, onChange, error = null, l
       {value.zone === 'other' && <label htmlFor={`${id}-offset`}>Forskyvning<input id={`${id}-offset`} className={input} inputMode="text" placeholder="+05:30"
         pattern="[+\-][0-9]{2}:[0-9]{2}" value={value.customOffset} onChange={(event) => set({ customOffset: event.target.value })} /></label>}
     </div>
-    <p className="photo-capture-time-help">Uten klokkeslett lagres bare dato. Legacy og AsBuilt krever sekunder.</p>
+    <p className="photo-capture-time-help">{help}</p>
     {error && <p className="photo-capture-time-error" role="alert">{error}</p>}
   </fieldset>;
 }
