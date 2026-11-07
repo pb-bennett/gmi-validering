@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { completionGmlText } from './helpers/photoCompletionFixtures.mjs';
-import { backToDelivery, buildPreview, canAdvance, canDownload, chooseFormat, closeExport, deliveryState, downloadZip, exportDialog, openCompletionFromExport, openExport, packageState, previewNames, selectedFormat, setLabel } from './helpers/photoExportWizard.mjs';
+import { backToDelivery, buildPreview, canAdvance, canDownload, chooseFormat, closeExport, deliveryState, downloadZip, exportDialog, openCompletionFromExport, openExport, packageState, previewNames, returnToExport, selectedFormat, setLabel } from './helpers/photoExportWizard.mjs';
 import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, clickImport, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
 import { KEYS, elementCentre, pressKey } from './helpers/photoWorkspace.mjs';
 
 // The two-screen export wizard in the real app: File objects, chunked exifr, native dialogs, trusted input and real downloads.
-// The way back from Fullfør opplysninger is M6d, so here the hub is only reached.
+// The way to Fullfør opplysninger and back has its own suite, photoExportReturnUi.
 const app = process.env.PHOTO_UI_URL;
 const hub = 'document.querySelector(".photo-completion-dialog[open]")';
 const button = (label) => `Array.from(${exportDialog}.querySelectorAll('button')).find((item) => item.innerText.trim() === ${JSON.stringify(label)})`;
@@ -196,8 +196,8 @@ layerTest('Fullfør opplysninger replaces the wizard and stays open, and a doubl
   await delay(800);
   assert(await browser.evaluate(`Boolean(${hub})`), 'a late close event from the wizard does not close the hub');
   assert.equal(await browser.evaluate(`${hub}.querySelector('.photo-completion-target select').value`), 'gemini-legacy2019');
-  await browser.evaluate(`${hub}.querySelector('.photo-import-footer .gmi-primary-control').click()`);
-  await browser.waitFor(`!${hub}`);
+  await returnToExport(browser);
+  await closeExport(browser);
   assert.equal(await browser.evaluate(`document.activeElement === document.querySelector('.photo-tools-trigger')`), true, 'focus returns to Verktøy');
 });
 
@@ -227,10 +227,7 @@ layerTest('pending EXIF: no false blockers on any format, Neste waits, and the s
   await browser.evaluate(`${hub}.querySelector('[data-task="captureTime"]').click()`);
   await browser.waitFor(`${hub}.querySelector('[data-completion-panel="captureTime"] [data-export-status-reading]')`);
   assert.equal(await browser.evaluate(`${hub}.querySelectorAll('[data-export-level]').length`), 0);
-  await browser.evaluate(`${hub}.querySelector('.photo-import-footer .gmi-primary-control').click()`);
-  await browser.waitFor(`!${hub}`);
-
-  await openExport(browser);
+  await returnToExport(browser);
   assert.equal(await deliveryState(browser), 'reading');
   await browser.evaluate(`(() => { const held = window.__heldReads; window.__heldReads = null; held.forEach((read) => read()); })()`);
   await browser.waitFor(`${exportDialog}.querySelector('[data-delivery-state]').dataset.deliveryState !== 'reading'`, 60000);

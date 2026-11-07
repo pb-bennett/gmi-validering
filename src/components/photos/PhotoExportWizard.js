@@ -27,10 +27,11 @@ function saveFile(blob, filename, urls) {
 
 // Choices live in the page's export config, so they outlast this dialog. The plan lives only here: going back or closing
 // discards it, and nothing on the second screen can change what it was built from.
-export default function PhotoExportWizard({ layer, photos, config, onConfigChange, openerRef, onOpenCompletion, onClose }) {
+// `resumed` means the user came back from Fullfør opplysninger.
+export default function PhotoExportWizard({ layer, photos, config, onConfigChange, openerRef, resumed = false, onOpenCompletion, onClose }) {
   // Render reads plan.isLive(), which depends on the session and not on props or state, so it must never be cached.
   'use no memo';
-  const ref = useRef(null), id = useId();
+  const ref = useRef(null), live = useRef(false), id = useId();
   const [now] = useState(() => Date.now());
   const [state, dispatch] = useReducer(photoExportWizardReducer, PHOTO_EXPORT_WIZARD_START);
   // The reducer drops late results, but it cannot stop a handler, and two clicks can land before a render. This can.
@@ -39,9 +40,10 @@ export default function PhotoExportWizard({ layer, photos, config, onConfigChang
 
   useEffect(() => {
     const dialog = ref.current, opener = openerRef?.current || document.activeElement, running = work.current, activeUrls = urls.current;
+    live.current = true;
     dialog.showModal();
     return () => {
-      running.download++; dialog.close();
+      live.current = false; running.download++; dialog.close();
       for (const url of activeUrls) URL.revokeObjectURL(url);
       activeUrls.clear();
       if (opener?.isConnected) opener.focus();
@@ -86,7 +88,9 @@ export default function PhotoExportWizard({ layer, photos, config, onConfigChang
   const packaging = packageState === 'packaging';
   const cancelButton = <button type="button" className={photoSourceButton} onClick={onClose}>Avbryt</button>;
 
-  return <dialog ref={ref} className="photo-collection-dialog photo-export-wizard" aria-labelledby={`${id}-title`} onCancel={(event) => { event.preventDefault(); onClose(); }} onClose={onClose}>
+  // onClose covers a close the browser makes by itself, as in the hub. One from this dialog's own cleanup arrives late and must not count.
+  return <dialog ref={ref} className="photo-collection-dialog photo-export-wizard" aria-labelledby={`${id}-title`} onCancel={(event) => { event.preventDefault(); onClose(); }}
+    onClose={(event) => { if (live.current && !event.currentTarget.open) onClose(); }}>
     <div className="photo-collection-frame">
       <header className="photo-collection-header border-b border-gmi-border">
         <div className="min-w-0"><h2 id={`${id}-title`}>Eksporter bilder</h2><p className="truncate text-sm text-gmi-text-muted">{layer.name}</p></div>
@@ -97,7 +101,7 @@ export default function PhotoExportWizard({ layer, photos, config, onConfigChang
         ? <PhotoExportDeliveryStep config={config} model={model} readiness={readiness} onConfigChange={onConfigChange} onOpenCompletion={onOpenCompletion} />
         : <PhotoExportPackageStep status={packageState} preview={state.preview} download={state.download} readiness={readiness} />}
       {state.step === 'delivery' ? <footer key="delivery" className="photo-import-footer border-t border-gmi-border">
-        <p className="photo-export-footer-status" role="status">{model.advance.reason || `${photoCount(readiness.counts.assets)} i pakken`}</p>
+        <p className="photo-export-footer-status" role="status">{resumed && 'Kontrollen er oppdatert. '}{model.advance.reason || `${photoCount(readiness.counts.assets)} i pakken`}</p>
         {cancelButton}
         <button type="button" className={model.completionPrimary ? photoSourceButton : primary} data-export-advance disabled={!model.advance.enabled} onClick={build}>{model.advance.label}</button>
       </footer> : <footer key="package" className="photo-import-footer border-t border-gmi-border">

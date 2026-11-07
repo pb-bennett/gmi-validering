@@ -88,10 +88,15 @@ export async function closeExport(browser) {
   await browser.waitFor(`!${exportDialog}`);
 }
 
-// M6c has no way back yet, so a suite that needs the wizard afterwards closes the hub and opens export again.
+// The hub remembers where it was opened from, so `returnToExport` is the way back, and it always lands on Leveranse.
 export async function openCompletionFromExport(browser) {
   await clickSourceControl(browser, 'Fullfør opplysninger…', exportDialog);
   await browser.waitFor(`${completionDialog} && !${exportDialog}`);
+}
+
+export async function returnToExport(browser) {
+  await clickSourceControl(browser, 'Tilbake til eksport', completionDialog);
+  await browser.waitFor(`${deliveryStep} && !${completionDialog}`);
 }
 
 // The hub owns the AsBuilt context. `values` is keyed by context field, such as `projectName`.

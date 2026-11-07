@@ -8,6 +8,7 @@ import PhotoCaptureMetadataDialog from './PhotoCaptureMetadataDialog';
 import { PhotoCompletionContextPanel, PhotoCompletionPhotographerPanel, PhotoCompletionPlacementPanel } from './PhotoCompletionDetailsPanels';
 import PhotoCompletionDirectionPanel from './PhotoCompletionDirectionPanel';
 import PhotoCompletionTimePanel from './PhotoCompletionTimePanel';
+import { photoSourceButton } from './PhotoSourceOption';
 import './photoCompletion.css';
 
 const TASK_NOTES = Object.freeze({
@@ -28,21 +29,24 @@ function TaskButton({ task, active, onSelect }) {
 // Standalone hub for what the sources could not settle. The session has already accepted source values, so this only
 // shows them and takes corrections. Each one goes through the session, and readiness and the counts follow canonical state.
 // `entry` is set when the hub comes back from a handoff: { task, selections }. Nothing else survives the trip.
-export default function PhotoCompletionDialog({ layer, photos, config, onConfigChange, openerRef, entry = null, onOpenMap, onOpenSources, onClose }) {
-  const ref = useRef(null), id = useId();
+// `fromExport` means the export wizard sent the user here, so every way out, onClose included, leads back to it.
+export default function PhotoCompletionDialog({ layer, photos, config, onConfigChange, openerRef, entry = null, fromExport = false, onOpenMap, onOpenSources, onOpenExport, onClose }) {
+  const ref = useRef(null), live = useRef(false), id = useId();
   const [now] = useState(() => Date.now());
   const [activeKey, setActiveKey] = useState(null);
   const [selections, setSelections] = useState(entry?.selections || {});
-  const [resumed] = useState(Boolean(entry));
+  // Arriving from another screen, focus takes the heading, so a held Enter or Space cannot reach the first control here.
+  const [focusOnArrival] = useState(Boolean(entry) || fromExport);
   const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     const dialog = ref.current, opener = openerRef?.current || document.activeElement;
+    live.current = true;
     dialog.showModal();
-    if (resumed) dialog.querySelector('[data-completion-heading]')?.focus();
-    return () => { dialog.close(); if (opener?.isConnected) opener.focus(); };
-  }, [openerRef, resumed]);
+    if (focusOnArrival) dialog.querySelector('[data-completion-heading]')?.focus();
+    return () => { live.current = false; dialog.close(); if (opener?.isConnected) opener.focus(); };
+  }, [openerRef, focusOnArrival]);
 
   const readiness = useMemo(() => photoExportReadiness(photos, { profile: config.profile, crs: config.crs, context: config.context, now }), [photos, config, now]);
   const model = useMemo(() => photoCompletionModel(photos, readiness), [photos, readiness]);
@@ -68,8 +72,10 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
   const groups = [['main', null], ['other', 'Andre opplysninger']].map(([group, label]) => [label, model.tasks.filter((item) => item.group === group)]).filter(([, tasks]) => tasks.length);
 
   return <>
-    {/* onClose covers a close the browser makes by itself: without a user action since the last Escape it skips cancel. */}
-    <dialog ref={ref} className="photo-collection-dialog photo-completion-dialog" aria-labelledby={`${id}-title`} onCancel={(event) => { event.preventDefault(); onClose(); }} onClose={onClose}>
+    {/* onClose covers a close the browser makes by itself: without a user action since the last Escape it skips cancel.
+        The event arrives late, so one from this dialog's own cleanup must not count: onClose can open another screen. */}
+    <dialog ref={ref} className="photo-collection-dialog photo-completion-dialog" aria-labelledby={`${id}-title`} onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onClose={(event) => { if (live.current && !event.currentTarget.open) onClose(); }}>
       <div className="photo-collection-frame">
         <header className="photo-collection-header border-b border-gmi-border">
           <div className="min-w-0"><h2 id={`${id}-title`}>Fullfør opplysninger</h2><p className="truncate text-sm text-gmi-text-muted">{layer.name}</p></div>
@@ -102,7 +108,8 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
             <p data-completion-status={status.status}>{status.text}</p>
             <p role="status">{message || returnNote}</p>
           </div>
-          <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4" onClick={onClose}>Lukk</button>
+          {!fromExport && <button type="button" className={photoSourceButton} onClick={onOpenExport}>Gå til eksport</button>}
+          <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4" onClick={onClose}>{fromExport ? 'Tilbake til eksport' : 'Lukk'}</button>
         </footer>
       </div>
     </dialog>

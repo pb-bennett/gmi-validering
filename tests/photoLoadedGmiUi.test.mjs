@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
-import { buildPreview, canAdvance, canDownload, chooseFormat, closeExport, deliveryState, downloadZip, exportDialog, fillContextInHub, openCompletionFromExport, openExport, previewNames, selectedFormat, setLabel } from './helpers/photoExportWizard.mjs';
+import { buildPreview, canAdvance, canDownload, chooseFormat, closeExport, deliveryState, downloadZip, exportDialog, fillContextInHub, openCompletionFromExport, openExport, previewNames, returnToExport, selectedFormat, setLabel } from './helpers/photoExportWizard.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { setPhotoFiles, clickSourceControl, sourceWizard } from './helpers/photoSourceWorkflow.mjs';
 import { TEST_CONNECTION } from './fixtures/gemini-wfs/connection.mjs';
@@ -173,8 +173,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await browser.waitFor(`${hub}.querySelector('[data-task="photographer"] .photo-completion-task-count')`);
         assert.equal(await fillInHub('photographer', [['input', ' Fallback   Artist ']]),'Bruk på 1 valgt bilde');
         assert.equal(await fillInHub('direction', [['input[type=number]', '0']]),'Bruk på 1 valgt plassering');
-        await closeHub(browser);
-        await openExport(browser);
+        await returnToExport(browser);
         assert.equal(await selectedFormat(browser),'legacy2019','the format survives the trip to the hub');
         assert.equal(await count('capture-time-required'),0); assert.equal(await count('direction-required'),0);
         await buildPreview(browser);
@@ -269,12 +268,11 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await chooseFormat(browser, 'asbuilt52');
         assert(await browser.evaluate(`${exportDialog}.textContent.includes('Datafangstdato: oppgi')`));
         assert(!await canAdvance(browser)); assert(!await canDownload(browser));
-        // All seven fields go through the hub, the only form for them. M6d adds the way back; for now export is opened again.
+        // All seven fields go through the hub, the only form for them.
         await openCompletionFromExport(browser);
         await fillContextInHub(browser, { surveyDate: '2026-05-12', datasetName: 'Synthetic export dataset', projectName: 'Synthetic export project', horizontalMethod: '99', verticalMethod: '99', surveyReason: 'nytt', surveyConditions: 'åpenGrøft' });
         await browser.waitFor(`${hub}.querySelector('[data-task="context"] .photo-completion-task-done')`);
-        await closeHub();
-        await openExport(browser);
+        await returnToExport(browser);
         assert.equal(await selectedFormat(browser), 'asbuilt52');
         assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="invalid-context"]'))`), false, 'the wizard uses what the hub accepted');
         await setLabel(browser, 'AsBuilt');
