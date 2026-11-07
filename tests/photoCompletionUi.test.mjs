@@ -4,12 +4,13 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parse } from 'exifr/dist/full.esm.mjs';
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8 } from 'fflate';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { completionGmlText } from './helpers/photoCompletionFixtures.mjs';
 import { assertGeminiConventions } from './helpers/geminiPhotoConventions.mjs';
 import { exportedTimes } from './helpers/photoEvidenceFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
+import { buildPreview, chooseFormat, closeExport, downloadZip, exportDialog, openExport, setContextField } from './helpers/photoExportWizard.mjs';
 import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, clickImport, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, savePhotoSource, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
@@ -19,7 +20,6 @@ import { KEYS, commandBar, elementCentre, enterEditMode, openTool, pressKey, rot
 const app = process.env.PHOTO_UI_URL, corpus = process.env.PHOTO_GML_FIXTURE;
 const hub = 'document.querySelector(".photo-completion-dialog[open]")';
 const nested = 'document.querySelector(".photo-metadata-dialog[open]")';
-const exportDialog = 'document.querySelector(".photo-export-dialog")';
 const panel = (key) => `${hub}?.querySelector('[data-completion-panel="${key}"]')`;
 const rowOf = (name, scope = hub) => `Array.from(${scope}.querySelectorAll('[data-completion-row]')).find((item) => item.querySelector('.photo-completion-filename')?.innerText.includes(${JSON.stringify(name)}))`;
 const taskButton = (key) => `${hub}.querySelector('[data-task="${key}"]')`;
@@ -123,7 +123,7 @@ layerTest('the tool opens on its own from Verktøy, shows every task, and return
   assert.equal(await browser.evaluate(`${hub}.querySelector('h2').innerText`), 'Fullfør opplysninger');
   assert.equal(await browser.evaluate(`${hub}.querySelector('.photo-completion-target select').value`), 'gemini-legacy2019');
   assert.deepEqual(await browser.evaluate(`Array.from(${hub}.querySelectorAll('[data-task]')).map((item) => item.dataset.task)`), ['captureTime', 'direction', 'placement', 'photographer']);
-  assert.equal(await browser.evaluate(`document.querySelector('.photo-export-dialog')`), null, 'independent of the export dialog');
+  assert.equal(await browser.evaluate(exportDialog), null, 'independent of the export dialog');
   assert.equal(await browser.evaluate(`${taskButton('captureTime')}.getAttribute('aria-current')`), 'true', 'what is genuinely missing comes first');
   assert.equal(await outstanding(browser, 'captureTime'), '2');
   assert.equal(await outstanding(browser, 'direction'), 'done');
@@ -314,15 +314,13 @@ layerTest('profiles: requirements change with the target; the choice and AsBuilt
   await showTask(browser, 'context');
   assert.equal(await browser.evaluate(`${panel('context')}.querySelector('[data-context-field="projectName"] input').value`), 'Syntetisk prosjekt');
   await closeHub(browser);
-  await openTool(browser, 'Eksporter…');
-  await browser.waitFor(exportDialog);
+  await openExport(browser);
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksportprofil"]').value`), '', 'the export dialog still asks for its profile each time');
-  await setSelect(browser, `${exportDialog}.querySelector('[aria-label="Eksportprofil"]')`, 'asbuilt52');
+  await chooseFormat(browser, 'asbuilt52');
   await browser.waitFor(`${exportDialog}.querySelector('[aria-label="Eksport Prosjektnavn"]')`);
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksport Prosjektnavn"]').value`), 'Syntetisk prosjekt');
-  await setValue(browser, `${exportDialog}.querySelector('[aria-label="Eksport Datasettets navn"]')`, 'Fra eksport');
-  await clickSourceControl(browser, 'Lukk eksport', exportDialog);
-  await browser.waitFor(`!${exportDialog}`);
+  await setContextField(browser, 'Datasettets navn', 'Fra eksport');
+  await closeExport(browser);
   await openHub(browser);
   await showTask(browser, 'context');
   assert.equal(await browser.evaluate(`${panel('context')}.querySelector('[data-context-field="datasetName"] input').value`), 'Fra eksport', 'one set of delivery values');
@@ -493,7 +491,6 @@ test('private corpus through the hub: with no action at all, times and direction
     const total = names.length;
     assert(total);
     await openApp(browser, { width: 1366, height: 768 });
-    await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: directory });
     await clickSourceControl(browser, 'Bilder', 'document');
     await browser.waitFor(importDialog);
     await addImportFiles(browser, names.map((name) => path.join(folder, name)));
@@ -517,22 +514,11 @@ test('private corpus through the hub: with no action at all, times and direction
     await screenshot(browser, '11-corpus-direction');
     await closeHub(browser);
 
-    await openTool(browser, 'Eksporter…');
-    await browser.waitFor(exportDialog);
-    await setSelect(browser, `${exportDialog}.querySelector('[aria-label="Eksportprofil"]')`, 'gemini-legacy2019');
-    await clickSourceControl(browser, 'Lag eksportforhåndsvisning', exportDialog);
-    await browser.waitFor(`${exportDialog}.querySelector('section[aria-label="Eksportforhåndsvisning"]') && !${exportDialog}.innerText.includes('Bygger forhåndsvisning')`, 120000);
-    await clickSourceControl(browser, 'Last ned testpakke', exportDialog);
-    await browser.waitFor(`${exportDialog}.innerText.includes('ZIP-pakken er klar')`, 120000);
-
-    const { zipName, gmlName } = await browser.evaluate(`(() => { const { exportZip, exportGml } = ${exportDialog}.querySelector('[data-export-zip]').dataset; return { zipName: exportZip, gmlName: exportGml }; })()`);
-    const file = path.join(directory, zipName);
-    let zip;
-    for (let attempt = 0; attempt < 300 && !zip; attempt++) {
-      try { zip = unzipSync(new Uint8Array(await readFile(file))); } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
-    }
-    assert(zip, 'ZIP download not completed');
-    const xml = strFromU8(zip[gmlName]);
+    await openExport(browser);
+    await chooseFormat(browser, 'gemini-legacy2019');
+    await buildPreview(browser);
+    const { gml, entries } = await downloadZip(browser, directory);
+    const xml = strFromU8(entries[gml]);
     assertGeminiConventions(xml);
     const times = exportedTimes(xml);
     assert.equal(times.size, total);

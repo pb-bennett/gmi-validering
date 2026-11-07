@@ -4,10 +4,11 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parse } from 'exifr/dist/full.esm.mjs';
-import { unzipSync, strFromU8 } from 'fflate';
+import { strFromU8 } from 'fflate';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { assertGeminiConventions } from './helpers/geminiPhotoConventions.mjs';
 import { exportedTimes } from './helpers/photoEvidenceFixtures.mjs';
+import { buildPreview, chooseFormat, downloadZip, exportDialog, openExport } from './helpers/photoExportWizard.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
@@ -15,7 +16,6 @@ import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSo
 // Capture-time and direction evidence in the real app: File objects, chunked exifr and the browser XML parser.
 const app = process.env.PHOTO_UI_URL, corpus = process.env.PHOTO_GML_FIXTURE;
 const inspector = 'document.querySelector(".photo-workspace-inspector")';
-const exportDialog = 'document.querySelector(".photo-export-dialog")';
 const metadataDialog = 'document.querySelector(".photo-metadata-dialog[open]")';
 const evidenceRow = (action) => `${exportDialog}.querySelector('[data-evidence-action="${action}"]')`;
 
@@ -80,8 +80,7 @@ test('source evidence in the workspace: chip, shared formatter, minute precision
     assert.match(await browser.evaluate(`${inspector}.innerText`), /12\.05\.2026 14:33:41/);
     assert.match(await chips(browser), /Opptakstid kjent/);
 
-    await clickSourceControl(browser, 'Eksporter', 'document');
-    await browser.waitFor(exportDialog);
+    await openExport(browser);
     assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), /GML-retning: 0 kan brukes · 3 allerede godtatt/, 'source directions are already in use');
   } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
 });
@@ -95,7 +94,6 @@ test('private corpus in the real app: with the GML attached, source values reach
     const total = names.length;
     assert(total);
     await openApp(browser);
-    await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: directory });
     await clickSourceControl(browser, 'Bilder', 'document');
     await browser.waitFor(importDialog);
     await addImportFiles(browser, names.map((name) => path.join(folder, name)));
@@ -109,28 +107,17 @@ test('private corpus in the real app: with the GML attached, source values reach
     assert.match(await chips(browser), /Opptakstid kjent/);
     assert(!await browser.evaluate(`${inspector}.innerText.includes('Kildene oppgir ulike opptakstider')`));
 
-    await clickSourceControl(browser, 'Eksporter', 'document');
-    await browser.waitFor(exportDialog);
+    await openExport(browser);
     for (const row of ['exif:captureTime', 'gml:captureTime']) assert.match(await browser.evaluate(`${evidenceRow(row)}.innerText`), new RegExp(`0 kan brukes · ${total} allerede godtatt`));
     assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), new RegExp(`GML-retning: 0 kan brukes · ${total} allerede godtatt`));
-    await browser.evaluate(`(() => { const select = ${exportDialog}.querySelector('[aria-label="Eksportprofil"]'); select.value = 'gemini-legacy2019'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await chooseFormat(browser, 'gemini-legacy2019');
     await browser.waitFor(`${exportDialog}.querySelector('[data-export-status]')`);
     assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-warning]'))`), false, 'every time is in place, so there is nothing to warn about');
     assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="import"] dd').innerText`), /denne pakken er ikke testet/);
-    await clickSourceControl(browser, 'Lag eksportforhåndsvisning', exportDialog);
-    await browser.waitFor(`${exportDialog}.querySelector('section[aria-label="Eksportforhåndsvisning"]') && !${exportDialog}.innerText.includes('Bygger forhåndsvisning')`, 120000);
+    await buildPreview(browser);
     assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-time"] summary').innerText`), /^Opptakstid i Gemini-filen/);
-    await clickSourceControl(browser, 'Last ned testpakke', exportDialog);
-    await browser.waitFor(`${exportDialog}.innerText.includes('ZIP-pakken er klar')`, 120000);
-
-    const { zipName, gmlName } = await browser.evaluate(`(() => { const { exportZip, exportGml } = ${exportDialog}.querySelector('[data-export-zip]').dataset; return { zipName: exportZip, gmlName: exportGml }; })()`);
-    const file = path.join(directory, zipName);
-    let zip;
-    for (let attempt = 0; attempt < 300 && !zip; attempt++) {
-      try { zip = unzipSync(new Uint8Array(await readFile(file))); } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
-    }
-    assert(zip, 'ZIP download not completed');
-    const xml = strFromU8(zip[gmlName]);
+    const { gml, entries } = await downloadZip(browser, directory);
+    const xml = strFromU8(entries[gml]);
     assertGeminiConventions(xml);
     const times = exportedTimes(xml);
     assert.equal(times.size, total);

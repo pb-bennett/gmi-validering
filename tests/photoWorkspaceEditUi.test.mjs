@@ -3,6 +3,7 @@ import test from 'node:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { exportDialog } from './helpers/photoExportWizard.mjs';
 import { createWorkspaceFixtures, openWorkspace } from './helpers/photoWorkspaceFixtures.mjs';
 import { KEYS, clickText, commandBar, discardEdits, dragSelectedMarker, editKnob, editTarget, elementCentre, enterEditMode, mouseDrag, openTool,
   pressKey, rotateSelected, saveEdits, selectPhotoRow } from './helpers/photoWorkspace.mjs';
@@ -415,7 +416,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         ]) {
           await action();
           await browser.waitFor('document.querySelector(".photo-edit-boundary[open]")');
-          assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-collection-dialog[open], .photo-metadata-dialog[open], .photo-export-dialog[open]"))'), false, name);
+          assert.equal(await browser.evaluate(`Boolean(document.querySelector(".photo-collection-dialog[open], .photo-metadata-dialog[open]") || ${exportDialog})`), false, name);
           await clickText(browser, 'Fortsett redigering', 'document.querySelector(".photo-edit-boundary")');
           await browser.waitFor('!document.querySelector(".photo-edit-boundary[open]")');
         }
