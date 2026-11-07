@@ -31,7 +31,7 @@ function SameTimeForm({ rows, layerId, onStatus }) {
 }
 
 // Source times are already in use. What is left is what no source has, and corrections through the per-photo dialog.
-export default function PhotoCompletionTimePanel({ task, title, requirementLabel, note, recommendations, readiness, excluded, layerId, selected, scope, onSelection, onEdit, onStatus }) {
+export default function PhotoCompletionTimePanel({ task, title, requirementLabel, note, recommendations, readiness, reading, excluded, layerId, selected, scope, onSelection, onEdit, onStatus }) {
   const heldBack = task.rows.filter(isHeldBack).length;
   const rowAction = (row) => row.state === 'pending' ? null
     : <button type="button" className={completionRowButton} onClick={() => onEdit(row.photoId)}>{row.state === 'conflict' ? 'Velg verdi…' : 'Rediger…'}</button>;
@@ -40,7 +40,7 @@ export default function PhotoCompletionTimePanel({ task, title, requirementLabel
     <CompletionHeading title={title} requirementLabel={requirementLabel} note={note} excluded={excluded} />
     {task.rows.length === 0 && <p>Ingen plasserte bilder ennå.</p>}
     {task.rows.length > 0 && <CompletionCounts counts={completionSummary(task, selected)} />}
-    {task.rows.length > 0 && <PhotoExportStatus readiness={readiness} />}
+    {task.rows.length > 0 && <PhotoExportStatus readiness={readiness} reading={reading} />}
     <CompletionNotes items={recommendations} />
     {heldBack > 0 && <p className="photo-completion-requirement-note" data-held-back>{photoCount(heldBack)} venter på bildedata og er ikke med i handlingene ennå.</p>}
     {task.rows.length > task.done.length && <SameTimeForm rows={manualFillRows(task.rows, selected)} layerId={layerId} onStatus={onStatus} />}

@@ -165,7 +165,7 @@ layerTest('capture time: source values in place, the warning, corrections, neste
   assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[data-adopt]'))`), false, 'source values need no adoption step');
   assert.deepEqual([await countOf(browser, 'captureTime', 'source'), await countOf(browser, 'captureTime', 'missing')], ['3', '2']);
   assert.equal(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-export-warning="capture-time-schema"]').innerText`),
-    '2 bilder mangler full opptakstid. Eksporten kan lages, men GML-filen oppfyller ikke kravet til opptakstid i Skråfoto 2019-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.');
+    '2 bilder mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.');
   assert.deepEqual(await browser.evaluate(`Array.from(${panel('captureTime')}.querySelectorAll('[data-export-level]')).map((item) => item.querySelector('dd').innerText)`),
     ['Kan lages', 'Oppfylles ikke: opptakstid mangler for 2 bilder. XSD-validering er ikke kjørt.', 'Ikke verifisert for denne pakken. Må testes manuelt.']);
   assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-recommendation="capture-time-sources-differ"]').innerText`), /1 bilde har ulik opptakstid i kildene/);

@@ -364,6 +364,42 @@ layerTest('dialog swaps: a late close event from the old dialog never reaches th
   assert.equal(await openDialogs(browser), 0, 'a browser close of the wizard');
 });
 
+// No screen can make a commit fail this way: staging validates each value, and the subscriber clears a ticket that has ended. So the
+// fault is injected at the commit: a real staged change and a real Save, with position validation failing for that one click. The
+// session then refuses it with the ticket still live. The retry after a conflict shares this code, and no screen can reach it.
+layerTest('a failed commit ends the journey, by the bar and by the boundary: nothing is saved, and nothing reopens', async (browser) => {
+  const refusedClick = (expression) => browser.evaluate(`(() => { const finite = Number.isFinite; Number.isFinite = () => false; try { (${expression}).click(); } finally { Number.isFinite = finite; } })()`);
+  const assertAbandoned = async (context) => {
+    await browser.waitFor(`!${commandBar}`);
+    await delay(300);
+    assert.equal(await openDialogs(browser), 0, `${context}: nothing opens`);
+    assert.match(await browser.evaluate('document.body.innerText'), /Redigeringen ble avsluttet fordi fotolaget ble endret\./, context);
+    // With a handoff left over, this tool would go back into the journey instead.
+    await openStandaloneHub(browser);
+    assert.deepEqual(await hubFooter(browser), ['Gå til eksport', 'Lukk'], `${context}: the way back is gone`);
+    await browser.evaluate(`${hub}.querySelector('[data-task="placement"]').click()`);
+    assert.equal(await browser.evaluate(`${hub}.querySelector('[data-task="placement"] [data-outstanding]').dataset.outstanding`), '1', `${context}: nothing was saved`);
+    await clickSourceControl(browser, 'Gå til eksport', hub);
+    await browser.waitFor(`${exportDialog} && !${hub}`);
+    assert.equal(await excluded(browser), LEFT_OUT, context);
+    assert.equal(await label(browser), 'Svikt', `${context}: settings stay`);
+  };
+  await openExport(browser);
+  await setLabel(browser, 'Svikt');
+  await openCompletionFromExport(browser);
+  await openPlacementMap(browser);
+  await placeOnMap(browser);
+  await refusedClick(buttonIn(commandBar, 'Lagre endringer'));
+  await assertAbandoned('the bar');
+
+  await openCompletionFromExport(browser);
+  await openPlacementMap(browser);
+  await placeOnMap(browser);
+  await askToLeaveMap(browser);
+  await refusedClick(buttonIn(boundary, 'Lagre endringer'));
+  await assertAbandoned('the boundary');
+});
+
 // Where the second click lands depends on the layout, so it is aimed at the real next control, in the position measured there.
 layerTest('double-clicks: the second click never activates the next dialog, and an ordinary click there still works', async (browser) => {
   await watchWork(browser);

@@ -1,6 +1,7 @@
 'use client';
 
-import { photoCaptureTimeSchemaWarning, photoExportAwaitingSource, photoExportLevels } from '@/lib/photos/photoCompletion.mjs';
+import { CheckCircleIcon, DownloadSimpleIcon, HourglassMediumIcon, InfoIcon, WarningIcon, WarningOctagonIcon } from '@phosphor-icons/react';
+import { photoCaptureTimeSchemaWarning, photoExportAwaitingSource, photoExportLevels, singularCopy } from '@/lib/photos/photoCompletion.mjs';
 import './photoCompletion.css';
 
 // Shared by Fullfør opplysninger and the export wizard, so both answer the three questions the same way. Until source data
@@ -21,6 +22,13 @@ export default function PhotoExportStatus({ readiness, reading = photoExportAwai
 export function PhotoExportDiagnostics({ groups }) {
   return groups.map((group) => <details key={group.code} className="photo-export-diagnostic" data-diagnostic-code={group.code}>
     <summary>{group.label} — {group.count}</summary>
-    <ul>{group.items.map((item, index) => <li key={index}>{item.message}</li>)}</ul>
+    <ul>{group.items.map((item, index) => <li key={index}>{singularCopy(item.message)}</li>)}</ul>
   </details>);
+}
+
+// The heading's tone in one glance. It repeats the heading and says nothing new, so it is hidden from screen readers.
+const TONES = Object.freeze({ wait: HourglassMediumIcon, good: CheckCircleIcon, info: InfoIcon, caution: WarningIcon, stop: WarningOctagonIcon, download: DownloadSimpleIcon });
+export function PhotoExportTone({ tone }) {
+  const Icon = TONES[tone];
+  return Icon ? <Icon className="photo-export-tone" data-tone={tone} size={20} weight="fill" aria-hidden="true" /> : null;
 }

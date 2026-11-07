@@ -233,6 +233,15 @@ export default function Home() {
     if (hidden) notifyPhoto('Laget vises mens du redigerer', 'info');
     return true;
   };
+  // A commit that failed, other than by conflict. `ticket` may still be registered, as after an invalid change, and the
+  // session holds automatic metadata for the layer until it is released. A ticket that has already ended is a no-op.
+  const abandonPhotoEdits = (ticket) => {
+    photoEditTicketRef.current = ticket;
+    endPhotoEditSession();
+    setPhotoBoundary(null);
+    endPhotoExportTrip();
+    notifyPhoto('Redigeringen ble avsluttet fordi fotolaget ble endret.', 'error');
+  };
   // One commit for the whole session: every change is validated before anything is written.
   const savePhotoEdits = (then = null) => {
     const ticket = photoEditTicketRef.current;
@@ -253,10 +262,7 @@ export default function Home() {
       setPhotoBoundary({ variant: 'conflict', staleIds: result.staleIds, then });
       return;
     }
-    endPhotoEditSession();
-    setPhotoBoundary(null);
-    endPhotoExportTrip();
-    notifyPhoto('Redigeringen ble avsluttet fordi fotolaget ble endret.', 'error');
+    abandonPhotoEdits(ticket);
   };
   const discardPhotoEdits = (then = null) => { endPhotoEditSession(); setPhotoBoundary(null); then?.(); };
   // The single unsaved-changes boundary: every action that leaves Edit mode or opens a photo-data tool.
@@ -689,7 +695,7 @@ export default function Home() {
               notifyPhoto(`Endringer lagret for ${changes.length} ${changes.length === 1 ? 'bilde' : 'bilder'}`);
               then?.();
             } else if (result.error === 'edit-conflict') { photoEditTicketRef.current = ticket; setPhotoBoundary({ variant: 'conflict', staleIds: result.staleIds, then }); }
-            else { endPhotoEditSession(); setPhotoBoundary(null); endPhotoExportTrip(); notifyPhoto('Redigeringen ble avsluttet fordi fotolaget ble endret.', 'error'); }
+            else abandonPhotoEdits(ticket);
           } else savePhotoEdits(photoBoundary.then);
         }} />}
       {/* Floating Stats Button */}

@@ -108,7 +108,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   for (const row of placed) occurrenceCounts.set(row.assetId, (occurrenceCounts.get(row.assetId) || 0) + 1);
   const sharedAttachments = [...occurrenceCounts.values()].filter((count) => count > 1).length;
   if (sharedAttachments) warnings.push({ code: 'shared-attachments', message: `${sharedAttachments} originalbilder deles av flere separate forekomst-features.` });
-  warnings.push({ code: 'experimental-mapping', message: 'Eksperimentell forekomstbevarende mapping: én godtatt forekomst = én Skråfoto-feature. Ingen ny kameraposisjon utledes. Gemini-kompatibilitet er ikke verifisert.' });
+  warnings.push({ code: 'experimental-mapping', message: 'Eksperimentell forekomstbevarende mapping: én godtatt forekomst = én Skråfoto-feature. Ingen ny kameraposisjon utledes.' });
   warnings.push({ code: 'direction-assumption', message: 'Eksperimentell retningsantakelse: med klokken i grader fra geografisk nord (enhet 1, referanse 1).' });
   if (!gemini) warnings.push({ code: 'path-convention', message: 'Attachments/<filnavn> med skråstrek er appens testkonvensjon, ikke et dokumentert Gemini-krav.' });
   if (profile === 'asbuilt52') warnings.push({ code: 'experimental-2d', message: 'Eksperimentell 2D AsBuilt-fotogeometri uten Z. Gemini-aksept er ukjent.' });

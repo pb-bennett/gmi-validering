@@ -9,7 +9,7 @@ import { normalizeCaptureTime } from '../src/lib/photos/photoCaptureMetadata.mjs
 import { buildPhotoExportPackage } from '../src/lib/photos/export/photoExportPackage.mjs';
 import { buildPhotoExportPlan, capturePhotoExportSnapshot } from '../src/lib/photos/export/photoExportPlan.mjs';
 import { PHOTO_EXPORT_IMPORT_EVIDENCE, PHOTO_EXPORT_PROFILE_METADATA, PHOTO_EXPORT_REQUIREMENTS } from '../src/lib/photos/export/photoExportRules.mjs';
-import { photoCaptureTimeSchemaWarning, photoCompletionStatus, photoExportAwaitingSource } from '../src/lib/photos/photoCompletion.mjs';
+import { photoCaptureTimeSchemaWarning, photoCompletionStatus, photoExportAwaitingSource, photoExportLevels, photoReadingNote, photosBeingRead } from '../src/lib/photos/photoCompletion.mjs';
 import { DEFAULT_PHOTO_EXPORT_CONFIG, photoExportConfigFor, reconcilePhotoExportConfig, updatePhotoExportConfig } from '../src/lib/photos/photoExportConfig.mjs';
 import { PHOTO_EXPORT_WIZARD_START, photoExportDeliveryModel, photoExportDeliveryReadiness, photoExportPackageContents, photoExportPackageState,
   photoExportWizardReducer as reduce } from '../src/lib/photos/photoExportWizard.mjs';
@@ -48,9 +48,9 @@ const STATES = [
   ['noTime', GEMINI, 'schema-gap', 'Kan eksporteres, men følger ikke Skråfoto 2019-skjemaet', CONTINUE, true, null],
   ['noTime', LEGACY, 'blocked', '1 må rettes før eksport', 'Neste', false, FIX],
   ['noTime', ASBUILT, 'blocked', '1 må rettes før eksport', 'Neste', false, FIX],
-  ['check', GEMINI, 'recommendations', 'Kan eksporteres, men 1 kan forbedres', 'Neste', true, null],
-  ['check', LEGACY, 'recommendations', 'Kan eksporteres, men 1 kan forbedres', 'Neste', true, null],
-  ['check', ASBUILT, 'recommendations', 'Kan eksporteres, men 1 kan forbedres', 'Neste', true, null],
+  ['check', GEMINI, 'recommendations', 'Kan eksporteres, men noe bør kontrolleres', 'Neste', true, null],
+  ['check', LEGACY, 'recommendations', 'Kan eksporteres, men noe bør kontrolleres', 'Neste', true, null],
+  ['check', ASBUILT, 'recommendations', 'Kan eksporteres, men noe bør kontrolleres', 'Neste', true, null],
   ['complete', GEMINI, 'ready', 'Ingen opplysninger mangler for dette målet', 'Neste', true, null],
   ['complete', LEGACY, 'ready', 'Ingen opplysninger mangler for dette målet', 'Neste', true, null],
   ['complete', ASBUILT, 'ready', 'Ingen opplysninger mangler for dette målet', 'Neste', true, null],
@@ -427,4 +427,56 @@ test('boundaries: the wizard components write no metadata, compose no final name
   assert(shell.includes('capturePhotoExportSnapshot(photoSession, layer.id)'));
   for (const text of steps) assert(!text.includes('photoSession'));
   assert(shell.includes('link.download = filename') && shell.includes('saveFile(blob, plan.naming.zipFilename'), 'the browser gets the name the plan fixed');
+});
+
+// M6e: what the hub says during a read, counts, and the failed commit
+test('the hub waits for a read as the wizard does: nothing blocked, on any format, and for a photo with no position too', () => {
+  for (const config of PROFILES) {
+    const readiness = photoExportDeliveryReadiness(LAYERS.reading, config, NOW);
+    assert.equal(readiness.status, 'blocked', 'readiness on its own reports a blocker here');
+    assert.deepEqual(photoCompletionStatus(readiness, photosBeingRead(LAYERS.reading)), { status: 'reading', text: 'Leser bildedata …' }, config.profile);
+  }
+  const loose = [photo('a'), photo('b', { placed: false, exifRead: 'pending' })];
+  const readiness = photoExportDeliveryReadiness(loose, GEMINI, NOW);
+  assert.equal(photoExportAwaitingSource(readiness), false, 'readiness counts placed photos only');
+  assert.equal(photosBeingRead(loose), 1);
+  assert.equal(photoCompletionStatus(readiness, photosBeingRead(loose)).status, 'reading');
+  assert.equal(photoCompletionStatus(readiness, photosBeingRead(loose)).text, model(loose).heading, 'hub and wizard say the same');
+  assert.equal(photoCompletionStatus(readiness, 0).status, 'ready', 'and it settles when the read ends');
+  assert.equal(photosBeingRead([photo('a', { assetId: 'x', exifRead: 'pending' }), photo('b', { assetId: 'x', exifRead: 'pending' })]), 1, 'one original, however often it is placed');
+  assert.equal(photoReadingNote(1), '1 bilde er ikke ferdig lest. Kontrollen oppdateres av seg selv.');
+  assert.equal(photoReadingNote(3), '3 bilder er ikke ferdig lest. Kontrollen oppdateres av seg selv.');
+});
+
+test('a category with many photos is not counted as one: the heading gives no total, and the list gives the real count', () => {
+  const photos = [1, 2, 3, 4].map((index) => photo(`p${index}`, { captureTime: '1999-05-12T14:33:02' }));
+  const result = model(photos);
+  assert.equal(result.state, 'recommendations');
+  assert.doesNotMatch(result.heading, /\d/);
+  assert.deepEqual(result.checks.map((item) => item.text), ['4 bilder har en usannsynlig dato.']);
+});
+
+test('one placed photo reads in the singular on the delivery screen', () => {
+  assert.deepEqual(model([photo('a')]).notes.map((item) => item.text), ['1 punkt får Z=0 som plassholder, ikke målt høyde.']);
+  assert.deepEqual(model([photo('a'), photo('b')]).notes.map((item) => item.text), ['2 punkter får Z=0 som plassholder, ikke målt høyde.']);
+});
+
+test('a blocked delivery gives its count once, in the heading', () => {
+  const readiness = photoExportDeliveryReadiness(LAYERS.noTime, LEGACY, NOW);
+  assert.equal(model(LAYERS.noTime, LEGACY).heading, '1 må rettes før eksport');
+  assert.equal(photoExportLevels(readiness).find((level) => level.key === 'generation').text, 'Kan ikke lages ennå');
+});
+
+test('wording: the plan no longer contradicts the import status, and blockers use the hub\'s name for delivery details', async () => {
+  const plan = await readFile(new URL('../src/lib/photos/export/photoExportPlan.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(plan, /Gemini-kompatibilitet er ikke verifisert/);
+  const readiness = photoExportDeliveryReadiness([photo('a')], { ...ASBUILT, context: {} }, NOW);
+  assert.deepEqual([...new Set(readiness.blocking.map((item) => item.label))], ['Leveranseopplysninger mangler']);
+});
+
+test('both failed commits go through the one function that releases the session and ends the journey', async () => {
+  const page = await readFile(new URL('../src/app/page.js', import.meta.url), 'utf8');
+  assert.equal(page.match(/abandonPhotoEdits\(ticket\)/g).length, 2, 'savePhotoEdits and the retry after a conflict');
+  const body = page.slice(page.indexOf('const abandonPhotoEdits'), page.indexOf('const savePhotoEdits'));
+  for (const step of ['photoEditTicketRef.current = ticket', 'endPhotoEditSession()', 'setPhotoBoundary(null)', 'endPhotoExportTrip()', 'notifyPhoto(']) assert(body.includes(step), step);
 });

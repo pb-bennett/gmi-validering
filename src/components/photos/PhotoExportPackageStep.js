@@ -2,12 +2,14 @@
 
 import { groupPhotoExportDiagnostics } from '@/lib/photos/export/photoExportDiagnostics.mjs';
 import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRules.mjs';
-import { photoCount, placementCount } from '@/lib/photos/photoCompletion.mjs';
+import { photoCount, placementCount, singularCopy } from '@/lib/photos/photoCompletion.mjs';
 import { photoExportPackageContents } from '@/lib/photos/photoExportWizard.mjs';
-import PhotoExportStatus, { PhotoExportDiagnostics } from './PhotoExportStatus';
+import PhotoExportStatus, { PhotoExportDiagnostics, PhotoExportTone } from './PhotoExportStatus';
 
 const HEADINGS = Object.freeze({ building: 'Kontrollerer originalfiler …', 'build-failed': 'Pakken kunne ikke forberedes', ready: 'Klar til nedlasting', packaging: 'Lager ZIP …',
   stale: 'Forhåndsvisningen er utdatert', 'packaging-failed': 'ZIP-pakken kunne ikke lages', done: 'ZIP-pakken er laget og sendt til nedlasting' });
+
+const TONES = Object.freeze({ building: 'wait', packaging: 'wait', ready: 'download', done: 'good', stale: 'caution', 'build-failed': 'stop', 'plan-errors': 'stop', 'packaging-failed': 'stop' });
 
 // Originals only: the GML and the ZIP's own overhead are not counted, so this is never presented as the file size.
 function imageData(bytes) {
@@ -34,7 +36,7 @@ function Summary({ plan, readiness }) {
         <li>{gmlFilename}</li>
         {plan.attachments.map((item) => <li key={item.assetId}>{item.path}</li>)}
       </ul>
-      {contents.sharedAttachments > 0 && <p data-package-shared>{contents.sharedAttachments === 1 ? '1 originalbilde deles' : `${contents.sharedAttachments} originalbilder deles`} av flere plasseringer.</p>}
+      {contents.sharedAttachments > 0 && <p data-package-shared>{singularCopy(`${contents.sharedAttachments} originalbilder deles av flere plasseringer.`)}</p>}
       {contents.renamed.length > 0 && <>
         <p>Filnavn som er endret i pakken:</p>
         <ul data-package-renamed>{contents.renamed.map((item) => <li key={item.assetId}>{item.from} → {item.to}</li>)}</ul>
@@ -42,9 +44,9 @@ function Summary({ plan, readiness }) {
     </details>
     <details className="photo-export-disclosure" data-package-technical>
       <summary>Tekniske detaljer</summary>
-      <p>{counts.uniqueImages} unike bilder i laget · {counts.totalOccurrences} forekomster · {counts.placed} plassert · {counts.excluded} utelatt</p>
-      <p>{counts.features} features · {counts.attachments} vedlegg · {counts.sharedAttachments} delte originalbilder</p>
-      <p>{plan.crs}{plan.profile === 'gemini-legacy2019' && ` · 3D · ${counts.compatibilityZCount} Z-plassholdere · ${counts.missingTimestampCount} uten full opptakstid · ${counts.timezoneTransformCount} tidssoneendringer`}</p>
+      <p>{singularCopy(`${counts.uniqueImages} unike bilder i laget · ${counts.totalOccurrences} forekomster · ${counts.placed} plassert · ${counts.excluded} utelatt`)}</p>
+      <p>{singularCopy(`${counts.features} features · ${counts.attachments} vedlegg · ${counts.sharedAttachments} delte originalbilder`)}</p>
+      <p>{plan.crs}{plan.profile === 'gemini-legacy2019' && singularCopy(` · 3D · ${counts.compatibilityZCount} Z-plassholdere · ${counts.missingTimestampCount} uten full opptakstid · ${counts.timezoneTransformCount} tidssoneendringer`)}</p>
       <PhotoExportDiagnostics groups={groupPhotoExportDiagnostics(plan.warnings)} />
     </details>
   </>;
@@ -61,7 +63,7 @@ function ImportGuidance({ plan, readiness }) {
       <li>Pakk ut ZIP-filen.</li>
       <li>Importer {gmlFilename} i Gemini VA, med Attachments-mappen ved siden av.</li>
       <li>Kontroller resultatet i Gemini VA.</li>
-    </ol> : <p data-export-guidance>Pakk ut ZIP-filen. GML-filen og Attachments-mappen må ligge ved siden av hverandre.</p>}
+    </ol> : <p data-export-guidance>Pakk ut ZIP-filen. {gmlFilename} og Attachments-mappen må ligge ved siden av hverandre.</p>}
     {timeGap && <p className="photo-completion-warning" data-export-warning="capture-time-schema">Pakken følger ikke skjemaet fordi {photoCount(timeGap.count)} mangler opptakstid.</p>}
     <p>Last ned på nytt gir den samme pakken. {gemini ? 'En ny pakke får nytt tidspunkt og nye ID-er og regnes som en ny leveranse.' : 'En ny pakke får nytt tidspunkt og regnes som en ny leveranse.'}</p>
   </>;
@@ -72,7 +74,7 @@ export default function PhotoExportPackageStep({ status, preview, download, read
   const { plan } = preview;
   const planErrors = status === 'plan-errors';
   return <div className="photo-export-package" data-export-step="package" data-package-state={status}>
-    <h3 tabIndex={-1} aria-live="polite" data-export-heading>{planErrors ? `${plan.errors.length} må rettes før eksport` : HEADINGS[status]}</h3>
+    <h3 tabIndex={-1} aria-live="polite" data-export-heading><PhotoExportTone tone={TONES[status]} />{planErrors ? `${plan.errors.length} må rettes før eksport` : HEADINGS[status]}</h3>
     {status === 'build-failed' && <p role="alert">{preview.error}</p>}
     {planErrors && <div className="photo-export-diagnostics"><PhotoExportDiagnostics groups={groupPhotoExportDiagnostics(plan.errors)} /></div>}
     {status === 'stale' && <p role="alert">Bildene er endret etter at forhåndsvisningen ble laget.</p>}

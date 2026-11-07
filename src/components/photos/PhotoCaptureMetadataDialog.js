@@ -27,7 +27,7 @@ function Choice({ name, value, checked, onChange, children, disabled = false, cl
 // Asset-level capture metadata for the selected photo. A canonical, explicit replacement written with
 // setCaptureMetadata on save; it is never part of the Edit-mode transaction.
 export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceCount = 1, exportProfile, onClose, onSaved }) {
-  const ref = useRef(null);
+  const ref = useRef(null), live = useRef(false);
   const id = useId();
   const accepted = photo.captureMetadata || {};
   const timeEvidence = (photo.metadataEvidence || []).filter((item) => item.field === 'captureTime');
@@ -49,8 +49,9 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
 
   useEffect(() => {
     const dialog = ref.current, opener = document.activeElement;
+    live.current = true;
     dialog.showModal();
-    return () => { dialog.close(); if (opener?.isConnected) opener.focus(); };
+    return () => { live.current = false; dialog.close(); if (opener?.isConnected) opener.focus(); };
   }, []);
 
   // Each field yields null (unchanged) or the exact setCaptureMetadata arguments.
@@ -90,7 +91,9 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
   };
 
   // onClose covers a close the browser makes by itself: without a user action since the last Escape it skips cancel.
-  return <dialog ref={ref} className="photo-metadata-dialog" aria-labelledby={`${id}-title`} onCancel={(event) => { event.preventDefault(); onClose(); }} onClose={onClose}>
+  // One from this dialog's own cleanup arrives late and must not count: under strict mode it lands on the reopened dialog.
+  return <dialog ref={ref} className="photo-metadata-dialog" aria-labelledby={`${id}-title`} onCancel={(event) => { event.preventDefault(); onClose(); }}
+    onClose={(event) => { if (live.current && !event.currentTarget.open) onClose(); }}>
     <form onSubmit={save} className="photo-metadata-form">
       <header><h2 id={`${id}-title`}>Rediger opptaksdata</h2><p className="break-all">{photo.originalFilename}</p></header>
       <div className="photo-metadata-body">

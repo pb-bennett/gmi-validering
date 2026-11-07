@@ -270,7 +270,7 @@ test('missing time: the warning is specific, and generation, schema and import a
   const { session, layerId, ids: photoIds } = await completionLayer([jpeg('a.jpg'), jpeg('b.jpg', exifTime())]);
   const { readiness } = completionView(session, layerId);
   assert.equal(readiness.levels.generation, 'possible');
-  assert.equal(photoCaptureTimeSchemaWarning(readiness), '1 bilde mangler full opptakstid. Eksporten kan lages, men GML-filen oppfyller ikke kravet til opptakstid i Skråfoto 2019-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.');
+  assert.equal(photoCaptureTimeSchemaWarning(readiness), '1 bilde mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.');
   assert.deepEqual(photoExportLevels(readiness).map(({ key, text }) => [key, text]), [['generation', 'Kan lages'],
     ['schema', 'Oppfylles ikke: opptakstid mangler for 1 bilde. XSD-validering er ikke kjørt.'], ['import', 'Ikke verifisert for denne pakken. Må testes manuelt.']]);
   assert.equal(photoCaptureTimeSchemaWarning(completionView(session, layerId, LEGACY).readiness), null, 'there it blocks, so it is an error and not this warning');
@@ -286,6 +286,12 @@ test('counts and copy read correctly for one and for many', () => {
   assert.equal(singularCopy('1 bilder har tid i UTC.'), '1 bilde har tid i UTC.');
   assert.equal(singularCopy('11 bilder og 21 plasseringer'), '11 bilder og 21 plasseringer');
   assert.equal(singularCopy('Leser fortsatt bildedata for 1 bilder.'), 'Leser fortsatt bildedata for 1 bilde.');
+  for (const [many, one] of [['1 punkter får Z=0', '1 punkt får Z=0'], ['1 XYZ-punkter i EPSG:5972', '1 XYZ-punkt i EPSG:5972'], ['1 originalbilder deles av flere plasseringer.', '1 originalbilde deles av flere plasseringer.'],
+    ['1 godtatte fotografverdier er ikke med i denne leveransen.', '1 godtatt fotografverdi er ikke med i denne leveransen.'], ['1 godtatte fotografverdier utelates', '1 godtatt fotografverdi utelates'],
+    ['1 features · 3 vedlegg · 1 delte originalbilder', '1 feature · 3 vedlegg · 1 delt originalbilde'], ['1 unike bilder i laget · 1 forekomster', '1 unikt bilde i laget · 1 forekomst'],
+    ['1 objektkoblinger beholdes', '1 objektkobling beholdes'], ['1 uplasserte forekomster er utelatt.', '1 uplassert forekomst er utelatt.'],
+    ['1 Z-plassholdere · 1 tidssoneendringer', '1 Z-plassholder · 1 tidssoneendring'], ['1 tidssone-suffikser fjernes', '1 tidssone-suffiks fjernes']]) assert.equal(singularCopy(many), one);
+  assert.equal(singularCopy('21 punkter, 0 features og 101 originalbilder'), '21 punkter, 0 features og 101 originalbilder');
 });
 
 test('capture-time input: bulk needs a clock with seconds, and help follows the target', () => {

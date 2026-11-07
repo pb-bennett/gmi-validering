@@ -233,7 +233,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert(await canAdvance(browser), 'Gemini needs no explicit choice');
         await chooseFormat(browser, 'legacy2019'); await buildPreview(browser);
         assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-diagnostic-code="capture-time-required"], [data-diagnostic-code="direction-required"]').length`),0);
-        assert(await browser.evaluate(`${exportDialog}.textContent.includes('4 features · 3 vedlegg · 1 delte originalbilder')`));
+        assert(await browser.evaluate(`${exportDialog}.textContent.includes('4 features · 3 vedlegg · 1 delt originalbilde')`));
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('3 bilder · 4 plasseringer i GML-filen')`));
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('4 plasseringer uten posisjon utelatt')`));
         assert(await browser.evaluate(`${exportDialog}.innerText.includes('Ikke testet med import i Gemini VA.')`));
@@ -241,6 +241,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.match(unlabelled.zip, /^\d{8}-\d{6}\.zip$/);
         assert.equal(unlabelled.gml, unlabelled.zip.replace(/\.zip$/, '.gml'));
         const legacy = await downloadZip(browser, directory);
+        assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-guidance]').innerText`), `Pakk ut ZIP-filen. ${legacy.gml} og Attachments-mappen må ligge ved siden av hverandre.`, 'guidance names the real file');
         assert.equal(Object.keys(legacy.entries).length,4);
         assert.deepEqual(Object.keys(legacy.entries)[0], legacy.gml);
         const legacyXml=strFromU8(legacy.entries[legacy.gml]);

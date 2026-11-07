@@ -9,7 +9,7 @@ import { backToDelivery, buildPreview, canAdvance, canDownload, chooseFormat, cl
 import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, clickImport, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
-import { KEYS, elementCentre, pressKey } from './helpers/photoWorkspace.mjs';
+import { KEYS, commandBar, elementCentre, enterEditMode, pressKey } from './helpers/photoWorkspace.mjs';
 
 // The two-screen export wizard in the real app: File objects, chunked exifr, native dialogs, trusted input and real downloads.
 // The way to Fullfør opplysninger and back has its own suite, photoExportReturnUi.
@@ -102,7 +102,7 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
 
   // The schema gap is stated and does not block.
   assert.equal(await deliveryState(browser), 'schema-gap');
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /^1 bilde mangler full opptakstid\./);
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /^1 bilde mangler full opptakstid,/);
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="generation"] dd').innerText`), 'Kan lages');
   assert.equal(await browser.evaluate(`${advance}.innerText`), 'Fortsett uten opptakstid');
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-excluded]').innerText`), '1 plassering mangler posisjon og blir ikke med.', 'not behind a disclosure');
@@ -236,6 +236,48 @@ layerTest('pending EXIF: no false blockers on any format, Neste waits, and the s
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="generation"] dd').innerText`), 'Kan lages');
   await buildPreview(browser);
   assert.equal(await packageState(browser), 'ready', 'a plan built after the read does not go stale');
+}, { hold: true });
+
+layerTest('pending EXIF in the hub: a neutral wait instead of a false blocker, on any format, and it settles with the hub still open', async (browser) => {
+  const footer = `${hub}.querySelector('.photo-import-footer')`;
+  const status = `${footer}.querySelector('[data-completion-status]')`;
+  const waiting = async (context) => {
+    assert.equal(await browser.evaluate(`${status}.dataset.completionStatus`), 'reading', context);
+    assert.equal(await browser.evaluate(`${status}.innerText`), 'Leser bildedata …', context);
+    assert.equal(await browser.evaluate(`${footer}.querySelector('[role=status]').innerText`), '3 bilder er ikke ferdig lest. Kontrollen oppdateres av seg selv.', context);
+    assert.doesNotMatch(await browser.evaluate(`${hub}.innerText`), /må rettes|Kan ikke lages/, context);
+  };
+  await openExport(browser);
+  await openCompletionFromExport(browser);
+  await waiting('Gemini');
+  const target = (value) => browser.evaluate(`(() => { const select = ${hub}.querySelector('.photo-completion-target select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(value)}); select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await target('legacy2019');
+  await waiting('Legacy, where a missing time would block');
+  await target('gemini-legacy2019');
+  await browser.evaluate(`(() => { const held = window.__heldReads; window.__heldReads = null; held.forEach((read) => read()); })()`);
+  await browser.waitFor(`${status}.dataset.completionStatus !== 'reading'`, 60000);
+  assert.equal(await browser.evaluate(`${status}.dataset.completionStatus`), 'schema-gap', 'follows the read without reopening');
+  assert.equal(await browser.evaluate(`${status}.innerText`), 'Kan eksporteres, men følger ikke Skråfoto 2019-skjemaet');
+  assert.equal(await browser.evaluate(`${footer}.querySelector('[role=status]').innerText`), '', 'the wait is over');
+  await returnToExport(browser);
+  assert.equal(await deliveryState(browser), 'schema-gap');
+}, { hold: true });
+
+// The ticket stays registered after an invalid change. If the page forgets it, the session goes on holding metadata for this layer.
+layerTest('a commit refused as invalid releases the edit session, so metadata held back during it arrives', async (browser) => {
+  await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id] .photo-workspace-row').click()`);
+  await enterEditMode(browser);
+  await browser.evaluate(`(() => { const bar = ${commandBar}; let fiber = bar[Object.keys(bar).find((key) => key.startsWith('__reactFiber'))];
+    while (fiber && !fiber.memoizedProps?.onStage) fiber = fiber.return;
+    const { onStage, photo } = fiber.memoizedProps; onStage(photo.id, 'position', { crs: 'EPSG:4326', longitude: 10.5, latitude: 59.5 }); })()`);
+  await browser.evaluate(`(() => { const held = window.__heldReads; window.__heldReads = null; held.forEach((read) => read()); })()`);
+  await delay(1500);
+  // No screen can cause this, so position validation fails for this one click. photoExportReturnUi has the same fault.
+  await browser.evaluate(`(() => { const finite = Number.isFinite; Number.isFinite = () => false; try { Array.from(${commandBar}.querySelectorAll('button')).find((item) => item.innerText.trim() === 'Lagre endringer' || item.getAttribute('aria-label') === 'Lagre endringer').click(); } finally { Number.isFinite = finite; } })()`);
+  await browser.waitFor(`!${commandBar}`);
+  assert.match(await browser.evaluate('document.body.innerText'), /Redigeringen ble avsluttet fordi fotolaget ble endret\./);
+  await openExport(browser);
+  assert.equal(await deliveryState(browser), 'schema-gap', 'blank.jpg got its default direction once the session was released');
 }, { hold: true });
 
 layerTest('closing during ZIP generation: the finished ZIP reaches no download, by any way of closing', async (browser) => {

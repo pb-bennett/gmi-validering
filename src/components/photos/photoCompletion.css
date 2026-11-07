@@ -29,7 +29,7 @@
 .photo-completion-notes { display: grid; gap: 4px; margin: 0; padding: 8px 10px 8px 24px; border-radius: 6px; background: var(--gmi-surface-soft); color: var(--gmi-text); list-style: disc; }
 .photo-completion-actions { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--gmi-border); border-radius: 8px; justify-items: start; }
 .photo-completion-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.photo-completion-warning { margin: 0; padding: 10px 12px; border: 1px solid #d9a441; border-radius: 8px; background: #fff7e6; color: #6b4300; font-weight: 600; }
+.photo-completion-warning { margin: 0; padding: 10px 12px; border: 1px solid #d9a441; border-radius: 8px; background: #fff7e6; color: #6b4300; font-weight: 500; }
 .photo-completion-sources summary { cursor: pointer; font-size: 0.75rem; color: var(--gmi-text-muted); }
 .photo-export-status { display: grid; gap: 8px; }
 .photo-export-levels { display: grid; gap: 2px; margin: 0; font-size: 0.8125rem; }
@@ -62,6 +62,7 @@
 .photo-completion-context small { font-size: 12px; font-weight: 400; color: #875400; }
 .photo-completion-footer-status { flex: 1; min-width: 0; margin-right: auto; }
 .photo-completion-footer-status p[data-completion-status] { font-weight: 600; color: var(--gmi-navy); }
+.photo-completion-footer-status p[data-completion-status='reading'] { font-weight: 500; color: var(--gmi-text-muted); }
 .photo-completion-footer-status p[role='status'] { min-height: 1.3em; color: var(--gmi-text-muted); font-size: 12px; }
 .photo-metadata-seconds { display: flex; align-items: flex-start; gap: 8px; margin-left: 24px; }
 .photo-metadata-seconds input { margin-top: 3px; }

@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CheckIcon, XIcon } from '@phosphor-icons/react';
 import { photoExportReadiness } from '@/lib/photos/export/photoExportReadiness.mjs';
-import { PHOTO_COMPLETION_TARGETS, completionRecommendations, initialCompletionTask, liveSelection, photoCompletionModel, photoCompletionStatus, selectionScope } from '@/lib/photos/photoCompletion.mjs';
+import { PHOTO_COMPLETION_TARGETS, completionRecommendations, initialCompletionTask, liveSelection, photoCompletionModel, photoCompletionStatus, photoReadingNote, photosBeingRead, selectionScope } from '@/lib/photos/photoCompletion.mjs';
 import PhotoCaptureMetadataDialog from './PhotoCaptureMetadataDialog';
 import { PhotoCompletionContextPanel, PhotoCompletionPhotographerPanel, PhotoCompletionPlacementPanel } from './PhotoCompletionDetailsPanels';
 import PhotoCompletionDirectionPanel from './PhotoCompletionDirectionPanel';
@@ -52,7 +52,9 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
   const model = useMemo(() => photoCompletionModel(photos, readiness), [photos, readiness]);
   const [initialKey] = useState(() => entry?.task || initialCompletionTask(model.tasks));
   const task = model.tasks.find((item) => item.key === (activeKey || initialKey)) || model.tasks[0];
-  const status = photoCompletionStatus(readiness);
+  // Derived from the live photos, so the footer settles by itself when the read ends.
+  const reading = photosBeingRead(photos);
+  const status = photoCompletionStatus(readiness, reading);
   // A default is complete, so it is counted apart from what remains.
   const [returnNote] = useState(() => {
     if (!entry) return '';
@@ -95,7 +97,7 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
             </div>)}
           </nav>
           <div className="photo-completion-panel">
-            {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} recommendations={completionRecommendations(readiness, 'captureTime')} readiness={readiness} onEdit={setEditingId} />}
+            {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} recommendations={completionRecommendations(readiness, 'captureTime')} readiness={readiness} reading={reading > 0} onEdit={setEditingId} />}
             {task.key === 'direction' && <PhotoCompletionDirectionPanel {...panelProps('direction')} recommendations={completionRecommendations(readiness, 'direction')} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} />}
             {task.key === 'photographer' && <PhotoCompletionPhotographerPanel {...panelProps('photographer')} onEdit={setEditingId} />}
             {task.key === 'placement' && <PhotoCompletionPlacementPanel task={model.placement} title={task.label} requirementLabel={task.requirementLabel} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} onOpenSources={() => onOpenSources({ selections })} />}
@@ -106,7 +108,7 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
         <footer className="photo-import-footer border-t border-gmi-border">
           <div className="photo-completion-footer-status">
             <p data-completion-status={status.status}>{status.text}</p>
-            <p role="status">{message || returnNote}</p>
+            <p role="status">{message || returnNote || (reading ? photoReadingNote(reading) : '')}</p>
           </div>
           {!fromExport && <button type="button" className={photoSourceButton} onClick={onOpenExport}>Gå til eksport</button>}
           <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4" onClick={onClose}>{fromExport ? 'Tilbake til eksport' : 'Lukk'}</button>

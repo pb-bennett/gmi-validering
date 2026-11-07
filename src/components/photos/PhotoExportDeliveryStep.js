@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRules.mjs';
 import { sanitizePhotoExportLabel } from '@/lib/photos/export/photoExportNaming.mjs';
-import PhotoExportStatus, { PhotoExportDiagnostics } from './PhotoExportStatus';
+import PhotoExportStatus, { PhotoExportDiagnostics, PhotoExportTone } from './PhotoExportStatus';
 import PhotoSourceOption, { photoSourceButton } from './PhotoSourceOption';
 
+const TONES = Object.freeze({ reading: 'wait', blocked: 'stop', 'schema-gap': 'caution', recommendations: 'info', ready: 'good' });
 const formats = (tier) => Object.entries(PHOTO_EXPORT_PROFILE_METADATA).filter(([, card]) => card.tier === tier);
 
 function FormatCard({ profile, card, config, onConfigChange }) {
@@ -44,12 +45,12 @@ export default function PhotoExportDeliveryStep({ config, model, readiness, onCo
       <FilenameHint label={config.label} />
     </div>
     <div className="photo-export-state">
-      <h3 tabIndex={-1} data-export-heading data-delivery-state={model.state}>{model.heading}</h3>
+      <h3 tabIndex={-1} data-export-heading data-delivery-state={model.state}><PhotoExportTone tone={TONES[model.state]} />{model.heading}</h3>
       <PhotoExportStatus readiness={readiness} reading={model.state === 'reading'} />
-      <div><button type="button" className={model.completionPrimary ? 'gmi-primary-control gmi-focus-ring min-h-10 px-4' : photoSourceButton} data-export-completion onClick={onOpenCompletion}>Fullfør opplysninger…</button></div>
-      {model.excludedText && <p className="photo-export-excluded" data-export-excluded>{model.excludedText}</p>}
       {model.blockers.length > 0 && <div className="photo-export-diagnostics" data-export-blockers><PhotoExportDiagnostics groups={model.blockers} /></div>}
       {model.checks.length > 0 && <ul className="photo-completion-notes" aria-label="Bør kontrolleres">{model.checks.map((item) => <li key={item.code} data-delivery-check={item.code}>{item.text}</li>)}</ul>}
+      {model.excludedText && <p className="photo-export-excluded" data-export-excluded>{model.excludedText}</p>}
+      <div><button type="button" className={model.completionPrimary ? 'gmi-primary-control gmi-focus-ring min-h-10 px-4' : photoSourceButton} data-export-completion onClick={onOpenCompletion}>Fullfør opplysninger…</button></div>
       {model.notes.length > 0 && <details className="photo-export-disclosure" data-delivery-notes>
         <summary>Slik blir leveransen ({model.notes.length})</summary>
         <ul>{model.notes.map((item) => <li key={item.code} data-readiness-note={item.code}>{item.text}</li>)}</ul>

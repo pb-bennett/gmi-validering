@@ -2,7 +2,7 @@
 const labels = {
   'invalid-profile': 'Eksportprofil mangler',
   'invalid-crs': 'Ugyldig koordinatsystem',
-  'invalid-context': 'Påkrevd AsBuilt-kontekst',
+  'invalid-context': 'Leveranseopplysninger mangler',
   'no-placed-photos': 'Ingen plasserte bilder',
   'capture-time-required': 'Mangler godtatt opptakstid',
   'capture-time-precision': 'Utilstrekkelig opptakstidspresisjon',

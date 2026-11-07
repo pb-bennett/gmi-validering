@@ -1,6 +1,6 @@
 import { groupPhotoExportDiagnostics } from './export/photoExportDiagnostics.mjs';
 import { photoExportReadiness } from './export/photoExportReadiness.mjs';
-import { photoCompletionStatus, singularCopy } from './photoCompletion.mjs';
+import { photoCompletionStatus, photoReadingNote, photosBeingRead, singularCopy } from './photoCompletion.mjs';
 
 // Presentation and step state for the export wizard. Rules stay in readiness and names stay in the plan, so nothing here
 // decides what blocks an export or composes a filename, and nothing here writes to the session.
@@ -10,7 +10,6 @@ import { photoCompletionStatus, singularCopy } from './photoCompletion.mjs';
 export const photoExportDeliveryReadiness = (photos, { profile, crs, context }, now = Date.now()) => photoExportReadiness(photos, { profile, crs, context, now });
 
 const lines = (items) => Object.freeze(items.map(({ code, label, message }) => Object.freeze({ code, label, text: singularCopy(message) })));
-const assetsBeingRead = (photos) => new Set(photos.filter((photo) => photo.spatial?.exifRead?.state === 'pending').map((photo) => photo.assetId)).size;
 
 function excludedText({ placed, excluded }) {
   if (!placed) return 'Ingen bilder er plassert ennå. Bare plasserte bilder kan eksporteres.';
@@ -21,11 +20,11 @@ function excludedText({ placed, excluded }) {
 // plan goes stale when any member finishes. Until the read ends, readiness can report blockers that are not real, because
 // a default direction waits for the read, so nothing it derives from those photos is passed on.
 export function photoExportDeliveryModel({ photos, readiness }) {
-  const reading = assetsBeingRead(photos);
+  const reading = photosBeingRead(photos);
   const shared = { excludedText: excludedText(readiness.counts) };
   if (reading) {
-    return Object.freeze({ ...shared, state: 'reading', heading: 'Leser bildedata …', blockers: Object.freeze([]), checks: lines([]), notes: lines([]), completionPrimary: false,
-      advance: Object.freeze({ enabled: false, label: 'Neste', reason: singularCopy(`${reading} bilder er ikke ferdig lest. Kontrollen oppdateres av seg selv.`) }) });
+    return Object.freeze({ ...shared, state: 'reading', heading: photoCompletionStatus(readiness, reading).text, blockers: Object.freeze([]), checks: lines([]), notes: lines([]), completionPrimary: false,
+      advance: Object.freeze({ enabled: false, label: 'Neste', reason: photoReadingNote(reading) }) });
   }
   const { status: state, text: heading } = photoCompletionStatus(readiness);
   const blocked = state === 'blocked';

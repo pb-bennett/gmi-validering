@@ -18,8 +18,12 @@ export const photoCount = (count) => counted(count, 'bilde', 'bilder');
 export const placementCount = (count) => counted(count, 'plassering', 'plasseringer');
 export const selectedPhotoCount = (count) => counted(count, 'valgt bilde', 'valgte bilder');
 export const selectedPlacementCount = (count) => counted(count, 'valgt plassering', 'valgte plasseringer');
-// Readiness copy is written for many. A lookbehind is not needed: "11 bilder" has no word boundary before its last 1.
-export const singularCopy = (text) => text.replace(/\b1 bilder\b/g, '1 bilde').replace(/\b1 plasseringer\b/g, '1 plassering');
+// Readiness and plan copy is written for many. A lookbehind is not needed: "11 bilder" has no word boundary before its last 1.
+const SINGULARS = Object.freeze({ bilder: 'bilde', 'unike bilder': 'unikt bilde', plasseringer: 'plassering', punkter: 'punkt', 'XYZ-punkter': 'XYZ-punkt', originalbilder: 'originalbilde', 'delte originalbilder': 'delt originalbilde',
+  'godtatte fotografverdier': 'godtatt fotografverdi', objektkoblinger: 'objektkobling', features: 'feature', forekomster: 'forekomst', 'uplasserte forekomster': 'uplassert forekomst',
+  'tidssone-suffikser': 'tidssone-suffiks', tidssoneendringer: 'tidssoneendring', 'Z-plassholdere': 'Z-plassholder' });
+const PLURAL_AFTER_ONE = new RegExp(`\\b1 (${Object.keys(SINGULARS).join('|')})\\b`, 'g');
+export const singularCopy = (text) => text.replace(PLURAL_AFTER_ONE, (_, plural) => `1 ${SINGULARS[plural]}`);
 
 const line = (key, text) => Object.freeze({ key, text });
 const sourceName = ({ kind, sourceFilename }) => `${photoSourceLabel(kind)}${sourceFilename ? ` · ${sourceFilename}` : ''}`;
@@ -144,22 +148,29 @@ export function initialCompletionTask(tasks) {
   return (open.find((task) => task.requirement === 'required') || open.find((task) => task.group === 'main') || tasks[0]).key;
 }
 
-// One line on the state of the delivery. Generation is confirmed by the plan, so this never promises a package.
-export function photoCompletionStatus(readiness) {
-  const { status, blocking, recommendations, levels } = readiness;
+// The whole layer counts, placed or not: a plan goes stale when any member finishes, and readiness sees placed photos only.
+export const photosBeingRead = (photos) => new Set(photos.filter((photo) => photo.spatial?.exifRead?.state === 'pending').map((photo) => photo.assetId)).size;
+export const photoReadingNote = (count) => singularCopy(`${count} bilder er ikke ferdig lest. Kontrollen oppdateres av seg selv.`);
+
+// One line on the state of the delivery. Generation is confirmed by the plan, so this never promises a package. Until a read
+// ends, what readiness blocks on may not be real, so `reading` comes first. Recommendations are categories, each with its own
+// count and unit, so no total is given: the list beside this line says how many of what.
+export function photoCompletionStatus(readiness, reading = 0) {
+  const { status, blocking, levels } = readiness;
+  if (reading) return { status: 'reading', text: 'Leser bildedata …' };
   if (status === 'blocked') return { status, text: `${blocking.length} må rettes før eksport` };
   if (status === 'schema-gap') return { status, text: `Kan eksporteres, men følger ikke ${levels.schema.name}-skjemaet` };
-  if (status === 'recommendations') return { status, text: `Kan eksporteres, men ${recommendations.length} kan forbedres` };
+  if (status === 'recommendations') return { status, text: 'Kan eksporteres, men noe bør kontrolleres' };
   return { status, text: 'Ingen opplysninger mangler for dette målet' };
 }
 
 // Generation, schema and import are separate questions, so each gets its own answer. Only rules are checked here,
 // and nothing here can say that a package will import: that takes a real import.
 const SCHEMA_GAPS = Object.freeze({ captureTime: (gap) => `opptakstid mangler for ${photoCount(gap.count)}`, direction: (gap) => `retning mangler for ${placementCount(gap.count)}`, context: () => 'leveranseopplysninger mangler' });
-export function photoExportLevels({ blocking, levels: { generation, schema, importEvidence } }) {
+export function photoExportLevels({ levels: { generation, schema, importEvidence } }) {
   const notValidated = 'XSD-validering er ikke kjørt.';
   return [
-    Object.freeze({ key: 'generation', label: 'Eksportpakke', text: generation === 'possible' ? 'Kan lages' : `Kan ikke lages ennå: ${blocking.length} må rettes` }),
+    Object.freeze({ key: 'generation', label: 'Eksportpakke', text: generation === 'possible' ? 'Kan lages' : 'Kan ikke lages ennå' }),
     Object.freeze({ key: 'schema', label: schema.name ? `${schema.name}-skjema` : 'Skjema', text: !schema.assessed ? 'Ikke vurdert ennå'
       : schema.met ? `Kravene er oppfylt etter regelsjekk. ${notValidated}` : `Oppfylles ikke: ${schema.gaps.map((gap) => SCHEMA_GAPS[gap.field](gap)).join(', ')}. ${notValidated}` }),
     Object.freeze({ key: 'import', label: 'Import i Gemini VA', text: importEvidence.profile === 'imported' && !importEvidence.deviations.length
@@ -174,7 +185,7 @@ export const photoExportAwaitingSource = ({ recommendations }) => recommendation
 export function photoCaptureTimeSchemaWarning({ levels, tasks }) {
   const gap = levels.schema.gaps.find((item) => item.field === 'captureTime');
   if (!gap || tasks.captureTime.requirement === 'required') return null;
-  return singularCopy(`${gap.count} bilder mangler full opptakstid. Eksporten kan lages, men GML-filen oppfyller ikke kravet til opptakstid i ${levels.schema.name}-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.`);
+  return singularCopy(`${gap.count} bilder mangler full opptakstid, så GML-filen oppfyller ikke ${levels.schema.name}-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.`);
 }
 
 const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-sources-differ']);
