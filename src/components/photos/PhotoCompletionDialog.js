@@ -27,25 +27,29 @@ function TaskButton({ task, active, onSelect }) {
 
 // Standalone hub for accepted metadata. It never writes on its own: every value needs an explicit action, and each
 // action goes through the session, so readiness and the counts here follow canonical state after any change.
-export default function PhotoCompletionDialog({ layer, photos, config, onConfigChange, openerRef, onOpenSources, onClose }) {
+// `entry` is set when the hub comes back from a handoff: { task, selections }. Nothing else survives the trip.
+export default function PhotoCompletionDialog({ layer, photos, config, onConfigChange, openerRef, entry = null, onOpenMap, onOpenSources, onClose }) {
   const ref = useRef(null), id = useId();
   const [now] = useState(() => Date.now());
   const [activeKey, setActiveKey] = useState(null);
-  const [selections, setSelections] = useState({});
+  const [selections, setSelections] = useState(entry?.selections || {});
+  const [resumed] = useState(Boolean(entry));
   const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     const dialog = ref.current, opener = openerRef?.current || document.activeElement;
     dialog.showModal();
+    if (resumed) dialog.querySelector('[data-completion-heading]')?.focus();
     return () => { dialog.close(); if (opener?.isConnected) opener.focus(); };
-  }, [openerRef]);
+  }, [openerRef, resumed]);
 
   const readiness = useMemo(() => photoExportReadiness(photos, { profile: config.profile, crs: config.crs, context: config.context, now }), [photos, config, now]);
   const model = useMemo(() => photoCompletionModel(photos, readiness), [photos, readiness]);
-  const [initialKey] = useState(() => initialCompletionTask(model.tasks));
+  const [initialKey] = useState(() => entry?.task || initialCompletionTask(model.tasks));
   const task = model.tasks.find((item) => item.key === (activeKey || initialKey)) || model.tasks[0];
   const status = photoCompletionStatus(readiness);
+  const [returnNote] = useState(() => entry ? `${task.label}: ${task.outstanding} gjenstår.` : '');
   const editing = photos.find((photo) => photo.id === editingId);
 
   // A saved row can move to Ferdig and take its button along, so focus must land somewhere in the hub.
@@ -81,9 +85,9 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
           </nav>
           <div className="photo-completion-panel">
             {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} recommendations={completionRecommendations(readiness, 'captureTime')} onEdit={setEditingId} />}
-            {task.key === 'direction' && <PhotoCompletionDirectionPanel {...panelProps('direction')} recommendations={completionRecommendations(readiness, 'direction')} photos={photos} />}
+            {task.key === 'direction' && <PhotoCompletionDirectionPanel {...panelProps('direction')} recommendations={completionRecommendations(readiness, 'direction')} photos={photos} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} />}
             {task.key === 'photographer' && <PhotoCompletionPhotographerPanel {...panelProps('photographer')} onEdit={setEditingId} />}
-            {task.key === 'placement' && <PhotoCompletionPlacementPanel task={model.placement} title={task.label} requirementLabel={task.requirementLabel} onOpenSources={onOpenSources} />}
+            {task.key === 'placement' && <PhotoCompletionPlacementPanel task={model.placement} title={task.label} requirementLabel={task.requirementLabel} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} onOpenSources={() => onOpenSources({ selections })} />}
             {task.key === 'context' && <PhotoCompletionContextPanel title={task.label} requirementLabel={task.requirementLabel} context={config.context}
               missing={readiness.blocking.filter((item) => item.code === 'invalid-context')} onChange={(context) => onConfigChange({ context })} />}
           </div>
@@ -91,7 +95,7 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
         <footer className="photo-import-footer border-t border-gmi-border">
           <div className="photo-completion-footer-status">
             <p data-completion-status={status.status}>{status.text}</p>
-            <p role="status">{message}</p>
+            <p role="status">{message || returnNote}</p>
           </div>
           <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4" onClick={onClose}>Lukk</button>
         </footer>

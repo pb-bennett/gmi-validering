@@ -54,14 +54,17 @@ export function PhotoCompletionPhotographerPanel({ task, title, requirementLabel
   </section>;
 }
 
-// Placement itself happens in the existing tools. Automatic handoff and return belong to a later step.
-export function PhotoCompletionPlacementPanel({ task, title, requirementLabel, onOpenSources }) {
+// Placement itself happens in the existing tools, and both of them come back here.
+export function PhotoCompletionPlacementPanel({ task, title, requirementLabel, onOpenMap, onOpenSources }) {
   return <section aria-label="Plassering" data-completion-panel="placement">
     <CompletionHeading title={title} requirementLabel={requirementLabel} note={task.unplaced ? `${placementCount(task.unplaced)} mangler posisjon og blir ikke med i leveransen.` : 'Alle plasseringer har posisjon.'} />
     {task.unplaced > 0 && <>
       <div className="photo-completion-actions" data-completion-actions="placement">
-        <button type="button" className={completionButton} onClick={onOpenSources}>Koble og posisjoner bilder…</button>
-        <p className="photo-completion-requirement-note">Dette lukker Fullfør opplysninger. Enkeltbilder kan også plasseres med «Juster plassering og retning» i Verktøy.</p>
+        <div className="photo-completion-action-buttons">
+          <button type="button" className={completionButton} onClick={(event) => { if (event.detail < 2) onOpenMap({ task: 'placement', photoIds: task.rows.map((row) => row.photoId) }); }}>Plasser på kartet</button>
+          <button type="button" className={completionButton} onClick={onOpenSources}>Koble og posisjoner bilder…</button>
+        </div>
+        <p className="photo-completion-requirement-note">Du kommer tilbake hit etterpå. Posisjoner fra kartet er ikke godtatt før du lagrer dem.</p>
       </div>
       <ul className="photo-completion-rows">{task.rows.map((row) => <li key={row.key} data-completion-row={row.key} data-state="unplaced">
         <div className="photo-completion-row-body"><p className="photo-completion-filename">{row.filename}{row.occurrence && <small> · {row.occurrence}</small>}</p></div>

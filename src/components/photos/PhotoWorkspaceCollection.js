@@ -61,7 +61,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
   const shownRows = view.pinned ? [view.pinned, ...view.rows] : view.rows;
   // Roving tabindex: the active row, or the first row when the active one is not shown.
   const tabbableId = shownRows.some((photo) => photo.id === workspace.activePhotoId) ? workspace.activePhotoId : shownRows[0]?.id;
-  const clearFilter = () => dispatch({ type: 'filter', filter: { placement: 'all', missingDirection: false, missingCaptureTime: false, repeated: false, changed: false } });
+  const clearFilter = () => dispatch({ type: 'filter', filter: { placement: 'all', missingDirection: false, missingCaptureTime: false, repeated: false, changed: false, work: null } });
   const removalIds = workspace.removalIds;
   const removalAssets = new Set(photos.filter((photo) => removalIds.includes(photo.id)).map((photo) => photo.assetId));
   const removalHasRepeats = photos.some((photo) => removalIds.includes(photo.id) && photo.repeatGroup?.occurrenceCount > 1);
@@ -160,6 +160,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
         </fieldset>
         <fieldset><legend>Annet</legend>
           <label><input type="checkbox" checked={filter.repeated} onChange={(event) => setFilter({ repeated: event.target.checked })} />Flere plasseringer ({view.counts.repeated})</label>
+          {filter.work && <label><input type="checkbox" checked onChange={() => setFilter({ work: null })} />{filter.work.label} ({filter.work.ids.size})</label>}
           {editing && <label><input type="checkbox" checked={filter.changed} onChange={(event) => setFilter({ changed: event.target.checked })} />Endret (ikke lagret) ({view.counts.changed})</label>}
         </fieldset>
       </div>}

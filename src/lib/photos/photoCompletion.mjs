@@ -88,7 +88,7 @@ const CAPTURE_GROUPS = Object.freeze([
 const DIRECTION_GROUPS = Object.freeze([
   ['adoptable', 'Kan brukes'], ['conflict', 'Ulike kildeverdier', 'Velg plasseringene og oppgi riktig retning.'], ['zero-review', 'GML oppgir 0°'],
   ['unsupported', 'Ukjent referanse', 'Vises bare. Verdien brukes ikke, fordi den ikke er oppgitt fra geografisk nord.'], ['unusable', 'Kan ikke tolkes'],
-  ['invalid', 'Ugyldig godtatt retning', 'Rett retningen på kartet med «Juster plassering og retning».'],
+  ['invalid', 'Ugyldig godtatt retning', 'Rett retningen med «Angi på kartet».'],
   ['pending', 'Leser bildedata', 'Oppdateres av seg selv når lesingen er ferdig.'], ['none', 'Ingen kildeverdi'],
 ]);
 const PHOTOGRAPHER_GROUPS = Object.freeze([
@@ -171,6 +171,10 @@ export function scopedRows(rows, selected, eligible) {
 export const canAdopt = (kind) => (row) => row.state === 'adoptable' && row.adoptableKinds.includes(kind) && !row.sourcePending;
 export const canAdoptPhotographer = (row) => row.state === 'adoptable';
 export const canAcceptGmlZero = (row) => row.zeroAcceptable;
+// The map can answer every row without an accepted, valid direction. GML 0° that was accepted stays questionable,
+// since 0 can mean "not recorded": it can be looked at again, and the map is the only place it can be changed.
+export const canSetOnMap = (row) => row.state !== 'accepted';
+export const canReviewOnMap = (row) => row.state === 'accepted' && row.accepted.degrees === 0 && row.accepted.basis?.kind === 'gml';
 export const isHeldBack = (row) => row.state !== 'pending' && !row.accepted && Boolean(row.sourcePending);
 export const selectionRows = (rows, selected) => { const keys = new Set(selected); return rows.filter((row) => keys.has(row.key)); };
 

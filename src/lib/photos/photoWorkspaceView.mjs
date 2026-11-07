@@ -40,7 +40,8 @@ function matchesPlacement(photo, placement) {
 }
 
 export function photoMatchesFilter(photo, filter, changedIds) {
-  return matchesPlacement(photo, filter.placement)
+  return (!filter.work || filter.work.ids.has(photo.id))
+    && matchesPlacement(photo, filter.placement)
     && (!filter.missingDirection || photoMissingDirection(photo))
     && (!filter.missingCaptureTime || photoMissingCaptureTime(photo))
     && (!filter.repeated || photoIsRepeated(photo))
@@ -80,7 +81,7 @@ export function photoPlacementCounts(photos) {
 
 export function photoFilterSummary(filter) {
   return [
-    filter.placement !== 'all' && PHOTO_PLACEMENT_FILTERS.find((item) => item.key === filter.placement)?.label,
+    filter.work?.label, filter.placement !== 'all' && PHOTO_PLACEMENT_FILTERS.find((item) => item.key === filter.placement)?.label,
     filter.missingDirection && 'Mangler retning', filter.missingCaptureTime && 'Mangler opptakstid',
     filter.repeated && 'Flere plasseringer', filter.changed && 'Endret',
   ].filter(Boolean);

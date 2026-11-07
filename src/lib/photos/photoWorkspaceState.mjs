@@ -11,6 +11,9 @@ function normalizeFilter(filter, patch) {
   const next = { ...filter };
   if (patch.placement !== undefined && FILTER_PLACEMENTS.includes(patch.placement)) next.placement = patch.placement;
   for (const flag of FILTER_FLAGS) if (patch[flag] !== undefined) next[flag] = Boolean(patch[flag]);
+  // A fixed work list from Fullfør opplysninger ({ ids, label }). Only present while one is set.
+  if (patch.work) next.work = patch.work;
+  else if (patch.work === null) delete next.work;
   return Object.freeze(next);
 }
 
@@ -52,4 +55,4 @@ export function photoWorkspaceReducer(state, action) {
   return state;
 }
 
-export const photoFilterIsDefault = (filter) => Object.keys(DEFAULT_PHOTO_FILTER).every((key) => filter[key] === DEFAULT_PHOTO_FILTER[key]);
+export const photoFilterIsDefault = (filter) => !filter.work && Object.keys(DEFAULT_PHOTO_FILTER).every((key) => filter[key] === DEFAULT_PHOTO_FILTER[key]);

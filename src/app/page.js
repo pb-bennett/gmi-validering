@@ -16,6 +16,8 @@ import { canRedoPhotoEdit, canUndoPhotoEdit, changedPhotoIds, effectivePhoto, em
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { photoStackMembers } from '@/lib/photos/photoStacks.mjs';
 import { photoExportConfigFor, reconcilePhotoExportConfig, updatePhotoExportConfig } from '@/lib/photos/photoExportConfig.mjs';
+import { createPhotoExportFlow, photoExportFlowFilter, photoExportFlowIsLive, photoExportFlowProgress } from '@/lib/photos/photoExportFlow.mjs';
+import { ignoreFollowUpClick } from '@/components/photos/photoFollowUpClick';
 import PhotoWorkspaceCollection from '@/components/photos/PhotoWorkspaceCollection';
 import PhotoPositioningWizard from '@/components/photos/PhotoPositioningWizard';
 import PhotoWorkspaceInspector from '@/components/photos/PhotoWorkspaceInspector';
@@ -154,6 +156,11 @@ export default function Home() {
   const [photoDialog, setPhotoDialog] = useState(null);
   // Transient per-layer export choices, shared by Fullfør opplysninger and the export dialog. Never persisted.
   const [photoExportConfigs, setPhotoExportConfigs] = useState(() => new Map());
+  // One handoff from Fullfør opplysninger to the map or the positioning wizard. Never persisted. The ref lets a Save/Discard
+  // continuation, created before the boundary dialog opened, see what is current when it runs.
+  const [photoExportFlow, setPhotoExportFlow] = useState(null);
+  const photoExportFlowRef = useRef(null);
+  const [photoCompletionEntry, setPhotoCompletionEntry] = useState(null);
   const photoToolOpenerRef = useRef(null);
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [photoBoundary, setPhotoBoundary] = useState(null);
@@ -180,6 +187,25 @@ export default function Home() {
   const [photoLocateRequest, setPhotoLocateRequest] = useState(null);
   const photoTriggerRef = useRef(null);
 
+  const changePhotoExportFlow = (flow) => { photoExportFlowRef.current = flow; setPhotoExportFlow(flow); };
+  const closePhotoExportFlow = () => {
+    const flow = photoExportFlowRef.current;
+    if (!flow) return null;
+    changePhotoExportFlow(null);
+    if (!photoExportFlowIsLive(flow, photoSession.getSnapshot().photoLayers)) return null;
+    dispatchPhotoWorkspace({ type: 'filter', filter: { ...flow.restore.filter, work: null } });
+    if (flow.restore.activePhotoId) dispatchPhotoWorkspace({ type: 'active', photoId: flow.restore.activePhotoId });
+    return flow;
+  };
+  // Runs after the Save/Discard boundary is settled. The hub then reads canonical photos when it mounts, so a saved
+  // value counts and a discarded one never did. With the layer gone there is nothing to come back to.
+  const returnToPhotoCompletion = () => {
+    const flow = closePhotoExportFlow();
+    if (!flow) return;
+    setPhotoCompletionEntry({ task: flow.task, selections: flow.restore.selections });
+    setPhotoDialog('complete');
+    ignoreFollowUpClick();
+  };
   const endPhotoEditSession = () => {
     const ticket = photoEditTicketRef.current;
     photoEditTicketRef.current = null;
@@ -187,19 +213,20 @@ export default function Home() {
     dispatchPhotoEdit({ type: 'end' });
     dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
   };
-  const enterPhotoEditMode = () => {
-    if (!workspaceLayer || photoWorkspace.mode === 'edit') return;
+  const enterPhotoEditMode = (photoId = photoWorkspace.activePhotoId) => {
+    if (!workspaceLayer || photoWorkspace.mode === 'edit') return false;
     const hidden = !workspaceLayer.visible;
     if (hidden) photoSession.setLayerVisibility(workspaceLayer.id, true);
     const ticket = photoSession.beginPhotoEdits(workspaceLayer.id);
-    if (!ticket) return;
+    if (!ticket) return false;
     photoEditTicketRef.current = ticket;
     setPhotoClickMoveId(null);
     dispatchPhotoEdit({ type: 'start', ticket });
     dispatchPhotoWorkspace({ type: 'mode', mode: 'edit' });
     // The command bar appears over the map: make sure the selected photo is not hidden underneath it.
-    if (photoWorkspace.activePhotoId) setPhotoPanRequest({ layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId, at: Date.now() });
+    if (photoId) setPhotoPanRequest({ layerId: workspaceLayer.id, photoId, at: Date.now() });
     if (hidden) notifyPhoto('Laget vises mens du redigerer', 'info');
+    return true;
   };
   // One commit for the whole session: every change is validated before anything is written.
   const savePhotoEdits = (then = null) => {
@@ -223,16 +250,22 @@ export default function Home() {
     }
     endPhotoEditSession();
     setPhotoBoundary(null);
+    closePhotoExportFlow();
     notifyPhoto('Redigeringen ble avsluttet fordi fotolaget ble endret.', 'error');
   };
   const discardPhotoEdits = (then = null) => { endPhotoEditSession(); setPhotoBoundary(null); then?.(); };
   // The single unsaved-changes boundary: every action that leaves Edit mode or opens a photo-data tool.
-  const requestWorkspaceAction = (run = () => {}) => {
+  // Going anywhere else ends a handoff from Fullfør opplysninger, but only once the boundary has been passed:
+  // choosing Fortsett redigering leaves the handoff as it was.
+  const requestWorkspaceAction = (action = () => {}, { keepFlow = false } = {}) => {
+    const run = keepFlow ? action : () => { closePhotoExportFlow(); action(); };
     if (photoWorkspace.mode === 'remove') dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
     if (photoWorkspace.mode !== 'edit') { run(); return; }
     if (!changedPhotoIds(photoEdit).length) { endPhotoEditSession(); run(); return; }
     setPhotoBoundary({ variant: 'boundary', then: run });
   };
+  // Every way out of Edit mode: without a handoff the return is a no-op, so ordinary editing behaves as before.
+  const leavePhotoEditMode = () => requestWorkspaceAction(returnToPhotoCompletion, { keepFlow: true });
   const stagePhotoEdit = (photoId, field, value, coalesceKey = null) => dispatchPhotoEdit({ type: 'stage', photoId, field, value, coalesceKey, at: Date.now() });
   const selectWorkspacePhoto = (photoId, { pan = false } = {}) => {
     dispatchPhotoWorkspace({ type: 'active', photoId });
@@ -278,6 +311,7 @@ export default function Home() {
     closeDataInspector();
     setPhotoDialog(null);
     setPhotoViewerOpen(false);
+    changePhotoExportFlow(null);
     dispatchPhotoWorkspace({ type: 'enter', layerId: id, photoId, photoIds: layer.photoIds });
     useStore.getState().setActiveViewTab('map');
   };
@@ -299,13 +333,32 @@ export default function Home() {
     setPhotoImport({ kind: 'append', targetLayerId: workspaceLayer.id });
   });
   const changePhotoExportConfig = (layerId, patch) => setPhotoExportConfigs((configs) => updatePhotoExportConfig(configs, layerId, patch));
-  const openCompletePhotoDetails = (opener) => requestWorkspaceAction(() => { photoToolOpenerRef.current = opener; setPhotoDialog('complete'); });
+  const openCompletePhotoDetails = (opener) => requestWorkspaceAction(() => { photoToolOpenerRef.current = opener; setPhotoCompletionEntry(null); setPhotoDialog('complete'); });
+  // Swap, never stack: the hub closes and Edit mode takes over. The hub is open, so the boundary has nothing to ask here.
+  const openPhotoCompletionMap = ({ task, scope, photoIds, focusId, selections }) => requestWorkspaceAction(() => {
+    const flow = createPhotoExportFlow({ layerId: workspaceLayer.id, task, scope, workIds: photoIds, focusId, photos: workspacePhotos, workspace: photoWorkspace, selections });
+    if (!flow || !enterPhotoEditMode(flow.focusId)) return;
+    changePhotoExportFlow(flow);
+    setPhotoDialog(null);
+    dispatchPhotoWorkspace({ type: 'filter', filter: photoExportFlowFilter(flow) });
+    dispatchPhotoWorkspace({ type: 'active', photoId: flow.focusId });
+    ignoreFollowUpClick();
+  });
+  const openPhotoCompletionSources = ({ selections }) => requestWorkspaceAction(() => {
+    changePhotoExportFlow(createPhotoExportFlow({ layerId: workspaceLayer.id, task: 'placement', route: 'positioning', workspace: photoWorkspace, selections }));
+    setPhotoDialog(null);
+    setPhotoSourceWorkflow({ layerId: workspaceLayer.id });
+    ignoreFollowUpClick();
+  });
+  // The wizard keeps its own transaction. Whatever it ended with, applied or cancelled, is already canonical here.
+  const closePhotoSources = () => { setPhotoSourceWorkflow(null); returnToPhotoCompletion(); };
   const runWorkspaceTool = (tool, opener) => {
     if (tool === 'add') addPhotosToLayer(opener);
     else if (tool === 'edit') { if (photoWorkspace.mode !== 'edit') requestWorkspaceAction(enterPhotoEditMode); }
     else if (tool === 'sources') openPhotoSources();
     else if (tool === 'info') requestWorkspaceAction(() => setPhotoDialog('info'));
-    else if (tool === 'complete') openCompletePhotoDetails(opener);
+    // During a handoff this is the way back, so the task it came from is not lost.
+    else if (tool === 'complete') { if (photoExportFlow) leavePhotoEditMode(); else openCompletePhotoDetails(opener); }
     else if (tool === 'export') requestWorkspaceAction(() => setPhotoDialog('export'));
     else if (tool === 'remove') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'remove' }));
   };
@@ -318,7 +371,9 @@ export default function Home() {
     setPhotoLocateRequest({ ...request, kind: 'photo' });
     useStore.getState().setActiveViewTab('map');
   };
+  const onPhotoFlowInvalid = useEffectEvent(closePhotoExportFlow);
   useEffect(() => photoSession.subscribe(() => {
+    if (photoExportFlowRef.current && !photoExportFlowIsLive(photoExportFlowRef.current, photoSession.getSnapshot().photoLayers)) onPhotoFlowInvalid();
     setPhotoLocateRequest((request) => request && !photoSession.getLayer(request.layerId)?.photoIds.includes(request.photoId) ? null : request);
     setPhotoSourceWorkflow((workflow) => workflow && !photoSession.getLayer(workflow.layerId) ? null : workflow);
     dispatchPhotoWorkspace({ type: 'reconcile', layers: photoSession.getSnapshot().photoLayers });
@@ -330,6 +385,7 @@ export default function Home() {
       dispatchPhotoEdit({ type: 'end' });
       dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
       setPhotoBoundary(null);
+      onPhotoFlowInvalid();
       setPhotoNotice({ id: `${Date.now()}`, text: 'Redigeringen ble avsluttet fordi fotolaget ble endret.', tone: 'error', action: null });
       return;
     }
@@ -362,7 +418,7 @@ export default function Home() {
       return;
     }
     if (event.key !== 'Escape') return;
-    if (photoEditing) { event.preventDefault(); requestWorkspaceAction(); }
+    if (photoEditing) { event.preventDefault(); leavePhotoEditMode(); }
     else if (photoWorkspace.mode === 'remove') { event.preventDefault(); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); }
   });
   const photoKeysActive = Boolean(workspaceLayer) && photoWorkspace.mode !== 'browse';
@@ -381,6 +437,11 @@ export default function Home() {
     && isPhotoPosition(photo.saved?.current?.position) && workspaceView.visibleIds.has(photo.id)).map((photo) => ({ photoId: photo.id, positions: [
     [photo.saved.current.position.latitude, photo.saved.current.position.longitude],
     [photo.spatial.current.position.latitude, photo.spatial.current.position.longitude]] })) : [], [photoEditing, effectiveWorkspacePhotos, workspaceView]);
+  const photoFlowBar = photoEditing && photoExportFlow?.route === 'edit' ? { progress: photoExportFlowProgress(photoExportFlow, effectiveWorkspacePhotos, photoWorkspace.activePhotoId),
+    onSelect: (photoId) => {
+      selectWorkspacePhoto(photoId, { pan: true });
+      setPhotoAnnouncement(`Valgte ${effectiveWorkspacePhotos.find((photo) => photo.id === photoId)?.originalFilename || 'bildet'}`);
+    } } : null;
   // GMI layers loaded in the app can be used as photo sources by both wizards (import and source positioning).
   const loadedGmiLayers = Object.values(surveyLayers).filter((layer) => loadedGmiSources.available(layer.id))
     .map((layer) => ({ id: layer.id, name: layer.name || layer.file?.name || layer.id }));
@@ -547,6 +608,7 @@ export default function Home() {
     setPhotoLocateRequest(null);
     // An explicit global reset: staged edits are lost with the whole photo session.
     if (photoEditTicketRef.current) endPhotoEditSession();
+    changePhotoExportFlow(null);
     setPhotoDialog(null); setPhotoBoundary(null); setPhotoNotice(null); setPhotoViewerOpen(false);
     dispatchPhotoWorkspace({ type: 'exit' });
     closeDataInspector();
@@ -571,14 +633,14 @@ export default function Home() {
       {sourceWorkflowLayer && !photoImport && <PhotoPositioningWizard layer={sourceWorkflowLayer}
         photos={photoSession.getLayerPhotos(sourceWorkflowLayer.id)} review={sourceReviews[sourceWorkflowLayer.id]}
         initialSourceId={photoSourceWorkflow.sourceId} focusedPhotoId={photoSourceWorkflow.photoId}
-        loadedSources={loadedGmiLayers} loadedSourceInput={loadedGmiInput} onClose={() => setPhotoSourceWorkflow(null)} />}
+        loadedSources={loadedGmiLayers} loadedSourceInput={loadedGmiInput} onClose={closePhotoSources} />}
       {workspaceLayer && !photoImport && photoDialog === 'info' && <PhotoSourcesInfoDialog layer={workspaceLayer} photos={workspacePhotos}
         onClose={() => setPhotoDialog(null)} onOpenSources={() => { setPhotoDialog(null); openPhotoSources(); }} />}
       {workspaceLayer && !photoImport && photoDialog === 'export' && <PhotoExportDialog layerId={workspaceLayer.id} initialContext={photoExportConfigFor(photoExportConfigs, workspaceLayer.id).context}
         onContextChange={(context) => changePhotoExportConfig(workspaceLayer.id, { context })} onClose={() => setPhotoDialog(null)} />}
       {workspaceLayer && !photoImport && photoDialog === 'complete' && <PhotoCompletionDialog key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos}
         config={photoExportConfigFor(photoExportConfigs, workspaceLayer.id)} onConfigChange={(patch) => changePhotoExportConfig(workspaceLayer.id, patch)} openerRef={photoToolOpenerRef}
-        onOpenSources={() => { setPhotoDialog(null); openPhotoSources(); }} onClose={() => setPhotoDialog(null)} />}
+        entry={photoCompletionEntry} onOpenMap={openPhotoCompletionMap} onOpenSources={openPhotoCompletionSources} onClose={() => setPhotoDialog(null)} />}
       {workspaceLayer && !photoImport && photoViewerOpen && activeWorkspacePhoto?.dimensions && <PhotoWorkspaceViewer photo={activeWorkspacePhoto}
         photos={effectiveWorkspacePhotos} assetSequence={workspaceView.assetSequence} onClose={() => setPhotoViewerOpen(false)}
         onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} />}
@@ -601,7 +663,7 @@ export default function Home() {
               notifyPhoto(`Endringer lagret for ${changes.length} ${changes.length === 1 ? 'bilde' : 'bilder'}`);
               then?.();
             } else if (result.error === 'edit-conflict') { photoEditTicketRef.current = ticket; setPhotoBoundary({ variant: 'conflict', staleIds: result.staleIds, then }); }
-            else { endPhotoEditSession(); setPhotoBoundary(null); notifyPhoto('Redigeringen ble avsluttet fordi fotolaget ble endret.', 'error'); }
+            else { endPhotoEditSession(); setPhotoBoundary(null); closePhotoExportFlow(); notifyPhoto('Redigeringen ble avsluttet fordi fotolaget ble endret.', 'error'); }
           } else savePhotoEdits(photoBoundary.then);
         }} />}
       {/* Floating Stats Button */}
@@ -833,10 +895,10 @@ export default function Home() {
                   {photoEditing && <div className="photo-edit-command-anchor">
                     <PhotoEditCommandBar photo={activeWorkspacePhoto || null} siblingCount={activeSiblings.length} changedCount={changedIds.size}
                       canUndo={canUndoPhotoEdit(photoEdit)} canRedo={canRedoPhotoEdit(photoEdit)} onUndo={() => travelPhotoEdit('undo')} onRedo={() => travelPhotoEdit('redo')}
-                      onSave={() => savePhotoEdits()} onDiscard={() => setPhotoBoundary({ variant: 'discard' })} onExit={() => requestWorkspaceAction()}
+                      onSave={() => savePhotoEdits(returnToPhotoCompletion)} onDiscard={() => setPhotoBoundary({ variant: 'discard', then: returnToPhotoCompletion })} onExit={leavePhotoEditMode}
                       onStage={stagePhotoEdit} onMapCenter={() => photoMapCenterRef.current?.()} announcement={photoAnnouncement}
                       clickMove={photoClickMove} onClickMove={(active) => setPhotoClickMoveId(active ? activeWorkspacePhoto?.id || null : null)}
-                      stackCount={photoEditStackIds.length} />
+                      stackCount={photoEditStackIds.length} flow={photoFlowBar} />
                   </div>}
                   {workspaceLayer && photoNotice && <div className="photo-workspace-toast-anchor">
                     <PhotoWorkspaceToast key={photoNotice.id} notice={photoNotice} onDismiss={dismissPhotoNotice} />
