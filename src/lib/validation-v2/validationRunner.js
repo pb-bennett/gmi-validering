@@ -362,6 +362,7 @@ function createDiagnosticFacts(rule, policyContext, evaluation, evidence) {
     cone: ['tema'],
     manholeShape: ['tema'],
     width: ['tema'],
+    verticalLevel: ['tema'],
     wallThickness: ['tema'],
     bottomDistance: ['tema'],
     type: ['tema'],

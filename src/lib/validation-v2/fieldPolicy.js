@@ -1,4 +1,5 @@
 import { EvaluationState, ObjectValueState, RuleReasonCode, TemaIdentityState } from './contracts.js';
+import { parseCalendarDate } from './calendarDate.js';
 import { getPointFieldApplicability, PointFieldApplicabilityState } from './registry/pointFieldApplicability.js';
 import { isRingStiffnessMaterial, isSdrMaterial } from './registry/hydraulicTemaClassification.js';
 
@@ -88,7 +89,8 @@ function applicable(value, rule, context, numericKind = 'integer') {
   if (absent) return state === PointFieldApplicabilityState.APPLICABLE
     ? (['wallThickness', 'innerBottomToOuterUndersideDistance'].includes(rule.canonicalFieldId)
       ? constructionValueMissing(context)
-      : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_REQUIRED_MISSING })
+      : { state: tema === 'GUT' && rule.canonicalFieldId === 'width' ? EvaluationState.CHECK : EvaluationState.FAIL,
+        reasonCode: RuleReasonCode.APPLICABILITY_REQUIRED_MISSING })
     : { state: EvaluationState.PASS, reasonCode: null };
   if (state !== PointFieldApplicabilityState.APPLICABLE && state !== PointFieldApplicabilityState.OPTIONAL_SUPPORTED) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE };
   if (n === 0) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.NUMERIC_ZERO };
@@ -101,13 +103,7 @@ function validYear(value, currentYear) {
   const year = Number(raw); return year <= currentYear ? year : null;
 }
 function parseDate(value) {
-  const raw = lexeme(value);
-  const match = typeof raw === 'string' && (/^([0-9]{2})\.([0-9]{2})\.([0-9]{4})$/.exec(raw) || /^([0-9]{4})([0-9]{2})([0-9]{2})$/.exec(raw));
-  if (!match) return null;
-  const day = Number(match[1].length === 4 ? match[3] : match[1]);
-  const month = Number(match[1].length === 4 ? match[2] : match[2]);
-  const year = Number(match[1].length === 4 ? match[1] : match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day)); return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? { date, year } : null;
+  return parseCalendarDate(lexeme(value));
 }
 function anniversary(reference, years) {
   const targetYear = reference.getUTCFullYear() - years; const month = reference.getUTCMonth(); const day = reference.getUTCDate();
@@ -164,6 +160,11 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
   }
   if (policy === 'verticalLevel') {
     const invalid = listed(value, rule.allowedValues); if (invalid) return invalid;
+    if (['LOK', 'GUT'].includes(resolvedTema(context))) {
+      return raw === 'OVER_GRUNN' || raw === 'PÅ_GRUNN_VANNOVERF'
+        ? { state: EvaluationState.PASS, reasonCode: null }
+        : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.UNUSUAL_VALID_VALUE };
+    }
     return raw === 'UNDER_GRUNN' || raw === 'PÅ_GRUNN_VANNOVERF' ? { state: EvaluationState.PASS, reasonCode: null } : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.UNUSUAL_VALID_VALUE };
   }
   if (policy === 'insideOutside') return listed(value, rule.allowedValues) || { state: EvaluationState.PASS, reasonCode: null };

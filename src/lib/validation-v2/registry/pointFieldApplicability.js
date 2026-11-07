@@ -75,6 +75,13 @@ for (const canonicalFieldId of ['constructionMethod', 'width']) {
   });
 }
 cells.push({
+  tema: 'GUT',
+  canonicalFieldId: 'width',
+  state: PointFieldApplicabilityState.APPLICABLE,
+  authority: POLICY_AUTHORITY,
+  rationale: 'Explicit contractor acceptance correction: supplied Bredde on GUT is validated normally; missing Bredde requires Sjekk rather than Feil.',
+});
+cells.push({
   tema: 'INR',
   canonicalFieldId: 'width',
   state: PointFieldApplicabilityState.OPTIONAL_SUPPORTED,
@@ -147,9 +154,9 @@ for (const tema of ['KMR', 'SUMP']) {
 export const POINT_FIELD_APPLICABILITY_POLICY = deepFreeze({
   policyId: 'validator-2-point-field-applicability',
   policyVersion: '3.2.0',
-  policyRevision: '2026-09-28.1',
-  effectiveDate: '2026-09-28',
-  decisionDate: '2026-09-28',
+  policyRevision: '2026-11-07.1',
+  effectiveDate: '2026-11-07',
+  decisionDate: '2026-11-07',
   authority: POLICY_AUTHORITY,
   standardProvenance: 'NOT_STANDARD_INNMALINGSINSTRUKS_BEHAVIOR',
   legacyProvenance: 'PRAKSIS',
