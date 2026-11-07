@@ -9,7 +9,7 @@ import { normalizeCaptureTime } from '../src/lib/photos/photoCaptureMetadata.mjs
 import { buildPhotoExportPackage } from '../src/lib/photos/export/photoExportPackage.mjs';
 import { buildPhotoExportPlan, capturePhotoExportSnapshot } from '../src/lib/photos/export/photoExportPlan.mjs';
 import { PHOTO_EXPORT_IMPORT_EVIDENCE, PHOTO_EXPORT_PROFILE_METADATA, PHOTO_EXPORT_REQUIREMENTS } from '../src/lib/photos/export/photoExportRules.mjs';
-import { photoCaptureTimeSchemaWarning, photoCompletionStatus } from '../src/lib/photos/photoCompletion.mjs';
+import { photoCaptureTimeSchemaWarning, photoCompletionStatus, photoExportAwaitingSource } from '../src/lib/photos/photoCompletion.mjs';
 import { DEFAULT_PHOTO_EXPORT_CONFIG, photoExportConfigFor, reconcilePhotoExportConfig, updatePhotoExportConfig } from '../src/lib/photos/photoExportConfig.mjs';
 import { PHOTO_EXPORT_WIZARD_START, photoExportDeliveryModel, photoExportDeliveryReadiness, photoExportPackageContents, photoExportPackageState,
   photoExportWizardReducer as reduce } from '../src/lib/photos/photoExportWizard.mjs';
@@ -81,6 +81,12 @@ test('reading comes before blocked: the false blocker from an unfinished read is
   assert.equal(result.state, 'reading');
   assert.deepEqual([result.blockers, result.checks, result.notes], [[], [], []]);
   assert.equal(result.completionPrimary, false);
+});
+
+test('the shared status holds its answer while a placed photo is read, and only then', () => {
+  assert.equal(photoExportAwaitingSource(photoExportDeliveryReadiness(LAYERS.reading, GEMINI, NOW)), true);
+  assert.equal(photoExportAwaitingSource(photoExportDeliveryReadiness([photo('a')], GEMINI, NOW)), false);
+  assert.equal(photoExportAwaitingSource(photoExportDeliveryReadiness([photo('a', { captureTime: null, degrees: null })], GEMINI, NOW)), false, 'a real blocker is still shown');
 });
 
 test('reading looks at the whole layer: an unplaced member still being read holds the wizard', () => {
@@ -367,6 +373,8 @@ test('label: what the config holds reaches the name through the plan', async () 
 // Wording and boundaries
 
 const source = (path) => readFile(new URL(`../src/lib/photos/${path}`, import.meta.url), 'utf8');
+const WIZARD_COMPONENTS = ['PhotoExportWizard.js', 'PhotoExportDeliveryStep.js', 'PhotoExportPackageStep.js'];
+const components = () => Promise.all(WIZARD_COMPONENTS.map((name) => readFile(new URL(`../src/components/photos/${name}`, import.meta.url), 'utf8')));
 
 test('format cards: every profile has one, and the first is the only recommendation', () => {
   const cards = Object.values(PHOTO_EXPORT_PROFILE_METADATA);
@@ -398,6 +406,7 @@ test('format cards: a card says Krever only where the requirement is real', () =
 test('wording: no wizard text claims more than a rule check or drops back to test-package language', async () => {
   const claims = /\b(validert|godkjent|sertifisert|garantert|eksperimentell|testpakke)/i;
   assert.doesNotMatch(await source('photoExportWizard.mjs'), claims);
+  for (const text of await components()) assert.doesNotMatch(text, claims);
   for (const card of Object.values(PHOTO_EXPORT_PROFILE_METADATA)) assert.doesNotMatch(JSON.stringify(card), claims);
   for (const [layer, config] of STATES) assert.doesNotMatch(JSON.stringify(model(LAYERS[layer], config)), claims);
 });
@@ -406,4 +415,16 @@ test('boundaries: the wizard writes no metadata, composes no filename and stores
   const wizard = await source('photoExportWizard.mjs');
   for (const name of ['adoptSourceEvidence', 'setCaptureMetadata', 'fillMissingPhotoValues', 'photoSession', 'photoExportNames', '.zip', '.gml']) assert(!wizard.includes(name), name);
   for (const text of [wizard, await source('photoExportConfig.mjs')]) assert.doesNotMatch(text, /localStorage|sessionStorage|indexedDB/);
+});
+
+test('boundaries: the wizard components write no metadata, compose no final name and keep the plan out of the browser store', async () => {
+  const [shell, ...steps] = await components();
+  for (const text of [shell, ...steps]) {
+    for (const name of ['adoptSourceEvidence', 'setCaptureMetadata', 'fillMissingPhotoValues', 'photoExportNames', 'localStorage', 'sessionStorage', 'indexedDB']) assert(!text.includes(name), name);
+  }
+  // The session is read for the snapshot alone, and only the shell needs it.
+  assert.doesNotMatch(shell, /photoSession\.(?!mjs)/, 'no session method is called here');
+  assert(shell.includes('capturePhotoExportSnapshot(photoSession, layer.id)'));
+  for (const text of steps) assert(!text.includes('photoSession'));
+  assert(shell.includes('link.download = filename') && shell.includes('saveFile(blob, plan.naming.zipFilename'), 'the browser gets the name the plan fixed');
 });

@@ -167,6 +167,9 @@ export function photoExportLevels({ blocking, levels: { generation, schema, impo
   ];
 }
 
+// A placed photo still being read has no default direction or source time yet, so what readiness blocks on may not be real.
+export const photoExportAwaitingSource = ({ recommendations }) => recommendations.some((item) => item.code === 'evidence-pending');
+
 // Missing time is allowed through only where it does not block, and that must never pass quietly.
 export function photoCaptureTimeSchemaWarning({ levels, tasks }) {
   const gap = levels.schema.gaps.find((item) => item.field === 'captureTime');

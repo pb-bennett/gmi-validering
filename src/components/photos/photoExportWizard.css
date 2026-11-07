@@ -1,0 +1,44 @@
+/* The wizard uses the import wizard's frame (.photo-collection-dialog/-frame/-header, .photo-import-steps, .photo-import-footer)
+   and source cards (.photo-import-source). A fixed height stops it jumping between steps; only the step body scrolls,
+   so the header and footer stay in view at any size. */
+.photo-collection-dialog.photo-export-wizard { max-width: 1080px; height: min(94dvh, 760px); font-size: 13px; color: var(--gmi-text); }
+.photo-export-wizard h2 { font-size: 18px; font-weight: 600; color: var(--gmi-navy); }
+.photo-export-wizard .photo-collection-header { flex-wrap: nowrap; }
+.photo-export-wizard .photo-collection-header > div { flex: 1; min-width: 0; }
+.photo-export-wizard h3 { font-size: 16px; font-weight: 600; color: var(--gmi-navy); outline: none; }
+.photo-export-body { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); align-items: start; }
+.photo-export-choices { min-width: 0; padding: 14px 16px; }
+.photo-export-state { display: grid; gap: 10px; min-width: 0; padding: 14px 20px; }
+.photo-export-section-title { margin-bottom: 8px; font-weight: 600; color: var(--gmi-navy); }
+.photo-export-wizard .photo-import-source { padding: 0.75rem; }
+.photo-export-badge { margin-left: 8px; padding: 0 8px; border: 1px solid var(--gmi-border-strong); border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.photo-export-compatibility { font-size: 12px; color: var(--gmi-text-muted); }
+.photo-export-crs { display: grid; gap: 4px; margin: 0.5rem 0 0 1.4rem; font-weight: 500; }
+.photo-export-crs select, .photo-export-label input { width: 100%; min-height: 34px; padding: 4px 8px; border: 1px solid var(--gmi-border-strong); border-radius: 4px; background: var(--gmi-surface); font-weight: 400; }
+.photo-export-more { margin-bottom: 0.75rem; }
+.photo-export-more > summary { margin-bottom: 0.5rem; cursor: pointer; font-weight: 600; color: var(--gmi-navy); }
+.photo-export-label { display: grid; gap: 4px; font-weight: 500; }
+.photo-export-hint { margin-top: 4px; font-size: 12px; color: var(--gmi-text-muted); overflow-wrap: anywhere; }
+.photo-export-excluded { font-weight: 500; }
+.photo-export-diagnostics { display: grid; gap: 4px; }
+.photo-export-diagnostic summary, .photo-export-disclosure summary { cursor: pointer; font-weight: 600; color: var(--gmi-navy); }
+.photo-export-diagnostic ul, .photo-export-disclosure ul { margin: 4px 0 8px; padding-left: 20px; list-style: disc; overflow-wrap: anywhere; }
+.photo-export-disclosure > p { margin: 4px 0; overflow-wrap: anywhere; }
+.photo-export-package { flex: 1; min-height: 0; overflow: auto; display: grid; align-content: start; gap: 10px; padding: 14px 20px; }
+.photo-export-summary { display: grid; gap: 4px; margin: 0; }
+.photo-export-summary > div { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: 8px; }
+.photo-export-summary dt { font-weight: 600; }
+.photo-export-summary dd { margin: 0; overflow-wrap: anywhere; }
+.photo-export-summary small { display: block; font-size: 12px; color: var(--gmi-text-muted); }
+.photo-export-counts { font-weight: 500; }
+.photo-export-filename { font-weight: 600; overflow-wrap: anywhere; }
+.photo-export-guidance { display: grid; gap: 4px; margin: 0; padding-left: 20px; list-style: decimal; overflow-wrap: anywhere; }
+.photo-export-footer-status { flex: 1; min-width: 0; margin-right: auto; font-size: 12px; color: var(--gmi-text-muted); }
+@media (max-width: 900px) {
+  .photo-export-body { grid-template-columns: minmax(0, 1fr); }
+  .photo-export-state { order: -1; padding-bottom: 0; }
+}
+@media (max-height: 750px) {
+  .photo-export-wizard .photo-import-footer { padding: 0.5rem 1rem; }
+  .photo-export-choices, .photo-export-state, .photo-export-package { padding-top: 10px; padding-bottom: 10px; }
+}

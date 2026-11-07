@@ -6,7 +6,7 @@ import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { completionGmlText } from './helpers/photoCompletionFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
-import { buildPreview, chooseFormat, closeExport, exportDialog, openExport } from './helpers/photoExportWizard.mjs';
+import { buildPreview, closeExport, exportDialog, openExport, selectedFormat } from './helpers/photoExportWizard.mjs';
 import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, savePhotoSource, sourceWizard, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
@@ -392,7 +392,7 @@ layerTest('going to another tool leaves the handoff only after the boundary, and
   await clickSourceControl(browser, 'Forkast endringer', boundary);
   await browser.waitFor(exportDialog);
   assert.equal(await browser.evaluate(`Boolean(${hub})`), false, 'one dialog: the hub does not come back on top of export');
-  await chooseFormat(browser, 'gemini-legacy2019');
+  assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
   await buildPreview(browser);
   assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="direction-required"]'))`), false, 'defaults satisfy the direction requirement');
   assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /Det er ikke verifisert at Gemini VA godtar en slik pakke/);
@@ -420,7 +420,7 @@ layerTest('going to another tool leaves the handoff only after the boundary, and
   await browser.waitFor(hub);
   await closeHub(browser);
   await openExport(browser);
-  await chooseFormat(browser, 'gemini-legacy2019');
+  assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
   await buildPreview(browser);
   assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="direction-required"]'))`), false);
 });

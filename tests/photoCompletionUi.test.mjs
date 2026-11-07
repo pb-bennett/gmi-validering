@@ -10,7 +10,7 @@ import { completionGmlText } from './helpers/photoCompletionFixtures.mjs';
 import { assertGeminiConventions } from './helpers/geminiPhotoConventions.mjs';
 import { exportedTimes } from './helpers/photoEvidenceFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
-import { buildPreview, chooseFormat, closeExport, downloadZip, exportDialog, openExport, setContextField } from './helpers/photoExportWizard.mjs';
+import { buildPreview, canAdvance, closeExport, downloadZip, exportDialog, openExport, selectedFormat } from './helpers/photoExportWizard.mjs';
 import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, clickImport, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, savePhotoSource, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
@@ -307,7 +307,7 @@ layerTest('profiles: requirements change with the target; the choice and AsBuilt
   assert.equal(await browser.evaluate(`${panel('context')}.querySelector('[data-context-field="surveyDate"]').hasAttribute('data-missing')`), false);
   assert.equal(await browser.evaluate(`${panel('context')}.querySelector('[data-context-field="datasetName"]').hasAttribute('data-missing')`), true);
 
-  // Remembered for the session, and shared with the export dialog.
+  // Remembered for the session, and shared with the export wizard.
   await closeHub(browser);
   await openHub(browser);
   assert.equal(await browser.evaluate(`${target}.value`), 'asbuilt52');
@@ -315,15 +315,22 @@ layerTest('profiles: requirements change with the target; the choice and AsBuilt
   assert.equal(await browser.evaluate(`${panel('context')}.querySelector('[data-context-field="projectName"] input').value`), 'Syntetisk prosjekt');
   await closeHub(browser);
   await openExport(browser);
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksportprofil"]').value`), '', 'the export dialog still asks for its profile each time');
-  await chooseFormat(browser, 'asbuilt52');
-  await browser.waitFor(`${exportDialog}.querySelector('[aria-label="Eksport Prosjektnavn"]')`);
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksport Prosjektnavn"]').value`), 'Syntetisk prosjekt');
-  await setContextField(browser, 'Datasettets navn', 'Fra eksport');
+  assert.equal(await selectedFormat(browser), 'asbuilt52', 'the wizard shows the target chosen in the hub');
+  assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-context-field], [aria-label^="Eksport Prosjektnavn"]'))`), false, 'the hub is the only form');
+  const missingContext = () => browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('[data-diagnostic-code="invalid-context"] li')).map((item) => item.textContent.split(':')[0])`);
+  assert.deepEqual(await missingContext(), ['Datasettets navn', 'Målemetode høyde', 'Stedfestingsårsak', 'Stedfestingsforhold'], 'the three values accepted in the hub are not reported');
+  assert.equal(await canAdvance(browser), false);
   await closeExport(browser);
   await openHub(browser);
   await showTask(browser, 'context');
-  assert.equal(await browser.evaluate(`${panel('context')}.querySelector('[data-context-field="datasetName"] input').value`), 'Fra eksport', 'one set of delivery values');
+  await setValue(browser, `${panel('context')}.querySelector('[data-context-field="datasetName"] input')`, 'Fra fullføring');
+  await closeHub(browser);
+  await openExport(browser);
+  assert.deepEqual(await missingContext(), ['Målemetode høyde', 'Stedfestingsårsak', 'Stedfestingsforhold'], 'one set of delivery values: an edit in the hub is what the wizard sees');
+  await closeExport(browser);
+  await openHub(browser);
+  await showTask(browser, 'context');
+  assert.equal(await browser.evaluate(`${panel('context')}.querySelector('[data-context-field="datasetName"] input').value`), 'Fra fullføring', 'and opening the wizard changed nothing');
   await closeHub(browser);
 
   // Nothing about the delivery reaches browser storage.
@@ -515,7 +522,7 @@ test('private corpus through the hub: with no action at all, times and direction
     await closeHub(browser);
 
     await openExport(browser);
-    await chooseFormat(browser, 'gemini-legacy2019');
+    assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
     await buildPreview(browser);
     const { gml, entries } = await downloadZip(browser, directory);
     const xml = strFromU8(entries[gml]);

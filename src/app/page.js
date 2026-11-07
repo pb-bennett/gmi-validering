@@ -24,7 +24,7 @@ import PhotoWorkspaceInspector from '@/components/photos/PhotoWorkspaceInspector
 import PhotoWorkspaceViewer from '@/components/photos/PhotoWorkspaceViewer';
 import PhotoCaptureMetadataDialog from '@/components/photos/PhotoCaptureMetadataDialog';
 import PhotoSourcesInfoDialog from '@/components/photos/PhotoSourcesInfoDialog';
-import PhotoExportDialog from '@/components/photos/PhotoExportDialog';
+import PhotoExportWizard from '@/components/photos/PhotoExportWizard';
 import PhotoCompletionDialog from '@/components/photos/PhotoCompletionDialog';
 import PhotoWorkspaceToast from '@/components/photos/PhotoWorkspaceToast';
 import PhotoEditCommandBar from '@/components/photos/PhotoEditCommandBar';
@@ -359,7 +359,7 @@ export default function Home() {
     else if (tool === 'info') requestWorkspaceAction(() => setPhotoDialog('info'));
     // During a handoff this is the way back, so the task it came from is not lost.
     else if (tool === 'complete') { if (photoExportFlow) leavePhotoEditMode(); else openCompletePhotoDetails(opener); }
-    else if (tool === 'export') requestWorkspaceAction(() => setPhotoDialog('export'));
+    else if (tool === 'export') requestWorkspaceAction(() => { photoToolOpenerRef.current = opener; setPhotoDialog('export'); });
     else if (tool === 'remove') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'remove' }));
   };
   const closePhotos = () => {
@@ -636,8 +636,9 @@ export default function Home() {
         loadedSources={loadedGmiLayers} loadedSourceInput={loadedGmiInput} onClose={closePhotoSources} />}
       {workspaceLayer && !photoImport && photoDialog === 'info' && <PhotoSourcesInfoDialog layer={workspaceLayer} photos={workspacePhotos}
         onClose={() => setPhotoDialog(null)} onOpenSources={() => { setPhotoDialog(null); openPhotoSources(); }} />}
-      {workspaceLayer && !photoImport && photoDialog === 'export' && <PhotoExportDialog layerId={workspaceLayer.id} initialContext={photoExportConfigFor(photoExportConfigs, workspaceLayer.id).context}
-        onContextChange={(context) => changePhotoExportConfig(workspaceLayer.id, { context })} onClose={() => setPhotoDialog(null)} />}
+      {workspaceLayer && !photoImport && photoDialog === 'export' && <PhotoExportWizard key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos}
+        config={photoExportConfigFor(photoExportConfigs, workspaceLayer.id)} onConfigChange={(patch) => changePhotoExportConfig(workspaceLayer.id, patch)} openerRef={photoToolOpenerRef}
+        onOpenCompletion={() => { openCompletePhotoDetails(photoToolOpenerRef.current); ignoreFollowUpClick(); }} onClose={() => setPhotoDialog(null)} />}
       {workspaceLayer && !photoImport && photoDialog === 'complete' && <PhotoCompletionDialog key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos}
         config={photoExportConfigFor(photoExportConfigs, workspaceLayer.id)} onConfigChange={(patch) => changePhotoExportConfig(workspaceLayer.id, patch)} openerRef={photoToolOpenerRef}
         entry={photoCompletionEntry} onOpenMap={openPhotoCompletionMap} onOpenSources={openPhotoCompletionSources} onClose={() => setPhotoDialog(null)} />}

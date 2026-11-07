@@ -8,7 +8,7 @@ import { strFromU8 } from 'fflate';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { assertGeminiConventions } from './helpers/geminiPhotoConventions.mjs';
 import { exportedTimes } from './helpers/photoEvidenceFixtures.mjs';
-import { buildPreview, chooseFormat, downloadZip, exportDialog, openExport } from './helpers/photoExportWizard.mjs';
+import { buildPreview, downloadZip, exportDialog, openExport, selectedFormat } from './helpers/photoExportWizard.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
@@ -17,7 +17,17 @@ import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSo
 const app = process.env.PHOTO_UI_URL, corpus = process.env.PHOTO_GML_FIXTURE;
 const inspector = 'document.querySelector(".photo-workspace-inspector")';
 const metadataDialog = 'document.querySelector(".photo-metadata-dialog[open]")';
-const evidenceRow = (action) => `${exportDialog}.querySelector('[data-evidence-action="${action}"]')`;
+const hub = 'document.querySelector(".photo-completion-dialog[open]")';
+const hubPanel = (key) => `${hub}.querySelector('[data-completion-panel="${key}"]')`;
+// Source values are in use on arrival: the hub counts them as taken from a source and offers nothing to adopt.
+async function assertSourcesInUse(browser, key, total) {
+  await browser.evaluate(`${hub}.querySelector('[data-task="${key}"]').click()`);
+  await browser.waitFor(hubPanel(key));
+  assert.equal(await browser.evaluate(`${hubPanel(key)}.querySelector('[data-count="source"] dd')?.innerText`), String(total), key);
+  assert.equal(await browser.evaluate(`Boolean(${hubPanel(key)}.querySelector('[data-adopt]'))`), false, key);
+}
+const openHub = async (browser) => { await clickSourceControl(browser, 'Fullfør opplysninger…', 'document'); await browser.waitFor(hub); };
+const closeHub = async (browser) => { await browser.evaluate(`${hub}.querySelector('.photo-import-footer .gmi-primary-control').click()`); await browser.waitFor(`!${hub}`); };
 
 async function openApp(browser) {
   await browser.send('Emulation.setDeviceMetricsOverride', { width: 1680, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -80,8 +90,8 @@ test('source evidence in the workspace: chip, shared formatter, minute precision
     assert.match(await browser.evaluate(`${inspector}.innerText`), /12\.05\.2026 14:33:41/);
     assert.match(await chips(browser), /Opptakstid kjent/);
 
-    await openExport(browser);
-    assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), /GML-retning: 0 kan brukes · 3 allerede godtatt/, 'source directions are already in use');
+    // Nothing is placed in this layer, so the hub has no rows for it: the list shows the accepted direction of every photo.
+    assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list .photo-workspace-status')).filter((item) => item.innerText.includes('°')).length`), 3, 'source directions are already in use');
   } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -107,15 +117,17 @@ test('private corpus in the real app: with the GML attached, source values reach
     assert.match(await chips(browser), /Opptakstid kjent/);
     assert(!await browser.evaluate(`${inspector}.innerText.includes('Kildene oppgir ulike opptakstider')`));
 
+    await openHub(browser);
+    for (const key of ['captureTime', 'direction']) await assertSourcesInUse(browser, key, total);
+    await closeHub(browser);
+
     await openExport(browser);
-    for (const row of ['exif:captureTime', 'gml:captureTime']) assert.match(await browser.evaluate(`${evidenceRow(row)}.innerText`), new RegExp(`0 kan brukes · ${total} allerede godtatt`));
-    assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), new RegExp(`GML-retning: 0 kan brukes · ${total} allerede godtatt`));
-    await chooseFormat(browser, 'gemini-legacy2019');
+    assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
     await browser.waitFor(`${exportDialog}.querySelector('[data-export-status]')`);
     assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-warning]'))`), false, 'every time is in place, so there is nothing to warn about');
     assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="import"] dd').innerText`), /denne pakken er ikke testet/);
     await buildPreview(browser);
-    assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-time"] summary').innerText`), /^Opptakstid i Gemini-filen/);
+    assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-time"] summary').textContent`), /^Opptakstid i Gemini-filen/);
     const { gml, entries } = await downloadZip(browser, directory);
     const xml = strFromU8(entries[gml]);
     assertGeminiConventions(xml);

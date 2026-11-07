@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
-import { buildPreview, canDownload, chooseFormat, closeExport, downloadZip, exportDialog, openExport, previewNames, setContextField, setLabel } from './helpers/photoExportWizard.mjs';
+import { buildPreview, canAdvance, canDownload, chooseFormat, closeExport, deliveryState, downloadZip, exportDialog, fillContextInHub, openCompletionFromExport, openExport, previewNames, selectedFormat, setLabel } from './helpers/photoExportWizard.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { setPhotoFiles, clickSourceControl, sourceWizard } from './helpers/photoSourceWorkflow.mjs';
 import { TEST_CONNECTION } from './fixtures/gemini-wfs/connection.mjs';
@@ -96,6 +96,29 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await click(browser, 'Lagre endringer', 'document.querySelector(".photo-edit-command-bar")');
         await browser.waitFor('!document.querySelector(".photo-edit-command-bar")');
       };
+      const hub = 'document.querySelector(".photo-completion-dialog[open]")';
+      const hubPanel = (key) => `${hub}.querySelector('[data-completion-panel="${key}"]')`;
+      const openHub = async () => { await click(browser, 'Fullfør opplysninger…'); await browser.waitFor(hub); };
+      const closeHub = async () => { await browser.evaluate(`${hub}.querySelector('.photo-import-footer .gmi-primary-control').click()`); await browser.waitFor(`!${hub}`); };
+      const setHubValue = (selector, value) => browser.evaluate(`(() => { const element = ${selector}, proto = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(element, ${JSON.stringify(value)}); element.dispatchEvent(new Event(element instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); })()`);
+      // Selects every open row in a task, fills its form and applies the one value to them. Returns the count on the button.
+      const fillInHub = async (task, fields) => {
+        await browser.evaluate(`${hub}.querySelector('[data-task="${task}"]').click()`);
+        await browser.waitFor(hubPanel(task));
+        const form = `${hubPanel(task)}.querySelector('[data-manual-fill="${task}"]')`;
+        await browser.evaluate(`${form}.open = true`);
+        assert(await browser.evaluate(`Array.from(${form}.querySelectorAll('input:not([type=checkbox])')).every((input) => input.value === '')`), 'nothing is prefilled');
+        await browser.evaluate(`${hubPanel(task)}.querySelectorAll('[data-group] details, details[data-group]').forEach((item) => { item.open = true; })`);
+        await browser.evaluate(`Array.from(${hubPanel(task)}.querySelectorAll('[data-completion-row] input[type=checkbox]:not(:checked)')).forEach((item) => item.click())`);
+        for (const [selector, value] of fields) await setHubValue(`${form}.querySelector('${selector}')`, value);
+        await browser.waitFor(`!${form}.querySelector('button[type=submit]').disabled`);
+        const label = await browser.evaluate(`${form}.querySelector('button[type=submit]').innerText`);
+        await browser.evaluate(`${form}.querySelector('button[type=submit]').click()`);
+        await browser.waitFor(`${hub}.querySelector('.photo-import-footer [role=status]').innerText.includes('godtatt for')`);
+        return label;
+      };
+      const TIME_FIELDS = (date, time, zone = '') => [['input[type=date]', date], ['input[type=time]', time], ['select', zone]];
       await t.test('ordinary loaded GMI exposes a usable photo action; reference state is connected through the real form', async () => {
         assert.equal(await browser.evaluate('document.querySelector("button[aria-label=\\\"Koble bilder til GMI-laget\\\"]").getAttribute("aria-disabled")'), null);
         await browser.evaluate('document.querySelector("button[aria-label=\\\"Åpne Gemini WFS\\\"]").click()');
@@ -140,20 +163,21 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await openExport(browser);
         await chooseFormat(browser, 'legacy2019');
         const count = (code) => browser.evaluate(`Number(${exportDialog}.querySelector('[data-diagnostic-code="${code}"] summary')?.textContent.split('—').at(-1).trim()||0)`);
-        await buildPreview(browser);
+        assert.equal(await deliveryState(browser),'blocked');
         assert.equal(await count('capture-time-required'),1,'only the photo no source has a time for');
         assert.equal(await count('direction-required'),0,'source directions and defaults are already in place');
-        assert(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('[data-manual-fill] input')).every(input=>input.value==='')`));
-        assert(!await canDownload(browser));
-        for (const [field,value] of [['captureTime','2026-09-17T10:30:02.125+02:00'],['photographer',' Fallback   Artist '],['direction','0']]) {
-          assert(await browser.evaluate(`${exportDialog}.querySelector('[data-manual-fill="${field}"] button').textContent.includes('2 manglende')`));
-          await browser.evaluate(`(() => {const form=${exportDialog}.querySelector('[data-manual-fill="${field}"]');form.elements.value.value=${JSON.stringify(value)};form.requestSubmit();})()`);
-          assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-manual-fill="${field}"]'))`),false);
-          assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[aria-label="Eksportforhåndsvisning"]'))`),false);
-        }
-        assert(await browser.evaluate(`${exportDialog}.textContent.includes('Lag eksportforhåndsvisning igjen')`));
-        await buildPreview(browser); assert.equal(await count('capture-time-required'),0); assert.equal(await count('direction-required'),0);
-        assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-manual-fill]').length`),0);
+        assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-manual-fill]').length`),0,'corrections belong to the hub');
+        assert(!await canAdvance(browser)); assert(!await canDownload(browser));
+        await openCompletionFromExport(browser);
+        assert.equal(await fillInHub('captureTime', TIME_FIELDS('2026-09-17', '10:30:02.125', '+02:00')),'Bruk på 1 valgt bilde','a photo without a position is not in the hub');
+        await browser.waitFor(`${hub}.querySelector('[data-task="photographer"] .photo-completion-task-count')`);
+        assert.equal(await fillInHub('photographer', [['input', ' Fallback   Artist ']]),'Bruk på 1 valgt bilde');
+        assert.equal(await fillInHub('direction', [['input[type=number]', '0']]),'Bruk på 1 valgt plassering');
+        await closeHub(browser);
+        await openExport(browser);
+        assert.equal(await selectedFormat(browser),'legacy2019','the format survives the trip to the hub');
+        assert.equal(await count('capture-time-required'),0); assert.equal(await count('direction-required'),0);
+        await buildPreview(browser);
         assert(await canDownload(browser));
         assert(await browser.evaluate(`${exportDialog}.textContent.includes('7 unike bilder i laget · 8 forekomster')`));
         await closeExport(browser);
@@ -185,31 +209,35 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await accepted('captureTime', 'Ikke angitt'); await accepted('photographer', 'Ikke angitt');
         const allRows = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(li=>li.dataset.photoId)`);
         const before = {};
-        for (const id of allRows) { await selectRow(id); await browser.waitFor(`${inspector}.querySelector('section[data-photo-id="${id}"]')`); before[id] = await metadata(); }
-        // Whole-layer, missing-only manual fill stays in Eksporter until the export-preparation pass.
-        await openExport(browser);
-        for (const [field, value] of [['photographer', 'Batch Artist'], ['captureTime', '2026-07-02T11:12:13']]) {
-          assert(await browser.evaluate(`${exportDialog}.querySelector('[data-manual-fill="${field}"] button').textContent.includes('1 manglende')`));
-          await browser.evaluate(`(() => {const form=${exportDialog}.querySelector('[data-manual-fill="${field}"]');form.elements.value.value=${JSON.stringify(value)};form.requestSubmit();})()`);
+        const placed = {};
+        for (const id of allRows) {
+          await selectRow(id); await browser.waitFor(`${inspector}.querySelector('section[data-photo-id="${id}"]')`); before[id] = await metadata();
+          placed[id] = await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"]').innerText.includes('Uplassert') === false`);
         }
-        await closeExport(browser);
+        // Missing-only fill in the hub: it reaches placed photos that lack a value, and it writes over nothing.
+        await openHub();
+        assert.equal(await fillInHub('photographer', [['input', 'Batch Artist']]),'Bruk på 1 valgt bilde');
+        assert.equal(await fillInHub('captureTime', TIME_FIELDS('2026-07-02', '11:12:13')),'Bruk på 1 valgt bilde');
+        await closeHub();
         for (const id of allRows) {
           await selectRow(id);
           for (const [field, value] of [['photographer', 'Batch Artist'], ['captureTime', '02.07.2026 11:12:13 · tidssone ukjent']]) {
-            await accepted(field, before[id][field] === 'Ikke angitt' ? value : before[id][field]);
+            await accepted(field, before[id][field] === 'Ikke angitt' && placed[id] ? value : before[id][field]);
           }
         }
         assert.equal(await browser.evaluate('photoWfsCalls'), 2);
       });
       await t.test('experimental dual export: explicit profiles, ready Legacy, truthful-context controls, shared originals and WFS isolation', async () => {
         await openExport(browser);
-        assert.equal(await browser.evaluate(`${exportDialog}.querySelector('select[aria-label="Eksportprofil"]').value`), '');
-        assert(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('button')).find(b=>b.textContent==='Lag eksportforhåndsvisning').disabled`));
+        assert.equal(await selectedFormat(browser), 'legacy2019', 'the format chosen earlier is kept for the session');
+        await chooseFormat(browser, 'gemini-legacy2019');
+        assert(await canAdvance(browser), 'Gemini needs no explicit choice');
         await chooseFormat(browser, 'legacy2019'); await buildPreview(browser);
         assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-diagnostic-code="capture-time-required"], [data-diagnostic-code="direction-required"]').length`),0);
-        assert(await browser.evaluate(`${exportDialog}.innerText.includes('4 planlagte features · 3 vedlegg · 1 delte originalbilder')`));
-        assert(await browser.evaluate(`${exportDialog}.innerText.includes('4 utelatt/uplassert')`));
-        assert(await browser.evaluate(`${exportDialog}.innerText.includes('Gemini-kompatibilitet er ikke verifisert')`));
+        assert(await browser.evaluate(`${exportDialog}.textContent.includes('4 features · 3 vedlegg · 1 delte originalbilder')`));
+        assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('3 bilder · 4 plasseringer i GML-filen')`));
+        assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('4 plasseringer uten posisjon utelatt')`));
+        assert(await browser.evaluate(`${exportDialog}.innerText.includes('Ikke testet med import i Gemini VA.')`));
         const unlabelled = await previewNames(browser);
         assert.match(unlabelled.zip, /^\d{8}-\d{6}\.zip$/);
         assert.equal(unlabelled.gml, unlabelled.zip.replace(/\.zip$/, '.gml'));
@@ -222,11 +250,11 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert(legacyXml.includes('2026-09-17T10:30:02.125+02:00'));
         for(const [name,data] of Object.entries(legacy.entries))if(!name.endsWith('.gml'))assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
         await setLabel(browser, '  Grøft / nord  ');
-        assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('section[aria-label="Eksportforhåndsvisning"]'))`), false, 'a new label needs a new preview, so a shown name is never out of date');
+        assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-zip]'))`), false, 'a new label needs a new plan: going back to change it discarded the one with the old name');
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-name-format]').innerText.includes('-Groeft-nord.zip')`));
         assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksportetikett"]').value`), '  Grøft / nord  ');
         await chooseFormat(browser, 'gemini-legacy2019'); await buildPreview(browser);
-        assert(await browser.evaluate(`${exportDialog}.innerText.includes('EPSG:5972') && ${exportDialog}.innerText.includes('Z-plassholdere')`));
+        assert(await browser.evaluate(`${exportDialog}.textContent.includes('EPSG:5972') && ${exportDialog}.textContent.includes('Z-plassholdere')`));
         assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-diagnostic-code="capture-time-required"]').length`), 0);
         const labelled = await previewNames(browser);
         assert.match(labelled.zip, /^\d{8}-\d{6}-Groeft-nord\.zip$/);
@@ -238,14 +266,21 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert(!geminiXml.includes('fotoinformasjon'));
         assert.equal(Object.keys(gemini.entries).length, 4);
         for (const [name, data] of Object.entries(gemini.entries)) if (name !== gemini.gml) assert.deepEqual(data, legacy.entries[name]);
-        await chooseFormat(browser, 'asbuilt52'); await buildPreview(browser);
+        await chooseFormat(browser, 'asbuilt52');
         assert(await browser.evaluate(`${exportDialog}.textContent.includes('Datafangstdato: oppgi')`));
-        assert(!await canDownload(browser));
-        for(const [label,value] of [['Datafangstdato','2026-05-12'],['Datasettets navn','Synthetic export dataset'],['Prosjektnavn','Synthetic export project'],['Målemetode','99'],['Målemetode høyde','99'],['Stedfestingsårsak','nytt'],['Stedfestingsforhold','åpenGrøft']]) await setContextField(browser,label,value);
+        assert(!await canAdvance(browser)); assert(!await canDownload(browser));
+        // All seven fields go through the hub, the only form for them. M6d adds the way back; for now export is opened again.
+        await openCompletionFromExport(browser);
+        await fillContextInHub(browser, { surveyDate: '2026-05-12', datasetName: 'Synthetic export dataset', projectName: 'Synthetic export project', horizontalMethod: '99', verticalMethod: '99', surveyReason: 'nytt', surveyConditions: 'åpenGrøft' });
+        await browser.waitFor(`${hub}.querySelector('[data-task="context"] .photo-completion-task-done')`);
+        await closeHub();
+        await openExport(browser);
+        assert.equal(await selectedFormat(browser), 'asbuilt52');
+        assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="invalid-context"]'))`), false, 'the wizard uses what the hub accepted');
         await setLabel(browser, 'AsBuilt');
         await buildPreview(browser);
         assert(await browser.evaluate(`${exportDialog}.textContent.includes('fotograf utelates i AsBuilt 5.2')`));
-        assert(await browser.evaluate(`${exportDialog}.innerText.includes('Eksperimentell 2D')`));
+        assert(await browser.evaluate(`${exportDialog}.textContent.includes('Eksperimentell 2D')`));
         for (const [width, height] of [[1920, 1080], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           const bounds = await browser.evaluate(`(() => {const d=${exportDialog},r=d.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,overflow:d.scrollWidth>d.clientWidth};})()`);
@@ -258,7 +293,9 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
           }
         }
         const modern = await downloadZip(browser, directory);
+        assert.match(modern.zip, /^\d{8}-\d{6}-AsBuilt\.zip$/);
         const modernXml=strFromU8(modern.entries[modern.gml]);assert(!modernXml.includes('<app:fotoinformasjon>')); assert(modernXml.includes('Synthetic export dataset'));
+        for (const value of ['Synthetic export project', '2026-05-12', 'åpenGrøft', 'nytt']) assert(modernXml.includes(value), value);
         assert.equal((modernXml.match(/<app:Skråfoto /g)||[]).length,4);
         for(const [name,data] of Object.entries(modern.entries))if(!name.endsWith('.gml'))assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
         assert.equal(await browser.evaluate('photoWfsCalls'),2);
