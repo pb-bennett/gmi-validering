@@ -2,11 +2,15 @@ import { PHOTO_EXPORT_PROFILES, EXPORT_CONTEXT_FIELDS, fullCaptureTime, isXmlTex
 
 const freeze = (table) => Object.freeze(Object.fromEntries(Object.entries(table).map(([key, value]) => [key, Object.freeze(value)])));
 
-// Presentation only. Serializers read PHOTO_EXPORT_PROFILES and never this table.
+// Presentation only. Serializers read PHOTO_EXPORT_PROFILES and never this table. `compatibility` reports a past import
+// in a tested setup, follows PHOTO_EXPORT_IMPORT_EVIDENCE below, and says nothing about the next package.
 export const PHOTO_EXPORT_PROFILE_METADATA = freeze({
-  'gemini-legacy2019': { tier: 'primary' },
-  legacy2019: { tier: 'advanced' },
-  asbuilt52: { tier: 'advanced' },
+  'gemini-legacy2019': { tier: 'primary', title: 'Gemini-kompatibel Skråfoto 2019', badge: 'Anbefalt', destination: 'Til import i Gemini VA og GeoFoto.',
+    compatibility: 'Importert i Gemini VA/GeoFoto i testet oppsett. Kontroller resultatet etter import.' },
+  legacy2019: { tier: 'advanced', title: 'Skråfoto 2019 (standard)', badge: null, destination: 'Etter standardskjemaet, til andre mottakere. Krever opptakstid og retning.',
+    compatibility: 'Ikke testet med import i Gemini VA.' },
+  asbuilt52: { tier: 'advanced', title: 'Norsk Vann AsBuilt 5.2', badge: null, destination: 'AsBuilt-leveranse. Krever opptakstid og leveranseopplysninger.',
+    compatibility: 'Ikke testet med import i Gemini VA.' },
 });
 
 // What blocks generation. Gemini direction is provisional (D1); Gemini time stays recommended until gate G3.

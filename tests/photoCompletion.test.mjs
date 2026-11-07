@@ -308,7 +308,7 @@ test('export config: transient, per layer, unchanged identity without a removal,
   const one = updatePhotoExportConfig(empty, 'a', { profile: 'asbuilt52' });
   const two = updatePhotoExportConfig(one, 'a', { context: { projectName: 'P' } });
   assert.equal(empty.size, 0, 'updates never mutate the previous state');
-  assert.deepEqual(photoExportConfigFor(two, 'a'), { profile: 'asbuilt52', crs: 'EPSG:25832', context: { projectName: 'P' } });
+  assert.deepEqual(photoExportConfigFor(two, 'a'), { profile: 'asbuilt52', crs: 'EPSG:25832', context: { projectName: 'P' }, label: '' });
   assert.equal(photoExportConfigFor(two, 'b').profile, 'gemini-legacy2019', 'one layer never affects another');
   assert.equal(reconcilePhotoExportConfig(two, ['a', 'b']), two, 'unrelated session publishes do not re-render');
   assert.equal(reconcilePhotoExportConfig(two, ['b']).size, 0, 'layer deletion');

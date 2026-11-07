@@ -1,5 +1,5 @@
 // Export choices for each photo layer, held by the page for the session and never persisted.
-export const DEFAULT_PHOTO_EXPORT_CONFIG = Object.freeze({ profile: 'gemini-legacy2019', crs: 'EPSG:25832', context: Object.freeze({}) });
+export const DEFAULT_PHOTO_EXPORT_CONFIG = Object.freeze({ profile: 'gemini-legacy2019', crs: 'EPSG:25832', context: Object.freeze({}), label: '' });
 
 export const photoExportConfigFor = (configs, layerId) => configs.get(layerId) || DEFAULT_PHOTO_EXPORT_CONFIG;
 
