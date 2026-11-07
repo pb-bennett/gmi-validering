@@ -21,7 +21,7 @@ export async function buildPhotoExportPackage(plan) {
     zip.add(member); member.push(bytes, true);
   };
   try {
-    add('photos.gml', strToU8(serializePhotoExport(plan)));
+    add(plan.naming.gmlFilename, strToU8(serializePhotoExport(plan)));
     const assets = new Map(plan.assets.map((asset) => [asset.assetId, asset]));
     for (const attachment of plan.attachments) {
       assertExportablePlan(plan);

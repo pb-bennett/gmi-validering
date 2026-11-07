@@ -217,10 +217,13 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
           await browser.waitFor(`${scope}.querySelector('section[aria-label="Eksportforhåndsvisning"]') && !${scope}.innerText.includes('Bygger forhåndsvisning')`);
         };
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: directory });
-        const download = async (profile, crs = '25832') => {
+        let gmlName;
+        const exportNames = () => browser.evaluate(`(() => { const { exportZip, exportGml } = ${scope}.querySelector('[data-export-zip]').dataset; return { zip: exportZip, gml: exportGml }; })()`);
+        const download = async () => {
+          const names = await exportNames(); gmlName = names.gml;
           await click(browser, 'Last ned testpakke', scope);
           await browser.waitFor(`${scope}.innerText.includes('ZIP-pakken er klar')`);
-          const file=path.join(directory,`photos-${profile}-${crs}.zip`);
+          const file=path.join(directory,names.zip);
           for(let attempt=0;attempt<100;attempt++) {
             try { return unzipSync(new Uint8Array(await readFile(file))); }
             catch { await new Promise(resolve=>setTimeout(resolve,100)); }
@@ -235,27 +238,39 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert(await browser.evaluate(`${scope}.innerText.includes('4 planlagte features · 3 vedlegg · 1 delte originalbilder')`));
         assert(await browser.evaluate(`${scope}.innerText.includes('4 utelatt/uplassert')`));
         assert(await browser.evaluate(`${scope}.innerText.includes('Gemini-kompatibilitet er ikke verifisert')`));
-        const legacy = await download('legacy2019');
+        const unlabelled = await exportNames();
+        assert.match(unlabelled.zip, /^\d{8}-\d{6}\.zip$/);
+        assert.equal(unlabelled.gml, unlabelled.zip.replace(/\.zip$/, '.gml'));
+        const legacy = await download();
         assert.equal(Object.keys(legacy).length,4);
-        const legacyXml=strFromU8(legacy['photos.gml']);
+        assert.deepEqual(Object.keys(legacy)[0], gmlName);
+        const legacyXml=strFromU8(legacy[gmlName]);
         assert.equal((legacyXml.match(/<app:Skråfoto /g)||[]).length,4); assert(legacyXml.includes('<app:fotograf>Batch Artist</app:fotograf>'));
         for (const degrees of [0,90,359.875]) assert(legacyXml.includes(`<app:retningsverdi>${degrees}</app:retningsverdi>`));
         assert(legacyXml.includes('2026-09-17T10:30:02.125+02:00'));
-        for(const [name,data] of Object.entries(legacy))if(name!=='photos.gml')assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
+        for(const [name,data] of Object.entries(legacy))if(!name.endsWith('.gml'))assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
+        await setExport('Eksportetikett', '  Grøft / nord  ');
+        assert.equal(await browser.evaluate(`Boolean(${scope}.querySelector('section[aria-label="Eksportforhåndsvisning"]'))`), false, 'a new label needs a new preview, so a shown name is never out of date');
+        assert(await browser.evaluate(`${scope}.querySelector('[data-export-name-format]').innerText.includes('-Groeft-nord.zip')`));
+        assert.equal(await browser.evaluate(`${scope}.querySelector('[aria-label="Eksportetikett"]').value`), '  Grøft / nord  ');
         await setExport('Eksportprofil', 'gemini-legacy2019'); await preview();
         assert(await browser.evaluate(`${scope}.innerText.includes('EPSG:5972') && ${scope}.innerText.includes('Z-plassholdere')`));
         assert.equal(await browser.evaluate(`${scope}.querySelectorAll('[data-diagnostic-code="capture-time-required"]').length`), 0);
-        const gemini = await download('gemini-legacy2019', '5972');
-        const geminiXml = strFromU8(gemini['photos.gml']);
+        const labelled = await exportNames();
+        assert.match(labelled.zip, /^\d{8}-\d{6}-Groeft-nord\.zip$/);
+        assert(await browser.evaluate(`${scope}.querySelector('[data-diagnostic-code="compatibility-import"]').textContent.includes(${JSON.stringify(labelled.gml)})`));
+        const gemini = await download();
+        const geminiXml = strFromU8(gemini[gmlName]);
         assertGeminiConventions(geminiXml);
         assert(geminiXml.includes('2026-09-17T10:30:02</app:fotograferingstidspunkt>'));
         assert(!geminiXml.includes('fotoinformasjon'));
         assert.equal(Object.keys(gemini).length, 4);
-        for (const [name, data] of Object.entries(gemini)) if (name !== 'photos.gml') assert.deepEqual(data, legacy[name]);
+        for (const [name, data] of Object.entries(gemini)) if (name !== gmlName) assert.deepEqual(data, legacy[name]);
         await setExport('Eksportprofil','asbuilt52'); await preview();
         assert(await browser.evaluate(`${scope}.textContent.includes('Datafangstdato: oppgi')`));
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
         for(const [label,value] of [['Datafangstdato','2026-05-12'],['Datasettets navn','Synthetic export dataset'],['Prosjektnavn','Synthetic export project'],['Målemetode','99'],['Målemetode høyde','99'],['Stedfestingsårsak','nytt'],['Stedfestingsforhold','åpenGrøft']]) await setExport('Eksport '+label,value);
+        await setExport('Eksportetikett', 'AsBuilt');
         await preview();
         assert(await browser.evaluate(`${scope}.textContent.includes('fotograf utelates i AsBuilt 5.2')`));
         assert(await browser.evaluate(`${scope}.innerText.includes('Eksperimentell 2D')`));
@@ -270,10 +285,10 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
             await writeFile(path.join(process.env.PHOTO_SCREENSHOT_DIR, `photo-export-${width}x${height}.png`), Buffer.from(data, 'base64'));
           }
         }
-        const modern = await download('asbuilt52');
-        const modernXml=strFromU8(modern['photos.gml']);assert(!modernXml.includes('<app:fotoinformasjon>')); assert(modernXml.includes('Synthetic export dataset'));
+        const modern = await download();
+        const modernXml=strFromU8(modern[gmlName]);assert(!modernXml.includes('<app:fotoinformasjon>')); assert(modernXml.includes('Synthetic export dataset'));
         assert.equal((modernXml.match(/<app:Skråfoto /g)||[]).length,4);
-        for(const [name,data] of Object.entries(modern))if(name!=='photos.gml')assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
+        for(const [name,data] of Object.entries(modern))if(!name.endsWith('.gml'))assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
         assert.equal(await browser.evaluate('photoWfsCalls'),2);
         await click(browser,'Lukk eksport',scope);
       });

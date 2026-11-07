@@ -30,8 +30,8 @@ for (const time of [null, '2026-05-12', '2026-05-12T14:33', '2026-05-12T14:33:02
     const positions = p.occurrences.map((row) => [Number(row.point.easting), Number(row.point.northing), 0]);
     for (const [tag, operation] of [['lowerCorner', Math.min], ['upperCorner', Math.max]]) assert.deepEqual(envelope.getElementsByTagNameNS('*', tag)[0].textContent.split(' ').map(Number), [0, 1, 2].map((axis) => operation(...positions.map((point) => point[axis]))));
     const bytes = new Uint8Array(await (await buildPhotoExportPackage(p)).arrayBuffer()), zip = unzipSync(bytes);
-    assert.deepEqual(Object.keys(zip), ['photos.gml', ...p.attachments.map((a) => a.path)]);
-    assert.equal(strFromU8(zip['photos.gml']), xml);
+    assert.deepEqual(Object.keys(zip), [p.naming.gmlFilename, ...p.attachments.map((a) => a.path)]);
+    assert.equal(strFromU8(zip[p.naming.gmlFilename]), xml);
     for (const a of p.attachments) assert.deepEqual(zip[a.path], new Uint8Array(await p.assets.find((asset) => asset.assetId === a.assetId).file.arrayBuffer()));
     assert.equal(xml, serializePhotoExport(p));
     assert.deepEqual(bytes, new Uint8Array(await (await buildPhotoExportPackage(p)).arrayBuffer()));
@@ -90,7 +90,7 @@ test('Gemini generates UUIDv4 only during plan construction; frozen XML/ZIP neve
     for (const photo of photos) assert.notEqual(photo.getAttribute('gml:id'), photo.getElementsByTagNameNS('*', 'Point')[0].getAttribute('gml:id'));
     assert.equal(xml, serializePhotoExport(plan));
     const zip = unzipSync(new Uint8Array(await (await buildPhotoExportPackage(plan)).arrayBuffer()));
-    assert.equal(strFromU8(zip['photos.gml']), xml);
+    assert.equal(strFromU8(zip[plan.naming.gmlFilename]), xml);
     assert.equal(mock.mock.callCount(), perPlan);
     const next = await f.plan(config);
     assert.equal(mock.mock.callCount(), perPlan * 2);

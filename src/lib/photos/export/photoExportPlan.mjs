@@ -4,6 +4,7 @@ import { isPhotoPosition } from '../photoSpatial.mjs';
 import { fullCaptureTime, freezeExportData } from './exportContract.mjs';
 import { compareExportKeys, digestHex, exportGuid, planAttachmentNames } from './attachmentNames.mjs';
 import { evaluatePhotoExportRules, normalizeExportContext } from './photoExportRules.mjs';
+import { photoExportNames } from './photoExportNaming.mjs';
 
 const issuedPlans = new WeakSet();
 
@@ -44,7 +45,7 @@ export function formatExportCoordinate(value) {
   return text === '-0.000' ? '0.000' : text;
 }
 
-export async function buildPhotoExportPlan(snapshot, configuration, { transform = proj4 } = {}) {
+export async function buildPhotoExportPlan(snapshot, configuration, { transform = proj4, now = () => new Date() } = {}) {
   const profile = configuration.profile, gemini = profile === 'gemini-legacy2019';
   const crs = gemini ? 'EPSG:5972' : configuration.crs;
   const horizontalCrs = gemini ? 'EPSG:25832' : crs;
@@ -56,6 +57,8 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
     usedGuids.add(guid);
     return guid;
   };
+  // Named once, here: like the Gemini UUIDs below, the name belongs to this plan, so preview and download cannot differ.
+  const naming = photoExportNames({ label: configuration.label, date: now() });
   const context = normalizeExportContext(configuration.context);
   const errors = [], warnings = [];
   const error = (code, message, occurrenceId, assetId) => errors.push({ code, message, occurrenceId, assetId });
@@ -115,10 +118,10 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
     warnings.push({ code: 'compatibility-z', message: `${occurrences.length} XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde.` });
     warnings.push({ code: 'compatibility-time', message: `${missingTimestampCount} features uten full opptakstid får ikke opptakstid i GML-filen. ${timezoneTransformCount} tidssone-suffikser fjernes, og klokkeslettet endres ikke: UTC-tid blir stående som UTC, uten tidssone. Brøkdelsekunder utelates for å matche referansen. Godtatte data endres ikke.` });
     warnings.push({ code: 'compatibility-metadata', message: `${assets.filter((asset) => asset.metadata?.photographer).length} godtatte fotografverdier utelates; bildeinformasjon eksporteres ikke.` });
-    warnings.push({ code: 'compatibility-import', message: 'Pakk ut ZIP. Importer photos.gml med Attachments-mappen ved siden av. XML bruker Attachments\\filnavn. Gemini-import må testes manuelt.' });
+    warnings.push({ code: 'compatibility-import', message: `Pakk ut ZIP. Importer ${naming.gmlFilename} med Attachments-mappen ved siden av. XML bruker Attachments\\filnavn. Gemini-import må testes manuelt.` });
   }
   if (!snapshot.isLive()) error('stale-plan', 'Fotolaget eller godtatte data er endret. Lag en ny forhåndsvisning.');
-  const plan = freezeExportData({ version: 1, profile, crs, context, collectionId: gemini ? `id${geminiGuid()}` : 'photo-collection', layer: snapshot.layer, assets, occurrences, attachments, excluded, warnings, errors,
+  const plan = freezeExportData({ version: 1, profile, crs, context, naming, collectionId: gemini ? `id${geminiGuid()}` : 'photo-collection', layer: snapshot.layer, assets, occurrences, attachments, excluded, warnings, errors,
     counts: { uniqueImages: snapshot.assets.length, totalOccurrences: all.length, placed: placed.length, excluded: excluded.length,
       missingTimestampCount, timezoneTransformCount, compatibilityZCount: gemini ? occurrences.length : 0,
       features: occurrences.length, attachments: attachments.length, sharedAttachments, associationCount },

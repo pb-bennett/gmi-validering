@@ -66,13 +66,13 @@ test('Gemini document head, namespace, geometry and optional time keep the accep
   } finally { missing.session.clear(); }
 });
 
-test('Gemini package keeps photos.gml at the root, Attachments paths and original bytes', async () => {
+test('Gemini package keeps its GML at the root, Attachments paths and original bytes', async () => {
   const f = await geminiGoldenFixture('unicode-collision');
   try {
     const plan = await f.plan(gemini), xml = serializePhotoExport(plan);
     const zip = unzipSync(new Uint8Array(await (await buildPhotoExportPackage(plan)).arrayBuffer()));
-    assert.deepEqual(Object.keys(zip), ['photos.gml', ...plan.attachments.map((attachment) => attachment.path)]);
-    assert.equal(strFromU8(zip['photos.gml']), xml);
+    assert.deepEqual(Object.keys(zip), [plan.naming.gmlFilename, ...plan.attachments.map((attachment) => attachment.path)]);
+    assert.equal(strFromU8(zip[plan.naming.gmlFilename]), xml);
     for (const attachment of plan.attachments) {
       assert(attachment.path.startsWith('Attachments/'));
       assert(xml.includes(`<app:fotolink>Attachments\\${attachment.filename}</app:fotolink>`));

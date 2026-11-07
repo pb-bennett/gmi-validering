@@ -525,13 +525,14 @@ test('private corpus through the hub: with no action at all, times and direction
     await clickSourceControl(browser, 'Last ned testpakke', exportDialog);
     await browser.waitFor(`${exportDialog}.innerText.includes('ZIP-pakken er klar')`, 120000);
 
-    const file = path.join(directory, 'photos-gemini-legacy2019-5972.zip');
+    const { zipName, gmlName } = await browser.evaluate(`(() => { const { exportZip, exportGml } = ${exportDialog}.querySelector('[data-export-zip]').dataset; return { zipName: exportZip, gmlName: exportGml }; })()`);
+    const file = path.join(directory, zipName);
     let zip;
     for (let attempt = 0; attempt < 300 && !zip; attempt++) {
       try { zip = unzipSync(new Uint8Array(await readFile(file))); } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
     }
     assert(zip, 'ZIP download not completed');
-    const xml = strFromU8(zip['photos.gml']);
+    const xml = strFromU8(zip[gmlName]);
     assertGeminiConventions(xml);
     const times = exportedTimes(xml);
     assert.equal(times.size, total);

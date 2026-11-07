@@ -9,6 +9,7 @@ import usePhotoSession from './usePhotoSession';
 import PhotoEvidenceActions from './PhotoEvidenceActions';
 import { groupPhotoExportDiagnostics } from '@/lib/photos/export/photoExportDiagnostics.mjs';
 import { photoExportReadiness } from '@/lib/photos/export/photoExportReadiness.mjs';
+import { sanitizePhotoExportLabel } from '@/lib/photos/export/photoExportNaming.mjs';
 import PhotoExportStatus from './PhotoExportStatus';
 import './photoExport.css';
 
@@ -28,6 +29,7 @@ export default function PhotoExportDialog({ layerId, initialContext, onContextCh
   const [profile, setProfile] = useState('');
   const [crs, setCrs] = useState('EPSG:25832');
   const [context, setContext] = useState(initialContext || {});
+  const [label, setLabel] = useState('');
   const [plan, setPlan] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -46,6 +48,7 @@ export default function PhotoExportDialog({ layerId, initialContext, onContextCh
   const invalidate = () => { operation.current.version++; setPlan(null); setBusy(false); setMessage(''); };
   const changeContext = (key, value) => { invalidate(); const next = { ...context, [key]: value }; setContext(next); onContextChange?.(next); };
   const live = plan?.isLive();
+  const labelPart = sanitizePhotoExportLabel(label);
   const layer = photoSession.getLayer(layerId);
   const readiness = profile ? photoExportReadiness(photoSession.getLayerPhotos(layerId), { profile, crs, context }) : null;
   const timesInSource = plan && readiness?.notes.find((note) => note.code === 'capture-time-in-source');
@@ -56,7 +59,7 @@ export default function PhotoExportDialog({ layerId, initialContext, onContextCh
     <label>Profil<select aria-label="Eksportprofil" value={profile} onChange={(event) => { invalidate(); setProfile(event.target.value); }}>
       <option value="">Velg profil</option>{Object.entries(PHOTO_EXPORT_PROFILES).map(([key, item]) => <option value={key} key={key}>{item.label}</option>)}
     </select></label>
-    {profile === 'gemini-legacy2019' ? <p>EPSG:5972 · XYZ · Z=0 er en kompatibilitetsplassholder, ikke målt høyde. Manglende opptakstid stopper ikke eksporten, men skjemaet krever den; retning kreves. Pakk ut ZIP og importer photos.gml med Attachments-mappen ved siden av.</p> : <label>Koordinatsystem<select aria-label="Eksport-CRS" value={crs} onChange={(event) => { invalidate(); setCrs(event.target.value); }}><option>EPSG:25832</option><option>EPSG:25833</option></select></label>}
+    {profile === 'gemini-legacy2019' ? <p>EPSG:5972 · XYZ · Z=0 er en kompatibilitetsplassholder, ikke målt høyde. Manglende opptakstid stopper ikke eksporten, men skjemaet krever den; retning kreves. Pakk ut ZIP og importer GML-filen med Attachments-mappen ved siden av.</p> : <label>Koordinatsystem<select aria-label="Eksport-CRS" value={crs} onChange={(event) => { invalidate(); setCrs(event.target.value); }}><option>EPSG:25832</option><option>EPSG:25833</option></select></label>}
     {profile === 'legacy2019' && <p>Legacy krever godtatt opptakstid med sekunder og godtatt retning. Ukjent retning er ikke nord.</p>}
     {profile === 'asbuilt52' && <fieldset><legend>Påkrevd AsBuilt-eksportkontekst</legend>
       <p>Oppgi sannferdige verdier for alle eksporterte forekomster. Dette fylles ikke fra bildet eller GMI. Eksperimentell 2D-geometri uten Z. Fotograf utelates fordi komplett moderne bildeinformasjon mangler.</p>
@@ -69,15 +72,18 @@ export default function PhotoExportDialog({ layerId, initialContext, onContextCh
     {profile !== 'gemini-legacy2019' && <p>Attachments/&lt;filnavn&gt; med skråstrek er appens testkonvensjon. Retning antas eksperimentelt å være grader med klokken fra geografisk nord (1/1).</p>}
     {readiness && <PhotoExportStatus readiness={readiness} />}
     <PhotoEvidenceActions photos={photoSession.getLayerPhotos(layerId)} layerId={layerId} onAdopt={invalidate} exportProfile={profile} />
+    <label>Etikett i filnavnet (valgfritt)<input type="text" autoComplete="off" aria-label="Eksportetikett" value={label} onChange={(event) => { invalidate(); setLabel(event.target.value); }} /></label>
+    <p data-export-name-format>Filnavn: ÅÅÅÅMMDD-TTmmss{labelPart && `-${labelPart}`}.zip. Tidspunktet settes i norsk tid når forhåndsvisningen lages.</p>
     <button className={control} type="button" disabled={!profile || !layer || busy} onClick={async () => {
       const token = ++operation.current.version; setBusy(true); setPlan(null); setMessage('Bygger forhåndsvisning …');
       try {
-        const next = await buildPhotoExportPlan(capturePhotoExportSnapshot(photoSession, layerId), { profile, crs, context });
+        const next = await buildPhotoExportPlan(capturePhotoExportSnapshot(photoSession, layerId), { profile, crs, context, label });
         if (token === operation.current.version) { setPlan(next); setMessage(''); }
       } catch (error) { if (token === operation.current.version) setMessage(error.message); }
       finally { if (token === operation.current.version) setBusy(false); }
     }}>Lag eksportforhåndsvisning</button>
     {plan && <section aria-label="Eksportforhåndsvisning">
+      <p data-export-zip={plan.naming.zipFilename} data-export-gml={plan.naming.gmlFilename}>ZIP: {plan.naming.zipFilename} · GML: {plan.naming.gmlFilename}</p>
       <p>{plan.counts.uniqueImages} unike bilder i laget · {plan.counts.totalOccurrences} forekomster · {plan.counts.placed} plassert · {plan.counts.excluded} utelatt/uplassert</p>
       <p>{plan.counts.features} planlagte features · {plan.counts.attachments} vedlegg · {plan.counts.sharedAttachments} delte originalbilder</p>
       {!live && <p role="alert">Fotolaget eller godtatte data er endret. Lag en ny forhåndsvisning.</p>}
@@ -93,7 +99,7 @@ export default function PhotoExportDialog({ layerId, initialContext, onContextCh
           if (token !== operation.current.version) return;
           if (!plan.isLive()) throw new Error('Eksportplanen er utdatert. Lag en ny forhåndsvisning.');
           const url = URL.createObjectURL(blob); urls.current.add(url);
-          const a = document.createElement('a'); a.href = url; a.download = `photos-${profile}-${plan.crs.slice(5)}.zip`;
+          const a = document.createElement('a'); a.href = url; a.download = plan.naming.zipFilename;
           document.body.append(a); a.click(); a.remove();
           setTimeout(() => { URL.revokeObjectURL(url); urls.current.delete(url); }, 1000);
           setMessage('ZIP-pakken er klar for lokal Gemini-testing. Importresultat er ikke verifisert.');

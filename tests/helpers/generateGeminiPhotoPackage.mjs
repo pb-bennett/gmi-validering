@@ -27,8 +27,8 @@ try {
   const plan = await f.plan({ profile: 'gemini-legacy2019' });
   const bytes = new Uint8Array(await (await buildPhotoExportPackage(plan)).arrayBuffer());
   const entries = unzipSync(bytes);
-  assertGeminiConventions(strFromU8(entries['photos.gml']));
-  assert.deepEqual(Object.keys(entries), ['photos.gml', ...plan.attachments.map((a) => a.path)]);
+  assertGeminiConventions(strFromU8(entries[plan.naming.gmlFilename]));
+  assert.deepEqual(Object.keys(entries), [plan.naming.gmlFilename, ...plan.attachments.map((a) => a.path)]);
   for (const attachment of plan.attachments) {
     const asset = plan.assets.find((row) => row.assetId === attachment.assetId);
     assert.deepEqual(entries[attachment.path], new Uint8Array(await asset.file.arrayBuffer()));

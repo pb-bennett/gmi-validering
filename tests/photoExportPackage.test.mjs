@@ -9,16 +9,17 @@ import { digestHex } from '../src/lib/photos/export/attachmentNames.mjs';
 for (const profile of ['legacy2019', 'asbuilt52']) test(`${profile} ZIP: two occurrences share exactly one original, deterministic bytes and members`, async () => {
   const f = await exportFixture({ repeated: true });
   try {
-    const plan = await f.plan({ profile });
+    const hooks = { now: () => new Date('2026-11-07T14:35:00Z') };
+    const plan = await f.plan({ profile }, hooks);
     const original = new Uint8Array(await plan.assets[0].file.arrayBuffer());
     const zip = new Uint8Array(await (await buildPhotoExportPackage(plan)).arrayBuffer());
     const entries = unzipSync(zip);
-    assert.deepEqual(Object.keys(entries), ['photos.gml', plan.attachments[0].path]);
-    assert.equal(strFromU8(entries['photos.gml']), serializePhotoExport(plan));
+    assert.deepEqual(Object.keys(entries), [plan.naming.gmlFilename, plan.attachments[0].path]);
+    assert.equal(strFromU8(entries[plan.naming.gmlFilename]), serializePhotoExport(plan));
     assert.deepEqual(entries[plan.attachments[0].path], original);
     assert.equal(await digestHex(entries[plan.attachments[0].path]), plan.assets[0].checksum);
     assert.deepEqual(new Uint8Array(await plan.assets[0].file.arrayBuffer()), original);
-    assert.deepEqual(new Uint8Array(await (await buildPhotoExportPackage(await f.plan({ profile }))).arrayBuffer()), zip);
+    assert.deepEqual(new Uint8Array(await (await buildPhotoExportPackage(await f.plan({ profile }, hooks))).arrayBuffer()), zip);
   } finally { f.session.clear(); }
 });
 test('colliding filenames produce two preserved original members and exactly matching XML paths', async () => {
@@ -26,7 +27,7 @@ test('colliding filenames produce two preserved original members and exactly mat
   try {
     const p = await f.plan(); const zip = unzipSync(new Uint8Array(await (await buildPhotoExportPackage(p)).arrayBuffer()));
     assert.equal(Object.keys(zip).length, 3);
-    assert.deepEqual(Object.keys(zip), ['photos.gml', ...p.attachments.map((row) => row.path)]);
+    assert.deepEqual(Object.keys(zip), [p.naming.gmlFilename, ...p.attachments.map((row) => row.path)]);
     for (const a of p.attachments) { assert(!a.path.includes('..')); assert(!a.path.startsWith('/')); assert(serializePhotoExport(p).includes(a.path)); }
   } finally { f.session.clear(); }
 });
