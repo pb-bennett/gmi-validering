@@ -12,10 +12,13 @@ export async function exportFixture({ files = null, names = ['Grøft æ image.pn
   let id = 0;
   const session = createPhotoSession({ createId: () => `export-${++id}`, yieldJob: () => new Promise((resolve) => setImmediate(resolve)),
     createThumbnail: async () => ({ thumbnailBlob: new Blob(['preview']), dimensions: { width: 1, height: 1 } }),
-    extractGps: async () => ({ state: 'no-gps', candidate: null }),
+    // A direction is only ever unknown while EXIF is still being read, so that is the state `direction: null` asks for.
+    extractGps: direction === null ? () => new Promise(() => {}) : async () => ({ state: 'no-gps', candidate: null }),
     urls: { createObjectURL: () => 'blob:synthetic', revokeObjectURL() {} }, ...options });
   session.importFiles(files || names.map((name) => new File([gpsPng()], name, { type: 'image/png' })));
   const layer = session.createLayer();
+  // The read can change accepted values, so a finished fixture must not have one still running.
+  if (direction !== null) while (session.getLayerPhotos(layer.id).some((photo) => photo.spatial.exifRead.state === 'pending')) await new Promise((resolve) => setImmediate(resolve));
   if (repeated) {
     await session.stageLayerSource(layer.id, gmiFile([{ hyperlink: `h:1(link:"${names[0]}") ` }, { hyperlink: `h:1(link:"${names[0]}") ` }]), 'gmi');
     const review = session.getSnapshot().sourceReviews[layer.id];

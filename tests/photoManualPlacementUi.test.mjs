@@ -178,8 +178,7 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
       await clickSourceControl(browser, 'Kontroller tilgjengelige posisjoner');
       await clickSourceControl(browser, 'Foreslå EXIF for viste');
       await browser.waitFor('document.querySelector(".photo-positioning-rows")');
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-positioning-rows [data-action=move]").length'),1);
-      assert(await browser.evaluate('document.querySelector(".photo-positioning-rows").innerText.includes("Flyttes")'));
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-positioning-rows [data-action=move]").length'),0,'a bulk proposal leaves a manual position alone');
       await closePhotoSources(browser); assert.equal(await currentText(),movedCurrent);
       const activeFilename = await browser.evaluate(`${inspector}.querySelector('h2').innerText`);
       await applyPhotoSourcePositions(browser, 'gml', { filename: activeFilename }); assert.equal(await currentText(),oldCoords); assert.deepEqual(await evidence(),oldEvidence);

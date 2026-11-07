@@ -44,6 +44,7 @@ export function photoMetadataSourceLabel(field, provenance) {
 export function photoDirectionSourceLabel(direction) {
   if (!direction) return null;
   if (direction.acceptance === 'staged') return 'Endret – ikke lagret';
+  if (direction.basis?.kind === 'default') return 'Standardverdi, ingen kilde oppgir retning';
   if (direction.basis?.kind === 'manual') return direction.basis.mode === 'bulk' ? 'Manuell (samme verdi for flere)' : 'Manuell';
   if (direction.basis?.kind === 'exif') return 'EXIF bilderetning (sann nord)';
   if (direction.basis?.kind === 'gml') return `GML${direction.basis.sourceFilename ? ` · ${direction.basis.sourceFilename}` : ''}`;
@@ -69,7 +70,6 @@ export function photoMetadataConflict(photo, field) {
 export function photoDirectionEvidenceText(item) {
   const source = `${photoSourceLabel(item.kind)}${item.sourceFilename ? ` · ${item.sourceFilename}` : ''}`;
   if (item.status === 'usable') return `${source}: ${item.value}° fra geografisk nord`;
-  if (item.status === 'usable-zero') return `${source}: 0° kan bety at retningen mangler i kildesystemet.`;
   if (item.status !== 'unsupported-reference') return `${source}: Ugyldig retningsverdi.`;
   return `${source}: ${item.kind === 'gml' ? 'Ukjent enhet eller referanse' : 'Ukjent eller magnetisk referanse'}; krever gjennomgang.`;
 }

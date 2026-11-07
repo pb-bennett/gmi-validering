@@ -115,12 +115,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert(!await browser.evaluate(`Array.from(${spatial}.querySelectorAll('button')).some(button=>/^Bruk /.test(button.innerText))`), 'the inspector has no source-acceptance actions');
       await selectPhoto(browser, 'b.png');
       assert(await browser.evaluate(currentIs('GML')));
-      assert.equal(await browser.evaluate(fact('Opptak', 'Opptakstid')), 'Ikke angitt');
-      // Source evidence is adopted explicitly in the focused Rediger opptaksdata… dialog.
-      await click(browser, 'Rediger opptaksdata…', spatial);
-      await browser.waitFor('document.querySelector(".photo-metadata-dialog[open]")');
-      await browser.evaluate(`Array.from(document.querySelectorAll('.photo-metadata-dialog[open] .photo-metadata-body > fieldset'))[0].querySelector('input[type=radio][value^="evidence:"]').click()`);
-      await click(browser, 'Lagre', 'document.querySelector(".photo-metadata-dialog[open]")');
+      // A complete source time needs no step of its own.
       await browser.waitFor(`${fact('Opptak', 'Opptakstid')}==='12.05.2026 14:33:02 · tidssone ukjent'`);
       assert.match(await browser.evaluate(`Array.from(${spatial}.querySelectorAll('section[aria-label=Opptak] dt')).find(e=>/^(Opptakstid|Fotograf) fra$/.test(e.textContent)).nextElementSibling.textContent`), /^GML/);
 
@@ -184,7 +179,7 @@ test('real 148-photo import retains GML/EXIF evidence until central explicit sou
       assert.equal((await sourcesInfo(browser)).exif, 148);
       await openPhotoSources(browser);
       await click(browser, 'Kontroller tilgjengelige posisjoner');
-      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '0 valgt');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '148 valgt', 'GML is proposed for every photo, so nobody changes 148 dropdowns');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelectorAll('select').length`), 148);
       await closePhotoSources(browser);
       assert.equal(await browser.evaluate(markerCount), 0, 'closing review changes no current positions');

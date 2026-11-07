@@ -77,86 +77,75 @@ test('malformed direction and unrelated orientation never become usable directio
   assert.deepEqual(exifDirectionEvidence({ Orientation: 6, GPSDestBearing: 90, GPSTrack: 42 }), []);
 });
 
-for (const field of ['captureTime', 'photographer']) test(`${field}: selected unique assets, repeated occurrences, whole layer, existing value, stale selection, provenance and reset`, async () => {
+test('photographer: one value for the asset, on every occurrence; manual and removed values stay, and adoption is only for after a removal', async () => {
   const s = setup();
   try {
-    const { layerId, photos } = await repeated(s), repeatedPhotos = photos.filter((photo) => photo.originalFilename === 'a.png');
-    assert.equal(repeatedPhotos.length, 2);
-    assert.equal(repeatedPhotos[0].captureMetadata[field], null);
-    const ids = repeatedPhotos.map((photo) => photo.id);
-    const result = s.adoptSourceEvidence(layerId, field, 'exif', [...ids, ids[0], 'removed']);
-    assert.equal(result.counts.adopted, 1); assert.equal(result.counts.stale, 1);
-    const accepted = s.getPhoto(ids[0]).captureMetadata[field];
-    assert.equal(accepted.provenance.kind, 'exif'); assert.equal(accepted.provenance.evidence.length, 1);
-    assert.equal(accepted.provenance.tag, field === 'captureTime' ? 'DateTimeOriginal' : 'Artist');
-    assert.strictEqual(s.getPhoto(ids[1]).captureMetadata[field], accepted);
-    const rest = s.adoptSourceEvidence(layerId, field);
-    assert.equal(rest.counts.adopted, 1); assert.equal(rest.counts.alreadyAccepted, 1);
-    assert.strictEqual(s.getPhoto(ids[0]).captureMetadata[field], accepted);
-    s.setCaptureMetadata(layerId, ids, field, field === 'captureTime' ? '2025-01-02T01:02:03' : 'Manual');
-    const manual = s.getPhoto(ids[0]).captureMetadata[field];
-    assert.equal(s.adoptSourceEvidence(layerId, field).counts.adopted, 0);
-    assert.strictEqual(s.getPhoto(ids[0]).captureMetadata[field], manual);
-    s.removeLayerPhotos(layerId, ids, { confirmed: true });
-    assert.equal(s.adoptSourceEvidence(layerId, field, 'exif', ids).counts.stale, 2);
-    s.clear(); assert.equal(s.adoptSourceEvidence(layerId, field, 'exif', ids).counts.adopted, 0);
+    const { layerId, photos } = await repeated(s), [first, second] = photos.filter((photo) => photo.originalFilename === 'a.png').map((photo) => photo.id);
+    const accepted = s.getPhoto(first).captureMetadata.photographer;
+    assert.equal(accepted.provenance.kind, 'exif'); assert.equal(accepted.provenance.tag, 'Artist'); assert.equal(accepted.acceptance, 'auto');
+    assert.strictEqual(s.getPhoto(second).captureMetadata.photographer, accepted);
+    assert.equal(s.adoptSourceEvidence(layerId, 'photographer').counts.adopted, 0);
+    s.setCaptureMetadata(layerId, [first], 'photographer', 'Manual');
+    const manual = s.getPhoto(first).captureMetadata.photographer;
+    s.setLayerVisibility(layerId, false); s.setLayerVisibility(layerId, true);
+    assert.strictEqual(s.getPhoto(first).captureMetadata.photographer, manual);
+    s.setCaptureMetadata(layerId, [first], 'photographer', null);
+    s.setLayerVisibility(layerId, false); s.setLayerVisibility(layerId, true);
+    assert.equal(s.getPhoto(first).captureMetadata.photographer, null, 'a removal is not undone');
+    assert.equal(s.adoptSourceEvidence(layerId, 'photographer', 'exif', [first]).counts.adopted, 1, 'the source value can still be chosen on purpose');
+    assert.equal(s.getPhoto(first).captureMetadata.photographer.value, 'Synthetic Artist');
   } finally { s.clear(); }
 });
 
-test('missing, invalid, insufficient and conflicting metadata stay unknown; neither EXIF nor GML wins conflicts', async () => {
+test('missing, invalid and insufficient times stay unknown; where sources differ GML is used and EXIF kept', async () => {
   const s = setup({ parseGml: async () => ({ entries: [{ id: 'date', raw: { fotolink: 'a.png', photographedAtText: '2025-01-01T01:02:03' }, status: 'invalid', position: null }] }) });
   try {
     const ids = s.importFiles([image(), image('missing.png', { captureTime: undefined, artist: undefined }), image('invalid.png', { captureTime: 'uncertain', artist: ' ' }), image('date.png', { captureTime: '2026-05-12' })]).acceptedIds;
     const layer = s.createLayer(); await settle(s, layer.id);
     await s.stageLayerSource(layer.id, new File(['source'], 'dates.gml')); s.applyLayerSource(layer.id);
-    for (const kind of ['exif', 'gml']) {
-      const result = s.adoptSourceEvidence(layer.id, 'captureTime', kind);
-      assert.equal(result.counts.conflicting, 1); assert.equal(result.counts.adopted, 0);
-    }
+    const accepted = s.getPhoto(ids[0]).captureMetadata.captureTime;
+    assert.equal(accepted.value.iso, '2025-01-01T01:02:03'); assert.equal(accepted.provenance.kind, 'gml');
+    assert.equal(s.getPhoto(ids[0]).metadataEvidence.filter((item) => item.field === 'captureTime').length, 2);
+    for (const id of ids.slice(1)) assert.equal(s.getPhoto(id).captureMetadata.captureTime, null);
     const counts = s.adoptSourceEvidence(layer.id, 'captureTime').counts;
-    assert.equal(counts.missing, 1); assert.equal(counts.unusable, 1); assert.equal(counts.insufficientPrecision, 1);
-    assert.equal(s.getPhoto(ids[0]).captureMetadata.captureTime, null);
+    assert.equal(counts.alreadyAccepted, 1); assert.equal(counts.missing, 1); assert.equal(counts.unusable, 1); assert.equal(counts.insufficientPrecision, 1);
     const photographer = s.adoptSourceEvidence(layer.id, 'photographer').counts;
-    assert.equal(photographer.adopted, 2); assert.equal(photographer.missing, 2); assert.equal(photographer.unusable, 0);
+    assert.equal(photographer.adopted, 0); assert.equal(photographer.alreadyAccepted, 2); assert.equal(photographer.missing, 2); assert.equal(photographer.unusable, 0);
   } finally { s.clear(); }
 });
 
-test('safe GML-only timestamp adoption and agreeing EXIF/GML preserve every agreeing provenance', async () => {
+test('GML-only and agreeing EXIF/GML times preserve every agreeing provenance', async () => {
   const s = setup({ parseGml: async () => ({ entries: ['a.png', 'b.png'].map((name) => ({ id: name, raw: { fotolink: name, photographedAtText: '2026-05-12T14:33:02' }, status: 'invalid', position: null })) }) });
   try {
     const ids = s.importFiles([image(), image('b.png', { captureTime: undefined })]).acceptedIds;
     const layer = s.createLayer(); await settle(s, layer.id);
     await s.stageLayerSource(layer.id, new File(['dates'], 'dates.gml')); s.applyLayerSource(layer.id);
-    assert.equal(s.adoptSourceEvidence(layer.id, 'captureTime', 'gml').counts.adopted, 2);
     assert.equal(s.getPhoto(ids[0]).captureMetadata.captureTime.provenance.evidence.length, 2);
     const provenance = s.getPhoto(ids[1]).captureMetadata.captureTime.provenance;
     assert.equal(provenance.kind, 'gml'); assert.equal(provenance.sourceFilename, 'dates.gml'); assert(provenance.sourceEntryId);
   } finally { s.clear(); }
 });
 
-test('direction explicit adoption per occurrence: repeated disclosure counts, manual preserved, source lifecycle and reset', async () => {
+test('direction per occurrence: automatic on every placement, manual preserved, source lifecycle and reset', async () => {
   const s = setup();
   try {
     const { layerId, photos } = await repeated(s), ids = photos.map((photo) => photo.id);
-    assert(photos.every((photo) => !photo.direction.current));
-    s.applyPhotoEdits(s.beginPhotoEdits(layerId), [{ photoId: ids[0], degrees: 90 }]);
-    const manual = s.getPhoto(ids[0]).direction.current;
-    const result = s.adoptSourceEvidence(layerId, 'direction');
-    assert.equal(result.counts.adopted, 2); assert.equal(result.counts.alreadyAccepted, 1); assert.equal(result.counts.repeatedApplications, 1);
-    assert.strictEqual(s.getPhoto(ids[0]).direction.current, manual);
-    for (const id of ids.slice(1)) {
-      const accepted = s.getPhoto(id).direction.current;
-      assert.equal(accepted.degrees, 0); assert.equal(accepted.basis.kind, 'exif'); assert.equal(accepted.acceptance, 'source');
+    for (const photo of photos) {
+      const accepted = photo.direction.current;
+      assert.equal(accepted.degrees, 0); assert.equal(accepted.basis.kind, 'exif'); assert.equal(accepted.acceptance, 'auto');
       assert.equal(accepted.basis.raw.GPSImgDirectionRef, 'T');
     }
-    const source = s.getLayer(layerId).spatialSources.find((source) => source.kind === 'gmi');
+    s.applyPhotoEdits(s.beginPhotoEdits(layerId), [{ photoId: ids[0], degrees: 90 }]);
+    const manual = s.getPhoto(ids[0]).direction.current;
+    const source = s.getLayer(layerId).spatialSources.find((item) => item.kind === 'gmi');
     s.removeGmiSource(layerId, source.id, { confirmed: true });
+    assert.strictEqual(s.getPhoto(ids[0]).direction.current, manual);
     assert.equal(s.getPhoto(ids[1]).direction.current.basis.kind, 'exif');
     s.removeLayerPhotos(layerId, [ids[1]], { confirmed: true });
     assert.equal(s.adoptSourceEvidence(layerId, 'direction', 'exif', [ids[1]]).counts.stale, 1);
     s.clear(); assert.equal(s.getPhoto(ids[0]), null);
     const fresh = s.importFiles([image()]).acceptedIds[0]; s.createLayer();
-    assert.equal(s.getPhoto(fresh).direction.current, null);
+    assert.equal(s.getPhoto(fresh).direction.current, null, 'nothing is assigned before the EXIF read has finished');
   } finally { s.clear(); }
 });
 
@@ -172,25 +161,19 @@ test('direction skip counts use assets for missing evidence and occurrences for 
   assert.equal(counts.unusable, 1); assert.equal(counts.conflicting, 1); assert.equal(counts.eligible, 0);
 });
 
-test('hundreds of diagnostics group without losing detail; asset capture and occurrence direction counts; refreshed preview stays strict', async () => {
+test('hundreds of diagnostics group without losing detail; a changed value still makes a preview stale', async () => {
   const s = setup();
   try {
     const { layerId, photos } = await repeated(s);
     for (const photo of photos) s.applyPhotoEdits(s.beginPhotoEdits(layerId), [{ photoId: photo.id, position: { crs: 'EPSG:4326', longitude: 10, latitude: 59 } }]);
     const config = { profile: 'legacy2019', crs: 'EPSG:25832' };
-    const plan = await buildPhotoExportPlan(capturePhotoExportSnapshot(s, layerId), config);
-    const groups = groupPhotoExportDiagnostics(plan.errors);
-    assert.equal(groups.find((group) => group.code === 'capture-time-required').count, 2);
-    assert.equal(groups.find((group) => group.code === 'direction-required').count, 3);
     const hundreds = Array.from({ length: 600 }, (_, i) => ({ code: 'direction-required', occurrenceId: `occurrence-${i}`, message: `image-${i}.png` }));
     const grouped = groupPhotoExportDiagnostics(hundreds);
     assert.equal(grouped.length, 1); assert.equal(grouped[0].count, 600); assert.deepEqual(grouped[0].items, hundreds);
-    assert.equal(planEvidenceAdoption(s.getLayerPhotos(layerId), 'captureTime').counts.eligible, 2);
-    assert.equal(s.adoptSourceEvidence(layerId, 'captureTime').counts.adopted, 2);
+    const plan = await buildPhotoExportPlan(capturePhotoExportSnapshot(s, layerId), config);
+    assert.deepEqual(plan.errors, []); assertExportablePlan(plan);
+    s.setCaptureMetadata(layerId, [photos[0].id], 'captureTime', '2025-01-02T01:02:03');
     assert.equal(plan.isLive(), false); assert.throws(() => assertExportablePlan(plan));
-    const afterTime = await buildPhotoExportPlan(capturePhotoExportSnapshot(s, layerId), config);
-    assert.equal(afterTime.errors.length, 3); assert(afterTime.errors.every((item) => item.code === 'direction-required'));
-    assert.equal(s.adoptSourceEvidence(layerId, 'direction').counts.adopted, 3);
     const ready = await buildPhotoExportPlan(capturePhotoExportSnapshot(s, layerId), config);
     assert.deepEqual(ready.errors, []); assertExportablePlan(ready);
     const modern = await buildPhotoExportPlan(capturePhotoExportSnapshot(s, layerId), { ...config, profile: 'asbuilt52' });

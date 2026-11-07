@@ -72,7 +72,7 @@ for (const count of [1, 2, 3, 7, 20, 30]) test(`${count} distinct point referenc
   const photos = session.getLayerPhotos(layer.id);
   assert.equal(photos.length, count);
   assert(photos.every((photo) => photo.assetId === context.ids[0] && session.getFile(photo.id) === files[0]));
-  assert(photos.every((photo) => photo.spatial.current === null && photo.direction.current === null));
+  assert(photos.every((photo) => photo.spatial.current === null));
   assert(photos.every((photo) => photo.preview === photos[0].preview));
   assert.equal(created.length, 1);
   assert.deepEqual(context.jobs(), { reads: 1, thumbnails: 1 });

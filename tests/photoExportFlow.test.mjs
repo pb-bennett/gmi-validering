@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { completionLayer, completionView, jpeg, sharedOriginalLayer } from './helpers/photoCompletionFixtures.mjs';
 import { createPhotoEditState, effectivePhoto, photoEditChanges, photoEditReducer } from '../src/lib/photos/photoEditSession.mjs';
 import { createPhotoExportFlow, photoExportFlowFilter, photoExportFlowIsLive, photoExportFlowProgress } from '../src/lib/photos/photoExportFlow.mjs';
-import { canReviewOnMap, canSetOnMap, scopedRows } from '../src/lib/photos/photoCompletion.mjs';
+import { canSetOnMap, scopedRows } from '../src/lib/photos/photoCompletion.mjs';
 import { DEFAULT_PHOTO_FILTER, emptyPhotoWorkspace, photoFilterIsDefault, photoWorkspaceReducer } from '../src/lib/photos/photoWorkspaceState.mjs';
 import { photoWorkspaceView } from '../src/lib/photos/photoWorkspaceView.mjs';
 
@@ -74,7 +74,7 @@ test('the work filter holds the list while values are staged, and a plain flag w
   const changedIds = new Set([ids[0]]);
   const view = photoWorkspaceView(edit.effective(), workspace, { changedIds });
   assert.deepEqual(view.rows.map((photo) => photo.id), ids.slice(0, 2), 'a staged occurrence stays on the list and the map');
-  assert.deepEqual(view.summary, ['Mangler retning']);
+  assert.deepEqual(view.summary, ['Standardretning']);
   assert.equal(view.filterActive, true);
   const flag = photoWorkspaceView(edit.effective(), { ...workspace, filter: { ...DEFAULT_PHOTO_FILTER, missingDirection: true } }, { changedIds });
   assert.equal(flag.rows.some((photo) => photo.id === ids[0]), false, 'why the flag was not enough');
@@ -107,7 +107,7 @@ test('counts keep staged values apart from saved ones and follow undo', async ()
   const flow = directionFlow(session, layerId, ids);
   const edit = editing(session, layerId);
   const progress = (active = ids[0]) => photoExportFlowProgress(flow, edit.effective(), active);
-  assert.deepEqual([progress().countLabel, progress().outstanding, progress().staged, progress().total], ['Mangler retning', 3, 0, 3]);
+  assert.deepEqual([progress().countLabel, progress().outstanding, progress().staged, progress().total], ['Standardretning', 3, 0, 3]);
   edit.stage(ids[0], 'direction', 90);
   assert.deepEqual([progress().outstanding, progress().staged], [2, 1]);
   edit.stage(ids[1], 'position', at(10.5));
@@ -137,18 +137,21 @@ test('Neste goes to what is left and Forrige walks everything, and neither write
   assert.deepEqual([outside.position, outside.previousId], [0, ids[2]], 'an occurrence picked on the map is not part of the count');
 });
 
-test('Save: the bar count is what readiness reports. Discard: readiness reports what it did before', async () => {
+test('Save: staged values become manual. Discard: the defaults stand, with the same identity', async () => {
   const { session, layerId, ids } = await completionLayer(FILES.map((name) => jpeg(name)));
   const flow = directionFlow(session, layerId, ids);
   const original = completionView(session, layerId);
-  assert.equal(original.readiness.blocking.length, 3);
+  assert.deepEqual(original.readiness.blocking, []);
+  const defaults = () => completionView(session, layerId).readiness.tasks.direction.counts.defaulted;
+  assert.equal(defaults(), 3);
+  const before = session.getLayerPhotos(layerId)[0].direction;
 
   const discarded = editing(session, layerId);
   discarded.stage(ids[0], 'direction', 90);
-  assert.equal(completionView(session, layerId).readiness.blocking.length, 3, 'staged values are not accepted');
+  assert.equal(defaults(), 3, 'staged values are not accepted');
   session.endPhotoEdits(discarded.ticket);
-  assert.deepEqual(completionView(session, layerId).readiness.blocking, original.readiness.blocking);
-  assert.equal(session.getLayerPhotos(layerId)[0].direction.current, null);
+  assert.equal(defaults(), 3);
+  assert.strictEqual(session.getLayerPhotos(layerId)[0].direction, before);
 
   const saved = editing(session, layerId);
   saved.stage(ids[0], 'direction', 90);
@@ -156,9 +159,7 @@ test('Save: the bar count is what readiness reports. Discard: readiness reports 
   const { outstanding, staged } = photoExportFlowProgress(flow, saved.effective(), ids[0]);
   assert.deepEqual([outstanding, staged], [1, 2]);
   assert.equal(session.applyPhotoEdits(saved.ticket, saved.changes()).ok, true);
-  const after = completionView(session, layerId);
-  assert.equal(after.readiness.blocking.length, outstanding);
-  assert.equal(after.model.tasks.find((task) => task.key === 'direction').outstanding, outstanding);
+  assert.equal(defaults(), outstanding, 'what the bar called outstanding is what is still a default');
 });
 
 test('placement: a placed occurrence leaves Plassering and joins the delivery tasks', async () => {
@@ -174,15 +175,13 @@ test('placement: a placed occurrence leaves Plassering and joins the delivery ta
   assert.equal(session.applyPhotoEdits(edit.ticket, edit.changes().filter((change) => change.photoId === ids[0])).ok, true);
   const { model } = completionView(session, layerId);
   assert.equal(model.tasks.find((task) => task.key === 'placement').outstanding, 2);
-  assert.equal(model.tasks.find((task) => task.key === 'direction').outstanding, 1, 'it now needs a direction of its own');
+  assert.equal(model.direction.rows.find((row) => row.photoId === ids[0]).state, 'defaulted', 'it joins the direction task with its default');
 });
 
-test('accepted GML 0° can be reviewed and corrected; other accepted directions are not called questionable', async () => {
-  const { session, layerId, ids } = await completionLayer(FILES.map((name) => jpeg(name)), { gml: GML });
-  assert.equal(session.adoptSourceEvidence(layerId, 'direction', 'gml', ids.slice(0, 2), { includeZero: true }).ok, true);
+test('any accepted direction can be corrected on the map, and a default gives way to a saved value', async () => {
+  const { session, layerId, ids } = await completionLayer(FILES.map((name) => jpeg(name)), { gml: GML.slice(0, 2) });
   const rows = () => completionView(session, layerId).model.direction.rows;
-  assert.deepEqual(rows().filter(canReviewOnMap).map((row) => row.photoId), ids.slice(0, 2));
-  assert.deepEqual(rows().filter(canSetOnMap).map((row) => row.photoId), [ids[2]], 'accepted rows are not "missing"');
+  assert.deepEqual(rows().filter(canSetOnMap).map((row) => row.photoId), [ids[2]], 'only the default is listed as without a known direction');
 
   const flow = directionFlow(session, layerId, ids.slice(0, 2), { scope: 'review' });
   assert.equal(photoExportFlowProgress(flow, session.getLayerPhotos(layerId), ids[0]).countLabel, 'Kontroller retning');
@@ -190,23 +189,17 @@ test('accepted GML 0° can be reviewed and corrected; other accepted directions 
   edit.stage(ids[0], 'direction', 135);
   assert.deepEqual([photoExportFlowProgress(flow, edit.effective(), ids[0]).outstanding, photoExportFlowProgress(flow, edit.effective(), ids[0]).staged], [1, 1]);
   assert.equal(session.getLayerPhotos(layerId)[0].direction.current.degrees, 0, 'the accepted value stands until saved');
-  assert.equal(rows().filter(canReviewOnMap).length, 2);
   assert.equal(session.applyPhotoEdits(edit.ticket, edit.changes()).ok, true);
   const corrected = session.getLayerPhotos(layerId)[0].direction.current;
   assert.deepEqual([corrected.degrees, corrected.basis.kind], [135, 'manual']);
-  assert.deepEqual(rows().filter(canReviewOnMap).map((row) => row.photoId), [ids[1]]);
 
   const manualNorth = editing(session, layerId);
   manualNorth.stage(ids[2], 'direction', 0);
+  assert.equal(manualNorth.changes().length, 0, 'the default already says 0°, so nothing changed');
+  manualNorth.stage(ids[2], 'direction', 45);
   assert.equal(session.applyPhotoEdits(manualNorth.ticket, manualNorth.changes()).ok, true);
-  assert.equal(rows().find((row) => row.photoId === ids[2]).state, 'accepted');
-  assert.equal(canReviewOnMap(rows().find((row) => row.photoId === ids[2])), false, 'a person chose this 0°');
-});
-
-test('an EXIF 0° from true north is ordinary evidence and is not put up for review', async () => {
-  const { session, layerId, ids } = await completionLayer([jpeg('nord.jpg', { direction: 0, directionRef: 'T' })]);
-  assert.equal(session.adoptSourceEvidence(layerId, 'direction', 'exif', ids).ok, true);
-  assert.equal(completionView(session, layerId).model.direction.rows.some(canReviewOnMap), false);
+  const row = rows().find((item) => item.photoId === ids[2]);
+  assert.deepEqual([row.state, row.origin, row.accepted.degrees], ['accepted', 'manual', 45]);
 });
 
 test('a selection narrows the map list and never widens it, as for every other action in the hub', async () => {
@@ -226,8 +219,7 @@ test('repeated photographs: each occurrence is its own work item', async () => {
   assert.deepEqual([photoExportFlowProgress(flow, edit.effective(), ids[0]).outstanding, photoExportFlowProgress(flow, edit.effective(), ids[0]).nextId], [1, ids[1]]);
   assert.equal(session.applyPhotoEdits(edit.ticket, edit.changes()).ok, true);
   const [first, second] = session.getLayerPhotos(layerId);
-  assert.deepEqual([first.direction.current?.degrees, second.direction.current], [45, null], 'the other placement is untouched');
-  assert.equal(completionView(session, layerId).model.tasks.find((task) => task.key === 'direction').outstanding, 1);
+  assert.deepEqual([first.direction.current.degrees, second.direction.current.basis.kind], [45, 'default'], 'the other placement is untouched');
 });
 
 test('a removed occurrence drops out of the work list, and a removed layer ends the flow', async () => {

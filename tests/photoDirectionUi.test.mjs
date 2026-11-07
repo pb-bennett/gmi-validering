@@ -1,7 +1,7 @@
 import { createLayerWithoutPlacement, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readdir, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
@@ -10,17 +10,14 @@ import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { KEYS, commandBar, discardEdits, dragSelectedMarker, editKnob, editTarget, elementCentre, enterEditMode, pressKey, rotateSelected, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL;
-const corpus = process.env.PHOTO_GML_FIXTURE;
 const tempRoot = path.resolve(tmpdir());
 
 // Run all interactions even without private originals; never label synthetic checks real-corpus acceptance.
 async function fixture() {
-  if (corpus) return { gml: corpus, photos: (await readdir(path.join(path.dirname(corpus), 'Attachments')))
-    .filter(name => /\.jpe?g$/i.test(name)).sort().map(name => path.join(path.dirname(corpus), 'Attachments', name)) };
   const directory = await mkdtemp(path.join(tempRoot, 'gmi-photo-direction-'));
   const photos = ['a.png', 'b.png'].map(name => path.join(directory, name));
   await Promise.all(photos.map(filename => writeFile(filename, gpsPng())));
-  const members = photos.map((filename, i) => `<gml:featureMember><app:Skråfoto gml:id="photo-${i}"><gml:name>${path.basename(filename)}</gml:name><app:fotolink>${path.basename(filename)}</app:fotolink><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>${581930 + i * 20} 6566000 0</gml:pos></gml:Point></app:fotograferingspunkt><app:retningsvektor><app:Retning><app:retningsverdi>0</app:retningsverdi><app:retningsenhet>1</app:retningsenhet><app:retningsreferanse>1</app:retningsreferanse></app:Retning></app:retningsvektor></app:Skråfoto></gml:featureMember>`).join('');
+  const members = photos.map((filename, i) => `<gml:featureMember><app:Skråfoto gml:id="photo-${i}"><gml:name>${path.basename(filename)}</gml:name><app:fotolink>${path.basename(filename)}</app:fotolink><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>${581930 + i * 20} 6566000 0</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember>`).join('');
   const gml = path.join(directory, 'directions.gml');
   await writeFile(gml, `<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy>${members}</gml:FeatureCollection>`);
   return { directory, photos, gml };
@@ -105,16 +102,17 @@ test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, stag
         await click(await browser.evaluate(`${inspector}.querySelector('.photo-inspector-locate').getAttribute('aria-label')`)); await settle();
       };
       await create();
-      assert.equal(await accepted(), 'Ikke angitt'); assert.equal(await browser.evaluate(`Boolean(${indicator})`), false);
+      assert.equal(await accepted(), '0° N'); assert.equal(await browser.evaluate(`Boolean(${indicator})`), true);
       const originalPosition = await position(), originalEvidence = await evidence();
-      assert(originalEvidence.some(text => text.includes('"valueText": "0"')), 'GML raw zero stays evidence');
+      assert.equal(await browser.evaluate(fact('Retningskilde')).then((text) => text.startsWith('Standardverdi, ingen kilde oppgir retning')), true, 'a default says that it is one');
       await assertAnchors();
 
-      // Unknown stays unknown: the ghost knob draws no arrow until a value is staged explicitly.
+      // A default is an ordinary north heading on the map and in Edit mode; only the provenance differs.
       await enterEditMode(browser);
-      assert(await browser.evaluate(`${editKnob}.classList.contains('photo-edit-knob-ghost')`));
-      assert.equal(await browser.evaluate(`Boolean(${indicator})`), false);
-      for (const degrees of [0, 90, 180, 270]) {
+      assert(!await browser.evaluate(`${editKnob}.classList.contains('photo-edit-knob-ghost')`));
+      assert.equal(await browser.evaluate(`Boolean(${indicator})`), true);
+      assert.equal(await browser.evaluate(`document.querySelector('.photo-edit-direction-field input').value`), '0');
+      for (const degrees of [90, 180, 270]) {
         await number(degrees); await assertHeading(degrees, true);
         assert.equal(await position(), originalPosition);
         await screenshot(`direction-staged-${degrees}-1680`);
@@ -122,7 +120,7 @@ test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, stag
       await rotateSelected(browser, 45);
       await browser.waitFor(`Math.abs(Number(${indicator}?.dataset.degrees) - 45) <= 2`);
       await discardEdits(browser);
-      assert.equal(await accepted(), 'Ikke angitt'); assert.equal(await browser.evaluate(`Boolean(${indicator})`), false);
+      assert.equal(await accepted(), '0° N'); assert.equal(await browser.evaluate(`Boolean(${indicator})`), true);
 
       await enterEditMode(browser); await number(45); await saveEdits(browser);
       assert.equal(await accepted(), '45° NØ'); await assertHeading(45, false);
@@ -152,19 +150,19 @@ test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, stag
       await applyPhotoSourcePositions(browser, 'gml', { filename: activeFilename }); assert.equal(await position(), originalPosition); assert.equal(await accepted(), '90° Ø');
       await applyPhotoSourcePositions(browser, 'exif', { filename: activeFilename }); assert.equal(await accepted(), '90° Ø'); assert.deepEqual(await evidence(), originalEvidence);
 
-      // Staging survives selection changes; occurrences are independent; explicit north is a real value.
+      // Staging survives selection changes, and occurrences are independent.
       await enterEditMode(browser);
-      await select(1); assert.equal(await accepted(), 'Ikke angitt'); assert.equal(await browser.evaluate(`Boolean(${indicator})`), false);
-      await number(0); await assertHeading(0, true);
+      await select(1); assert.equal(await accepted(), '0° N'); assert.equal(await browser.evaluate(`Boolean(${indicator})`), true);
+      await number(180); await assertHeading(180, true);
       await select(0); await assertHeading(90, false);
-      await select(1); await assertHeading(0, true);
-      await saveEdits(browser); assert.equal(await accepted(), '0° N'); await assertHeading(0, false);
+      await select(1); await assertHeading(180, true);
+      await saveEdits(browser); assert.equal(await accepted(), '180° S'); await assertHeading(180, false);
 
       for (const [width, height] of [[1024, 620], [390, 700]]) {
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor:1, mobile:false }); await settle();
         await enterEditMode(browser); await number(270); await assertHeading(270, true); await assertAnchors();
         assert(await browser.evaluate('document.querySelector(".photo-workspace-shell").scrollWidth<=innerWidth+1'));
-        await screenshot(`direction-edit-${width}`); await discardEdits(browser); await assertHeading(0, false);
+        await screenshot(`direction-edit-${width}`); await discardEdits(browser); await assertHeading(180, false);
       }
       await browser.send('Emulation.setDeviceMetricsOverride', { width:1680, height:900, deviceScaleFactor:1, mobile:false }); await settle();
       await select(0);
@@ -189,7 +187,7 @@ test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, stag
       assert.equal(await accepted(), '90° Ø');
       await enterEditMode(browser); await number(180); await browser.send('Page.reload');
       await browser.waitFor('!document.querySelector(".photo-workspace-shell") && !document.querySelector(".photo-direction-indicator")');
-      console.log(JSON.stringify({ fixture: corpus ? 'real Ekenesstokken' : 'synthetic', photos: files.photos.length,
+      console.log(JSON.stringify({ fixture: 'synthetic', photos: files.photos.length,
         checks: 'unknown/ghost, N/Ø/S/V geometry, staged dashed vs accepted solid, discard/save, knob drag/keyboard, numeric, move independence, source independence, occurrence independence, zoom/pan, boundary, reload', screenshots }));
     } catch (error) {
       console.log(await browser.evaluate(`({bar:${commandBar}?.innerText,inspector:${inspector}?.innerText?.slice(0,1500)})`).catch(() => null));

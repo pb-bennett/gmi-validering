@@ -62,7 +62,8 @@ export function photoPositioningRequests(plan, selectedIds) {
   }));
 }
 
-// Retained evidence from every position source. Defaults are proposals, never acceptance.
+// Retained evidence from every position source. Defaults are proposals, never acceptance: GMI object positions,
+// then GML, then a lone EXIF position. GML is also proposed over an EXIF position already in use, never over a manual one.
 // Keep original candidate/current identities for the session's optimistic guards.
 export function photoSourceEvidenceSignature(photos) {
   return JSON.stringify(photos.map((photo) => [photo.id, photo.spatial.exifRead.state,
@@ -91,14 +92,16 @@ export function planPhotoSourcePositions(photos, sources) {
       count + (source.associationLedger.reverseIndexes.byPhotoId[photo.assetId || photo.id]?.length || 0), 0);
     const peers = photos.filter((item) => (item.assetId || item.id) === (photo.assetId || photo.id));
     const gmi = options.filter((candidate) => candidate.kind === 'gmi');
+    const gml = options.filter((candidate) => candidate.kind === 'gml');
+    const preferred = gmi.length ? gmi : gml.length ? gml : options;
     return Object.freeze({ photoId: photo.id, assetId: photo.assetId || photo.id, occurrence: photo.occurrence,
       occurrenceCount: peers.length, occurrenceIndex: peers.findIndex((item) => item.id === photo.id) + 1,
       gmiUnavailable: photo.spatial.candidates.find((candidate) => candidate.kind === 'gmi' && candidate.status !== 'viable')?.errorCode,
       filename: photo.originalFilename, thumbnailUrl: photo.preview.thumbnailUrl,
       current, currentKind: basis?.kind || current?.basis.kind, currentSourceFilename: basis?.sourceFilename,
       options: Object.freeze(options), objectCount, exifState: photo.spatial.exifRead.state,
-      defaultChoice: current || gmi.length > 1 ? '' : gmi.length === 1 ? gmi[0].id
-        : options.length === 1 ? options[0].id : '' });
+      defaultChoice: current ? (basis?.kind === 'exif' && gml.length === 1 && !gmi.length ? gml[0].id : '')
+        : preferred.length === 1 ? preferred[0].id : '' });
   });
   return Object.freeze({ rows: Object.freeze(rows), evidenceSignature: photoSourceEvidenceSignature(photos) });
 }
@@ -118,6 +121,10 @@ export function photoSourcePositionChoices(next, previous = null, choices = {}, 
       if (!row.current && !editedIds.has(row.photoId) && (!focusedPhotoId || row.photoId === focusedPhotoId)
         && newGmi.length === 1 && newGmi[0].sourceId === newGmiSourceId
         && !before.options.some((option) => option.id === newGmi[0].id)) return [row.photoId, row.defaultChoice];
+      // A GML file added in this wizard is proposed like one present from the start. Late EXIF is not: it never widens a review.
+      const newGml = row.options.find((option) => option.id === row.defaultChoice && option.kind === 'gml');
+      if (newGml && !choices[row.photoId] && !editedIds.has(row.photoId) && (!focusedPhotoId || row.photoId === focusedPhotoId)
+        && !before.options.some((option) => option.id === newGml.id)) return [row.photoId, row.defaultChoice];
       const choice = choices[row.photoId] || '';
       const oldCandidate = before.options.find((option) => option.id === choice);
       const candidate = row.options.find((option) => option.id === choice);

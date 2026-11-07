@@ -108,7 +108,7 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
             <span>Sekundene er 00 <span className="photo-metadata-consequence">Kilden oppgir bare minutter. Dette lagres som din manuelle verdi, ikke som kildens.</span></span>
           </label>}
           {accepted.captureTime && <Choice name={`${id}-time`} value="remove" checked={timeChoice === 'remove'} onChange={touch('captureTime', setTimeChoice)} className="photo-metadata-remove">
-            Fjern godtatt opptakstid <span className="photo-metadata-consequence">Kan blokkere eksport for Legacy og AsBuilt.</span>
+            Fjern godtatt opptakstid <span className="photo-metadata-consequence">Hentes ikke inn automatisk igjen. Kan blokkere eksport for Legacy og AsBuilt.</span>
           </Choice>}
           {timeChoice !== 'other' && errors.captureTime && <p role="alert" className="photo-capture-time-error">{errors.captureTime}</p>}
         </fieldset>

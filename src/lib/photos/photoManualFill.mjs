@@ -1,5 +1,5 @@
 import { normalizeCaptureTime, normalizePhotographer } from './photoCaptureMetadata.mjs';
-import { normalizeExactPhotoDirection } from './photoDirection.mjs';
+import { isDefaultPhotoDirection, normalizeExactPhotoDirection } from './photoDirection.mjs';
 import { isXmlText } from './export/exportContract.mjs';
 
 export const MANUAL_FILL_FIELDS = ['captureTime', 'photographer', 'direction'];
@@ -18,6 +18,7 @@ export function normalizeManualPhotoFill(field, input) {
 }
 
 // Accepted values, not source availability, define manual fallback eligibility.
+// A default direction stands in for a missing one, so it stays open to a manual value.
 export function planManualPhotoFill(photos, field, photoIds = photos.map((photo) => photo.id)) {
   const byId = new Map(photos.map((photo) => [photo.id, photo]));
   const occurrences = new Map();
@@ -31,7 +32,7 @@ export function planManualPhotoFill(photos, field, photoIds = photos.map((photo)
     if (seen.has(owner)) { counts.deduplicated++; continue; }
     seen.add(owner); counts.inspected++;
     const accepted = field === 'direction' ? photo.direction.current : photo.captureMetadata[field];
-    if (accepted != null) { counts.alreadyAccepted++; continue; }
+    if (accepted != null && !(field === 'direction' && isDefaultPhotoDirection(accepted))) { counts.alreadyAccepted++; continue; }
     counts.eligible++;
     targets.push({ photoId: photo.id, assetId: photo.assetId });
     if (field === 'direction' && occurrences.get(photo.assetId) > 1) counts.repeatedApplications++;

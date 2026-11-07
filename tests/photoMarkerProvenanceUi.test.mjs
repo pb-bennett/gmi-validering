@@ -111,7 +111,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await enterEditMode(browser);
         assert.notEqual(await cursor(), 'crosshair');
         await browser.evaluate(`${commandBar}.querySelector('input[type=number]').focus()`);
-        await browser.evaluate(`(() => { const input = ${commandBar}.querySelector('input[type=number]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '0'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+        await browser.evaluate(`(() => { const input = ${commandBar}.querySelector('input[type=number]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '45'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
         await pressKey(browser, 'Enter', KEYS.Enter);
         await browser.waitFor(`${editTarget}?.querySelector('.photo-direction-indicator[data-staged=true]')`);
         await saveEdits(browser);

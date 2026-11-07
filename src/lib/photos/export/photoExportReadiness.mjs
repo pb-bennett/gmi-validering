@@ -2,6 +2,7 @@ import { fullCaptureTime } from './exportContract.mjs';
 import { photoExportDiagnosticLabel } from './photoExportDiagnostics.mjs';
 import { PHOTO_EXPORT_IMPORT_EVIDENCE, PHOTO_EXPORT_REQUIREMENTS, PHOTO_EXPORT_SCHEMA_REQUIREMENTS, evaluatePhotoExportRules, isValidExportDirection } from './photoExportRules.mjs';
 import { evidenceEligibility, evidenceValuesConflict } from '../photoEvidenceAdoption.mjs';
+import { isDefaultPhotoDirection } from '../photoDirection.mjs';
 
 // Synchronous and read-only over canonical state, so it is safe to recompute on every render. It reads no bytes,
 // hashes nothing, issues no identifiers, starts no work and takes the time from `now`. Accepted values decide
@@ -15,6 +16,10 @@ const readingExif = (photo) => photo.spatial?.exifRead?.state === 'pending';
 const sourceValue = ({ id, kind, tag, sourceFilename, value, raw }) => ({ id, kind, tag: tag ?? null, sourceFilename: sourceFilename ?? null, value: value ?? null, raw });
 const tally = (items, states) => Object.fromEntries(states.map((state) => [state, items.filter((item) => item.state === state).length]));
 
+// Sources behind a value chosen automatically that really differ. Precision alone never counts. A person's own value
+// has settled the question, so it is not reported.
+const sourcesDiffer = (accepted, evidence, field) => accepted?.acceptance === 'auto' && evidenceValuesConflict(evidence.filter((item) => item.value !== null && item.value !== undefined), field);
+
 // One state from planning §6, with the values and available sources an interface needs to act on it.
 // `blocking` follows the requirement; a recommended time is never blocking, whatever its state.
 export function classifyCaptureTime(photo, requirement = 'recommended') {
@@ -22,31 +27,31 @@ export function classifyCaptureTime(photo, requirement = 'recommended') {
   const evidence = (photo.metadataEvidence || []).filter((item) => item.field === 'captureTime');
   const usable = evidence.filter((item) => item.value);
   const result = (state, details = {}) => ({ state, requirement, blocking: requirement === 'required' && state !== 'accepted', accepted,
-    evidence: evidence.map(sourceValue), adoptableKinds: [], sourcesAgree: false, sourcePending: readingExif(photo), replacesAccepted: false, ...details });
-  if (fullCaptureTime(accepted)) return result('accepted');
+    evidence: evidence.map(sourceValue), adoptableKinds: [], sourcePending: readingExif(photo), replacesAccepted: false, ...details });
+  if (fullCaptureTime(accepted)) return result('accepted', { sourcesDiffer: sourcesDiffer(accepted, evidence, 'captureTime') });
   if (accepted) return result('partial', { replacesAccepted: true });
   if (evidenceValuesConflict(usable, 'captureTime')) return result('conflict');
   const adoptableKinds = SOURCE_KINDS.filter((kind) => evidenceEligibility(photo, 'captureTime', kind).status === 'eligible');
-  if (adoptableKinds.length) return result('adoptable', { adoptableKinds, sourcesAgree: new Set(usable.map((item) => item.kind)).size > 1 });
+  if (adoptableKinds.length) return result('adoptable', { adoptableKinds });
   if (readingExif(photo)) return result('pending');
   if (usable.length) return result('partial');
   return result(evidence.length ? 'unusable' : 'none');
 }
 const CAPTURE_STATES = Object.freeze(['accepted', 'adoptable', 'conflict', 'partial', 'unusable', 'pending', 'none']);
 
-// Direction is owned by the occurrence. GML 0° is reported apart and never counts as a known direction.
+// Direction is owned by the occurrence. A default is valid for export, but reported apart from a value a source gave.
 function classifyDirection(photo) {
   const accepted = photo.direction?.current || null;
-  if (accepted) return { state: isValidExportDirection(accepted) ? 'accepted' : 'invalid', accepted, adoptableKinds: [], sourcePending: readingExif(photo) };
+  if (accepted) return { state: !isValidExportDirection(accepted) ? 'invalid' : isDefaultPhotoDirection(accepted) ? 'defaulted' : 'accepted', accepted, adoptableKinds: [],
+    sourcePending: readingExif(photo), sourcesDiffer: sourcesDiffer(accepted, (photo.directionEvidence || []).filter((item) => item.field === 'direction'), 'direction') };
   const results = SOURCE_KINDS.map((kind) => [kind, evidenceEligibility(photo, 'direction', kind).status]);
   const has = (status) => results.some(([, item]) => item === status);
   const adoptableKinds = results.filter(([, status]) => status === 'eligible').map(([kind]) => kind);
-  const zeroNeedsReview = has('zeroNeedsReview');
-  const state = has('conflicting') ? 'conflict' : adoptableKinds.length ? 'adoptable' : zeroNeedsReview ? 'zero-review'
+  const state = has('conflicting') ? 'conflict' : adoptableKinds.length ? 'adoptable'
     : readingExif(photo) ? 'pending' : has('unsupportedReference') ? 'unsupported' : has('unusable') ? 'unusable' : 'none';
-  return { state, accepted, adoptableKinds, zeroNeedsReview, sourcePending: readingExif(photo) };
+  return { state, accepted, adoptableKinds, sourcePending: readingExif(photo) };
 }
-const DIRECTION_STATES = Object.freeze(['accepted', 'adoptable', 'conflict', 'zero-review', 'unsupported', 'unusable', 'invalid', 'pending', 'none']);
+const DIRECTION_STATES = Object.freeze(['accepted', 'defaulted', 'adoptable', 'conflict', 'unsupported', 'unusable', 'invalid', 'pending', 'none']);
 
 // Edit mode hands out effective photos. Staged positions and directions are not accepted data.
 const canonicalPhoto = (photo) => photo.saved
@@ -73,7 +78,7 @@ function earliestInstant(value) {
 }
 const implausibleCaptureTime = (value, nowMs) => Number(value.iso.slice(0, 4)) < 2000 || earliestInstant(value) > nowMs;
 
-function recommendationsFor({ profile, placed, assets, nowMs }) {
+function recommendationsFor({ profile, placed, assets, nowMs, captureItems, directionItems }) {
   const recommendations = [];
   const add = (code, count, message, details = {}) => { if (count) recommendations.push({ code, label: photoExportDiagnosticLabel(code), count, message, ...details }); };
   const timeOf = (photo) => photo.captureMetadata?.captureTime || null;
@@ -88,8 +93,11 @@ function recommendationsFor({ profile, placed, assets, nowMs }) {
   const bulkTimeCount = bulkTimes.reduce((total, group) => total + group.count, 0);
   add('capture-time-bulk', bulkTimeCount, `${bulkTimeCount} bilder har samme manuelt angitte tid.`, { groups: bulkTimes });
 
-  const zero = placed.filter((photo) => photo.direction?.current?.degrees === 0);
-  if (placed.length >= 5 && zero.length * 2 >= placed.length) add('direction-all-zero', zero.length, `${zero.length} bilder peker nøyaktig mot nord. Kontroller at dette stemmer.`, { occurrenceIds: zero.map((photo) => photo.id) });
+  const differingTimes = captureItems.filter((item) => item.sourcesDiffer);
+  add('capture-time-sources-differ', differingTimes.length, `${differingTimes.length} bilder har ulik opptakstid i kildene. Den prioriterte kilden er brukt.`, { assetIds: differingTimes.map((item) => item.assetId) });
+
+  const differingDirections = directionItems.filter((item) => item.sourcesDiffer);
+  add('direction-sources-differ', differingDirections.length, `${differingDirections.length} plasseringer har ulik retning i kildene. GML er brukt.`, { occurrenceIds: differingDirections.map((item) => item.occurrenceId) });
   const bulkDirections = repeatedBulkValues(placed, (photo) => photo.direction?.current?.basis, (photo) => photo.direction.current.degrees);
   const bulkDirectionCount = bulkDirections.reduce((total, group) => total + group.count, 0);
   add('direction-bulk', bulkDirectionCount, `${bulkDirectionCount} plasseringer har samme manuelt angitte retning.`, { groups: bulkDirections });
@@ -99,11 +107,13 @@ function recommendationsFor({ profile, placed, assets, nowMs }) {
   return recommendations;
 }
 
-function notesFor({ profile, requirement, placed, assets, captureItems }) {
+function notesFor({ profile, requirement, placed, assets, captureItems, directionItems }) {
   const notes = [];
   const add = (code, count, message) => { if (count) notes.push({ code, label: photoExportDiagnosticLabel(code), count, message }); };
   const gemini = profile === 'gemini-legacy2019';
 
+  const defaulted = directionItems.filter((item) => item.state === 'defaulted').length;
+  add('direction-defaulted', defaulted, `${defaulted} plasseringer har standardretning 0°, fordi ingen kilde oppgir retning.`);
   const adoptable = captureItems.filter((item) => item.state === 'adoptable');
   const source = adoptable.every((item) => item.adoptableKinds.includes('exif')) ? 'EXIF' : adoptable.every((item) => item.adoptableKinds.includes('gml')) ? 'GML' : 'kildene';
   add('capture-time-in-source', adoptable.length, `${adoptable.length} bilder mangler opptakstid, men tiden finnes i ${source}.`);
@@ -155,7 +165,7 @@ export function photoExportReadiness(photos, { profile, crs, context, now } = {}
   if (evidence?.missingDirection && withoutDirection) deviations.push({ field: 'direction', state: evidence.missingDirection, count: withoutDirection, referenceOnly: evidence.referenceOnly.includes('missingDirection') });
 
   const nowMs = now === undefined || now === null ? Number.NaN : new Date(now).getTime();
-  const recommendations = recommendationsFor({ profile, placed, assets, nowMs });
+  const recommendations = recommendationsFor({ profile, placed, assets, nowMs, captureItems, directionItems });
   const blockedAssets = new Set(blocking.map((item) => item.assetId).filter(Boolean));
   const blockedOccurrences = new Set(blocking.map((item) => item.occurrenceId).filter(Boolean));
   const allBlocked = blocking.some((item) => !item.assetId && !item.occurrenceId);
@@ -175,7 +185,7 @@ export function photoExportReadiness(photos, { profile, crs, context, now } = {}
     blocking,
     recommendations,
     excluded: unplaced.map((photo) => ({ occurrenceId: photo.id, assetId: photo.assetId, reason: 'unplaced' })),
-    notes: notesFor({ profile, requirement, placed, assets, captureItems }),
+    notes: notesFor({ profile, requirement, placed, assets, captureItems, directionItems }),
     tasks: {
       captureTime: { requirement: requirement?.captureTime ?? null, schemaRequired: Boolean(schema?.captureTime), counts: tally(captureItems, CAPTURE_STATES), items: captureItems },
       direction: { requirement: requirement?.direction ?? null, schemaRequired: Boolean(schema?.direction), counts: tally(directionItems, DIRECTION_STATES), items: directionItems },

@@ -68,6 +68,8 @@ const filterPlaced = async (browser) => {
   await browser.evaluate(`${filterToggle}.click()`);
   await browser.waitFor('document.querySelector(".photo-filter-summary")');
 };
+const defaultCount = async (browser) => { await showTask(browser, 'direction'); return browser.evaluate(`${panel('direction')}.querySelector('[data-count="default"] dd')?.innerText ?? '0'`); };
+const manualValues = async (browser) => (await doneValues(browser)).filter((value) => value.includes('Manuell'));
 const openDone = (browser) => browser.evaluate(`(() => { const group = ${panel('direction')}.querySelector('[data-group="done"]'); group.open = true; })()`);
 // Carries the text a real key press has: without it Chrome does not activate a focused button.
 const pressEnter = async (browser) => {
@@ -95,21 +97,24 @@ const typeDirection = async (browser, degrees) => {
   await pressKey(browser, 'Enter', KEYS.Enter);
 };
 
-// Each file exercises one state. "unplaced" has no GML feature, so it stays unplaced.
+// Each file exercises one state. "unplaced" has no GML feature, so it stays unplaced. Only "north" has a direction from a
+// source; the five others get the default, which is what Angi på kartet is for.
 const FILES = {
   'match.jpg': { captureTime: '2026:05:12 14:33:02', subsecond: '012' },
   'conflict.jpg': { captureTime: '2026:05:12 14:33:02' },
   'minute.jpg': {},
-  'heading.jpg': { captureTime: '2026:05:12 15:00:10', direction: 45, directionRef: 'T' },
+  'heading.jpg': { captureTime: '2026:05:12 15:00:10' },
   'blank.jpg': {},
+  'north.jpg': {},
   'unplaced.jpg': { captureTime: '2026:05:12 16:00:00' },
 };
 const FEATURES = [
-  { name: 'match.jpg', time: '2026-05-12T14:33:02', direction: '0' },
-  { name: 'conflict.jpg', time: '2026-05-12T14:40:00', direction: '90.5' },
+  { name: 'match.jpg', time: '2026-05-12T14:33:02' },
+  { name: 'conflict.jpg', time: '2026-05-12T14:40:00' },
   { name: 'minute.jpg', time: '2026-05-12T14:33' },
-  { name: 'heading.jpg', direction: '0' },
+  { name: 'heading.jpg' },
   { name: 'blank.jpg' },
+  { name: 'north.jpg', direction: '0' },
 ];
 
 async function buildLayer(browser, directory) {
@@ -144,14 +149,13 @@ layerTest('Angi på kartet: filter, selection, staged counts, Neste and Forrige,
   await filterPlaced(browser);
   await selectListRow(browser, 'match.jpg');
   await openHub(browser);
-  assert.equal(await outstanding(browser, 'direction'), '5');
-  await showTask(browser, 'direction');
+  assert.equal(await defaultCount(browser), '5');
   await openDirectionMap(browser);
 
   assert.equal(await openDialogs(browser), 0, 'the hub is swapped out, not stacked');
   assert.deepEqual(await listed(browser), ['blank.jpg', 'conflict.jpg', 'heading.jpg', 'match.jpg', 'minute.jpg'], 'the unplaced photo is out of scope');
   assert.equal(await activeName(browser), 'blank.jpg');
-  assert.match(await summary(browser), /Mangler retning/);
+  assert.match(await summary(browser), /Standardretning/);
   assert.equal(await browser.evaluate(`document.activeElement === ${flowRow}`), true, 'focus moves to the handoff controls');
   assert.deepEqual(await counts(browser), [5, 0]);
   assert.equal(await browser.evaluate(`${flowRow}.querySelector('.photo-edit-flow-position').innerText`), '1 av 5');
@@ -160,7 +164,7 @@ layerTest('Angi på kartet: filter, selection, staged counts, Neste and Forrige,
   await rotateSelected(browser, 90);
   await browser.waitFor(`${flowCount}.dataset.flowStaged === '1'`);
   assert.deepEqual(await counts(browser), [4, 1], 'staged values are counted apart from saved ones');
-  assert.match(await browser.evaluate(`${flowCount}.innerText`), /Mangler retning: 4 · 1 ulagret/);
+  assert.match(await browser.evaluate(`${flowCount}.innerText`), /Standardretning: 4 · 1 ulagret/);
   assert.match(await browser.evaluate(`${flowCount}.getAttribute('aria-label')`), /1 plassering har ulagrede endringer/);
   await screenshot(browser, 'flow-direction-1680');
 
@@ -179,18 +183,17 @@ layerTest('Angi på kartet: filter, selection, staged counts, Neste and Forrige,
   await browser.waitFor(hub);
   assert.equal(await browser.evaluate(`Boolean(${commandBar})`), false);
   assert.equal(await activeTask(browser), 'direction');
-  assert.equal(await outstanding(browser, 'direction'), '3', 'readiness now agrees with the bar');
-  assert.equal(await statusLine(browser), '3 må rettes før eksport');
-  assert.equal(await hubMessage(browser), 'Retning: 3 gjenstår.');
+  assert.equal(await defaultCount(browser), '3', 'readiness now agrees with the bar');
+  assert.equal(await hubMessage(browser), 'Retning: 0 gjenstår. 3 har standardretning.');
   assert.equal(await browser.evaluate(`document.activeElement === ${panel('direction')}.querySelector('[data-completion-heading]')`), true);
   await openDone(browser);
-  assert.deepEqual(await doneValues(browser), ['Godtatt: 200° S · Manuell', 'Godtatt: 90° Ø · Manuell']);
+  assert.deepEqual(await manualValues(browser), ['Godtatt: 200° S · Manuell', 'Godtatt: 90° Ø · Manuell']);
 
   await pressKey(browser, 'Escape', KEYS.Escape);
   await browser.waitFor(`!${hub}`);
   assert.equal(await browser.evaluate(`document.activeElement === document.querySelector('.photo-tools-trigger')`), true, 'closing returns focus to Verktøy');
   assert.equal(await activeName(browser), 'match.jpg', 'the earlier selection is back');
-  assert.match(await summary(browser), /^Viser 5 av 6 · Plassert$/, 'and so is the earlier filter');
+  assert.match(await summary(browser), /^Viser 6 av 7 · Plassert$/, 'and so is the earlier filter');
   await openHub(browser);
   assert.equal(await hubMessage(browser), '', 'an ordinary opening is not a return');
 });
@@ -220,9 +223,8 @@ layerTest('Discard returns to the original data, and cancelling at the boundary 
   await clickSourceControl(browser, 'Forkast endringer', boundary);
   await browser.waitFor(hub);
   assert.equal(await activeTask(browser), 'direction');
-  assert.equal(await outstanding(browser, 'direction'), '5', 'nothing from the working copy');
-  assert.equal(await statusLine(browser), '5 må rettes før eksport');
-  assert.equal(await browser.evaluate(`Boolean(${panel('direction')}.querySelector('[data-group="done"]'))`), false);
+  assert.equal(await defaultCount(browser), '5', 'nothing from the working copy');
+  assert.deepEqual(await manualValues(browser), []);
 
   // The command bar's own Forkast asks first, and cancelling that keeps the staged value too.
   await openDirectionMap(browser);
@@ -237,7 +239,7 @@ layerTest('Discard returns to the original data, and cancelling at the boundary 
   await browser.waitFor(boundary);
   await clickSourceControl(browser, 'Forkast', boundary);
   await browser.waitFor(hub);
-  assert.equal(await outstanding(browser, 'direction'), '5');
+  assert.equal(await defaultCount(browser), '5');
 
   // With nothing staged, every way out goes straight back.
   await openDirectionMap(browser);
@@ -257,7 +259,7 @@ layerTest('Discard returns to the original data, and cancelling at the boundary 
   assert.deepEqual(await counts(browser), [4, 1], 'the typed value is not lost on the way out');
   await clickSourceControl(browser, 'Forkast endringer', boundary);
   await browser.waitFor(hub);
-  assert.equal(await outstanding(browser, 'direction'), '5');
+  assert.equal(await defaultCount(browser), '5');
 
   // Saving at the boundary is the same commit as the command bar's.
   await openDirectionMap(browser);
@@ -266,14 +268,15 @@ layerTest('Discard returns to the original data, and cancelling at the boundary 
   await askToLeave();
   await clickSourceControl(browser, 'Lagre endringer', boundary);
   await browser.waitFor(hub);
-  assert.equal(await outstanding(browser, 'direction'), '4');
+  assert.equal(await defaultCount(browser), '4');
 });
 
 layerTest('Plasser på kartet: a double-click on the way in places nothing; the map places, Save returns to Plassering', async (browser) => {
   await openHub(browser);
   await showTask(browser, 'placement');
   assert.equal(await outstanding(browser, 'placement'), '1');
-  assert.equal(await outstanding(browser, 'direction'), '5');
+  assert.equal(await defaultCount(browser), '5');
+  await showTask(browser, 'placement');
   await realClick(browser, buttonIn(panel('placement'), 'Plasser på kartet'), 2);
   await browser.waitFor(flowRow);
   await settle();
@@ -297,23 +300,20 @@ layerTest('Plasser på kartet: a double-click on the way in places nothing; the 
   await browser.waitFor(hub);
   assert.equal(await activeTask(browser), 'placement');
   assert.equal(await outstanding(browser, 'placement'), 'done');
-  assert.equal(await outstanding(browser, 'direction'), '6', 'a placed photo joins the delivery and needs a direction');
+  assert.equal(await defaultCount(browser), '6', 'a placed photo joins the delivery and needs a direction');
 });
 
-layerTest('accepted GML 0° can be corrected on the map; Discard keeps it, Save replaces it, and nothing is accepted automatically', async (browser) => {
+layerTest('an accepted GML 0° can be corrected on the map; Discard keeps it, Save replaces it, and no other row changes', async (browser) => {
   await openHub(browser);
   await showTask(browser, 'direction');
-  const review = `${panel('direction')}.querySelector('[data-completion-actions="review"]')`;
-  assert.equal(await browser.evaluate(`Boolean(${review})`), false, 'nothing to review until a 0° is accepted');
-  await realClick(browser, buttonIn(`${panel('direction')}.querySelector('[data-completion-zero]')`, 'Godta GML-retning 0° for 1 plassering'));
-  await browser.waitFor(review);
-  assert.equal(await outstanding(browser, 'direction'), '4');
-
-  await realClick(browser, buttonIn(review, 'Kontroller 0° på kartet'));
+  assert.equal(await browser.evaluate(`Boolean(${buttonIn(panel('direction'), 'Kontroller 0° på kartet')})`), false, '0° has no route of its own');
+  await openDone(browser);
+  await realClick(browser, `${rowOf('north.jpg')}.querySelector('.photo-completion-row-action button')`);
   await browser.waitFor(flowRow);
   assert.match(await browser.evaluate(`${flowCount}.innerText`), /Kontroller retning: 1/);
-  assert.deepEqual(await listed(browser), ['match.jpg']);
+  assert.deepEqual(await listed(browser), ['north.jpg']);
   assert.equal(await browser.evaluate(`${commandBar}.querySelector('.photo-edit-direction-field input').value`), '0');
+  assert.equal(await browser.evaluate(`${buttonIn(flowRow, 'Neste')}.getAttribute('aria-disabled')`), 'true');
   await rotateSelected(browser, 135);
   await browser.waitFor(`${flowCount}.dataset.flowStaged === '1'`);
   await realClick(browser, buttonIn(flowRow, 'Tilbake til opplysninger'));
@@ -322,26 +322,16 @@ layerTest('accepted GML 0° can be corrected on the map; Discard keeps it, Save 
   await browser.waitFor(hub);
   await openDone(browser);
   assert.match((await doneValues(browser))[0], /^Godtatt: 0° N · GML/, 'the accepted value stands');
-  assert.equal(await browser.evaluate(`Boolean(${review})`), true);
 
-  // The row route reaches the same occurrence.
-  await realClick(browser, `${rowOf('match.jpg')}.querySelector('.photo-completion-row-action button')`);
+  await realClick(browser, `${rowOf('north.jpg')}.querySelector('.photo-completion-row-action button')`);
   await browser.waitFor(flowRow);
   await rotateSelected(browser, 135);
   await browser.waitFor(`${flowCount}.dataset.flowStaged === '1'`);
   await realClick(browser, buttonIn(commandBar, 'Lagre endringer'));
   await browser.waitFor(hub);
   await openDone(browser);
-  assert.match((await doneValues(browser))[0], /· Manuell$/, 'the correction replaces the GML value');
-  assert.doesNotMatch((await doneValues(browser))[0], /^Godtatt: 0°/);
-  assert.equal(await browser.evaluate(`Boolean(${review})`), false);
-  assert.equal(await outstanding(browser, 'direction'), '4', 'correcting one row accepts no other');
-
-  // Any accepted direction can be corrected from Ferdig; there is no list to step through for a single row.
-  await realClick(browser, `${rowOf('match.jpg')}.querySelector('.photo-completion-row-action button')`);
-  await browser.waitFor(flowRow);
-  assert.equal(await browser.evaluate(`${buttonIn(flowRow, 'Neste')}.getAttribute('aria-disabled')`), 'true');
-  await backToHub(browser);
+  assert.equal((await manualValues(browser)).length, 1, 'the correction replaces the GML value');
+  assert.equal(await defaultCount(browser), '5', 'correcting one row changes no other');
 });
 
 layerTest('the positioning wizard returns to Plassering on cancel, Escape and apply, with its own transaction intact', async (browser, directory) => {
@@ -381,7 +371,7 @@ layerTest('the positioning wizard returns to Plassering on cancel, Escape and ap
   await browser.waitFor(hub);
   assert.equal(await activeTask(browser), 'placement');
   assert.equal(await outstanding(browser, 'placement'), 'done', 'readiness is recalculated from the applied position');
-  assert.equal(await outstanding(browser, 'direction'), '6');
+  assert.equal(await defaultCount(browser), '5', 'the new GML gave this photo its direction');
   await closeHub(browser);
   assert.match(await summary(browser), /Plassert/, 'the workspace filter is untouched');
 });
@@ -407,7 +397,8 @@ layerTest('going to another tool leaves the handoff only after the boundary, and
     element.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await clickSourceControl(browser, 'Lag eksportforhåndsvisning', exportDialog);
   await browser.waitFor(`${exportDialog}.querySelector('[aria-label="Eksportforhåndsvisning"]')`);
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="direction-required"]').querySelectorAll('li').length`), 5, 'the discarded direction is not in the plan');
+  assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="direction-required"]'))`), false, 'defaults satisfy the direction requirement');
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /Det er ikke verifisert at Gemini VA godtar en slik pakke/);
   await clickSourceControl(browser, 'Lukk eksport', exportDialog);
   await browser.waitFor(`!${exportDialog}`);
   await settle();
@@ -439,7 +430,7 @@ layerTest('going to another tool leaves the handoff only after the boundary, and
     element.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await clickSourceControl(browser, 'Lag eksportforhåndsvisning', exportDialog);
   await browser.waitFor(`${exportDialog}.querySelector('[aria-label="Eksportforhåndsvisning"]')`);
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="direction-required"]').querySelectorAll('li').length`), 4);
+  assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="direction-required"]'))`), false);
 });
 
 layerTest('layer switching, deletion and reset end the handoff without reopening a stale dialog', async (browser, directory) => {
@@ -467,7 +458,7 @@ layerTest('layer switching, deletion and reset end the handoff without reopening
   assert.equal(await browser.evaluate(`Boolean(${commandBar}) || Boolean(document.querySelector('.photo-completion-dialog'))`), false);
   assert.equal(await summary(browser), '', 'no work list follows into another layer');
   await openHub(browser);
-  assert.equal(await outstanding(browser, 'direction'), '5');
+  assert.equal(await defaultCount(browser), '5');
   await closeHub(browser);
 
   // Deleting the layer a handoff came from, after leaving it with nothing staged.
@@ -506,18 +497,17 @@ layerTest('a selection narrows the work list, survives the trip, and a double-cl
   await typeDirection(browser, 200);
   await browser.waitFor(`${flowCount}.dataset.flowStaged === '2'`);
   assert.equal(await browser.evaluate(`${buttonIn(flowRow, 'Neste')}.getAttribute('aria-disabled')`), 'true');
-  assert.equal(await browser.evaluate(`${buttonIn(flowRow, 'Neste')}.title`), 'Ingen flere gjenstår');
+  assert.equal(await browser.evaluate(`${buttonIn(flowRow, 'Neste')}.title`), 'Ingen flere i listen');
 
   await realClick(browser, buttonIn(commandBar, 'Lagre endringer'), 2);
   await browser.waitFor(hub);
   await settle();
-  assert.equal(await outstanding(browser, 'direction'), '3', 'only the two saved values, nothing from the second click');
+  assert.equal(await defaultCount(browser), '3', 'only the two saved values, nothing from the second click');
   assert.equal(await browser.evaluate(`${panel('direction')}.querySelector('[data-completion-selection]')?.innerText.includes('Ingen av de valgte gjenstår')`), true, 'the used selection keeps narrowing, as in M3');
   assert.equal(await browser.evaluate(`${buttonIn(panel('direction'), 'Angi på kartet')}.disabled`), true);
-  assert.match(await browser.evaluate(`${panel('direction')}.querySelector('[data-completion-zero] button').innerText`), /for 0 valgte plasseringer/);
   await clickSourceControl(browser, 'Fjern valg', panel('direction'));
-  await browser.waitFor(`${panel('direction')}.querySelector('[data-completion-zero] button').innerText.includes('for 1 plassering')`);
-  assert.equal(await outstanding(browser, 'direction'), '3');
+  await browser.waitFor(`!${buttonIn(panel('direction'), 'Angi på kartet')}.disabled`);
+  assert.equal(await defaultCount(browser), '3');
 });
 
 // Where the second click lands depends on the layout, so it is placed on purpose: on the map going out, on a hub action coming back.
@@ -545,18 +535,16 @@ layerTest('the second click of a double-click never reaches the screen that repl
   await browser.waitFor(hub);
 
   await showTask(browser, 'direction');
-  const adopt = `${panel('direction')}.querySelector('[data-adopt="exif"]')`;
-  const adoptPoint = await elementCentre(browser, adopt);
+  const action = buttonIn(panel('direction'), 'Angi på kartet');
+  const actionPoint = await elementCentre(browser, action);
   await openDirectionMap(browser);
   await new Promise((resolve) => setTimeout(resolve, 700));
   await realClick(browser, buttonIn(flowRow, 'Tilbake til opplysninger'));
-  await secondClick(adoptPoint);
+  await secondClick(actionPoint);
   await browser.waitFor(hub);
   await settle();
-  assert.equal(await browser.evaluate(`document.elementFromPoint(${adoptPoint.x}, ${adoptPoint.y}) === ${adopt}`), true, 'the click really was aimed at the action');
-  assert.equal(await outstanding(browser, 'direction'), '5', 'the EXIF direction was not accepted by accident');
-  await realClick(browser, adopt);
-  await browser.waitFor(`${taskButton('direction')}.querySelector('.photo-completion-task-count')?.dataset.outstanding === '4'`);
+  assert.equal(await browser.evaluate(`document.elementFromPoint(${actionPoint.x}, ${actionPoint.y}) === ${action}`), true, 'the click really was aimed at the action');
+  assert.equal(await browser.evaluate(`Boolean(${flowRow})`), false, 'it did not send anyone back to the map');
 });
 
 layerTest('keyboard: the controls are reachable and named, and ordinary Edit mode has none of them', async (browser) => {
@@ -640,7 +628,7 @@ test('repeated photographs: each placement is its own work item and keeps its ow
     await browser.waitFor(`${flowCount}.dataset.flowStaged === '1'`);
     await realClick(browser, buttonIn(flowRow, 'Neste'));
     await browser.waitFor(`${flowRow}.querySelector('.photo-edit-flow-position').innerText === '2 av 2'`);
-    assert.equal(await browser.evaluate(`${commandBar}.querySelector('.photo-edit-direction-field input').value`), '', 'the other placement has no value of its own yet');
+    assert.equal(await browser.evaluate(`${commandBar}.querySelector('.photo-edit-direction-field input').value`), '0', 'the other placement keeps its own default');
     await typeDirection(browser, 200);
     await browser.waitFor(`${flowCount}.dataset.flowStaged === '2'`);
     await realClick(browser, buttonIn(commandBar, 'Lagre endringer'));
@@ -651,7 +639,7 @@ test('repeated photographs: each placement is its own work item and keeps its ow
   } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
-test('private corpus: 148 occurrences through the map, with Discard, Save and correction of accepted GML 0°', { skip: !chromePath || !app || !corpus, timeout: 420000 }, async () => {
+test('private corpus: 148 occurrences need nothing by hand, and one can still be corrected with Discard and Save', { skip: !chromePath || !app || !corpus, timeout: 420000 }, async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'photo-flow-corpus-ui-'));
   const browser = await openTestChrome();
   try {
@@ -669,31 +657,34 @@ test('private corpus: 148 occurrences through the map, with Discard, Save and co
     await applyPhotoSourcePositions(browser, 'gml');
     await browser.waitFor(`document.querySelectorAll(".photo-camera-marker").length === ${total}`, 60000);
 
-    await startDirection(browser);
-    assert.deepEqual(await counts(browser), [total, 0]);
-    await typeDirection(browser, 90);
-    await browser.waitFor(`${flowCount}.dataset.flowStaged === '1'`);
+    const correct = async () => {
+      await openDone(browser);
+      await realClick(browser, `${rowOf(names[0])}.querySelector('.photo-completion-row-action button')`);
+      await browser.waitFor(flowRow);
+      assert.deepEqual(await counts(browser), [1, 0]);
+      await typeDirection(browser, 90);
+      await browser.waitFor(`${flowCount}.dataset.flowStaged === '1'`);
+    };
+    await openHub(browser);
+    assert.equal(await statusLine(browser), 'Ingen opplysninger mangler for dette målet', 'nothing had to be accepted by hand');
+    await showTask(browser, 'direction');
+    assert.equal(await outstanding(browser, 'direction'), 'done');
+    assert.equal(await browser.evaluate(`Boolean(${buttonIn(panel('direction'), 'Angi på kartet')})`), false, 'nothing is missing, so nothing is asked for');
+
+    await correct();
     await realClick(browser, buttonIn(flowRow, 'Tilbake til opplysninger'));
     await browser.waitFor(boundary);
     await clickSourceControl(browser, 'Forkast endringer', boundary);
     await browser.waitFor(hub);
-    assert.equal(await outstanding(browser, 'direction'), String(total), 'Discard leaves all of them as they were');
+    await openDone(browser);
+    assert.deepEqual(await manualValues(browser), [], 'Discard leaves all of them as they were');
 
-    await realClick(browser, buttonIn(`${panel('direction')}.querySelector('[data-completion-zero]')`, `Godta GML-retning 0° for ${total} plasseringer`));
-    await browser.waitFor(`${taskButton('direction')}.querySelector('.photo-completion-task-done')`);
-    await realClick(browser, buttonIn(panel('direction'), 'Kontroller 0° på kartet'));
-    await browser.waitFor(flowRow);
-    assert.deepEqual(await counts(browser), [total, 0], 'every accepted GML 0° can be looked at');
-    await typeDirection(browser, 90);
-    await browser.waitFor(`${flowCount}.dataset.flowStaged === '1'`);
-    await realClick(browser, buttonIn(flowRow, 'Neste'));
-    await browser.waitFor(`${flowRow}.querySelector('.photo-edit-flow-position').innerText === '2 av ${total}'`);
-    await typeDirection(browser, 180);
-    await browser.waitFor(`${flowCount}.dataset.flowStaged === '2'`);
+    await correct();
     await screenshot(browser, 'flow-corpus-1366');
     await realClick(browser, buttonIn(commandBar, 'Lagre endringer'));
     await browser.waitFor(hub);
-    assert.match(await browser.evaluate(`${panel('direction')}.querySelector('[data-completion-actions="review"]').innerText`), new RegExp(`${total - 2} plasseringer har godtatt GML-retning 0°`));
-    assert.match(await browser.evaluate(`${panel('direction')}.querySelector('[data-recommendation="direction-all-zero"]').innerText`), new RegExp(`${total - 2} bilder peker nøyaktig mot nord`), 'the warning follows the saved data');
+    await openDone(browser);
+    assert.equal((await manualValues(browser)).length, 1);
+    assert.equal((await doneValues(browser)).length, total);
   } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
 });

@@ -122,29 +122,31 @@ test('direction rejects nonfinite/out-of-range/malformed values instead of wrapp
   for (const value of [NaN, Infinity, -Infinity, -1, 360.001, 720, '0', '', null, undefined]) assert.equal(normalizeManualPhotoFill('direction', value), null, String(value));
 });
 
-test('selected direction leaves an unselected sibling unknown; whole layer completes it and preserves EXIF north', async () => {
-  const f = await setup({ extractGps: async () => ({ state: 'no-gps', directionEvidence: exifDirectionEvidence({ GPSImgDirection: 0, GPSImgDirectionRef: 'T' }) }) });
+test('a default stays open to manual fill, an unselected sibling keeps its default, and EXIF north is preserved', async () => {
+  let n = 0;
+  const f = await setup({ extractGps: async () => ({ state: 'no-gps', directionEvidence: n++ === 1 ? exifDirectionEvidence({ GPSImgDirection: 0, GPSImgDirectionRef: 'T' }) : [] }) });
   try {
-    const s = f.session, photos = s.getLayerPhotos(f.layerId), a = photos.filter((photo) => photo.originalFilename === 'a.png'), b = photos.find((photo) => photo.originalFilename === 'b.png');
-    while (!s.getPhoto(b.id).directionEvidence.length) await tick();
-    s.adoptSourceEvidence(f.layerId, 'direction', 'exif', [b.id]); const source = s.getPhoto(b.id).direction.current;
+    const s = f.session;
+    while (s.getLayerPhotos(f.layerId).some((photo) => photo.spatial.exifRead.state === 'pending')) await tick();
+    const photos = s.getLayerPhotos(f.layerId), a = photos.filter((photo) => photo.originalFilename === 'a.png'), b = photos.find((photo) => photo.originalFilename === 'b.png');
+    const source = s.getPhoto(b.id).direction.current;
+    assert.equal(source.basis.kind, 'exif');
     assert.equal(s.fillMissingPhotoValues(f.layerId, 'direction', 42.125, [a[0].id]).counts.adopted, 1);
-    assert.equal(s.getPhoto(a[1].id).direction.current, null);
+    assert.equal(s.getPhoto(a[1].id).direction.current.basis.kind, 'default');
     const result = s.fillMissingPhotoValues(f.layerId, 'direction', 180);
     assert.equal(result.counts.adopted, 1); assert.equal(result.counts.repeatedApplications, 1);
     assert.equal(result.counts.alreadyAccepted, 2); assert.strictEqual(s.getPhoto(b.id).direction.current, source);
   } finally { f.session.clear(); }
 });
 
-test('evidence first: seven of ten timestamps adopted, live manual fallback fills exactly three', async () => {
+test('evidence first: seven of ten timestamps accepted on their own, live manual fallback fills exactly three', async () => {
   const f = await setup({ repeated: false, names: Array.from({ length: 10 }, (_, i) => `${i}.png`),
     extractGps: async (file) => ({ state: 'no-gps', metadataEvidence: Number(file.name.split('.')[0]) < 7 ? exifCaptureEvidence({ DateTimeOriginal: '2026:05:12 14:33:02' }) : [] }) });
   try {
     const s = f.session;
     while (s.getLayerPhotos(f.layerId).some((photo) => photo.spatial.exifRead.state === 'pending')) await tick();
     const ids = [...f.ids];
-    assert.equal(planManualPhotoFill(s.getLayerPhotos(f.layerId), 'captureTime').counts.eligible, 10);
-    assert.equal(s.adoptSourceEvidence(f.layerId, 'captureTime').counts.adopted, 7);
+    assert.equal(planManualPhotoFill(s.getLayerPhotos(f.layerId), 'captureTime').counts.eligible, 3);
     const source = s.getPhoto(ids[0]).captureMetadata.captureTime;
     const result = s.fillMissingPhotoValues(f.layerId, 'captureTime', time, ids);
     assert.equal(result.counts.adopted, 3); assert.equal(result.counts.alreadyAccepted, 7);
@@ -170,19 +172,18 @@ test('manual first and late EXIF evidence: no automatic or explicit bulk adoptio
   } finally { f.session.clear(); }
 });
 
-test('manual choice may resolve unknown time with conflicting EXIF/GML without adopting either source', async () => {
+test('a per-photo manual correction replaces a source value, keeps the evidence, and later sources leave it alone', async () => {
   const f = await setup({ names: ['a.png'], repeated: false,
     extractGps: async () => ({ state: 'no-gps', metadataEvidence: exifCaptureEvidence({ DateTimeOriginal: '2026:05:12 14:33:02' }) }),
     parseGml: async () => ({ entries: [{ id: 'entry', raw: { fotolink: 'a.png', photographedAtText: '2025-01-01T01:02:03' }, status: 'invalid', position: null }] }) });
   try {
     const s = f.session;
     while (!s.getPhoto(f.ids[0]).metadataEvidence.length) await tick();
+    assert(s.setCaptureMetadata(f.layerId, f.ids, 'captureTime', time).ok);
     await s.stageLayerSource(f.layerId, new File(['source'], 'source.gml')); s.applyLayerSource(f.layerId);
-    assert.equal(s.adoptSourceEvidence(f.layerId, 'captureTime').counts.conflicting, 1);
-    const raw = s.getPhoto(f.ids[0]).metadataEvidence;
-    assert.equal(s.fillMissingPhotoValues(f.layerId, 'captureTime', time).counts.adopted, 1);
-    const photo = s.getPhoto(f.ids[0]); assert.deepEqual(photo.captureMetadata.captureTime.provenance, { kind: 'manual', mode: 'bulk' });
-    assert.strictEqual(photo.metadataEvidence, raw); assert.equal(photo.captureMetadata.captureTime.value.iso, time);
+    const photo = s.getPhoto(f.ids[0]);
+    assert.equal(photo.captureMetadata.captureTime.provenance.kind, 'manual'); assert.equal(photo.captureMetadata.captureTime.value.iso, time);
+    assert.equal(photo.metadataEvidence.length, 2);
   } finally { f.session.clear(); }
 });
 

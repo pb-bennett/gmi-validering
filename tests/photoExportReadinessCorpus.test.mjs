@@ -28,31 +28,16 @@ test('private corpus: readiness tells the same story as the plan at each step', 
     await parity();
 
     assert.equal(acceptGmlPositions(session, layer.id).length, total);
-    const before = readiness();
-    assert.equal(before.status, 'blocked');
-    assert.equal(before.blocking.filter((item) => item.code === 'direction-required').length, total, 'unaccepted GML 0° does not pass');
-    assert.equal(before.tasks.captureTime.counts.adoptable, total);
-    assert.equal(before.tasks.captureTime.items.filter((item) => item.sourcesAgree).length, total);
-    assert.equal(before.tasks.direction.counts['zero-review'], total);
-    assert.equal(before.notes.find((note) => note.code === 'capture-time-in-source').message, `${total} bilder mangler opptakstid, men tiden finnes i EXIF.`);
-    assert.deepEqual(before.levels.schema.gaps.map((gap) => [gap.field, gap.count]), [['captureTime', total], ['direction', total]]);
+    const finished = readiness();
+    assert.equal(finished.status, 'ready', 'every value came from the sources, with nothing to adopt');
+    assert.deepEqual(finished.blocking, []);
+    assert.equal(finished.levels.generation, 'possible'); assert.equal(finished.levels.schema.met, true);
+    assert.equal(finished.tasks.captureTime.counts.accepted, total);
+    assert.equal(finished.tasks.direction.counts.accepted, total);
+    assert.equal(finished.tasks.direction.counts.defaulted, 0);
+    assert.deepEqual(finished.recommendations, []);
     await parity();
     await parity({ profile: 'legacy2019', crs: 'EPSG:25832' });
-
-    assert.equal(session.adoptSourceEvidence(layer.id, 'direction', 'gml', null, { includeZero: true }).counts.adopted, total);
-    const directed = readiness();
-    assert.equal(directed.status, 'schema-gap', 'generation is possible, and the schema gap is reported');
-    assert.equal(directed.levels.generation, 'possible');
-    assert.deepEqual(directed.levels.importEvidence.deviations, [{ field: 'captureTime', state: 'unconfirmed', count: total, referenceOnly: true }]);
-    assert.equal(directed.recommendations.find((item) => item.code === 'direction-all-zero').count, total);
-    await parity();
-
-    assert.equal(session.adoptSourceEvidence(layer.id, 'captureTime', 'exif').counts.adopted, total);
-    const finished = readiness();
-    assert.equal(finished.status, 'recommendations'); assert.equal(finished.levels.schema.met, true);
-    assert.equal(finished.tasks.captureTime.counts.accepted, total);
-    assert.deepEqual(finished.recommendations.map((item) => item.code), ['direction-all-zero']);
-    await parity();
     t.diagnostic(`${total} photos: readiness and plan agree at every step`);
   } finally { session.clear(); }
 });

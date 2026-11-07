@@ -52,22 +52,22 @@ test('direction labels use Norwegian compass letters and spoken words', async ()
     assert.equal(photoDirectionSpokenLabel(degrees), `${degrees} grader, ${word}`);
   }
   assert.equal(photoDirectionLabel(123), '123° SØ');
-  assert.equal(photoDirectionLabel(359.875), '359,875° N', 'exact evidence values are not rounded for display');
-  assert.equal(photoDirectionLabel(22.5), '22,5° NØ');
+  assert.equal(photoDirectionLabel(359.875), '0° N', 'whole degrees on screen; the value itself keeps its precision');
+  assert.equal(photoDirectionLabel(22.5), '23° NØ');
   assert.equal(photoDirectionLabel(360), '0° N');
   assert.equal(photoDirectionSpokenLabel(1), '1 grad, nord');
   const module = await readFile(new URL('../src/lib/photos/photoDirection.mjs', import.meta.url), 'utf8');
   for (const english of ["'NE'", "'SE'", "'SW'", "'NW'", "'E'", "'W'"]) assert(!module.includes(english), english);
 });
 
-test('legacy GML raw zero stays evidence; begin/end writes nothing; staged north applies and publishes exactly once', async () => {
+test('a default is recorded as one; begin/end writes nothing; staged north applies and publishes exactly once', async () => {
   const session = setup(), { layer, ids } = await createLayer(session);
-  assert(session.getLayerPhotos(layer.id).every(photo => photo.direction.current === null));
+  assert(session.getLayerPhotos(layer.id).every(photo => photo.direction.current.basis.kind === 'default'));
   const before = session.getPhoto(ids[0]), ticket = session.beginPhotoEdits(layer.id);
-  assert.equal(ticket.baseline[ids[0]].direction, null, 'unknown is never an implicit north');
+  assert.strictEqual(ticket.baseline[ids[0]].direction, before.direction.current);
   assert.strictEqual(session.getPhoto(ids[0]).direction, before.direction);
   session.endPhotoEdits(ticket);
-  assert.equal(session.getPhoto(ids[0]).direction.current, null);
+  assert.strictEqual(session.getPhoto(ids[0]).direction, before.direction);
   assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0], degrees: 0 }]).error, 'session-ended');
   const next = session.beginPhotoEdits(layer.id);
   let publications = 0; const unsubscribe = session.subscribe(() => publications++);
@@ -79,7 +79,7 @@ test('legacy GML raw zero stays evidence; begin/end writes nothing; staged north
   assert.strictEqual(photo.spatial, before.spatial);
   assert.deepEqual(photo.spatial.candidates.find(candidate => candidate.kind === 'gml').raw, raw);
   assert.equal(session.applyPhotoEdits(next, [{ photoId: ids[0], degrees: 90 }]).ok, false, 'consumed once');
-  assert.strictEqual(session.getPhoto(ids[1]).direction.current, null);
+  assert.equal(session.getPhoto(ids[1]).direction.current.basis.kind, 'default');
   session.clear();
 });
 
@@ -162,7 +162,7 @@ test('visibility no longer participates in liveness; fabricated/foreign/wrong-ow
   assert.equal(session.applyPhotoEdits(ticket, [{ photoId: 'missing', degrees: 90 }]).error, 'edit-conflict');
   for (const degrees of [NaN, Infinity, -Infinity, '90']) assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0], degrees }]).error, 'invalid-change');
   assert.equal(session.applyPhotoEdits(ticket, [{ photoId: ids[0] }]).error, 'invalid-change');
-  assert.equal(session.getPhoto(ids[0]).direction.current, null);
+  assert.equal(session.getPhoto(ids[0]).direction.current.basis.kind, 'default');
   assert(session.applyPhotoEdits(ticket, [{ photoId: ids[0], degrees: 360 }]).ok);
   assert.equal(session.getPhoto(ids[0]).direction.current.degrees, 0);
   session.clear(); other.clear();

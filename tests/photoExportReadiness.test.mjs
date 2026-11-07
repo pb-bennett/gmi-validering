@@ -161,7 +161,7 @@ test('classifyCaptureTime: accepted, and accepted values too coarse to export', 
 
 test('classifyCaptureTime: unaccepted EXIF is adoptable, which is not the same as having no evidence', () => {
   const result = classify({ metadataEvidence: [exifTime()] }, 'recommended');
-  assert.equal(result.state, 'adoptable'); assert.deepEqual(result.adoptableKinds, ['exif']); assert.equal(result.sourcesAgree, false);
+  assert.equal(result.state, 'adoptable'); assert.deepEqual(result.adoptableKinds, ['exif']);
   assert.equal(result.accepted, null); assert.equal(result.blocking, false);
   assert.equal(result.evidence[0].value.iso, '2026-05-12T14:33:02'); assert.equal(result.evidence[0].kind, 'exif'); assert.equal(result.evidence[0].raw.DateTimeOriginal, '2026:05:12 14:33:02');
   assert.equal(classify({}, 'recommended').state, 'none');
@@ -170,7 +170,7 @@ test('classifyCaptureTime: unaccepted EXIF is adoptable, which is not the same a
 
 test('classifyCaptureTime respects M1 agreement: subseconds and unknown offsets are not conflicts', () => {
   const agreeing = classify({ metadataEvidence: [exifTime('2026:05:12 14:33:02', { SubSecTimeOriginal: '012' }), gmlTime('2026-05-12T14:33:02')] });
-  assert.equal(agreeing.state, 'adoptable'); assert.deepEqual(agreeing.adoptableKinds, ['exif', 'gml']); assert.equal(agreeing.sourcesAgree, true);
+  assert.equal(agreeing.state, 'adoptable'); assert.deepEqual(agreeing.adoptableKinds, ['exif', 'gml']);
   const conflict = classify({ metadataEvidence: [exifTime(), gmlTime('2026-05-12T14:33:03')] });
   assert.equal(conflict.state, 'conflict'); assert.equal(conflict.evidence.length, 2); assert.deepEqual(conflict.adoptableKinds, []);
   assert.equal(classify({ metadataEvidence: [exifTime('2026:05:12 14:33:02', { OffsetTimeOriginal: '+01:00' }), gmlTime('2026-05-12T14:33:02+02:00')] }).state, 'conflict');
@@ -202,21 +202,23 @@ test('available evidence is stated plainly, naming the source', () => {
 });
 
 // Direction safeguards
-test('unaccepted GML 0° never satisfies a direction requirement, and is reported apart', () => {
-  const result = photoExportReadiness([complete('a', { degrees: null, directionEvidence: [gmlDirection('0')] })], gemini);
-  assert.equal(result.status, 'blocked'); assert.deepEqual(codes(result.blocking), ['direction-required']);
-  assert.equal(result.tasks.direction.counts['zero-review'], 1); assert.equal(result.tasks.direction.counts.accepted, 0);
-  assert.equal(result.tasks.direction.items[0].state, 'zero-review');
+test('a default direction satisfies the requirement and is reported apart from a source value', () => {
+  const defaulted = direction(0, { kind: 'default' });
+  const result = photoExportReadiness([complete('a', { degrees: defaulted }), complete('b')], gemini);
+  assert.deepEqual(result.blocking, []);
+  assert.equal(result.tasks.direction.counts.defaulted, 1); assert.equal(result.tasks.direction.counts.accepted, 1);
+  assert.equal(result.tasks.direction.items[0].state, 'defaulted');
+  assert.equal(result.notes.find((note) => note.code === 'direction-defaulted').message, '1 plasseringer har standardretning 0°, fordi ingen kilde oppgir retning.');
+  assert.equal(recommendation(result, 'direction-defaulted'), undefined, 'a default is complete, so it asks nothing of anyone');
 });
 
-test('direction task separates what can be adopted, reviewed, resolved or only entered', () => {
+test('direction task separates accepted, unsettled and invalid rows, and treats GML 0° as an ordinary value', () => {
   const { counts, items } = photoExportReadiness([complete('a'), complete('b', { degrees: null, directionEvidence: [exifDirection(45), gmlDirection('0')] }),
     complete('c', { degrees: null, directionEvidence: [exifDirection(45), gmlDirection('90')] }), complete('d', { degrees: null, directionEvidence: [gmlDirection('12.5')] }),
     complete('e', { degrees: null }), complete('f', { degrees: null, exifRead: 'pending' }), complete('g', { degrees: direction(400) }),
     complete('h', { degrees: null, directionEvidence: exifDirectionEvidence({ GPSImgDirection: 45, GPSImgDirectionRef: 'M' }) })], legacy).tasks.direction;
-  assert.deepEqual(counts, { accepted: 1, adoptable: 2, conflict: 1, 'zero-review': 0, unsupported: 1, unusable: 0, invalid: 1, pending: 1, none: 1 });
-  assert.deepEqual(items.find((item) => item.occurrenceId === 'b').adoptableKinds, ['exif'], 'a real EXIF heading is adoptable past GML 0°');
-  assert.equal(items.find((item) => item.occurrenceId === 'b').zeroNeedsReview, true);
+  assert.deepEqual(counts, { accepted: 1, defaulted: 0, adoptable: 1, conflict: 2, unsupported: 1, unusable: 0, invalid: 1, pending: 1, none: 1 });
+  assert.equal(items.find((item) => item.occurrenceId === 'b').state, 'conflict');
 });
 
 test('photographer task follows the profile', () => {
@@ -280,21 +282,13 @@ test('capture-time-bulk: repeated bulk values only, counted by provenance and no
   assert.equal(found([{ ...item('a', bulk), spatial: { current: null } }, item('b', bulk)]), undefined, 'unplaced assets are out of scope');
 });
 
-test('direction-all-zero: at least 5 placed and at least half exactly 0°', () => {
-  const set = (zero, other, extra = []) => [...Array.from({ length: zero }, (_, i) => complete(`z${i}`, { degrees: direction(0) })), ...Array.from({ length: other }, (_, i) => complete(`o${i}`)), ...extra];
-  const found = (photos, configuration = gemini) => recommendation(photoExportReadiness(photos, configuration), 'direction-all-zero');
-  assert.equal(found(set(4, 0)), undefined, '4 placed');
-  assert.equal(found(set(5, 0)).count, 5);
-  assert.equal(found(set(3, 2)).count, 3, '3 of 5 is over half');
-  assert.equal(found(set(2, 3)), undefined, '2 of 5 is under half');
-  assert.equal(found(set(3, 3)).count, 3, 'exactly half');
-  assert.equal(found(set(3, 4)), undefined, 'just under half');
-  assert.equal(found(set(4, 1)).message, '4 bilder peker nøyaktig mot nord. Kontroller at dette stemmer.');
-  assert.equal(found(set(3, 1, [complete('u', { degrees: null })])).count, 3, 'unknown direction is placed, and is not a zero');
-  assert.equal(found(set(2, 0, [complete('u1', { degrees: null }), complete('u2', { degrees: null }), complete('u3', { degrees: null })])), undefined);
-  assert.equal(found(set(4, 0, [complete('p', { degrees: direction(0), placed: false })])), undefined, 'unplaced is out of scope');
-  assert.equal(found(set(3, 0, [complete('n1', { degrees: direction(.1) }), complete('n2', { degrees: direction(359.9) }), complete('n3', { degrees: direction(1) })])).count, 3, 'near north is not exactly 0°');
-  assert.equal(found(set(4, 0, [complete('g', { degrees: null, directionEvidence: [gmlDirection('0')] }), complete('h', { degrees: null, directionEvidence: [gmlDirection('0')] })])).count, 4, 'unaccepted GML 0° is not counted');
+test('source differences are reported only for automatic values, and rounding is no difference', () => {
+  const auto = (kind) => ({ ...direction(0, { kind }), acceptance: 'auto' });
+  const found = (photos) => recommendation(photoExportReadiness(photos, gemini), 'direction-sources-differ');
+  assert.equal(found([complete('a', { degrees: auto('gml'), directionEvidence: [gmlDirection('123'), exifDirection(123.4)] })]), undefined);
+  assert.equal(found([complete('a', { degrees: auto('gml'), directionEvidence: [gmlDirection('0'), exifDirection(359.9)] })]), undefined, 'the smallest angle counts');
+  assert.equal(found([complete('a', { degrees: auto('gml'), directionEvidence: [gmlDirection('90'), exifDirection(45)] })]).count, 1);
+  assert.equal(found([complete('a', { degrees: direction(70), directionEvidence: [gmlDirection('90'), exifDirection(45)] })]), undefined, 'a person has settled it');
 });
 
 test('direction-bulk: repeated bulk directions per occurrence, by provenance', () => {
@@ -317,7 +311,7 @@ test('evidence-pending counts placed assets still being read', () => {
 test('recommendations never block and never touch accepted values', () => {
   const photos = Array.from({ length: 6 }, (_, i) => complete(`a${i}`, { time: accepted('2026-05-12T12:33:02Z', bulk), degrees: direction(0, bulk) }));
   const result = photoExportReadiness(photos, { ...gemini, now: NOW });
-  assert.deepEqual(codes(result.recommendations), ['capture-time-utc', 'capture-time-bulk', 'direction-all-zero', 'direction-bulk']);
+  assert.deepEqual(codes(result.recommendations), ['capture-time-utc', 'capture-time-bulk', 'direction-bulk']);
   assert.equal(result.status, 'recommendations'); assert.deepEqual(result.blocking, []); assert.equal(result.levels.generation, 'possible');
   assert.equal(photos[0].captureMetadata.captureTime.value.iso, '2026-05-12T12:33:02Z');
 });

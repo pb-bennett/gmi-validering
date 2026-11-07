@@ -1,5 +1,5 @@
 import { importPlacementRequests, previewImportPlacement, summarizeImportOutcome } from './photoImportOutcome.mjs';
-import { emptyCaptureMetadata, normalizeCaptureTime, normalizePhotographer, gmlCaptureEvidence } from './photoCaptureMetadata.mjs';
+import { emptyCaptureMetadata, evidenceProvenance, normalizeCaptureTime, normalizePhotographer, gmlCaptureEvidence } from './photoCaptureMetadata.mjs';
 import { classifyPhotoFile, createPhotoThumbnail, THUMBNAIL_MAX_EDGE } from './imagePreview.mjs';
 import { createDisplayPreviewCache, DISPLAY_PREVIEW_JPEG_QUALITY, DISPLAY_PREVIEW_MAX_EDGE } from './photoDisplayPreviews.mjs';
 import { readExifGps } from './exifGps.mjs';
@@ -7,6 +7,7 @@ import { acceptManualPhotoPosition, acceptPhotoCandidate, createPhotoCandidate, 
 import { matchPhotoReferences } from './photoReferenceMatching.mjs';
 import { acceptManualPhotoDirection, acceptEvidencePhotoDirection, emptyDirection, gmlDirectionEvidence, normalizePhotoDirection } from './photoDirection.mjs';
 import { planEvidenceAdoption } from './photoEvidenceAdoption.mjs';
+import { planAutoCaptureTime, planAutoDirection, planAutoPhotographer } from './photoAutoMetadata.mjs';
 import { MANUAL_FILL_FIELDS, normalizeManualPhotoFill, planManualPhotoFill } from './photoManualFill.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
@@ -188,10 +189,33 @@ export function createPhotoSession({
     return true;
   }
 
+  // The one place metadata is accepted automatically. It runs before every publication, so no route that brings in
+  // a source, a photo or an occurrence can miss it. An open Edit session owns its layer: its Save and Discard compare
+  // against a fixed baseline, so the layer waits and catches up when the session ends.
+  function autoAcceptMetadata() {
+    const acceptedAt = Date.now();
+    let changed = false;
+    for (const [layerId, layer] of layers) {
+      if (editSessions.has(layerId)) continue;
+      for (const id of layer.photoIds) {
+        const record = records.get(id), asset = assets.get(record.assetId);
+        const captureTime = planAutoCaptureTime(asset.captureMetadata, asset.metadataEvidence, acceptedAt);
+        const photographer = planAutoPhotographer(asset.captureMetadata, asset.metadataEvidence, acceptedAt);
+        if (captureTime || photographer) assets.set(record.assetId, { ...asset, captureMetadata: immutable({ ...asset.captureMetadata,
+          ...(captureTime ? { captureTime } : {}), ...(photographer ? { photographer } : {}) }) });
+        const direction = planAutoDirection(record.direction, asset.directionEvidence, { exifPending: asset.spatial.exifRead.state === 'pending', acceptedAt });
+        if (direction) records.set(id, { ...record, direction });
+        changed ||= Boolean(captureTime || photographer || direction);
+      }
+    }
+    return changed;
+  }
+
   const appendPolicy = () => draftTargetLayerId ? photoAppendPolicy(importIds.map((id) => records.get(id)),
     assetPhotos(layers.get(draftTargetLayerId)?.photoIds || []), appendOverrideIds) : null;
   const skippedSpatial = () => immutable({ ...emptySpatial(), exifRead: { state: 'skipped-duplicate', errorCode: null } });
   const publish = () => {
+    autoAcceptMetadata();
     const appendStatus = appendPolicy();
     const skipped = new Set(appendStatus?.skippedIds || []);
     let resumedMetadata = false;
@@ -657,7 +681,9 @@ export function createPhotoSession({
     },
     photoEditsAreLive,
     endPhotoEdits(ticket) {
-      if (ticket && editSessions.get(ticket.layerId) === ticket) editSessions.delete(ticket.layerId);
+      if (!ticket || editSessions.get(ticket.layerId) !== ticket) return;
+      editSessions.delete(ticket.layerId);
+      if (autoAcceptMetadata()) publish();
     },
     // Validate every staged change before any write, then commit and publish once.
     // Conflicts are detected by identity, like the source workflow; nothing is ever partially applied.
@@ -686,7 +712,7 @@ export function createPhotoSession({
         ...(degrees !== null ? { direction: acceptManualPhotoDirection(degrees, acceptedAt) } : {}),
       }));
       editSessions.delete(ticket.layerId);
-      if (writes.length) publish();
+      if (autoAcceptMetadata() || writes.length) publish();
       return { ok: true, changedIds: writes.map((write) => write.photoId) };
     },
     // Owner-scoped, deduplicated asset writes. Stale occurrences are ignored;
@@ -708,7 +734,12 @@ export function createPhotoSession({
           : { kind: 'manual' }, acceptedAt: Date.now() });
         changes.push([assetId, accepted]);
       }
-      for (const [assetId, accepted] of changes) updateAsset(assetId, (asset) => ({ captureMetadata: immutable({ ...asset.captureMetadata, [field]: accepted }) }));
+      // Removing a value is a decision too, so it is remembered: automatic acceptance must not bring it back.
+      const clearedFlag = `${field}Cleared`;
+      for (const [assetId, accepted] of changes) updateAsset(assetId, (asset) => {
+        const { [clearedFlag]: _cleared, ...metadata } = asset.captureMetadata;
+        return { captureMetadata: immutable({ ...metadata, [field]: accepted, ...(accepted === null ? { [clearedFlag]: true } : {}) }) };
+      });
       if (changes.length) publish();
       return { ok: true, assetIds: ids };
     },
@@ -736,15 +767,14 @@ export function createPhotoSession({
       if (plan.targets.length) publish();
       return { ok: true, ...plan, counts: { ...plan.counts, adopted: plan.targets.length, invalidInput: 0 } };
     },
-    // includeZero is the explicit acceptance of GML 0°, which the default action never offers.
-    adoptSourceEvidence(layerId, field, kind = 'exif', photoIds = null, { includeZero = false } = {}) {
+    adoptSourceEvidence(layerId, field, kind = 'exif', photoIds = null) {
       if (!['captureTime', 'photographer', 'direction'].includes(field) || !['exif', 'gml'].includes(kind)) return { ok: false, error: 'invalid-field' };
       const members = layers.get(layerId)?.photoIds || [];
       const photos = members.map((id) => {
         const record = records.get(id), asset = assets.get(record.assetId);
         return { ...record, captureMetadata: asset.captureMetadata, metadataEvidence: asset.metadataEvidence, directionEvidence: asset.directionEvidence };
       });
-      const plan = planEvidenceAdoption(photos, field, kind, photoIds || members, { includeZero });
+      const plan = planEvidenceAdoption(photos, field, kind, photoIds || members);
       const acceptedAt = Date.now();
       for (const target of plan.targets) {
         if (field === 'direction') records.set(target.photoId, { ...records.get(target.photoId),
@@ -753,9 +783,7 @@ export function createPhotoSession({
           const asset = assets.get(target.assetId), evidence = target.evidence;
           // Metadata is projected from the asset; avoid a record scan per asset.
           assets.set(target.assetId, { ...asset, captureMetadata: immutable({ ...asset.captureMetadata, [field]: {
-            value: evidence.value, provenance: { kind: evidence.kind, evidenceId: evidence.id, tag: evidence.tag || null,
-              sourceId: evidence.sourceId || null, sourceFilename: evidence.sourceFilename || null,
-              sourceEntryId: evidence.sourceEntryId || null, raw: evidence.raw, evidence: target.agreeingEvidence }, acceptedAt,
+            value: evidence.value, provenance: evidenceProvenance(evidence, target.agreeingEvidence), acceptedAt,
           } }) });
         }
       }

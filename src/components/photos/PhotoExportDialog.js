@@ -9,6 +9,7 @@ import usePhotoSession from './usePhotoSession';
 import PhotoEvidenceActions from './PhotoEvidenceActions';
 import { groupPhotoExportDiagnostics } from '@/lib/photos/export/photoExportDiagnostics.mjs';
 import { photoExportReadiness } from '@/lib/photos/export/photoExportReadiness.mjs';
+import PhotoExportStatus from './PhotoExportStatus';
 import './photoExport.css';
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs disabled:opacity-40';
@@ -46,7 +47,8 @@ export default function PhotoExportDialog({ layerId, initialContext, onContextCh
   const changeContext = (key, value) => { invalidate(); const next = { ...context, [key]: value }; setContext(next); onContextChange?.(next); };
   const live = plan?.isLive();
   const layer = photoSession.getLayer(layerId);
-  const timesInSource = plan && photoExportReadiness(photoSession.getLayerPhotos(layerId), { profile, crs, context }).notes.find((note) => note.code === 'capture-time-in-source');
+  const readiness = profile ? photoExportReadiness(photoSession.getLayerPhotos(layerId), { profile, crs, context }) : null;
+  const timesInSource = plan && readiness?.notes.find((note) => note.code === 'capture-time-in-source');
   return <dialog ref={ref} className="photo-export-dialog" aria-labelledby="photo-export-title" onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <header><h2 id="photo-export-title">Eksperimentell fotoeksport</h2><button type="button" className={control} onClick={onClose}>Lukk eksport</button></header>
     <p>Gemini-kompatibilitet er ikke verifisert for noen av profilene. Pakken er til lokal importtesting.</p>
@@ -65,6 +67,7 @@ export default function PhotoExportDialog({ layerId, initialContext, onContextCh
         : <input type={type} aria-label={`Eksport ${label}`} value={context[key] || ''} onChange={(event) => changeContext(key, event.target.value)} />}</label>)}
     </fieldset>}
     {profile !== 'gemini-legacy2019' && <p>Attachments/&lt;filnavn&gt; med skråstrek er appens testkonvensjon. Retning antas eksperimentelt å være grader med klokken fra geografisk nord (1/1).</p>}
+    {readiness && <PhotoExportStatus readiness={readiness} />}
     <PhotoEvidenceActions photos={photoSession.getLayerPhotos(layerId)} layerId={layerId} onAdopt={invalidate} exportProfile={profile} />
     <button className={control} type="button" disabled={!profile || !layer || busy} onClick={async () => {
       const token = ++operation.current.version; setBusy(true); setPlan(null); setMessage('Bygger forhåndsvisning …');

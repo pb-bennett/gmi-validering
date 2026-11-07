@@ -158,7 +158,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       assert.equal(await browser.evaluate(fact('Kilde')), 'Manuell');
       await select(a);
       assert.equal(await positionText(), aPosition);
-      assert.equal(await browser.evaluate(fact('Retning')), 'Ikke angitt');
+      assert.equal(await browser.evaluate(fact('Retning')), '0° N', 'its own default, untouched by the other occurrence');
       await select(b);
       assert.equal(await browser.evaluate(fact('Retning')), '75° Ø');
       assert(await browser.evaluate(`Boolean(document.querySelector('.leaflet-photo-markers-pane .photo-camera-marker-selected .photo-direction-indicator[data-degrees="75"]'))`));

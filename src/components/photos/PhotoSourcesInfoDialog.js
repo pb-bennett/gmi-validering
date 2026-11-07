@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef } from 'react';
+import { isDefaultPhotoDirection } from '@/lib/photos/photoDirection.mjs';
 import { photoPlacementCounts } from '@/lib/photos/photoWorkspaceView.mjs';
 import PhotoGmiSummary from './PhotoGmiSummary';
 import PhotoGmlSummary from './PhotoGmlSummary';
@@ -30,7 +31,7 @@ export default function PhotoSourcesInfoDialog({ layer, photos, onClose, onOpenS
     ['Bilder', assets.size], ['Plasseringer', photos.length],
     ['Plassert fra EXIF', counts.exif], ['Plassert fra GMI', counts.gmi], ['Plassert fra GML', counts.gml], ['Plassert manuelt', counts.manual],
     ['Uplassert', counts.unplaced], ['Bilder med EXIF GPS', layer.exifCandidateCount], ...(exifPending ? [['EXIF leses fortsatt', exifPending]] : []),
-    ['Med retning', photos.filter((photo) => photo.direction?.current).length],
+    ['Med retning', photos.filter((photo) => photo.direction?.current).length], ['Standardretning', photos.filter((photo) => isDefaultPhotoDirection(photo.direction?.current)).length],
     ['Med opptakstid', [...assets.values()].filter((photo) => photo.captureMetadata?.captureTime).length],
   ];
   return <dialog ref={ref} className="photo-gmi-dialog photo-sources-info" aria-labelledby={`${id}-title`} onCancel={(event) => { event.preventDefault(); onClose(); }}>

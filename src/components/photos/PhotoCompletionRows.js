@@ -31,9 +31,11 @@ function RowBody({ row, children }) {
     {row.thumbnailUrl ? <img src={row.thumbnailUrl} alt="" loading="lazy" decoding="async" /> : <span className="photo-completion-thumbnail" aria-hidden="true" />}
     <div className="photo-completion-row-body">
       <p className="photo-completion-filename">{row.filename}{row.occurrence && <small> · {row.occurrence}</small>}</p>
-      {row.acceptedText && <p data-accepted-value>Godtatt: {row.acceptedText}</p>}
-      {row.sources?.map((source) => <p key={source.key} data-source-value>{source.text}</p>)}
+      {row.acceptedText && <p data-accepted-value>{row.origin === 'default' ? 'Standard' : 'Godtatt'}: {row.acceptedText}</p>}
       {row.note && <p className="photo-completion-row-note">{row.note}</p>}
+      {row.sources?.length > 0 && <details className="photo-completion-sources"><summary>Kildeverdier ({row.sources.length})</summary>
+        {row.sources.map((source) => <p key={source.key} data-source-value>{source.text}</p>)}
+      </details>}
       {children}
     </div>
   </>;

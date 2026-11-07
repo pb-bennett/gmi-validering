@@ -25,8 +25,8 @@ function TaskButton({ task, active, onSelect }) {
   </button></li>;
 }
 
-// Standalone hub for accepted metadata. It never writes on its own: every value needs an explicit action, and each
-// action goes through the session, so readiness and the counts here follow canonical state after any change.
+// Standalone hub for what the sources could not settle. The session has already accepted source values, so this only
+// shows them and takes corrections. Each one goes through the session, and readiness and the counts follow canonical state.
 // `entry` is set when the hub comes back from a handoff: { task, selections }. Nothing else survives the trip.
 export default function PhotoCompletionDialog({ layer, photos, config, onConfigChange, openerRef, entry = null, onOpenMap, onOpenSources, onClose }) {
   const ref = useRef(null), id = useId();
@@ -49,7 +49,12 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
   const [initialKey] = useState(() => entry?.task || initialCompletionTask(model.tasks));
   const task = model.tasks.find((item) => item.key === (activeKey || initialKey)) || model.tasks[0];
   const status = photoCompletionStatus(readiness);
-  const [returnNote] = useState(() => entry ? `${task.label}: ${task.outstanding} gjenstår.` : '');
+  // A default is complete, so it is counted apart from what remains.
+  const [returnNote] = useState(() => {
+    if (!entry) return '';
+    const defaults = task.key === 'direction' ? model.direction.rows.filter((row) => row.origin === 'default').length : 0;
+    return `${task.label}: ${task.outstanding} gjenstår.${defaults ? ` ${defaults} har standardretning.` : ''}`;
+  });
   const editing = photos.find((photo) => photo.id === editingId);
 
   // A saved row can move to Ferdig and take its button along, so focus must land somewhere in the hub.
@@ -84,8 +89,8 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
             </div>)}
           </nav>
           <div className="photo-completion-panel">
-            {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} recommendations={completionRecommendations(readiness, 'captureTime')} onEdit={setEditingId} />}
-            {task.key === 'direction' && <PhotoCompletionDirectionPanel {...panelProps('direction')} recommendations={completionRecommendations(readiness, 'direction')} photos={photos} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} />}
+            {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} recommendations={completionRecommendations(readiness, 'captureTime')} readiness={readiness} onEdit={setEditingId} />}
+            {task.key === 'direction' && <PhotoCompletionDirectionPanel {...panelProps('direction')} recommendations={completionRecommendations(readiness, 'direction')} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} />}
             {task.key === 'photographer' && <PhotoCompletionPhotographerPanel {...panelProps('photographer')} onEdit={setEditingId} />}
             {task.key === 'placement' && <PhotoCompletionPlacementPanel task={model.placement} title={task.label} requirementLabel={task.requirementLabel} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} onOpenSources={() => onOpenSources({ selections })} />}
             {task.key === 'context' && <PhotoCompletionContextPanel title={task.label} requirementLabel={task.requirementLabel} context={config.context}

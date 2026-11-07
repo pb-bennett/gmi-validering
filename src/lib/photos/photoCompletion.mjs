@@ -4,7 +4,8 @@ import { evidenceEligibility } from './photoEvidenceAdoption.mjs';
 import { formatPhotoCaptureTime, photoDirectionEvidenceText, photoDirectionSourceLabel, photoMetadataSourceLabel, photoSourceLabel } from './photoPresentation.mjs';
 
 // Presentation over photoExportReadiness. States come from readiness and every write goes through the session,
-// so nothing here decides what blocks an export or what counts as accepted.
+// so nothing here decides what blocks an export or what counts as accepted. Source values are accepted by the
+// session on its own, which leaves this tool with what is missing and with optional corrections.
 
 export const PHOTO_COMPLETION_TARGETS = Object.freeze([
   ['gemini-legacy2019', 'Gemini VA'], ['legacy2019', 'Skråfoto 2019 (standard)'], ['asbuilt52', 'Norsk Vann AsBuilt 5.2'],
@@ -31,12 +32,13 @@ function photoRow(photo) {
     occurrence: occurrenceCount > 1 ? `Plassering ${occurrenceIndex} av ${occurrenceCount}` : null };
 }
 
-// Selection is for rows a bulk action can write. Accepted values and rows still waiting for EXIF are left out.
-const selectable = (row) => !row.accepted && row.state !== 'pending' && !row.sourcePending;
+// Selection is for rows a bulk action can write. Accepted values and rows still waiting for EXIF are left out;
+// a default direction counts as missing, because a manual value may replace it.
+const selectable = (row) => (!row.accepted || row.state === 'defaulted') && row.state !== 'pending' && !row.sourcePending;
+const originOf = (accepted, basis) => !accepted ? null : basis?.kind === 'default' ? 'default' : basis?.kind === 'manual' ? 'manual' : 'source';
 
 function captureNote(item) {
-  if (item.state === 'adoptable' && item.sourcePending) return 'Leser bildedata … Kan brukes når lesingen er ferdig.';
-  if (item.state === 'adoptable' && item.sourcesAgree) return `${[...new Set(item.evidence.filter((source) => source.value).map((source) => photoSourceLabel(source.kind)))].join(' og ')} stemmer overens`;
+  if (item.sourcesDiffer) return 'Kildene oppgir ulike tider. Den prioriterte kilden er brukt.';
   if (item.state === 'partial') return item.replacesAccepted ? 'Har tid uten sekunder · Erstatter godtatt verdi' : 'Har tid uten sekunder';
   if (item.state === 'pending') return 'Leser bildedata …';
   if (item.state === 'none') return 'Ingen kildeverdi';
@@ -46,14 +48,14 @@ function captureNote(item) {
 function captureRow(item, photo) {
   const row = { ...item, ...photoRow(photo), key: item.assetId, sources: item.evidence.map((source) => line(source.id,
     `${sourceName(source)}: ${source.value ? timeText(source.value) : `${rawText(source.raw)} (kan ikke tolkes sikkert)`}`)),
-  acceptedText: item.accepted ? `${timeText(item.accepted.value)} · ${photoMetadataSourceLabel('captureTime', item.accepted.provenance)}` : null, note: captureNote(item) };
+  acceptedText: item.accepted ? `${timeText(item.accepted.value)} · ${photoMetadataSourceLabel('captureTime', item.accepted.provenance)}` : null, note: captureNote(item),
+  origin: originOf(item.accepted, item.accepted?.provenance) };
   return Object.freeze({ ...row, selectable: selectable(row) });
 }
 
 function directionNote(item) {
+  if (item.sourcesDiffer) return 'Kildene oppgir ulike verdier. GML er brukt.';
   if (item.accepted) return null;
-  if (item.sourcePending && item.state !== 'pending') return 'Leser bildedata … Kan brukes når lesingen er ferdig.';
-  if (item.state === 'adoptable' && item.zeroNeedsReview) return 'GML oppgir 0°, som ikke regnes mot den andre kilden.';
   if (item.state === 'pending') return 'Leser bildedata …';
   if (item.state === 'none') return 'Ingen kildeverdi';
   return null;
@@ -62,9 +64,9 @@ function directionNote(item) {
 function directionRow(item, photo) {
   const evidence = (photo.directionEvidence || []).filter((source) => source.field === 'direction');
   const row = { ...item, ...photoRow(photo), key: item.occurrenceId, photoId: item.occurrenceId, sources: evidence.map((source) => line(source.id, photoDirectionEvidenceText(source))),
-    acceptedText: item.accepted ? `${photoDirectionLabel(item.accepted.degrees)} · ${photoDirectionSourceLabel(item.accepted)}` : null, note: directionNote(item),
-    // The explicit route, asked of the same rule the action uses: a real heading from another source still stops it.
-    zeroAcceptable: item.state === 'zero-review' && !item.sourcePending && evidenceEligibility(photo, 'direction', 'gml', { includeZero: true }).status === 'eligible' };
+    // The group says why a default is there, so each row need not repeat it.
+    acceptedText: !item.accepted ? null : item.state === 'defaulted' ? photoDirectionLabel(item.accepted.degrees) : `${photoDirectionLabel(item.accepted.degrees)} · ${photoDirectionSourceLabel(item.accepted)}`, note: directionNote(item),
+    origin: originOf(item.accepted, item.accepted?.basis) };
   return Object.freeze({ ...row, selectable: selectable(row) });
 }
 
@@ -81,12 +83,14 @@ function photographerRow(item, photo) {
 }
 
 const CAPTURE_GROUPS = Object.freeze([
-  ['adoptable', 'Kan brukes'], ['conflict', 'Ulike kildeverdier', 'Velg verdi for hvert bilde. Ingen kilde går foran en annen.'],
+  ['none', 'Mangler opptakstid', 'Ingen kilde har en brukbar tid. Du kan fylle den ut, men det er valgfritt for Gemini VA.'],
   ['partial', 'Tid uten sekunder', 'Oppgi sekunder, eller bekreft at de er 00.'], ['unusable', 'Kan ikke tolkes'],
-  ['pending', 'Leser bildedata', 'Oppdateres av seg selv når lesingen er ferdig.'], ['none', 'Ingen kildeverdi'],
+  ['conflict', 'Ulike kildeverdier', 'Velg verdi for hvert bilde.'], ['adoptable', 'Fjernet av deg', 'Kilden har en verdi, men den hentes ikke inn igjen av seg selv.'],
+  ['pending', 'Leser bildedata', 'Oppdateres av seg selv når lesingen er ferdig.'],
 ]);
 const DIRECTION_GROUPS = Object.freeze([
-  ['adoptable', 'Kan brukes'], ['conflict', 'Ulike kildeverdier', 'Velg plasseringene og oppgi riktig retning.'], ['zero-review', 'GML oppgir 0°'],
+  ['defaulted', 'Standardretning 0°', 'Ingen kilde oppgir retning. Rett verdien hvis du kjenner den.'],
+  ['adoptable', 'Kan brukes'], ['conflict', 'Ulike kildeverdier', 'Velg plasseringene og oppgi riktig retning.'],
   ['unsupported', 'Ukjent referanse', 'Vises bare. Verdien brukes ikke, fordi den ikke er oppgitt fra geografisk nord.'], ['unusable', 'Kan ikke tolkes'],
   ['invalid', 'Ugyldig godtatt retning', 'Rett retningen med «Angi på kartet».'],
   ['pending', 'Leser bildedata', 'Oppdateres av seg selv når lesingen er ferdig.'], ['none', 'Ingen kildeverdi'],
@@ -102,8 +106,9 @@ function groupRows(rows, definitions) {
   return groups.map((group) => ({ ...group, open: groups.length === 1 || group.rows.length <= LONG_GROUP }));
 }
 
+// A default is settled for export, so it is not work left. It stays in its own group, where it can be corrected.
 function panel(rows, definitions) {
-  return { rows, groups: groupRows(rows, definitions), done: rows.filter((row) => row.state === 'accepted') };
+  return { rows, groups: groupRows(rows, definitions), done: rows.filter((row) => row.state === 'accepted'), outstanding: rows.filter((row) => !['accepted', 'defaulted'].includes(row.state)).length };
 }
 
 function requirementFor(key, requirement, outstanding, empty = false) {
@@ -117,15 +122,14 @@ export function photoCompletionModel(photos, readiness) {
   const directionPanel = panel(direction.items.map((item) => directionRow(item, byId.get(item.occurrenceId))), DIRECTION_GROUPS);
   const photographerPanel = panel(captureTime.items.map((item) => photographerRow(item, byId.get(item.photoId))), PHOTOGRAPHER_GROUPS);
   const unplaced = placement.occurrenceIds.map((id) => Object.freeze({ key: id, photoId: id, ...photoRow(byId.get(id)) }));
-  const remaining = ({ rows, done }) => rows.length - done.length;
 
   // Omitted photographer values never reach the delivery, so they are shown but never counted as work left.
   const tasks = [
-    { ...requirementFor('captureTime', captureTime.requirement, remaining(capturePanel), !capturePanel.rows.length), label: 'Opptakstid', group: 'main' },
-    { ...requirementFor('direction', direction.requirement, remaining(directionPanel), !directionPanel.rows.length), label: 'Retning', group: 'main' },
+    { ...requirementFor('captureTime', captureTime.requirement, capturePanel.outstanding, !capturePanel.rows.length), label: 'Opptakstid', group: 'main' },
+    { ...requirementFor('direction', direction.requirement, directionPanel.outstanding, !directionPanel.rows.length), label: 'Retning', group: 'main' },
     { key: 'placement', label: 'Plassering', group: 'main', requirement: null, requirementLabel: placement.unplaced ? 'Blir ikke med' : null, outstanding: placement.unplaced },
     ...(context.required ? [{ ...requirementFor('context', 'required', context.missingFields.length), label: 'Leveranseopplysninger', group: 'main' }] : []),
-    { ...requirementFor('photographer', photographer.requirement, photographer.requirement === 'omitted' ? 0 : remaining(photographerPanel), !photographerPanel.rows.length), label: 'Fotograf',
+    { ...requirementFor('photographer', photographer.requirement, photographer.requirement === 'omitted' ? 0 : photographerPanel.outstanding, !photographerPanel.rows.length), label: 'Fotograf',
       group: photographer.requirement === 'omitted' ? 'other' : 'main' },
   ].map((task) => Object.freeze({ ...task, done: task.outstanding === 0 && !task.empty }));
 
@@ -149,9 +153,30 @@ export function photoCompletionStatus(readiness) {
   return { status, text: 'Ingen opplysninger mangler for dette målet' };
 }
 
-const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk']);
-const DIRECTION_RECOMMENDATIONS = Object.freeze(['direction-all-zero', 'direction-bulk']);
-export const completionRecommendations = (readiness, task) => readiness.recommendations
+// Generation, schema and import are separate questions, so each gets its own answer. Only rules are checked here,
+// and nothing here can say that a package will import: that takes a real import.
+const SCHEMA_GAPS = Object.freeze({ captureTime: (gap) => `opptakstid mangler for ${photoCount(gap.count)}`, direction: (gap) => `retning mangler for ${placementCount(gap.count)}`, context: () => 'leveranseopplysninger mangler' });
+export function photoExportLevels({ blocking, levels: { generation, schema, importEvidence } }) {
+  const notValidated = 'XSD-validering er ikke kjørt.';
+  return [
+    Object.freeze({ key: 'generation', label: 'Eksportpakke', text: generation === 'possible' ? 'Kan lages' : `Kan ikke lages ennå: ${blocking.length} må rettes` }),
+    Object.freeze({ key: 'schema', label: schema.name ? `${schema.name}-skjema` : 'Skjema', text: !schema.assessed ? 'Ikke vurdert ennå'
+      : schema.met ? `Kravene er oppfylt etter regelsjekk. ${notValidated}` : `Oppfylles ikke: ${schema.gaps.map((gap) => SCHEMA_GAPS[gap.field](gap)).join(', ')}. ${notValidated}` }),
+    Object.freeze({ key: 'import', label: 'Import i Gemini VA', text: importEvidence.profile === 'imported' && !importEvidence.deviations.length
+      ? 'Profilen er importert tidligere, men denne pakken er ikke testet.' : 'Ikke verifisert for denne pakken. Må testes manuelt.' }),
+  ];
+}
+
+// Missing time is allowed through only where it does not block, and that must never pass quietly.
+export function photoCaptureTimeSchemaWarning({ levels, tasks }) {
+  const gap = levels.schema.gaps.find((item) => item.field === 'captureTime');
+  if (!gap || tasks.captureTime.requirement === 'required') return null;
+  return singularCopy(`${gap.count} bilder mangler full opptakstid. Eksporten kan lages, men GML-filen oppfyller ikke kravet til opptakstid i ${levels.schema.name}-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.`);
+}
+
+const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-sources-differ']);
+const DIRECTION_RECOMMENDATIONS = Object.freeze(['direction-defaulted', 'direction-sources-differ', 'direction-bulk']);
+export const completionRecommendations = (readiness, task) => [...readiness.recommendations, ...readiness.notes]
   .filter((item) => (task === 'direction' ? DIRECTION_RECOMMENDATIONS : CAPTURE_RECOMMENDATIONS).includes(item.code))
   .map((item) => Object.freeze({ code: item.code, text: singularCopy(item.message) }));
 
@@ -168,13 +193,9 @@ export function scopedRows(rows, selected, eligible) {
   return rows.filter((row) => eligible(row) && (!keys.size || keys.has(row.key)));
 }
 
-export const canAdopt = (kind) => (row) => row.state === 'adoptable' && row.adoptableKinds.includes(kind) && !row.sourcePending;
 export const canAdoptPhotographer = (row) => row.state === 'adoptable';
-export const canAcceptGmlZero = (row) => row.zeroAcceptable;
-// The map can answer every row without an accepted, valid direction. GML 0° that was accepted stays questionable,
-// since 0 can mean "not recorded": it can be looked at again, and the map is the only place it can be changed.
+// The map can answer every row without a direction from a source or a person. Any accepted row can still be corrected there.
 export const canSetOnMap = (row) => row.state !== 'accepted';
-export const canReviewOnMap = (row) => row.state === 'accepted' && row.accepted.degrees === 0 && row.accepted.basis?.kind === 'gml';
 export const isHeldBack = (row) => row.state !== 'pending' && !row.accepted && Boolean(row.sourcePending);
 export const selectionRows = (rows, selected) => { const keys = new Set(selected); return rows.filter((row) => keys.has(row.key)); };
 
@@ -188,6 +209,13 @@ export function completionCounts({ rows, done }, selected, eligible) {
     ['conflict', 'I konflikt', rows.filter((row) => row.state === 'conflict').length],
     ['review', 'Må vurderes', rows.filter((row) => row.state !== 'accepted' && row.state !== 'conflict' && !eligible(row)).length]]
     .map(([key, label, count]) => Object.freeze({ key, label, count }));
+}
+
+// Where the values came from. Each row counts once; "Valgt" cuts across and only shows with a selection.
+export function completionSummary({ rows }, selected) {
+  return [['source', 'Fra kilde', rows.filter((row) => row.origin === 'source').length], ['manual', 'Manuelt', rows.filter((row) => row.origin === 'manual').length],
+    ['default', 'Standardverdi', rows.filter((row) => row.origin === 'default').length], ['missing', 'Mangler', rows.filter((row) => !row.origin).length], ['selected', 'Valgt', selected.length]]
+    .filter(([, , count]) => count > 0).map(([key, label, count]) => Object.freeze({ key, label, count }));
 }
 
 // Names used in this layer, offered as suggestions and never filled in.

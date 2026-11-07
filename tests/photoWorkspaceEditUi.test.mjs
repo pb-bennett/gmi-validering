@@ -149,7 +149,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await browser.evaluate('document.querySelector("button[aria-label^=\\"Filtrer bilder\\"]").click()');
         await browser.waitFor('document.querySelector(".photo-filter-panel")');
         const labels = await browser.evaluate('Array.from(document.querySelectorAll(".photo-filter-panel label")).map((e) => e.innerText.trim())');
-        for (const expected of ['Alle (5)', 'Plassert (2)', 'Uplassert (3)', 'EXIF (2)', 'GMI (0)', 'GML (0)', 'Manuell (0)', 'Retning (2)', 'Opptakstid (5)', 'Flere plasseringer (2)']) assert(labels.includes(expected), expected);
+        for (const expected of ['Alle (5)', 'Plassert (2)', 'Uplassert (3)', 'EXIF (2)', 'GMI (0)', 'GML (0)', 'Manuell (0)', 'Retning (0)', 'Opptakstid (3)', 'Flere plasseringer (2)']) assert(labels.includes(expected), expected);
         assert(!labels.some((label) => label.startsWith('Endret')), 'Endret only exists in Edit mode');
         await browser.evaluate('document.querySelector(".photo-filter-panel input[value=unplaced]").click()');
         await browser.evaluate('document.querySelector("button[aria-label^=\\"Filtrer bilder\\"]").click()');
@@ -218,13 +218,12 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await browser.waitFor(dialog);
         assert.match(await browser.evaluate(`${dialog}.innerText`), /EXIF: 12\.05\.2026 14:33:02/);
         assert.match(await browser.evaluate(`${dialog}.innerText`), /Gjelder bildet\./);
-        await browser.evaluate(`${dialog}.querySelector('input[value="evidence:exif:captureTime"]').click()`);
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('input[value="evidence:exif:captureTime"]').checked`), true, 'the source value is already the accepted one');
         await clickText(browser, 'Lagre', dialog);
         await browser.waitFor(`!${dialog}`);
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Opptakstid\s+12\.05\.2026 14:33:02 · tidssone ukjent/);
         await openInspectorDetails();
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Opptakstid fra\s+EXIF DateTimeOriginal/);
-        assert.match(await browser.evaluate('document.querySelector(".photo-workspace-toast")?.innerText || ""'), /Opptaksdata lagret for IMG_2\.png/);
         await clickText(browser, 'Rediger opptaksdata…'); await browser.waitFor(dialog);
         await browser.evaluate(`${dialog}.querySelector('input[value="other"]').click()`);
         await browser.waitFor(`${dialog}.querySelector('input[type=date]')`);
@@ -236,6 +235,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await clickText(browser, 'Lagre', dialog);
         await browser.waitFor(`!${dialog}`);
         assert.match(await browser.evaluate(`${inspector}.innerText`), /14\.05\.2026 10:11:12 \(\+02:00\)/);
+        assert.match(await browser.evaluate('document.querySelector(".photo-workspace-toast")?.innerText || ""'), /Opptaksdata lagret for IMG_2\.png/);
         await openInspectorDetails();
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Opptakstid fra\s+Manuell/);
         await clickText(browser, 'Rediger opptaksdata…'); await browser.waitFor(dialog);
@@ -272,8 +272,8 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await blur();
         assert(await browser.evaluate(`Boolean(${editTarget}) && ${editTarget}.dataset.photoId === ${JSON.stringify(ids.IMG_10)}`), 'the actual selected marker is the drag target');
         assert.equal(await browser.evaluate(`document.querySelectorAll('.leaflet-photo-markers-pane [data-photo-id="${ids.IMG_10}"]').length`), 0, 'no duplicate marker');
-        assert.equal(await browser.evaluate(`${editKnob}.getAttribute('aria-label')`), 'Legg til retning for IMG_10.png');
-        assert(await browser.evaluate(`${editKnob}.classList.contains('photo-edit-knob-ghost') && !${editTarget}.querySelector('.photo-direction-indicator')`), 'ghost knob never draws an implicit north');
+        assert.equal(await browser.evaluate(`${editKnob}.getAttribute('aria-label')`), 'Retning for IMG_10.png');
+        assert(await browser.evaluate(`!${editKnob}.classList.contains('photo-edit-knob-ghost') && ${editTarget}.querySelector('.photo-direction-indicator')?.dataset.degrees === '0'`), 'a default is drawn as a north heading');
       });
 
       await t.test('drag moves only the selected photo, stages at gesture end and shows manual provenance and displacement', async () => {
@@ -321,7 +321,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
 
       await t.test('numeric direction creates a direction for a photo without one; click-to-place never places on a pan', async () => {
         await selectPhotoRow(browser, ids.IMG_2);
-        assert(await browser.evaluate(`${editKnob}.classList.contains('photo-edit-knob-ghost')`));
+        assert(!await browser.evaluate(`${editKnob}.classList.contains('photo-edit-knob-ghost')`), 'a default is a heading like any other');
         const field = `${commandBar}.querySelector('input[type=number]')`;
         await browser.evaluate(`${field}.focus()`);
         await setInput(field, '45');

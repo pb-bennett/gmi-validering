@@ -142,18 +142,9 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         const preview = async () => { await click(browser,'Lag eksportforhåndsvisning',scope); await browser.waitFor(`${scope}.querySelector('[aria-label="Eksportforhåndsvisning"]')`); };
         const count = (code) => browser.evaluate(`Number(${scope}.querySelector('[data-diagnostic-code="${code}"] summary')?.textContent.split('—').at(-1).trim()||0)`);
         await preview();
-        assert.equal(await count('capture-time-required'),2);
-        assert.equal(await count('direction-required'),3);
-        assert.equal(await browser.evaluate(`${scope}.querySelector('[data-diagnostic-code="direction-required"]').open`),false);
-        assert.equal(await browser.evaluate(`${scope}.querySelector('[data-diagnostic-code="direction-required"]').querySelectorAll('li').length`),3);
+        assert.equal(await count('capture-time-required'),1,'only the photo no source has a time for');
+        assert.equal(await count('direction-required'),0,'source directions and defaults are already in place');
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('[data-manual-fill] input')).every(input=>input.value==='')`));
-        await click(browser,'Bruk EXIF-tid for alle mulige (4)',scope);
-        assert.equal(await browser.evaluate(`Boolean(${scope}.querySelector('[aria-label="Eksportforhåndsvisning"]'))`),false);
-        await preview(); assert.equal(await count('capture-time-required'),1);
-        await click(browser,'Bruk EXIF-fotograf for alle mulige (5)',scope);
-        await click(browser,'Bruk EXIF-retning for alle mulige (5)',scope);
-        await preview(); assert.equal(await count('direction-required'),1);
-        assert.equal(await count('capture-time-required'),1);
         assert(await browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).find(b=>b.textContent==='Last ned testpakke').disabled`));
         for (const [field,value] of [['captureTime','2026-09-17T10:30:02.125+02:00'],['photographer',' Fallback   Artist '],['direction','0']]) {
           assert(await browser.evaluate(`${scope}.querySelector('[data-manual-fill="${field}"] button').textContent.includes('2 manglende')`));
@@ -172,7 +163,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await browser.evaluate(inspectorFact('Opptak', 'Opptakstid fra')), 'Manuell');
         assert.equal(await browser.evaluate(inspectorFact('Plassering', 'Retning')), '90° Ø');
         await selectRow(rows[1]);
-        await browser.waitFor(`${inspectorFact('Plassering', 'Retning')} === '359,875° N'`);
+        await browser.waitFor(`${inspectorFact('Plassering', 'Retning')} === '0° N'`);
         assert.equal(await browser.evaluate('photoWfsCalls'),2);
       });
       await t.test('canonical metadata: manual, adopt, clear, whole-layer missing-only fill and shared repeated occurrences', async () => {

@@ -6,7 +6,7 @@ import { photoWorkspaceView } from './photoWorkspaceView.mjs';
 // data: the hub recalculates from canonical photos when it opens again.
 
 const WORK = Object.freeze({
-  'direction:missing': Object.freeze({ field: 'direction', countLabel: 'Mangler retning', filterLabel: 'Mangler retning' }),
+  'direction:missing': Object.freeze({ field: 'direction', countLabel: 'Standardretning', filterLabel: 'Standardretning' }),
   'direction:review': Object.freeze({ field: 'direction', countLabel: 'Kontroller retning', filterLabel: 'Retning til kontroll' }),
   'placement:missing': Object.freeze({ field: 'position', countLabel: 'Mangler plassering', filterLabel: 'Uplassert' }),
 });

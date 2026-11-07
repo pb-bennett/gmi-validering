@@ -14,7 +14,7 @@ const read = (...args) => gmlDirectionEvidence(source, entry(...args))[0];
 
 for (const [text, status, value] of [
   ['90.5', 'usable', 90.5], ['359.875', 'usable', 359.875], [' 45 ', 'usable', 45], ['0.001', 'usable', .001],
-  ['0', 'usable-zero', 0], ['0.000000', 'usable-zero', 0], ['360', 'usable-zero', 0],
+  ['0', 'usable', 0], ['0.000000', 'usable', 0], ['360', 'usable', 0],
   ['360.5', 'invalid', null], ['-1', 'invalid', null], ['-0', 'invalid', null], ['', 'invalid', null], ['   ', 'invalid', null],
   ['abc', 'invalid', null], ['1e2', 'invalid', null], ['0x10', 'invalid', null], ['45,5', 'invalid', null], [null, 'invalid', null],
 ]) test(`GML direction value ${JSON.stringify(text)} is ${status}`, () => {
@@ -46,28 +46,13 @@ const evidence = (item) => ({ id: 'p', assetId: 'a', direction: { current: null 
 const gml = (...args) => gmlDirectionEvidence(source, entry(...args))[0];
 const exif = (degrees, ref = 'T') => exifDirectionEvidence({ GPSImgDirection: degrees, GPSImgDirectionRef: ref })[0];
 
-test('GML 0° stays evidence, is skipped by default, counted apart, and adopted only when asked for', () => {
+test('GML 0° is ordinary evidence: eligible, and it speaks against a different heading like any other value', () => {
   const photo = evidence([gml('0')]);
-  assert.equal(evidenceEligibility(photo, 'direction', 'gml').status, 'zeroNeedsReview');
-  const { counts, targets } = planEvidenceAdoption([photo], 'direction', 'gml');
-  assert.equal(counts.zeroNeedsReview, 1); assert.equal(counts.eligible, 0); assert.equal(counts.missing, 0); assert.deepEqual(targets, []);
-  const explicit = evidenceEligibility(photo, 'direction', 'gml', { includeZero: true });
-  assert.equal(explicit.status, 'eligible'); assert.equal(explicit.evidence.value, 0);
-  assert.equal(planEvidenceAdoption([photo], 'direction', 'gml', ['p'], { includeZero: true }).counts.eligible, 1);
-});
-
-test('GML 0° never conflicts with a real EXIF direction, in either request', () => {
-  const photo = evidence([exif(45), gml('0')]);
-  const result = evidenceEligibility(photo, 'direction', 'exif');
-  assert.equal(result.status, 'eligible'); assert.equal(result.evidence.value, 45);
-  assert.deepEqual(result.agreeingEvidence.map((item) => item.kind), ['exif'], 'a questionable zero is no agreeing source');
-  assert.equal(evidenceEligibility(photo, 'direction', 'gml').status, 'zeroNeedsReview');
-});
-
-test('asking for GML 0° does not override a real EXIF heading that says otherwise', () => {
-  assert.equal(evidenceEligibility(evidence([exif(45), gml('0')]), 'direction', 'gml', { includeZero: true }).status, 'conflicting');
-  assert.equal(evidenceEligibility(evidence([exif(0), gml('0')]), 'direction', 'gml', { includeZero: true }).status, 'eligible');
-  assert.equal(evidenceEligibility(evidence([exif(45), gml('0')]), 'direction', 'exif', { includeZero: true }).status, 'eligible');
+  const result = evidenceEligibility(photo, 'direction', 'gml');
+  assert.equal(result.status, 'eligible'); assert.equal(result.evidence.value, 0);
+  assert.equal(planEvidenceAdoption([photo], 'direction', 'gml').counts.eligible, 1);
+  assert.equal(evidenceEligibility(evidence([exif(45), gml('0')]), 'direction', 'exif').status, 'conflicting');
+  assert.equal(evidenceEligibility(evidence([exif(0), gml('0')]), 'direction', 'gml').status, 'eligible');
 });
 
 test('EXIF north with a true reference is ordinary evidence, and it conflicts with a real GML heading', () => {
@@ -86,10 +71,10 @@ test('non-zero GML directions adopt like any source: agreement, conflict, unsupp
   assert.equal(evidenceEligibility(evidence([gml('45', 'grader', 'nord')]), 'direction', 'exif').status, 'missing');
 });
 
-test('inspector text names the source and never presents GML 0° as a known heading', () => {
+test('inspector text names the source, and GML 0° reads like any other heading', () => {
   assert.equal(photoDirectionEvidenceText(gml('45.5')), 'GML · directions.gml: 45.5° fra geografisk nord');
   assert.equal(photoDirectionEvidenceText(exif(45)), 'EXIF: 45° fra geografisk nord');
-  assert.equal(photoDirectionEvidenceText(gml('0')), 'GML · directions.gml: 0° kan bety at retningen mangler i kildesystemet.');
+  assert.equal(photoDirectionEvidenceText(gml('0')), 'GML · directions.gml: 0° fra geografisk nord');
   assert.equal(photoDirectionEvidenceText(gml('45', 'grader', 'nord')), 'GML · directions.gml: Ukjent enhet eller referanse; krever gjennomgang.');
   assert.equal(photoDirectionEvidenceText(exif(45, 'M')), 'EXIF: Ukjent eller magnetisk referanse; krever gjennomgang.');
   assert.match(photoDirectionEvidenceText(gml('abc')), /Ugyldig retningsverdi/);
@@ -103,7 +88,7 @@ const place = (session, layerId) => session.acceptCandidates(layerId, session.ge
   candidateId: photo.spatial.candidates.find((candidate) => candidate.kind === 'gml')?.id })));
 const plan = (session, layerId, profile = 'gemini-legacy2019') => buildPhotoExportPlan(capturePhotoExportSnapshot(session, layerId), { profile, crs: 'EPSG:25832' });
 
-test('session: the real parser feeds GML direction evidence, and attaching accepts nothing', async () => {
+test('session: the real parser feeds GML direction evidence, and each occurrence gets its direction automatically', async () => {
   const session = evidenceSession();
   try {
     session.importFiles([jpeg('a.jpg'), jpeg('b.jpg'), jpeg('c.jpg')]);
@@ -111,10 +96,10 @@ test('session: the real parser feeds GML direction evidence, and attaching accep
     await settleExif(session, layer.id);
     await attach(session, layer.id, document([{ name: 'a.jpg', direction: '45.5' }, { name: 'b.jpg', direction: '0' }, { name: 'c.jpg', direction: null }]));
     const [a, b, c] = session.getLayerPhotos(layer.id);
-    assert.deepEqual([a, b, c].map((photo) => photo.directionEvidence.map((item) => [item.status, item.value])), [[['usable', 45.5]], [['usable-zero', 0]], []]);
+    assert.deepEqual([a, b, c].map((photo) => photo.directionEvidence.map((item) => [item.status, item.value])), [[['usable', 45.5]], [['usable', 0]], []]);
     assert.deepEqual(a.directionEvidence[0].raw, { valueText: '45.5', unitText: '1', referenceText: '1' });
     assert.equal(a.directionEvidence[0].sourceFilename, 'directions.gml');
-    assert.deepEqual([a, b, c].map((photo) => photo.direction.current), [null, null, null]);
+    assert.deepEqual([a, b, c].map((photo) => [photo.direction.current.degrees, photo.direction.current.basis.kind]), [[45.5, 'gml'], [0, 'gml'], [0, 'default']]);
   } finally { session.clear(); }
 });
 
@@ -149,17 +134,15 @@ test('session: rechecking the same source adds no duplicate evidence', async () 
   } finally { session.clear(); }
 });
 
-test('session: GML direction reaches Gemini XML only after explicit adoption, with source provenance', async () => {
+test('session: GML direction reaches Gemini XML on its own, with source provenance and full source precision', async () => {
   const session = evidenceSession();
   try {
     const ids = session.importFiles([jpeg('a.jpg')]).acceptedIds, layer = session.createLayer();
     await settleExif(session, layer.id);
     await attach(session, layer.id, document([{ name: 'a.jpg', direction: '45.5' }]));
     place(session, layer.id);
-    assert.deepEqual((await plan(session, layer.id)).errors.map((error) => error.code), ['direction-required']);
-    assert.equal(session.adoptSourceEvidence(layer.id, 'direction', 'gml').counts.adopted, 1);
     const { degrees, basis, acceptance } = session.getPhoto(ids[0]).direction.current;
-    assert.equal(degrees, 45.5); assert.equal(acceptance, 'source');
+    assert.equal(degrees, 45.5); assert.equal(acceptance, 'auto');
     assert.deepEqual([basis.kind, basis.sourceFilename, basis.sourceEntryId, basis.raw.valueText], ['gml', 'directions.gml', 'entry-1', '45.5']);
     const result = await plan(session, layer.id);
     assert.deepEqual(result.errors, []);
@@ -167,35 +150,30 @@ test('session: GML direction reaches Gemini XML only after explicit adoption, wi
   } finally { session.clear(); }
 });
 
-test('session: GML 0° leaves direction unknown by default, so the Gemini requirement still applies', async () => {
+test('session: GML 0° is accepted as an ordinary direction and stays apart from a default in provenance', async () => {
   const session = evidenceSession();
   try {
     const ids = session.importFiles([jpeg('a.jpg')]).acceptedIds, layer = session.createLayer();
     await settleExif(session, layer.id);
+    assert.equal(session.getPhoto(ids[0]).direction.current.basis.kind, 'default');
     await attach(session, layer.id, document([{ name: 'a.jpg', direction: '0' }]));
     place(session, layer.id);
-    const result = session.adoptSourceEvidence(layer.id, 'direction', 'gml');
-    assert.equal(result.counts.adopted, 0); assert.equal(result.counts.zeroNeedsReview, 1);
-    assert.equal(session.getPhoto(ids[0]).direction.current, null);
-    assert.deepEqual((await plan(session, layer.id)).errors.map((error) => error.code), ['direction-required']);
-
-    assert.equal(session.adoptSourceEvidence(layer.id, 'direction', 'gml', null, { includeZero: true }).counts.adopted, 1);
     const { degrees, basis } = session.getPhoto(ids[0]).direction.current;
-    assert.equal(degrees, 0); assert.equal(basis.raw.valueText, '0');
-    assert.equal(basis.evidence[0].status, 'usable-zero', 'provenance shows this was the questionable value');
+    assert.equal(degrees, 0); assert.equal(basis.kind, 'gml'); assert.equal(basis.raw.valueText, '0');
     assert(serializePhotoExport(await plan(session, layer.id)).includes('<app:retningsverdi>0</app:retningsverdi>'));
   } finally { session.clear(); }
 });
 
-test('session: a real EXIF heading is adopted past a GML 0° on the same photo', async () => {
+test('session: GML 0° stays authoritative beside a different EXIF heading, and the EXIF value is kept as evidence', async () => {
   const session = evidenceSession();
   try {
     const ids = session.importFiles([jpeg('a.jpg', { direction: 90, directionRef: 'T' })]).acceptedIds, layer = session.createLayer();
     await settleExif(session, layer.id);
+    assert.equal(session.getPhoto(ids[0]).direction.current.degrees, 90, 'EXIF is used until a GML value arrives');
     await attach(session, layer.id, document([{ name: 'a.jpg', direction: '0' }]));
     assert.deepEqual(session.getPhoto(ids[0]).directionEvidence.map((item) => item.kind).sort(), ['exif', 'gml']);
-    assert.equal(session.adoptSourceEvidence(layer.id, 'direction', 'exif').counts.adopted, 1);
-    assert.equal(session.getPhoto(ids[0]).direction.current.degrees, 90);
+    assert.equal(session.getPhoto(ids[0]).direction.current.degrees, 0);
+    assert.equal(session.getPhoto(ids[0]).direction.current.basis.kind, 'gml');
   } finally { session.clear(); }
 });
 

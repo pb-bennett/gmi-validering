@@ -38,6 +38,13 @@ export function captureTimesAgree(a, b) {
 export const allCaptureTimesAgree = (values) => values.every((value, index) =>
   values.slice(index + 1).every((other) => captureTimesAgree(value, other)));
 
+export const completeCaptureValue = (value) => ['second', 'fraction'].includes(value?.precision);
+
+// Provenance of a value taken from source evidence, whichever way it was accepted.
+export const evidenceProvenance = (evidence, agreeingEvidence) => ({ kind: evidence.kind, evidenceId: evidence.id, tag: evidence.tag || null,
+  sourceId: evidence.sourceId || null, sourceFilename: evidence.sourceFilename || null, sourceEntryId: evidence.sourceEntryId || null,
+  raw: evidence.raw, evidence: agreeingEvidence });
+
 export function normalizePhotographer(input) {
   return typeof input === 'string' ? input.replace(/\s+/gu, ' ').trim() || null : null;
 }

@@ -186,8 +186,8 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert.equal(selectedStyle.normalWidth, 30); assert.equal(selectedStyle.selectedWidth, 30);
       assert.equal(selectedStyle.normalColor, 'rgba(0, 0, 0, 0)');
       assert.equal(selectedStyle.selectedColor, 'rgba(0, 0, 0, 0)');
-      assert.equal(await browser.evaluate("document.querySelector('.photo-camera-marker:not(.photo-camera-marker-selected) svg').getBoundingClientRect().width"), 16);
-      assert.equal(await browser.evaluate("document.querySelector('.photo-camera-marker-selected svg').getBoundingClientRect().width"), 22);
+      assert.equal(await browser.evaluate("document.querySelector('.photo-camera-marker:not(.photo-camera-marker-selected) svg:not(.photo-direction-indicator)').getBoundingClientRect().width"), 16);
+      assert.equal(await browser.evaluate("document.querySelector('.photo-camera-marker-selected svg:not(.photo-direction-indicator)').getBoundingClientRect().width"), 22);
       assert(await browser.evaluate("Number(document.querySelector('.photo-camera-marker-selected').style.zIndex) > Math.max(...Array.from(document.querySelectorAll('.photo-camera-marker:not(.photo-camera-marker-selected)')).map(e => Number(e.style.zIndex)))"));
       await browser.evaluate(`Array.from(${inspector}.querySelectorAll('summary')).find(e => e.innerText === 'Tekniske kildedata').click()`);
       assert(await browser.evaluate(`${inspector}.innerText.includes('EPSG:5972') && ${inspector}.innerText.includes('GPSLatitude')`));

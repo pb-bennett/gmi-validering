@@ -30,7 +30,9 @@ const labels = {
   'capture-time-implausible': 'Usannsynlig dato',
   'capture-time-bulk': 'Samme manuelle opptakstid',
   'capture-time-in-source': 'Opptakstid finnes i kilde',
-  'direction-all-zero': 'Mange retninger mot nord',
+  'capture-time-sources-differ': 'Ulik opptakstid i kildene',
+  'direction-defaulted': 'Standardretning',
+  'direction-sources-differ': 'Ulik retning i kildene',
   'direction-bulk': 'Samme manuelle retning',
   'evidence-pending': 'Bildedata leses',
 };

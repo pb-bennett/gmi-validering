@@ -57,7 +57,7 @@ test('GMI checkpoint then EXIF batch in the same operation preserves direction, 
     assert.strictEqual(session.getFile(id), files[index]);
   });
   assert.equal(session.getPhoto(ids[0]).direction.current.degrees, 0);
-  assert.equal(session.getPhoto(ids[1]).direction.current, null);
+  assert.equal(session.getPhoto(ids[1]).direction.current.basis.kind, 'default');
   assert.strictEqual(session.getLayer(layer.id).spatialSources[0], source);
   session.clear();
 });
@@ -73,7 +73,7 @@ test('GML checkpoint retains evidence only; mixed source apply preserves an acce
   assert.strictEqual(session.getPhoto(ids[2]).spatial.current, manual);
   const plan = session.reviewSourceWorkflowPositions(ticket);
   assert.equal(plan.rows[0].options.length, 2);
-  assert.equal(plan.rows[0].defaultChoice, '', 'multiple sources do not establish authority');
+  assert.equal(plan.rows[0].defaultChoice, plan.rows[0].options.find((item) => item.kind === 'gml').id, 'GML is proposed over EXIF, so nobody has to choose row by row');
   assert.equal(plan.rows[2].defaultChoice, '', 'manual current is kept');
   const requests = [
     { photoId: ids[0], candidateId: plan.rows[0].options.find((item) => item.kind === 'gml').id },
@@ -131,7 +131,7 @@ for (const phase of ['before-source-save', 'after-source-save', 'position-review
   if (['position-review', 'summary'].includes(phase)) assert(session.reviewSourceWorkflowPositions(ticket));
   session.endSourceWorkflow(ticket);
   assert.equal(session.getLayer(layer.id).spatialSources.length, phase === 'before-source-save' ? 0 : 1);
-  assert(session.getLayerPhotos(layer.id).every((photo) => photo.spatial.current === null && photo.direction.current === null));
+  assert(session.getLayerPhotos(layer.id).every((photo) => photo.spatial.current === null));
   assert.equal(session.getSnapshot().sourceReviews[layer.id], undefined);
   assert.equal(session.reviewSourceWorkflowPositions(ticket), null);
   session.clear();

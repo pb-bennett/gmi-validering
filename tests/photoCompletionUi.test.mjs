@@ -50,18 +50,6 @@ const realClick = async (browser, expression) => {
   await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
   await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
 };
-// Two presses at one spot, as a real double-click sends them. The button can relabel between the two.
-const realDoubleClick = async (browser, expression, { lift = 0 } = {}) => {
-  await browser.evaluate(`(${expression}).scrollIntoView({ block: 'center' })`);
-  const { x, y: centre } = await elementCentre(browser, expression);
-  const y = centre + lift;
-  await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 });
-  for (const clickCount of [1, 2]) {
-    await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount });
-    await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount });
-  }
-  await new Promise((resolve) => setTimeout(resolve, 200));
-};
 const openHub = async (browser) => { await openTool(browser, 'Fullfør opplysninger…'); await browser.waitFor(hub); };
 const showTask = async (browser, key) => { await browser.evaluate(`${taskButton(key)}.click()`); await browser.waitFor(panel(key)); };
 const closeHub = async (browser) => { await browser.evaluate(`${hub}.querySelector('.photo-import-footer .gmi-primary-control').click()`); await browser.waitFor(`!${hub}`); };
@@ -71,9 +59,13 @@ const statusLine = (browser) => browser.evaluate(`${hub}.querySelector('[data-co
 const message = (browser) => browser.evaluate(`${hub}.querySelector('.photo-import-footer [role=status]').innerText`);
 const buttonLabels = (browser, scope) => browser.evaluate(`Array.from(${scope}.querySelectorAll('button')).map((item) => item.innerText.trim())`);
 const expand = (browser, expression) => browser.evaluate(`(() => { const element = ${expression}; element.open = true; })()`);
+const countOf = (browser, key, count) => browser.evaluate(`${panel(key)}.querySelector('[data-count="${count}"] dd')?.innerText ?? '0'`);
+const rowText = (browser, name) => browser.evaluate(`${rowOf(name)}.textContent`);
 const openGroup = (browser, key, group) => expand(browser, `${panel(key)}.querySelector('[data-group="${group}"]')`);
 
-// Each file exercises one state. "unplaced" has no GML feature, so it stays unplaced.
+// Each file exercises one state. "unplaced" has no GML feature, so it stays unplaced. Times: match, conflict and heading
+// have a complete one, minute has none with seconds and blank has none. Directions: match, conflict and heading come from
+// GML, and heading's EXIF value differs from it; minute and blank get the default.
 const FILES = {
   'match.jpg': { captureTime: '2026:05:12 14:33:02', subsecond: '012' },
   'conflict.jpg': { captureTime: '2026:05:12 14:33:02' },
@@ -132,12 +124,12 @@ layerTest('the tool opens on its own from Verktøy, shows every task, and return
   assert.equal(await browser.evaluate(`${hub}.querySelector('.photo-completion-target select').value`), 'gemini-legacy2019');
   assert.deepEqual(await browser.evaluate(`Array.from(${hub}.querySelectorAll('[data-task]')).map((item) => item.dataset.task)`), ['captureTime', 'direction', 'placement', 'photographer']);
   assert.equal(await browser.evaluate(`document.querySelector('.photo-export-dialog')`), null, 'independent of the export dialog');
-  assert.equal(await browser.evaluate(`${taskButton('direction')}.getAttribute('aria-current')`), 'true', 'direction blocks Gemini, so it comes first');
-  assert.equal(await outstanding(browser, 'captureTime'), '5');
-  assert.equal(await outstanding(browser, 'direction'), '5');
+  assert.equal(await browser.evaluate(`${taskButton('captureTime')}.getAttribute('aria-current')`), 'true', 'what is genuinely missing comes first');
+  assert.equal(await outstanding(browser, 'captureTime'), '2');
+  assert.equal(await outstanding(browser, 'direction'), 'done');
   assert.equal(await outstanding(browser, 'placement'), '1');
-  assert.equal(await statusLine(browser), '5 må rettes før eksport');
-  await screenshot(browser, '01-direction-1680');
+  assert.equal(await statusLine(browser), 'Kan eksporteres, men følger ikke Skråfoto 2019-skjemaet');
+  await screenshot(browser, '01-overview-1680');
   assert.equal(await browser.evaluate(`getComputedStyle(${hub}.querySelector('.photo-import-footer .gmi-primary-control')).color !== getComputedStyle(${hub}.querySelector('.photo-import-footer .gmi-primary-control')).backgroundColor`), true, 'the close button is legible');
 
   await showTask(browser, 'placement');
@@ -164,82 +156,30 @@ layerTest('the tool opens on its own from Verktøy, shows every task, and return
   await browser.waitFor(`document.querySelector('.photo-positioning-wizard') && !${hub}`);
 });
 
-layerTest('a used selection stays narrow: a double-click never reaches the rows left out of it', async (browser) => {
-  await openHub(browser);
-  await showTask(browser, 'captureTime');
-  const exif = `${panel('captureTime')}.querySelector('[data-adopt="exif"]')`;
-  await browser.evaluate(`${rowOf('heading.jpg')}.querySelector('input[type=checkbox]').click()`);
-  await browser.waitFor(`${exif}.innerText === 'Bruk EXIF-tid for 1 valgt bilde'`);
-  await realDoubleClick(browser, exif);
-  await browser.waitFor(`${panel('captureTime')}.querySelector('[data-group="done"]')`);
-  assert.equal(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-group="done"] summary').innerText`), 'Ferdig (1)', 'the second click must not reach the other row');
-  assert.equal(await browser.evaluate(`${rowOf('match.jpg')}.closest('[data-group]').dataset.group`), 'adoptable');
-  assert.equal(await browser.evaluate(`${exif}.innerText`), 'Bruk EXIF-tid for 0 valgte bilder');
-  assert.equal(await browser.evaluate(`${exif}.disabled`), true);
-  assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-completion-selection]').innerText`), /Ingen av de valgte gjenstår/);
-
-  // Widening is its own step, and a new selection replaces the used one.
-  await browser.evaluate(`${rowOf('match.jpg')}.querySelector('input[type=checkbox]').click()`);
-  await browser.waitFor(`${exif}.innerText === 'Bruk EXIF-tid for 1 valgt bilde'`);
-  await browser.evaluate(`${rowOf('match.jpg')}.querySelector('input[type=checkbox]').click()`);
-  await browser.waitFor(`${exif}.innerText === 'Bruk EXIF-tid for 1 bilde' && !${exif}.disabled`);
-  await browser.evaluate(`${rowOf('match.jpg')}.querySelector('input[type=checkbox]').click()`);
-  await browser.waitFor(`${exif}.innerText === 'Bruk EXIF-tid for 1 valgt bilde'`);
-  await browser.evaluate(`${exif}.click()`);
-  await browser.waitFor(`${exif}?.disabled !== false`);
-  await clickSourceControl(browser, 'Fjern valg', panel('captureTime'));
-  await browser.waitFor(`!${panel('captureTime')}.querySelector('[data-completion-selection]')`);
-});
-
-layerTest('GML 0° cannot be accepted by the second click of a double-click on the action above it', async (browser) => {
-  await openHub(browser);
-  await showTask(browser, 'direction');
-  await clickSourceControl(browser, 'Bruk EXIF-retning for 1 plassering', panel('direction'));
-  const gml = `${panel('direction')}.querySelector('[data-adopt="gml"]')`;
-  await browser.waitFor(`${gml} && !${panel('direction')}.querySelector('[data-adopt="exif"]')`);
-  // When this block goes, the 0° block moves up, and its button ends under the lower edge of this one.
-  await realDoubleClick(browser, gml, { lift: 15 });
-  await browser.waitFor(`!${gml}`);
-  assert.equal(await browser.evaluate(`${panel('direction')}.querySelectorAll('[data-group="zero-review"] [data-completion-row]').length`), 1, '0° needs its own deliberate click');
-  assert.equal(await message(browser), 'GML-retning er godtatt for 1 plassering.');
-  await clickSourceControl(browser, 'Godta GML-retning 0° for 1 plassering', `${panel('direction')}.querySelector('[data-completion-zero]')`);
-  await browser.waitFor(`!${panel('direction')}.querySelector('[data-completion-zero]')`);
-});
-
-layerTest('capture time: real values, selection, conflicts, nested dialog, Escape and genuine zero seconds', async (browser) => {
+layerTest('capture time: source values in place, the warning, corrections, nested dialog, Escape and genuine zero seconds', async (browser) => {
   await openHub(browser);
   await showTask(browser, 'captureTime');
   await screenshot(browser, '02-time-1680');
   const text = await panelText(browser, 'captureTime');
   assert.match(text, /Kreves av skjemaet, men stopper ikke eksporten/);
-  assert.match(text, /EXIF: 12\.05\.2026 14:33:02,012 · tidssone ukjent/);
-  assert.match(text, /GML · kilde\.gml: 12\.05\.2026 14:33:02 · tidssone ukjent/);
-  assert.match(text, /EXIF og GML stemmer overens/);
-  assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-completion-agreement]').innerText`), /Kildene stemmer overens for 1 bilde/);
-  assert.deepEqual(await browser.evaluate(`Array.from(${panel('captureTime')}.querySelectorAll('[data-adopt]')).map((item) => item.innerText)`), ['Bruk EXIF-tid for 2 bilder', 'Bruk GML-tid for 1 bilde']);
+  assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[data-adopt]'))`), false, 'source values need no adoption step');
+  assert.deepEqual([await countOf(browser, 'captureTime', 'source'), await countOf(browser, 'captureTime', 'missing')], ['3', '2']);
+  assert.equal(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-export-warning="capture-time-schema"]').innerText`),
+    '2 bilder mangler full opptakstid. Eksporten kan lages, men GML-filen oppfyller ikke kravet til opptakstid i Skråfoto 2019-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.');
+  assert.deepEqual(await browser.evaluate(`Array.from(${panel('captureTime')}.querySelectorAll('[data-export-level]')).map((item) => item.querySelector('dd').innerText)`),
+    ['Kan lages', 'Oppfylles ikke: opptakstid mangler for 2 bilder. XSD-validering er ikke kjørt.', 'Ikke verifisert for denne pakken. Må testes manuelt.']);
+  assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-recommendation="capture-time-sources-differ"]').innerText`), /1 bilde har ulik opptakstid i kildene/);
 
-  // Selection-scoped: one row out of two, and the other stays unaccepted.
-  await browser.evaluate(`${rowOf('heading.jpg')}.querySelector('input[type=checkbox]').click()`);
-  await browser.waitFor(`${panel('captureTime')}.querySelector('[data-adopt="exif"]').innerText === 'Bruk EXIF-tid for 1 valgt bilde'`);
-  assert.equal(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-adopt="gml"]').disabled`), true, 'nothing selected can use GML');
-  assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-completion-selection]').innerText`), /1 valgt/);
-  await browser.evaluate(`${panel('captureTime')}.querySelector('[data-adopt="exif"]').click()`);
-  await browser.waitFor(`${panel('captureTime')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (1)'`);
-  assert.equal(await message(browser), 'EXIF-tid er godtatt for 1 bilde.');
-  assert.equal(await outstanding(browser, 'captureTime'), '4', 'readiness is recalculated at once');
-  assert.equal(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-count="selected"] dd').innerText`), '0', 'an accepted row leaves the selection');
-  await clickSourceControl(browser, 'Fjern valg', panel('captureTime'));
+  // Details are folded away, but still there.
   await openGroup(browser, 'captureTime', 'done');
   assert.match(await browser.evaluate(`${rowOf('heading.jpg')}.innerText`), /Godtatt: 12\.05\.2026 15:00:10 · tidssone ukjent · EXIF DateTimeOriginal/);
+  assert.match(await browser.evaluate(`${rowOf('match.jpg')}.innerText`), /Godtatt: 12\.05\.2026 14:33:02 · tidssone ukjent · GML · kilde\.gml/);
+  assert.doesNotMatch(await browser.evaluate(`${rowOf('match.jpg')}.innerText`), /EXIF: /, 'source values start folded');
+  assert.match(await rowText(browser, 'match.jpg'), /EXIF: 12\.05\.2026 14:33:02,012 · tidssone ukjent/);
+  assert.match(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /Kildene oppgir ulike tider\. Den prioriterte kilden er brukt\./);
 
-  // EXIF adoption without a selection takes what remains; GML then has nothing left.
-  await browser.evaluate(`${panel('captureTime')}.querySelector('[data-adopt="exif"]').click()`);
-  await browser.waitFor(`${panel('captureTime')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (2)'`);
-  assert.match(await browser.evaluate(`${rowOf('match.jpg')}.innerText`), /GML · kilde\.gml: 12\.05\.2026 14:33:02/, 'source values stay visible after adoption');
-
-  // The conflict goes through the per-photo dialog; Escape closes only that dialog.
-  assert.match(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /EXIF: 12\.05\.2026 14:33:02[\s\S]*GML · kilde\.gml: 12\.05\.2026 14:40:00/);
-  const choose = `Array.from(${rowOf('conflict.jpg')}.querySelectorAll('button')).find((item) => item.innerText === 'Velg verdi…')`;
+  // A correction goes through the per-photo dialog; Escape closes only that dialog.
+  const choose = `Array.from(${rowOf('conflict.jpg')}.querySelectorAll('button')).find((item) => item.innerText === 'Rediger…')`;
   await realClick(browser, choose);
   await browser.waitFor(nested);
   await screenshot(browser, '03-nested-1680');
@@ -249,12 +189,13 @@ layerTest('capture time: real values, selection, conflicts, nested dialog, Escap
   assert.equal(await browser.evaluate(`document.activeElement === ${choose}`), true, 'focus returns to the row action');
   await realClick(browser, choose);
   await browser.waitFor(nested);
-  await browser.evaluate(`Array.from(${nested}.querySelectorAll('label.photo-metadata-choice')).find((item) => item.innerText.startsWith('GML')).querySelector('input').click()`);
+  await browser.evaluate(`Array.from(${nested}.querySelectorAll('label.photo-metadata-choice')).find((item) => item.innerText.startsWith('EXIF')).querySelector('input').click()`);
   await clickSourceControl(browser, 'Lagre', nested);
-  await browser.waitFor(`!${nested} && ${panel('captureTime')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (3)'`);
-  assert.equal(await browser.evaluate(`${hub}.contains(document.activeElement)`), true, 'focus stays in the hub although the row moved');
+  await browser.waitFor(`!${nested}`);
+  assert.equal(await browser.evaluate(`${hub}.contains(document.activeElement)`), true, 'focus stays in the hub');
   assert.equal(await message(browser), 'Opptaksdata lagret for conflict.jpg');
-  assert.match(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /Godtatt: 12\.05\.2026 14:40:00 · tidssone ukjent · GML · kilde\.gml/);
+  await browser.waitFor(`${rowOf('conflict.jpg')}.innerText.includes('EXIF DateTimeOriginal')`);
+  assert.doesNotMatch(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /Kildene oppgir ulike/, 'a person has settled it');
 
   // A source with minutes only: an untouched prefill is refused, and the deliberate confirmation is saved as manual.
   await clickSourceControl(browser, 'Rediger…', rowOf('minute.jpg'));
@@ -272,7 +213,7 @@ layerTest('capture time: real values, selection, conflicts, nested dialog, Escap
   await clickSourceControl(browser, 'Lagre', nested);
   await browser.waitFor(`!${nested} && ${panel('captureTime')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (4)'`);
   assert.match(await browser.evaluate(`${rowOf('minute.jpg')}.innerText`), /Godtatt: 12\.05\.2026 14:33:00 · tidssone ukjent · Manuell/, 'the source is not credited with seconds it never gave');
-  assert.match(await browser.evaluate(`${rowOf('minute.jpg')}.innerText`), /GML · kilde\.gml: 12\.05\.2026 14:33 · uten sekunder/, 'the source value stays as it was');
+  assert.match(await rowText(browser, 'minute.jpg'), /GML · kilde\.gml: 12\.05\.2026 14:33 · uten sekunder/, 'the source value stays as it was');
 
   // A changed time needs no confirmation: the box disappears once a real second is entered.
   await clickSourceControl(browser, 'Rediger…', rowOf('blank.jpg'));
@@ -301,38 +242,25 @@ layerTest('capture time: real values, selection, conflicts, nested dialog, Escap
   assert.equal(await outstanding(browser, 'captureTime'), 'done');
 });
 
-layerTest('direction: EXIF, non-zero GML, the separate GML 0° action, manual entry and readiness after each step', async (browser) => {
+layerTest('direction: source values and defaults are in place, 0° is ordinary, and manual entry replaces a default', async (browser) => {
   await openHub(browser);
-  await browser.waitFor(panel('direction'));
-  await screenshot(browser, '05-direction-actions-1680');
-  assert.deepEqual(await browser.evaluate(`Array.from(${panel('direction')}.querySelectorAll('[data-adopt]')).map((item) => item.innerText)`), ['Bruk EXIF-retning for 1 plassering', 'Bruk GML-retning for 1 plassering']);
-  const zero = `${panel('direction')}.querySelector('[data-completion-zero]')`;
-  assert.equal(await browser.evaluate(`${zero}.querySelector('p').innerText`), '0° kan bety at retningen mangler i kildesystemet. Godta bare hvis bildene er tatt mot nord.');
-  assert.equal(await browser.evaluate(`${zero}.querySelector('button').innerText`), 'Godta GML-retning 0° for 1 plassering');
-  assert.match(await browser.evaluate(`${rowOf('heading.jpg')}.innerText`), /GML oppgir 0°, som ikke regnes mot den andre kilden/);
-  assert.equal(await browser.evaluate(`${rowOf('heading.jpg')}.closest('[data-group]').dataset.group`), 'adoptable', 'a real EXIF heading is not held back by GML 0°');
-  assert.equal(await browser.evaluate(`${rowOf('match.jpg')}.closest('[data-group]').dataset.group`), 'zero-review');
+  await showTask(browser, 'direction');
+  await screenshot(browser, '05-direction-1680');
+  assert.equal(await outstanding(browser, 'direction'), 'done');
+  assert.equal(await browser.evaluate(`Boolean(${panel('direction')}.querySelector('[data-adopt], [data-completion-zero], [data-completion-actions="review"]'))`), false, 'no adoption step and no 0° workflow');
+  assert.deepEqual([await countOf(browser, 'direction', 'source'), await countOf(browser, 'direction', 'default')], ['3', '2']);
+  assert.match(await browser.evaluate(`${panel('direction')}.querySelector('[data-recommendation="direction-defaulted"]').innerText`), /2 plasseringer har standardretning 0°, fordi ingen kilde oppgir retning/);
+  assert.match(await browser.evaluate(`${panel('direction')}.querySelector('[data-recommendation="direction-sources-differ"]').innerText`), /1 plassering har ulik retning i kildene\. GML er brukt\./);
+  assert.equal(await browser.evaluate(`${rowOf('blank.jpg')}.closest('[data-group]').dataset.group`), 'defaulted');
+  assert.match(await browser.evaluate(`${rowOf('blank.jpg')}.innerText`), /Standard: 0° N/);
 
-  // The ordinary GML action reaches the 90.5° photo and not the zero.
-  await browser.evaluate(`${panel('direction')}.querySelector('[data-adopt="gml"]').click()`);
-  await browser.waitFor(`${panel('direction')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (1)'`);
-  assert.equal(await message(browser), 'GML-retning er godtatt for 1 plassering.');
-  assert.equal(await outstanding(browser, 'direction'), '4');
-  assert.equal(await browser.evaluate(`${rowOf('match.jpg')}.closest('[data-group]').dataset.group`), 'zero-review', 'still unaccepted');
-
-  await browser.evaluate(`${panel('direction')}.querySelector('[data-adopt="exif"]').click()`);
-  await browser.waitFor(`${panel('direction')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (2)'`);
   await openGroup(browser, 'direction', 'done');
-  assert.match(await browser.evaluate(`${rowOf('heading.jpg')}.innerText`), /Godtatt: 45° NØ · EXIF bilderetning \(sann nord\)/);
-
-  // Only the explicit action accepts the zero.
-  await clickSourceControl(browser, 'Godta GML-retning 0° for 1 plassering', zero);
-  await browser.waitFor(`${panel('direction')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (3)'`);
-  assert.equal(await message(browser), 'GML-retning 0° er godtatt for 1 plassering.');
   assert.match(await browser.evaluate(`${rowOf('match.jpg')}.innerText`), /Godtatt: 0° N · GML · kilde\.gml/);
-  assert.equal(await browser.evaluate(`Boolean(${zero})`), false, 'nothing is left to accept');
+  assert.match(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /Godtatt: 91° Ø · GML · kilde\.gml/, 'whole degrees on screen');
+  assert.match(await rowText(browser, 'conflict.jpg'), /GML · kilde\.gml: 90\.5° fra geografisk nord/, 'the source precision is one fold away');
+  assert.match(await browser.evaluate(`${rowOf('heading.jpg')}.innerText`), /Godtatt: 0° N · GML[\s\S]*Kildene oppgir ulike verdier\. GML er brukt\./);
 
-  // Manual: an explicit selection, no default value, and a warning for 0.
+  // Manual: an explicit selection, no default value, and a note for 0.
   const form = `${panel('direction')}.querySelector('[data-manual-fill="direction"]')`;
   await expand(browser, form);
   assert.equal(await browser.evaluate(`${form}.querySelector('input').value`), '', 'no prefilled value');
@@ -344,9 +272,8 @@ layerTest('direction: EXIF, non-zero GML, the separate GML 0° action, manual en
   await browser.waitFor(`!${form}.querySelector('[data-zero-direction-note]')`);
   await clickSourceControl(browser, 'Bruk på 1 valgt plassering', form);
   await browser.waitFor(`${panel('direction')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (4)'`);
-  assert.equal(await outstanding(browser, 'direction'), '1');
-  assert.match(await browser.evaluate(`${rowOf('blank.jpg')}.innerText`), /Ingen kildeverdi/);
-  assert.equal(await statusLine(browser), '1 må rettes før eksport');
+  assert.deepEqual([await countOf(browser, 'direction', 'manual'), await countOf(browser, 'direction', 'default')], ['1', '1']);
+  assert.equal(await statusLine(browser), 'Kan eksporteres, men følger ikke Skråfoto 2019-skjemaet');
 });
 
 layerTest('profiles: requirements change with the target; the choice and AsBuilt context survive, reach export and stay off the photos', async (browser) => {
@@ -361,9 +288,8 @@ layerTest('profiles: requirements change with the target; the choice and AsBuilt
   await browser.waitFor(`${taskButton('photographer')}.querySelector('small').innerText === 'Valgfritt'`);
   assert.equal(await taskLabel('captureTime'), 'Påkrevd');
   await showTask(browser, 'photographer');
-  await browser.evaluate(`${panel('photographer')}.querySelector('[data-adopt="exif"]').click()`);
   await browser.waitFor(`${panel('photographer')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (1)'`);
-  assert.equal(await message(browser), 'EXIF-fotograf er godtatt for 1 bilde.');
+  assert.equal(await browser.evaluate(`Boolean(${panel('photographer')}.querySelector('[data-adopt]'))`), false, 'EXIF Artist needs no adoption step');
   await openGroup(browser, 'photographer', 'done');
   assert.match(await browser.evaluate(`${rowOf('heading.jpg')}.innerText`), /Godtatt: Kari Nordmann · EXIF Artist/);
 
@@ -454,7 +380,8 @@ layerTest('the Save/Discard boundary comes first when Edit mode has unsaved chan
   await clickSourceControl(browser, 'Forkast endringer', 'document.querySelector(".photo-edit-boundary[open]")');
   await browser.waitFor(hub);
   assert.equal(await browser.evaluate(`Boolean(${commandBar})`), false, 'Edit mode ended first');
-  assert.equal(await outstanding(browser, 'direction'), '5', 'discarded staged changes count for nothing');
+  await showTask(browser, 'direction');
+  assert.equal(await countOf(browser, 'direction', 'manual'), '0', 'discarded staged changes count for nothing');
   await closeHub(browser);
 
   await enterEditMode(browser);
@@ -463,10 +390,11 @@ layerTest('the Save/Discard boundary comes first when Edit mode has unsaved chan
   await browser.waitFor('document.querySelector(".photo-edit-boundary[open]")');
   await clickSourceControl(browser, 'Lagre endringer', 'document.querySelector(".photo-edit-boundary[open]")');
   await browser.waitFor(hub);
-  assert.equal(await outstanding(browser, 'direction'), '4', 'the saved direction is canonical, so readiness sees it');
+  await showTask(browser, 'direction');
+  assert.equal(await countOf(browser, 'direction', 'manual'), '1', 'the saved direction is canonical, so readiness sees it');
 });
 
-layerTest('pending EXIF: rows say so, source actions wait, and the panel follows the read without reopening', async (browser) => {
+layerTest('pending EXIF: rows say so, GML is in use already, and the panel follows the read without reopening', async (browser) => {
   await openHub(browser);
   await showTask(browser, 'captureTime');
   await browser.waitFor(`${panel('captureTime')}.querySelector('[data-recommendation="evidence-pending"]')`);
@@ -474,14 +402,14 @@ layerTest('pending EXIF: rows say so, source actions wait, and the panel follows
   assert.match(await browser.evaluate(`${rowOf('blank.jpg')}.innerText`), /Leser bildedata/);
   assert.equal(await browser.evaluate(`${rowOf('blank.jpg')}.querySelector('input[type=checkbox]')`), null, 'a row still being read cannot be selected');
   assert.equal(await browser.evaluate(`Array.from(${rowOf('blank.jpg')}.querySelectorAll('button')).length`), 0, 'and offers no edit');
-  assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[data-adopt="gml"]'))`), false, 'GML waits while EXIF might disagree');
-  assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-held-back]').innerText`), /venter på bildedata/);
+  assert.equal(await countOf(browser, 'captureTime', 'source'), '2', 'a complete GML time does not wait for EXIF');
   await screenshot(browser, '07-pending-1680');
   await browser.evaluate(`(() => { const held = window.__heldReads; window.__heldReads = null; held.forEach((read) => read()); })()`);
-  await browser.waitFor(`${panel('captureTime')}.querySelector('[data-adopt="exif"]')?.innerText === 'Bruk EXIF-tid for 2 bilder'`, 60000);
   await browser.waitFor(`!${panel('captureTime')}.querySelector('[data-recommendation="evidence-pending"]')`, 60000);
   assert.match(await browser.evaluate(`${rowOf('blank.jpg')}.innerText`), /Ingen kildeverdi/);
-  assert.match(await browser.evaluate(`${rowOf('match.jpg')}.innerText`), /EXIF: 12\.05\.2026 14:33:02,012/);
+  await openGroup(browser, 'captureTime', 'done');
+  assert.match(await rowText(browser, 'match.jpg'), /EXIF: 12\.05\.2026 14:33:02,012/);
+  assert.equal(await countOf(browser, 'captureTime', 'source'), '3', 'the EXIF time arrived on its own');
 }, { hold: true });
 
 layerTest('constrained screens: no horizontal scroll, header and footer stay in view, and the panel scrolls', async (browser) => {
@@ -505,19 +433,20 @@ layerTest('constrained screens: no horizontal scroll, header and footer stay in 
   // At phone width the task list runs along the top and every task stays reachable.
   assert.deepEqual(await browser.evaluate(`(() => { const nav = ${hub}.querySelector('.photo-completion-nav').getBoundingClientRect(), panelBox = ${hub}.querySelector('.photo-completion-panel').getBoundingClientRect(); return [nav.bottom <= panelBox.top + 1, Math.abs(nav.left - panelBox.left) <= 1]; })()`), [true, true]);
   await showTask(browser, 'direction');
-  await browser.evaluate(`${panel('direction')}.querySelector('[data-completion-zero] button').scrollIntoView({ block: 'center' })`);
+  await browser.evaluate(`${panel('direction')}.querySelector('[data-completion-actions="map"] button').scrollIntoView({ block: 'center' })`);
   await screenshot(browser, '09-direction-390');
   const nestedLayout = async () => {
     await browser.evaluate(`Array.from(${hub}.querySelectorAll('[data-task="captureTime"]'))[0].click()`);
     await browser.waitFor(panel('captureTime'));
-    await browser.evaluate(`Array.from(${rowOf('conflict.jpg')}.querySelectorAll('button')).find((item) => item.innerText === 'Velg verdi…').click()`);
+    await openGroup(browser, 'captureTime', 'done');
+    await browser.evaluate(`Array.from(${rowOf('conflict.jpg')}.querySelectorAll('button')).find((item) => item.textContent === 'Rediger…').click()`);
     await browser.waitFor(nested);
     return browser.evaluate(`(() => { const box = ${nested}.getBoundingClientRect(); return { fits: box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight }; })()`);
   };
   assert.deepEqual(await nestedLayout(), { fits: true });
 });
 
-test('shared original: one row for time, one per placement for direction, and placements can end up different', { skip: !chromePath || !app, timeout: 180000 }, async () => {
+test('shared original: one row for time, one per placement for direction, each with the value from the source', { skip: !chromePath || !app, timeout: 180000 }, async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'photo-completion-shared-ui-'));
   const browser = await openTestChrome();
   try {
@@ -538,37 +467,24 @@ test('shared original: one row for time, one per placement for direction, and pl
     await browser.waitFor('document.querySelectorAll(".photo-camera-marker").length === 2', 60000);
 
     await openHub(browser);
-    assert.equal(await outstanding(browser, 'captureTime'), '1', 'capture time belongs to the asset');
-    assert.equal(await outstanding(browser, 'direction'), '2', 'direction belongs to the occurrence');
-    await browser.waitFor(panel('direction'));
-    const rows = `Array.from(${panel('direction')}.querySelectorAll('[data-group="adoptable"] [data-completion-row]'))`;
+    await showTask(browser, 'direction');
+    await openGroup(browser, 'direction', 'done');
+    const rows = `Array.from(${panel('direction')}.querySelectorAll('[data-group="done"] [data-completion-row]'))`;
     assert.deepEqual(await browser.evaluate(`${rows}.map((item) => item.querySelector('small').innerText)`), [' · Plassering 1 av 2', ' · Plassering 2 av 2']);
     assert.match(await browser.evaluate(`${panel('direction')}.querySelector('[data-shared-original]').innerText`), /Det dokumenterer ikke separate kameraobservasjoner/);
-
-    await browser.evaluate(`${rows}[0].querySelector('input[type=checkbox]').click()`);
-    await browser.waitFor(`${panel('direction')}.querySelector('[data-adopt="exif"]').innerText === 'Bruk EXIF-retning for 1 valgt plassering'`);
-    await browser.evaluate(`${panel('direction')}.querySelector('[data-adopt="exif"]').click()`);
-    await browser.waitFor(`${panel('direction')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (1)'`);
-    assert.equal(await outstanding(browser, 'direction'), '1', 'the other placement is untouched');
-
-    const form = `${panel('direction')}.querySelector('[data-manual-fill="direction"]')`;
-    await expand(browser, form);
-    await browser.evaluate(`${rows}[0].querySelector('input[type=checkbox]').click()`);
-    await setValue(browser, `${form}.querySelector('input')`, '200');
-    await clickSourceControl(browser, 'Bruk på 1 valgt plassering', form);
-    await browser.waitFor(`${panel('direction')}.querySelector('[data-group="done"] summary')?.innerText === 'Ferdig (2)'`);
-    await openGroup(browser, 'direction', 'done');
     assert.deepEqual(await browser.evaluate(`Array.from(${panel('direction')}.querySelectorAll('[data-group="done"] [data-accepted-value]')).map((item) => item.innerText)`),
-      ['Godtatt: 45° NØ · EXIF bilderetning (sann nord)', 'Godtatt: 200° S · Manuell (samme verdi for flere)']);
+      ['Godtatt: 45° NØ · EXIF bilderetning (sann nord)', 'Godtatt: 45° NØ · EXIF bilderetning (sann nord)']);
 
     await showTask(browser, 'captureTime');
+    assert.equal(await countOf(browser, 'captureTime', 'source'), '1', 'capture time belongs to the asset');
+    await openGroup(browser, 'captureTime', 'done');
     await clickSourceControl(browser, 'Rediger…', rowOf('delt.jpg'));
     await browser.waitFor(nested);
     assert.match(await browser.evaluate(`${nested}.querySelector('footer').innerText`), /Gjelder alle 2 plasseringer av bildet/);
   } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
-test('private corpus through the hub: explicit time and 0° actions reach the Gemini package', { skip: !chromePath || !app || !corpus, timeout: 420000 }, async () => {
+test('private corpus through the hub: with no action at all, times and directions reach the Gemini package', { skip: !chromePath || !app || !corpus, timeout: 420000 }, async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'photo-completion-corpus-ui-'));
   const browser = await openTestChrome();
   try {
@@ -588,31 +504,17 @@ test('private corpus through the hub: explicit time and 0° actions reach the Ge
     await browser.waitFor(`document.querySelectorAll(".photo-camera-marker").length === ${total}`, 60000);
 
     await openHub(browser);
-    assert.equal(await statusLine(browser), `${total} må rettes før eksport`);
-    assert.equal(await outstanding(browser, 'direction'), String(total));
-    assert.deepEqual(await browser.evaluate(`Array.from(${panel('direction')}.querySelectorAll('[data-adopt]')).length`), 0, 'no ordinary action reaches GML 0°');
-    await browser.evaluate(`${hub}.querySelector('[data-task="captureTime"]').click()`);
-    await browser.waitFor(panel('captureTime'));
-    assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-completion-agreement]').innerText`), new RegExp(`Kildene stemmer overens for ${total} bilder`));
-    assert.equal(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-count="conflict"] dd').innerText`), '0');
-    assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('.photo-completion-sample').innerText`), /EXIF: \d\d\.\d\d\.\d{4}[\s\S]*GML/, 'real values are shown, not only counts');
+    assert.equal(await statusLine(browser), 'Ingen opplysninger mangler for dette målet');
+    assert.equal(await outstanding(browser, 'captureTime'), 'done');
+    assert.equal(await outstanding(browser, 'direction'), 'done');
+    await showTask(browser, 'captureTime');
+    assert.equal(await countOf(browser, 'captureTime', 'source'), String(total));
+    assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[data-recommendation="capture-time-sources-differ"]'))`), false, 'no false conflicts');
     await screenshot(browser, '10-corpus-time');
-    await clickSourceControl(browser, `Bruk EXIF-tid for ${total} bilder`, panel('captureTime'));
-    await browser.waitFor(`${taskButton('captureTime')}.querySelector('.photo-completion-task-done')`);
-
     await showTask(browser, 'direction');
+    assert.equal(await countOf(browser, 'direction', 'source'), String(total));
+    assert.equal(await browser.evaluate(`Boolean(${panel('direction')}.querySelector('[data-completion-actions="map"]'))`), false, 'nothing is missing, so nothing is asked for');
     await screenshot(browser, '11-corpus-direction');
-    // One placement, double-clicked: nothing else is accepted, and the rest still takes its own explicit action.
-    const zeroButton = `${panel('direction')}.querySelector('[data-completion-zero] button')`;
-    await browser.evaluate(`${panel('direction')}.querySelector('[data-group="zero-review"] input[type=checkbox]').click()`);
-    await browser.waitFor(`${zeroButton}.innerText === 'Godta GML-retning 0° for 1 valgt plassering'`);
-    await realDoubleClick(browser, zeroButton);
-    assert.equal(await outstanding(browser, 'direction'), String(total - 1), 'a double-click on a selection must not accept the rest');
-    await clickSourceControl(browser, 'Fjern valg', panel('direction'));
-    await clickSourceControl(browser, `Godta GML-retning 0° for ${total - 1} plasseringer`, `${panel('direction')}.querySelector('[data-completion-zero]')`);
-    await browser.waitFor(`${taskButton('direction')}.querySelector('.photo-completion-task-done')`);
-    assert.match(await browser.evaluate(`${panel('direction')}.querySelector('[data-recommendation="direction-all-zero"]').innerText`), new RegExp(`${total} bilder peker nøyaktig mot nord`));
-    assert.equal(await statusLine(browser), 'Kan eksporteres, men 1 kan forbedres');
     await closeHub(browser);
 
     await openTool(browser, 'Eksporter…');
@@ -639,6 +541,6 @@ test('private corpus through the hub: explicit time and 0° actions reach the Ge
       if (times.get(name) === tags.DateTimeOriginal.trim().replace(/^(\d{4}):(\d{2}):(\d{2}) /, '$1-$2-$3T')) matching++;
     }
     assert.equal(matching, total, 'each exported time equals the JPEG clock, read independently of the app');
-    assert.equal((xml.match(/<app:retningsverdi>0<\/app:retningsverdi>/g) || []).length, total, 'the explicitly accepted direction is what is exported');
+    assert.equal((xml.match(/<app:retningsverdi>0<\/app:retningsverdi>/g) || []).length, total, 'GML 0° is exported as the ordinary value it is');
   } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
 });

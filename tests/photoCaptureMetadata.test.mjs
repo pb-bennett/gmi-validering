@@ -46,7 +46,7 @@ test('unknown defaults, explicit manual replacement/clear and invalid atomic wri
   s.setCaptureMetadata(null, ids, 'photographer', 'Anne');
   assert.equal(s.getPhoto(ids[0]).captureMetadata.photographer.value, 'Anne');
   for (const field of ['captureTime', 'photographer']) s.setCaptureMetadata(null, ids, field, null);
-  assert.deepEqual(s.getPhoto(ids[0]).captureMetadata, { captureTime: null, photographer: null }); s.clear();
+  assert.deepEqual(s.getPhoto(ids[0]).captureMetadata, { captureTime: null, photographer: null, captureTimeCleared: true, photographerCleared: true }, 'a removal is remembered'); s.clear();
 });
 
 for (const container of [gpsJpeg, gpsPng]) test(`actual EXIF ${container.name}: capture originals/artist raw evidence, offset/subseconds, no acceptance`, async () => {

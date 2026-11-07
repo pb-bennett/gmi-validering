@@ -9,7 +9,7 @@ import { normalizeGeminiIdentifiers } from './helpers/photoExportGolden.mjs';
 import { buildPhotoExportPlan, capturePhotoExportSnapshot } from '../src/lib/photos/export/photoExportPlan.mjs';
 import { serializePhotoExport } from '../src/lib/photos/export/photoExportXml.mjs';
 import { captureTimeFields, captureTimeHelp, composeCaptureTime, hasPlaceholderSeconds } from '../src/lib/photos/photoCaptureTimeInput.mjs';
-import { PHOTO_COMPLETION_TARGETS, selectionScope, canAcceptGmlZero, canAdopt, canAdoptPhotographer, completionCounts, completionRecommendations, initialCompletionTask, isHeldBack, liveSelection, manualFillRows,
+import { PHOTO_COMPLETION_TARGETS, selectionScope, canAdoptPhotographer, canSetOnMap, completionCounts, completionSummary, photoCaptureTimeSchemaWarning, photoExportLevels, completionRecommendations, initialCompletionTask, isHeldBack, liveSelection, manualFillRows,
   photoCompletionStatus, photoCount, photographerSuggestions, placementCount, scopedRows, selectedPhotoCount, selectedPlacementCount, singularCopy } from '../src/lib/photos/photoCompletion.mjs';
 import { DEFAULT_PHOTO_EXPORT_CONFIG, photoExportConfigFor, reconcilePhotoExportConfig, updatePhotoExportConfig } from '../src/lib/photos/photoExportConfig.mjs';
 
@@ -32,11 +32,14 @@ test('tasks follow the profile: required, recommended, optional and omitted stay
   assert.deepEqual(labels(ASBUILT), [['captureTime', 'Påkrevd', 'main'], ['direction', 'Valgfritt', 'main'], ['placement', null, 'main'], ['context', 'Påkrevd', 'main'], ['photographer', 'Tas ikke med i denne leveransen', 'other']]);
 });
 
-test('outstanding counts: per asset for time, per occurrence for direction; omitted photographer is never work left', async () => {
-  const { session, layerId } = await sharedOriginalLayer(jpeg('shared.jpg', exifTime()));
+test('outstanding counts: per asset for time, a default direction is no work left, and omitted photographer never is', async () => {
+  const { session, layerId } = await sharedOriginalLayer(jpeg('shared.jpg'));
   const { model } = completionView(session, layerId);
   assert.equal(task(model, 'captureTime').outstanding, 1);
-  assert.equal(task(model, 'direction').outstanding, 2);
+  assert.equal(task(model, 'direction').outstanding, 0);
+  assert.equal(task(model, 'direction').done, true);
+  assert.equal(model.direction.groups[0].state, 'defaulted');
+  assert.equal(model.direction.groups[0].rows.length, 2, 'direction still has one row per placement');
   assert.equal(task(model, 'photographer').outstanding, 0);
   assert.equal(task(completionView(session, layerId, LEGACY).model, 'photographer').outstanding, 1);
   assert.equal(task(completionView(session, layerId, ASBUILT).model, 'context').outstanding, 7);
@@ -54,38 +57,28 @@ test('initial task: what blocks first, then anything outstanding; with nothing p
   assert.equal(task(model, 'direction').done, false);
 });
 
-test('capture time: EXIF and GML that agree stay as separate values with their sources', async () => {
+test('capture time: EXIF and GML that agree stay as separate values, and GML is the one used', async () => {
   const { session, layerId } = await completionLayer([jpeg('a.jpg', exifTime({ subsecond: '012' }))], { gml: [{ name: 'a.jpg', time: '2026-05-12T14:33:02' }] });
-  const { model } = completionView(session, layerId);
-  const item = model.captureTime.rows[0];
-  assert.equal(item.state, 'adoptable');
-  assert.equal(item.note, 'EXIF og GML stemmer overens');
+  const { captureTime } = completionView(session, layerId).model;
+  const item = captureTime.done[0];
+  assert.equal(item.state, 'accepted'); assert.equal(item.origin, 'source'); assert.equal(item.note, null);
   assert.deepEqual(item.sources.map(({ text }) => text), ['EXIF: 12.05.2026 14:33:02,012 · tidssone ukjent', 'GML · kilde.gml: 12.05.2026 14:33:02 · tidssone ukjent']);
-  assert.deepEqual(item.adoptableKinds, ['exif', 'gml']);
-
-  const before = session.getPhoto(item.photoId).metadataEvidence;
-  assert.equal(session.adoptSourceEvidence(layerId, 'captureTime', 'gml', ids(scopedRows(model.captureTime.rows, [], canAdopt('gml')))).counts.adopted, 1);
-  const after = completionView(session, layerId).model.captureTime;
-  assert.equal(after.done.length, 1);
-  assert.equal(after.done[0].acceptedText, '12.05.2026 14:33:02 · tidssone ukjent · GML · kilde.gml');
-  assert.equal(after.done[0].sources.length, 2, 'source values stay reviewable after adoption');
-  assert.equal(session.getPhoto(item.photoId).metadataEvidence, before, 'source evidence is untouched');
+  assert.equal(item.acceptedText, '12.05.2026 14:33:02 · tidssone ukjent · GML · kilde.gml');
   assert.equal(session.getPhoto(item.photoId).captureMetadata.captureTime.provenance.kind, 'gml');
 });
 
-test('capture time: conflicts offer no bulk action, and the per-photo route keeps the chosen source', async () => {
+test('capture time: sources that really differ use GML, say so calmly, and the per-photo route keeps the chosen source', async () => {
   const { session, layerId, ids: [id] } = await completionLayer([jpeg('a.jpg', exifTime())], { gml: [{ name: 'a.jpg', time: '2026-05-12T14:40:00' }] });
   const { model, readiness } = completionView(session, layerId);
-  const item = model.captureTime.rows[0];
-  assert.equal(item.state, 'conflict');
+  const item = model.captureTime.done[0];
+  assert.equal(item.accepted.provenance.kind, 'gml');
+  assert.equal(item.note, 'Kildene oppgir ulike tider. Den prioriterte kilden er brukt.');
   assert.equal(item.sources.length, 2);
-  assert.deepEqual(scopedRows(model.captureTime.rows, [], canAdopt('exif')), []);
-  assert.deepEqual(scopedRows(model.captureTime.rows, [], canAdopt('gml')), []);
-  assert.equal(readiness.tasks.captureTime.counts.conflict, 1);
-  const evidenceId = session.getPhoto(id).metadataEvidence.find((source) => source.kind === 'gml').id;
+  assert.deepEqual(completionRecommendations(readiness, 'captureTime').map(({ code }) => code), ['capture-time-sources-differ']);
+  const evidenceId = session.getPhoto(id).metadataEvidence.find((source) => source.kind === 'exif').id;
   assert(session.setCaptureMetadata(layerId, [id], 'captureTime', null, { evidenceId }).ok);
-  assert.equal(session.getPhoto(id).captureMetadata.captureTime.provenance.kind, 'gml');
-  assert.equal(completionView(session, layerId).readiness.tasks.captureTime.counts.accepted, 1, 'readiness follows the mutation');
+  assert.equal(session.getPhoto(id).captureMetadata.captureTime.provenance.kind, 'exif');
+  assert.equal(completionView(session, layerId).model.captureTime.done[0].sourcesDiffer, false, 'a person has settled it');
 });
 
 test('capture time: every remaining state has a row, and accepted values can only be replaced one photo at a time', async () => {
@@ -93,41 +86,43 @@ test('capture time: every remaining state has a row, and accepted values can onl
     gml: [{ name: 'full.jpg', time: '2026-05-12T14:33:02' }, { name: 'minute.jpg', time: '2026-05-12T14:33' }, { name: 'garbled.jpg', time: 'not a time' }] });
   session.setCaptureMetadata(layerId, [acceptedMinute], 'captureTime', '2026-05-12T14:33');
   const { captureTime } = completionView(session, layerId).model;
-  assert.deepEqual(captureTime.groups.map(({ state, rows }) => [state, rows.length]), [['adoptable', 1], ['partial', 2], ['unusable', 1], ['none', 1]]);
+  assert.deepEqual(captureTime.groups.map(({ state, rows }) => [state, rows.length]), [['none', 1], ['partial', 2], ['unusable', 1]]);
+  assert.deepEqual(captureTime.done.map(({ filename }) => filename), ['full.jpg']);
   assert.equal(row(captureTime.rows, 'minute.jpg').note, 'Har tid uten sekunder');
   assert.equal(row(captureTime.rows, 'accepted-minute.jpg').note, 'Har tid uten sekunder · Erstatter godtatt verdi');
   assert.match(row(captureTime.rows, 'accepted-minute.jpg').acceptedText, /14:33 · uten sekunder/);
   assert.match(row(captureTime.rows, 'garbled.jpg').sources[0].text, /not a time \(kan ikke tolkes sikkert\)/);
   assert.equal(row(captureTime.rows, 'blank.jpg').note, 'Ingen kildeverdi');
   assert.equal(row(captureTime.rows, 'accepted-minute.jpg').selectable, false);
-  assert.equal(row(captureTime.rows, 'full.jpg').selectable, true);
+  assert.equal(row(captureTime.rows, 'full.jpg').selectable, false);
+  assert.equal(row(captureTime.rows, 'blank.jpg').selectable, true);
 });
 
-test('bulk adoption never overwrites an accepted value', async () => {
-  const { session, layerId, ids: [first] } = await completionLayer([jpeg('a.jpg', exifTime()), jpeg('b.jpg', exifTime())]);
+test('automatic acceptance never overwrites a manual value', async () => {
+  const { session, layerId, ids: [first, second] } = await completionLayer([jpeg('a.jpg', exifTime()), jpeg('b.jpg', exifTime())]);
   session.setCaptureMetadata(layerId, [first], 'captureTime', '2020-01-01T10:00:00');
-  const { model } = completionView(session, layerId);
-  assert.deepEqual(scopedRows(model.captureTime.rows, [], canAdopt('exif')).map(({ filename }) => filename), ['b.jpg']);
-  const result = session.adoptSourceEvidence(layerId, 'captureTime', 'exif', ids(model.captureTime.rows));
-  assert.deepEqual([result.counts.adopted, result.counts.alreadyAccepted], [1, 1]);
+  const result = session.adoptSourceEvidence(layerId, 'captureTime', 'exif');
+  assert.deepEqual([result.counts.adopted, result.counts.alreadyAccepted], [0, 2]);
   assert.equal(session.getPhoto(first).captureMetadata.captureTime.value.iso, '2020-01-01T10:00:00');
+  assert.equal(session.getPhoto(second).captureMetadata.captureTime.provenance.kind, 'exif');
 });
 
 test('selection narrows an action and never widens it; nothing selected means all eligible', async () => {
-  const { session, layerId } = await completionLayer(['a', 'b', 'c'].map((name) => jpeg(`${name}.jpg`, exifTime())));
-  const { rows } = completionView(session, layerId).model.captureTime;
+  const { session, layerId } = await completionLayer(['a', 'b', 'c'].map((name) => jpeg(`${name}.jpg`)));
+  const { rows } = completionView(session, layerId).model.direction;
   const [a, b] = rows;
-  assert.equal(scopedRows(rows, [], canAdopt('exif')).length, 3);
-  assert.deepEqual(scopedRows(rows, [a.key], canAdopt('exif')).map(({ key }) => key), [a.key]);
-  assert.equal(session.adoptSourceEvidence(layerId, 'captureTime', 'exif', ids(scopedRows(rows, [a.key, b.key], canAdopt('exif')))).counts.adopted, 2);
-  const after = completionView(session, layerId).model.captureTime;
+  assert(rows.every((item) => item.state === 'defaulted' && item.selectable), 'a default can be selected for correction');
+  assert.equal(scopedRows(rows, [], canSetOnMap).length, 3);
+  assert.deepEqual(scopedRows(rows, [a.key], canSetOnMap).map(({ key }) => key), [a.key]);
+  assert.equal(session.fillMissingPhotoValues(layerId, 'direction', 90, ids(scopedRows(rows, [a.key, b.key], canSetOnMap))).counts.adopted, 2);
+  const after = completionView(session, layerId).model.direction;
   assert.deepEqual(after.done.map(({ filename }) => filename), ['a.jpg', 'b.jpg']);
   assert.deepEqual(liveSelection(after.rows, [a.key, b.key, 'removed']), [], 'accepted and removed rows drop out of the selection');
-  assert.deepEqual(scopedRows(after.rows, [a.key], canAdopt('exif')), [], 'a selection with nothing eligible does not fall back to everything');
-  assert.deepEqual(scopedRows(after.rows, selectionScope(after.rows, [a.key, b.key]), canAdopt('exif')), [], 'a used selection keeps narrowing, so a second click cannot reach c.jpg');
-  assert.equal(scopedRows(after.rows, selectionScope(after.rows, []), canAdopt('exif')).length, 1, 'clearing it is what widens the action again');
-  session.adoptSourceEvidence(layerId, 'captureTime', 'exif', ids(after.rows.filter(canAdopt('exif'))));
-  const finished = completionView(session, layerId).model.captureTime;
+  assert.deepEqual(scopedRows(after.rows, [a.key], canSetOnMap), [], 'a selection with nothing eligible does not fall back to everything');
+  assert.deepEqual(scopedRows(after.rows, selectionScope(after.rows, [a.key, b.key]), canSetOnMap), [], 'a used selection keeps narrowing, so a second click cannot widen it');
+  assert.equal(scopedRows(after.rows, selectionScope(after.rows, []), canSetOnMap).length, 1, 'clearing it is what widens the action again');
+  session.fillMissingPhotoValues(layerId, 'direction', 90, ids(after.rows.filter(canSetOnMap)));
+  const finished = completionView(session, layerId).model.direction;
   assert.deepEqual(selectionScope(finished.rows, [a.key]), [], 'with nothing left to act on, the used selection is dropped');
 });
 
@@ -139,65 +134,52 @@ test('manual fill reaches only an explicit selection', async () => {
   assert.equal(completionView(session, layerId).model.captureTime.done[0].acceptedText, '12.05.2026 14:33:00 · tidssone ukjent · Manuell (samme verdi for flere)');
 });
 
-test('counts strip separates eligible, selected, accepted, conflicting and individual review', async () => {
-  const { session, layerId, ids: [, , accepted] } = await completionLayer([jpeg('a.jpg', exifTime()), jpeg('b.jpg', exifTime()), jpeg('c.jpg', exifTime()), jpeg('d.jpg')], {
-    gml: [{ name: 'b.jpg', time: '2026-05-12T15:00:00' }] });
-  session.setCaptureMetadata(layerId, [accepted], 'captureTime', '2020-01-01T10:00:00');
-  const { captureTime } = completionView(session, layerId).model;
-  const counts = Object.fromEntries(completionCounts(captureTime, ['x'], canAdopt('exif')).map(({ key, count }) => [key, count]));
-  assert.deepEqual(counts, { eligible: 1, selected: 1, accepted: 1, conflict: 1, review: 1 });
+test('summary strip says where values came from, and leaves out what does not apply', async () => {
+  const { session, layerId, ids: [, , manual] } = await completionLayer([jpeg('a.jpg', exifTime()), jpeg('b.jpg', exifTime()), jpeg('c.jpg', exifTime()), jpeg('d.jpg')]);
+  session.setCaptureMetadata(layerId, [manual], 'captureTime', '2020-01-01T10:00:00');
+  const { captureTime, direction } = completionView(session, layerId).model;
+  const counts = (model, selected = []) => Object.fromEntries(completionSummary(model, selected).map(({ key, count }) => [key, count]));
+  assert.deepEqual(counts(captureTime, ['x']), { source: 2, manual: 1, missing: 1, selected: 1 });
+  assert.deepEqual(counts(direction), { default: 4 });
+  assert.equal(completionCounts({ rows: [], done: [] }, [], canAdoptPhotographer).length, 5, 'Fotograf keeps its own strip');
 });
 
-test('EXIF direction: adoption is explicit, and a magnetic reference is listed and never adopted', async () => {
+test('EXIF direction is used automatically; a magnetic reference is listed, never used, and gives a default', async () => {
   const { session, layerId } = await completionLayer([jpeg('true.jpg', { direction: 90, directionRef: 'T' }), jpeg('magnetic.jpg', { direction: 90, directionRef: 'M' })]);
   const { direction } = completionView(session, layerId).model;
-  assert.equal(row(direction.rows, 'true.jpg').state, 'adoptable');
-  assert.equal(row(direction.rows, 'magnetic.jpg').state, 'unsupported');
+  assert.equal(row(direction.rows, 'true.jpg').state, 'accepted');
+  assert.equal(row(direction.rows, 'true.jpg').acceptedText, '90° Ø · EXIF bilderetning (sann nord)');
+  assert.equal(row(direction.rows, 'magnetic.jpg').state, 'defaulted');
+  assert.equal(row(direction.rows, 'magnetic.jpg').acceptedText, '0° N');
   assert.match(row(direction.rows, 'magnetic.jpg').sources[0].text, /Ukjent eller magnetisk referanse/);
-  assert.equal(session.adoptSourceEvidence(layerId, 'direction', 'exif', ids(scopedRows(direction.rows, [], canAdopt('exif')))).counts.adopted, 1);
-  const after = completionView(session, layerId).model.direction;
-  assert.equal(after.done[0].acceptedText, '90° Ø · EXIF bilderetning (sann nord)');
-  assert.equal(row(after.rows, 'magnetic.jpg').accepted, null);
 });
 
-test('GML 0° stays out of ordinary adoption, and only the explicit route accepts it', async () => {
-  const { session, layerId } = await completionLayer(['zero', 'east'].map((name) => jpeg(`${name}.jpg`)), { gml: [{ name: 'zero.jpg', direction: '0' }, { name: 'east.jpg', direction: '90.5' }] });
+test('GML 0° is an ordinary accepted direction, kept apart from a default', async () => {
+  const { session, layerId } = await completionLayer(['zero', 'east', 'none'].map((name) => jpeg(`${name}.jpg`)), { gml: [{ name: 'zero.jpg', direction: '0' }, { name: 'east.jpg', direction: '90' }] });
   const { model, readiness } = completionView(session, layerId);
   const { rows } = model.direction;
-  assert.deepEqual(scopedRows(rows, [], canAdopt('gml')).map(({ filename }) => filename), ['east.jpg']);
-  assert.deepEqual(scopedRows(rows, [], canAcceptGmlZero).map(({ filename }) => filename), ['zero.jpg']);
-  assert.equal(readiness.blocking.filter((item) => item.code === 'direction-required').length, 2, 'unaccepted evidence blocks as before');
-
-  // The ordinary action, even when pointed straight at the zero, adopts nothing.
-  const zero = row(rows, 'zero.jpg');
-  assert.equal(session.adoptSourceEvidence(layerId, 'direction', 'gml', [zero.photoId]).counts.adopted, 0);
-  assert.equal(session.getPhoto(zero.photoId).direction.current, null);
-
-  assert.equal(session.adoptSourceEvidence(layerId, 'direction', 'gml', ids(scopedRows(rows, [], canAcceptGmlZero)), { includeZero: true }).counts.adopted, 1);
-  const after = completionView(session, layerId).model.direction;
-  assert.equal(row(after.rows, 'zero.jpg').accepted.degrees, 0);
-  assert.equal(row(after.rows, 'zero.jpg').accepted.basis.kind, 'gml');
-  assert.equal(row(after.rows, 'east.jpg').accepted, null, 'the zero action reached only the zero');
+  assert.deepEqual(readiness.blocking, []);
+  assert.deepEqual(rows.map(({ filename, state, origin }) => [filename, state, origin]), [['zero.jpg', 'accepted', 'source'], ['east.jpg', 'accepted', 'source'], ['none.jpg', 'defaulted', 'default']]);
+  assert.equal(row(rows, 'zero.jpg').accepted.basis.kind, 'gml');
+  assert.equal(canSetOnMap(row(rows, 'zero.jpg')), false, 'it needs no special route');
 });
 
-test('a real EXIF heading beside GML 0° stays adoptable, and the zero is not offered against it', async () => {
+test('a different EXIF heading beside GML is noted calmly, and GML stays the value used', async () => {
   const { session, layerId } = await completionLayer([jpeg('a.jpg', { direction: 45, directionRef: 'T' })], { gml: [{ name: 'a.jpg', direction: '0' }] });
-  const { rows } = completionView(session, layerId).model.direction;
-  assert.equal(rows[0].state, 'adoptable');
-  assert.equal(rows[0].zeroAcceptable, false);
-  assert.equal(rows[0].note, 'GML oppgir 0°, som ikke regnes mot den andre kilden.');
-  assert.deepEqual(scopedRows(rows, [], canAcceptGmlZero), []);
-  assert.equal(scopedRows(rows, [], canAdopt('exif')).length, 1);
+  const { model, readiness } = completionView(session, layerId);
+  const [item] = model.direction.rows;
+  assert.equal(item.state, 'accepted'); assert.equal(item.accepted.degrees, 0);
+  assert.equal(item.note, 'Kildene oppgir ulike verdier. GML er brukt.');
+  assert.equal(item.sources.length, 2);
+  assert.deepEqual(completionRecommendations(readiness, 'direction').map(({ code }) => code), ['direction-sources-differ']);
 });
 
-test('EXIF and GML headings that disagree are a conflict that no bulk source action can settle', async () => {
-  const { session, layerId } = await completionLayer([jpeg('a.jpg', { direction: 45, directionRef: 'T' })], { gml: [{ name: 'a.jpg', direction: '90' }] });
-  const { rows } = completionView(session, layerId).model.direction;
-  assert.equal(rows[0].state, 'conflict');
-  assert.equal(rows[0].sources.length, 2);
-  for (const kind of ['exif', 'gml']) assert.deepEqual(scopedRows(rows, [], canAdopt(kind)), []);
-  assert.equal(session.fillMissingPhotoValues(layerId, 'direction', 70, ids(manualFillRows(rows, [rows[0].key]))).counts.adopted, 1);
-  assert.equal(completionView(session, layerId).model.direction.done[0].acceptedText, '70° Ø · Manuell (samme verdi for flere)');
+test('EXIF and GML headings that differ only by rounding are not reported at all', async () => {
+  const { session, layerId } = await completionLayer([jpeg('a.jpg', { direction: 45.4, directionRef: 'T' })], { gml: [{ name: 'a.jpg', direction: '45' }] });
+  const { model, readiness } = completionView(session, layerId);
+  assert.equal(model.direction.rows[0].sourcesDiffer, false);
+  assert.equal(model.direction.rows[0].note, null);
+  assert.deepEqual(completionRecommendations(readiness, 'direction'), []);
 });
 
 test('shared original: time is one row for the asset, direction one row per placement, and values can differ', async () => {
@@ -205,17 +187,13 @@ test('shared original: time is one row for the asset, direction one row per plac
   const { model } = completionView(session, layerId);
   assert.equal(model.captureTime.rows.length, 1);
   assert.deepEqual(model.direction.rows.map(({ occurrence }) => occurrence), ['Plassering 1 av 2', 'Plassering 2 av 2']);
-
-  assert.equal(session.adoptSourceEvidence(layerId, 'captureTime', 'exif', ids(model.captureTime.rows)).counts.adopted, 1);
   assert.equal(session.getPhoto(first).captureMetadata.captureTime.value.iso, session.getPhoto(second).captureMetadata.captureTime.value.iso);
-
-  assert.equal(session.adoptSourceEvidence(layerId, 'direction', 'exif', ids(scopedRows(model.direction.rows, [first], canAdopt('exif')))).counts.adopted, 1);
-  assert.equal(session.fillMissingPhotoValues(layerId, 'direction', 200, [second]).counts.adopted, 1);
+  assert(session.applyPhotoEdits(session.beginPhotoEdits(layerId), [{ photoId: second, degrees: 200 }]).ok);
   assert.deepEqual([first, second].map((id) => session.getPhoto(id).direction.current.degrees), [45, 200]);
   assert.equal(task(completionView(session, layerId).model, 'direction').outstanding, 0);
 });
 
-test('pending EXIF: rows wait, nothing is adopted around them, and the state follows the read', async () => {
+test('pending EXIF: GML is used at once, no default is assigned yet, and the rest follows the read', async () => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   const session = evidenceSession({ extractGps: async (file) => { await gate; return readRealExif(file); } });
@@ -226,38 +204,36 @@ test('pending EXIF: rows wait, nothing is adopted around them, and the state fol
 
   const waiting = completionView(session, layerId);
   const { captureTime, direction } = waiting.model;
-  assert.equal(row(captureTime.rows, 'time.jpg').sourcePending, true);
-  assert.equal(row(captureTime.rows, 'time.jpg').selectable, false);
-  assert.deepEqual(scopedRows(captureTime.rows, [], canAdopt('gml')), [], 'GML is not adopted while EXIF might still disagree');
+  assert.equal(row(captureTime.rows, 'time.jpg').state, 'accepted', 'GML is authoritative, so it does not wait for EXIF');
+  assert.equal(row(direction.rows, 'time.jpg').accepted.degrees, 0);
   assert.equal(row(captureTime.rows, 'blank.jpg').state, 'pending');
-  assert.equal(captureTime.rows.filter(isHeldBack).length, 1);
-  assert.deepEqual(scopedRows(direction.rows, [], canAcceptGmlZero), [], 'GML 0° waits for a possible real EXIF heading');
+  assert.equal(row(captureTime.rows, 'blank.jpg').selectable, false);
+  assert.equal(row(direction.rows, 'blank.jpg').state, 'pending', 'a heading may still be on its way');
+  assert.equal(row(direction.rows, 'blank.jpg').accepted, null);
   assert.deepEqual(completionRecommendations(waiting.readiness, 'captureTime').map(({ code }) => code), ['evidence-pending']);
 
   release();
   await settleExif(session, layerId);
   await tick();
   const ready = completionView(session, layerId).model;
-  assert.equal(row(ready.captureTime.rows, 'time.jpg').state, 'adoptable');
   assert.equal(row(ready.captureTime.rows, 'blank.jpg').state, 'none');
-  assert.equal(row(ready.direction.rows, 'time.jpg').state, 'adoptable', 'the real heading arrived, so the zero is no longer the question');
-  assert.deepEqual(scopedRows(ready.direction.rows, [], canAcceptGmlZero), []);
+  assert.equal(row(ready.direction.rows, 'blank.jpg').state, 'defaulted');
+  assert.equal(row(ready.direction.rows, 'time.jpg').accepted.basis.kind, 'gml', 'a late EXIF heading does not displace GML');
 });
 
-test('photographer: EXIF Artist is explicit, accepted values are shown, and omitted targets keep the value in the app', async () => {
+test('photographer: EXIF Artist is used automatically, values are shown, and omitted targets keep the value in the app', async () => {
   const { session, layerId } = await completionLayer([jpeg('artist.jpg', { artist: 'Kari Nordmann' }), jpeg('blank.jpg')]);
-  const view = completionView(session, layerId, LEGACY).model.photographer;
-  assert.equal(row(view.rows, 'artist.jpg').state, 'adoptable');
-  assert.equal(row(view.rows, 'artist.jpg').sources[0].text, 'EXIF: Kari Nordmann');
-  assert.equal(row(view.rows, 'blank.jpg').state, 'none');
-  assert.equal(session.adoptSourceEvidence(layerId, 'photographer', 'exif', ids(scopedRows(view.rows, [], canAdoptPhotographer))).counts.adopted, 1);
   const after = completionView(session, layerId, LEGACY);
+  assert.equal(row(after.model.photographer.rows, 'artist.jpg').state, 'accepted');
+  assert.equal(row(after.model.photographer.rows, 'artist.jpg').sources[0].text, 'EXIF: Kari Nordmann');
+  assert.equal(row(after.model.photographer.rows, 'blank.jpg').state, 'none');
+  assert.deepEqual(scopedRows(after.model.photographer.rows, [], canAdoptPhotographer), []);
   assert.equal(after.model.photographer.done[0].acceptedText, 'Kari Nordmann · EXIF Artist');
   assert.equal(after.readiness.tasks.photographer.accepted, 1);
   assert.deepEqual(photographerSuggestions(after.model.photographer), ['Kari Nordmann']);
   assert.equal(completionView(session, layerId).readiness.notes.find((note) => note.code === 'photographer-omitted').count, 1);
   const blank = row(after.model.photographer.rows, 'blank.jpg');
-  assert.equal(session.fillMissingPhotoValues(layerId, 'photographer', 'bad\u0001name', ids(manualFillRows(after.model.photographer.rows, [blank.key]))).ok, false, 'XML-invalid names are refused');
+  assert.equal(session.fillMissingPhotoValues(layerId, 'photographer', 'bad\u0001name', ids(manualFillRows(after.model.photographer.rows, [blank.key]))).ok, false, 'XML-invalid text is refused');
 });
 
 test('placement: unplaced occurrences are named, counted and excluded from the photo tasks', async () => {
@@ -283,13 +259,25 @@ test('AsBuilt context: readiness tracks the seven fields and photo times never f
 });
 
 test('status line: never a plain "klar", and never claims more than the rules say', async () => {
-  const { session, layerId, ids: photoIds } = await completionLayer([jpeg('a.jpg', exifTime())]);
+  const { session, layerId, ids: photoIds } = await completionLayer([jpeg('a.jpg')]);
   const text = () => photoCompletionStatus(completionView(session, layerId).readiness).text;
-  assert.equal(text(), '1 må rettes før eksport');
-  session.fillMissingPhotoValues(layerId, 'direction', 90, photoIds);
   assert.equal(text(), 'Kan eksporteres, men følger ikke Skråfoto 2019-skjemaet', 'Gemini without time is generated but is a schema gap');
-  session.adoptSourceEvidence(layerId, 'captureTime', 'exif');
-  assert.equal(text(), 'Ingen opplysninger mangler for dette målet');
+  session.fillMissingPhotoValues(layerId, 'captureTime', '2026-05-12T14:33:00', photoIds);
+  assert.equal(text(), 'Ingen opplysninger mangler for dette målet', 'a default direction is complete');
+});
+
+test('missing time: the warning is specific, and generation, schema and import are answered separately', async () => {
+  const { session, layerId, ids: photoIds } = await completionLayer([jpeg('a.jpg'), jpeg('b.jpg', exifTime())]);
+  const { readiness } = completionView(session, layerId);
+  assert.equal(readiness.levels.generation, 'possible');
+  assert.equal(photoCaptureTimeSchemaWarning(readiness), '1 bilde mangler full opptakstid. Eksporten kan lages, men GML-filen oppfyller ikke kravet til opptakstid i Skråfoto 2019-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.');
+  assert.deepEqual(photoExportLevels(readiness).map(({ key, text }) => [key, text]), [['generation', 'Kan lages'],
+    ['schema', 'Oppfylles ikke: opptakstid mangler for 1 bilde. XSD-validering er ikke kjørt.'], ['import', 'Ikke verifisert for denne pakken. Må testes manuelt.']]);
+  assert.equal(photoCaptureTimeSchemaWarning(completionView(session, layerId, LEGACY).readiness), null, 'there it blocks, so it is an error and not this warning');
+  session.fillMissingPhotoValues(layerId, 'captureTime', '2026-05-12T14:33:00', [photoIds[0]]);
+  const filled = completionView(session, layerId).readiness;
+  assert.equal(photoCaptureTimeSchemaWarning(filled), null);
+  assert.deepEqual(photoExportLevels(filled).map(({ text }) => text).slice(1), ['Kravene er oppfylt etter regelsjekk. XSD-validering er ikke kjørt.', 'Profilen er importert tidligere, men denne pakken er ikke testet.']);
 });
 
 test('counts and copy read correctly for one and for many', () => {
@@ -327,21 +315,13 @@ test('export config: transient, per layer, unchanged identity without a removal,
   assert.equal(reconcilePhotoExportConfig(two, []).size, 0, 'session reset');
 });
 
-test('nothing reaches export except accepted values: scoped hub actions give the same bytes as the plain domain calls', async () => {
-  const build = async (act) => {
-    const { session, layerId } = await completionLayer(['a', 'b'].map((name) => jpeg(`${name}.jpg`, exifTime({ subsecond: '5', offsetTime: '+02:00', direction: 90, directionRef: 'T' }))));
-    act(session, layerId);
-    const plan = await buildPhotoExportPlan(capturePhotoExportSnapshot(session, layerId), { profile: 'gemini-legacy2019', crs: 'EPSG:25832' });
-    assert.deepEqual(plan.errors, []);
-    return normalizeGeminiIdentifiers(serializePhotoExport(plan));
-  };
-  const hub = await build((session, layerId) => {
-    const { captureTime, direction } = completionView(session, layerId).model;
-    session.adoptSourceEvidence(layerId, 'captureTime', 'exif', ids(scopedRows(captureTime.rows, [], canAdopt('exif'))));
-    session.adoptSourceEvidence(layerId, 'direction', 'exif', ids(scopedRows(direction.rows, [], canAdopt('exif'))));
-  });
-  const plain = await build((session, layerId) => { session.adoptSourceEvidence(layerId, 'captureTime', 'exif'); session.adoptSourceEvidence(layerId, 'direction', 'exif'); });
-  assert.equal(hub, plain);
+test('nothing reaches export except accepted values: automatic source values arrive with no action at all', async () => {
+  const { session, layerId } = await completionLayer(['a', 'b'].map((name) => jpeg(`${name}.jpg`, exifTime({ subsecond: '5', offsetTime: '+02:00', direction: 90, directionRef: 'T' }))));
+  const plan = await buildPhotoExportPlan(capturePhotoExportSnapshot(session, layerId), { profile: 'gemini-legacy2019', crs: 'EPSG:25832' });
+  assert.deepEqual(plan.errors, []);
+  const xml = normalizeGeminiIdentifiers(serializePhotoExport(plan));
+  assert.match(xml, /<app:retningsverdi>90<\/app:retningsverdi>/);
+  assert.match(xml, /2026-05-12T14:33:02/);
 });
 
 test('reading the hub model changes nothing', async () => {
@@ -350,7 +330,6 @@ test('reading the hub model changes nothing', async () => {
   for (let turn = 0; turn < 3; turn++) completionView(session, layerId, ASBUILT);
   const after = session.getPhoto(id);
   assert.equal(after.direction, before.direction); assert.equal(after.captureMetadata, before.captureMetadata);
-  assert.equal(after.captureMetadata.captureTime, null); assert.equal(after.direction.current, null);
 });
 
 test('source boundaries: no export or Edit-mode code in the hub, no certification words, nothing suggesting 0°', async () => {
@@ -360,13 +339,11 @@ test('source boundaries: no export or Edit-mode code in the hub, no certificatio
   assert.doesNotMatch(all, /buildPhotoExportPlan|serializePhotoExport|buildPhotoExportPackage|applyPhotoEdits|beginPhotoEdits|enterPhotoEditMode|localStorage|sessionStorage/);
   assert.doesNotMatch(all, /validert|godkjent|sertifisert|garantert/i);
   assert.doesNotMatch(all, /classifyCaptureTime|fullCaptureTime|evaluatePhotoExportRules/, 'classification stays in readiness and the rules');
-  assert.equal((all.match(/includeZero: true/g) || []).length, 2, 'the explicit action and its eligibility check, nowhere else');
-  assert.match(all, /Godta GML-retning 0° for/);
-  assert.match(all, /0° kan bety at retningen mangler i kildesystemet\. Godta bare hvis bildene er tatt mot nord\./);
+  assert.doesNotMatch(all, /includeZero|Godta GML-retning|adoptSourceEvidence\(layerId, '(?:direction|captureTime)'/, 'source values need no adoption step');
   assert.match(all, /0° betyr nord, ikke ukjent retning\./);
 });
 
-test('private corpus: the hub offers every EXIF time with matching GML and no false conflicts, and keeps 0° apart', { skip: !corpusGmlPath && 'PHOTO_GML_FIXTURE is not set; the private corpus is opt-in.', timeout: 300000 }, async () => {
+test('private corpus: every time and direction is in place with no action, with no false conflicts', { skip: !corpusGmlPath && 'PHOTO_GML_FIXTURE is not set; the private corpus is opt-in.', timeout: 300000 }, async () => {
   const { photos, gml } = await readPhotoCorpus();
   const session = evidenceSession();
   session.importFiles(photos);
@@ -376,16 +353,11 @@ test('private corpus: the hub offers every EXIF time with matching GML and no fa
   assert.equal(acceptGmlPositions(session, layerId).length, photos.length);
   const total = photos.length;
 
-  const before = completionView(session, layerId).model;
-  assert.equal(scopedRows(before.captureTime.rows, [], canAdopt('exif')).length, total);
-  assert.equal(before.captureTime.rows.filter((item) => item.sourcesAgree).length, total);
-  assert.equal(before.captureTime.rows.filter((item) => item.state === 'conflict').length, 0);
-  assert(before.captureTime.rows.every((item) => item.sources.length === 2), 'both source values are available on every row');
-  assert.deepEqual(scopedRows(before.direction.rows, [], canAdopt('gml')), [], 'GML 0° is in no ordinary adoption');
-  assert.equal(scopedRows(before.direction.rows, [], canAcceptGmlZero).length, total);
-
-  assert.equal(session.adoptSourceEvidence(layerId, 'captureTime', 'exif', ids(scopedRows(before.captureTime.rows, [], canAdopt('exif')))).counts.adopted, total);
-  const after = completionView(session, layerId);
-  assert.equal(after.model.captureTime.done.length, total);
-  assert.equal(after.readiness.tasks.direction.counts['zero-review'], total, 'direction is still open');
+  const { model, readiness } = completionView(session, layerId);
+  assert.equal(model.captureTime.done.length, total);
+  assert.equal(model.captureTime.done.filter((item) => item.sourcesDiffer).length, 0);
+  assert(model.captureTime.done.every((item) => item.sources.length === 2), 'both source values are available on every row');
+  assert.equal(model.direction.done.length, total);
+  assert(model.direction.done.every((item) => item.accepted.basis.kind === 'gml'));
+  assert.deepEqual(readiness.blocking, []);
 });

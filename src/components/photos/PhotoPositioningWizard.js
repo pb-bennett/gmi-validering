@@ -193,7 +193,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
             </div>
           </section>}
           {step === 3 && plan && <section aria-label="Kontroller posisjoner">
-            <p>Velg én posisjon per plassering, eller behold gjeldende. Flere punktreferanser beholder hver sin plassering av samme bilde. EXIF og GML er felles kildedata. Avstander er omtrentlige og sier ikke noe om kildepresisjon.</p>
+            <p>GML-posisjoner er foreslått der de finnes, og manuelle posisjoner beholdes. Endre bare det som ikke stemmer. Flere punktreferanser beholder hver sin plassering av samme bilde. Avstander er omtrentlige og sier ikke noe om kildepresisjon.</p>
             {focusedPhotoId && <p>Åpnet for {photos.find((photo) => photo.id === focusedPhotoId)?.originalFilename}. Valgene gjelder bare denne kontrollen.</p>}
             {newEvidence && <div role="status"><p>Nye posisjoner eller GPS-status er tilgjengelige. Oppdater kontrollen for å se dem; valgene utvides ikke automatisk.</p>
             </div>}
@@ -203,7 +203,8 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
               {photoSourceProposalKinds(positionRows).map((sourceKind) => <button key={sourceKind} type="button" className={photoSourceButton} onClick={() => setChoices(Object.fromEntries(positionRows.map((row) => {
                 editedIds.current.add(row.photoId);
                 const options = row.options.filter((option) => option.kind === sourceKind);
-                return [row.photoId, options.length === 1 ? options[0].id : ''];
+                // A manual position is only replaced by a choice made on its own row.
+                return [row.photoId, options.length === 1 && row.currentKind !== 'manual' ? options[0].id : ''];
               })))}>Foreslå {sourceKind.toUpperCase()} for viste</button>)}
             </div>
             <ul className="photo-positioning-rows" aria-label="Tilgjengelige bildeposisjoner">{positionRows.map((row) => {

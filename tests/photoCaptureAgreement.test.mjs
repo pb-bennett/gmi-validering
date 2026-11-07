@@ -112,22 +112,19 @@ async function attached(session, photos) {
   return layer.id;
 }
 
-test('session: same-second EXIF and GML adopt from either source, with both provenances kept', async () => {
-  for (const [kind, iso] of [['exif', '2026-05-12T14:33:02.012'], ['gml', '2026-05-12T14:33:02']]) {
-    const session = evidenceSession({ parseGml: sourceWith([['a.jpg', '2026-05-12T14:33:02']]) });
-    try {
-      const layerId = await attached(session, [jpeg('a.jpg', { subsecond: '012' })]);
-      assert.equal(photoMetadataConflict(session.getLayerPhotos(layerId)[0], 'captureTime'), false);
-      const { counts } = session.adoptSourceEvidence(layerId, 'captureTime', kind);
-      assert.equal(counts.adopted, 1); assert.equal(counts.conflicting, 0);
-      const accepted = session.getLayerPhotos(layerId)[0].captureMetadata.captureTime;
-      assert.equal(accepted.value.iso, iso); assert.equal(accepted.provenance.kind, kind);
-      assert.deepEqual(accepted.provenance.evidence.map((item) => item.kind).sort(), ['exif', 'gml']);
-    } finally { session.clear(); }
-  }
+test('session: same-second EXIF and GML are no conflict, GML is used, and both provenances are kept', async () => {
+  const session = evidenceSession({ parseGml: sourceWith([['a.jpg', '2026-05-12T14:33:02']]) });
+  try {
+    const layerId = await attached(session, [jpeg('a.jpg', { subsecond: '012' })]);
+    const [live] = session.getLayerPhotos(layerId);
+    assert.equal(photoMetadataConflict(live, 'captureTime'), false);
+    const accepted = live.captureMetadata.captureTime;
+    assert.equal(accepted.value.iso, '2026-05-12T14:33:02'); assert.equal(accepted.provenance.kind, 'gml');
+    assert.deepEqual(accepted.provenance.evidence.map((item) => item.kind).sort(), ['exif', 'gml']);
+  } finally { session.clear(); }
 });
 
-test('session: genuine differences stay conflicts and nothing is adopted', async () => {
+test('session: genuine differences are still reported, and GML is the value used', async () => {
   for (const [tags, gml] of [
     [{}, '2026-05-12T14:33:03'],
     [{ offsetTime: '+01:00' }, '2026-05-12T14:33:02+02:00'],
@@ -136,12 +133,9 @@ test('session: genuine differences stay conflicts and nothing is adopted', async
     const session = evidenceSession({ parseGml: sourceWith([['a.jpg', gml]]) });
     try {
       const layerId = await attached(session, [jpeg('a.jpg', tags)]);
-      for (const kind of ['exif', 'gml']) {
-        const { counts } = session.adoptSourceEvidence(layerId, 'captureTime', kind);
-        assert.equal(counts.conflicting, 1); assert.equal(counts.adopted, 0);
-      }
       const [live] = session.getLayerPhotos(layerId);
-      assert.equal(live.captureMetadata.captureTime, null);
+      assert.equal(live.captureMetadata.captureTime.value.iso, gml);
+      assert.equal(live.captureMetadata.captureTime.provenance.kind, 'gml');
       assert.equal(photoMetadataConflict(live, 'captureTime'), true);
     } finally { session.clear(); }
   }
@@ -151,19 +145,17 @@ test('session: an unknown offset on one side does not block, and the offset is n
   const session = evidenceSession({ parseGml: sourceWith([['a.jpg', '2026-05-12T14:33:02']]) });
   try {
     const layerId = await attached(session, [jpeg('a.jpg', { offsetTime: '+02:00' })]);
-    assert.equal(session.adoptSourceEvidence(layerId, 'captureTime', 'gml').counts.adopted, 1);
     const { value: accepted } = session.getLayerPhotos(layerId)[0].captureMetadata.captureTime;
     assert.equal(accepted.iso, '2026-05-12T14:33:02'); assert.equal(accepted.timezoneKnown, false);
   } finally { session.clear(); }
 });
 
-test('session: a malformed supplementary tag no longer loses the clock, and it agrees with GML to the second', async () => {
+test('session: a malformed supplementary tag no longer loses the clock', async () => {
   const tags = { DateTimeOriginal: '2026:05:12 14:33:02', OffsetTimeOriginal: '  :  ', SubSecTimeOriginal: 'abc' };
-  const session = evidenceSession({ parseGml: sourceWith([['a.jpg', '2026-05-12T14:33:02']]),
+  const session = evidenceSession({ parseGml: sourceWith([]),
     extractGps: async () => ({ state: 'no-gps', errorCode: null, candidate: null, metadataEvidence: exifCaptureEvidence(tags) }) });
   try {
     const layerId = await attached(session, [jpeg('a.jpg')]);
-    assert.equal(session.adoptSourceEvidence(layerId, 'captureTime', 'exif').counts.adopted, 1);
     const accepted = session.getLayerPhotos(layerId)[0].captureMetadata.captureTime;
     assert.equal(accepted.value.iso, '2026-05-12T14:33:02'); assert.equal(accepted.value.precision, 'second');
     assert.equal(accepted.value.timezoneKnown, false);

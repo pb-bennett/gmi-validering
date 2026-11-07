@@ -66,7 +66,7 @@ test('save applies every staged change with one publish, shared acceptedAt and m
   state = stage(state, ids[0], 'position', at(10.5));
   state = stage(state, ids[1], 'direction', 271);
   state = stage(state, ids[2], 'position', at(10.6));
-  state = stage(state, ids[2], 'direction', 0);
+  state = stage(state, ids[2], 'direction', 45);
   let publishes = 0; const unsubscribe = session.subscribe(() => publishes++);
   const result = session.applyPhotoEdits(ticket, photoEditChanges(state));
   assert(result.ok); assert.deepEqual(result.changedIds.sort(), [...ids].sort());
@@ -80,7 +80,7 @@ test('save applies every staged change with one publish, shared acceptedAt and m
   assert.equal(b.direction.current.degrees, 271); assert.equal(b.direction.current.basis.kind, 'manual');
   assert.deepEqual(b.directionEvidence, before[ids[1]].directionEvidence);
   assert.equal(c.spatial.current.basis.kind, 'manual', 'an unplaced occurrence becomes placed');
-  assert.equal(c.direction.current.degrees, 0, 'a new explicit north direction is created');
+  assert.equal(c.direction.current.degrees, 45, 'a manual direction replaces the default');
   assert.equal(session.getLayer(layer.id).placedCount, 3);
   const times = new Set([a.spatial.current.acceptedAt, b.direction.current.acceptedAt, c.spatial.current.acceptedAt, c.direction.current.acceptedAt]);
   assert.equal(times.size, 1, 'one save shares one acceptedAt');

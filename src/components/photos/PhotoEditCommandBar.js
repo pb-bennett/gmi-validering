@@ -15,7 +15,8 @@ const primaryButton = 'photo-edit-button gmi-primary-control gmi-focus-ring';
 
 function DirectionField({ photo, onStage }) {
   const id = useId();
-  const degrees = photo.direction?.current?.degrees ?? null;
+  // Whole degrees here, however precise the source.
+  const degrees = normalizePhotoDirection(photo.direction?.current?.degrees);
   const [draft, setDraft] = useState(null);
   const commit = () => {
     if (draft === null) return;
@@ -57,7 +58,7 @@ function PhotoEditFlowRow({ progress, onSelect, onReturn }) {
     <span className="photo-edit-flow-actions">
       <PhotoIconButton icon={CaretLeftIcon} label="Forrige bilde" tooltip={previousId ? 'Forrige bilde' : 'Forrige bilde – dette er det første'} unavailable={!previousId}
         onClick={() => onSelect(previousId)} className="photo-edit-icon" />
-      <button type="button" aria-disabled={!nextId || undefined} title={nextId ? undefined : 'Ingen flere gjenstår'} className={`${textButton} border-gmi-border-strong bg-gmi-surface${nextId ? '' : ' photo-edit-button-unavailable'}`}
+      <button type="button" aria-disabled={!nextId || undefined} title={nextId ? undefined : 'Ingen flere i listen'} className={`${textButton} border-gmi-border-strong bg-gmi-surface${nextId ? '' : ' photo-edit-button-unavailable'}`}
         onClick={() => { if (nextId) onSelect(nextId); }}>Neste<CaretRightIcon size={14} weight="regular" aria-hidden="true" /></button>
       <button type="button" aria-label="Tilbake til opplysninger" className={`${textButton} border-gmi-border-strong bg-gmi-surface`} onClick={onReturn}>
         <ArrowLeftIcon size={14} weight="regular" aria-hidden="true" />Tilbake<span className="photo-edit-long">&nbsp;til opplysninger</span></button>

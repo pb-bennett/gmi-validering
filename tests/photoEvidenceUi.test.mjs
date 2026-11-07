@@ -57,7 +57,7 @@ test('source evidence in the workspace: chip, shared formatter, minute precision
     await retainGmlInWorkspace(browser, gml);
 
     await selectFile(browser, 'a.png');
-    assert.match(await chips(browser), /Opptakstid i kilde/);
+    assert.match(await chips(browser), /Opptakstid kjent/);
     assert(!await browser.evaluate(`${inspector}.innerText.includes('Kildene oppgir ulike opptakstider')`), 'subseconds against whole seconds is no conflict');
     assert.match(await directionEvidence(browser), /GML · directions\.gml: 45\.5° fra geografisk nord/);
     await selectFile(browser, 'c.png');
@@ -65,7 +65,7 @@ test('source evidence in the workspace: chip, shared formatter, minute precision
 
     await selectFile(browser, 'b.png');
     assert.match(await chips(browser), /Opptakstid i kilde/);
-    assert.match(await directionEvidence(browser), /0° kan bety at retningen mangler i kildesystemet/);
+    assert.match(await directionEvidence(browser), /GML · directions\.gml: 0° fra geografisk nord/);
     await clickSourceControl(browser, 'Rediger opptaksdata…', inspector);
     await browser.waitFor(metadataDialog);
     await browser.evaluate(`${metadataDialog}.querySelector('input[value="other"]').click()`);
@@ -82,14 +82,11 @@ test('source evidence in the workspace: chip, shared formatter, minute precision
 
     await clickSourceControl(browser, 'Eksporter', 'document');
     await browser.waitFor(exportDialog);
-    assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), /GML-retning: 1 kan brukes[\s\S]*1 med 0°, som kan bety at retningen mangler/);
-    await clickSourceControl(browser, 'Bruk GML-retning for alle mulige (1)', exportDialog);
-    await browser.waitFor(`${evidenceRow('gml:direction')}.innerText.includes('1 allerede godtatt')`);
-    assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), /GML-retning: 0 kan brukes[\s\S]*1 med 0°/, 'GML 0° is still held back');
+    assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), /GML-retning: 0 kan brukes · 3 allerede godtatt/, 'source directions are already in use');
   } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
-test('private corpus in the real app: explicit EXIF adoption with the GML attached reaches the downloaded Gemini package', { skip: !chromePath || !app || !corpus, timeout: 300000 }, async () => {
+test('private corpus in the real app: with the GML attached, source values reach the downloaded Gemini package with no adoption', { skip: !chromePath || !app || !corpus, timeout: 300000 }, async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'photo-evidence-corpus-ui-'));
   const browser = await openTestChrome();
   try {
@@ -109,29 +106,20 @@ test('private corpus in the real app: explicit EXIF adoption with the GML attach
     await applyPhotoSourcePositions(browser, 'gml');
     await browser.waitFor(`document.querySelectorAll(".photo-camera-marker").length === ${total}`, 60000);
 
-    assert.match(await chips(browser), /Opptakstid i kilde/);
+    assert.match(await chips(browser), /Opptakstid kjent/);
     assert(!await browser.evaluate(`${inspector}.innerText.includes('Kildene oppgir ulike opptakstider')`));
 
     await clickSourceControl(browser, 'Eksporter', 'document');
     await browser.waitFor(exportDialog);
-    assert.match(await browser.evaluate(`${evidenceRow('exif:captureTime')}.innerText`), new RegExp(`EXIF-tid: ${total} kan brukes[\\s\\S]*0 i konflikt`));
-    assert.match(await browser.evaluate(`${evidenceRow('gml:captureTime')}.innerText`), new RegExp(`GML-tid: ${total} kan brukes[\\s\\S]*0 i konflikt`));
-    assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), new RegExp(`GML-retning: 0 kan brukes[\\s\\S]*${total} med 0°`));
-    // F3: before adoption the preview says the times exist, and diagnostics carry readable labels.
+    for (const row of ['exif:captureTime', 'gml:captureTime']) assert.match(await browser.evaluate(`${evidenceRow(row)}.innerText`), new RegExp(`0 kan brukes · ${total} allerede godtatt`));
+    assert.match(await browser.evaluate(`${evidenceRow('gml:direction')}.innerText`), new RegExp(`GML-retning: 0 kan brukes · ${total} allerede godtatt`));
     await browser.evaluate(`(() => { const select = ${exportDialog}.querySelector('[aria-label="Eksportprofil"]'); select.value = 'gemini-legacy2019'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-    await clickSourceControl(browser, 'Lag eksportforhåndsvisning', exportDialog);
-    await browser.waitFor(`${exportDialog}.querySelector('[data-readiness-note="capture-time-in-source"]')`, 120000);
-    assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-readiness-note="capture-time-in-source"]').innerText`), `${total} bilder mangler opptakstid, men tiden finnes i EXIF.`);
-    assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-time"] summary').innerText`), /^Opptakstid i Gemini-filen/);
-    assert(!await browser.evaluate(`${exportDialog}.textContent.includes('Legacy krever godtatt retning')`), 'direction-required names no profile');
-    await clickSourceControl(browser, `Bruk EXIF-tid for alle mulige (${total})`, exportDialog);
-    await browser.waitFor(`${evidenceRow('exif:captureTime')}.innerText.includes('${total} allerede godtatt')`);
-
-    // No UI accepts GML 0° before M3, and Gemini still requires direction, so this run enters one explicitly.
-    await browser.evaluate(`(() => { const form = ${exportDialog}.querySelector('[data-manual-fill="direction"]'); form.elements.value.value = '90'; form.requestSubmit(); })()`);
-    await browser.evaluate(`(() => { const select = ${exportDialog}.querySelector('[aria-label="Eksportprofil"]'); select.value = 'gemini-legacy2019'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await browser.waitFor(`${exportDialog}.querySelector('[data-export-status]')`);
+    assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-warning]'))`), false, 'every time is in place, so there is nothing to warn about');
+    assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="import"] dd').innerText`), /denne pakken er ikke testet/);
     await clickSourceControl(browser, 'Lag eksportforhåndsvisning', exportDialog);
     await browser.waitFor(`${exportDialog}.querySelector('section[aria-label="Eksportforhåndsvisning"]') && !${exportDialog}.innerText.includes('Bygger forhåndsvisning')`, 120000);
+    assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-time"] summary').innerText`), /^Opptakstid i Gemini-filen/);
     await clickSourceControl(browser, 'Last ned testpakke', exportDialog);
     await browser.waitFor(`${exportDialog}.innerText.includes('ZIP-pakken er klar')`, 120000);
 

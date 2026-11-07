@@ -4,7 +4,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowCounterClockwiseIcon, ArrowLeftIcon, ArrowsDownUpIcon, EyeIcon, EyeSlashIcon, FunnelIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
-import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
+import { normalizePhotoDirection, photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
 import { photoPositionSourceKind, photoPositionSourcePresentation } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
 import { PHOTO_PLACEMENT_FILTERS, PHOTO_SORT_MODES, photoIsPlaced, photoSortLabel } from '@/lib/photos/photoWorkspaceView.mjs';
@@ -20,7 +20,7 @@ export function photoRowLabel(photo, changed) {
   const degrees = photo.direction?.current?.degrees;
   const repeat = photo.repeatGroup?.occurrenceCount > 1 ? `, plassering ${photo.repeatGroup.occurrenceIndex} av ${photo.repeatGroup.occurrenceCount}` : '';
   return `${photo.originalFilename}, ${placed ? `plassert, ${photoPositionSourcePresentation(photoPositionSourceKind(photo)).label}` : 'uplassert'}`
-    + `${degrees != null ? `, retning ${degrees} grader` : ''}${repeat}${changed ? ', endret – ikke lagret' : ''}`;
+    + `${degrees != null ? `, retning ${normalizePhotoDirection(degrees)} grader` : ''}${repeat}${changed ? ', endret – ikke lagret' : ''}`;
 }
 
 function PhotoRow({ photo, active, tabbable, changed, removal, removalSelected, onSelect, onToggleRemoval, onKeyDown }) {

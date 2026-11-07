@@ -6,12 +6,12 @@ import { gmiText } from './gmiPhotoFixtures.mjs';
 import { closePhotoSources, savePhotoSource, setPhotoFiles, stagePhotoSource } from './photoSourceWorkflow.mjs';
 import { createLayerWithPlacement, waitForThumbnails } from './photoImportWizard.mjs';
 
-// Synthetic, non-customer workspace: EXIF GPS + heading photos, one unplaced photo, and a GMI with a repeated reference.
+// Synthetic, non-customer workspace: EXIF GPS photos without a heading, one unplaced photo, and a GMI with a repeated reference.
 export async function createWorkspaceFixtures(prefix = 'photo-workspace-edit-') {
   const root = path.resolve(tmpdir()), directory = await mkdtemp(path.join(root, prefix));
   const photo = (name, options) => ({ name, file: path.join(directory, name), bytes: gpsPng(options) });
   const photos = [
-    photo('IMG_2.png', { longitude: [10, 26, 5], latitude: [59, 13, 30], direction: 90, directionRef: 'T', captureTime: '2026:05:12 14:33:02' }),
+    photo('IMG_2.png', { longitude: [10, 26, 5], latitude: [59, 13, 30], captureTime: '2026:05:12 14:33:02' }),
     photo('IMG_10.png', { longitude: [10, 26, 6], latitude: [59, 13, 30.5] }),
     photo('shared.png', { noLocation: true }),
     photo('unplaced.png', { noLocation: true, captureTime: '2026:05:13 08:00:00' }),

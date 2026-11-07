@@ -131,7 +131,7 @@ test('late source stays candidate-only even unplaced, conflicts are shown, accep
   assert.equal(session.getPhoto(ids[0]).spatial.current.position.longitude, 11);
   ids.forEach((id, index) => assert.strictEqual(session.getPhoto(id).spatial.candidates, candidates[index]));
   assert.equal(photoCurrentSource(session.getPhoto(ids[0])), 'EXIF');
-  assert.equal(photoCaptureTime(session.getPhoto(ids[0])), null, 'source evidence is not accepted capture time');
+  assert.equal(photoCaptureTime(session.getPhoto(ids[0])), '2025-11-20T12:00:00', 'a complete source time is accepted automatically');
   const evidence = session.getPhoto(ids[0]).metadataEvidence.find((item) => item.field === 'captureTime');
   assert(session.setCaptureMetadata(layer.id, [ids[0]], 'captureTime', null, { evidenceId: evidence.id }).ok);
   assert.equal(photoCaptureTime(session.getPhoto(ids[0])), '2025-11-20T12:00:00');
