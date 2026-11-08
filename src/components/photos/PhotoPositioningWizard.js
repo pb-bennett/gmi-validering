@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- Reuses session-owned thumbnail URLs only. */
 import { useEffect, useRef, useState } from 'react';
-import { XIcon } from '@phosphor-icons/react';
+import { CheckCircleIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPositionDistance, PHOTO_POSITION_TOLERANCE_METRES, photoSourceEvidenceSignature, photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '@/lib/photos/photoPositioning.mjs';
 import { photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
@@ -20,18 +20,82 @@ const coordinates = (position) => position ? `${position.latitude.toFixed(7)}°,
 const metres = (distance) => distance < .1 && distance > .01 ? 'under 0,1 m'
   : `${distance.toLocaleString('nb-NO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m`;
 const actionLabel = (row) => row.action === 'move' ? `Flyttes ca. ${metres(row.distanceMetres)}` : row.action === 'same' ? 'Samme posisjon' : 'Plasseres';
+// Presentation only. Sources that disagree by less than this are ordinary GPS spread and are shown neutrally; larger
+// differences stay visible on the row and in Kontroll. Matching, proposals and the tolerance are unchanged.
+const NOTABLE_METRES = 20;
+const separationOf = (row) => row.options.length < 2 ? null
+  : Math.max(...row.options.flatMap((a, index) => row.options.slice(index + 1).map((b) => photoPositionDistance(a.position, b.position))));
+// The comparison leads with the distance; coordinates are the detail underneath.
+function comparisonLead(row, chosen) {
+  const separation = separationOf(row);
+  if (separation !== null) return separation <= PHOTO_POSITION_TOLERANCE_METRES ? 'Kildene oppgir samme posisjon' : `ca. ${metres(separation)} mellom kildene`;
+  if (chosen?.distanceMetres > PHOTO_POSITION_TOLERANCE_METRES) return `ca. ${metres(chosen.distanceMetres)} fra gjeldende`;
+  return null;
+}
 const sourceLabels = { gmi: 'GMI – objektenes bildereferanser', gml: 'GML – bildeposisjoner' };
 // Same wording as the import wizard's placement step.
 const addLabels = { gmi: 'Fra GMI', gml: 'Fra GML-fil' };
 const STEPS = Object.freeze(['Kilder', 'Koblinger', 'Plassering', 'Kontroll']);
 const savedMessage = 'Kilder og koblinger er lagret. Posisjoner er ikke endret.';
 
+// Saving a source and applying its positions are two separate commitments, so the step shows both and where the user is.
+function SourceStages({ saved, kind }) {
+  const name = kind === 'gmi' ? 'GMI-kilden og koblingene' : kind === 'gml' ? 'GML-kilden' : 'kilden';
+  return <ol className="photo-positioning-stages" aria-label="To trinn">
+    <li data-stage-state={saved ? 'done' : 'current'}>
+      <span className="photo-positioning-stage-marker" aria-hidden="true">{saved ? <CheckCircleIcon size={22} weight="fill" /> : '1'}</span>
+      <div><strong>{saved ? 'Kilden er lagret i fotolaget' : `Lagre ${name} i fotolaget`}</strong>
+        <p>{saved ? 'Filen og treffene er beholdt. Ingen posisjoner er endret.' : 'Lagrer filen og treffene. Ingen posisjoner eller retninger endres.'}</p></div>
+    </li>
+    <li data-stage-state={saved ? 'current' : 'next'}>
+      <span className="photo-positioning-stage-marker" aria-hidden="true">2</span>
+      <div><strong>Velg posisjoner</strong>
+        <p>{saved ? 'Kontroller hvilke posisjoner som skal brukes. Ingenting endres før du bekrefter i Kontroll.' : 'Etterpå velger du hvilke posisjoner som skal brukes, og bekrefter dem i Kontroll.'}</p></div>
+    </li>
+  </ol>;
+}
+
+// Kontroll: the counts first and anything unusual straight after; each decision is one fold away.
+function PositioningSummary({ plan, selected, selectionUnit, repeats, optionLabel, newEvidence }) {
+  const count = (action) => selected.filter((row) => row.action === action).length;
+  const unchanged = plan.rows.length - selected.length;
+  const unit = repeats ? 'plasseringer' : 'bilder';
+  const exceptions = [
+    ...selected.filter((row) => (separationOf(row) ?? 0) > NOTABLE_METRES)
+      .map((row) => ({ key: `${row.photoId}-sources`, row, text: `Kildene ligger ca. ${metres(separationOf(row))} fra hverandre. ${optionLabel(row.proposal)} er valgt.` })),
+    ...selected.filter((row) => row.action === 'move' && row.distanceMetres > NOTABLE_METRES)
+      .map((row) => ({ key: `${row.photoId}-move`, row, text: `Flyttes ca. ${metres(row.distanceMetres)} fra gjeldende posisjon.` })),
+    ...selected.filter((row) => row.proposal.issues?.includes('questionable-zero-gps'))
+      .map((row) => ({ key: `${row.photoId}-zero`, row, text: 'GPS er 0°/0°. Kontroller kilden.' })),
+    ...plan.rows.filter((row) => !row.current && !selected.some((item) => item.photoId === row.photoId))
+      .map((row) => ({ key: `${row.photoId}-unplaced`, row, text: row.options.length ? 'Forblir uplassert.' : 'Ingen brukbar posisjon. Forblir uplassert.' })),
+  ];
+  const tiles = [['Plasseres', count('place'), 'place'], ['Flyttes', count('move'), 'move'], ['Samme posisjon', count('same'), 'same'], ['Uendret', unchanged, 'keep']]
+    .filter(([, value, key]) => value > 0 || key !== 'same');
+  return <section className="photo-positioning-summary" aria-label="Oppsummer posisjonering">
+    <p className="photo-positioning-selected-count">{selected.length} {selectionUnit} valgt</p>
+    <dl className="photo-positioning-tiles">{tiles.map(([label, value, key]) => <div key={key} data-summary={key}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    {exceptions.length > 0 ? <div className="photo-positioning-exceptions" data-positioning-exceptions={exceptions.length}>
+      <p><strong>Bør kontrolleres ({exceptions.length})</strong></p>
+      <ul>{exceptions.map((item) => <li key={item.key}><strong>{item.row.filename}</strong>
+        <PhotoOccurrenceContext occurrence={item.row.occurrence} count={item.row.occurrenceCount} index={item.row.occurrenceIndex} objectCount={item.row.objectCount} compact /> {item.text}</li>)}</ul>
+    </div> : <p className="photo-positioning-clear" data-positioning-exceptions="0">Ingen avvik å kontrollere.</p>}
+    <details className="photo-positioning-details" data-positioning-details>
+      <summary>Vis detaljer ({selected.length})</summary>
+      <ul>{selected.map((row) => <li key={row.photoId}>{row.filename}: {optionLabel(row.proposal)} · {actionLabel(row)}
+        <PhotoOccurrenceContext occurrence={row.occurrence} count={row.occurrenceCount} index={row.occurrenceIndex} objectCount={row.objectCount} compact /></li>)}</ul>
+    </details>
+    <p className="photo-positioning-note">{unchanged > 0 ? `${unchanged} ${unit} beholdes uendret. ` : ''}Bare valgte posisjoner endres. Retning, koblinger, kildedata og originalfiler beholdes. «Samme posisjon» kan endre hvilken kilde posisjonen bygger på.</p>
+    {newEvidence && <p role="status">Nye posisjoner er tilgjengelige. Gå tilbake og oppdater kontrollen for å inkludere dem.</p>}
+  </section>;
+}
+
 // Works on the photos already in the FOTO layer: no new import, no photo selection. Presented in the same
 // frame, step list and source cards as the import wizard; the lifecycle stays this workflow's own ticket:
 // sources and links are kept explicitly, positions only change after explicit selection and confirmation,
 // and cancelling leaves the layer as it was (a kept source stays, positions do not change).
 export default function PhotoPositioningWizard({ layer, photos, review, initialSourceId, focusedPhotoId, loadedSources = [], loadedSourceInput, onClose }) {
-  const dialogRef = useRef(null), inputRef = useRef(null), ticketRef = useRef(null), heading = useRef(null);
+  const dialogRef = useRef(null), inputRef = useRef(null), ticketRef = useRef(null), heading = useRef(null), content = useRef(null);
   const editedIds = useRef(new Set());
   const [step, setStep] = useState(initialSourceId ? 2 : 1);
   const [kind, setKind] = useState('gml');
@@ -67,7 +131,8 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   useEffect(() => {
     if (!photoSession.sourceWorkflowIsLive(ticketRef.current)) onClose();
   }, [layer.photoIds, onClose]);
-  useEffect(() => { heading.current?.focus(); }, [step]);
+  // Each step starts at its top: the body is one scroller, and Kontroll would otherwise open where Plassering was left.
+  useEffect(() => { if (content.current) content.current.scrollTop = 0; heading.current?.focus(); }, [step]);
 
   // A File or an already-loaded GMI layer; an already attached source is rechecked instead of duplicated.
   const stage = async (input, sourceKind) => {
@@ -131,7 +196,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
         canGoBack={(target) => target < step && (target !== 3 || Boolean(plan))} onBack={goBack} />
       <h3 ref={heading} tabIndex={-1} className="photo-import-heading">{STEPS[step - 1]}</h3>
       {notice && <p className="photo-source-saved" role="status">{notice}</p>}
-      <div className="photo-import-step-body photo-positioning-content">
+      <div ref={content} className="photo-import-step-body photo-positioning-content">
         <div className="photo-positioning-step">
           {error && <p role="alert">{error}</p>}
           {step === 1 && <section aria-label="Kilder og koblinger">
@@ -176,7 +241,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
             <input ref={inputRef} type="file" accept={`.${kind}`} hidden aria-label={`Velg ${kind.toUpperCase()}-kilde`} onChange={readFile} />
             {review && <p>Du har en uspart kilde. <button type="button" className={photoSourceButton} onClick={() => setStep(2)}>Se uspart kilde</button></p>}
           </section>}
-          {step === 2 && <section aria-label="Kontroller koblinger">
+          {step === 2 && <section aria-label="Kontroller koblinger" className="photo-positioning-links">
             {review?.state === 'pending' && <p role="status">Analyserer kilden …</p>}
             {review?.state === 'error' && <p role="alert">{readErrors[review.errorCode] || 'Kilden kunne ikke leses. Forkast denne kontrollen og velg filen på nytt.'}</p>}
             {ready && <>
@@ -184,16 +249,17 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
               {review.source.kind === 'gmi' ? <><PhotoGmiSummary source={review.source} ledger={review.associationLedger} />
                 <p>Hvert punktobjekt gir en egen plassering som du kan bekrefte i neste steg. Linjer gir bare koblinger.</p><p>Kilden beholdes også uten treff. Flere bilder kan kobles ved en senere kontroll.</p></>
                 : <PhotoGmlSummary source={review.source} ledger={review.ledger} />}
-              <p>Bekreft for å beholde kildedata. Gjeldende posisjoner og retning endres ikke.</p>
             </>}
-            {!review && <p>{saved ? 'Kilden er beholdt. Du kan legge til en kilde til, fullføre eller kontrollere tilgjengelige posisjoner.' : 'Ingen ekstern kilde er valgt. EXIF GPS trenger ingen filkobling.'}</p>}
+            {!review && !saved && <p>Ingen ekstern kilde er valgt. EXIF GPS trenger ingen filkobling.</p>}
+            {(review || saved) && <SourceStages saved={saved && !review} kind={review?.source?.kind} />}
             <div className="flex flex-wrap gap-2">
               {review && <button type="button" className={photoSourceButton} onClick={discard}>Forkast uspart kilde</button>}
               {!review && <button type="button" className={photoSourceButton} onClick={() => setStep(1)}>Legg til en kilde</button>}
             </div>
           </section>}
           {step === 3 && plan && <section aria-label="Kontroller posisjoner">
-            <p>GML-posisjoner er foreslått der de finnes, og manuelle posisjoner beholdes. Endre bare det som ikke stemmer. Flere punktreferanser beholder hver sin plassering av samme bilde. Avstander er omtrentlige og sier ikke noe om kildepresisjon.</p>
+            <p className="photo-positioning-lead">GML-posisjoner er valgt der de er entydige, og manuelle posisjoner beholdes. Endre bare det som ikke stemmer.</p>
+            <p className="photo-positioning-note">Flere punktreferanser beholder hver sin plassering av samme bilde. Avstander er omtrentlige og sier ikke noe om kildepresisjon.</p>
             {focusedPhotoId && <p>Åpnet for {photos.find((photo) => photo.id === focusedPhotoId)?.originalFilename}. Valgene gjelder bare denne kontrollen.</p>}
             {newEvidence && <div role="status"><p>Nye posisjoner eller GPS-status er tilgjengelige. Oppdater kontrollen for å se dem; valgene utvides ikke automatisk.</p>
             </div>}
@@ -209,14 +275,14 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
             </div>
             <ul className="photo-positioning-rows" aria-label="Tilgjengelige bildeposisjoner">{positionRows.map((row) => {
               const chosen = selected.find((item) => item.photoId === row.photoId);
-              const conflict = row.options.some((a, index) => row.options.slice(index + 1).some((b) => photoPositionDistance(a.position, b.position) > PHOTO_POSITION_TOLERANCE_METRES));
+              const separation = separationOf(row), lead = comparisonLead(row, chosen);
               return <li key={row.photoId} data-photo-id={row.photoId} data-focused={row.photoId === focusedPhotoId || undefined} data-action={chosen?.action || 'keep'}>
                 <div className="photo-positioning-row">
                   {row.thumbnailUrl ? <img src={row.thumbnailUrl} alt="" loading="lazy" /> : <span className="photo-positioning-thumbnail">Bilde</span>}
                   <div className="photo-positioning-filename"><strong>{row.filename}</strong>
                     <PhotoOccurrenceContext occurrence={row.occurrence} count={row.occurrenceCount} index={row.occurrenceIndex} objectCount={row.objectCount} />
                     <small>{row.current ? `Gjeldende: ${photoSourceLabel(row.currentKind)}` : 'Uplassert'}{row.currentSourceFilename ? ` · ${row.currentSourceFilename}` : ''}</small>
-                    <small>GMI: koblet til {row.objectCount} {row.objectCount === 1 ? 'objekt' : 'objekter'}</small>
+                    {row.objectCount > 0 && <small>GMI: koblet til {row.objectCount} {row.objectCount === 1 ? 'objekt' : 'objekter'}</small>}
                     {row.exifState === 'pending' && <small>Leser GPS …</small>}
                     {row.exifState === 'no-gps' && <small>Ingen GPS-data</small>}
                     {['invalid', 'error', 'unsupported-format'].includes(row.exifState) && <small>EXIF GPS: Kan ikke brukes</small>}
@@ -224,33 +290,28 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
                     {row.gmiUnavailable && <small>GMI-posisjon utilgjengelig: {row.gmiUnavailable === 'missing-crs' ? 'Kilden mangler et kjent koordinatsystem.' : row.gmiUnavailable === 'unsupported-crs' ? 'Koordinatsystemet støttes ikke.' : 'Punktgeometrien kan ikke brukes.'}</small>}
                   </div>
                   <label className="photo-position-choice">Posisjon
-                    <select aria-label={`Velg posisjon for ${row.filename}`} value={choices[row.photoId] || ''} onChange={(event) => { editedIds.current.add(row.photoId); setChoices({ ...choices, [row.photoId]: event.target.value }); }}>
+                    <select className="gmi-focus-ring" aria-label={`Velg posisjon for ${row.filename}`} value={choices[row.photoId] || ''} onChange={(event) => { editedIds.current.add(row.photoId); setChoices({ ...choices, [row.photoId]: event.target.value }); }}>
                       <option value="">{row.current ? 'Behold gjeldende' : 'La bildet være uplassert'}</option>
                       {row.options.map((candidate) => <option key={candidate.id} value={candidate.id}>{optionLabel(candidate)}</option>)}
                     </select>
                   </label>
-                  <strong className="photo-positioning-action">{chosen ? actionLabel(chosen) : row.current ? 'Behold gjeldende' : 'Uplassert'}</strong>
+                  <strong className="photo-positioning-action" data-action={chosen?.action || 'keep'}>{chosen ? actionLabel(chosen) : row.current ? 'Behold gjeldende' : 'Uplassert'}</strong>
                 </div>
-                {conflict && <p className="photo-position-conflict">Ulike posisjoner fra kildene</p>}
-                <details className="photo-positioning-comparison"><summary>Sammenlign posisjoner</summary>
-                  <p>Gjeldende: {coordinates(row.current?.position)}</p>
-                  {row.options.map((candidate) => <p key={candidate.id}>{optionLabel(candidate)}: {coordinates(candidate.position)}
-                    {row.current ? ` · ${metres(photoPositionDistance(row.current.position, candidate.position))} fra gjeldende` : ''}
-                    {candidate.issues?.includes('questionable-zero-gps') && ' · GPS er 0°/0°. Kontroller kilden før du bruker posisjonen.'}</p>)}
-                </details>
+                {(lead || row.options.length > 0) && <details className="photo-positioning-comparison" data-sources-differ={separation > PHOTO_POSITION_TOLERANCE_METRES || undefined}
+                  data-notable={separation > NOTABLE_METRES || undefined}>
+                  <summary>{lead && <span className="photo-positioning-separation">{lead}</span>}<span className="photo-positioning-coordinates-label">{lead ? 'Vis koordinater' : 'Vis posisjon'}</span></summary>
+                  <dl>
+                    <div><dt>Gjeldende</dt><dd>{coordinates(row.current?.position)}</dd></div>
+                    {row.options.map((candidate) => <div key={candidate.id}><dt>{optionLabel(candidate)}</dt><dd>
+                      {row.current && <span className="photo-positioning-separation">ca. {metres(photoPositionDistance(row.current.position, candidate.position))} fra gjeldende · </span>}
+                      {coordinates(candidate.position)}
+                      {candidate.issues?.includes('questionable-zero-gps') && <span className="photo-positioning-caution"> · GPS er 0°/0°. Kontroller kilden før du bruker posisjonen.</span>}</dd></div>)}
+                  </dl>
+                </details>}
               </li>;
             })}</ul>
           </section>}
-          {step === 4 && plan && <section className="photo-positioning-summary" aria-label="Oppsummer posisjonering">
-            <p className="photo-positioning-selected-count">{selected.length} {selectionUnit} valgt</p>
-            <dl>{[['Plasseres', 'place'], ['Flyttes', 'move'], ['Samme posisjon', 'same']].map(([label, action]) =>
-              <div key={action}><dt>{label}</dt><dd>{selected.filter((row) => row.action === action).length}</dd></div>)}</dl>
-            <p>{plan.rows.length - selected.length} {repeats ? 'plasseringer' : 'bilder'} beholdes uendret.</p>
-            <ul>{selected.map((row) => <li key={row.photoId}>{row.filename}: {optionLabel(row.proposal)} · {actionLabel(row)}
-              <PhotoOccurrenceContext occurrence={row.occurrence} count={row.occurrenceCount} index={row.occurrenceIndex} objectCount={row.objectCount} compact /></li>)}</ul>
-            <p>«Samme posisjon» kan endre hvilken kilde gjeldende posisjon bygger på. Bare valgte posisjoner endres. Retning, koblinger, kildedata og originalfiler beholdes.</p>
-            {newEvidence && <p role="status">Nye posisjoner er tilgjengelige. Gå tilbake og oppdater kontrollen for å inkludere dem.</p>}
-          </section>}
+          {step === 4 && plan && <PositioningSummary plan={plan} selected={selected} selectionUnit={selectionUnit} repeats={repeats} optionLabel={optionLabel} newEvidence={newEvidence} />}
         </div>
       </div>
       <footer className="photo-import-footer border-t border-gmi-border">

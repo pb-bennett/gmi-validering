@@ -85,7 +85,8 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       await click(browser, 'Kontroller tilgjengelige posisjoner');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '3 valgt');
       assert(await browser.evaluate(`${sourceWizard}.innerText.includes('GMI: koblet til 2 objekter')`));
-      assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Ulike posisjoner fra kildene')`));
+      // A source difference is stated by its size, neutrally, and stays visible without opening anything.
+      assert.match(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-comparison[data-sources-differ] summary .photo-positioning-separation').innerText`), /^ca\. .+ m mellom kildene$/);
       for (const [width, height] of [[1680, 900], [1366, 768], [1280, 720], [1024, 768], [1024, 620]]) {
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
         const geometry = await browser.evaluate(`(() => {const dialog=${sourceWizard},footer=dialog.querySelector('footer'),content=dialog.querySelector('.photo-positioning-content');return {dialog:dialog.getBoundingClientRect().toJSON(),footer:footer.getBoundingClientRect().toJSON(),scroll:content.scrollWidth,width:content.clientWidth};})()`);

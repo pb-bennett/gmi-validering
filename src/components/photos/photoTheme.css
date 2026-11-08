@@ -1,0 +1,65 @@
+/* FOTO controls in the app's interactive teal (--gmi-interactive). Scoped to the FOTO dialogs, the edit bar and the map card,
+   so the rest of the app keeps its navy primary. Hover and pressed shades are mixed from the existing tokens rather than added.
+   Warning, success and photo provenance colours (GML purple, EXIF green, manual orange) are not touched here. */
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar) {
+  --photo-accent: var(--gmi-interactive);
+  --photo-accent-hover: color-mix(in srgb, var(--gmi-interactive) 82%, var(--gmi-ink));
+  --photo-accent-pressed: color-mix(in srgb, var(--gmi-interactive) 64%, var(--gmi-ink));
+  --photo-accent-tint: color-mix(in srgb, var(--gmi-interactive) 7%, var(--gmi-surface));
+  --photo-accent-tint-strong: color-mix(in srgb, var(--gmi-interactive) 14%, var(--gmi-surface));
+}
+
+/* Primary actions. */
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar) .gmi-primary-control {
+  border-color: var(--photo-accent); background: var(--photo-accent); color: #fff; transition: background-color 120ms, border-color 120ms;
+}
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar) .gmi-primary-control:hover:not(:disabled) {
+  opacity: 1; border-color: var(--photo-accent-hover); background: var(--photo-accent-hover);
+}
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar) .gmi-primary-control:active:not(:disabled) {
+  opacity: 1; border-color: var(--photo-accent-pressed); background: var(--photo-accent-pressed);
+}
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar) .gmi-primary-control:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Secondary buttons: a teal edge and tint on hover, a stronger tint while pressed. */
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar) .gmi-compact-button:not(.gmi-primary-control) { transition: background-color 120ms, border-color 120ms, color 120ms; }
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar) .gmi-compact-button:not(.gmi-primary-control):hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: var(--photo-accent); background: var(--photo-accent-tint); color: var(--gmi-navy);
+}
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar) .gmi-compact-button:not(.gmi-primary-control):active:not(:disabled):not([aria-disabled='true']) {
+  background: var(--photo-accent-tint-strong);
+}
+/* Selected and pressed controls. */
+:is(.photo-collection-dialog, .photo-edit-command-bar) :is([aria-pressed='true'], [aria-checked='true']).gmi-compact-button,
+.photo-map-display-card .gmi-selected-control {
+  border-color: var(--gmi-interactive); background: var(--gmi-cyan-soft); color: var(--gmi-navy); --tw-ring-color: var(--gmi-interactive);
+}
+/* The ✕ in each header. */
+:is(.photo-collection-dialog, .photo-metadata-dialog) .photo-collection-header > button { border-radius: 8px; transition: background-color 120ms, color 120ms; }
+:is(.photo-collection-dialog, .photo-metadata-dialog) .photo-collection-header > button:hover { background: var(--gmi-surface-soft); color: var(--gmi-interactive); }
+
+/* Radios and checkboxes. */
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary) :is(input[type='radio'], input[type='checkbox']) { accent-color: var(--gmi-interactive); cursor: pointer; }
+
+/* Fields: recognisably interactive, with a teal edge on hover and focus. */
+:is(.photo-collection-dialog, .photo-metadata-dialog) select { cursor: pointer; transition: border-color 120ms, box-shadow 120ms; }
+:is(.photo-collection-dialog, .photo-metadata-dialog) :is(select, input[type='text'], input[type='date'], input[type='time'], input:not([type])):hover:not(:disabled) { border-color: var(--gmi-interactive); }
+
+/* Keyboard focus: one visible teal ring for everything that lacks gmi-focus-ring. Headings that only receive focus on arrival
+   (tabindex=-1) show none; a mouse click on a fold shows none either. */
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar) :is(summary, select, input, textarea, [tabindex='0']):focus-visible {
+  outline: 2px solid var(--gmi-interactive); outline-offset: 2px; border-radius: 4px;
+}
+:is(.photo-collection-dialog, .photo-metadata-dialog) :is(h2, h3, h4)[tabindex='-1']:focus { outline: none; }
+:is(.photo-collection-dialog, .photo-metadata-dialog) summary:focus:not(:focus-visible) { outline: none; }
+:is(.photo-collection-dialog, .photo-metadata-dialog) summary { border-radius: 4px; }
+:is(.photo-collection-dialog, .photo-metadata-dialog) summary:hover { color: var(--gmi-interactive); }
+
+/* Wizard steps: the current step in teal, earlier steps as teal links. */
+.photo-import-steps [aria-current] { color: var(--gmi-interactive); text-decoration-color: var(--gmi-interactive); text-decoration-thickness: 2px; }
+.photo-import-steps button { color: var(--gmi-text); transition: color 120ms; }
+.photo-import-steps button:hover { color: var(--gmi-interactive); background: transparent; }
+
+/* Source and format cards: a teal edge on hover, as on the export wizard. */
+.photo-collection-dialog .photo-import-source { transition: border-color 120ms; }
+.photo-collection-dialog .photo-import-source:has(input[type='radio']:not(:disabled)):hover { border-color: var(--gmi-interactive); }

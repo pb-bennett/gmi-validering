@@ -280,6 +280,21 @@ test('missing time: the warning is specific, and generation, schema and import a
   assert.deepEqual(photoExportLevels(filled).map(({ text }) => text).slice(1), ['Kravene er oppfylt etter regelsjekk. XSD-validering er ikke kjørt.', 'Profilen er importert tidligere, men denne pakken er ikke testet.']);
 });
 
+// Acceptance defect: Standard showed «valgfritt for Gemini VA», where a missing time blocks the export.
+test('missing time: the group hint follows the chosen target, and only Gemini lets it through', async () => {
+  const { session, layerId } = await completionLayer([jpeg('a.jpg'), jpeg('b.jpg', exifTime())]);
+  const hint = (configuration) => completionView(session, layerId, configuration).model.captureTime.groups.find((group) => group.state === 'none').hint;
+  assert.equal(hint({}), 'Ingen kilde har en brukbar tid. Eksporten kan lages uten, men GML-filen følger da ikke Skråfoto 2019-skjemaet.');
+  assert.equal(hint(LEGACY), 'Ingen kilde har en brukbar tid. Opptakstid med sekunder kreves for Skråfoto 2019, og må fylles ut før eksport.');
+  assert.equal(hint(ASBUILT), 'Ingen kilde har en brukbar tid. Opptakstid med sekunder kreves for AsBuilt 5.2, og må fylles ut før eksport.');
+  for (const configuration of [LEGACY, ASBUILT]) {
+    const { model, readiness } = completionView(session, layerId, configuration);
+    assert.doesNotMatch(JSON.stringify(model.captureTime.groups.map((group) => group.hint)), /Gemini|valgfritt/, configuration.profile);
+    assert.equal(readiness.blocking.some((item) => item.code === 'capture-time-required'), true, 'the rule is unchanged: Standard and AsBuilt block');
+  }
+  assert.equal(completionView(session, layerId).readiness.levels.generation, 'possible', 'the rule is unchanged: Gemini does not block');
+});
+
 test('counts and copy read correctly for one and for many', () => {
   assert.deepEqual([photoCount(1), photoCount(2), placementCount(1), placementCount(11), selectedPhotoCount(1), selectedPhotoCount(3), selectedPlacementCount(1), selectedPlacementCount(2)],
     ['1 bilde', '2 bilder', '1 plassering', '11 plasseringer', '1 valgt bilde', '3 valgte bilder', '1 valgt plassering', '2 valgte plasseringer']);

@@ -7,7 +7,7 @@ import { photoExportPackageContents } from '@/lib/photos/photoExportWizard.mjs';
 import PhotoExportStatus, { PhotoExportDiagnostics, PhotoExportTone } from './PhotoExportStatus';
 
 const HEADINGS = Object.freeze({ building: 'Kontrollerer originalfiler …', 'build-failed': 'Pakken kunne ikke forberedes', ready: 'Klar til nedlasting', packaging: 'Lager ZIP …',
-  stale: 'Forhåndsvisningen er utdatert', 'packaging-failed': 'ZIP-pakken kunne ikke lages', done: 'ZIP-pakken er laget og sendt til nedlasting' });
+  stale: 'Forhåndsvisningen er utdatert', 'packaging-failed': 'ZIP-pakken kunne ikke lages', done: 'ZIP-pakken er klar' });
 
 const TONES = Object.freeze({ building: 'wait', packaging: 'wait', ready: 'download', done: 'good', stale: 'caution', 'build-failed': 'stop', 'plan-errors': 'stop', 'packaging-failed': 'stop' });
 
@@ -52,20 +52,14 @@ function Summary({ plan, readiness }) {
   </>;
 }
 
-// «Sendt til nedlasting», because the app cannot see whether the browser saved the file.
-function ImportGuidance({ plan, readiness }) {
-  const gemini = plan.profile === 'gemini-legacy2019';
+// After the download: the name, and the schema gap when there is one. Last ned på nytt hands over the same plan, so the same
+// bytes and identifiers; that guarantee lives in the wizard and needs no paragraph here.
+function DownloadDone({ plan, readiness }) {
   const { zipFilename, gmlFilename } = plan.naming;
   const timeGap = readiness.levels.schema.gaps.find((gap) => gap.field === 'captureTime');
   return <>
     <p className="photo-export-filename" data-export-zip={zipFilename} data-export-gml={gmlFilename}>{zipFilename}</p>
-    {gemini ? <ol className="photo-export-guidance" data-export-guidance>
-      <li>Pakk ut ZIP-filen.</li>
-      <li>Importer {gmlFilename} i Gemini VA, med Attachments-mappen ved siden av.</li>
-      <li>Kontroller resultatet i Gemini VA.</li>
-    </ol> : <p data-export-guidance>Pakk ut ZIP-filen. {gmlFilename} og Attachments-mappen må ligge ved siden av hverandre.</p>}
-    {timeGap && <p className="photo-completion-warning" data-export-warning="capture-time-schema">Pakken følger ikke skjemaet fordi {photoCount(timeGap.count)} mangler opptakstid.</p>}
-    <p>Last ned på nytt gir den samme pakken. {gemini ? 'En ny pakke får nytt tidspunkt og nye ID-er og regnes som en ny leveranse.' : 'En ny pakke får nytt tidspunkt og regnes som en ny leveranse.'}</p>
+    {timeGap && <p className="photo-completion-warning" data-export-warning="capture-time-schema">{singularCopy(`${timeGap.count} bilder mangler opptakstid.`)} Pakken følger derfor ikke {readiness.levels.schema.name}-skjemaet.</p>}
   </>;
 }
 
@@ -80,6 +74,6 @@ export default function PhotoExportPackageStep({ status, preview, download, read
     {status === 'stale' && <p role="alert">Bildene er endret etter at forhåndsvisningen ble laget.</p>}
     {status === 'packaging-failed' && <p role="alert">{download.error}</p>}
     {['ready', 'packaging', 'packaging-failed'].includes(status) && <Summary plan={plan} readiness={readiness} />}
-    {status === 'done' && <ImportGuidance plan={plan} readiness={readiness} />}
+    {status === 'done' && <DownloadDone plan={plan} readiness={readiness} />}
   </div>;
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import './photoTheme.css';
+
 export const photoSourceButton = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong bg-gmi-surface px-3 py-2';
 
 // One source card for both photo wizards: a radio choice (or a plain card for an attached source), an optional

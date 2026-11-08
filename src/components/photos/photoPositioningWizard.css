@@ -2,28 +2,75 @@
    .photo-import-heading, .photo-import-step-body, .photo-import-footer) and source cards (.photo-import-source).
    Only the content specific to linking and position review is styled here. */
 .photo-positioning-wizard [role="alert"] { color: #9b2c23; }
-.photo-positioning-wizard .photo-source-saved { margin: 0; padding: .5rem 1rem; background: var(--gmi-surface-soft); flex-shrink: 0; font-size: 13px; }
-.photo-positioning-step { max-width: 1000px; margin: 0 auto; font-size: 13px; }
+.photo-positioning-wizard .photo-source-saved { margin: 0; padding: .4rem 1rem; border-bottom: 1px solid var(--gmi-border); background: var(--gmi-surface-soft); color: var(--gmi-text-muted); flex-shrink: 0; font-size: 12px; }
+.photo-positioning-step { max-width: 1040px; font-size: 13px; }
 .photo-positioning-step > section > p, .photo-positioning-step > p { margin: 10px 0; }
 .photo-positioning-subheading { margin: 18px 0 8px; font-size: 14px; font-weight: 600; color: var(--gmi-navy); }
 .photo-positioning-add { display: grid; gap: 0; margin: 0; padding: 0; border: 0; min-width: 0; }
 .photo-positioning-add:disabled { opacity: .6; }
 .photo-positioning-wizard summary { cursor: pointer; }
-.photo-positioning-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0; }
+.photo-positioning-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 12px; }
+.photo-positioning-selection > strong { padding: 2px 10px; border-radius: 999px; background: var(--gmi-cyan-soft); color: var(--gmi-navy); font-weight: 600; }
 .photo-positioning-rows { list-style: none; padding: 0; margin: 0; }
-.photo-positioning-rows > li { padding: 10px 0; border-top: 1px solid var(--gmi-border, #dce3ea); }
-.photo-positioning-row { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.photo-positioning-rows > li { padding: 8px 0; border-top: 1px solid var(--gmi-border, #dce3ea); }
+.photo-positioning-row { display: flex; align-items: center; gap: 12px; }
 .photo-positioning-row img, .photo-positioning-thumbnail { width: 56px; height: 48px; object-fit: cover; flex-shrink: 0; background: #edf0f3; }
 .photo-positioning-filename { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.photo-positioning-filename small { display: block; color: #596779; margin-top: 4px; }
-.photo-positioning-action { width: 160px; flex-shrink: 0; font-weight: 500; }
+.photo-positioning-filename strong { font-weight: 600; color: var(--gmi-navy); }
+.photo-positioning-filename small { display: block; color: var(--gmi-text-subtle); margin-top: 2px; font-size: 11.5px; }
+/* What happens to the row, as a quiet tag: never a warning colour, since a move is an ordinary outcome. */
+.photo-positioning-action { width: 150px; flex-shrink: 0; align-self: center; font-size: 12px; font-weight: 600; color: var(--gmi-text-muted); }
+.photo-positioning-action:is([data-action='place'], [data-action='move'], [data-action='same']) { color: var(--gmi-interactive); }
 .photo-positioning-move { color: #875400; }
 .photo-positioning-place { color: #245d41; }
 .photo-positioning-unavailable, .photo-positioning-ambiguous, .photo-positioning-unmatched { color: #596779; }
-.photo-positioning-comparison { margin: 6px 0 0 98px; font-size: 12px; }
-.photo-positioning-summary dl { max-width: 520px; margin: 18px 0; }
-.photo-positioning-summary dl > div { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #dce3ea; }
-.photo-positioning-selected-count { font-size: 18px; font-weight: 600; }
+/* Distance first, in ordinary text; the coordinates are the detail behind it. Only a large difference takes the caution colour. */
+.photo-positioning-comparison { margin: 4px 0 0 68px; font-size: 12px; color: var(--gmi-text-muted); }
+.photo-positioning-comparison > summary { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 1px 4px; }
+.photo-positioning-comparison > summary::before { content: '▸'; font-size: 10px; color: var(--gmi-text-subtle); }
+.photo-positioning-comparison[open] > summary::before { content: '▾'; }
+.photo-positioning-comparison .photo-positioning-separation { color: var(--gmi-text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.photo-positioning-coordinates-label { font-size: 11.5px; color: var(--gmi-text-subtle); text-decoration: underline; text-decoration-color: var(--gmi-border-strong); text-underline-offset: 2px; }
+.photo-positioning-comparison[data-notable] > summary .photo-positioning-separation { color: #6b4300; }
+.photo-positioning-comparison dl { display: grid; gap: 2px; margin: 4px 0 2px 16px; }
+.photo-positioning-comparison dl > div { display: grid; grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr); gap: 8px; }
+.photo-positioning-comparison dt { color: var(--gmi-text-muted); }
+.photo-positioning-comparison dd { margin: 0; color: var(--gmi-text-subtle); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.photo-positioning-caution { color: #6b4300; }
+/* Kontroll: counts as tiles, exceptions straight under them, every decision one fold away. */
+.photo-positioning-summary { display: grid; gap: 12px; }
+.photo-positioning-selected-count { font-size: 16px; font-weight: 600; color: var(--gmi-navy); }
+.photo-positioning-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; max-width: 640px; margin: 0; }
+.photo-positioning-tiles > div { display: grid; gap: 2px; padding: 8px 12px; border: 1px solid var(--gmi-border); border-radius: 8px; background: var(--gmi-surface-soft); }
+.photo-positioning-tiles dt { font-size: 12px; color: var(--gmi-text-muted); }
+.photo-positioning-tiles dd { margin: 0; font-size: 20px; font-weight: 600; color: var(--gmi-navy); font-variant-numeric: tabular-nums; }
+.photo-positioning-exceptions { padding: 10px 12px; border: 1px solid #d9a441; border-radius: 8px; background: #fff7e6; color: #6b4300; }
+.photo-positioning-exceptions > p { margin: 0; }
+.photo-positioning-exceptions ul { display: grid; gap: 4px; margin: 6px 0 0; padding-left: 18px; list-style: disc; overflow-wrap: anywhere; }
+.photo-positioning-exceptions li strong { font-weight: 600; }
+.photo-positioning-clear { color: #245d41; font-weight: 500; }
+.photo-positioning-details { padding: 6px 12px; border: 1px solid var(--gmi-border); border-radius: 8px; }
+.photo-positioning-details > summary { font-weight: 600; color: var(--gmi-navy); }
+.photo-positioning-details ul { display: grid; gap: 2px; margin: 6px 0 4px; padding-left: 18px; list-style: disc; color: var(--gmi-text-muted); overflow-wrap: anywhere; }
+.photo-positioning-lead { font-size: 13px; color: var(--gmi-text); }
+.photo-positioning-note { font-size: 12px; color: var(--gmi-text-muted); }
+.photo-positioning-step > section > p.photo-positioning-lead { margin: 0 0 2px; }
+.photo-positioning-step > section > p.photo-positioning-note { margin: 0 0 4px; }
+.photo-positioning-summary > p { margin: 0; }
+
+/* Koblinger: what the source gives, then the two separate commitments. */
+.photo-positioning-links { display: grid; gap: 14px; align-content: start; }
+.photo-positioning-step > .photo-positioning-links > p { margin: 0; }
+.photo-positioning-stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.photo-positioning-stages > li { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--gmi-border-strong); border-radius: 10px; background: var(--gmi-surface); }
+.photo-positioning-stages > li[data-stage-state='current'] { border-color: var(--gmi-interactive); background: var(--gmi-cyan-soft); box-shadow: inset 3px 0 0 var(--gmi-interactive); }
+.photo-positioning-stages > li[data-stage-state='next'] { color: var(--gmi-text-muted); background: var(--gmi-surface-soft); border-style: dashed; }
+.photo-positioning-stages strong { display: block; font-size: 14px; font-weight: 600; color: var(--gmi-navy); }
+.photo-positioning-stages > li[data-stage-state='next'] strong { color: var(--gmi-text-muted); }
+.photo-positioning-stages p { margin: 2px 0 0; font-size: 12.5px; }
+.photo-positioning-stage-marker { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; border: 1.5px solid currentColor; font-size: 12px; font-weight: 700; color: var(--gmi-text-muted); }
+.photo-positioning-stages > li[data-stage-state='current'] > .photo-positioning-stage-marker { border-color: var(--gmi-interactive); background: var(--gmi-interactive); color: #fff; }
+.photo-positioning-stages > li[data-stage-state='done'] > .photo-positioning-stage-marker { border: 0; color: #245d41; }
 .photo-source-inventory { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; margin: 8px 0 0; }
 .photo-source-inventory > .photo-import-source { min-width: 0; margin-bottom: 0; }
 .photo-source-filename, .photo-source-removal { overflow-wrap: anywhere; }
@@ -32,17 +79,19 @@
 .photo-source-removal p { margin: 0 0 8px; }
 .photo-import-source .photo-import-source-title { margin: 0; }
 .photo-import-source details { margin: .5rem 0 0; }
-.photo-position-choice { display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 36%; }
-.photo-position-choice select { width: 100%; border: 1px solid var(--gmi-border-strong); padding: 7px; border-radius: 4px; }
-.photo-position-conflict { color: #855400; }
+.photo-position-choice { display: flex; flex-direction: column; gap: 2px; min-width: 0; width: 34%; max-width: 360px; font-size: 11.5px; color: var(--gmi-text-muted); }
+/* A field that looks like one: white, bordered, its own chevron, a teal edge on hover and a teal ring on keyboard focus. */
+.photo-position-choice select { width: 100%; min-height: 34px; padding: 5px 30px 5px 9px; border: 1px solid var(--gmi-border-strong); border-radius: 6px; color: var(--gmi-text); font-size: 13px; appearance: none; box-shadow: 0 1px 1px #0206180a;
+  background: var(--gmi-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%2345556C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center; }
+.photo-position-choice select:hover { border-color: var(--gmi-interactive); background-color: color-mix(in srgb, var(--gmi-interactive) 4%, var(--gmi-surface)); }
 .photo-positioning-rows [data-focused] { border-left: 3px solid var(--gmi-interactive); padding-left: 8px; }
 @media (max-width: 1100px) {
   .photo-positioning-row { flex-wrap: wrap; }
-  .photo-position-choice { flex: 1 1 260px; max-width: none; }
+  .photo-position-choice { flex: 1 1 260px; width: auto; max-width: none; }
 }
 @media (max-width: 700px) {
   .photo-positioning-row { flex-wrap: wrap; gap: 8px; }
   .photo-positioning-filename { flex-basis: calc(100% - 96px); }
-  .photo-positioning-action { width: auto; margin-left: 80px; }
-  .photo-positioning-comparison { margin-left: 80px; }
+  .photo-positioning-action { width: auto; margin-left: 68px; }
+  .photo-positioning-comparison { margin-left: 68px; }
 }

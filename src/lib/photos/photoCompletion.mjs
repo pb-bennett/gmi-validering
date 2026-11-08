@@ -86,8 +86,17 @@ function photographerRow(item, photo) {
   return Object.freeze({ ...row, selectable: selectable(row) });
 }
 
+// The hint follows the target's own rule, so it never names Gemini VA when another target is chosen. The rule itself is
+// readiness's: a required time blocks, a recommended one is let through with the schema gap shown.
+function missingTimeHint(requirement, schemaName) {
+  const none = 'Ingen kilde har en brukbar tid.';
+  if (requirement === 'required') return `${none} Opptakstid med sekunder kreves${schemaName ? ` for ${schemaName}` : ''}, og må fylles ut før eksport.`;
+  if (requirement === 'recommended') return `${none} Eksporten kan lages uten, men GML-filen følger da ikke ${schemaName || 'skjemaet'}-skjemaet.`;
+  if (requirement === 'optional') return `${none} Du kan fylle den ut, men det er valgfritt.`;
+  return none;
+}
 const CAPTURE_GROUPS = Object.freeze([
-  ['none', 'Mangler opptakstid', 'Ingen kilde har en brukbar tid. Du kan fylle den ut, men det er valgfritt for Gemini VA.'],
+  ['none', 'Mangler opptakstid', ({ requirement, schemaName }) => missingTimeHint(requirement, schemaName)],
   ['partial', 'Tid uten sekunder', 'Oppgi sekunder, eller bekreft at de er 00.'], ['unusable', 'Kan ikke tolkes'],
   ['conflict', 'Ulike kildeverdier', 'Velg verdi for hvert bilde.'], ['adoptable', 'Fjernet av deg', 'Kilden har en verdi, men den hentes ikke inn igjen av seg selv.'],
   ['pending', 'Leser bildedata', 'Oppdateres av seg selv når lesingen er ferdig.'],
@@ -105,14 +114,14 @@ const PHOTOGRAPHER_GROUPS = Object.freeze([
 
 // A long group starts folded when other groups follow it, so a few conflicts are not buried under hundreds of ready rows.
 const LONG_GROUP = 25;
-function groupRows(rows, definitions) {
-  const groups = definitions.map(([state, label, hint = null]) => ({ state, label, hint, rows: rows.filter((row) => row.state === state) })).filter((group) => group.rows.length);
+function groupRows(rows, definitions, context) {
+  const groups = definitions.map(([state, label, hint = null]) => ({ state, label, hint: typeof hint === 'function' ? hint(context) : hint, rows: rows.filter((row) => row.state === state) })).filter((group) => group.rows.length);
   return groups.map((group) => ({ ...group, open: groups.length === 1 || group.rows.length <= LONG_GROUP }));
 }
 
 // A default is settled for export, so it is not work left. It stays in its own group, where it can be corrected.
-function panel(rows, definitions) {
-  return { rows, groups: groupRows(rows, definitions), done: rows.filter((row) => row.state === 'accepted'), outstanding: rows.filter((row) => !['accepted', 'defaulted'].includes(row.state)).length };
+function panel(rows, definitions, context = {}) {
+  return { rows, groups: groupRows(rows, definitions, context), done: rows.filter((row) => row.state === 'accepted'), outstanding: rows.filter((row) => !['accepted', 'defaulted'].includes(row.state)).length };
 }
 
 function requirementFor(key, requirement, outstanding, empty = false) {
@@ -122,7 +131,8 @@ function requirementFor(key, requirement, outstanding, empty = false) {
 export function photoCompletionModel(photos, readiness) {
   const byId = new Map(photos.map((photo) => [photo.id, photo]));
   const { captureTime, direction, photographer, placement, context } = readiness.tasks;
-  const capturePanel = panel(captureTime.items.map((item) => captureRow(item, byId.get(item.photoId))), CAPTURE_GROUPS);
+  const capturePanel = panel(captureTime.items.map((item) => captureRow(item, byId.get(item.photoId))), CAPTURE_GROUPS,
+    { requirement: captureTime.requirement, schemaName: readiness.levels.schema.name });
   const directionPanel = panel(direction.items.map((item) => directionRow(item, byId.get(item.occurrenceId))), DIRECTION_GROUPS);
   const photographerPanel = panel(captureTime.items.map((item) => photographerRow(item, byId.get(item.photoId))), PHOTOGRAPHER_GROUPS);
   const unplaced = placement.occurrenceIds.map((id) => Object.freeze({ key: id, photoId: id, ...photoRow(byId.get(id)) }));

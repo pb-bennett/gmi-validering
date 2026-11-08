@@ -123,9 +123,11 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   const first = await downloadZip(browser, directory);
   assert.deepEqual(Object.keys(first.entries).sort(), [first.gml, 'Attachments/blank.jpg', 'Attachments/timed.jpg'].sort());
   const done = await dialogText(browser);
-  assert.match(done, /ZIP-pakken er laget og sendt til nedlasting/);
-  assert(done.includes(`Importer ${first.gml} i Gemini VA, med Attachments-mappen ved siden av.`));
-  assert.match(done, /Pakken følger ikke skjemaet fordi 1 bilde mangler opptakstid\./);
+  assert.match(done, /ZIP-pakken er klar/);
+  assert(done.includes(first.zip), 'the downloaded name');
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), '1 bilde mangler opptakstid. Pakken følger derfor ikke Skråfoto 2019-skjemaet.');
+  assert.doesNotMatch(done, /Importer |Pakk ut ZIP-filen|nye ID-er|Kontroller resultatet i Gemini VA/, 'no import steps and no explanation of repeated downloads');
+  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Last ned på nytt', 'Lukk']);
   assert.deepEqual(await previewNames(browser), { zip: first.zip, gml: first.gml });
 
   // Again: same plan, so the same name and the same bytes, identifiers included.

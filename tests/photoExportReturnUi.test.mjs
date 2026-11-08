@@ -170,6 +170,108 @@ layerTest('wizard → hub → wizard: settings stay, the hub says where it leads
   assert.equal(await label(browser), 'Nord');
 });
 
+// Acceptance defect: with the hub opened from export, choosing another Mål showed `Gå til eksport` and `Lukk`. The target is
+// chosen by key, a trusted input, as a person would, and the journey must outlast any number of changes.
+const hubTarget = `${hub}.querySelector('.photo-completion-target select')`;
+const chooseHubTarget = async (browser, value) => {
+  const [from, to] = await browser.evaluate(`(() => { const values = Array.from(${hubTarget}.options).map((item) => item.value); return [values.indexOf(${hubTarget}.value), values.indexOf(${JSON.stringify(value)})]; })()`);
+  await browser.evaluate(`${hubTarget}.focus()`);
+  for (let step = 0; step < Math.abs(to - from); step++) await pressKey(browser, to > from ? 'ArrowDown' : 'ArrowUp', to > from ? KEYS.ArrowDown : KEYS.ArrowUp);
+  await browser.waitFor(`${hubTarget}.value === ${JSON.stringify(value)}`);
+  await delay(200);
+};
+const hubStatus = (browser) => browser.evaluate(`${hub}.querySelector('[data-completion-status]').dataset.completionStatus`);
+
+layerTest('changing Mål in a hub opened from export keeps the way back, and Leveranse follows the target chosen there', async (browser) => {
+  await openExport(browser);
+  await setLabel(browser, 'Mål');
+  assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
+  await realClick(browser, completion);
+  await browser.waitFor(`${hub} && !${exportDialog}`);
+  assert.deepEqual(await hubFooter(browser), ['Tilbake til eksport']);
+
+  await chooseHubTarget(browser, 'legacy2019');
+  assert.deepEqual(await hubFooter(browser), ['Tilbake til eksport'], 'Skråfoto 2019 (standard): still the way back');
+  assert.equal(await hubStatus(browser), 'blocked', 'the hub recalculates: a missing time blocks Standard');
+  await chooseHubTarget(browser, 'asbuilt52');
+  await chooseHubTarget(browser, 'legacy2019');
+  assert.deepEqual(await hubFooter(browser), ['Tilbake til eksport'], 'after several changes');
+  assert.equal(await browser.evaluate(`${buttonIn(hub, 'Lukk Fullfør opplysninger')}.getAttribute('aria-label')`), 'Lukk Fullfør opplysninger');
+
+  await realClick(browser, hubBack);
+  await browser.waitFor(`${exportDialog}?.open && !${hub}`);
+  await onDelivery(browser, 'the footer');
+  assert.equal(await selectedFormat(browser), 'legacy2019', 'the target chosen in the hub');
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksport-CRS"]').value`), 'EPSG:25832');
+  assert.equal(await label(browser), 'Mål');
+  assert.equal(await deliveryState(browser), 'blocked', 'readiness for Standard');
+
+  // ✕ and Escape after a change are the same way back.
+  await openCompletionFromExport(browser);
+  await chooseHubTarget(browser, 'gemini-legacy2019');
+  await realClick(browser, buttonIn(hub, 'Lukk Fullfør opplysninger'));
+  await browser.waitFor(`${exportDialog}?.open && !${hub}`);
+  assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
+  assert.equal(await deliveryState(browser), 'schema-gap');
+  await openCompletionFromExport(browser);
+  await chooseHubTarget(browser, 'legacy2019');
+  await escape(browser);
+  await browser.waitFor(`${exportDialog}?.open && !${hub}`);
+  assert.equal(await selectedFormat(browser), 'legacy2019');
+
+  // Closing ends the journey, and a hub on its own stays on its own whatever the target.
+  await closeExport(browser);
+  await openStandaloneHub(browser);
+  assert.deepEqual(await hubFooter(browser), ['Gå til eksport', 'Lukk']);
+  await chooseHubTarget(browser, 'gemini-legacy2019');
+  assert.deepEqual(await hubFooter(browser), ['Gå til eksport', 'Lukk']);
+  await realClick(browser, buttonIn(hub, 'Lukk'));
+  await browser.waitFor(`!${hub}`);
+  await delay(200);
+  assert.equal(await openDialogs(browser), 0, 'Lukk does not lead to export');
+});
+
+layerTest('export → hub → map → hub → export with Mål changed on the way: Save and Discard both keep the way back', async (browser) => {
+  await openExport(browser);
+  await setLabel(browser, 'Tur');
+  await openCompletionFromExport(browser);
+  await chooseHubTarget(browser, 'legacy2019');
+  await openPlacementMap(browser);
+  await placeOnMap(browser);
+  await realClick(browser, buttonIn(commandBar, 'Lagre endringer'));
+  await browser.waitFor(hub);
+  await delay(300);
+  assert.deepEqual(await hubFooter(browser), ['Tilbake til eksport'], 'Save');
+  assert.equal(await browser.evaluate(`${hubTarget}.value`), 'legacy2019', 'the target outlasts the map');
+  await chooseHubTarget(browser, 'gemini-legacy2019');
+  assert.deepEqual(await hubFooter(browser), ['Tilbake til eksport'], 'a change after the map');
+  await returnToExport(browser);
+  await onDelivery(browser, 'after Save');
+  assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
+  assert.equal(await excluded(browser), null, 'the saved placement counts');
+  assert.equal(await label(browser), 'Tur');
+});
+
+layerTest('the same journey with Discard: nothing saved, and the way back holds after a change of Mål', async (browser) => {
+  await openExport(browser);
+  await setLabel(browser, 'Tur');
+  await openCompletionFromExport(browser);
+  await openPlacementMap(browser);
+  await placeOnMap(browser);
+  await askToLeaveMap(browser);
+  await clickSourceControl(browser, 'Forkast endringer', boundary);
+  await browser.waitFor(hub);
+  await delay(300);
+  await chooseHubTarget(browser, 'legacy2019');
+  assert.deepEqual(await hubFooter(browser), ['Tilbake til eksport'], 'Discard, then a change');
+  await realClick(browser, hubBack);
+  await browser.waitFor(`${exportDialog}?.open && !${hub}`);
+  await onDelivery(browser, 'after Discard');
+  assert.equal(await selectedFormat(browser), 'legacy2019');
+  assert.equal(await excluded(browser), LEFT_OUT, 'a discarded placement never counted');
+  assert.equal(await label(browser), 'Tur');
+});
+
 layerTest('no navigation brings back a plan: not a finished one, and not one still being built', async (browser) => {
   await watchWork(browser);
   await openExport(browser);

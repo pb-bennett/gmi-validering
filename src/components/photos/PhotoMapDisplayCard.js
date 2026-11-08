@@ -1,6 +1,7 @@
 'use client';
 
 import { CameraIcon, ImageSquareIcon } from '@phosphor-icons/react';
+import './photoTheme.css';
 import { PHOTO_POSITION_SOURCES, PHOTO_THUMBNAIL_MIN_ZOOM, photoCameraGlyph, photoLegendArrow, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 
 const MODES = [['markers', 'Markører', CameraIcon], ['thumbnails', 'Miniatyrer', ImageSquareIcon]];

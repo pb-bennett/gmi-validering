@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { CheckCircleIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { ASBUILT_CODES, EXPORT_CONTEXT_FIELDS } from '@/lib/photos/export/exportContract.mjs';
 import { canAdoptPhotographer, completionCounts, manualFillRows, photoCount, photographerSuggestions, placementCount, scopedRows, selectedPhotoCount } from '@/lib/photos/photoCompletion.mjs';
@@ -55,9 +56,11 @@ export function PhotoCompletionPhotographerPanel({ task, title, requirementLabel
 }
 
 // Placement itself happens in the existing tools, and both of them come back here.
-export function PhotoCompletionPlacementPanel({ task, title, requirementLabel, onOpenMap, onOpenSources }) {
+export function PhotoCompletionPlacementPanel({ task, title, requirementLabel, placed = 0, onOpenMap, onOpenSources }) {
   return <section aria-label="Plassering" data-completion-panel="placement">
-    <CompletionHeading title={title} requirementLabel={requirementLabel} note={task.unplaced ? `${placementCount(task.unplaced)} mangler posisjon og blir ikke med i leveransen.` : 'Alle plasseringer har posisjon.'} />
+    <CompletionHeading title={title} requirementLabel={requirementLabel} note={task.unplaced ? `${placementCount(task.unplaced)} mangler posisjon og blir ikke med i leveransen.` : null} />
+    {!task.unplaced && <p className="photo-completion-done-state" data-completion-done="placement"><CheckCircleIcon size={18} weight="fill" aria-hidden="true" />
+      {placed === 1 ? 'Plasseringen har posisjon.' : `Alle ${placed} plasseringer har posisjon.`} Ingenting å gjøre her.</p>}
     {task.unplaced > 0 && <>
       <div className="photo-completion-actions" data-completion-actions="placement">
         <div className="photo-completion-action-buttons">

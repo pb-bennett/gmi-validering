@@ -100,7 +100,7 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
             {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} recommendations={completionRecommendations(readiness, 'captureTime')} readiness={readiness} reading={reading > 0} onEdit={setEditingId} />}
             {task.key === 'direction' && <PhotoCompletionDirectionPanel {...panelProps('direction')} recommendations={completionRecommendations(readiness, 'direction')} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} />}
             {task.key === 'photographer' && <PhotoCompletionPhotographerPanel {...panelProps('photographer')} onEdit={setEditingId} />}
-            {task.key === 'placement' && <PhotoCompletionPlacementPanel task={model.placement} title={task.label} requirementLabel={task.requirementLabel} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} onOpenSources={() => onOpenSources({ selections })} />}
+            {task.key === 'placement' && <PhotoCompletionPlacementPanel task={model.placement} title={task.label} requirementLabel={task.requirementLabel} placed={readiness.counts.placed} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} onOpenSources={() => onOpenSources({ selections })} />}
             {task.key === 'context' && <PhotoCompletionContextPanel title={task.label} requirementLabel={task.requirementLabel} context={config.context}
               missing={readiness.blocking.filter((item) => item.code === 'invalid-context')} onChange={(context) => onConfigChange({ context })} />}
           </div>

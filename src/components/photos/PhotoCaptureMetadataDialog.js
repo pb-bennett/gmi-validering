@@ -6,13 +6,15 @@ import { normalizePhotographer } from '@/lib/photos/photoCaptureMetadata.mjs';
 import { CAPTURE_TIME_ERRORS, captureTimeFields, captureTimeHelp, composeCaptureTime, hasPlaceholderSeconds } from '@/lib/photos/photoCaptureTimeInput.mjs';
 import { formatPhotoCaptureTime, photoMetadataSourceLabel, photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoCaptureTimeField from './PhotoCaptureTimeField';
+import './photoTheme.css';
 
 const button = 'gmi-compact-button gmi-focus-ring min-h-9 border px-3 py-1.5 text-sm font-medium';
 const timeText = (value) => formatPhotoCaptureTime(value)?.text || value?.iso || '';
 
-// The initial choice reflects the accepted value: the matching evidence, or "Annen verdi" for a manual value.
-function initialChoice(accepted, evidence) {
-  if (!accepted) return null;
+// The initial choice reflects the accepted value: the matching evidence, or "Annen verdi" for a manual value. With nothing
+// accepted and no usable source value, "Annen verdi" is the only way to supply one, so its fields are open from the start.
+function initialChoice(accepted, evidence, { openManual = false } = {}) {
+  if (!accepted) return openManual && !evidence.some((item) => item.value) ? 'other' : null;
   const evidenceId = accepted.provenance?.evidenceId;
   return evidenceId && evidence.some((item) => item.id === evidenceId && item.value) ? `evidence:${evidenceId}` : 'other';
 }
@@ -32,7 +34,9 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
   const accepted = photo.captureMetadata || {};
   const timeEvidence = (photo.metadataEvidence || []).filter((item) => item.field === 'captureTime');
   const nameEvidence = (photo.metadataEvidence || []).filter((item) => item.field === 'photographer');
-  const [timeChoice, setTimeChoice] = useState(() => initialChoice(accepted.captureTime, timeEvidence));
+  const [timeChoice, setTimeChoice] = useState(() => initialChoice(accepted.captureTime, timeEvidence, { openManual: true }));
+  const timeMissing = !accepted.captureTime;
+  const usableTimeEvidence = timeEvidence.some((item) => item.value);
   const timePrefill = accepted.captureTime?.value || timeEvidence.find((item) => item.value)?.value;
   const [timeFields, setTimeFields] = useState(() => captureTimeFields(timePrefill?.iso));
   const [timeEdited, setTimeEdited] = useState(false);
@@ -100,6 +104,9 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
         <fieldset>
           <legend>Opptakstid</legend>
           <p className="photo-metadata-current">Godtatt: {accepted.captureTime ? `${timeText(accepted.captureTime.value)} · ${photoMetadataSourceLabel('captureTime', accepted.captureTime.provenance)}` : 'Ikke angitt'}</p>
+          {timeMissing && <p className="photo-metadata-missing" data-metadata-missing="captureTime">{usableTimeEvidence
+            ? 'Mangler. Velg en kildeverdi nedenfor, eller angi tiden selv under «Annen verdi».'
+            : 'Mangler, og ingen kilde har en brukbar tid. Skriv inn dato og klokkeslett med sekunder nedenfor, og trykk Lagre.'}</p>}
           {timeEvidence.map((evidence) => <Choice key={evidence.id} name={`${id}-time`} value={`evidence:${evidence.id}`} checked={timeChoice === `evidence:${evidence.id}`}
             onChange={touch('captureTime', setTimeChoice)} disabled={!evidence.value}>
             {photoSourceLabel(evidence.kind)}{evidence.sourceFilename ? ` · ${evidence.sourceFilename}` : ''}: {evidence.value ? timeText(evidence.value) : `${typeof evidence.raw === 'string' ? evidence.raw : JSON.stringify(evidence.raw)} (kan ikke tolkes sikkert)`}

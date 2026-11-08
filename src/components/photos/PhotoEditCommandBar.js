@@ -8,6 +8,7 @@ import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { normalizePhotoDirection } from '@/lib/photos/photoDirection.mjs';
 import { formatPhotoMoveDistance } from '@/lib/photos/photoPresentation.mjs';
 import './photoEdit.css';
+import './photoTheme.css';
 
 const textButton = 'photo-edit-button gmi-compact-button gmi-focus-ring';
 // Not gmi-compact-button: its light hover background would combine with the primary control's light text.

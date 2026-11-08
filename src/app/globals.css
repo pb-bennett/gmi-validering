@@ -53,6 +53,8 @@
 .photo-camera-marker-selected svg { filter: drop-shadow(0 1px 2px #15233566); }
 /* Center children explicitly: Leaflet can load its display:block marker rule later. */
 .photo-camera-marker .photo-camera-glyph, .photo-camera-marker .photo-direction-indicator { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+/* The arrow sits under the photo it belongs to; slightly translucent so it reads as part of the marker, cased for contrast. */
+.photo-direction-indicator { opacity: .8; pointer-events: none; }
 .photo-camera-marker:focus-visible { outline: 2px solid #075e9a; outline-offset: 1px; border-radius: 50%; }
 @media (max-width: 700px) {
   .photo-collection-dialog { width: calc(100vw - 1rem); height: calc(100dvh - 1rem); }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import './photoEdit.css';
+import './photoTheme.css';
 
 const button = 'gmi-compact-button gmi-focus-ring min-h-9 border px-3 py-1.5 text-sm font-medium';
 const photos = (count) => `${count} ${count === 1 ? 'bilde' : 'bilder'}`;

@@ -42,17 +42,43 @@ export function photoCameraGlyph({ sourceKind = 'unknown', size = 16, selected =
   return `<svg class="photo-camera-glyph" data-position-source="${source.kind}" aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-linejoin="round">${ring}<path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${source.color}" stroke="white" stroke-width="4"/><path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${source.color}" stroke="#172b3a" stroke-width="1.5"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="white" stroke-width="2"/></svg>`;
 }
 
-// Rotation happens inside the SVG around the geographic anchor; Leaflet owns the outer transform.
-// 0° = up = geographic north, clockwise. Unknown direction draws nothing, never an implicit north.
-export function photoDirectionArrow({ degrees = null, staged = false, mode = 'markers' } = {}) {
+// How far the drawn marker reaches from its anchor, in px, at a heading. The arrow starts behind the marker and its tip clears
+// this edge by a few px, so it reads as part of the photo at any angle: a diagonal reaches the corner of a square thumbnail.
+// Sizes follow the glyph and thumbnail drawn below, including the white casing, the selection ring and the sibling outline.
+const CAMERA_BODY = Object.freeze({ halfWidth: 11 / 24, halfHeight: 10 / 24 });
+function photoMarkerReach(mode, { selected = false, sibling = false } = {}, heading = 0) {
+  const angle = heading * Math.PI / 180, sin = Math.abs(Math.sin(angle)), cos = Math.abs(Math.cos(angle));
+  const box = (halfWidth, halfHeight) => Math.min(sin > 1e-9 ? halfWidth / sin : Infinity, cos > 1e-9 ? halfHeight / cos : Infinity);
+  if (mode === 'thumbnails') {
+    const half = PHOTO_THUMBNAIL_SIZE / 2 + (selected ? 4 : sibling ? 4.5 : 0);
+    return box(half, half);
+  }
+  if (selected) return 22 * 16 / 24;
+  if (sibling) return 16 * 15.5 / 24;
+  return box(16 * CAMERA_BODY.halfWidth, 16 * CAMERA_BODY.halfHeight);
+}
+
+// Compact on a camera, a little larger on a thumbnail. `gap` is how far the tip lies beyond the marker's edge.
+const ARROW_GEOMETRY = Object.freeze({
+  markers: Object.freeze({ size: 64, gap: 8, head: 4, spread: 3.5, width: 2.25 }),
+  thumbnails: Object.freeze({ size: 100, gap: 10, head: 5.5, spread: 4.5, width: 2.5 }),
+});
+const round = (value) => Math.round(value * 100) / 100;
+
+// Rotation happens inside the SVG around the geographic anchor; Leaflet owns the outer transform, and both marker modes
+// share the anchor, so switching mode never moves the point the arrow turns about. 0° = up = geographic north, clockwise.
+// Unknown direction draws nothing, never an implicit north. The arrow comes first in the marker, so the photo covers its root.
+export function photoDirectionArrow({ degrees = null, staged = false, mode = 'markers', selected = false, sibling = false } = {}) {
   const heading = normalizePhotoDirection(degrees);
   if (heading === null) return '';
-  const thumbnail = mode === 'thumbnails';
-  const size = thumbnail ? 100 : 64, centre = size / 2, inner = thumbnail ? 26 : 14, outer = thumbnail ? 46 : 29;
-  const shaft = `M${centre} ${centre - inner}V${centre - outer}`, head = `M${centre - 5} ${centre - outer + 6}l5-6 5 6`;
+  const geometry = ARROW_GEOMETRY[mode === 'thumbnails' ? 'thumbnails' : 'markers'];
+  const centre = geometry.size / 2, reach = photoMarkerReach(mode, { selected, sibling }, heading);
+  const tip = round(centre - reach - geometry.gap), base = round(tip + geometry.head), root = round(centre - reach + 4);
+  // The shaft runs from the head inwards, so a staged dash always starts where it can be seen.
+  const shaft = `M${centre} ${base}V${root}`, head = `M${round(centre - geometry.spread)} ${base}L${centre} ${tip}L${round(centre + geometry.spread)} ${base}`;
   const stroke = (d, color, width, cap = 'round', extra = '') => `<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="${cap}" stroke-linejoin="round"${extra}/>`;
   // Staged is a dashed shaft with butt caps; round caps would close the gaps and read as solid.
-  return `<svg class="photo-direction-indicator" aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" data-degrees="${heading}" data-staged="${Boolean(staged)}"><g transform="rotate(${heading} ${centre} ${centre})">${stroke(`${shaft}${head}`, 'white', 5)}${staged ? stroke(shaft, PHOTO_DIRECTION_COLOR, 2.5, 'butt', ` stroke-dasharray="${PHOTO_STAGED_DASH}"`) : stroke(shaft, PHOTO_DIRECTION_COLOR, 2.5)}${stroke(head, PHOTO_DIRECTION_COLOR, 2.5)}</g></svg>`;
+  return `<svg class="photo-direction-indicator" aria-hidden="true" width="${geometry.size}" height="${geometry.size}" viewBox="0 0 ${geometry.size} ${geometry.size}" data-degrees="${heading}" data-staged="${Boolean(staged)}"><g transform="rotate(${heading} ${centre} ${centre})">${stroke(`${shaft}${head}`, 'white', 5)}${staged ? stroke(shaft, PHOTO_DIRECTION_COLOR, geometry.width, 'butt', ` stroke-dasharray="${PHOTO_STAGED_DASH}"`) : stroke(shaft, PHOTO_DIRECTION_COLOR, geometry.width)}${stroke(head, PHOTO_DIRECTION_COLOR, geometry.width)}</g></svg>`;
 }
 
 // Compact legend sample of the same navy arrow (solid = accepted, dashed = staged).
@@ -91,7 +117,7 @@ export function cameraMarkerOptions({ sourceKind = 'unknown', selected = false, 
   const modifiers = modifierClasses({ selected, sibling: sibling && !selected, staged, editing });
   return { className: `photo-camera-marker${selected ? ' photo-camera-marker-selected' : ''}${modifiers ? ` ${modifiers}` : ''}`,
     iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -9],
-    html: photoDirectionArrow({ degrees, staged: directionStaged, mode: 'markers' })
+    html: photoDirectionArrow({ degrees, staged: directionStaged, mode: 'markers', selected, sibling: sibling && !selected })
       + photoCameraGlyph({ sourceKind, size: selected ? 22 : 16, selected, sibling: sibling && !selected }) + stagedDot(staged) + stackBadge(stackCount) };
 }
 
@@ -105,7 +131,7 @@ export function thumbnailMarkerOptions({ sourceKind = 'unknown', selected = fals
   const modifiers = modifierClasses({ selected, sibling: sibling && !selected, staged, editing });
   return { className: `photo-thumb-marker${modifiers ? ` ${modifiers}` : ''}`,
     iconSize: [PHOTO_THUMBNAIL_SIZE, PHOTO_THUMBNAIL_SIZE], iconAnchor: [PHOTO_THUMBNAIL_SIZE / 2, PHOTO_THUMBNAIL_SIZE / 2], popupAnchor: [0, -24],
-    html: photoDirectionArrow({ degrees, staged: directionStaged, mode: 'thumbnails' })
+    html: photoDirectionArrow({ degrees, staged: directionStaged, mode: 'thumbnails', selected, sibling: sibling && !selected })
       + `<div class="photo-thumb" data-position-source="${source.kind}" data-thumbnail="${url ? 'ready' : 'fallback'}" style="--photo-source:${source.color}">${image}</div>`
       + `<span class="photo-source-dot photo-thumb-source" role="img" aria-label="${photoPositionSourceDescription(source.kind)}" style="--photo-source:${source.color}"></span>`
       + (editing && selected ? '<span class="photo-thumb-anchor" aria-hidden="true"></span>' : '') + stagedDot(staged) + stackBadge(stackCount) };

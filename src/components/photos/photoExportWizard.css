@@ -26,8 +26,6 @@
 .photo-export-wizard .photo-import-source input[type='radio'] { width: 14px; height: 14px; margin: 3px 0 0; accent-color: var(--gmi-interactive); }
 .photo-export-badge { padding: 0 8px; border: 1px solid var(--gmi-border-strong); border-radius: 999px; background: var(--gmi-surface); font-size: 12px; font-weight: 500; white-space: nowrap; }
 .photo-export-compatibility { font-size: 12px; color: var(--gmi-text-muted); }
-.photo-export-wizard .gmi-primary-control:hover:not(:disabled), .photo-completion-dialog .gmi-primary-control:hover:not(:disabled) { opacity: 1; background: #24324f; }
-.photo-export-wizard .gmi-primary-control:active:not(:disabled), .photo-completion-dialog .gmi-primary-control:active:not(:disabled) { opacity: 1; background: #020618; }
 .photo-export-wizard summary:focus-visible, .photo-export-wizard input[type='radio']:focus-visible { outline: 2px solid var(--gmi-interactive); outline-offset: 2px; border-radius: 2px; }
 .photo-export-wizard .photo-export-levels { padding: 8px 12px; border: 1px solid var(--gmi-border); border-radius: 8px; }
 .photo-export-crs { display: grid; gap: 4px; margin: 0.5rem 0 0 1.4rem; font-weight: 500; }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { PHOTO_DIRECTION_COLOR, PHOTO_POSITION_SOURCES, PHOTO_STAGED_DASH, PHOTO_THUMBNAIL_MIN_ZOOM, photoMarkerIconKey, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible, cameraMarkerOptions, thumbnailMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
+import { PHOTO_DIRECTION_COLOR, PHOTO_POSITION_SOURCES, PHOTO_THUMBNAIL_SIZE, photoDirectionArrow, PHOTO_STAGED_DASH, PHOTO_THUMBNAIL_MIN_ZOOM, photoMarkerIconKey, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible, cameraMarkerOptions, thumbnailMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { acceptPhotoCandidate, acceptManualPhotoPosition, emptySpatial } from '../src/lib/photos/photoSpatial.mjs';
 import { buildPhotoMapFeatures } from '../src/lib/photos/photoMapFeatures.mjs';
 
@@ -141,4 +141,39 @@ test('thumbnail source badges distinguish all four sources without colour, along
     }
   }
   assert.equal(dots.size, 4, 'each source has its own colour');
+});
+
+// Acceptance: the arrow emerged too far from the marker, worst on thumbnails. Its tip now clears the drawn edge by a fixed gap at
+// every heading, so a diagonal reaches past the corner of the square and an axis heading stays close to the side.
+test('direction arrow: starts behind the marker, tip just beyond its edge at any heading, in both modes', () => {
+  const tipDistance = (html) => { const [, size] = html.match(/width="(\d+)"/); const tip = Number(html.match(/L(\d+(?:\.\d+)?) (\d+(?:\.\d+)?)L/)[2]); return Number(size) / 2 - tip; };
+  const rootDistance = (html) => { const [, size] = html.match(/width="(\d+)"/); return Number(size) / 2 - Number(html.match(/V(\d+(?:\.\d+)?)/)[1]); };
+  const half = PHOTO_THUMBNAIL_SIZE / 2;
+  for (const [degrees, edge] of [[0, half], [90, half], [180, half], [45, half * Math.SQRT2], [135, half * Math.SQRT2], [300, half / Math.cos(Math.PI / 6)]]) {
+    const html = thumbnailMarkerOptions({ degrees, thumbnailUrl: 'blob:http://app/t' }).html;
+    assert(Math.abs(tipDistance(html) - (edge + 10)) < 0.02, `thumbnail ${degrees}°`);
+    assert(rootDistance(html) < edge, `thumbnail ${degrees}°: the shaft starts under the photo`);
+    assert(html.indexOf('photo-direction-indicator') < html.indexOf('class="photo-thumb"'), 'drawn first, so the photo covers it');
+  }
+  for (const degrees of [0, 45, 90, 225]) {
+    const plain = tipDistance(cameraMarkerOptions({ degrees }).html), selected = tipDistance(cameraMarkerOptions({ degrees, selected: true }).html);
+    assert(plain > 12 && plain < 18, `camera ${degrees}°: compact, ${plain}`);
+    assert(selected > plain, 'clears the selection ring');
+    const html = cameraMarkerOptions({ degrees }).html;
+    assert(html.indexOf('photo-direction-indicator') < html.indexOf('photo-camera-glyph'), 'drawn first, so the camera covers it');
+  }
+  assert(tipDistance(thumbnailMarkerOptions({ degrees: 0, selected: true }).html) > tipDistance(thumbnailMarkerOptions({ degrees: 0 }).html), 'clears the selection ring');
+  // The same anchor in both modes: each icon is centred on the point, and the arrow on the icon.
+  assert.deepEqual(cameraMarkerOptions({ degrees: 30 }).iconAnchor.map((value) => value * 2), cameraMarkerOptions({ degrees: 30 }).iconSize);
+  assert.deepEqual(thumbnailMarkerOptions({ degrees: 30 }).iconAnchor.map((value) => value * 2), thumbnailMarkerOptions({ degrees: 30 }).iconSize);
+  assert.equal(photoDirectionArrow({ degrees: null }), '');
+  assert(photoDirectionArrow({ degrees: 10, staged: true }).includes('stroke-dasharray'));
+});
+
+test('direction arrow: translucent and never takes pointer events', async () => {
+  const css = await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+  const rule = css.match(/^\.photo-direction-indicator \{([^}]*)\}/m)[1];
+  const opacity = Number(rule.match(/opacity:\s*([.\d]+)/)[1]);
+  assert(opacity >= .75 && opacity <= .8);
+  assert.match(rule, /pointer-events: none/);
 });

@@ -241,7 +241,8 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.match(unlabelled.zip, /^\d{8}-\d{6}\.zip$/);
         assert.equal(unlabelled.gml, unlabelled.zip.replace(/\.zip$/, '.gml'));
         const legacy = await downloadZip(browser, directory);
-        assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-guidance]').innerText`), `Pakk ut ZIP-filen. ${legacy.gml} og Attachments-mappen må ligge ved siden av hverandre.`, 'guidance names the real file');
+        assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-package-state="done"] [data-export-zip]').innerText`), legacy.zip, 'the done screen names the real file');
+        assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-guidance]'))`), false, 'and gives no import steps');
         assert.equal(Object.keys(legacy.entries).length,4);
         assert.deepEqual(Object.keys(legacy.entries)[0], legacy.gml);
         const legacyXml=strFromU8(legacy.entries[legacy.gml]);

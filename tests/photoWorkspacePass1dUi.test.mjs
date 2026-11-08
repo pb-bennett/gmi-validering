@@ -100,7 +100,8 @@ async function createFixtures(browser) {
 
 const luminance = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
 const contrast = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
-const rgb = (value) => value.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
+// color-mix() computes to `color(srgb r g b)` with channels from 0 to 1.
+const rgb = (value) => { const channels = value.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number); return value.startsWith('color(srgb') ? channels.map((channel) => channel * 255) : channels; };
 
 test('Pass 1D: source dots, dark previews, display-sized images, Save button states and file drag feedback',
   { skip: !chromePath || !app, timeout: 300000 }, async (t) => {
@@ -222,7 +223,8 @@ test('Pass 1D: source dots, dark previews, display-sized images, Save button sta
         assert(await browser.evaluate('Boolean(document.querySelector(".photo-workspace-shell"))'));
       });
 
-      await t.test('Save button: dark and legible on hover, press and focus; unrelated buttons keep their hover', async () => {
+      // FOTO acceptance corrections: editing controls use the app's teal primary (--gmi-interactive), and secondary buttons show hover.
+      await t.test('Save button: teal and legible on hover, press and focus; secondary buttons show a teal hover', async () => {
         await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${ids['solo-a']}"] .photo-workspace-row').click()`);
         await enterEditMode(browser);
         await clickText(browser, 'Flytt til kartsenter');
@@ -232,14 +234,15 @@ test('Pass 1D: source dots, dark previews, display-sized images, Save button sta
         const state = () => browser.evaluate(`(() => { const s = getComputedStyle(${save}); return { background: s.backgroundColor, color: s.color, opacity: s.opacity, shadow: s.boxShadow }; })()`);
         await unhover(); await wait(200);
         const rest = await state();
-        assert.equal(rest.background, 'rgb(15, 23, 43)');
+        assert.equal(rest.background, 'rgb(0, 117, 149)', 'the app\'s interactive teal');
+        assert(contrast(rgb(rest.background), rgb(rest.color)) >= DARK_MIN_CONTRAST, JSON.stringify(rest));
         const point = await elementCentre(browser, save);
         await move(point); await wait(250);
         const hovered = await state();
         assert.notEqual(hovered.background, rest.background, 'hover is a deliberate change');
         assert.equal(hovered.opacity, '1');
         assert(contrast(rgb(hovered.background), rgb(hovered.color)) >= DARK_MIN_CONTRAST, JSON.stringify(hovered));
-        assert(luminance(rgb(hovered.background)) < 0.1, 'hover stays clearly dark');
+        assert(luminance(rgb(hovered.background)) < luminance(rgb(rest.background)), 'hover darkens the teal');
         await screenshot('save-hover');
         await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1 });
         await wait(100);
@@ -255,7 +258,10 @@ test('Pass 1D: source dots, dark previews, display-sized images, Save button sta
         await wait(200);
         assert.notEqual((await state()).shadow, 'none', 'focus-visible keeps its ring');
         await move(await elementCentre(browser, discard)); await wait(250);
-        assert.equal(await browser.evaluate(`getComputedStyle(${discard}).backgroundColor`), 'rgb(255, 255, 255)', 'secondary buttons are untouched by the primary fix');
+        const secondary = await browser.evaluate(`(() => { const s = getComputedStyle(${discard}); return { background: s.backgroundColor, border: s.borderTopColor, color: s.color }; })()`);
+        assert.notEqual(secondary.background, 'rgb(255, 255, 255)', 'a secondary button shows its hover');
+        assert.equal(secondary.border, 'rgb(0, 117, 149)', 'with a teal edge');
+        assert(contrast(rgb(secondary.background), rgb(secondary.color)) >= DARK_MIN_CONTRAST, JSON.stringify(secondary));
         await unhover();
         await discardEdits(browser);
       });
