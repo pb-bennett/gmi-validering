@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircleIcon, DownloadSimpleIcon, HourglassMediumIcon, InfoIcon, WarningIcon, WarningOctagonIcon } from '@phosphor-icons/react';
+import { CheckCircleIcon, DownloadSimpleIcon, HourglassMediumIcon, InfoIcon, WarningCircleIcon, WarningIcon } from '@phosphor-icons/react';
 import { photoCaptureTimeSchemaWarning, photoExportAwaitingSource, photoExportLevels, singularCopy } from '@/lib/photos/photoCompletion.mjs';
 import './photoCompletion.css';
 
@@ -27,8 +27,9 @@ export function PhotoExportDiagnostics({ groups }) {
 }
 
 // The heading's tone in one glance. It repeats the heading and says nothing new, so it is hidden from screen readers.
-const TONES = Object.freeze({ wait: HourglassMediumIcon, good: CheckCircleIcon, info: InfoIcon, caution: WarningIcon, stop: WarningOctagonIcon, download: DownloadSimpleIcon });
+// Phosphor Regular, like the rest of GMI Validator: outlines, with colour carrying the state.
+const TONES = Object.freeze({ wait: HourglassMediumIcon, good: CheckCircleIcon, info: InfoIcon, caution: WarningIcon, stop: WarningCircleIcon, download: DownloadSimpleIcon });
 export function PhotoExportTone({ tone }) {
   const Icon = TONES[tone];
-  return Icon ? <Icon className="photo-export-tone" data-tone={tone} size={20} weight="fill" aria-hidden="true" /> : null;
+  return Icon ? <Icon className="photo-export-tone" data-tone={tone} size={20} weight="regular" aria-hidden="true" /> : null;
 }

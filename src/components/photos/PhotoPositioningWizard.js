@@ -43,7 +43,7 @@ function SourceStages({ saved, kind }) {
   const name = kind === 'gmi' ? 'GMI-kilden og koblingene' : kind === 'gml' ? 'GML-kilden' : 'kilden';
   return <ol className="photo-positioning-stages" aria-label="To trinn">
     <li data-stage-state={saved ? 'done' : 'current'}>
-      <span className="photo-positioning-stage-marker" aria-hidden="true">{saved ? <CheckCircleIcon size={22} weight="fill" /> : '1'}</span>
+      <span className="photo-positioning-stage-marker" aria-hidden="true">{saved ? <CheckCircleIcon size={22} weight="regular" /> : '1'}</span>
       <div><strong>{saved ? 'Kilden er lagret i fotolaget' : `Lagre ${name} i fotolaget`}</strong>
         <p>{saved ? 'Filen og treffene er beholdt. Ingen posisjoner er endret.' : 'Lagrer filen og treffene. Ingen posisjoner eller retninger endres.'}</p></div>
     </li>
@@ -55,30 +55,63 @@ function SourceStages({ saved, kind }) {
   </ol>;
 }
 
+// The two sources that lie furthest apart on a row, with their distance. Presentation only.
+function farthestPair(row) {
+  let pair = null;
+  row.options.forEach((a, index) => row.options.slice(index + 1).forEach((b) => {
+    const distance = photoPositionDistance(a.position, b.position);
+    if (!pair || distance > pair.distance) pair = { a, b, distance };
+  }));
+  return pair;
+}
+const shortSourceName = (candidate, optionLabel) => candidate.kind === 'exif' ? 'EXIF GPS' : candidate.kind === 'gmi' ? 'GMI' : optionLabel(candidate);
+
+// Why a row is listed in Kontroll. Each reason explains itself once, and each row says what was compared and how far apart.
+// Only what is shown changes: the selection and the apply rule are the wizard's own and are untouched here.
+function reviewGroups(plan, selected, optionLabel) {
+  const name = (candidate) => shortSourceName(candidate, optionLabel);
+  const sources = selected.map((row) => ({ row, pair: farthestPair(row) })).filter(({ pair }) => pair && pair.distance > NOTABLE_METRES);
+  const proposedKinds = new Set(sources.map(({ row }) => row.proposal.kind));
+  return [
+    { key: 'sources', title: `Kildene oppgir posisjoner mer enn ${NOTABLE_METRES} m fra hverandre`,
+      text: `${proposedKinds.size === 1 && proposedKinds.has('gml') ? 'GML er foreslått fordi den prioriteres når den finnes, men det betyr ikke at GML-posisjonen er riktig. '
+        : 'Den valgte kilden er ikke nødvendigvis riktig. '}Se på bildet og kartet, og velg en annen kilde i Plassering hvis den passer bedre.`,
+      rows: sources.map(({ row, pair }) => ({ row, detail: `${name(pair.a)} og ${name(pair.b)}: ca. ${metres(pair.distance)} fra hverandre. Valgt: ${name(row.proposal)}.` })) },
+    { key: 'move', title: `Flytter en eksisterende posisjon mer enn ${NOTABLE_METRES} m`,
+      text: 'Bildet har allerede en posisjon. Den valgte kilden flytter det langt, så kontroller at den nye posisjonen er riktig.',
+      rows: selected.filter((row) => row.action === 'move' && row.distanceMetres > NOTABLE_METRES)
+        .map((row) => ({ row, detail: `Fra ${photoSourceLabel(row.currentKind)} til ${name(row.proposal)}: ca. ${metres(row.distanceMetres)}.` })) },
+    { key: 'zero', title: 'GPS oppgir 0°/0°',
+      text: 'Dette er nesten alltid en manglende GPS-posisjon i kameraet, ikke et virkelig sted.',
+      rows: selected.filter((row) => row.proposal.issues?.includes('questionable-zero-gps')).map((row) => ({ row, detail: `Valgt: ${name(row.proposal)}.` })) },
+    { key: 'unplaced', title: 'Forblir uten posisjon',
+      text: 'Disse bildene blir ikke med i leveransen før de får en posisjon.',
+      rows: plan.rows.filter((row) => !row.current && !selected.some((item) => item.photoId === row.photoId))
+        .map((row) => ({ row, detail: row.options.length ? 'En posisjon finnes, men er ikke valgt.' : 'Ingen kilde har en brukbar posisjon.' })) },
+  ].filter((group) => group.rows.length);
+}
+
 // Kontroll: the counts first and anything unusual straight after; each decision is one fold away.
 function PositioningSummary({ plan, selected, selectionUnit, repeats, optionLabel, newEvidence }) {
   const count = (action) => selected.filter((row) => row.action === action).length;
   const unchanged = plan.rows.length - selected.length;
   const unit = repeats ? 'plasseringer' : 'bilder';
-  const exceptions = [
-    ...selected.filter((row) => (separationOf(row) ?? 0) > NOTABLE_METRES)
-      .map((row) => ({ key: `${row.photoId}-sources`, row, text: `Kildene ligger ca. ${metres(separationOf(row))} fra hverandre. ${optionLabel(row.proposal)} er valgt.` })),
-    ...selected.filter((row) => row.action === 'move' && row.distanceMetres > NOTABLE_METRES)
-      .map((row) => ({ key: `${row.photoId}-move`, row, text: `Flyttes ca. ${metres(row.distanceMetres)} fra gjeldende posisjon.` })),
-    ...selected.filter((row) => row.proposal.issues?.includes('questionable-zero-gps'))
-      .map((row) => ({ key: `${row.photoId}-zero`, row, text: 'GPS er 0°/0°. Kontroller kilden.' })),
-    ...plan.rows.filter((row) => !row.current && !selected.some((item) => item.photoId === row.photoId))
-      .map((row) => ({ key: `${row.photoId}-unplaced`, row, text: row.options.length ? 'Forblir uplassert.' : 'Ingen brukbar posisjon. Forblir uplassert.' })),
-  ];
+  const groups = reviewGroups(plan, selected, optionLabel);
+  const total = groups.reduce((sum, group) => sum + group.rows.length, 0);
   const tiles = [['Plasseres', count('place'), 'place'], ['Flyttes', count('move'), 'move'], ['Samme posisjon', count('same'), 'same'], ['Uendret', unchanged, 'keep']]
     .filter(([, value, key]) => value > 0 || key !== 'same');
   return <section className="photo-positioning-summary" aria-label="Oppsummer posisjonering">
     <p className="photo-positioning-selected-count">{selected.length} {selectionUnit} valgt</p>
     <dl className="photo-positioning-tiles">{tiles.map(([label, value, key]) => <div key={key} data-summary={key}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-    {exceptions.length > 0 ? <div className="photo-positioning-exceptions" data-positioning-exceptions={exceptions.length}>
-      <p><strong>Bør kontrolleres ({exceptions.length})</strong></p>
-      <ul>{exceptions.map((item) => <li key={item.key}><strong>{item.row.filename}</strong>
-        <PhotoOccurrenceContext occurrence={item.row.occurrence} count={item.row.occurrenceCount} index={item.row.occurrenceIndex} objectCount={item.row.objectCount} compact /> {item.text}</li>)}</ul>
+    {total > 0 ? <div className="photo-positioning-exceptions" data-positioning-exceptions={total}>
+      <p><strong>Bør kontrolleres ({total})</strong></p>
+      {groups.map((group) => <section key={group.key} className="photo-positioning-review" data-review-reason={group.key} aria-label={group.title}>
+        <h4>{group.title} ({group.rows.length})</h4>
+        <p>{group.text}</p>
+        <ul>{group.rows.map(({ row, detail }) => <li key={row.photoId} data-review-row={row.photoId}><strong>{row.filename}</strong>
+          <PhotoOccurrenceContext occurrence={row.occurrence} count={row.occurrenceCount} index={row.occurrenceIndex} objectCount={row.objectCount} compact />
+          <span className="photo-positioning-review-detail">{detail}</span></li>)}</ul>
+      </section>)}
     </div> : <p className="photo-positioning-clear" data-positioning-exceptions="0">Ingen avvik å kontrollere.</p>}
     <details className="photo-positioning-details" data-positioning-details>
       <summary>Vis detaljer ({selected.length})</summary>

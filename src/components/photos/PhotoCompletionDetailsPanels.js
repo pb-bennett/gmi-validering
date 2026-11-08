@@ -59,7 +59,7 @@ export function PhotoCompletionPhotographerPanel({ task, title, requirementLabel
 export function PhotoCompletionPlacementPanel({ task, title, requirementLabel, placed = 0, onOpenMap, onOpenSources }) {
   return <section aria-label="Plassering" data-completion-panel="placement">
     <CompletionHeading title={title} requirementLabel={requirementLabel} note={task.unplaced ? `${placementCount(task.unplaced)} mangler posisjon og blir ikke med i leveransen.` : null} />
-    {!task.unplaced && <p className="photo-completion-done-state" data-completion-done="placement"><CheckCircleIcon size={18} weight="fill" aria-hidden="true" />
+    {!task.unplaced && <p className="photo-completion-done-state" data-completion-done="placement"><CheckCircleIcon size={18} weight="regular" aria-hidden="true" />
       {placed === 1 ? 'Plasseringen har posisjon.' : `Alle ${placed} plasseringer har posisjon.`} Ingenting å gjøre her.</p>}
     {task.unplaced > 0 && <>
       <div className="photo-completion-actions" data-completion-actions="placement">

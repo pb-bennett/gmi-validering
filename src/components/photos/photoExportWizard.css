@@ -9,7 +9,8 @@
 .photo-export-tone { flex: none; margin-top: 1px; }
 .photo-export-tone[data-tone='good'] { color: #245d41; }
 .photo-export-tone[data-tone='caution'] { color: #875400; }
-.photo-export-tone[data-tone='stop'] { color: #b42318; }
+/* The app's error red (Tailwind red-700, as in the Validator's rule list). */
+.photo-export-tone[data-tone='stop'] { color: var(--color-red-700, #b91c1c); }
 .photo-export-tone[data-tone='info'], .photo-export-tone[data-tone='download'] { color: var(--gmi-interactive); }
 .photo-export-tone[data-tone='wait'] { color: var(--gmi-text-muted); }
 /* Each column scrolls by itself, so the answer stays in view while a format further down the list is chosen. */
