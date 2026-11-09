@@ -357,9 +357,10 @@ const CONDITIONAL_POLICIES = new Set([
 ]);
 const OPTIONAL_POLICIES = new Set([
   'caseNumber', 'owner', 'length', 'externalHeight', 'nobb', 'frameNobb',
-  'optionalText', 'visibility', 'facilityId', 'typeCompatibility',
+  'optionalText', 'visibility', 'facilityId', 'typeCompatibility', 'sdrRingExclusive',
 ]);
 const POLICY_METADATA = Object.freeze({
+  sdrRingExclusive: ['SDR og Ringstivhet skal ikke være utfylt samtidig på samme ledning.', ['Gjelder uavhengig av material- og hydraulikkontrollene. Ett eller begge felt kan være tomme i denne relasjonskontrollen.']],
   heightReference: ['Høydereferanse er påkrevd. UKJENT gir Sjekk; andre godkjente koder gir Pass.', []],
   installationYear: ['Anleggsår valideres som fire ASCII-sifre og vurderes mot Stedfestingsårsak og kontrollåret.', ['0000 og år før 1900 gir Sjekk. Fremtidig eller feil format gir Feil. NYTT krever år; eldre NYTT-år enn fem år gir Sjekk.']],
   measurementMethod: ['Målemetode er påkrevd. Kode 96 gir Pass; andre godkjente XY-koder gir Sjekk.', []],

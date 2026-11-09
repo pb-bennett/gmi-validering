@@ -36,6 +36,8 @@ function isDirectApplicableOutcome(outcome) {
 // This is deliberately a reason-code map, not a second policy. The evaluator
 // owns the reason; this layer only gives it a stable presentation category.
 export const DIAGNOSTIC_REASON_MAPPING = Object.freeze({
+  [RuleReasonCode.SDR_RING_STIFFNESS_CONFLICT]: T.RELATIONSHIP_INCONSISTENT,
+  [RuleReasonCode.DATASET_CONTEXT_REQUIRED]: T.DEPENDENCY_UNRESOLVED,
   [RuleReasonCode.PLACEHOLDER_VALUE]: T.VALID_VALUE_REVIEW,
   [RuleReasonCode.UNUSUAL_VALID_VALUE]: T.VALID_VALUE_REVIEW,
   [RuleReasonCode.NUMERIC_ZERO]: T.VALID_VALUE_REVIEW,
@@ -429,6 +431,9 @@ function contextText(diagnostic) {
 }
 
 export function renderValidationV2Diagnostic(diagnostic) {
+  if (diagnostic.reasonCodes?.includes(RuleReasonCode.SDR_RING_STIFFNESS_CONFLICT)) {
+    return 'Både SDR og Ringstivhet er utfylt. Disse egenskapene skal ikke brukes samtidig på samme ledning.';
+  }
   const name = diagnostic.field.canonicalFieldId === 'attachmentLink' && diagnostic.contextFacts?.requirement === 'EXPECTED'
     ? 'bilder'
     : diagnostic.field.displayName;

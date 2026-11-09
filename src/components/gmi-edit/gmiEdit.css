@@ -15,6 +15,14 @@
 .gmi-edit-download-pill[data-download-state="downloaded"] { border: 1px solid #9fd3c7; color: #276749; background: #effaf5; }
 .gmi-edit-changed-pill, .gmi-edit-state-pill { margin-left: 6px; border: 1px dashed var(--gmi-interactive); color: var(--gmi-interactive); }
 .gmi-edit-state-pill-proposed { border-style: solid; background: #e6f6f9; }
+.gmi-edit-state-pill { margin-top: 6px; margin-bottom: 0; }
+.gmi-edit-field-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.gmi-edit-finding.photo-icon-button { position: relative; flex-shrink: 0; width: 18px; height: 18px; padding: 0; color: #b45309; }
+.gmi-edit-finding[data-severity="FAIL"] { color: #b91c1c; }
+.gmi-edit-finding[data-transition="introduced"]::after { content: '+'; position: absolute; right: -2px; top: -5px; font-size: 10px; font-weight: 700; }
+.gmi-edit-finding[data-transition="resolved"] { color: #15803d; }
+.gmi-edit-unbound-findings { font-size: 11px; color: var(--gmi-text-muted); }
+.gmi-edit-unbound-findings ul { display: grid; gap: 4px; margin-top: 4px; }
 .gmi-edit-badge { margin-left: 4px; border: 1px solid var(--gmi-border-strong); color: var(--gmi-text-muted); }
 .gmi-edit-badge-warning { border-color: #e5c07b; color: #7a4f00; background: #fff8e6; }
 .gmi-edit-experimental-tag { margin-left: 4px; background: #ffffff26; border: 1px solid #ffffff59; color: inherit; }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowCounterClockwiseIcon, CrosshairSimpleIcon, LockSimpleIcon, WarningIcon } from '@phosphor-icons/react';
+import { ArrowCounterClockwiseIcon, CheckCircleIcon, CrosshairSimpleIcon, LockSimpleIcon, WarningCircleIcon, WarningIcon } from '@phosphor-icons/react';
 import fieldsData from '@/data/fields.json';
 import { createGmiObjectCorrection, listGmiObjectCells } from '@/lib/gmi-edit/index.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
@@ -10,6 +10,13 @@ import {
   gmiObjectCorrectionLabel, gmiSkipReasonLabel, planGmiObjectForm,
 } from '@/lib/gmiEditView.mjs';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
+import useGmiObjectValidation from './useGmiObjectValidation';
+
+function FindingIcon({ finding }) {
+  return <PhotoIconButton icon={finding.transition === 'resolved' ? CheckCircleIcon : WarningCircleIcon} size={14}
+    label={finding.tooltip} tooltip={finding.tooltip} className="gmi-edit-finding"
+    data-gmi-finding={finding.ruleId} data-severity={finding.state} data-transition={finding.transition} />;
+}
 
 const fieldLabel = (field) => fieldsData.find((entry) => entry.fieldKey === field)?.label || null;
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-3 py-1.5 text-xs font-medium';
@@ -71,6 +78,8 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
   const [allowReplace, setAllowReplace] = useState(false);
   const [review, setReview] = useState(null);   // { changeSet } built against one session value
   const [message, setMessage] = useState(null);
+  const validation = useGmiObjectValidation(view, scope, sourceIndex, rows, drafts);
+  const unboundFindings = validation.findings.filter((finding) => !finding.fields.some((field) => rows?.some((row) => row.field === field)));
 
   const editableRows = useMemo(() => (rows ? rows.filter((row) => row.editable) : []), [rows]);
   // No optional chains inside memo bodies (React Compiler dependency inference).
@@ -182,7 +191,11 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
               const inputId = `gmi-edit-${scope}-${sourceIndex}-${row.position ?? row.field}`;
               return <tr key={row.field} data-field={row.field} data-state={editing ? 'draft' : row.changed ? 'proposed' : undefined}>
                 <th scope="row">
-                  <label htmlFor={row.editable ? inputId : undefined} className="gmi-edit-field-name">{row.field}</label>
+                  <span className="gmi-edit-field-heading">
+                    <label htmlFor={row.editable ? inputId : undefined} className="gmi-edit-field-name">{row.field}</label>
+                    {validation.findings.filter((finding) => finding.fields.includes(row.field)).map((finding) =>
+                      <FindingIcon key={`${finding.key}:${finding.transition}`} finding={finding} />)}
+                  </span>
                   {row.label && row.label !== row.field && <span className="gmi-edit-muted">{row.label}</span>}
                 </th>
                 <td><Lexeme value={row.original} /></td>
@@ -225,6 +238,16 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
         </div>
       </div>}
     </form>}
+    {view && <p className="gmi-edit-muted" data-gmi-object-validation aria-live="polite">
+      {validation.pending ? 'Kontrollerer objektet…' : 'Objektkontroll: rødt = FEIL · oransje = SJEKK · + = nytt · grønn hake = løst.'}
+      {' '}NYTT-år på tvers av objekter vurderes ikke lokalt.
+    </p>}
+    {unboundFindings.length > 0 && <details className="gmi-edit-unbound-findings">
+      <summary>Funn i felt som mangler i skjemaet ({unboundFindings.length})</summary>
+      <ul>{unboundFindings.map((finding) => <li key={`${finding.key}:${finding.transition}`}>
+        <FindingIcon finding={finding} /> {finding.reason}
+      </li>)}</ul>
+    </details>}
     {message && <p className="gmi-edit-message" data-tone={message.tone} role="status">{message.text}</p>}
     <p className="gmi-edit-hint">Geometri, koordinater, objektnummer, GUID og filhode kan ikke rettes. Nye kolonner kan ikke legges til.</p>
   </div>;

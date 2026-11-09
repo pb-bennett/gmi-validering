@@ -111,6 +111,14 @@ function anniversary(reference, years) {
 }
 
 export function evaluateFieldPolicy(value, policy, rule, context = {}) {
+  if (policy === 'sdrRingExclusive') {
+    const ring = context.ringStiffness;
+    const issue = structural(value) || structural(ring);
+    if (issue) return issue;
+    const conflict = !missing(value) && !missing(ring);
+    return { state: conflict ? EvaluationState.FAIL : EvaluationState.PASS,
+      reasonCode: conflict ? RuleReasonCode.SDR_RING_STIFFNESS_CONFLICT : null };
+  }
   // A supplied optional note remains supplied text even when it is whitespace.
   // Evaluate its raw lexical length before generic missing() trims whitespace.
   if (policy === 'optionalText' && value.state === ObjectValueState.VALUE_PRESENT) {
@@ -261,7 +269,17 @@ export function evaluateFieldPolicy(value, policy, rule, context = {}) {
   if (policy === 'attachmentLink') { const issue = structural(value); if (issue) return issue; const tema = resolvedTema(context); if (!tema) return { state: EvaluationState.NOT_EVALUATED, reasonCode: RuleReasonCode.DEPENDENT_TEMA_UNRESOLVED }; if (['LOK', 'TOP'].includes(tema)) return missing(value) ? { state: EvaluationState.PASS, reasonCode: null } : { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE }; if (getPointFieldApplicability(tema, 'constructionMethod').state === PointFieldApplicabilityState.APPLICABLE) return missing(value) ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : { state: EvaluationState.PASS, reasonCode: null }; return { state: EvaluationState.PASS, reasonCode: null }; }
   if (policy === 'installationYear') { const issue = structural(value); if (issue) return issue; const cause = context.positioningCause; const currentYear = context.currentYear; if (missing(value)) return validListed(cause, ['NYTT']) ? { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING } : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING }; const raw = lexeme(value); if (typeof raw !== 'string' || !/^[0-9]{4}$/.test(raw)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.YEAR_FORMAT_INVALID }; const year = Number(raw); if (year > currentYear) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.YEAR_FUTURE }; if (year === 0 || year < 1900 || (validListed(cause, ['NYTT']) && year < currentYear - 5)) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.YEAR_PLAUSIBILITY }; return { state: EvaluationState.PASS, reasonCode: null }; }
   if (policy === 'captureDate') { const issue = structural(value); if (issue) return issue; if (missing(value)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING }; const parsed = parseDate(value); if (!parsed) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.DATE_FORMAT_INVALID }; const reference = context.referenceDate; if (parsed.date > reference) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.DATE_FUTURE }; const year = validYear(context.installationYear, context.currentYear); if (year && year !== 0 && parsed.year < year) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.DATE_BEFORE_INSTALLATION }; return parsed.date < anniversary(reference, 5) ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.DATE_OLDER_THAN_FIVE_YEARS } : { state: EvaluationState.PASS, reasonCode: null }; }
-  if (policy === 'positioningCause') { const issue = structural(value); if (issue) return issue; if (missing(value)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING }; if (!rule.allowedValues.includes(lexeme(value))) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_ALLOWED }; const year = validYear(context.installationYear, context.currentYear); return lexeme(value) !== 'NYTT' && year && year !== 0 && context.nyttYears?.has(year) ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.POSITIONING_CAUSE_SHARED_NYTT_YEAR } : { state: EvaluationState.PASS, reasonCode: null }; }
+  if (policy === 'positioningCause') {
+    const issue = structural(value); if (issue) return issue;
+    if (missing(value)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING };
+    if (!rule.allowedValues.includes(lexeme(value))) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.VALUE_NOT_ALLOWED };
+    const year = validYear(context.installationYear, context.currentYear);
+    if (lexeme(value) !== 'NYTT' && year && year !== 0) {
+      if (context.localOnly) return { state: EvaluationState.NOT_EVALUATED, reasonCode: RuleReasonCode.DATASET_CONTEXT_REQUIRED };
+      if (context.nyttYears?.has(year)) return { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.POSITIONING_CAUSE_SHARED_NYTT_YEAR };
+    }
+    return { state: EvaluationState.PASS, reasonCode: null };
+  }
   throw new Error(`unknown field policy ${policy}`);
 }
 

@@ -48,7 +48,7 @@ function finding(state, reasonCode, sourceIndex, sourceValue, details = null) {
 
 test('diagnostic mapping covers all active owners and canonical fields', () => {
   const coverage = getDiagnosticMappingCoverage();
-  assert.equal(coverage.activeOwnerCount, 45);
+  assert.equal(coverage.activeOwnerCount, 46);
   assert.equal(coverage.canonicalFieldCount, 41);
   assert.equal(coverage.complete, true);
   assert.deepEqual(coverage.unmappedReasonCodes, []);

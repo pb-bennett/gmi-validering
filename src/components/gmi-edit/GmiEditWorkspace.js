@@ -86,6 +86,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const setHighlightedFeature = useStore((state) => state.setHighlightedFeature);
   const viewObjectInMap = useStore((state) => state.viewObjectInMap);
   const openLayerDataTable = useStore((state) => state.openLayerDataTable);
+  const setLayerDataTableTab = useStore((state) => state.setLayerDataTableTab);
   const tableOpenOnLayer = useStore((state) => state.ui.layerDataTable?.isOpen && state.ui.layerDataTable?.layerId === layerId);
 
   const [tab, setTab] = useState('objects');
@@ -128,10 +129,24 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     setHighlightedFeature(`${scopeToTableTab(target.scope)}-${layerId}-${target.sourceIndex}`);
   }, [layerId, setHighlightedFeature]);
 
+  const syncObjectTable = useCallback((target) => {
+    const state = useStore.getState();
+    const table = state.ui.layerDataTable;
+    // A Validator inspection pins its own geometry. An explicit selection in
+    // Rettinger returns the open table to this layer's ordinary object browser.
+    if (table?.isOpen && (table.layerId !== layerId || state.objectTableInspection)) openLayerDataTable(layerId);
+    setLayerDataTableTab(layerId, scopeToTableTab(target.scope));
+  }, [layerId, openLayerDataTable, setLayerDataTableTab]);
+
   const select = useCallback((target, changeSetId = null) => {
-    if (selected && target.scope === selected.scope && target.sourceIndex === selected.sourceIndex) { setActiveChangeSetId(changeSetId); return; }
-    guard(() => { setSelected(target); setScope(target.scope); setActiveChangeSetId(changeSetId); highlight(target); });
-  }, [guard, highlight, selected]);
+    if (selected && target.scope === selected.scope && target.sourceIndex === selected.sourceIndex) {
+      setActiveChangeSetId(changeSetId); syncObjectTable(target); return;
+    }
+    guard(() => {
+      setSelected(target); setScope(target.scope); setActiveChangeSetId(changeSetId); highlight(target);
+      syncObjectTable(target);
+    });
+  }, [guard, highlight, selected, syncObjectTable]);
 
   // Row clicks in the Data Table arrive as one-shot store requests.
   const onObjectRequest = useEffectEvent((request) => {

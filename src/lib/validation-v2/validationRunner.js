@@ -7,7 +7,7 @@ import {
   RuleReasonCode,
 } from './contracts.js';
 import { bindGmiLayerSchema } from './gmiLayerSchemaBinding.js';
-import { createGmiObjectRefs } from './objectRef.js';
+import { createGmiObjectRefs, createObjectRef } from './objectRef.js';
 import { extractGmiObjectFieldValue } from './objectFieldValue.js';
 import { resolveGmiTemaIdentity } from './temaIdentity.js';
 import {
@@ -500,9 +500,9 @@ function createGeometryCounts() {
 
 // Shared by runGmiValidationV2 and evaluateGmiRuleApplicability so both use
 // one schema binding, evidence and policy-context derivation.
-function createGmiRunContext(input) {
-  const schemaBinding = bindGmiLayerSchema(input);
-  const objectRefs = createGmiObjectRefs(input);
+function createGmiRunContext(input, options = {}) {
+  const schemaBinding = options.schemaBinding || bindGmiLayerSchema(input);
+  const objectRefs = options.objectRefs || createGmiObjectRefs(input);
   const rules = getValidationRules();
   const referenceDate = input.referenceDate ? new Date(`${input.referenceDate}T00:00:00Z`) : new Date();
   const context = {
@@ -525,7 +525,7 @@ function createGmiRunContext(input) {
   const raw = (evidence) => typeof evidence?.sourceLexeme === 'string' && evidence.sourceLexeme !== 'UNAVAILABLE' ? evidence.sourceLexeme : evidence?.sourceValue;
   const causeValues = ['FJERN', 'FLYTT_DELV', 'FLYTT_HELT', 'NYTT', 'PÅVI', 'UENDR'];
   const nyttYears = new Set();
-  for (const ref of allRefs) {
+  for (const ref of options.localOnly ? [] : allRefs) {
     const cause = evidenceFor(ref, 'positioningCause'); const year = evidenceFor(ref, 'installationYear'); const y = raw(year);
     if (raw(cause) === 'NYTT' && typeof y === 'string' && /^[0-9]{4}$/.test(y) && Number(y) > 0 && Number(y) <= context.currentYear) nyttYears.add(Number(y));
   }
@@ -536,6 +536,8 @@ function createGmiRunContext(input) {
   const typeValues = new Set(typeRelationship?.relationship.allowedPairs.map(([type]) => type) || []);
   const positioningCauseRule = rules.find((rule) => rule.ruleId === 'innmaling.common.positioning-cause.valid');
   for (const ref of allRefs) context.policyContexts.set(ref.key, {
+    localOnly: Boolean(options.localOnly),
+    ringStiffness: evidenceFor(ref, 'ringStiffness'),
     tema: evidenceFor(ref, 'tema'),
     temaValid: (() => { const identity = evidenceFor(ref, 'tema'); return identity.state === 'RESOLVED' && (ref.geometryScope === 'point' ? rules.find((r) => r.ruleId === 'innmaling.point.tema.required') : rules.find((r) => r.ruleId === 'innmaling.line.tema.required'))?.allowedValues.includes(identity.resolvedValue); })(),
     positioningCause: evidenceFor(ref, 'positioningCause'), positioningCauseValid: (() => { const cause = evidenceFor(ref, 'positioningCause'); return cause?.state === 'VALUE_PRESENT' && positioningCauseRule?.allowedValues.includes(raw(cause)); })(), installationYear: evidenceFor(ref, 'installationYear'),
@@ -544,6 +546,39 @@ function createGmiRunContext(input) {
     nyttYears, typeTemas, typeValues, referenceDate, currentYear: context.currentYear,
   });
   return { schemaBinding, objectRefs, rules, referenceDate, context };
+}
+
+/**
+ * Bind the delivered schema once, then evaluate only one object's values through
+ * the same rule/evidence/policy pipeline as the full Validator. No other objects
+ * are enumerated or read during evaluate(). The cross-object NYTT-year check
+ * reports DATASET_CONTEXT_REQUIRED instead of claiming a local pass.
+ * Overrides are transient inspection values, never a validated export dataset.
+ */
+export function createGmiObjectValidator(input) {
+  const schemaBinding = bindGmiLayerSchema(input);
+  const referenceDate = input.referenceDate || new Date().toISOString().slice(0, 10);
+  return Object.freeze({
+    evaluate({ geometryScope, sourceIndex, object }) {
+      const ref = createObjectRef({ ...input, geometryScope, objectIndex: sourceIndex });
+      const collection = geometryScope === 'point' ? 'points' : 'lines';
+      if (!input.dataset[collection]?.[sourceIndex]) throw new Error('validation object is outside the source dataset');
+      const dataset = { points: [], lines: [] };
+      dataset[collection][sourceIndex] = object || input.dataset[collection][sourceIndex];
+      const objectRefs = { pointRefs: geometryScope === 'point' ? [ref] : [], lineRefs: geometryScope === 'line' ? [ref] : [] };
+      const { rules, context } = createGmiRunContext({ ...input, dataset, referenceDate }, { schemaBinding, objectRefs, localOnly: true });
+      const ruleResults = rules.filter((rule) => rule.geometryScopes.includes(geometryScope))
+        .map((rule) => createRuleResult(rule, [ref], context));
+      const outcomes = ruleResults.flatMap((result) => result.outcomes);
+      const temaBinding = schemaBinding.bindings.find((binding) => binding.geometryScope === geometryScope && binding.canonicalFieldId === 'tema');
+      const keys = temaBinding?.candidates.filter((item) => item.mappingKind !== MappingKind.UNSUPPORTED_CANDIDATE).map((item) => item.sourceKey) || [];
+      return deepFreeze({ schemaBinding, ruleResults, outcomes,
+        schemaFindings: keys.includes('Tema') && keys.includes('S_FCODE')
+          ? [{ geometryScope, canonicalFieldId: 'tema', state: EvaluationState.CHECK, reasonCode: RuleReasonCode.SCHEMA_TEMA_SFCODE_COEXISTENCE }] : [],
+        deferred: outcomes.filter((outcome) => outcome.reasonCode === RuleReasonCode.DATASET_CONTEXT_REQUIRED),
+      });
+    },
+  });
 }
 
 /**

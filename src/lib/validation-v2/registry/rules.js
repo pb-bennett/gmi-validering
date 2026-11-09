@@ -951,6 +951,17 @@ const attachmentLinkRule = batch1Rules.find(
 attachmentLinkRule.geometryScopes = [GeometryScope.POINT, GeometryScope.LINE];
 attachmentLinkRule.description = 'Vedlegg forventes på aktuelle kumobjekt. Gemini VA støtter ikke vedlegg på kumlokk (LOK/TOP); en levert lenke skal da fjernes.';
 
+batch1Rules.push({
+  ruleId: 'innmaling.line.sdr-ring-stiffness.exclusive', canonicalFieldId: 'sdr',
+  relatedFieldIds: ['ringStiffness'], geometryScopes: [GeometryScope.LINE],
+  evaluatorKind: RuleEvaluatorKind.FIELD_POLICY, category: RuleCategory.VALUE_FORMAT,
+  policy: 'sdrRingExclusive', title: 'SDR og Ringstivhet brukes ikke samtidig',
+  description: 'Både SDR og Ringstivhet er utfylt. Disse egenskapene skal ikke brukes samtidig på samme ledning.',
+  severity: RuleSeverity.ERROR, provenance: RuleProvenance.STANDARD,
+  source: { document: 'GMI Validator — M5A akseptansekrav', pages: '§3' },
+  allowedValues: [], valueComparison: ValueComparisonPolicy.NONE,
+});
+
 export const VALIDATION_RULES = deepFreeze(batch1Rules);
 
 function assertInvariant(condition, message) {
@@ -976,6 +987,9 @@ export function validateRuleRegistry(rules = VALIDATION_RULES) {
     assertInvariant(!ruleIds.has(rule.ruleId), `duplicate ruleId ${rule.ruleId}`);
     ruleIds.add(rule.ruleId);
     assertInvariant(Boolean(getCanonicalField(rule.canonicalFieldId)), `${rule.ruleId} references unknown field`);
+    if (rule.relatedFieldIds) {
+      assertInvariant(Array.isArray(rule.relatedFieldIds) && rule.relatedFieldIds.every((id) => Boolean(getCanonicalField(id))), `${rule.ruleId} references unknown related fields`);
+    }
     assertInvariant(
       Array.isArray(rule.geometryScopes) &&
         rule.geometryScopes.length > 0 &&
