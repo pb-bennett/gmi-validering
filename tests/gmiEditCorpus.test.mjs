@@ -1,9 +1,10 @@
 // M0: byte-exact GMI editing fixtures and the reference corpus harness.
 //
-// Everything asserted here runs against the TEST-ONLY reference harness in
-// tests/helpers/gmiEditHarness.mjs. Tests named "M1 pending" are acceptance
-// criteria for the future production library (src/lib/gmi-edit) and are
-// recorded as todo until it exists.
+// Tests marked "(reference)" run against the TEST-ONLY reference harness in
+// tests/helpers/gmiEditHarness.mjs. Tests marked "(production)" are the M1
+// acceptance criteria T1-T4 and T8: they drive the production library
+// src/lib/gmi-edit and compare it with the harness, which stays an independent
+// oracle. Negative and policy tests live in tests/gmiEditProduction.test.mjs.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFileSync } from 'node:child_process';
@@ -20,8 +21,15 @@ import {
 import {
   applyCellChanges, applyReferencePatches, bytesEqual, cellSpans, checkHyperlinkRemoval, checkNoOpIdentity,
   checkSingleCellChange, discoverGmiFiles, encodeLexeme, indexGmiSource, loadGmiDocument, planWrapperRemoval,
-  scanGmiCorpus, verifyCellChanges, verifyWrapperRemoval,
+  chooseSingleCellTarget, scanGmiCorpus, verifyCellChanges, verifyWrapperRemoval,
 } from './helpers/gmiEditHarness.mjs';
+import { expectedProductionStatus, scanGmiCorpusProduction } from './helpers/gmiEditProductionCorpus.mjs';
+import {
+  GMI_GEOMETRY_SCOPES, applyGmiPatches, createGmiSourceDocument, editGmiFields, getGmiSourceBytes, gmiObjectLexemes,
+  listGmiObjectCells, resolveGmiCell, validateGmiFieldLexeme,
+} from '../src/lib/gmi-edit/index.mjs';
+import { internalGmiSourceState } from '../src/lib/gmi-edit/sourceDocument.mjs';
+import { reconcileGmiSourceIndex } from '../src/lib/gmi-edit/sourceIndex.mjs';
 
 const manifest = JSON.parse(await readFile(path.join(GMI_EDIT_FIXTURE_DIR, 'manifest.json'), 'utf8'));
 const fixtureBytes = new Map(await Promise.all(manifest.fixtures.map(async (entry) =>
@@ -439,12 +447,280 @@ test('private corpus: reference checks on every byte-unique GMI; every original 
     if (process.env.GMI_EDIT_CORPUS_STRICT === '1') assert.equal(stats.status['not-reconcilable'] || 0, 0, 'strict: non-reconcilable files');
   });
 
-// --- pending M1 acceptance (production library, not yet implemented) -----
+test('private corpus (production): M1 library agrees with the reference harness on every byte-unique GMI; files unchanged',
+  { skip: corpusDirectories.length ? false : 'set GMI_EDIT_CORPUS to run', timeout: 600000 }, async () => {
+    const files = await discoverGmiFiles(corpusDirectories);
+    assert(files.length > 0, 'GMI_EDIT_CORPUS contains no .gmi files');
+    const before = new Map();
+    for (const filename of files) before.set(filename, sha256Hex(await readFile(filename)));
+    const stats = await scanGmiCorpusProduction(files);
+    assert.deepEqual(await discoverGmiFiles(corpusDirectories), files, 'no file added, removed or renamed');
+    let unchanged = 0;
+    for (const filename of files) if (sha256Hex(await readFile(filename)) === before.get(filename)) unchanged++;
+    console.log(JSON.stringify({ gmiEditCorpusProduction: { ...stats, unchangedFileHashes: unchanged } }));
+    assert.equal(unchanged, files.length, 'every corpus file hash unchanged');
+    assert.deepEqual(stats.errors, {}, 'exceptions');
+    assert.deepEqual(stats.agreement.unexpected, {}, 'production status differs from the reference outside the documented M1 policy');
+    assert.equal(stats.lexemes.production, stats.lexemes.reference);
+    assert.equal(stats.nonEditableObjects.production, stats.nonEditableObjects.reference);
+    assert.equal(stats.spans.mismatches, 0, 'every production span equals the reference span');
+    assert.deepEqual(stats.spans.mismatchCodes, {});
+    assert.equal(stats.noOp.identical, stats.noOp.checked, 'T1 on every editable file');
+    assert.equal(stats.noOp.readOnlyRejected, stats.production.readOnly, 'read-only files refuse edits');
+    assert.equal(stats.noOp.readOnlyBytesIdentical, stats.production.readOnly, 'read-only files stay readable');
+    for (const key of ['ok', 'identicalToReference', 'referenceVerifierOk']) {
+      assert.equal(stats.singleCell[key], stats.singleCell.applicable, `single-cell ${key}`);
+      assert.equal(stats.multiCell[key], stats.multiCell.files, `multi-cell ${key}`);
+    }
+    assert.equal(stats.negative.staleRejected, stats.negative.checked);
+    assert.equal(stats.negative.tamperRejected, stats.negative.checked);
+    assert.equal(stats.coordinatePolicy.editable, stats.coordinatePolicy.files, 'coordinate-warning files editable under the M1 policy');
+    assert.equal(stats.coordinatePolicy.repairRejected, stats.coordinatePolicy.editable, 'repairing a malformed vertex line is rejected');
+    assert.equal(stats.coordinatePolicy.malformedLinesPreserved, stats.coordinatePolicy.malformedLines);
+    assert.equal(stats.sourceIntact, stats.uniqueFiles - (stats.production.status['too-large'] || 0), 'source documents never mutated');
+  });
 
-for (const criterion of [
-  'T1 production no-change export returns the original bytes for every fixture and corpus file',
-  'T2 production GmiSourceDocument reconciliation matches this harness; non-reconcilable inputs are read-only',
-  'T3 production applyGmiPatches + verifier: diff ranges within patch ranges, reparse differs only in intended cells',
-  'T4 production fills/clears in first, middle, last and trailing-empty columns',
-  'T8 production lexeme validation and per-encoding-class encoder',
-]) test(`M1 pending: ${criterion}`, { todo: 'src/lib/gmi-edit lands in M1; must pass against tests/fixtures/gmi-edit' }, () => {});
+// --- M1 acceptance: production library (src/lib/gmi-edit) -----------------
+
+const prod = (id) => createGmiSourceDocument(fixtureBytes.get(id), { filename: manifest.fixtures.find((entry) => entry.id === id).file });
+const readOnlyIds = manifest.fixtures.filter((entry) => entry.expect.status !== 'reconciled').map((entry) => entry.id);
+const edit = (document, scope, sourceIndex, field, next) => {
+  const resolved = resolveGmiCell(document, { scope, sourceIndex, field });
+  assert(resolved.ok, `${scope}:${sourceIndex}:${field} ${resolved.code}`);
+  return { target: { scope, sourceIndex, field }, expected: resolved.cell.lexeme, lexeme: next };
+};
+// Byte ranges [start, end) in the source where output differs (aligned by the
+// common prefix and suffix around each patch, independent of the splice).
+function differingSourceRange(source, output) {
+  let prefix = 0;
+  while (prefix < source.length && prefix < output.length && source[prefix] === output[prefix]) prefix++;
+  let suffix = 0;
+  while (suffix < source.length - prefix && suffix < output.length - prefix && source[source.length - 1 - suffix] === output[output.length - 1 - suffix]) suffix++;
+  return prefix === source.length && prefix === output.length ? null : [prefix, source.length - suffix];
+}
+
+test('T1 (production): a no-change export is byte-identical for every fixture; read-only fixtures stay readable but refuse edits', () => {
+  for (const entry of manifest.fixtures) {
+    const document = prod(entry.id);
+    const original = fixtureBytes.get(entry.id);
+    assert(bytesEqual(getGmiSourceBytes(document), original), `${entry.id} source bytes`);
+    if (!document.editable) {
+      assert(readOnlyIds.includes(entry.id), `${entry.id} unexpectedly read-only (${document.reasons})`);
+      const refused = editGmiFields(document, []);
+      assert.equal(refused.ok, false);
+      assert.equal(refused.rejections[0].code, 'document-not-editable');
+      assert.equal('bytes' in refused, false, 'no bytes from a refused export');
+      continue;
+    }
+    const result = editGmiFields(document, []);
+    assert(result.ok, `${entry.id}: ${JSON.stringify(result.rejections)}`);
+    assert(bytesEqual(result.bytes, original), `${entry.id} identical`);
+    assert.equal(sha256Hex(result.bytes), entry.sha256);
+    assert.equal(result.verification.summary.targetedCells, 0);
+    const spliced = applyGmiPatches(document, []);
+    assert(spliced.ok && bytesEqual(spliced.bytes, original));
+    // The output is a copy: changing it cannot reach the source.
+    result.bytes[0] ^= 0xff;
+    assert(bytesEqual(getGmiSourceBytes(document), original));
+  }
+  assert.deepEqual(readOnlyIds.sort(), ['guard-cr-only', 'guard-mixed-eol', 'guard-repeated-section', 'guard-utf8-bom']);
+});
+
+test('T2 (production): source document reconciliation matches the reference harness; unsupported inputs are read-only with reasons', () => {
+  for (const entry of manifest.fixtures) {
+    const document = prod(entry.id), reference = doc(entry.id);
+    const expected = expectedProductionStatus(reference);
+    assert.equal(expected.policy, 'same', `${entry.id}: no fixture is affected by the coordinate policy`);
+    assert.equal(document.status, entry.expect.status, `${entry.id} status (${document.reasons.join(',')})`);
+    assert.equal(document.status, expected.status);
+    assert.equal(document.editable, entry.expect.status === 'reconciled');
+    assert.equal(document.encoding.encodingClass, entry.expect.encodingClass);
+    assert.equal(document.encoding.eol.kind, entry.expect.eolKind);
+    assert.deepEqual(document.mismatches, []);
+    if (entry.expect.reasons) assert.deepEqual([...document.reasons], entry.expect.reasons, `${entry.id} reasons`);
+    if (entry.expect.status === 'parser-error') {
+      assert.deepEqual([...document.reasons], ['parser-throws']);
+      assert.equal(document.counts, null);
+      continue;
+    }
+    assert.equal(document.counts.points, entry.expect.points);
+    assert.equal(document.counts.lines, entry.expect.lines);
+    assert.equal(document.counts.lexemes, reference.counts.lexemes);
+    assert.equal(document.counts.nonEditableObjects, entry.expect.nonEditableObjects ?? 0);
+    // Every production span equals the harness span, and holds the parser lexeme as raw bytes.
+    const state = internalGmiSourceState(document);
+    for (const { scope, collection } of GMI_GEOMETRY_SCOPES) {
+      reference.parser[collection].forEach((object, sourceIndex) => {
+        const referenceSpans = cellSpans(reference.index.objects[scope][sourceIndex]);
+        const productionSpans = state.objects[scope][sourceIndex].spans;
+        assert.equal(productionSpans.size, referenceSpans.size);
+        const lexemes = gmiObjectLexemes(document, scope, sourceIndex) || {};
+        for (const [field, { position, span }] of referenceSpans) {
+          assert.deepEqual(productionSpans.get(field), { position, span }, `${entry.id} ${scope}:${sourceIndex}:${field}`);
+          assert(bytesEqual(getGmiSourceBytes(document).subarray(...span), encodeSingleByte(lexemes[field])));
+        }
+      });
+    }
+    // Read-only documents remain inspectable but no cell resolves.
+    if (!document.editable) {
+      assert.equal(resolveGmiCell(document, { scope: 'point', sourceIndex: 0, field: 'S_FCODE' }).code, 'document-not-editable');
+      assert(listGmiObjectCells(document, 'point', 0).every((cell) => !cell.editable && cell.reason === 'document-not-editable'));
+      assert(document.parser.points.length > 0);
+    }
+  }
+  // The gate rejects a wrong index, including a span moved to identical text in another object.
+  const document = prod('core-crlf-latin1');
+  const { text, parser, index } = internalGmiSourceState(document);
+  const tamper = (mutate) => {
+    const copy = structuredClone(index);
+    mutate(copy);
+    return [...new Set(reconcileGmiSourceIndex({ text, parser, index: copy }).mismatches.map((m) => m.code))].sort();
+  };
+  assert.deepEqual(reconcileGmiSourceIndex({ text, parser, index }).mismatches, []);
+  assert.deepEqual(tamper((copy) => copy.objects.point.pop()), ['object-count']);
+  assert.deepEqual(tamper((copy) => { copy.objects.line[0].fieldValueLines[0].spans[0][1] -= 1; }), ['lexeme-span', 'span-not-contiguous']);
+  const sameText = tamper((copy) => {
+    // line 0 and line 1 both have S_FCODE "VL": point line 0's cell at line 1's bytes.
+    assert.equal(text.slice(...copy.objects.line[0].fieldValueLines[0].spans[0]), text.slice(...copy.objects.line[1].fieldValueLines[0].spans[0]));
+    copy.objects.line[0].fieldValueLines[0].spans[0] = [...copy.objects.line[1].fieldValueLines[0].spans[0]];
+  });
+  assert(sameText.length > 0 && !sameText.includes('lexeme-span'), `identical text elsewhere is caught structurally: ${sameText}`);
+  assert.deepEqual(tamper((copy) => { copy.objects.line[2].guid = 'x'; }), ['object-guid']);
+});
+
+test('T3 (production): single-cell changes stay inside their span and reparse to exactly the intended lexeme', () => {
+  for (const id of editableIds) {
+    const document = prod(id), reference = doc(id);
+    const chosen = chooseSingleCellTarget(reference);
+    const target = chosen ? { scope: chosen.scope, sourceIndex: chosen.sourceIndex, field: chosen.field } : id === 'hyperlink-families'
+      ? { scope: 'point', sourceIndex: 0, field: 'Merknad' } : { scope: 'point', sourceIndex: 0, field: 'Kumform' };
+    const next = chosen?.lexeme ?? 'Endret';
+    const request = edit(document, target.scope, target.sourceIndex, target.field, next);
+    const result = editGmiFields(document, [request]);
+    assert(result.ok, `${id}: ${JSON.stringify(result.rejections)}`);
+    const [patch] = result.patches;
+    // Diff range within the patch range.
+    const range = differingSourceRange(fixtureBytes.get(id), result.bytes);
+    assert(range && range[0] >= patch.start && range[1] <= patch.end, `${id} diff ${range} within [${patch.start}, ${patch.end})`);
+    // Identical to the reference splice, and accepted by the reference verifier.
+    const cells = [{ ...target, lexeme: next }];
+    assert(bytesEqual(result.bytes, applyCellChanges(reference, cells).output), `${id} equals reference output`);
+    const referenceCheck = verifyCellChanges(reference, result.bytes, cells);
+    assert(referenceCheck.ok, `${id} reference verifier: ${referenceCheck.failures}`);
+    assert.equal(lexeme({ parser: referenceCheck.reparsed }, target.scope, target.sourceIndex, target.field), next);
+    assert.equal(result.verification.summary.changedCells, 1);
+    // The verified output reloads as an editable document with the same structure.
+    assert.equal(result.verification.outputDocument.status, 'reconciled');
+  }
+  const core = prod('core-crlf-latin1');
+  const result = editGmiFields(core, [edit(core, 'line', 1, 'SDR', '11.0')]);
+  assert(result.ok);
+  assert.equal(result.bytes.length, core.size + 4);
+  assert.equal(result.verification.outputDocument.parser.linesParsed[1].attributes.SDR, 11);
+  assert.equal(count(result.bytes, 0x0d), count(fixtureBytes.get('core-crlf-latin1'), 0x0d), 'CRLF preserved');
+  assert.deepEqual(result.verification.outputDocument.parser.header, core.parser.header);
+  // Irregular objects are refused; the regular one in the same file is editable.
+  const irregular = prod('guard-irregular-objects');
+  for (const sourceIndex of [1, 2, 3, 4]) {
+    assert.equal(resolveGmiCell(irregular, { scope: 'point', sourceIndex, field: 'S_FCODE' }).code, 'object-not-editable');
+  }
+  assert(editGmiFields(irregular, [edit(irregular, 'point', 0, 'Kumform', 'R')]).ok);
+  assert.equal(irregular.parser.points[1].attributes.Merknad, 'Andre linje', 'parser last-wins is observed, not "fixed"');
+});
+
+test('T4 (production): fills and clears in first, middle, last and trailing-empty columns, alone and together', () => {
+  const document = prod('sdr-empty');
+  // line 0: ['', VL, PE, 110, '', PN10, '', '', ''] + structural trailing ''.
+  const edits = [
+    edit(document, 'line', 0, 'S_FCODE', 'VL'), // fill, first column
+    edit(document, 'line', 0, 'SDR', '11.0'), // fill, middle column
+    edit(document, 'line', 0, 'Merknad', 'Fylt'), // fill between two empty columns
+    edit(document, 'line', 0, 'Datafangstdato', '2026-09-02'), // fill, last (trailing-empty) column
+    edit(document, 'line', 1, 'SDR', '17.0'), // replace whitespace-only value
+    edit(document, 'line', 1, 'S_FCODE', ''), // clear, first column
+    edit(document, 'line', 2, 'SDR', ''), // clear, middle column
+    edit(document, 'line', 3, 'Datafangstdato', ''), // clear, last column
+  ];
+  for (const single of edits) {
+    const result = editGmiFields(document, [single]);
+    assert(result.ok, `${JSON.stringify(single.target)}: ${JSON.stringify(result.rejections)}`);
+    const range = differingSourceRange(fixtureBytes.get('sdr-empty'), result.bytes);
+    const [patch] = result.patches;
+    if (range) assert(range[0] >= patch.start && range[1] <= patch.end);
+  }
+  const result = editGmiFields(document, edits);
+  assert(result.ok, JSON.stringify(result.rejections));
+  const lines = result.verification.outputDocument.parser.linesParsed;
+  assert.deepEqual([lines[0].attributes.S_FCODE, lines[0].attributes.SDR, lines[0].attributes.Merknad, lines[0].attributes.Datafangstdato], ['VL', 11, 'Fylt', '2026-09-02']);
+  assert.deepEqual([lines[1].attributes.S_FCODE, lines[1].attributes.SDR, lines[2].attributes.SDR, lines[3].attributes.Datafangstdato], [null, 17, null, null]);
+  assert(verifyCellChanges(doc('sdr-empty'), result.bytes, edits.map((entry) => ({ ...entry.target, lexeme: entry.lexeme }))).ok, 'reference verifier agrees');
+  const text = new TextDecoder('iso-8859-1').decode(result.bytes);
+  assert(text.includes('_FIELDVALUES VL;VL;PE;110;11.0;PN10;;Fylt;2026-09-02;\r\n'), 'trailing ";" and CRLF kept');
+  // Points: fill and clear the last column.
+  const core = prod('core-crlf-latin1'), coreLf = prod('core-lf-latin1');
+  const pointEdits = (target) => [edit(target, 'point', 1, 'Kumform', 'R'), edit(target, 'point', 0, 'Kumform', ''), edit(target, 'line', 2, 'SDR', '11.0')];
+  const crlf = editGmiFields(core, pointEdits(core)), lf = editGmiFields(coreLf, pointEdits(coreLf));
+  assert(crlf.ok && lf.ok);
+  // The LF twin's edited output differs from the CRLF output only in EOL bytes.
+  assert(bytesEqual(lf.bytes, Uint8Array.from([...crlf.bytes].filter((byte, i) => !(byte === 0x0d && crlf.bytes[i + 1] === 0x0a)))));
+  assert.equal(count(lf.bytes, 0x0d), 0);
+  // The structural trailing slot and absent columns are not targets.
+  assert.equal(resolveGmiCell(document, { scope: 'line', sourceIndex: 0, field: '' }).code, 'unnamed-field');
+  assert.equal(resolveGmiCell(prod('sdr-absent'), { scope: 'line', sourceIndex: 0, field: 'SDR' }).code, 'field-absent');
+});
+
+test('T8 (production): lexeme validation and per-encoding-class encoding; Windows-1252 bytes elsewhere preserved', () => {
+  const ok = (value, encodingClass) => [...validateGmiFieldLexeme(value, encodingClass).bytes];
+  const code = (value, encodingClass = 'single-byte') => validateGmiFieldLexeme(value, encodingClass).code;
+  assert.deepEqual(ok('ÆØÅ æøå', 'single-byte'), [0xc6, 0xd8, 0xc5, 0x20, 0xe6, 0xf8, 0xe5]);
+  assert.deepEqual(ok('Rør', 'ascii'), [0x52, 0xf8, 0x72]);
+  assert.deepEqual(ok('', 'single-byte'), []);
+  assert.deepEqual(ok('11.0', 'utf8-likely'), [0x31, 0x31, 0x2e, 0x30]);
+  assert.equal(code('a;b'), 'lexeme-semicolon');
+  for (const value of ['a\nb', 'a\rb', 'a\r\nb']) assert.equal(code(value), 'lexeme-line-break');
+  for (const value of ['a\tb', 'a\x00b', 'a\x1fb', 'a\x7fb', '\x0b']) assert.equal(code(value), 'lexeme-control-character');
+  for (const value of ['\x85', '\x80', '\x9f']) assert.equal(code(value), 'lexeme-c1-control');
+  for (const value of ['€', '†', '˜', '☃', '😀', ' ']) assert.equal(code(value), 'lexeme-unrepresentable', value);
+  const decomposed = validateGmiFieldLexeme('Rör', 'single-byte');
+  assert.equal(decomposed.code, 'lexeme-unrepresentable');
+  assert.equal(decomposed.nfcRepresentable, true, 'never normalized silently, but reported');
+  assert.equal(code(11), 'lexeme-not-string');
+  assert.equal(code(null), 'lexeme-not-string');
+  assert.equal(code('ø', 'utf8-likely'), 'lexeme-non-ascii-in-utf8');
+  assert.equal(code('a', 'utf8-bom'), 'encoding-not-editable');
+
+  // Windows-1252 0x86/0x98 elsewhere survive, at the same positions relative to the edit.
+  const cp = prod('cp1252-c1-bytes');
+  const source = fixtureBytes.get('cp1252-c1-bytes');
+  const result = editGmiFields(cp, [edit(cp, 'line', 0, 'SDR', '11.0'), edit(cp, 'point', 1, 'Kumform', 'Rund kum øst')]);
+  assert(result.ok, JSON.stringify(result.rejections));
+  assert.equal(count(result.bytes, 0x86), count(source, 0x86));
+  assert.equal(count(result.bytes, 0x98), count(source, 0x98));
+  assert.equal(result.bytes.length, source.length + 4 + 12);
+  assert.equal(result.verification.outputDocument.encoding.encodingClass, 'single-byte');
+  assert.deepEqual(result.verification.outputDocument.encoding.c1Bytes, [0x86, 0x98]);
+  // A value that held a Windows-1252 character can be replaced with ASCII; writing one is refused.
+  assert(editGmiFields(cp, [edit(cp, 'point', 1, 'Merknad', 'Kryss og tilde')]).ok);
+  assert.equal(editGmiFields(cp, [edit(cp, 'point', 1, 'Merknad', 'Kryss †')]).rejections[0].code, 'lexeme-unrepresentable');
+
+  // UTF-8 without BOM: ASCII edits only; multibyte sequences elsewhere intact; still valid UTF-8.
+  const utf8 = prod('utf8-no-bom');
+  assert.equal(editGmiFields(utf8, [edit(utf8, 'line', 0, 'Merknad', 'Rør')]).rejections[0].code, 'lexeme-non-ascii-in-utf8');
+  const utf8Result = editGmiFields(utf8, [edit(utf8, 'line', 0, 'SDR', '11.0'), edit(utf8, 'line', 0, 'Merknad', 'Ror under bekk')]);
+  assert(utf8Result.ok, JSON.stringify(utf8Result.rejections));
+  assert(indexOfBytes(utf8Result.bytes, Uint8Array.of(0xc3, 0x98)) >= 0, '"Ø" in the untouched point Merknad');
+  assert.doesNotThrow(() => new TextDecoder('utf-8', { fatal: true }).decode(utf8Result.bytes));
+  assert.equal(utf8Result.verification.outputDocument.encoding.encodingClass, 'utf8-likely');
+
+  // ASCII file: Latin-1 letters allowed (becomes single-byte); bytes that would turn
+  // the file into valid multibyte UTF-8 are refused by the verifier.
+  const ascii = prod('sdr-empty');
+  const latin = editGmiFields(ascii, [edit(ascii, 'line', 0, 'Merknad', 'Grøft')]);
+  assert(latin.ok);
+  assert.equal(latin.verification.outputDocument.encoding.encodingClass, 'single-byte');
+  const drift = editGmiFields(ascii, [edit(ascii, 'line', 0, 'Merknad', 'Ã¸')]);
+  assert.equal(drift.ok, false);
+  assert.equal(drift.stage, 'verify');
+  assert.deepEqual(drift.rejections.map((entry) => entry.code), ['encoding-class-drift']);
+  assert.equal('bytes' in drift, false);
+});
