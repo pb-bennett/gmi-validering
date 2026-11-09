@@ -43,6 +43,14 @@ export default function GmiChangeList({ changeSets, redoCount, effective, active
             {objects.map((cell) => <button key={`${cell.scope}:${cell.sourceIndex}`} type="button" className="gmi-edit-link"
               onClick={() => onSelectObject({ scope: cell.scope, sourceIndex: cell.sourceIndex }, changeSet.id)}>{cell.object}</button>)}
           </div>
+          {changeSet.eligibility?.manualOverrides?.length > 0 && <details className="gmi-edit-manual-history">
+            <summary>Manuelt overstyrt anvendelighet ({changeSet.eligibility.manualOverrides.length})</summary>
+            <ul>{changeSet.eligibility.manualOverrides.map((entry) => <li key={entry.key}>
+              {describeGmiObject(entry.scope, entry.sourceIndex, entry.objectId)} · {gmiSkipReasonLabel(entry.reason)}
+              {entry.evidence?.diagnosticFacts?.context?.length > 0 && ` · ${entry.evidence.diagnosticFacts.context.map((fact) => `${fact.fieldId === 'tema' ? 'Tema' : fact.fieldId === 'material' ? 'Material' : fact.fieldId}: ${fact.value}`).join(' · ')}`}
+              {!changeSet.cells.some((cell) => cell.key === entry.key) && ' · Ingen verdi endret'}
+            </li>)}</ul>
+          </details>}
           <table className="gmi-edit-change-cells">
             <thead><tr><th scope="col">Felt</th><th scope="col">Original</th><th scope="col">Foreslått</th></tr></thead>
             <tbody>{cells.map((cell) => <tr key={cell.key} data-superseded={cell.superseded || undefined}>

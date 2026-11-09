@@ -119,7 +119,8 @@ export function evaluateGmiBatchEligibility(session, { canonicalFieldId, mode = 
     const missing = isGmiMissingLexeme(current);
     if (missing) counts.missing++; else counts.populated++;
     if (entry) counts.previouslyChanged++;
-    const facts = { original, current, missing, changedBy: entry ? [...entry.touchedBy] : [] };
+    const facts = { original, current, missing, changedBy: entry ? [...entry.touchedBy] : [], applicability: state,
+      evidence: Object.freeze({ state: outcome.state, reasonCode: outcome.reasonCode, diagnosticFacts: outcome.diagnosticFacts }) };
     if (state === 'NOT_APPLICABLE') { skip({ ...base, ...facts }, GMI_SKIP_REASONS.NOT_APPLICABLE, { applicability: state }); continue; }
     // EXPECTED (special hydraulic class), UNRESOLVED and anything else need a
     // human decision: never batch-filled.

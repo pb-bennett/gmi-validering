@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { performance } from 'node:perf_hooks';
-import { prepareGmiBatchReview, initialGmiBatchSelection, buildGmiBatchSelection } from '../src/lib/gmiEditBatchView.mjs';
+import { prepareGmiBatchReview, initialGmiBatchSelection, buildGmiBatchSelection, canManuallySelectGmiBatchRow, describeGmiBatchApplicability } from '../src/lib/gmiEditBatchView.mjs';
 import { createGmiSourceDocument, createGmiEditSession, createGmiObjectCorrection, stageGmiChangeSet, getGmiEditCell,
-  getGmiProposedState, getGmiProposedBytes, getGmiSourceBytes, undoGmiEdit, redoGmiEdit, discardAllGmiEdits, discardGmiChangeSet,
+  getGmiProposedState, getGmiProposedBytes, getGmiSourceBytes, undoGmiEdit, redoGmiEdit, discardAllGmiEdits, discardGmiChangeSet, createGmiBatchCorrection, evaluateGmiBatchEligibility,
 } from '../src/lib/gmi-edit/index.mjs';
 import { loadGmiDocument, verifyCellChanges } from './helpers/gmiEditHarness.mjs';
 import { gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
@@ -147,4 +147,89 @@ test('empty eligible sets and chunked large lists; selection does not rerun Vali
   const selected = initialGmiBatchSelection(preview); selected.clear();
   assert.equal(selected.size, 0);
   t.diagnostic(`1000-object preview: ${Math.round(performance.now() - started)} ms; ${yields} yields`);
+});
+
+test('exclusion evidence distinguishes hydraulic context, material family and unresolved dependencies', async () => {
+  const preview = await prepare(setup());
+  const byIndex = (index) => preview.skippedRows.find((row) => row.sourceIndex === index);
+  assert.match(byIndex(2).explanation, /hydrauliske klasse.*SDR/);
+  assert.match(byIndex(2).explanation, /Tema: SP.*Material: PVC.*selvfall/);
+  assert.match(byIndex(5).explanation, /Materialfamilien.*SDR/);
+  assert.match(byIndex(3).explanation, /uavklart/);
+  assert.match(byIndex(4).explanation, /spesiell hydraulisk klasse/);
+  assert.match(byIndex(1).explanation, /allerede utfylt/);
+  assert.match(describeGmiBatchApplicability({ reason: 'unresolved' }, 'SDR'), /uavklart.*ikke fastslå/);
+  assert.equal(preview.eligibility.counts.skippedByReason['not-applicable'], 2);
+});
+
+test('advanced explicit manual selection preserves evidence, exact bytes, one ChangeSet and reversible history', async () => {
+  const view = setup(), preview = await prepare(view);
+  const selected = initialGmiBatchSelection(preview);
+  const manual = preview.skippedRows.filter((row) => [2, 3, 4, 5, 8].includes(row.sourceIndex));
+  for (const row of manual) selected.add(row.key);
+  assert.equal(initialGmiBatchSelection(preview).size, 3, 'no manual row is selected automatically');
+  assert.equal(buildGmiBatchSelection(view.session, preview, selected).ok, false, 'advanced flag required');
+  const result = buildGmiBatchSelection(view.session, preview, selected, false, undefined, true);
+  assert.equal(result.ok, true);
+  const cs = result.changeSet;
+  assert.equal(cs.cells.length, 8); assert.equal(cs.eligibility.normallyEligible.length, 3);
+  assert.equal(cs.eligibility.manualOverrides.length, 5);
+  assert.deepEqual(cs.eligibility.manualOverrides.map((row) => row.reason).sort(), ['not-applicable', 'not-applicable', 'unresolved', 'unresolved', 'unresolved']);
+  assert.match(cs.label, /Manuelt overstyrt/);
+  assert.equal(cs.eligibility.manualOverrides.find((row) => row.sourceIndex === 5).evidence.diagnosticFacts.applicabilityReason, 'MATERIAL_FAMILY_NOT_RECOMMENDED');
+  const session = stageGmiChangeSet(view.session, cs).session;
+  assert.equal(session.changeSets.length, 1);
+  const edits = cs.cells.map((cell) => ({ scope: cell.scope, sourceIndex: cell.sourceIndex, field: cell.field, lexeme: cell.next }));
+  assert.deepEqual(verifyCellChanges(loadGmiDocument(view.bytes), getGmiProposedBytes(getGmiProposedState(session)), edits).failures, []);
+  assert.deepEqual(getGmiSourceBytes(view.document), view.bytes);
+  assert.equal(value(undoGmiEdit(session).session, 2), '');
+  assert.equal(value(redoGmiEdit(undoGmiEdit(session).session).session, 2), '11.0');
+  assert.equal(value(discardGmiChangeSet(session, cs.id).session, 2), '');
+  assert.deepEqual(getGmiProposedBytes(getGmiProposedState(discardAllGmiEdits(session).session)), view.bytes);
+});
+
+test('M2 manual override needs genuine exact-session eligibility and cannot widen targets or bypass technical limits', async () => {
+  const view = setup({ rows: [['SP', 'PVC', '', '', 'SN8'], ['VL', 'PE'], ['VL', 'PE', '17.0', '', '']] });
+  const eligibility = evaluateGmiBatchEligibility(view.session, { canonicalFieldId: 'sdr' });
+  const spec = { eligibility, manualTargets: [{ scope: 'line', sourceIndex: 0 }], lexeme: '11.0', allowApplicabilityOverride: true };
+  const built = createGmiBatchCorrection(view.session, spec);
+  assert.equal(built.ok, true);
+  assert.equal(createGmiBatchCorrection(view.session, { ...spec, allowApplicabilityOverride: false }).ok, false);
+  assert.equal(createGmiBatchCorrection(view.session, { ...spec, eligibility: { ...eligibility } }).ok, false);
+  assert.equal(createGmiBatchCorrection(setup().session, spec).ok, false);
+  assert.equal(createGmiBatchCorrection(view.session, { ...spec, manualTargets: [{ scope: 'line', sourceIndex: '0' }] }).ok, false);
+  const absent = setup({ fields: ['Tema', 'Material'], rows: [['SP', 'PVC']] });
+  assert.equal(createGmiBatchCorrection(absent.session, { ...spec, eligibility: evaluateGmiBatchEligibility(absent.session, { canonicalFieldId: 'sdr' }) }).ok, false);
+  for (const sourceIndex of [1, 2, 99]) assert.equal(createGmiBatchCorrection(view.session, { ...spec, manualTargets: [{ scope: 'line', sourceIndex }] }).ok, false);
+  for (const field of ['GUID', 'S_HYPERLINK', 'S_HYPERLINK_punkt', 'Unknown']) assert.equal(createGmiBatchCorrection(view.session, { ...spec, field }).ok, false);
+  for (const lexeme of ['x;y', 'x\ny', '🧪']) assert.equal(createGmiBatchCorrection(view.session, { ...spec, lexeme }).ok, false);
+  const staged = stageGmiChangeSet(view.session, built.changeSet).session;
+  const back = undoGmiEdit(staged).session;
+  assert.equal(back.stateKey, view.session.stateKey);
+  assert.equal(createGmiBatchCorrection(back, spec).rejections[0].code, 'stale-eligibility');
+  assert.equal(stageGmiChangeSet(staged, built.changeSet).ok, false);
+  const preview = await prepare(view);
+  assert(!canManuallySelectGmiBatchRow(preview.skippedRows.find((row) => row.sourceIndex === 1), 'overwrite'));
+  assert(preview.skippedRows.find((row) => row.sourceIndex === 0).findings.some((finding) => finding.state === 'FAIL' && finding.batchIntroduced));
+});
+
+test('manual inclusion is independent of populated overwrite and replacement approval, even with a populated earlier proposal', async () => {
+  let view = setup({ rows: [['SP', 'PVC', '17.0', '', 'SN8'], ['SP', 'PVC', '', '', '']] });
+  const fill = evaluateGmiBatchEligibility(view.session, { canonicalFieldId: 'sdr' });
+  const request = { manualTargets: [{ scope: 'line', sourceIndex: 0 }], allowApplicabilityOverride: true, lexeme: '11.0' };
+  assert.equal(createGmiBatchCorrection(view.session, { ...request, eligibility: fill }).rejections[0].code, 'manual-overwrite-not-approved');
+  const overwrite = evaluateGmiBatchEligibility(view.session, { canonicalFieldId: 'sdr', mode: 'overwrite' });
+  const built = createGmiBatchCorrection(view.session, { ...request, eligibility: overwrite, mode: 'overwrite' });
+  assert.equal(built.changeSet.counts.populatedOverwrites, 1);
+  view = change(view, 1, { SDR: '17.0' });
+  const currentFill = evaluateGmiBatchEligibility(view.session, { canonicalFieldId: 'sdr' });
+  assert.equal(createGmiBatchCorrection(view.session, { ...request, manualTargets: [{ scope: 'line', sourceIndex: 1 }], conflictPolicy: 'replace', eligibility: currentFill }).rejections[0].code, 'manual-overwrite-not-approved');
+  const preview = await prepare(view, { mode: 'overwrite' });
+  const selected = new Set([preview.skippedRows.find((row) => row.sourceIndex === 1).key]);
+  const skipped = buildGmiBatchSelection(view.session, preview, selected, false, undefined, true);
+  assert.equal(skipped.changeSet.cells.length, 0);
+  const approved = buildGmiBatchSelection(view.session, preview, selected, true, undefined, true);
+  assert.equal(approved.changeSet.counts.overwritten, 1);
+  assert.equal(approved.changeSet.counts.populatedOverwrites, 1);
+  assert.equal(approved.changeSet.eligibility.manualOverrides[0].current, '17.0');
 });

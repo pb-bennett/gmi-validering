@@ -301,6 +301,24 @@ function sourceValue(evidence) {
   return evidence.sourceValue;
 }
 
+// One hydraulic decision, with its explanation evidence retained for inspection.
+// The returned states/ordering are the existing applicability policy.
+function hydraulicDiagnosticApplicability(rule, policyContext, evaluation) {
+  const result = (state, reason) => ({ state, reason });
+  if (evaluation?.state === EvaluationState.NOT_EVALUATED) return result('UNRESOLVED', evaluation.reasonCode);
+  const hydraulicClass = policyContext?.hydraulicClass;
+  if (!hydraulicClass) return result('UNRESOLVED', 'HYDRAULIC_CONTEXT_UNRESOLVED');
+  if (rule.policy === 'pressureClass') return hydraulicClass === 'PRESSURE' ? result('APPLICABLE', null)
+    : hydraulicClass === 'SPECIAL' ? result('EXPECTED', 'SPECIAL_HYDRAULIC_CONTEXT') : result('NOT_APPLICABLE', 'HYDRAULIC_CLASS_NOT_RECOMMENDED');
+  if (!policyContext?.materialValid) return result('UNRESOLVED', 'MATERIAL_CONTEXT_UNRESOLVED');
+  const material = sourceValue(policyContext?.material);
+  const materialMatches = rule.policy === 'sdr' ? isSdrMaterial(material) : isRingStiffnessMaterial(material);
+  if (hydraulicClass === 'SPECIAL') return result('EXPECTED', 'SPECIAL_HYDRAULIC_CONTEXT');
+  const classMatches = rule.policy === 'sdr' ? hydraulicClass === 'PRESSURE' : hydraulicClass === 'GRAVITY';
+  return classMatches && materialMatches ? result('APPLICABLE', null)
+    : result('NOT_APPLICABLE', !classMatches ? 'HYDRAULIC_CLASS_NOT_RECOMMENDED' : 'MATERIAL_FAMILY_NOT_RECOMMENDED');
+}
+
 function getDiagnosticApplicability(rule, policyContext, evaluation) {
   if (evaluation?.state === EvaluationState.NOT_EVALUATED) return 'UNRESOLVED';
   const tema = sourceValue(policyContext?.tema);
@@ -322,15 +340,7 @@ function getDiagnosticApplicability(rule, policyContext, evaluation) {
     return shape ? (shape === 'S' ? 'NOT_APPLICABLE' : 'APPLICABLE') : 'UNRESOLVED';
   }
   if (['sdr', 'ringStiffness', 'pressureClass'].includes(rule.policy)) {
-    const hydraulicClass = policyContext?.hydraulicClass;
-    if (!hydraulicClass) return 'UNRESOLVED';
-    if (rule.policy === 'pressureClass') return hydraulicClass === 'PRESSURE' ? 'APPLICABLE' : hydraulicClass === 'SPECIAL' ? 'EXPECTED' : 'NOT_APPLICABLE';
-    const material = sourceValue(policyContext?.material);
-    if (!policyContext?.materialValid) return 'UNRESOLVED';
-    const materialMatches = rule.policy === 'sdr' ? isSdrMaterial(material) : isRingStiffnessMaterial(material);
-    if (hydraulicClass === 'SPECIAL') return 'EXPECTED';
-    if (rule.policy === 'sdr') return hydraulicClass === 'PRESSURE' && materialMatches ? 'APPLICABLE' : 'NOT_APPLICABLE';
-    return hydraulicClass === 'GRAVITY' && materialMatches ? 'APPLICABLE' : 'NOT_APPLICABLE';
+    return hydraulicDiagnosticApplicability(rule, policyContext, evaluation).state;
   }
   return 'ALL';
 }
@@ -387,6 +397,8 @@ function createDiagnosticFacts(rule, policyContext, evaluation, evidence) {
       ? 'EXPECTED'
       : 'REQUIRED',
     coverageApplicability: getDiagnosticApplicability(rule, policyContext, evaluation),
+    applicabilityReason: ['sdr', 'ringStiffness', 'pressureClass'].includes(rule.policy)
+      ? hydraulicDiagnosticApplicability(rule, policyContext, evaluation).reason : null,
     presence: evidencePresence(evidence),
     expectation: {
       allowedValueCount: Array.isArray(rule.allowedValues) ? rule.allowedValues.length : null,
@@ -647,6 +659,7 @@ export function evaluateGmiRuleApplicability(input, ruleId) {
       reasonCode: outcome.reasonCode,
       applicability: outcome.diagnosticFacts?.coverageApplicability ?? 'UNRESOLVED',
       presence: outcome.diagnosticFacts?.presence ?? 'UNRESOLVED',
+      diagnosticFacts: outcome.diagnosticFacts,
     })),
   });
 }

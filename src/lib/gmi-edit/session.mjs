@@ -129,25 +129,49 @@ export function createGmiObjectCorrection(session, { scope, sourceIndex, objectI
  * result from evaluateGmiBatchEligibility on this exact session state; then
  * only its eligible objects are requested and its skipped objects are kept
  * in the ChangeSet record.
+ * Opt-in `manualTargets` plus `allowApplicabilityOverride: true` may include
+ * only technically resolved not-applicable/unresolved entries from that exact
+ * eligibility/session. This does not authorize populated-value overwrite or
+ * conflict replacement; those still require their separate options.
  */
-export function createGmiBatchCorrection(session, { field, lexeme, targets, eligibility, ...options } = {}) {
+export function createGmiBatchCorrection(session, { field, lexeme, targets, eligibility, manualTargets = [], allowApplicabilityOverride = false, ...options } = {}) {
   const reject = (code, detail = {}) => Object.freeze({ ok: false, rejections: Object.freeze([Object.freeze({ code, ...detail })]) });
   if (isGmiFieldEditReservedColumn(field)) return reject('field-owned-by-photo-delivery', { field });
   if (targets && eligibility) return reject('ambiguous-targets');
+  if (!Array.isArray(manualTargets)) return reject('invalid-manual-targets');
+  if (manualTargets.length && (!eligibility || allowApplicabilityOverride !== true)) return reject('manual-override-not-approved');
   let requests, preSkipped, eligibilitySummary = null;
   if (eligibility) {
     const basis = gmiEligibilityBasis(eligibility);
     if (!basis) return reject('invalid-eligibility');
     if (basis.lineage !== lineageOf(session)) return reject('foreign-eligibility');
     if (basis.stateKey !== session.stateKey) return reject('stale-eligibility');
+    if (manualTargets.length && basis.session !== session) return reject('stale-eligibility');
     const column = field ?? eligibility.field;
     if (column !== eligibility.field) return reject('eligibility-field-mismatch');
     const mode = options.mode ?? GMI_CHANGE_SET_MODES.FILL_MISSING;
     if (mode !== eligibility.mode) return reject('eligibility-mode-mismatch', { eligibilityMode: eligibility.mode, mode });
-    if (!eligibility.eligible.length) return reject('no-eligible-objects');
-    requests = eligibility.eligible.map((entry) => ({ scope: entry.scope, sourceIndex: entry.sourceIndex, objectId: entry.objectId, guid: entry.guid, field: column, lexeme }));
-    preSkipped = eligibility.skipped.map((entry) => ({ key: entry.key, scope: entry.scope, sourceIndex: entry.sourceIndex, field: column, position: entry.position, reason: entry.reason, ...(entry.applicability ? { applicability: entry.applicability } : {}) }));
-    eligibilitySummary = { ruleId: eligibility.ruleId, canonicalFieldId: eligibility.canonicalFieldId, counts: eligibility.counts };
+    // Only genuine, technically resolved M2 exclusions may be overridden. The
+    // ordinary builder still enforces original-value, conflict and M1 safety.
+    const manual = [], seen = new Set();
+    const skippedTargets = new Map(eligibility.skipped.map((row) => [`${row.scope}:${row.sourceIndex}`, row]));
+    for (const target of manualTargets) {
+      if (!Number.isInteger(target?.sourceIndex)) return reject('invalid-manual-targets');
+      const entry = skippedTargets.get(`${target?.scope}:${target?.sourceIndex}`);
+      if (!entry?.key || !['not-applicable', 'unresolved'].includes(entry.reason)) return reject('manual-target-not-allowed');
+      if (mode === GMI_CHANGE_SET_MODES.FILL_MISSING && (!entry.missing || entry.original.trim() !== '')) return reject('manual-overwrite-not-approved');
+      if (seen.has(entry.key)) return reject('duplicate-target');
+      seen.add(entry.key); manual.push(entry);
+    }
+    if (!eligibility.eligible.length && !manual.length) return reject('no-eligible-objects');
+    requests = [...eligibility.eligible, ...manual].map((entry) => ({ scope: entry.scope, sourceIndex: entry.sourceIndex, objectId: entry.objectId, guid: entry.guid, field: column, lexeme }));
+    preSkipped = eligibility.skipped.filter((entry) => !seen.has(entry.key)).map((entry) => ({ key: entry.key, scope: entry.scope, sourceIndex: entry.sourceIndex, field: column, position: entry.position, reason: entry.reason, ...(entry.applicability ? { applicability: entry.applicability } : {}) }));
+    eligibilitySummary = { ruleId: eligibility.ruleId, canonicalFieldId: eligibility.canonicalFieldId, counts: eligibility.counts,
+      normallyEligible: eligibility.eligible.map((entry) => ({ key: entry.key, scope: entry.scope, sourceIndex: entry.sourceIndex })),
+      manualOverrides: manual.map((entry) => ({ key: entry.key, scope: entry.scope, sourceIndex: entry.sourceIndex,
+        objectId: entry.objectId, reason: entry.reason, applicability: entry.applicability, evidence: entry.evidence,
+        original: entry.original, current: entry.current })),
+    };
   } else {
     if (!Array.isArray(targets)) return reject('no-requests');
     requests = targets.map((target) => {
@@ -163,7 +187,7 @@ export function createGmiBatchCorrection(session, { field, lexeme, targets, elig
 // Eligibility results register their basis here (eligibility.mjs).
 const eligibilityBases = new WeakMap();
 export function registerGmiEligibilityBasis(result, session) {
-  eligibilityBases.set(result, { lineage: lineageOf(session), stateKey: session.stateKey });
+  eligibilityBases.set(result, { lineage: lineageOf(session), stateKey: session.stateKey, session });
 }
 export const gmiEligibilityBasis = (result) => (result && typeof result === 'object' && eligibilityBases.get(result)) || null;
 
