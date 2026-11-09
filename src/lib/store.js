@@ -1,3 +1,4 @@
+import { validatorInspectionLayer } from './gmiValidatorEditing.mjs';
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { detectOutliers } from './analysis/outliers';
@@ -226,13 +227,24 @@ const useStore = create(
         // Data Table display mode per layer and a one-shot object selection
         // request from the Data Table. View state only; never GMI data, and
         // not persisted (partialize keeps settings, ui and lastActive).
+        gmiValidatorFocus: null,
+        openGmiValidator: (layerId, dataset = 'original', ruleId = null, geometryScope = null) => set((state) => ({
+          gmiEditWorkspace: null,
+          gmiValidatorFocus: { layerId, ruleId, geometryScope },
+          gmiValidatorDatasets: { ...state.gmiValidatorDatasets, [layerId]: dataset },
+          ui: { ...state.ui, fieldValidationOpen: true, expandedLayerId: layerId },
+        })),
+        gmiValidatorDatasets: {},
+        gmiValidatorReferenceDate: new Date().toISOString().slice(0, 10),
+        setGmiValidatorDataset: (layerId, dataset) => set((state) => ({ gmiValidatorDatasets: { ...state.gmiValidatorDatasets, [layerId]: dataset } })),
+        setGmiValidatorReferenceDate: (date) => set({ gmiValidatorReferenceDate: date }),
         gmiEditWorkspace: null, // { layerId } | null
         gmiEditTableView: {}, // { [layerId]: 'original' | 'proposed' | 'changed' }
         gmiEditObjectRequest: null, // { layerId, scope, sourceIndex, at } | null
-        openGmiEditWorkspace: (layerId) =>
+        openGmiEditWorkspace: (layerId, correction = null) =>
           set(
             (state) => ({
-              gmiEditWorkspace: state.layers[layerId] ? { layerId } : null,
+              gmiEditWorkspace: state.layers[layerId] ? { layerId, ...(correction ? { correction } : {}) } : null,
               gmiEditObjectRequest: null,
               ui: { ...state.ui, fieldValidationOpen: false },
             }),
@@ -1613,11 +1625,11 @@ const useStore = create(
           try {
             inspection = request?.scope?.kind === 'contextual-object-set'
               ? createContextualObjectInspection({
-                layer: layerId ? state.layers[layerId] : null,
+                layer: validatorInspectionLayer(gmiEditSessions, layerId ? state.layers[layerId] : null, request.editBasis),
                 request,
               })
               : createExactObjectInspection({
-                layer: layerId ? state.layers[layerId] : null,
+                layer: validatorInspectionLayer(gmiEditSessions, layerId ? state.layers[layerId] : null, request.editBasis),
                 request,
               });
           } catch {
@@ -1625,7 +1637,7 @@ const useStore = create(
           }
           set(
             (current) => ({
-              objectTableInspection: inspection,
+              objectTableInspection: request.editBasis ? Object.freeze({ ...inspection, editBasis: request.editBasis }) : inspection,
               analysis: { ...current.analysis, isOpen: false, layerId: null },
               ui: {
                 ...current.ui,
@@ -2101,6 +2113,8 @@ const useStore = create(
               );
               const { [layerId]: removedView, ...remainingTableViews } =
                 state.gmiEditTableView || {};
+              const { [layerId]: removedValidatorDataset, ...remainingValidatorDatasets } = state.gmiValidatorDatasets;
+              void removedValidatorDataset;
               void removedView;
               const baseState = {
                 layers: remainingLayers,
@@ -2110,6 +2124,8 @@ const useStore = create(
                     ? null
                     : state.gmiEditWorkspace,
                 gmiEditTableView: remainingTableViews,
+                gmiValidatorDatasets: remainingValidatorDatasets,
+                gmiValidatorFocus: state.gmiValidatorFocus?.layerId === layerId ? null : state.gmiValidatorFocus,
                 gmiEditObjectRequest:
                   state.gmiEditObjectRequest?.layerId === layerId
                     ? null
@@ -3061,6 +3077,8 @@ const useStore = create(
                   mapBaseLayer: preservedMapBaseLayer,
                   mapOverlayVisibility: preservedMapOverlayVisibility,
                 },
+                gmiValidatorFocus: null,
+                gmiValidatorDatasets: {},
                 gmiEditStatus: {},
                 gmiEditWorkspace: null,
                 gmiEditTableView: {},

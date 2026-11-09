@@ -119,7 +119,7 @@ test('V2 is gated by authoritative parsed format metadata', () => {
   assert.equal(isGmiLayer(makeLayer('gmi')), true);
 });
 
-test('V2 workspace consumes A5 only and has no map, table, legacy, or all-layer path', async () => {
+test('V2 workspace uses the cached A5 runner and has no map, legacy or all-layer path', async () => {
   const workspaceSource = await readFile(
     new URL('../src/components/validation-v2/ValidationV2Workspace.js', import.meta.url),
     'utf8',
@@ -129,7 +129,9 @@ test('V2 workspace consumes A5 only and has no map, table, legacy, or all-layer 
     'utf8',
   );
 
-  assert.match(workspaceSource, /runGmiValidationV2/);
+  assert.match(workspaceSource, /validateGmiDataset/);
+  const proposedSource = await readFile(new URL('../src/lib/gmi-edit/proposed.mjs', import.meta.url), 'utf8');
+  assert.match(proposedSource, /runGmiValidationV2/);
   assert.match(workspaceSource, /selectedLayerId/);
   assert.match(workspaceSource, /sourceFieldDiagnostics/);
   assert.doesNotMatch(workspaceSource, /validateFields|legacy validator/i);

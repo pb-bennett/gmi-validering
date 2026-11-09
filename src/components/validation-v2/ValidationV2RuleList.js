@@ -26,6 +26,8 @@ export default function ValidationV2RuleList({
   expandedRuleKey,
   onToggle,
   onInfo,
+  canCorrect,
+  onCorrect,
 }) {
   return (
     <div className="gmi-elevated-surface divide-y divide-gmi-border overflow-hidden rounded-lg">
@@ -86,6 +88,7 @@ export default function ValidationV2RuleList({
                     <span>Vis</span>
                   </button>
                 </div>
+                {canCorrect?.(presentation) && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive text-[11px]" onClick={() => onCorrect(presentation)}>Lag retting…</button>}
               </section>
             )}
           </div>

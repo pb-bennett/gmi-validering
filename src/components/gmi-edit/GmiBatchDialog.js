@@ -23,17 +23,17 @@ function Warnings({ findings }) {
   </span>);
 }
 
-export default function GmiBatchDialog({ view, onClose, onDirtyChange, onStaged, registerReset }) {
+export default function GmiBatchDialog({ view, onClose, onDirtyChange, onStaged, registerReset, correction = null }) {
   'use no memo';
   const dialogRef = useRef(null), headingId = useId(), generation = useRef(0);
-  const [field, setField] = useState('sdr'), [lexeme, setLexeme] = useState(''), [mode, setMode] = useState('fill-missing');
+  const [field, setField] = useState(correction?.canonicalFieldId || 'sdr'), [lexeme, setLexeme] = useState(''), [mode, setMode] = useState('fill-missing');
   const [preview, setPreview] = useState(null), [selected, setSelected] = useState(new Set());
   const [step, setStep] = useState('configure'), [busy, setBusy] = useState(false), [message, setMessage] = useState(null);
   const [query, setQuery] = useState(''), [page, setPage] = useState(0), [replace, setReplace] = useState(false), [review, setReview] = useState(null);
   const [onlyNewErrors, setOnlyNewErrors] = useState(false);
   const [advanced, setAdvanced] = useState(false), [riskOpen, setRiskOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const dirty = Boolean(lexeme || preview || mode !== 'fill-missing' || field !== 'sdr');
+  const dirty = Boolean(lexeme || preview || mode !== 'fill-missing' || field !== (correction?.canonicalFieldId || 'sdr'));
   const stale = Boolean(preview && preview.session !== view.session);
   const reset = () => { generation.current++; onClose(); };
   useEffect(() => { registerReset(reset); return () => registerReset(null); });
@@ -58,11 +58,14 @@ export default function GmiBatchDialog({ view, onClose, onDirtyChange, onStaged,
   const problem = gmiLexemeProblem(validateGmiFieldLexeme(lexeme, view.document.encoding.encodingClass), lexeme);
   const calculate = async () => {
     const token = ++generation.current;
+    if (correction && (correction.layerId !== view.session.layerId || correction.sessionId !== view.handle.sessionId || correction.session.document !== view.document)) {
+      setMessage('Kildegrunnlaget for Validator-utvalget er endret. Gå tilbake til Validator og lag et nytt utvalg.'); return;
+    }
     const basis = gmiEditSessions.getSession(view.handle);
     if (!basis.ok || basis.session !== view.session) { setMessage('Økten er endret. Åpne masseendringer på nytt.'); return; }
     setBusy(true); setMessage(null); setReview(null); if (preview) setStep('select');
     try {
-      const result = await prepareGmiBatchReview(view, { canonicalFieldId: field, mode, lexeme }, {
+      const result = await prepareGmiBatchReview(view, { canonicalFieldId: field, mode, lexeme, ...(correction ? { targets: correction.targets } : {}) }, {
         isLive: () => token === generation.current && gmiEditSessions.getSession(view.handle).session === view.session,
       });
       if (token !== generation.current) return;
@@ -105,11 +108,12 @@ export default function GmiBatchDialog({ view, onClose, onDirtyChange, onStaged,
         <PhotoIconButton icon={XIcon} label="Lukk masseendringer" onClick={cancel} /></header>
       <div className="gmi-batch-content">
         <p className="gmi-edit-muted">Originalfilen endres ikke. Godkjente verdier legges til som én reverserbar retting.</p>
+        {correction && <p className="gmi-edit-note">Fra Validator: {correction.targets.length} eksakte objekter. Utvalget utvides ikke. Du velger ny verdi selv.</p>}
         {stale && <p className="gmi-edit-message" data-tone="error" role="alert">Utvalget er utdatert fordi rettinger eller kildegrunnlaget er endret. Beregn utvalget på nytt og se gjennom igjen.</p>}
         {message && <p role="alert" className="gmi-edit-message" data-tone="error">{message}</p>}
         {step === 'configure' ? <form id="gmi-batch-config" onSubmit={(event) => { event.preventDefault(); calculate(); }}>
           <div className="gmi-batch-config">
-            <label>Felt<select aria-label="Felt for masseendring" value={field} onChange={(event) => setField(event.target.value)} disabled={busy}>
+            <label>Felt<select aria-label="Felt for masseendring" value={field} onChange={(event) => setField(event.target.value)} disabled={busy || Boolean(correction)}>
               {GMI_BATCH_FIELDS.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
             </select></label>
             <label>Ny verdi<input aria-label="Ny verdi" value={lexeme} onChange={(event) => setLexeme(event.target.value)} disabled={busy} autoComplete="off" spellCheck={false} aria-invalid={Boolean(problem)} /></label>

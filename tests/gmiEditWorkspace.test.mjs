@@ -389,3 +389,41 @@ test('callers: removal and reset inspect the result; discarding is only reachabl
   for (const file of files) if (code(await readFile(file, 'utf8')).includes('discardGmiEdits: true')) callers.push(path.relative(path.resolve('.'), file).replaceAll('\\', '/'));
   assert.deepEqual(callers.sort(), ['src/app/page.js', 'src/components/LayerPanel.js']);
 });
+
+
+test('M5C store navigation retains sessions and staged edits; proposed inspections reject other layers and history revisions', async (t) => {
+  resetStore(); t.after(resetStore);
+  const { id, data } = await addStoreLayer(CORE);
+  const { id: other } = await addStoreLayer(CORE, 'Other validator layer.gmi');
+  const { handle } = await gmiEditSessions.open(id);
+  const initial = gmiEditSessions.getSession(handle).session;
+  const correction = createGmiObjectCorrection(initial, { scope: 'line', sourceIndex: 1, values: { SDR: '11.0' } });
+  assert.equal(gmiEditSessions.stage(handle, correction.changeSet).ok, true);
+  const session = gmiEditSessions.getSession(handle).session;
+  const validation = gmiEditSessions.revalidate(handle, { referenceDate: '2026-11-09' });
+  useStore.getState().openGmiValidator(id, 'proposed', 'innmaling.line.sdr.valid', 'line');
+  assert.equal(useStore.getState().gmiValidatorDatasets[id], 'proposed');
+  assert.equal(useStore.getState().gmiValidatorDatasets[other], undefined, 'other layers still default to Original');
+  const request = { layerId: id, session, canonicalFieldId: 'sdr', targets: [{ scope: 'line', sourceIndex: 1 }] };
+  useStore.getState().openGmiEditWorkspace(id, request);
+  assert.equal(useStore.getState().gmiEditWorkspace.correction, request);
+  assert.equal(gmiEditSessions.getSession(handle).session, session);
+  assert.equal(session.changeSets.length, 1);
+  assert.equal(data.lines[1].attributes.SDR, null);
+  const { createObjectRef } = await import('../src/lib/validation-v2/objectRef.js');
+  const datasetRevision = validation.revised.datasetRevision;
+  const inspection = { scope: { kind: 'exact-object-set', layerId: id, datasetRevision, geometryScope: 'line',
+    objectRefs: [createObjectRef({ layerId: id, datasetRevision, geometryScope: 'line', objectIndex: 1 })] },
+    editBasis: { layerId: id, session, datasetRevision }, context: { title: 'Foreslaatt SDR', source: 'validation-v2-diagnostic' } };
+  assert.equal(useStore.getState().openObjectTable(inspection), true);
+  assert.equal(useStore.getState().objectTableInspection.editBasis.session, session);
+  assert.equal(useStore.getState().openObjectTable({ ...inspection, editBasis: { ...inspection.editBasis, layerId: other } }), false);
+  assert.equal(gmiEditSessions.undo(handle).ok, true);
+  assert.equal(useStore.getState().openObjectTable(inspection), false, 'no stale proposed object table');
+  useStore.getState().removeLayer(id, { discardGmiEdits: true });
+  assert.equal(useStore.getState().gmiValidatorDatasets[id], undefined);
+  assert.equal(useStore.getState().gmiValidatorFocus, null);
+  useStore.getState().setGmiValidatorDataset(other, 'proposed');
+  resetStore();
+  assert.deepEqual(useStore.getState().gmiValidatorDatasets, {});
+});

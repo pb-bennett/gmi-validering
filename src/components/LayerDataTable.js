@@ -22,6 +22,7 @@ import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
 import FilenameCopyButton from '@/components/FilenameCopyButton';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
 import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns } from '@/lib/objectTablePresentation';
+import { validatorInspectionLayer } from '@/lib/gmiValidatorEditing.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { GMI_EDIT_TABLE_VIEWS, GMI_EDIT_TABLE_VIEW_LABELS, gmiEditMessage, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope } from '@/lib/gmiEditView.mjs';
 
@@ -164,7 +165,12 @@ export default function LayerDataTable() {
 
   const isOpen = layerDataTable?.isOpen;
   const layerId = layerDataTable?.layerId;
-  const layer = layerId ? layers[layerId] : null;
+  const importedLayer = layerId ? layers[layerId] : null;
+  const layer = useMemo(() => {
+    // The published status invalidates exact proposed inspections on every history transition.
+    void gmiEditStatus;
+    return validatorInspectionLayer(gmiEditSessions, importedLayer, inspection?.editBasis);
+  }, [importedLayer, inspection, gmiEditStatus]);
   const isExactInspection = ['exact-object-set', 'contextual-object-set'].includes(inspection?.kind);
   const isContextualInspection = inspection?.kind === 'contextual-object-set';
   const [contextualSorting, setContextualSorting] = useState([]);

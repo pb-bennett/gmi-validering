@@ -16,6 +16,7 @@ import GmiChangeList from './GmiChangeList';
 import GmiExportDialog from './GmiExportDialog';
 import GmiConfirmDialog from './GmiConfirmDialog';
 import GmiBatchDialog from './GmiBatchDialog';
+import GmiFullValidation from './GmiFullValidation';
 import './gmiEdit.css';
 
 export const GMI_EDIT_INSPECTOR_ROOT_ID = 'gmi-edit-inspector-root';
@@ -100,7 +101,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const [exportOpen, setExportOpen] = useState(false);
   const [notice, setNotice] = useState(null);
   const [formRevision, setFormRevision] = useState(0);
-  const [batchOpen, setBatchOpen] = useState(false);
+  const correction = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.correction : null);
+  const [batchOpen, setBatchOpen] = useState(Boolean(correction));
   const objectDirtyRef = useRef(false), batchDirtyRef = useRef(false), batchResetRef = useRef(null);
   const dirtyRef = useRef(false);
   const onDirtyChange = useCallback((dirty) => { objectDirtyRef.current = dirty; dirtyRef.current = dirty || batchDirtyRef.current; onDraftChange?.(dirtyRef.current); }, [onDraftChange]);
@@ -258,6 +260,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       {problem && <p className="gmi-edit-message" data-tone="error" role="alert">{problem}</p>}
       {notice && <p className="gmi-edit-message gmi-edit-notice" data-tone={notice.tone} role="status">{notice.text}</p>}
     </header>
+    <GmiFullValidation view={view} layerId={layerId} guard={guard} />
     <div className="gmi-edit-tabs" role="tablist" aria-label="Rettinger">
       <button type="button" role="tab" aria-selected={tab === 'objects'} className="gmi-focus-ring" onClick={() => setTab('objects')}>Objekter</button>
       <button type="button" role="tab" aria-selected={tab === 'changes'} className="gmi-focus-ring" onClick={() => setTab('changes')}>
@@ -291,7 +294,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate}
       onStaged={() => { setChangedOnly(false); }} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}
     {exportOpen && view && <GmiExportDialog layerId={layerId} view={view} status={status} onClose={() => setExportOpen(false)} />}
-    {batchOpen && view && <GmiBatchDialog view={view} onClose={() => setBatchOpen(false)} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
+    {batchOpen && view && <GmiBatchDialog correction={correction} view={view} onClose={() => { setBatchOpen(false); if (correction) useStore.setState({ gmiEditWorkspace: { layerId } }); }} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice({ tone: 'ok', text: `Lagt til: ${changeSet.label}` }); }} />}
     {pending && <GmiConfirmDialog title={pending.title} confirmLabel={pending.confirmLabel} testId="workspace"
       onCancel={() => setPending(null)} onConfirm={() => { const run = pending.run; setPending(null); run(); }}>{pending.body}</GmiConfirmDialog>}

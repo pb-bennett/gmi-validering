@@ -1,0 +1,169 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
+import { gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
+const app = process.env.PHOTO_UI_URL;
+const workspace = 'document.querySelector(".gmi-edit-workspace")';
+const dialog = 'document.querySelector("dialog[open].gmi-batch-dialog")';
+const dataset = `document.querySelector('[aria-label="Datasett i Validator"]')`;
+
+test('M5C production: Original, exact finding handoff, reviewed batch, full revalidation, stale protection and Foreslått',
+  { skip: !chromePath || !app, timeout: 180000 }, async (t) => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'gmi-m5c-ui-'));
+    const file = path.join(directory, 'Syntetisk M5C.gmi'), bytes = gmiEditBatchFixture();
+    await writeFile(file, bytes);
+    const otherFile = path.join(directory, 'Syntetisk annet lag.gmi');
+    await writeFile(otherFile, gmiEditBatchFixture({ fields: ['Tema', 'Material'], rows: [['VL', 'PE']] }));
+    const browser = await openTestChrome();
+    const click = (label, scope = 'document') => browser.evaluate(`(() => { const button = Array.from(${scope}.querySelectorAll('button')).find(e => e.innerText.trim() === ${JSON.stringify(label)} || e.getAttribute('aria-label') === ${JSON.stringify(label)});
+      if (!button || button.disabled) throw new Error('Unavailable: ' + ${JSON.stringify(label)}); button.click(); })()`);
+    const choose = (selector, value) => browser.evaluate(`(() => { const e = ${selector}; e.value = ${JSON.stringify(value)}; e.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    const value = (selector, text) => browser.evaluate(`(() => { const e = ${selector}; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(e, ${JSON.stringify(text)}); e.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    const shot = async (name) => {
+      if (!process.env.GMI_EDIT_SCREENSHOT_DIR) return;
+      await mkdir(process.env.GMI_EDIT_SCREENSHOT_DIR, { recursive: true });
+      const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+      await writeFile(path.join(process.env.GMI_EDIT_SCREENSHOT_DIR, name + '.png'), Buffer.from(data, 'base64'));
+    };
+    const openSdr = async () => {
+      await browser.waitFor(`document.querySelector('button[aria-label^="SDR:"]')`);
+      await browser.evaluate(`document.querySelector('button[aria-label^="SDR:"]').click()`);
+    };
+    try {
+      await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
+      await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'localStorage.clear(); window.confirm = () => true;' });
+      await browser.send('Page.navigate', { url: `${app}?testmodus=1` });
+      await browser.waitFor('document.querySelector("button[aria-label=Lukk]")'); await click('Lukk');
+      await browser.waitFor('document.querySelector("input[type=file]")');
+      await setPhotoFiles(browser, 'input[type=file]', [file]);
+      await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
+      await click('Legg til fil');
+      await browser.waitFor('document.querySelector("input[type=file]")');
+      await setPhotoFiles(browser, 'input[type=file]', [otherFile]);
+      await browser.waitFor('document.querySelectorAll("[data-gmi-edit-action]").length === 2');
+      await browser.evaluate(`document.querySelector('[title="Syntetisk M5C.gmi"]').click()`);
+      await browser.waitFor(`document.querySelector('button[title="Feltvalidering"]')`);
+      await browser.evaluate(`document.querySelector('button[title="Feltvalidering"]').click()`);
+      await browser.waitFor(dataset);
+      const original = await browser.evaluate('document.querySelector("#validation-v2-geometry-panel")?.innerText');
+      await t.test('defaults to Original; proposed unavailable without matching session; allow-list action only', async () => {
+        assert.equal(await browser.evaluate(`${dataset}.value`), 'original');
+        assert.equal(await browser.evaluate(`${dataset}.querySelector('[value=proposed]').disabled`), true);
+        await openSdr();
+        await click('Lag retting…');
+        await browser.waitFor(`${dialog}?.dataset.gmiBatchStep === 'configure'`);
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Felt for masseendring"]').value`), 'sdr');
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Ny verdi"]').value`), '');
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Felt for masseendring"]').disabled`), true);
+        assert.match(await browser.evaluate(`${dialog}.innerText`), /3 eksakte objekter/);
+        assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText || ''`), '');
+      });
+      await t.test('exact scope preserved through review, exclusion and M5B staging; no automatic value', async () => {
+        await value(`${dialog}.querySelector('[aria-label="Ny verdi"]')`, '11.0');
+        await click('Beregn utvalg', dialog);
+        await browser.waitFor(`${dialog}?.dataset.gmiBatchStep === 'select' && ${dialog}.getAttribute('aria-busy') === 'false'`);
+        assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-batch-object]').length`), 3);
+        await browser.evaluate(`${dialog}.querySelectorAll('[data-batch-object] input')[2].click()`);
+        assert.match(await browser.evaluate(`${dialog}.innerText`), /Valgt: 2/);
+        await shot('m5c-exact-batch-review');
+        await click('Legg til masseendring', dialog); await browser.waitFor(`!${dialog}`);
+        await click('Kontroller endringer', workspace);
+        await browser.waitFor('document.querySelector("[data-gmi-full-comparison]")');
+        const text = await browser.evaluate('document.querySelector("[data-gmi-full-comparison]").innerText');
+        assert.match(text, /Nye FEIL: 1/); assert.match(text, /Løste SJEKK: 2/);
+        for (const [width, height] of [[1366, 768], [1280, 720]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          const box = await browser.evaluate(`({ footer: ${workspace}.querySelector('.gmi-edit-footer').getBoundingClientRect().toJSON(), width: document.documentElement.scrollWidth })`);
+          assert(box.footer.bottom <= height && box.footer.top >= 0); assert(box.width <= width);
+          await shot(`m5c-comparison-${width}x${height}`);
+        }
+      });
+      await t.test('undo and redo invalidate full results; no obsolete counts shown', async () => {
+        await click('Angre siste retting', workspace);
+        await browser.waitFor('!document.querySelector("[data-gmi-full-comparison]")');
+        assert.match(await browser.evaluate(`${workspace}.innerText`), /Kontrollen er utdatert/);
+        await click('Gjør om retting', workspace);
+        assert.equal(await browser.evaluate('Boolean(document.querySelector("[data-gmi-full-comparison]"))'), false);
+        await click('Kontroller endringer', workspace); await browser.waitFor('document.querySelector("[data-gmi-full-comparison]")');
+      });
+      await t.test('verified Foreslått and unchanged Original, retained selection and remaining exact targets', async () => {
+        await click('Objekter', workspace);
+        await browser.evaluate(`${workspace}.querySelector('[data-object-key="line:0"]').click()`);
+        await browser.waitFor(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input')`);
+        await value(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input')`, '17.0');
+        await click('\u00c5pne Validator', workspace);
+        await browser.waitFor(`document.querySelector('[data-gmi-confirm="workspace"]')`);
+        await click('Avbryt', `document.querySelector('[data-gmi-confirm="workspace"]')`);
+        assert.equal(await browser.evaluate(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input').value`), '17.0');
+        await click('\u00c5pne Validator', workspace);
+        await browser.waitFor(`document.querySelector('[data-gmi-confirm="workspace"]')`);
+        await click('Forkast skjemaet', `document.querySelector('[data-gmi-confirm="workspace"]')`);
+        await browser.waitFor(`${dataset}?.value === 'original'`);
+        await choose(dataset, 'proposed'); await browser.waitFor(`${dataset}?.value === 'proposed'`);
+        await browser.waitFor('document.querySelector("#validation-v2-geometry-panel")');
+        assert.match(await browser.evaluate('document.body.innerText'), /Du kontrollerer den foreslåtte kopien. Originalleveransen er uendret/);
+        await shot('m5c-validator-proposed');
+        await openSdr(); await click('Vis detaljer: SDR');
+        await browser.waitFor(`document.querySelector('button[aria-label*="objekter i tabell:"]')`);
+        await browser.evaluate(`Array.from(document.querySelectorAll('button[aria-label*="objekter i tabell:"]')).find(e => e.getAttribute('aria-label').includes('Ringstivhet')).click()`);
+        await browser.waitFor(`document.body.innerText.includes('Objektutvalg: Foresl\u00e5tt')`);
+        await browser.waitFor(`document.querySelectorAll('.group.flex.cursor-pointer').length === 1`);
+        assert.match(await browser.evaluate(`document.querySelector('.group.flex.cursor-pointer').innerText`), /11/);
+        await click('Lukk feltinformasjon');
+        await shot('m5c-proposed-object-inspection');
+        await choose(dataset, 'original');
+        await browser.waitFor('document.querySelector("#validation-v2-geometry-panel")?.innerText.startsWith("Original")');
+        assert.equal(await browser.evaluate('document.querySelector("#validation-v2-geometry-panel").innerText'), original);
+        await choose(dataset, 'proposed');
+        await browser.waitFor('document.querySelector("#validation-v2-geometry-panel")?.innerText.startsWith("Foreslått")');
+        await openSdr(); await click('Lag retting…');
+        await browser.waitFor(`${dialog}?.dataset.gmiBatchStep === 'configure'`);
+        assert.match(await browser.evaluate(`${dialog}.innerText`), /1 eksakte objekter/);
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Ny verdi"]').value`), '');
+        await click('Avbryt', dialog);
+        await click('Åpne Validator', workspace); await browser.waitFor(`${dataset}?.value === 'proposed'`);
+        await shot('m5c-validator-retained');
+      });
+      await t.test('a new full-comparison problem opens its rule in the matching proposed Validator', async () => {
+        const layerId = await browser.evaluate(`document.querySelector('#validation-v2-layer').value`);
+        await click('Lukk Validator');
+        await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
+        await browser.evaluate(`Array.from(document.querySelectorAll('[data-gmi-edit-action]')).find(e => e.dataset.gmiEditAction === ${JSON.stringify(layerId)}).click()`);
+        await browser.waitFor(`${workspace}?.querySelector('[data-gmi-edit-status]')?.innerText === 'Redigerbar'`);
+        await click('Kontroller endringer', workspace);
+        await browser.waitFor('document.querySelector("[data-gmi-full-comparison]")');
+        await browser.evaluate(`document.querySelector('[data-gmi-full-comparison] details').open = true`);
+        await shot('m5c-introduced-findings');
+        await browser.evaluate(`Array.from(document.querySelector('[data-gmi-full-comparison]').querySelectorAll('button')).find(e => e.innerText.includes('Nytt') && e.innerText.includes('FEIL')).click()`);
+        await browser.waitFor(`${dataset}?.value === 'proposed'`);
+        await browser.waitFor(`document.querySelector('#validation-v2-field-info-title')?.innerText.includes('Foresl\u00e5tt')`);
+        assert.match(await browser.evaluate('document.body.innerText'), /B\u00e5de SDR og Ringstivhet er utfylt/);
+        await click('Regel');
+        await shot('m5c-rule-handoff');
+        await click('Lukk feltinformasjon');
+      });
+      await t.test('another layer never inherits proposed state; missing column has no misleading correction shortcut', async () => {
+        const selectLayer = `document.querySelector('#validation-v2-layer')`;
+        const identities = await browser.evaluate(`Array.from(${selectLayer}.options).map(e => ({ value: e.value, text: e.textContent }))`);
+        const first = identities.find((e) => e.text === 'Syntetisk M5C.gmi').value;
+        const second = identities.find((e) => e.text === 'Syntetisk annet lag.gmi').value;
+        await choose(selectLayer, second);
+        await browser.waitFor(`${dataset}.value === 'original' && ${dataset}.querySelector('[value=proposed]').disabled`);
+        await openSdr();
+        assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('button')).some(e => e.innerText.trim() === 'Lag retting\u2026')`), false);
+        await shot('m5c-other-layer-unavailable');
+        await choose(selectLayer, first);
+        await browser.waitFor(`${dataset}.value === 'proposed'`);
+      });
+      assert.deepEqual(await readFile(file), Buffer.from(bytes));
+      assert.equal(browser.events.filter((event) => event.method === 'Runtime.exceptionThrown').length, 0);
+    } catch (error) { console.log(await browser.evaluate("document.body.innerText")); throw error; } finally {
+      await browser.close();
+      if (path.dirname(path.resolve(directory)) !== path.resolve(tmpdir()) || !path.basename(directory).startsWith('gmi-m5c-ui-')) throw new Error('Unsafe temp path');
+      await rm(directory, { recursive: true, force: true });
+    }
+  });

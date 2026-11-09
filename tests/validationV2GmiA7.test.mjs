@@ -356,7 +356,13 @@ test('compact rule rows expose summaries without individual object metadata', as
   assert.match(source, /focus-visible:ring-2/);
   assert.match(source, /onClick=\{\(event\) => onInfo\?\.\(presentation, event\.currentTarget\)\}/);
   assert.doesNotMatch(source, /hidden sm:inline/);
-  assert.doesNotMatch(source, /<button[\s\S]*<button[\s\S]*<\/button>[\s\S]*<\/button>/);
+  let buttonDepth = 0;
+  for (const tag of source.matchAll(/<\/?button\b/g)) {
+    buttonDepth += tag[0].startsWith('</') ? -1 : 1;
+    assert(buttonDepth >= 0 && buttonDepth <= 1, 'actions are siblings, never nested buttons');
+  }
+  assert.equal(buttonDepth, 0);
+  assert.match(source, /canCorrect\?\.\(presentation\)/);
   assert(source.indexOf('onInfo?.') > source.indexOf('<dl'));
   assert.match(source, /<button/);
   assert.doesNotMatch(source, /finding\.objectRef\.key|Objekt 1|Vis alle|FindingGroups/);
@@ -423,12 +429,12 @@ test('Validator exposes only the automatic V2 workflow', async () => {
   );
   assert.match(source, /<ValidationV2Workspace\s+sidebarWidth=\{sidebarWidth\}/);
   assert.doesNotMatch(source, /ValidationModeSelector|Validator 1\.0|Validator 2\.0/);
-  assert.match(workspaceSource, /<h2[^>]*>Validator<\/h2>/);
+  assert.match(workspaceSource, /<h2[^>]*>Validator[^<]*\{datasetLabel\}<\/h2>/);
   assert.doesNotMatch(workspaceSource, />Kj.r<\/button>/);
   assert.match(workspaceSource, /aria-label="Lukk Validator"/);
   assert.match(workspaceSource, /toggleFieldValidation\(false\)/);
   assert.doesNotMatch(workspaceSource, /resetAll|clearAll|setData\(/);
-  assert.match(workspaceSource, /useEffect\(\(\) => \{[\s\S]*?runValidation\(\);[\s\S]*?\}, \[selectedLayerId, selectedRevision, isGmi\]\)/);
+  assert.match(workspaceSource, /useEffect\(\(\) => \{[\s\S]*?runValidation\(\);[\s\S]*?\}, \[selectedLayerId, selectedRevision, isGmi, referenceDate\]\)/);
   assert.doesNotMatch(workspaceSource, /\[.*activeGeometry.*selectedRevision.*\]/);
   assert.match(workspaceSource, /id="validation-v2-layer"/);
 });

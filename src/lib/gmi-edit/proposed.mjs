@@ -172,8 +172,9 @@ export function validateGmiDataset(dataset, { layerId, referenceDate } = {}) {
 export function revalidateGmiEditSession(session, { layerId = session.layerId, referenceDate, cache } = {}) {
   const proposed = getGmiProposedState(session, cache ? { cache } : undefined);
   if (!proposed.ok) return Object.freeze({ ok: false, proposed });
-  const original = validateGmiDataset(getGmiDocumentDataset(session.document), { layerId, referenceDate });
-  const revised = validateGmiDataset(proposed.dataset, { layerId, referenceDate });
+  const date = isoDate(referenceDate);
+  const original = validateGmiDataset(getGmiDocumentDataset(session.document), { layerId, referenceDate: date });
+  const revised = validateGmiDataset(proposed.dataset, { layerId, referenceDate: date });
   return Object.freeze({
     ok: true,
     proposed,

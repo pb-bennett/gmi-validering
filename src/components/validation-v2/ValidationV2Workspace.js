@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { createPortal } from 'react-dom';
 import { XIcon, FunnelIcon, ArrowsDownUpIcon, ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
-import { runGmiValidationV2 } from '@/lib/validation-v2';
+import { validateGmiDataset } from '@/lib/gmi-edit/index.mjs';
+import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
+import useGmiEditLayer from '@/components/gmi-edit/useGmiEditLayer';
+import { CORRECTABLE_RULES, isCorrectableMissingFinding, prepareValidatorCorrection } from '@/lib/gmiValidatorEditing.mjs';
 import { getDatasetRevision } from '@/lib/validation-v2/datasetRevision';
 import { createValidationV2ViewController } from '@/lib/validation-v2/validationViewController';
 import {
@@ -53,6 +56,11 @@ function UnknownFields({ diagnostics }) {
 }
 
 export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, onDockedInspectorChange }) {
+  'use no memo';
+  const referenceDate = useStore((state) => state.gmiValidatorReferenceDate);
+  const datasetPreferences = useStore((state) => state.gmiValidatorDatasets);
+  const focus = useStore((state) => state.gmiValidatorFocus);
+  const [correctionError, setCorrectionError] = useState(null);
   const layers = useStore((state) => state.layers);
   const layerOrder = useStore((state) => state.layerOrder);
   const toggleFieldValidation = useStore((state) => state.toggleFieldValidation);
@@ -63,11 +71,12 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     () => layerOrder.filter((layerId) => layers[layerId]?.data),
     [layerOrder, layers],
   );
-  const initialLayerId = availableLayerIds.includes(expandedLayerId)
-    ? expandedLayerId
+  const preferredLayerId = focus?.layerId || expandedLayerId;
+  const initialLayerId = availableLayerIds.includes(preferredLayerId)
+    ? preferredLayerId
     : availableLayerIds[0] || '';
   const [controller] = useState(() =>
-    createValidationV2ViewController(runGmiValidationV2)
+    createValidationV2ViewController((input) => validateGmiDataset(input.dataset, { layerId: input.layerId, referenceDate: input.referenceDate }))
   );
   const [requestedLayerId, setRequestedLayerId] = useState(initialLayerId);
   const [viewState, setViewState] = useState(() => controller.selectLayer(layers[initialLayerId]));
@@ -89,7 +98,17 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   const selectedLayerId = availableLayerIds.includes(requestedLayerId)
     ? requestedLayerId
     : availableLayerIds[0] || '';
-  const selectedLayer = layers[selectedLayerId];
+  const importedLayer = layers[selectedLayerId];
+  const { view: editView, descriptor } = useGmiEditLayer(selectedLayerId);
+  const proposed = useMemo(() => {
+    if (!editView) return null;
+    try { return gmiEditSessions.proposed(editView.handle); }
+    catch { return { ok: false }; }
+  }, [editView]);
+  const datasetKind = datasetPreferences[selectedLayerId] === 'proposed' && proposed?.ok ? 'proposed' : 'original';
+  const datasetLabel = datasetKind === 'proposed' ? 'Foreslått' : 'Original';
+  const selectedLayer = useMemo(() => datasetKind === 'proposed' ? { ...importedLayer, data: proposed.dataset } : importedLayer,
+    [importedLayer, datasetKind, proposed]);
   const selectedRevision = selectedLayer?.data
     ? getDatasetRevision(selectedLayer.data)
     : null;
@@ -103,7 +122,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     selectedLayerId,
     selectedRevision,
   );
-  const result = isCurrentResult ? viewState.result : null;
+  const result = isCurrentResult && viewState.result.runContext.referenceDate === referenceDate ? viewState.result : null;
   const isGmi = isGmiLayer(selectedLayer);
   const pointCount = selectedLayer?.data?.points?.length || 0;
   const lineCount = selectedLayer?.data?.lines?.length || 0;
@@ -265,14 +284,15 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     if (!inspectionRequest) return;
     openObjectTable({
       ...inspectionRequest,
+      ...(datasetKind === 'proposed' ? { editBasis: { layerId: selectedLayerId, session: editView.session, datasetRevision: selectedRevision } } : {}),
       context: {
-        title: diagnostic.field.displayName,
+        title: `${datasetLabel} · ${diagnostic.field.displayName}`,
         reason: getValidationV2DiagnosticPresentation(diagnostic).summary,
         status: diagnostic.state,
         source: 'validation-v2-diagnostic',
       },
     });
-  }, [openObjectTable, selectedLayerId, selectedRevision, selectedValidatorField, result, selectedLayer]);
+  }, [openObjectTable, selectedLayerId, selectedRevision, selectedValidatorField, result, selectedLayer, datasetKind, datasetLabel, editView]);
 
   const selectLayer = (event) => {
     const nextLayerId = event.target.value;
@@ -297,7 +317,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     setActiveFieldTab('result');
     dispatchPresentation({ type: 'NEW_RESULT' });
     try {
-      setViewState(controller.run(input));
+      setViewState(controller.run({ ...input, referenceDate }));
       setRunState('success');
     } catch (error) {
       console.error('Validator could not run', error);
@@ -314,7 +334,49 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     setViewState(controller.selectLayer(selectedLayer));
     runValidation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLayerId, selectedRevision, isGmi]);
+  }, [selectedLayerId, selectedRevision, isGmi, referenceDate]);
+
+  const currentCorrectionSource = useRef(null);
+  currentCorrectionSource.current = { layer: importedLayer, result, referenceDate };
+  const changeDataset = (event) => {
+    closeValidatorOwnedObjectTable();
+    useStore.getState().setGmiValidatorDataset(selectedLayerId, event.target.value);
+    setSelectedValidatorField(null);
+  };
+  const correctable = (presentation) => Boolean(result && descriptor?.state !== 'read-only' && presentation.rules.some((rule) => CORRECTABLE_RULES[rule.ruleId]
+    && result.schemaBinding.bindings.some((binding) => binding.geometryScope === 'line' && binding.canonicalFieldId === CORRECTABLE_RULES[rule.ruleId] && binding.state === 'BOUND')
+    && result.ruleResults.find((entry) => entry.rule.ruleId === rule.ruleId)?.findings.some((finding) =>
+      isCorrectableMissingFinding(finding))));
+  const startCorrection = async (presentation) => {
+    setCorrectionError(null);
+    try {
+      const opened = await gmiEditSessions.open(selectedLayerId);
+      if (currentCorrectionSource.current.layer !== importedLayer || currentCorrectionSource.current.result !== result || currentCorrectionSource.current.referenceDate !== referenceDate
+        || useStore.getState().layers[selectedLayerId] !== importedLayer) return;
+      if (!opened.ok) throw new Error('Rettinger er utilgjengelig for dette kildegrunnlaget.');
+      const handle = gmiEditSessions.getHandle(selectedLayerId);
+      const resolved = gmiEditSessions.resolve(handle);
+      const correction = resolved.ok ? prepareValidatorCorrection(resolved.session, result, presentation.rules.map((rule) => rule.ruleId)) : resolved;
+      if (!correction.ok) throw new Error(correction.code === 'field-absent' ? 'Kolonnen mangler. Den kan ikke opprettes før strukturell redigering støttes.'
+        : 'Ingen aktuelle manglende verdier kan rettes sikkert. Utfylte, uavklarte og ikke-redigerbare objekter tas ikke med.');
+      closeValidatorOwnedObjectTable();
+      useStore.getState().openGmiEditWorkspace(selectedLayerId, { ...correction, sessionId: handle.sessionId });
+    } catch (failure) { setCorrectionError(failure.message); }
+  };
+
+  useEffect(() => {
+    if (!result || focus?.layerId !== selectedLayerId || !focus.ruleId) return;
+    const presentation = getValidationV2PresentationRules(result.ruleResults, 'line', createValidationV2PresentationState())
+      .concat(getValidationV2PresentationRules(result.ruleResults, 'point', createValidationV2PresentationState()))
+      .find((entry) => entry.rules.some((rule) => rule.ruleId === focus.ruleId || rule.canonicalFieldId === focus.ruleId));
+    if (presentation) {
+      const geometryScope = focus.geometryScope || (presentation.rule.geometryScopes.includes('line') ? 'line' : 'point');
+      if (activeGeometry !== geometryScope) { setViewState(controller.selectGeometry(geometryScope)); return; }
+      setSelectedValidatorField({ field: composeFieldInformation({ canonicalFieldId: presentation.rule.canonicalFieldId, geometryScope, rule: presentation.rule }),
+        rule: presentation.rule, rules: presentation.rules, geometryScope, layerId: selectedLayerId, datasetRevision: selectedRevision });
+    }
+    useStore.setState({ gmiValidatorFocus: null });
+  }, [result, focus, selectedLayerId, selectedRevision, controller, activeGeometry]);
 
   const selectGeometry = (scope) => {
     setSelectedValidatorField(null);
@@ -327,7 +389,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gmi-surface-soft">
       <div className="flex-none border-b border-gmi-border bg-gmi-surface px-2 py-2">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold text-gmi-navy">Validator</h2>
+          <h2 className="text-sm font-bold text-gmi-navy">Validator · {datasetLabel}</h2>
           <button
             type="button"
             onClick={closeValidator}
@@ -353,6 +415,15 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
             ))}
           </select>
         </div>
+        {isGmi && <div className="mt-2 text-[11px]" data-validator-dataset={datasetKind}>
+          <label>Datasett <select aria-label="Datasett i Validator" className="gmi-compact-field" value={datasetKind} onChange={changeDataset}>
+            <option value="original">Original</option><option value="proposed" disabled={!proposed?.ok}>Foreslått</option>
+          </select></label>
+          <label className="ml-2">Dato <input type="date" aria-label="Referansedato" value={referenceDate} onChange={(event) => { if (event.target.value) useStore.getState().setGmiValidatorReferenceDate(event.target.value); }} className="gmi-compact-field max-w-32" /></label>
+          {datasetKind === 'proposed' ? <p role="status" className="mt-1 rounded border border-gmi-border p-1">Du kontrollerer den foreslåtte kopien. Originalleveransen er uendret.</p>
+            : !proposed?.ok && <p className="mt-1 text-gmi-text-subtle">Foreslått er utilgjengelig: {editView ? 'den foreslåtte kopien kunne ikke verifiseres.' : descriptor?.state === 'unloaded' ? 'Åpne laget i Rettinger for å opprette en økt.' : 'ingen gyldig Rettinger-økt for dette laget.'}</p>}
+          {correctionError && <p role="alert">{correctionError}</p>}
+        </div>}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
@@ -389,7 +460,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
             {result && geometrySummary && (
               <div id="validation-v2-geometry-panel" role="tabpanel" className="py-2 text-[11px] text-gmi-text-muted">
                 <div className="mb-2">
-                  {geometrySummary.objectCount} {activeGeometry === 'point' ? 'punkter' : 'ledninger'} · {geometrySummary.failCount} feil · {(geometrySummary.checkCount || 0) + geometrySummary.indeterminateCount} sjekk
+                  {datasetLabel} · {geometrySummary.objectCount} {activeGeometry === 'point' ? 'punkter' : 'ledninger'} · {geometrySummary.failCount} feil · {(geometrySummary.checkCount || 0) + geometrySummary.indeterminateCount} sjekk
                 </div>
                 {geometryView.schemaFindings.some((finding) => finding.reasonCode === 'SCHEMA_TEMA_SFCODE_COEXISTENCE') && (
                   <div role="status" data-validation-tone="warning" className="gmi-validation-panel mb-2 rounded border px-2 py-1.5">
@@ -501,6 +572,8 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                   expandedRuleKey={presentationState.expandedRuleKey}
                   onToggle={(expansionKey) => dispatchPresentation({ type: 'TOGGLE_RULE', expansionKey })}
                   onInfo={openFieldInfo}
+                  canCorrect={correctable}
+                  onCorrect={startCorrection}
                 />
                 <UnknownFields diagnostics={result.sourceFieldDiagnostics} />
               </div>
@@ -521,6 +594,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
             inspectorHost && createPortal(
               <ValidationV2FieldInspector
                 field={selectedValidatorField.field}
+                datasetLabel={datasetLabel}
                 rule={selectedValidatorField.rule}
                 rules={selectedValidatorField.rules}
                 geometryScope={selectedValidatorField.geometryScope}
@@ -538,6 +612,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
             <ValidationV2FieldInfoModal
               isOpen
               field={selectedValidatorField.field}
+                datasetLabel={datasetLabel}
               rule={selectedValidatorField.rule}
               rules={selectedValidatorField.rules}
               geometryScope={selectedValidatorField.geometryScope}

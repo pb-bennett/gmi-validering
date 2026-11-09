@@ -6,6 +6,7 @@ import { VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH } from './fieldDetailLayout';
 
 export default function ValidationV2FieldInspector({
   field,
+  datasetLabel,
   rule,
   rules,
   geometryScope,
@@ -26,7 +27,7 @@ export default function ValidationV2FieldInspector({
     >
       <header className="flex flex-none items-start justify-between gap-3 border-b border-gmi-border bg-gmi-surface px-3 py-2">
         <div className="min-w-0">
-          <h2 id="validation-v2-field-inspector-title" aria-live="polite" className="truncate text-sm font-bold text-gmi-navy">{field.displayName}</h2>
+          <h2 id="validation-v2-field-inspector-title" aria-live="polite" className="truncate text-sm font-bold text-gmi-navy">{datasetLabel && `${datasetLabel} · `}{field.displayName}</h2>
           <p className="mt-0.5 text-[11px] text-gmi-text-subtle">Feltinformasjon for valgt geometri</p>
         </div>
         <button
