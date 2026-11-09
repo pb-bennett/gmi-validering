@@ -1,0 +1,363 @@
+{
+  "schemaVersion": "1.0.0",
+  "purpose": "Fabricated, byte-exact GMI fixtures for source-preserving editing (M0). Checksums are SHA-256 of the raw committed bytes.",
+  "statusLegend": {
+    "reconciled": "every production parser lexeme reconciles with an exact source span and no file-level fail-closed rule applies",
+    "unsupported": "reconciles, but a file-level fail-closed rule applies (read-only)",
+    "parser-error": "the production GMIParser throws or reports errors (read-only, never repaired)"
+  },
+  "fixtures": [
+    {
+      "id": "core-crlf-latin1",
+      "file": "core-crlf-latin1.gmi",
+      "bytes": 1808,
+      "sha256": "47d607afc814fc75e85366264caa036371d6cf3c4cceb3d1c1f3aca9ff93dd4e",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "CRLF, ISO-8859-1 Norwegian letters, _INDEX/_EXTENT \"!\" padding, trailing \";\" names and values, GUIDs, mid-row S_HYPERLINK with sign metadata, populated and empty SDR.",
+      "covers": [
+        "crlf",
+        "latin1-norwegian",
+        "index-extent-padding",
+        "trailing-semicolons",
+        "hyperlink-mid-row",
+        "hyperlink-sign",
+        "sdr-empty-cells"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "single-byte",
+        "eolKind": "crlf",
+        "points": 3,
+        "lines": 3
+      }
+    },
+    {
+      "id": "core-lf-latin1",
+      "file": "core-lf-latin1.gmi",
+      "bytes": 1755,
+      "sha256": "e82614f856a8ff48cad45315cc8a5010c909d423cc32d6a26560f8246b9ee349",
+      "encoding": "latin1",
+      "eol": "lf",
+      "description": "Same content as core-crlf-latin1 with LF line endings; only EOL bytes differ.",
+      "covers": [
+        "lf",
+        "latin1-norwegian",
+        "index-extent-padding",
+        "trailing-semicolons"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "single-byte",
+        "eolKind": "lf",
+        "points": 3,
+        "lines": 3
+      }
+    },
+    {
+      "id": "cp1252-c1-bytes",
+      "file": "cp1252-c1-bytes.gmi",
+      "bytes": 1115,
+      "sha256": "b31351fd7e471aac6d811482e94f2db8fc0e1135d3240ac127e0f73ce4cb337b",
+      "encoding": "cp1252",
+      "eol": "crlf",
+      "description": "Windows-1252-only bytes 0x86 (†) and 0x98 (˜) in Merknad next to Latin-1 letters; must survive every patch byte-for-byte.",
+      "covers": [
+        "crlf",
+        "cp1252-0x86",
+        "cp1252-0x98",
+        "latin1-norwegian"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "single-byte",
+        "eolKind": "crlf",
+        "points": 2,
+        "lines": 1,
+        "c1Bytes": [
+          134,
+          152
+        ]
+      }
+    },
+    {
+      "id": "utf8-no-bom",
+      "file": "utf8-no-bom.gmi",
+      "bytes": 968,
+      "sha256": "6b6c3135cd932c14025a7b36a593b4b0914934742d1d5157e5de7a63bd68785c",
+      "encoding": "utf8",
+      "eol": "crlf",
+      "description": "Valid UTF-8 without BOM (multibyte Norwegian letters). Decoded per byte like upload; still 1 char per byte.",
+      "covers": [
+        "crlf",
+        "utf8-no-bom"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "utf8-likely",
+        "eolKind": "crlf",
+        "points": 1,
+        "lines": 1
+      }
+    },
+    {
+      "id": "extra-sections",
+      "file": "extra-sections.gmi",
+      "bytes": 2620,
+      "sha256": "2999b8af05e3c0c63bdb55f84c944c042b9cacba19b60ccfabb670e0bb237e61",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "Unparsed sections [Y_], [T_] (with _rot/_label), [N_] (_OFFSET_NE, /POINTS2) and [O_COORDOBS]; /XYH and /XY geometry variants that the parser ignores. All must survive untouched.",
+      "covers": [
+        "crlf",
+        "section-y",
+        "section-t",
+        "t-label-rot",
+        "section-n",
+        "section-o-coordobs",
+        "geometry-xyh",
+        "geometry-xy"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "single-byte",
+        "eolKind": "crlf",
+        "points": 2,
+        "lines": 3
+      }
+    },
+    {
+      "id": "no-guid",
+      "file": "no-guid.gmi",
+      "bytes": 1038,
+      "sha256": "fd7f17d39acc320afd44dbc283385c76f51c17e56dca8813245e562c4bcefdfb",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "Objects without GUID lines (and one line without _EXTENT); identity must come from parser order.",
+      "covers": [
+        "crlf",
+        "no-guid"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "ascii",
+        "eolKind": "crlf",
+        "points": 2,
+        "lines": 2
+      }
+    },
+    {
+      "id": "hyperlink-families",
+      "file": "hyperlink-families.gmi",
+      "bytes": 6967,
+      "sha256": "541f9680fa734cf8fe3ff70947e5f368b0c033b5e56bc248ada971e013a076d2",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "Mid-row S_HYPERLINK: 1-7 wrappers in every realGrammarFamilies shape, sign metadata, bare paths, PDF, SOS, directory-only, deeper paths, no trailing space, leading space, a multi-link wrapper and invalid grammar.",
+      "covers": [
+        "crlf",
+        "hyperlink-mid-row",
+        "hyperlink-1-to-6-wrappers",
+        "hyperlink-sign",
+        "hyperlink-bare",
+        "hyperlink-pdf",
+        "hyperlink-sos",
+        "hyperlink-directory-only",
+        "hyperlink-multi-link",
+        "hyperlink-invalid-grammar"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "single-byte",
+        "eolKind": "crlf",
+        "points": 25,
+        "lines": 0
+      }
+    },
+    {
+      "id": "shared-photo",
+      "file": "shared-photo.gmi",
+      "bytes": 1244,
+      "sha256": "0f7a642fe75832b761ca3ca1e8c92c57500b4e81ba6ac31e39e13f3ed3c53b61",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "One photograph referenced by two different objects (a point and a line); removing one link must leave the other.",
+      "covers": [
+        "crlf",
+        "shared-photo"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "single-byte",
+        "eolKind": "crlf",
+        "points": 2,
+        "lines": 1
+      }
+    },
+    {
+      "id": "merknad-quotes",
+      "file": "merknad-quotes.gmi",
+      "bytes": 981,
+      "sha256": "1a11910438463c97d0a644c30155e215018b687e71eab9f4233ecacbf5037293",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "Merknad values with odd and irregular quotation marks (inch marks); splitting is on \";\" only, never quote-aware.",
+      "covers": [
+        "crlf",
+        "merknad-odd-quotes"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "single-byte",
+        "eolKind": "crlf",
+        "points": 4,
+        "lines": 0
+      }
+    },
+    {
+      "id": "sdr-empty",
+      "file": "sdr-empty.gmi",
+      "bytes": 1226,
+      "sha256": "bf6a5f52d00abfb48546d1a1c5a10184e8c0b5dfc42a158ea6d9e5b1a6a6b125",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "SDR column present: empty, whitespace-only and populated (11.0, 17.0) values; first and trailing cells empty.",
+      "covers": [
+        "crlf",
+        "sdr-empty-cells",
+        "sdr-whitespace-cell",
+        "first-column-empty"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "ascii",
+        "eolKind": "crlf",
+        "points": 0,
+        "lines": 4
+      }
+    },
+    {
+      "id": "sdr-absent",
+      "file": "sdr-absent.gmi",
+      "bytes": 811,
+      "sha256": "e88c150518b5c891a35570b4e5f31c02cf0476fd3ce2300abed1a5ef10509dae",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "Same lines without any SDR column; a value fill is impossible (future column add only).",
+      "covers": [
+        "crlf",
+        "sdr-absent-column"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "ascii",
+        "eolKind": "crlf",
+        "points": 0,
+        "lines": 2
+      }
+    },
+    {
+      "id": "guard-irregular-objects",
+      "file": "guard-irregular-objects.gmi",
+      "bytes": 1016,
+      "sha256": "017cef2488008630e511cc35f50e2bb5f8ddd816c192e11d25c857df1c7299b2",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "Objects with two _FIELDVALUES lines, more values than names, fewer values than names and no _FIELDVALUES. File reconciles; those objects are not editable.",
+      "covers": [
+        "crlf",
+        "object-double-fieldvalues",
+        "object-more-values",
+        "object-fewer-values",
+        "object-no-fieldvalues"
+      ],
+      "expect": {
+        "status": "reconciled",
+        "encodingClass": "single-byte",
+        "eolKind": "crlf",
+        "points": 5,
+        "lines": 0,
+        "nonEditableObjects": 4
+      }
+    },
+    {
+      "id": "guard-repeated-section",
+      "file": "guard-repeated-section.gmi",
+      "bytes": 604,
+      "sha256": "6c1c73ce7f82d8768e9ad79a52b8da4595384ade5e5acd7af2d741142d6533a6",
+      "encoding": "latin1",
+      "eol": "crlf",
+      "description": "Two [P_] definition sections (parser keeps the last). Reconciles, but is read-only by the fail-closed rule.",
+      "covers": [
+        "crlf",
+        "repeated-section"
+      ],
+      "expect": {
+        "status": "unsupported",
+        "reasons": [
+          "repeated-section"
+        ],
+        "encodingClass": "ascii",
+        "eolKind": "crlf",
+        "points": 1,
+        "lines": 0
+      }
+    },
+    {
+      "id": "guard-mixed-eol",
+      "file": "guard-mixed-eol.gmi",
+      "bytes": 1798,
+      "sha256": "fd7cc353ee903ac87e1c7ab6e37ecd8fbae7f6737ce55fb4804e53c55426338f",
+      "encoding": "latin1",
+      "eol": "mixed",
+      "description": "Core content with mixed CRLF and LF. The parser accepts it; editing is refused (fail-closed).",
+      "covers": [
+        "mixed-eol"
+      ],
+      "expect": {
+        "status": "unsupported",
+        "reasons": [
+          "mixed-eol"
+        ],
+        "encodingClass": "single-byte",
+        "eolKind": "mixed",
+        "points": 3,
+        "lines": 3
+      }
+    },
+    {
+      "id": "guard-cr-only",
+      "file": "guard-cr-only.gmi",
+      "bytes": 1755,
+      "sha256": "6aafb0e150d1a9f4468635fbbd6ef4ee13108f70c92f6d70c845a787fc68cd99",
+      "encoding": "latin1",
+      "eol": "cr",
+      "description": "Bare-CR line endings. The parser does not split on CR and throws; reported, never repaired.",
+      "covers": [
+        "cr-only-eol"
+      ],
+      "expect": {
+        "status": "parser-error",
+        "encodingClass": "single-byte",
+        "eolKind": "cr"
+      }
+    },
+    {
+      "id": "guard-utf8-bom",
+      "file": "guard-utf8-bom.gmi",
+      "bytes": 1824,
+      "sha256": "ba682d4a87d6a6f58405a07905890fb375d8ba2e9cfe677389cdb9e52780f999",
+      "encoding": "utf8-bom",
+      "eol": "crlf",
+      "description": "UTF-8 with BOM. The signature check fails, so the parser throws; reported, never repaired.",
+      "covers": [
+        "utf8-bom"
+      ],
+      "expect": {
+        "status": "parser-error",
+        "encodingClass": "utf8-bom",
+        "eolKind": "crlf"
+      }
+    }
+  ]
+}

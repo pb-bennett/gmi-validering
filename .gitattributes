@@ -1,0 +1,3 @@
+# Byte-exact GMI editing fixtures: line endings and encoding are part of the test.
+# Never convert EOLs or treat them as text (core.autocrlf would otherwise rewrite them).
+tests/fixtures/gmi-edit/*.gmi -text

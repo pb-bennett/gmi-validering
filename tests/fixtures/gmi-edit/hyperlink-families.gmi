@@ -1,0 +1,138 @@
+[GMIFILE_ASCII]
+_VERSION 2
+_FILETYPE GMI
+_INDEX !!!!!!!!!!!!!!!!!!!!
+_EXTENT 581900 6565900 582100 6566100 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+COSYS_EPSG 25832
+COSYSVER_EPSG 5941
+PRODUCER Syntetisk testprodusent
+[P_]
+_EXTENT 581900 6565900 582100 6566100 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+_FIELDNAMES S_FCODE;Type;AnleggsID;S_HYPERLINK;Merknad;Kumform;
+[+P_]
+:P 1
+_FIELDVALUES KUM;Kum;SYNT-H1;h:1(link:"Attachments\SYNT_F0_1.jpg" sign:"Feltmåler A") ;Tilfelle family-0;S;
+GUID 5ec0e000-0000-4000-8000-0000000007d1
+/XYZ
+581940.000 6566007.000 101.000
+:P 2
+_FIELDVALUES KUM;Kum;SYNT-H2;h:1(link:"Attachments\SYNT_F1_1.jpg") h:2(link:"Attachments\SYNT_F1_2.jpg" sign:"Feltmåler B") h:3(link:"Attachments\SYNT_F1_3.jpg" sign:"Feltmåler B") h:4(link:"Attachments\SYNT_F1_4.jpg" sign:"Feltmåler B") h:5(link:"Attachments\SYNT F1 (5).jpg" sign:"Feltmåler B") h:6(link:"Attachments\SYNT_F1_6.JPEG" sign:"Feltmåler B") ;Tilfelle family-1;S;
+GUID 5ec0e000-0000-4000-8000-0000000007d2
+/XYZ
+581950.000 6566014.000 102.000
+:P 3
+_FIELDVALUES KUM;Kum;SYNT-H3;h:1(link:"Attachments\SYNT_F2_1.jpg" sign:"Feltmåler A") h:2(link:"Attachments\SYNT_F2_2.jpg" sign:"Feltmåler A") ;Tilfelle family-2;S;
+GUID 5ec0e000-0000-4000-8000-0000000007d3
+/XYZ
+581960.000 6566021.000 103.000
+:P 4
+_FIELDVALUES KUM;Kum;SYNT-H4;h:1(link:"Attachments\SYNT_F3_1.jpg" sign:"Feltmåler B") h:2(link:"Attachments\SYNT_F3_2.jpg" sign:"Feltmåler B") h:3(link:"Attachments\SYNT_F3_3.jpg" sign:"Feltmåler B") h:4(link:"Attachments\SYNT_F3_4.jpg" sign:"Feltmåler B") ;Tilfelle family-3;S;
+GUID 5ec0e000-0000-4000-8000-0000000007d4
+/XYZ
+581970.000 6566028.000 104.000
+:P 5
+_FIELDVALUES KUM;Kum;SYNT-H5;h:1(link:"Attachments\SYNT_F4_1.jpg") h:2(link:"Attachments\SYNT_F4_2.jpg" sign:"Feltmåler A") h:3(link:"Attachments\SYNT_F4_3.jpg" sign:"Feltmåler A") ;Tilfelle family-4;S;
+GUID 5ec0e000-0000-4000-8000-0000000007d5
+/XYZ
+581980.000 6566035.000 105.000
+:P 6
+_FIELDVALUES KUM;Kum;SYNT-H6;h:1(link:"Attachments\SYNT_F5_1.jpg") h:2(link:"Attachments\SYNT_F5_2.jpg" sign:"Feltmåler B") ;Tilfelle family-5;S;
+GUID 5ec0e000-0000-4000-8000-0000000007d6
+/XYZ
+581990.000 6566042.000 106.000
+:P 7
+_FIELDVALUES KUM;Kum;SYNT-H7;h:1(link:"Attachments\SYNT_F6_1.jpg") ;Tilfelle family-6;S;
+GUID 5ec0e000-0000-4000-8000-0000000007d7
+/XYZ
+582000.000 6566049.000 107.000
+:P 8
+_FIELDVALUES KUM;Kum;SYNT-H8;h:1(link:"Attachments\SYNT_F7_1.jpg" sign:"Feltmåler B") h:2(link:"Attachments\SYNT_F7_2.jpg" sign:"Feltmåler B") h:3(link:"Attachments\SYNT_F7_3.jpg" sign:"Feltmåler B") ;Tilfelle family-7;S;
+GUID 5ec0e000-0000-4000-8000-0000000007d8
+/XYZ
+582010.000 6566056.000 108.000
+:P 9
+_FIELDVALUES KUM;Kum;SYNT-H9;h:1(link:"Attachments\SYNT_F8_1.jpg") h:2(link:"Attachments\SYNT_F8_2.jpg") ;Tilfelle family-8;S;
+GUID 5ec0e000-0000-4000-8000-0000000007d9
+/XYZ
+582020.000 6566063.000 109.000
+:P 10
+_FIELDVALUES KUM;Kum;SYNT-H10;h:1(link:"Attachments\SYNT_F9_1.jpg") h:2(link:"Attachments\SYNT_F9_2.jpg") h:3(link:"Attachments\SYNT_F9_3.jpg" sign:"Feltmåler B") ;Tilfelle family-9;S;
+GUID 5ec0e000-0000-4000-8000-0000000007da
+/XYZ
+582030.000 6566070.000 110.000
+:P 11
+_FIELDVALUES KUM;Kum;SYNT-H11;h:1(link:"Attachments\SYNT_F10_1.jpg" sign:"Feltmåler A") h:2(link:"Attachments\SYNT_F10_2.jpg" sign:"Feltmåler A") h:3(link:"Attachments\SYNT_F10_3.jpg" sign:"Feltmåler A") h:4(link:"Attachments\SYNT_F10_4.jpg" sign:"Feltmåler A") h:5(link:"Attachments\SYNT F10 (5).jpg" sign:"Feltmåler A") h:6(link:"Attachments\SYNT_F10_6.JPEG" sign:"Feltmåler A") ;Tilfelle family-10;S;
+GUID 5ec0e000-0000-4000-8000-0000000007db
+/XYZ
+582040.000 6566077.000 111.000
+:P 12
+_FIELDVALUES KUM;Kum;SYNT-H12;h:1(link:"Attachments\SYNT_F11_1.jpg" sign:"Feltmåler B") h:2(link:"Attachments\SYNT_F11_2.jpg" sign:"Feltmåler B") h:3(link:"Attachments\SYNT_F11_3.jpg" sign:"Feltmåler B") h:4(link:"Attachments\SYNT_F11_4.jpg" sign:"Feltmåler B") h:5(link:"Attachments\SYNT F11 (5).jpg" sign:"Feltmåler B") h:6(link:"Attachments\SYNT_F11_6.JPEG" sign:"Feltmåler B") h:7(link:"Attachments\SYNT_F11_7.jpg" sign:"Feltmåler B") ;Tilfelle family-11;S;
+GUID 5ec0e000-0000-4000-8000-0000000007dc
+/XYZ
+582050.000 6566084.000 112.000
+:P 13
+_FIELDVALUES KUM;Kum;SYNT-H13;h:1(link:"Attachments\SYNT_FEM_1.jpg" sign:"Feltmåler B") h:2(link:"Attachments\SYNT_FEM_2.jpg") h:3(link:"Attachments\SYNT_FEM_3.jpg" sign:"Feltmåler B") h:4(link:"Attachments\SYNT_FEM_4.jpg") h:5(link:"Attachments\SYNT_FEM_5.jpg" sign:"Feltmåler B") ;Tilfelle five-wrappers;S;
+GUID 5ec0e000-0000-4000-8000-0000000007dd
+/XYZ
+582060.000 6566091.000 113.000
+:P 14
+_FIELDVALUES KUM;Kum;SYNT-H14;Attachments\SYNT_BARE_1.jpg;Tilfelle bare-relative-path;S;
+GUID 5ec0e000-0000-4000-8000-0000000007de
+/XYZ
+582070.000 6566098.000 114.000
+:P 15
+_FIELDVALUES KUM;Kum;SYNT-H15;SYNT_BARE_2.jpg;Tilfelle bare-filename;S;
+GUID 5ec0e000-0000-4000-8000-0000000007df
+/XYZ
+582080.000 6566105.000 115.000
+:P 16
+_FIELDVALUES KUM;Kum;SYNT-H16;h:1(link:"Attachments\SYNT_DOK_1.pdf" sign:"Feltmåler A") ;Tilfelle pdf-signed;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e0
+/XYZ
+582090.000 6566112.000 116.000
+:P 17
+_FIELDVALUES KUM;Kum;SYNT-H17;h:1(link:"Attachments\SYNT_DATA_1.sos") ;Tilfelle sos;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e1
+/XYZ
+582100.000 6566119.000 117.000
+:P 18
+_FIELDVALUES KUM;Kum;SYNT-H18;h:1(link:"Attachments\SYNT_MIX_1.jpg") h:2(link:"Attachments\SYNT_MIX_2.pdf") h:3(link:"Attachments\SYNT_MIX_3.jpg" sign:"Feltmåler B") h:4(link:"Attachments\SYNT_MIX_4.sos") ;Tilfelle mixed-photo-pdf-sos;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e2
+/XYZ
+582110.000 6566126.000 118.000
+:P 19
+_FIELDVALUES KUM;Kum;SYNT-H19;h:1(link:"Attachments\") ;Tilfelle directory-only;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e3
+/XYZ
+582120.000 6566133.000 119.000
+:P 20
+_FIELDVALUES KUM;Kum;SYNT-H20;h:1(link:"Attachments\Kum 1\SYNT_DYP_1.jpg") ;Tilfelle deeper-relative-path;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e4
+/XYZ
+582130.000 6566140.000 120.000
+:P 21
+_FIELDVALUES KUM;Kum;SYNT-H21;h:1(link:"Attachments\SYNT_NT_1.jpg") h:2(link:"Attachments\SYNT_NT_2.jpg");Tilfelle no-trailing-space;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e5
+/XYZ
+582140.000 6566147.000 121.000
+:P 22
+_FIELDVALUES KUM;Kum;SYNT-H22; h:1(link:"Attachments\SYNT_LS_1.jpg") ;Tilfelle leading-space;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e6
+/XYZ
+582150.000 6566154.000 122.000
+:P 23
+_FIELDVALUES KUM;Kum;SYNT-H23;h:1(link:"Attachments\SYNT_ML_1.jpg" link:"Attachments\SYNT_ML_2.jpg") ;Tilfelle multi-link-wrapper;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e7
+/XYZ
+582160.000 6566161.000 123.000
+:P 24
+_FIELDVALUES KUM;Kum;SYNT-H24;h:1(link:"Attachments\SYNT_BAD_1.jpg" ;Tilfelle invalid-grammar;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e8
+/XYZ
+582170.000 6566168.000 124.000
+:P 25
+_FIELDVALUES KUM;Kum;SYNT-H25;;Tilfelle empty;S;
+GUID 5ec0e000-0000-4000-8000-0000000007e9
+/XYZ
+582180.000 6566175.000 125.000
+[END]
