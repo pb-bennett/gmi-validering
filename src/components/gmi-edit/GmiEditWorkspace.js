@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, DownloadSimpleIcon, MagnifyingGlassIcon, TableIcon } from '@phosphor-icons/react';
+import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, DownloadSimpleIcon, MagnifyingGlassIcon, TableIcon, StackIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
@@ -15,6 +15,7 @@ import GmiObjectEditor from './GmiObjectEditor';
 import GmiChangeList from './GmiChangeList';
 import GmiExportDialog from './GmiExportDialog';
 import GmiConfirmDialog from './GmiConfirmDialog';
+import GmiBatchDialog from './GmiBatchDialog';
 import './gmiEdit.css';
 
 export const GMI_EDIT_INSPECTOR_ROOT_ID = 'gmi-edit-inspector-root';
@@ -99,8 +100,12 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const [exportOpen, setExportOpen] = useState(false);
   const [notice, setNotice] = useState(null);
   const [formRevision, setFormRevision] = useState(0);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const objectDirtyRef = useRef(false), batchDirtyRef = useRef(false), batchResetRef = useRef(null);
   const dirtyRef = useRef(false);
-  const onDirtyChange = useCallback((dirty) => { dirtyRef.current = dirty; onDraftChange?.(dirty); }, [onDraftChange]);
+  const onDirtyChange = useCallback((dirty) => { objectDirtyRef.current = dirty; dirtyRef.current = dirty || batchDirtyRef.current; onDraftChange?.(dirtyRef.current); }, [onDraftChange]);
+  const onBatchDirtyChange = useCallback((dirty) => { batchDirtyRef.current = dirty; dirtyRef.current = dirty || objectDirtyRef.current; onDraftChange?.(dirtyRef.current); }, [onDraftChange]);
+  const registerBatchReset = useCallback((reset) => { batchResetRef.current = reset; }, []);
 
   // The Data Table is the main object browser in Rettinger: open it for this layer on entry.
   useEffect(() => { if (layer && !useStore.getState().ui.layerDataTable?.isOpen) openLayerDataTable(layerId); }, [layerId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -121,9 +126,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       confirmLabel: 'Forkast skjemaet',
       // The next action can be cancelled by the staged-corrections guard, leaving
       // this workspace mounted. Reset the editor's local form even in that case.
-      run: () => { onDirtyChange(false); setFormRevision((revision) => revision + 1); run(); },
+      run: () => { batchResetRef.current?.(); onDirtyChange(false); onBatchDirtyChange(false); setFormRevision((revision) => revision + 1); run(); },
     });
-  }, [onDirtyChange]);
+  }, [onDirtyChange, onBatchDirtyChange]);
 
   const highlight = useCallback((target) => {
     setHighlightedFeature(`${scopeToTableTab(target.scope)}-${layerId}-${target.sourceIndex}`);
@@ -268,6 +273,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
           editable={editable} onSelectObject={(target, id) => select(target, id)} onDiscard={discard} />}
     </div>
     <footer className="gmi-edit-footer">
+      <button type="button" className="gmi-compact-button gmi-focus-ring gmi-batch-open" disabled={!editable}
+        onClick={() => guard(() => setBatchOpen(true), 'objektet')}><StackIcon size={16} aria-hidden="true" /> Masseendringer</button>
       <div className="gmi-edit-history">
         <PhotoIconButton icon={ArrowArcLeftIcon} label="Angre siste retting" tooltip={view?.summary.canUndo ? `Angre: ${labelOf(view.changeSets.at(-1).id)}` : 'Ingenting å angre'}
           unavailable={!editable || !view?.summary.canUndo} onClick={undo} />
@@ -284,6 +291,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate}
       onStaged={() => { setChangedOnly(false); }} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}
     {exportOpen && view && <GmiExportDialog layerId={layerId} view={view} status={status} onClose={() => setExportOpen(false)} />}
+    {batchOpen && view && <GmiBatchDialog view={view} onClose={() => setBatchOpen(false)} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
+      onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice({ tone: 'ok', text: `Lagt til: ${changeSet.label}` }); }} />}
     {pending && <GmiConfirmDialog title={pending.title} confirmLabel={pending.confirmLabel} testId="workspace"
       onCancel={() => setPending(null)} onConfirm={() => { const run = pending.run; setPending(null); run(); }}>{pending.body}</GmiConfirmDialog>}
   </section>;

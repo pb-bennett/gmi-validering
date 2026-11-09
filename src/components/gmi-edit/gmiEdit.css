@@ -121,6 +121,31 @@
 /* Dialogs. */
 .gmi-edit-dialog { margin: auto; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 20px; border: 1px solid #c4ced8; border-radius: 8px; background: white; color: #24364b; font-size: 13px; }
 .gmi-edit-dialog::backdrop { background: #15233566; }
+.gmi-batch-open { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; border: 1px solid var(--gmi-border-strong); }
+.gmi-batch-dialog { width: min(1080px, calc(100vw - 32px)); height: min(690px, calc(100dvh - 40px)); padding: 0; overflow: hidden; }
+.gmi-batch-dialog[open] { display: flex; flex-direction: column; }
+.gmi-batch-header, .gmi-batch-footer { flex-shrink: 0; display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 16px; }
+.gmi-batch-header { border-bottom: 1px solid var(--gmi-border); }
+.gmi-batch-header h2 { margin-bottom: 2px; }
+.gmi-batch-content { min-height: 0; flex: 1; overflow: auto; padding: 0 16px 12px; display: flex; flex-direction: column; gap: 10px; }
+.gmi-batch-footer { border-top: 1px solid var(--gmi-border); margin-top: 0; justify-content: flex-end; }
+.gmi-batch-config, .gmi-batch-tools, .gmi-batch-counts { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.gmi-batch-config label, .gmi-batch-search { display: grid; gap: 4px; }
+.gmi-batch-dialog input:not([type=checkbox]):not([type=radio]), .gmi-batch-dialog select { border: 1px solid var(--gmi-border-strong); border-radius: 4px; padding: 6px 8px; background: var(--gmi-surface); }
+.gmi-batch-modes { display: grid; gap: 8px; margin: 16px 0; }
+.gmi-batch-modes legend { margin-bottom: 8px; font-weight: 600; }
+.gmi-batch-counts { padding: 8px; border: 1px solid var(--gmi-border); border-radius: 6px; background: var(--gmi-surface-soft); font-size: 12px; }
+.gmi-batch-table-scroll { flex-shrink: 0; max-height: 280px; overflow: auto; border: 1px solid var(--gmi-border); }
+.gmi-batch-table { width: 100%; table-layout: fixed; font-size: 12px; }
+.gmi-batch-table th, .gmi-batch-table td { overflow-wrap: anywhere; vertical-align: top; }
+.gmi-batch-table[data-selection="true"] th:first-child { width: 50px; }
+.gmi-batch-table th:last-child { width: 42%; }
+.gmi-batch-table thead th { position: sticky; top: 0; z-index: 1; background: var(--gmi-surface-soft); }
+.gmi-batch-table small { display: block; color: var(--gmi-text-muted); font-weight: 400; }
+.gmi-batch-warning { display: flex; gap: 4px; margin-top: 5px; padding: 4px; border: 1px solid var(--validation-border); border-radius: 4px; background: var(--validation-bg); color: var(--validation-text); }
+.gmi-batch-warning svg { flex-shrink: 0; color: var(--validation-icon); }
+.gmi-batch-dialog details ul { padding-left: 16px; }
+.gmi-batch-content > .gmi-edit-note { display: block; }
 .gmi-edit-dialog h2 { font-size: 17px; font-weight: 600; color: var(--gmi-navy); margin-bottom: 10px; }
 .gmi-edit-dialog > * + * { margin-top: 10px; }
 .gmi-edit-confirm-dialog { width: min(460px, calc(100vw - 32px)); }
