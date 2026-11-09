@@ -222,6 +222,43 @@ const useStore = create(
         // Lightweight GMI editing status per opened layer (gmiEditSessions.mjs).
         // Never bytes, documents or datasets; not persisted.
         gmiEditStatus: {},
+        // Rettinger workspace view state (M4): the layer being corrected, the
+        // Data Table display mode per layer and a one-shot object selection
+        // request from the Data Table. View state only; never GMI data, and
+        // not persisted (partialize keeps settings, ui and lastActive).
+        gmiEditWorkspace: null, // { layerId } | null
+        gmiEditTableView: {}, // { [layerId]: 'original' | 'proposed' | 'changed' }
+        gmiEditObjectRequest: null, // { layerId, scope, sourceIndex, at } | null
+        openGmiEditWorkspace: (layerId) =>
+          set(
+            (state) => ({
+              gmiEditWorkspace: state.layers[layerId] ? { layerId } : null,
+              gmiEditObjectRequest: null,
+              ui: { ...state.ui, fieldValidationOpen: false },
+            }),
+            false,
+            'gmiEdit/openWorkspace',
+          ),
+        closeGmiEditWorkspace: () =>
+          set({ gmiEditWorkspace: null, gmiEditObjectRequest: null }, false, 'gmiEdit/closeWorkspace'),
+        setGmiEditTableView: (layerId, view) =>
+          set(
+            (state) => ({ gmiEditTableView: { ...state.gmiEditTableView, [layerId]: view } }),
+            false,
+            'gmiEdit/tableView',
+          ),
+        requestGmiEditObject: (layerId, scope, sourceIndex) =>
+          set(
+            { gmiEditObjectRequest: { layerId, scope, sourceIndex, at: Date.now() } },
+            false,
+            'gmiEdit/objectRequest',
+          ),
+        clearGmiEditObjectRequest: (request) =>
+          set(
+            (state) => (state.gmiEditObjectRequest === request ? { gmiEditObjectRequest: null } : {}),
+            false,
+            'gmiEdit/objectRequestHandled',
+          ),
         hydrated: false,
 
         // ============================================
@@ -2062,9 +2099,21 @@ const useStore = create(
               const nextLayerOrder = state.layerOrder.filter(
                 (id) => id !== layerId,
               );
+              const { [layerId]: removedView, ...remainingTableViews } =
+                state.gmiEditTableView || {};
+              void removedView;
               const baseState = {
                 layers: remainingLayers,
                 layerOrder: nextLayerOrder,
+                gmiEditWorkspace:
+                  state.gmiEditWorkspace?.layerId === layerId
+                    ? null
+                    : state.gmiEditWorkspace,
+                gmiEditTableView: remainingTableViews,
+                gmiEditObjectRequest:
+                  state.gmiEditObjectRequest?.layerId === layerId
+                    ? null
+                    : state.gmiEditObjectRequest,
                 objectTableInspection:
                   state.objectTableInspection?.layerId === layerId
                     ? null
@@ -3013,6 +3062,9 @@ const useStore = create(
                   mapOverlayVisibility: preservedMapOverlayVisibility,
                 },
                 gmiEditStatus: {},
+                gmiEditWorkspace: null,
+                gmiEditTableView: {},
+                gmiEditObjectRequest: null,
                 // Keep settings as-is
                 settings: state.settings,
               };

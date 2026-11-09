@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useState, useEffect, useEffectEvent, useMemo, useRef, useReducer } from 'react';
+import { startTransition, useCallback, useState, useEffect, useEffectEvent, useMemo, useRef, useReducer } from 'react';
 import dynamic from 'next/dynamic';
 import { EnvelopeSimpleIcon, ImagesIcon, InfoIcon, GearSixIcon, PlusIcon, XIcon } from '@phosphor-icons/react';
 import FileUpload from '@/components/FileUpload';
@@ -34,6 +34,9 @@ import DataDisplayModal from '@/components/DataDisplayModal';
 import ZValidationModal from '@/components/ZValidationModal';
 import InclineAnalysisModal from '@/components/InclineAnalysisModal';
 import FieldValidationSidebar from '@/components/FieldValidationSidebar';
+import GmiEditWorkspace, { GMI_EDIT_INSPECTOR_ROOT_ID } from '@/components/gmi-edit/GmiEditWorkspace';
+import GmiConfirmDialog, { UnsavedGmiLayers } from '@/components/gmi-edit/GmiConfirmDialog';
+import { gmiEditRemovalBlock } from '@/lib/gmiEditSessions.mjs';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
@@ -144,6 +147,16 @@ export default function Home() {
   const [showAppInfo, setShowAppInfo] = useState(false);
   const [photoImport, setPhotoImport] = useState(null);
   const surveyLayers = useStore((state) => state.layers);
+  const gmiEditLayerId = useStore((state) => state.gmiEditWorkspace?.layerId ?? null);
+  // A pending global reset that would discard GMI corrections: { layers } until the user confirms or cancels.
+  const [resetConfirm, setResetConfirm] = useState(null);
+  // The right-hand inspector slot of Rettinger; the workspace portals its object editor into it.
+  const [gmiEditInspector, setGmiEditInspector] = useState(null);
+  // Unsubmitted Rettinger form values: the workspace owns the draft and its confirmation dialog; the page only
+  // learns whether one exists and asks the workspace's guard before anything that would unmount it.
+  const gmiEditGuardRef = useRef(null);
+  const registerGmiEditGuard = useCallback((guard) => { gmiEditGuardRef.current = guard; }, []);
+  const [gmiEditDraft, setGmiEditDraft] = useState(false);
   const [photoWorkspace, dispatchPhotoWorkspace] = useReducer(photoWorkspaceReducer, emptyPhotoWorkspace);
   // Staged Edit-mode values and undo/redo live here, never in photoSession; the session only holds the ticket.
   const [photoEdit, dispatchPhotoEdit] = useReducer(photoEditReducer, emptyPhotoEditState);
@@ -175,6 +188,13 @@ export default function Home() {
   const notifyPhoto = (text, tone = 'success', action = null) => setPhotoNotice({ id: `${Date.now()}-${Math.random()}`, text, tone, action });
   const dismissPhotoNotice = (id) => setPhotoNotice((notice) => notice?.id === id ? null : notice);
   const workspaceLayer = photoLayers.find((layer) => layer.id === photoWorkspace.layerId);
+  // Rettinger (GMI field corrections) is a sibling of the FOTO and Validator workspaces; FOTO wins if both are requested.
+  const gmiEditActive = !workspaceLayer && Boolean(gmiEditLayerId && surveyLayers[gmiEditLayerId]);
+  // Runs `action` now, or after the Rettinger draft dialog when unsubmitted form values exist. Cancel = nothing happens.
+  const guardGmiEditDraft = (action) => {
+    const guard = gmiEditActive ? gmiEditGuardRef.current : null;
+    if (guard) guard(action, 'objektet'); else action();
+  };
   // photoLayers is a new array on every publish, so every derived photo list follows the session snapshot.
   const workspacePhotos = useMemo(() => photoLayers.some((layer) => layer.id === photoWorkspace.layerId)
     ? photoSession.getLayerPhotos(photoWorkspace.layerId) : [], [photoLayers, photoWorkspace.layerId]);
@@ -328,10 +348,10 @@ export default function Home() {
     dispatchPhotoWorkspace({ type: 'enter', layerId: id, photoId, photoIds: layer.photoIds });
     useStore.getState().setActiveViewTab('map');
   };
-  const openPhotoLayer = (id, opener, photoId = null) => {
+  const openPhotoLayer = (id, opener, photoId = null) => guardGmiEditDraft(() => {
     if (id !== photoWorkspace.layerId) requestWorkspaceAction(() => enterPhotoLayer(id, opener, photoId));
     else enterPhotoLayer(id, opener, photoId);
-  };
+  });
   const exitPhotoWorkspace = () => requestWorkspaceAction(() => {
     setPhotoSourceWorkflow(null);
     setPhotoDialog(null);
@@ -632,7 +652,14 @@ export default function Home() {
     };
   }, []);
 
-  const handleReset = () => {
+  // The GMI decision comes first: a reset that would discard unsaved corrections is refused before any FOTO or page
+  // state is touched, so cancelling leaves everything exactly as it was. Only an explicit confirmation discards.
+  // User-initiated reset: unsubmitted Rettinger form values are decided first, then staged corrections (handleReset).
+  const requestReset = () => guardGmiEditDraft(() => handleReset());
+  const handleReset = ({ discardGmiEdits = false } = {}) => {
+    const blocked = gmiEditRemovalBlock(null, { discardGmiEdits });
+    if (blocked) { setResetConfirm({ layers: blocked.layers }); return; }
+    setResetConfirm(null);
     setPhotoImport(null);
     setPhotoLocateRequest(null);
     // An explicit global reset: staged edits are lost with the whole photo session.
@@ -642,7 +669,7 @@ export default function Home() {
     setPhotoDialog(null); setPhotoBoundary(null); setPhotoNotice(null); setPhotoViewerOpen(false);
     dispatchPhotoWorkspace({ type: 'exit' });
     closeDataInspector();
-    resetAll();
+    resetAll({ discardGmiEdits });
   };
 
   const openAppInfo = (tab = 'about', opener = null) => {
@@ -656,7 +683,8 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gmi-surface-soft">
-      <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !photoImport && !workspaceLayer} />
+      {/* A window drop starts parsing, which unmounts the workspace: refused while a Rettinger form has unsubmitted values. */}
+      <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !photoImport && !workspaceLayer && !(gmiEditActive && gmiEditDraft)} />
       <TestModeActivation />
       {photoImport && <PhotoImportWizard context={photoImport} onClose={closePhotos} onComplete={completePhotoImport} openerRef={photoTriggerRef}
         loadedSources={loadedGmiLayers} onLoadedSource={attachLoadedGmi} />}
@@ -698,6 +726,12 @@ export default function Home() {
             else abandonPhotoEdits(ticket);
           } else savePhotoEdits(photoBoundary.then);
         }} />}
+      {resetConfirm && <GmiConfirmDialog title="Nullstille og forkaste rettinger?" confirmLabel="Forkast rettinger og nullstill" testId="reset"
+        onCancel={() => setResetConfirm(null)} onConfirm={() => handleReset({ discardGmiEdits: true })}>
+        <p>Disse GMI-lagene har rettinger som ikke er lastet ned som revidert GMI:</p>
+        <UnsavedGmiLayers layers={resetConfirm.layers} names={Object.fromEntries(Object.values(surveyLayers).map((layer) => [layer.id, layer.name]))} />
+        <p>Nullstiller du, fjernes alle lag og rettingene forkastes. Velg «Avbryt» for å beholde alt og laste ned først.</p>
+      </GmiConfirmDialog>}
       {/* Floating Stats Button */}
       {!workspaceLayer && !(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
       <button
@@ -807,7 +841,7 @@ export default function Home() {
                       {parsingError}
                     </p>
                     <button
-                      onClick={handleReset}
+                      onClick={() => requestReset()}
                       className="mt-3 text-sm font-medium text-red-600 hover:text-red-800 underline"
                     >
                       Prøv igjen med en annen fil
@@ -862,13 +896,15 @@ export default function Home() {
           <TerrainFetcher />
 
           <WorkspaceShell
-            sidebarWidth={workspaceLayer ? 316 : sidebarWidth}
+            sidebarWidth={workspaceLayer ? 316 : gmiEditActive ? 330 : sidebarWidth}
             photoWorkspace={Boolean(workspaceLayer)}
             onOpenAppInfo={(event) => openAppInfo('about', event.currentTarget)}
             appInfoTriggerRef={appInfoTriggerRef}
             sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={effectiveWorkspacePhotos}
               view={workspaceView} workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace} editing={photoEditing} changedIds={changedIds}
-              onExit={exitPhotoWorkspace} onTool={runWorkspaceTool} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} /> : fieldValidationOpen ? (
+              onExit={exitPhotoWorkspace} onTool={runWorkspaceTool} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} />
+              : gmiEditActive ? <GmiEditWorkspace key={gmiEditLayerId} layerId={gmiEditLayerId} inspectorRoot={gmiEditInspector}
+                onGuardChange={registerGmiEditGuard} onDraftChange={setGmiEditDraft} /> : fieldValidationOpen ? (
               <FieldValidationSidebar
                 sidebarWidth={sidebarWidth}
                 canDockInspector={canDockInspector}
@@ -877,7 +913,7 @@ export default function Home() {
               />
             ) : (
               <Sidebar
-                onReset={handleReset}
+                onReset={() => requestReset()}
                 onOpenPhotoLayer={openPhotoLayer}
                 onAddGmiPhotos={openLoadedGmiPhotos}
                 onOpenGemini={() => setGeminiDialog({})}
@@ -898,7 +934,7 @@ export default function Home() {
                   <div role="alert" className="absolute inset-x-3 top-16 z-[1300] rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Feil ved lasting av fil: {parsingError}. Bruk «Legg til fil» for å prøve igjen.</div>
                 )}
                 {!workspaceLayer && <MapPaneToolbar
-                  onReset={handleReset}
+                  onReset={() => requestReset()}
                   onShare={() => setShowShareModal(true)}
                   showShare={parsingStatus === 'done'}
                 />}
@@ -980,7 +1016,7 @@ export default function Home() {
                   </div>
 
                   {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
-                  {!workspaceLayer && !analysisOpen && !fieldValidationOpen && parsingStatus === 'done' && (
+                  {!workspaceLayer && !gmiEditActive && !analysisOpen && !fieldValidationOpen && parsingStatus === 'done' && (
                     <div
                       className="absolute bottom-4 -translate-x-1/2"
                       style={{
@@ -1021,7 +1057,8 @@ export default function Home() {
             {!photoImport && <PhotoWorkspaceInspector key={activeWorkspacePhoto?.assetId || 'empty'} photo={activeWorkspacePhoto} layer={workspaceLayer}
               siblings={activeSiblings} editing={photoEditing} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} onLocate={locatePhoto}
               onEditMetadata={() => requestWorkspaceAction(() => setPhotoDialog('metadata'))} onOpenViewer={() => setPhotoViewerOpen(true)} />}
-          </aside> : <div id="validation-v2-field-inspector-root" className="contents" />}
+          </aside> : gmiEditActive ? <aside id={GMI_EDIT_INSPECTOR_ROOT_ID} key={gmiEditLayerId} ref={setGmiEditInspector} className="gmi-edit-inspector" aria-label="Objektinspektør" />
+            : <div id="validation-v2-field-inspector-root" className="contents" />}
         </div>
             )}
           />

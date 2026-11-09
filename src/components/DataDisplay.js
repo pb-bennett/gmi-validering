@@ -9,8 +9,12 @@ export default function DataDisplay() {
   const resetAll = useStore((state) => state.resetAll);
   const [activeTab, setActiveTab] = useState('header');
 
+  // Never forces a discard: with unsaved GMI corrections the store refuses and nothing is reset.
   const handleReset = () => {
-    resetAll();
+    const result = resetAll();
+    if (result?.ok === false && typeof window !== 'undefined') {
+      window.alert('Laget har GMI-rettinger som ikke er lastet ned. Bruk «Nullstill og åpne ny fil» i kartvisningen for å bekrefte at de skal forkastes.');
+    }
   };
 
   if (!data) return null;

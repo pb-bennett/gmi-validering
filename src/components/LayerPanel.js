@@ -12,11 +12,15 @@ import { analyzeTopplok } from '@/lib/analysis/topplok';
 import { detectOutliers } from '@/lib/analysis/outliers';
 import { getLayerHighlightStyle } from '@/lib/map/layerHighlight.mjs';
 import PhotoIconButton from './photos/PhotoIconButton';
+import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
+import { describeGmiEditStatus } from '@/lib/gmiEditView.mjs';
+import { UnsavedGmiLayers } from './gmi-edit/GmiConfirmDialog';
 import {
   ArrowCounterClockwiseIcon,
   CameraPlusIcon,
   CaretDownIcon,
   CornersOutIcon,
+  PencilSimpleLineIcon,
   TableIcon,
   TrashIcon,
 } from '@phosphor-icons/react';
@@ -1152,6 +1156,10 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
     (state) => state.toggleLayerVisibility,
   );
   const removeLayer = useStore((state) => state.removeLayer);
+  const gmiEditStatus = useStore((state) => state.gmiEditStatus?.[layerId] ?? null);
+  const openGmiEditWorkspace = useStore((state) => state.openGmiEditWorkspace);
+  // Unsaved GMI corrections that removing this layer would discard; shown in the confirmation before anything is removed.
+  const [removeWarning, setRemoveWarning] = useState(null);
   const openLayerDataTable = useStore(
     (state) => state.openLayerDataTable,
   );
@@ -1261,10 +1269,22 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
             </div>
             <div className="text-[10px] text-gmi-text-subtle">
               {pointCount} punkt, {lineCount} ledn.
+              {gmiEditStatus?.changeSetCount > 0 && (
+                <span className="gmi-edit-layer-pill" data-downloaded={gmiEditStatus.downloaded || undefined} data-gmi-layer-pill>
+                  {gmiEditStatus.changeSetCount} {gmiEditStatus.changeSetCount === 1 ? 'retting' : 'rettinger'}{gmiEditStatus.unsaved ? ' · ikke lastet ned' : gmiEditStatus.downloaded ? ' · lastet ned' : ''}
+                </span>
+              )}
             </div>
           </div>
 
           <div className="ml-auto flex items-center gap-1">
+            {/* Rettinger: individual corrections of this layer's attribute values (a revised copy; the import is never changed). */}
+            {isLoadedGmiSurveyLayer(layer) && (
+              <PhotoIconButton icon={PencilSimpleLineIcon} size={14} label="Rettinger: rett feltverdier"
+                tooltip={loadedGmiSources.available(layerId) ? 'Rettinger: rett feltverdier' : 'Rettinger – originalfilen er ikke tilgjengelig i denne økten, så verdiene kan bare vises.'}
+                data-gmi-edit-action={layerId} className="layer-card-icon-button"
+                onClick={(event) => { event.stopPropagation(); openGmiEditWorkspace(layerId); }} />
+            )}
             {/* Connects photos to this GMI layer's object references; never a separate new FOTO import. */}
             {isLoadedGmiSurveyLayer(layer) && (() => {
               const available = Boolean(onAddGmiPhotos) && loadedGmiSources.available(layerId);
@@ -1290,6 +1310,8 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                const unsaved = gmiEditSessions.unsavedLayers([layerId]);
+                setRemoveWarning(unsaved.length ? unsaved : null);
                 setShowRemoveConfirm(true);
               }}
               className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle transition-colors hover:bg-red-100 hover:text-red-600"
@@ -1309,6 +1331,13 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
           </div>
         </div>
 
+        {gmiEditStatus?.state === 'invalidated' && (
+          <div className="gmi-edit-layer-notice" role="status" data-gmi-invalidated>
+            <span>{describeGmiEditStatus(gmiEditStatus).message}</span>
+            <button type="button" className="gmi-focus-ring underline" onClick={() => gmiEditSessions.dispose(layerId)}>OK</button>
+          </div>
+        )}
+
         {showRemoveConfirm && (
           <div className="fixed inset-0 z-10002 flex items-center justify-center bg-gmi-ink/50 p-4">
             <div className="w-full max-w-sm rounded-xl border border-gmi-border bg-gmi-surface shadow-xl">
@@ -1319,22 +1348,32 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
               </div>
               <div className="px-4 py-3 text-sm text-gmi-text">
                 Er du sikker på at du vil fjerne lag “{layer.name}”?
+                {removeWarning && (
+                  <div className="mt-3 grid gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900" role="alert" data-gmi-remove-warning>
+                    <p className="font-semibold">Laget har rettinger som ikke er lastet ned.</p>
+                    <UnsavedGmiLayers layers={removeWarning} names={{ [layerId]: layer.name }} />
+                    <p>Fjerner du laget, forkastes rettingene. Velg «Avbryt» og last ned revidert GMI først for å beholde dem.</p>
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-end gap-2 border-t border-gmi-border px-4 py-3">
                 <button
-                  onClick={() => setShowRemoveConfirm(false)}
+                  onClick={() => { setShowRemoveConfirm(false); setRemoveWarning(null); }}
                   className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-3 py-1.5 text-sm"
                 >
                   Avbryt
                 </button>
                 <button
                   onClick={() => {
-                    removeLayer(layerId);
+                    // Discard only after the warning above was shown; otherwise the store refuses and we warn now.
+                    const result = removeLayer(layerId, removeWarning ? { discardGmiEdits: true } : undefined);
+                    if (result?.ok === false && result.code === 'gmi-edits-pending') { setRemoveWarning(result.layers); return; }
+                    setRemoveWarning(null);
                     setShowRemoveConfirm(false);
                   }}
                   className="px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700"
                 >
-                  Fjern
+                  {removeWarning ? 'Forkast rettinger og fjern' : 'Fjern'}
                 </button>
               </div>
             </div>

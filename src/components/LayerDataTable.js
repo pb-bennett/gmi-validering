@@ -22,6 +22,8 @@ import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
 import FilenameCopyButton from '@/components/FilenameCopyButton';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
 import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns } from '@/lib/objectTablePresentation';
+import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
+import { GMI_EDIT_TABLE_VIEWS, GMI_EDIT_TABLE_VIEW_LABELS, gmiEditMessage, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope } from '@/lib/gmiEditView.mjs';
 
 const ROW_HEIGHT = 28;
 const MAX_COLUMN_WIDTH = 180;
@@ -96,6 +98,17 @@ const HyperlinkCell = React.memo(function HyperlinkCell({ value, searchQuery }) 
   );
 });
 
+// Proposed value that differs from the delivered one (Foreslått / Kun endrede modes). Read-only: editing stays in Rettinger.
+const ChangedCell = React.memo(function ChangedCell({ change, children }) {
+  const original = change.original === '' ? 'tom' : change.original;
+  const proposed = change.proposed === '' ? 'tom' : change.proposed;
+  return (
+    <span className="gmi-edit-table-cell-changed" data-gmi-changed-cell title={`Original: ${original} → Foreslått: ${proposed}`}>
+      {children}
+    </span>
+  );
+});
+
 // Memoized zoom button
 const ZoomButton = React.memo(function ZoomButton({ onClick }) {
   return (
@@ -137,6 +150,12 @@ export default function LayerDataTable() {
   const resetLayerFilters = useStore(
     (state) => state.resetLayerFilters,
   );
+
+  const gmiEditStatus = useStore((state) => (state.ui.layerDataTable?.layerId ? state.gmiEditStatus?.[state.ui.layerDataTable.layerId] : null) ?? null);
+  const gmiEditTableView = useStore((state) => (state.ui.layerDataTable?.layerId ? state.gmiEditTableView?.[state.ui.layerDataTable.layerId] : null) ?? GMI_EDIT_TABLE_VIEWS.ORIGINAL);
+  const setGmiEditTableView = useStore((state) => state.setGmiEditTableView);
+  const gmiEditWorkspaceLayerId = useStore((state) => state.gmiEditWorkspace?.layerId ?? null);
+  const requestGmiEditObject = useStore((state) => state.requestGmiEditObject);
 
   const tableContainerRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -194,6 +213,18 @@ export default function LayerDataTable() {
     };
   }, [setHighlightedFeatureIds]);
 
+  // GMI editing display modes. Only for a layer with an open editing session, and never for exact
+  // object inspections (their rows are bound to the original dataset revision). The verified proposed
+  // view is computed once per published editing revision (status object), not per render.
+  const gmiEditModesAvailable = !isExactInspection && (gmiEditStatus?.state === 'editable' || gmiEditStatus?.state === 'read-only');
+  const proposedView = useMemo(
+    () => gmiEditModesAvailable && gmiEditTableView !== GMI_EDIT_TABLE_VIEWS.ORIGINAL ? gmiProposedViewForStatus(gmiEditSessions, gmiEditStatus) : null,
+    [gmiEditModesAvailable, gmiEditTableView, gmiEditStatus],
+  );
+  const tableView = gmiEditModesAvailable && proposedView?.ok ? gmiEditTableView : GMI_EDIT_TABLE_VIEWS.ORIGINAL;
+  const proposedData = tableView === GMI_EDIT_TABLE_VIEWS.ORIGINAL ? null : proposedView.dataset;
+  const changedByObject = tableView === GMI_EDIT_TABLE_VIEWS.ORIGINAL ? null : proposedView.changed.byObject;
+
   const activeTab = isExactInspection
     ? inspection.geometryScope === 'point' ? 'punkter' : 'ledninger'
     : layerId && layerDataTable?.activeTabByLayer?.[layerId]
@@ -203,11 +234,12 @@ export default function LayerDataTable() {
   // Memoize raw items with stable reference
   const rawItems = useMemo(() => {
     if (isExactInspection) return exactRows || [];
-    if (!layer?.data) return [];
+    const data = proposedData || layer?.data;
+    if (!data) return [];
     return activeTab === 'punkter'
-      ? layer.data.points || []
-      : layer.data.lines || [];
-  }, [layer?.data, activeTab, isExactInspection, exactRows]);
+      ? data.points || []
+      : data.lines || [];
+  }, [layer?.data, proposedData, activeTab, isExactInspection, exactRows]);
 
   // Helper to check if an item is hidden by filters
   const isItemHidden = useCallback(
@@ -316,11 +348,16 @@ export default function LayerDataTable() {
   // Add __index and filter hidden items
   const allItemsWithIndex = useMemo(() => {
     if (isExactInspection) return rawItems;
-    return rawItems.map((item, index) => ({
+    const scope = tableTabToScope(activeTab);
+    const indexed = rawItems.map((item, index) => ({
       ...item,
       __index: index,
     }));
-  }, [rawItems, isExactInspection]);
+    // Kun endrede: only objects with an effective correction (source index = parser order = table index).
+    return tableView === GMI_EDIT_TABLE_VIEWS.CHANGED
+      ? indexed.filter((item) => changedByObject?.has(gmiObjectKey(scope, item.__index)))
+      : indexed;
+  }, [rawItems, isExactInspection, tableView, changedByObject, activeTab]);
 
   // Filtered items (respecting sidebar filters)
   const items = useMemo(() => {
@@ -398,8 +435,17 @@ export default function LayerDataTable() {
       presentFields.unshift('S_FCODE');
     }
 
+    if (tableView === GMI_EDIT_TABLE_VIEWS.CHANGED && changedByObject) {
+      // Kun endrede: identity columns plus the corrected fields of the shown objects.
+      const scope = tableTabToScope(activeTab);
+      const changedFields = new Set();
+      for (const item of fieldItems) changedByObject.get(gmiObjectKey(scope, item.__index))?.forEach((_, field) => changedFields.add(field));
+      const identity = ['S_FCODE', 'Tema', 'Type'].filter((field) => fieldSet.has(field) && !changedFields.has(field));
+      return [...identity, ...[...changedFields].filter((field) => fieldSet.has(field))];
+    }
+
     return [...new Set([...presentFields, ...requiredFields])];
-  }, [items, contextualScopeRows, isContextualInspection, inspection]);
+  }, [items, contextualScopeRows, isContextualInspection, inspection, tableView, changedByObject, activeTab]);
 
   const savedOrder = useMemo(() => {
     return layerId &&
@@ -417,7 +463,7 @@ export default function LayerDataTable() {
   }, [fields, savedOrder, isContextualInspection, inspection, contextualColumnOrder]);
 
   useEffect(() => {
-    if (isExactInspection || !layerId || fields.length === 0) return;
+    if (isExactInspection || !layerId || fields.length === 0 || tableView === GMI_EDIT_TABLE_VIEWS.CHANGED) return;
     const normalized = normalizeColumnOrder(fields, savedOrder);
     const sameLength = normalized.length === savedOrder.length;
     const sameOrder =
@@ -431,7 +477,7 @@ export default function LayerDataTable() {
     fields,
     layerId,
     savedOrder,
-    setLayerDataTableColumnOrder, isExactInspection,
+    setLayerDataTableColumnOrder, isExactInspection, tableView,
   ]);
 
   const sorting = useMemo(() => {
@@ -444,13 +490,14 @@ export default function LayerDataTable() {
 
   useEffect(() => {
     if (isExactInspection || !layerId) return;
+    if (tableView === GMI_EDIT_TABLE_VIEWS.CHANGED) return;
     const validSorting = Array.isArray(sorting)
       ? sorting.filter((sort) => fields.includes(sort.id))
       : [];
     if (validSorting.length !== sorting.length) {
       setLayerDataTableSorting(layerId, activeTab, validSorting);
     }
-  }, [activeTab, fields, layerId, sorting, setLayerDataTableSorting, isExactInspection]);
+  }, [activeTab, fields, layerId, sorting, setLayerDataTableSorting, isExactInspection, tableView]);
 
   const [draggedField, setDraggedField] = useState(null);
 
@@ -525,8 +572,10 @@ export default function LayerDataTable() {
     (index, objectType) => {
       const featureId = `${objectType}-${layerId}-${index}`;
       setHighlightedFeature(featureId);
+      // In Rettinger the table is the object browser: a row click asks the workspace to open that object.
+      if (!isExactInspection && gmiEditWorkspaceLayerId === layerId) requestGmiEditObject(layerId, tableTabToScope(objectType), index);
     },
-    [layerId, setHighlightedFeature],
+    [layerId, setHighlightedFeature, isExactInspection, gmiEditWorkspaceLayerId, requestGmiEditObject],
   );
 
   const handleRowHoverStart = useCallback(
@@ -578,11 +627,15 @@ export default function LayerDataTable() {
           }}
         />
       ),
-      dataCell: (info, id) => id === 'S_HYPERLINK'
-        ? <HyperlinkCell value={info.getValue()} searchQuery={normalizedSearchQuery} />
-        : <DataCell value={info.getValue()} searchQuery={normalizedSearchQuery} missingLabel={isContextualInspection && id === inspection.presentation.fieldColumn ? 'Mangler' : '-'} />,
+      dataCell: (info, id) => {
+        const content = id === 'S_HYPERLINK'
+          ? <HyperlinkCell value={info.getValue()} searchQuery={normalizedSearchQuery} />
+          : <DataCell value={info.getValue()} searchQuery={normalizedSearchQuery} missingLabel={isContextualInspection && id === inspection.presentation.fieldColumn ? 'Mangler' : '-'} />;
+        const change = changedByObject?.get(gmiObjectKey(tableTabToScope(activeTab), info.row.original.__index))?.get(id);
+        return change ? <ChangedCell change={change}>{content}</ChangedCell> : content;
+      },
     });
-  }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery]);
+  }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery, changedByObject]);
 
   const table = useReactTable({
     data: searchedItems,
@@ -676,6 +729,25 @@ export default function LayerDataTable() {
           </button>
         </div>
         }
+
+        {gmiEditModesAvailable && (
+          <div className="gmi-edit-table-modes" role="group" aria-label="Visning av GMI-rettinger" data-gmi-table-view={tableView}>
+            {GMI_EDIT_TABLE_VIEW_LABELS.map((mode) => (
+              <button key={mode.key} type="button" aria-pressed={tableView === mode.key} title={mode.description}
+                className="gmi-focus-ring" onClick={() => setGmiEditTableView(layerId, mode.key)}>
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {gmiEditModesAvailable && gmiEditTableView !== GMI_EDIT_TABLE_VIEWS.ORIGINAL && proposedView && !proposedView.ok && (
+          <span className="text-[10px] text-red-700" role="status">{gmiEditMessage(proposedView.code)} Viser originalen.</span>
+        )}
+        {tableView !== GMI_EDIT_TABLE_VIEWS.ORIGINAL && (
+          <span className="gmi-edit-table-banner" role="status">
+            {tableView === GMI_EDIT_TABLE_VIEWS.PROPOSED ? 'Foreslått kopi – originalen er uendret' : `Kun endrede · ${proposedView.changed.byKey.size} felt`}
+          </span>
+        )}
 
         {isContextualInspection && inspection.focusIndices.length !== inspection.scopeIndices.length && (
           <div className="flex items-center rounded border border-gmi-border-strong bg-gmi-surface p-0.5 text-[10px]" aria-label="Vis objektutvalg">
