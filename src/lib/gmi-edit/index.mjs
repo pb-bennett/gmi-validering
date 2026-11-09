@@ -77,3 +77,16 @@ export {
   isGmiFieldExport,
   recordGmiExportDownload,
 } from './exportGmi.mjs';
+
+// M7 (source-preserving S_HYPERLINK reference removal composer): see
+// docs/agent-reports/*-gmi-edit-m7-hyperlink-removal.md.
+export {
+  GMI_HYPERLINK_FIELD,
+  GMI_HYPERLINK_ORDINAL_POLICIES,
+  GMI_HYPERLINK_REMOVAL_STATUS,
+  applyGmiHyperlinkRemoval,
+  gmiHyperlinkSelectionKey,
+  isGmiHyperlinkRemovalPlan,
+  planGmiHyperlinkRemoval,
+  verifyGmiHyperlinkRemoval,
+} from './hyperlinkRemoval.mjs';
