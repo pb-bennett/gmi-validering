@@ -392,7 +392,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                   {geometrySummary.objectCount} {activeGeometry === 'point' ? 'punkter' : 'ledninger'} · {geometrySummary.failCount} feil · {(geometrySummary.checkCount || 0) + geometrySummary.indeterminateCount} sjekk
                 </div>
                 {geometryView.schemaFindings.some((finding) => finding.reasonCode === 'SCHEMA_TEMA_SFCODE_COEXISTENCE') && (
-                  <div role="status" className="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-900">
+                  <div role="status" data-validation-tone="warning" className="gmi-validation-panel mb-2 rounded border px-2 py-1.5">
                     <strong>Sjekk:</strong> Både Tema og S_FCODE finnes i skjemaet. Feltene beskriver samme identitet, og sameksistensen bør kontrolleres.
                   </div>
                 )}

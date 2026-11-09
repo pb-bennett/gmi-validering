@@ -13,8 +13,10 @@ import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import useGmiObjectValidation from './useGmiObjectValidation';
 
 function FindingIcon({ finding }) {
-  return <PhotoIconButton icon={finding.transition === 'resolved' ? CheckCircleIcon : WarningCircleIcon} size={14}
+  const tone = finding.transition === 'resolved' ? 'success' : finding.state === 'FAIL' ? 'error' : 'warning';
+  return <PhotoIconButton icon={finding.transition === 'resolved' ? CheckCircleIcon : WarningCircleIcon} size={18}
     label={finding.tooltip} tooltip={finding.tooltip} className="gmi-edit-finding"
+    tooltipTone={tone} data-validation-tone={tone}
     data-gmi-finding={finding.ruleId} data-severity={finding.state} data-transition={finding.transition} />;
 }
 

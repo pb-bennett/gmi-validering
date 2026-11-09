@@ -2,19 +2,19 @@
 
 import { ArrowSquareOutIcon, CaretDownIcon } from '@phosphor-icons/react';
 
-const STATUS_DOT_CLASSES = Object.freeze({
-  red: 'bg-red-600',
-  amber: 'bg-amber-500',
-  green: 'bg-green-600',
+const STATUS_TONES = Object.freeze({
+  red: 'error',
+  amber: 'warning',
+  green: 'success',
 });
 
 function getRowId(presentation) {
   return `validation-v2-rule-${presentation.expansionKey.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 }
 
-function SummaryCount({ label, value, className = 'text-gmi-text' }) {
+function SummaryCount({ label, value, tone }) {
   return (
-    <div className={`inline-flex items-baseline gap-0.5 whitespace-nowrap ${className}`}>
+    <div data-validation-tone={tone} className={`inline-flex items-baseline gap-0.5 whitespace-nowrap ${tone ? 'gmi-validation-accent' : 'text-gmi-text'}`}>
       <dt className="text-[10px] font-medium">{label}</dt>
       <dd className="text-[11px] font-bold">{value}</dd>
     </div>
@@ -49,7 +49,8 @@ export default function ValidationV2RuleList({
                 role="img"
                 aria-label={`Status: ${presentation.status.label}`}
                 title={`Status: ${presentation.status.label}`}
-                className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT_CLASSES[presentation.status.visualToken] || STATUS_DOT_CLASSES.amber}`}
+                data-validation-tone={STATUS_TONES[presentation.status.visualToken] || 'warning'}
+                className="gmi-validation-dot h-2.5 w-2.5 shrink-0 rounded-full"
               />
               <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gmi-navy">
                 {presentation.displayName}
@@ -68,11 +69,11 @@ export default function ValidationV2RuleList({
                 <div className="mb-1 flex flex-nowrap items-center gap-1">
                   <dl className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-2">
                     <SummaryCount label="Objekter" value={counts.evaluatedCount} />
-                    {counts.failCount > 0 && <SummaryCount label="Feil" value={counts.failCount} className="text-red-700" />}
+                    {counts.failCount > 0 && <SummaryCount label="Feil" value={counts.failCount} tone="error" />}
                     {(counts.checkCount || 0) + counts.indeterminateCount > 0 && (
-                      <SummaryCount label="Sjekk" value={(counts.checkCount || 0) + counts.indeterminateCount} className="text-amber-700" />
+                      <SummaryCount label="Sjekk" value={(counts.checkCount || 0) + counts.indeterminateCount} tone="warning" />
                     )}
-                    {counts.passCount > 0 && <SummaryCount label="Pass" value={counts.passCount} className="text-green-700" />}
+                    {counts.passCount > 0 && <SummaryCount label="Pass" value={counts.passCount} tone="success" />}
                   </dl>
                   <button
                     type="button"

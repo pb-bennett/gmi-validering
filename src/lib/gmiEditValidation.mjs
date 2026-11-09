@@ -72,6 +72,6 @@ export function gmiEditObjectDiagnostics({ view, scope, sourceIndex, rows, draft
       // A cross-object outcome is unknown locally, never a resolved issue.
       .filter((finding) => !result.deferred.some((outcome) => outcome.ruleId === finding.ruleId))
       .map((finding) => ({ ...finding, transition: 'resolved' })),
-  ].map((finding) => ({ ...finding, tooltip: `${finding.state === 'FAIL' ? 'FEIL' : 'SJEKK'} · ${TRANSITION[finding.transition]}\n${[...new Set([finding.description, finding.reason])].join('\n')}\n${finding.ruleId}` }));
+  ].map((finding) => ({ ...finding, tooltip: `${finding.transition === 'resolved' ? 'OK' : finding.state === 'FAIL' ? 'FEIL' : 'SJEKK'} · ${TRANSITION[finding.transition]}\n${finding.transition === 'resolved' ? 'Opprinnelig funn: ' : ''}${finding.reason}` }));
   return { findings, deferred: result.deferred.length > 0 };
 }

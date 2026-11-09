@@ -148,11 +148,11 @@ function RuleSection({ title, children }) {
 
 function StatusGuidance({ rows }) {
   const styles = {
-    Feil: 'border-red-200 bg-red-50/60 text-red-800',
-    Sjekk: 'border-orange-200 bg-orange-50/60 text-orange-800',
-    Pass: 'border-green-200 bg-green-50/60 text-green-800',
+    Feil: 'error',
+    Sjekk: 'warning',
+    Pass: 'success',
   };
-  return <div className="space-y-1.5">{rows.map((row) => <div key={row.status} className={`rounded-lg border px-2.5 py-2 text-xs ${styles[row.status]}`}><span className="font-semibold">{row.status}</span><span className="ml-2 text-gmi-text">{row.text}</span></div>)}</div>;
+  return <div className="space-y-1.5">{rows.map((row) => <div key={row.status} data-validation-tone={styles[row.status]} className="gmi-validation-panel rounded-lg border px-2.5 py-2 text-xs"><span className="font-semibold">{row.status}</span><span className="ml-2 text-gmi-text">{row.text}</span></div>)}</div>;
 }
 
 const VALUE_COLUMN_LABELS = {
@@ -280,9 +280,9 @@ function DiagnosticBlock({ diagnostic, onOpenObjects }) {
   const isFail = diagnostic.state === ValidationV2DiagnosticState.FAIL;
   const presentation = getValidationV2DiagnosticPresentation(diagnostic);
   return (
-    <section className={`rounded-lg border px-2 py-1.5 ${isFail ? 'border-red-200 bg-red-50/60' : 'border-amber-200 bg-amber-50/60'}`}>
+    <section data-validation-tone={isFail ? 'error' : 'warning'} className="gmi-validation-panel rounded-lg border px-2 py-1.5">
       <div className="flex items-start justify-between gap-2">
-      <div className={`text-[10px] font-bold uppercase tracking-wide ${isFail ? 'text-red-700' : 'text-amber-700'}`}>
+      <div className="gmi-validation-accent text-[10px] font-bold uppercase tracking-wide">
         {isFail ? 'Feil' : 'Sjekk'} · {diagnostic.count} {diagnostic.count === 1 ? 'objekt' : 'objekter'}
       </div>
       {diagnostic.hasCompleteExactObjectRefs && onOpenObjects && (

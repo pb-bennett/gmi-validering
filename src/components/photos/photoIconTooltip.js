@@ -29,6 +29,8 @@ export function attachPhotoIconTooltip(element) {
   };
   const decorate = () => {
     tip.textContent = options.text;
+    if (['error', 'warning', 'success', 'info'].includes(options.tone)) tip.dataset.validationTone = options.tone;
+    else delete tip.dataset.validationTone;
     // Same text as the accessible name: hide it from AT so it is not announced twice.
     if (options.text === options.label) {
       tip.removeAttribute('role'); tip.setAttribute('aria-hidden', 'true'); describedBy(false);
@@ -84,7 +86,7 @@ export function attachPhotoIconTooltip(element) {
 
   return {
     update(next) {
-      options = { text: next.text || '', label: next.label || '' };
+      options = { text: next.text || '', label: next.label || '', tone: next.tone };
       if (!tip?.isConnected) return;
       if (!options.text) hide(); else { decorate(); place(); }
     },

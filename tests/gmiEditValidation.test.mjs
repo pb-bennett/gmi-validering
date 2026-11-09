@@ -67,10 +67,13 @@ test('existing FEIL/SJEKK, field association and tooltip wording; introduced and
   const conflict = draft.find((finding) => finding.ruleId === exclusive);
   assert.deepEqual(conflict.fields, ['SDR', 'Ringstivhet']);
   assert.equal(conflict.transition, 'introduced');
-  assert.match(conflict.tooltip, /FEIL · Nytt i forslaget[\s\S]*Både SDR og Ringstivhet[\s\S]*innmaling.line.sdr-ring-stiffness.exclusive/);
+  assert.match(conflict.tooltip, /FEIL · Nytt i forslaget[\s\S]*Både SDR og Ringstivhet/);
+  assert.equal(conflict.ruleId, exclusive, 'technical identity is retained internally');
+  assert.doesNotMatch(conflict.tooltip, /innmaling\./);
   assert(draft.some((finding) => finding.fields.includes('Dimensjon') && finding.transition === 'resolved'));
   assert(!inspect(session, 0, { SDR: '11.0', Ringstivhet: '' }).findings.some((finding) => finding.ruleId === exclusive));
   assert.equal(inspect(session, 1, { Ringstivhet: '' }).findings.find((finding) => finding.ruleId === exclusive).transition, 'resolved');
+  assert.match(inspect(session, 1, { Ringstivhet: '' }).findings.find((finding) => finding.ruleId === exclusive).tooltip, /^OK · Løst i forslaget\nOpprinnelig funn:/);
 });
 
 test('previously staged Material is used; feedback matches M1 verified proposed reparse and source stays untouched', () => {

@@ -438,6 +438,18 @@ export function renderValidationV2Diagnostic(diagnostic) {
     ? 'bilder'
     : diagnostic.field.displayName;
   const count = diagnostic.count;
+  if (diagnostic.field.canonicalFieldId === 'captureDate') {
+    // Reason codes already own date comparisons and reference-date semantics.
+    // Presentation must never infer a cause from the supplied date itself.
+    const single = count === 1 && diagnostic.values?.length === 1 && !diagnostic.additionalValueCount;
+    const subject = single ? `Datafangstdato er ${diagnostic.values[0].supplied}, som`
+      : `${objectCountText(count)} har Datafangstdato som`;
+    const reason = diagnostic.reasonCodes || [];
+    if (reason.includes(RuleReasonCode.DATE_FUTURE)) return `${subject} ligger i fremtiden. Kontroller datoen.`;
+    if (reason.includes(RuleReasonCode.DATE_BEFORE_INSTALLATION)) return `${subject} ligger før Anleggsår. Kontroller datoen og anleggsåret.`;
+    if (reason.includes(RuleReasonCode.DATE_OLDER_THAN_FIVE_YEARS)) return `${subject} er mer enn fem år gammel. Kontroller om datoen er riktig.`;
+    if (reason.includes(RuleReasonCode.DATE_FORMAT_INVALID)) return 'Datafangstdato er ikke en gyldig dato. Bruk DD.MM.ÅÅÅÅ, ÅÅÅÅMMDD eller ÅÅÅÅ-MM-DD.';
+  }
   const values = displayValues(diagnostic);
   const suffix = values ? `: ${values}` : '';
   switch (diagnostic.wordingKey) {

@@ -1,5 +1,7 @@
 # GMI Validator M5A — Validator rules inside Rettinger
 
+Follow-up: [M5A validation polish, 2026-11-09](20261109-145553-gmi-edit-m5a-validation-polish.md) introduces shared severity colours, larger icons, softer tooltips without rule IDs, and clearer date explanations. Its findings supersede the tooltip presentation described below; validation behaviour is unchanged.
+
 Date: 2026-11-09. Repository `C:\GitHub\gmi-validering-test`, branch `feature/photo-workspace`, starting commit `7eba472`. The initial working tree was clean. No commit or push.
 
 ## Outcome
