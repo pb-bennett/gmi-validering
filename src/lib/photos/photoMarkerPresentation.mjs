@@ -67,7 +67,8 @@ const round = (value) => Math.round(value * 100) / 100;
 
 // Rotation happens inside the SVG around the geographic anchor; Leaflet owns the outer transform, and both marker modes
 // share the anchor, so switching mode never moves the point the arrow turns about. 0° = up = geographic north, clockwise.
-// Unknown direction draws nothing, never an implicit north. The arrow comes first in the marker, so the photo covers its root.
+// Unknown direction draws nothing, never an implicit north. The arrow is drawn in its own pane below every photo
+// (photoDirectionMarkerOptions), so its root is covered by its own photo and no arrow can cover a neighbouring one.
 export function photoDirectionArrow({ degrees = null, staged = false, mode = 'markers', selected = false, sibling = false } = {}) {
   const heading = normalizePhotoDirection(degrees);
   if (heading === null) return '';
@@ -112,27 +113,26 @@ const stackBadge = (count) => count > 1 ? `<span class="photo-marker-stack" aria
 const modifierClasses = ({ selected, sibling, staged, editing }) => [selected && 'photo-marker-selected', sibling && 'photo-marker-sibling',
   staged && 'photo-marker-staged', editing && 'photo-marker-editing'].filter(Boolean).join(' ');
 
-export function cameraMarkerOptions({ sourceKind = 'unknown', selected = false, degrees = null, staged = false, directionStaged = false,
-  sibling = false, stackCount = 1, editing = false } = {}) {
+// Photo icons carry no arrow: direction is drawn by photoDirectionMarkerOptions in the lower pane, so a direction
+// change never replaces a photo icon.
+export function cameraMarkerOptions({ sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false } = {}) {
   const modifiers = modifierClasses({ selected, sibling: sibling && !selected, staged, editing });
   return { className: `photo-camera-marker${selected ? ' photo-camera-marker-selected' : ''}${modifiers ? ` ${modifiers}` : ''}`,
     iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -9],
-    html: photoDirectionArrow({ degrees, staged: directionStaged, mode: 'markers', selected, sibling: sibling && !selected })
-      + photoCameraGlyph({ sourceKind, size: selected ? 22 : 16, selected, sibling: sibling && !selected }) + stagedDot(staged) + stackBadge(stackCount) };
+    html: photoCameraGlyph({ sourceKind, size: selected ? 22 : 16, selected, sibling: sibling && !selected }) + stagedDot(staged) + stackBadge(stackCount) };
 }
 
 const thumbnailFallback = '<svg class="photo-thumb-fallback" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="#e2e8f0" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="#475569" stroke-width="1.5"/></svg>';
 
-export function thumbnailMarkerOptions({ sourceKind = 'unknown', selected = false, degrees = null, staged = false, directionStaged = false,
-  sibling = false, stackCount = 1, editing = false, thumbnailUrl = null } = {}) {
+export function thumbnailMarkerOptions({ sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false,
+  thumbnailUrl = null } = {}) {
   const source = photoPositionSourcePresentation(sourceKind);
   const url = safeThumbnailUrl(thumbnailUrl);
   const image = url ? `<img src="${escapeHtml(url)}" alt="" decoding="async" draggable="false">` : thumbnailFallback;
   const modifiers = modifierClasses({ selected, sibling: sibling && !selected, staged, editing });
   return { className: `photo-thumb-marker${modifiers ? ` ${modifiers}` : ''}`,
     iconSize: [PHOTO_THUMBNAIL_SIZE, PHOTO_THUMBNAIL_SIZE], iconAnchor: [PHOTO_THUMBNAIL_SIZE / 2, PHOTO_THUMBNAIL_SIZE / 2], popupAnchor: [0, -24],
-    html: photoDirectionArrow({ degrees, staged: directionStaged, mode: 'thumbnails', selected, sibling: sibling && !selected })
-      + `<div class="photo-thumb" data-position-source="${source.kind}" data-thumbnail="${url ? 'ready' : 'fallback'}" style="--photo-source:${source.color}">${image}</div>`
+    html: `<div class="photo-thumb" data-position-source="${source.kind}" data-thumbnail="${url ? 'ready' : 'fallback'}" style="--photo-source:${source.color}">${image}</div>`
       + `<span class="photo-source-dot photo-thumb-source" role="img" aria-label="${photoPositionSourceDescription(source.kind)}" style="--photo-source:${source.color}"></span>`
       + (editing && selected ? '<span class="photo-thumb-anchor" aria-hidden="true"></span>' : '') + stagedDot(staged) + stackBadge(stackCount) };
 }
@@ -142,11 +142,28 @@ export function photoMarkerOptions(mode, options) {
 }
 
 // Stable cache key: identical presentation reuses one L.divIcon instance (and DOM-free comparisons).
-export function photoMarkerIconKey(mode, { sourceKind = 'unknown', selected = false, degrees = null, staged = false, directionStaged = false,
-  sibling = false, stackCount = 1, editing = false, thumbnailUrl = null } = {}) {
-  return JSON.stringify([mode === 'thumbnails' ? 't' : 'm', photoPositionSourcePresentation(sourceKind).kind, Boolean(selected), normalizePhotoDirection(degrees),
-    Boolean(staged), Boolean(directionStaged), Boolean(sibling && !selected), stackCount > 1 ? Math.min(stackCount, 99) : 1, Boolean(editing),
+export function photoMarkerIconKey(mode, { sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false,
+  thumbnailUrl = null } = {}) {
+  return JSON.stringify([mode === 'thumbnails' ? 't' : 'm', photoPositionSourcePresentation(sourceKind).kind, Boolean(selected),
+    Boolean(staged), Boolean(sibling && !selected), stackCount > 1 ? Math.min(stackCount, 99) : 1, Boolean(editing),
     mode === 'thumbnails' ? safeThumbnailUrl(thumbnailUrl) : null]);
+}
+
+// One non-interactive arrow per placed occurrence, in the direction pane at the photo's own lat/lng. The icon has no
+// size and its SVG is centred on the anchor (CSS), exactly where the photo icon is centred, so both turn about one point.
+// The geometry still follows the photo it emerges from: mode, selection ring and sibling outline. Unknown direction: null.
+export function photoDirectionMarkerOptions(mode, { degrees = null, directionStaged = false, selected = false, sibling = false, editing = false } = {}) {
+  const displayMode = mode === 'thumbnails' ? 'thumbnails' : 'markers';
+  const html = photoDirectionArrow({ degrees, staged: directionStaged, mode: displayMode, selected, sibling: sibling && !selected });
+  if (!html) return null;
+  return { className: `photo-direction-marker photo-direction-marker-${displayMode}${selected ? ' photo-direction-marker-selected' : ''}${editing ? ' photo-direction-marker-editing' : ''}`,
+    iconSize: [0, 0], iconAnchor: [0, 0], html };
+}
+
+export function photoDirectionIconKey(mode, { degrees = null, directionStaged = false, selected = false, sibling = false, editing = false } = {}) {
+  const heading = normalizePhotoDirection(degrees);
+  if (heading === null) return null;
+  return JSON.stringify([mode === 'thumbnails' ? 't' : 'm', heading, Boolean(directionStaged), Boolean(selected), Boolean(sibling && !selected), Boolean(editing)]);
 }
 
 export const photoThumbnailsVisible = (mode, zoom) => mode === 'thumbnails' && Number.isFinite(zoom) && zoom >= PHOTO_THUMBNAIL_MIN_ZOOM;

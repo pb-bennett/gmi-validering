@@ -9,9 +9,9 @@ import { photoPositionDistance } from '@/lib/photos/photoPositioning.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { formatPhotoMoveDistance } from '@/lib/photos/photoPresentation.mjs';
 import { PHOTO_PLACEMENT_PANE, PHOTO_PLACEMENT_Z_INDEX } from '@/lib/photos/photoMapPanes.mjs';
-import { photoMarkerIcon } from './photoMarkerIcons';
+import { photoDirectionIcon, photoMarkerIcon } from './photoMarkerIcons';
 import { attachPhotoIconTooltip } from './photoIconTooltip';
-import { photoMarkerLabel } from './PhotoMarkersLayer';
+import { PhotoDirectionMarker, photoMarkerLabel } from './PhotoMarkersLayer';
 import './photoEdit.css';
 
 const KNOB_DISTANCE = 56;
@@ -218,6 +218,8 @@ function RotationKnob({ photoId, filename, lat, lng, degrees, innerRadius, onSta
 
 // The actual selected marker is the move handle. Its icon/position props are frozen from dragstart to
 // dragend so React can never call setIcon/setLatLng (which would abort Leaflet's drag) mid-gesture.
+// Its arrow is a separate marker in the direction pane, below every photo like all other arrows. It moves in the
+// same drag lifecycle (drag, Escape, and the reset after every gesture), so it never stays behind at the old spot.
 // A plain click (no drag) on a stacked selection selects the next occurrence at the same coordinates,
 // exactly like stack cycling outside Edit mode; it never moves anything.
 function EditableMarker({ photo, mode, stackIds = [], onSelectPhoto, onStage, onAnnounce, knobApi, connectorRef }) {
@@ -225,9 +227,11 @@ function EditableMarker({ photo, mode, stackIds = [], onSelectPhoto, onStage, on
   const ref = useRef(null);
   const { latitude: lat, longitude: lng } = photo.spatial.current.position;
   const savedPosition = photo.saved ? photo.saved.current?.position : photo.spatial.current.position;
-  const icon = photoMarkerIcon(mode, { sourceKind: photoPositionSourceKind(photo), selected: true, degrees: photo.direction?.current?.degrees ?? null,
-    staged: Boolean(photo.staged), directionStaged: Boolean(photo.staged?.direction), editing: true, thumbnailUrl: photo.preview?.thumbnailUrl || null,
-    stackCount: stackIds.length });
+  const icon = photoMarkerIcon(mode, { sourceKind: photoPositionSourceKind(photo), selected: true,
+    staged: Boolean(photo.staged), editing: true, thumbnailUrl: photo.preview?.thumbnailUrl || null, stackCount: stackIds.length });
+  const directionIcon = photoDirectionIcon(mode, { degrees: photo.direction?.current?.degrees ?? null, directionStaged: Boolean(photo.staged?.direction),
+    selected: true, editing: true });
+  const arrowRef = useRef(null);
   const position = useMemo(() => [lat, lng], [lat, lng]);
   const [frozen, setFrozen] = useState(null);
   const latest = useRef(null);
@@ -244,8 +248,8 @@ function EditableMarker({ photo, mode, stackIds = [], onSelectPhoto, onStage, on
     element.setAttribute('aria-label', `${label}. Dra eller bruk piltastene for å flytte.${stack}`);
     element.removeAttribute('title');
   }, [icon, label, mode, photo.id, stackIds.length]);
-  // A gesture that ended without a staged change must leave the marker where React says it is.
-  useEffect(() => { if (!frozen) ref.current?.setLatLng(position); }, [frozen, position]);
+  // A gesture that ended without a staged change must leave the marker (and its arrow) where React says it is.
+  useEffect(() => { if (!frozen) { ref.current?.setLatLng(position); arrowRef.current?.setLatLng(position); } }, [frozen, position]);
   useEffect(() => {
     const active = gesture;
     return () => active.current?.finish(active.current.start);
@@ -265,6 +269,7 @@ function EditableMarker({ photo, mode, stackIds = [], onSelectPhoto, onStage, on
         keyEvent.preventDefault(); keyEvent.stopImmediatePropagation();
         // disable() detaches dragend before ending the drag, so restoring here is the whole cancel.
         marker.dragging.disable(); marker.setLatLng(start); marker.dragging.enable();
+        arrowRef.current?.setLatLng(start);
         const saved = latest.current.savedPosition;
         if (saved) connectorRef.current?.setLatLngs([[saved.latitude, saved.longitude], start]);
         finish(start);
@@ -279,6 +284,7 @@ function EditableMarker({ photo, mode, stackIds = [], onSelectPhoto, onStage, on
       const saved = latest.current.savedPosition;
       const distance = saved ? photoPositionDistance(saved, positionFrom(event.latlng)) : null;
       knobApi.current?.follow(event.latlng, distance === null ? '' : `Flyttes ${formatPhotoMoveDistance(distance)}`);
+      arrowRef.current?.setLatLng(event.latlng);
       if (saved) connectorRef.current?.setLatLngs([[saved.latitude, saved.longitude], event.latlng]);
     },
     dragend: (event) => {
@@ -308,8 +314,12 @@ function EditableMarker({ photo, mode, stackIds = [], onSelectPhoto, onStage, on
       stage(photoId, 'position', positionFrom(map.unproject(pixel.add(L.point(direction[0] * step, direction[1] * step)))), `${photoId}:position:keyboard`);
     },
   }), [map, knobApi, connectorRef]);
-  return <Marker ref={ref} pane={PHOTO_PLACEMENT_PANE} position={frozen?.position || position} icon={frozen?.icon || icon}
-    draggable keyboard zIndexOffset={1500} eventHandlers={handlers} />;
+  return <>
+    {directionIcon && <PhotoDirectionMarker markerRef={arrowRef} photoId={photo.id} lat={(frozen?.position || position)[0]} lng={(frozen?.position || position)[1]}
+      mode={mode} icon={directionIcon} zIndexOffset={1500} editing />}
+    <Marker ref={ref} pane={PHOTO_PLACEMENT_PANE} position={frozen?.position || position} icon={frozen?.icon || icon}
+      draggable keyboard zIndexOffset={1500} eventHandlers={handlers} />
+  </>;
 }
 
 export default function PhotoEditLayer({ photo, displayMode, connectors = [], stackIds = [], onSelectPhoto, clickMove = false, onClickMoveEnd,

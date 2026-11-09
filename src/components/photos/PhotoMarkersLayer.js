@@ -7,9 +7,9 @@ import PhotoMapPopup from './PhotoMapPopup';
 import { photoPositionSourceDescription, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
 import { gmiObjectLabel } from '@/lib/photos/gmiPhotoSource.mjs';
-import { PHOTO_MARKER_PANE, PHOTO_MARKER_Z_INDEX } from '@/lib/photos/photoMapPanes.mjs';
+import { PHOTO_DIRECTION_PANE, PHOTO_DIRECTION_Z_INDEX, PHOTO_MARKER_PANE, PHOTO_MARKER_Z_INDEX } from '@/lib/photos/photoMapPanes.mjs';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
-import { photoMarkerIcon } from './photoMarkerIcons';
+import { photoDirectionIcon, photoMarkerIcon } from './photoMarkerIcons';
 
 const PREVIEW_DELAY_MS = 250;
 const PREVIEW_SIZE = 220;
@@ -77,15 +77,18 @@ function markerModels(items, workspace, thumbnails) {
     const top = members && stackTop.get(stackKey);
     const selected = inWorkspace && photo.id === workspace.photoId;
     const options = {
-      sourceKind: photoPositionSourceKind(photo), selected, degrees: photo.direction?.current?.degrees ?? null,
-      staged: Boolean(photo.staged), directionStaged: Boolean(photo.staged?.direction),
+      sourceKind: photoPositionSourceKind(photo), selected,
+      staged: Boolean(photo.staged),
       sibling: inWorkspace && !selected && Boolean(workspace.activeAssetId) && photo.assetId === workspace.activeAssetId,
       stackCount: top === photo ? members.length : 1, editing: false,
       thumbnailUrl: photo.preview?.thumbnailUrl || null,
     };
     // Workspace: miniatures for the workspace layer only. Main map: for every visible FOTO layer.
     const mode = thumbnails && (!workspace || inWorkspace) ? 'thumbnails' : 'markers';
-    return [{ markerKey: feature.id, layerId, photoId: photo.id, lat, lng, mode, icon: photoMarkerIcon(mode, options),
+    // The arrow follows the same occurrence, mode and selection as its photo, from this same model.
+    const directionIcon = photoDirectionIcon(mode, { degrees: photo.direction?.current?.degrees ?? null, directionStaged: Boolean(photo.staged?.direction),
+      selected, sibling: options.sibling });
+    return [{ markerKey: feature.id, layerId, photoId: photo.id, lat, lng, mode, icon: photoMarkerIcon(mode, options), directionIcon,
       zIndexOffset: selected ? 1000 : photo.staged ? 500 : top === photo ? 100 : 0,
       label: photoMarkerLabel(photo, top === photo ? members.length : 1), inWorkspace,
       // Edit mode: other FOTO layers are context only, so no popup can switch layers by accident.
@@ -98,6 +101,24 @@ function markerModels(items, workspace, thumbnails) {
       popupStack: !inWorkspace && !workspace?.editing && top === photo ? members : null }];
   });
 }
+
+// Non-interactive and never focusable: hit testing, labels and previews stay on the photo marker above it. Its own
+// data-direction-* attributes keep every photo-marker selector ([data-photo-id], [data-edit-target]) off the arrows.
+export const PhotoDirectionMarker = memo(function PhotoDirectionMarker({ layerId = null, photoId, lat, lng, mode, icon, zIndexOffset = 0, editing = false, markerRef }) {
+  const ownRef = useRef(null);
+  const ref = markerRef || ownRef;
+  const position = useMemo(() => [lat, lng], [lat, lng]);
+  useEffect(() => {
+    const element = ref.current?.getElement();
+    if (!element) return;
+    element.dataset.directionPhotoId = photoId; element.dataset.directionMode = mode;
+    if (layerId) element.dataset.directionLayerId = layerId;
+    if (editing) element.dataset.directionEditTarget = 'true';
+    element.setAttribute('aria-hidden', 'true');
+  }, [ref, icon, layerId, photoId, mode, editing]);
+  return <Marker ref={ref} position={position} pane={PHOTO_DIRECTION_PANE} icon={icon} zIndexOffset={zIndexOffset}
+    interactive={false} keyboard={false} />;
+});
 
 const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat, lng, mode, icon, zIndexOffset, label, inWorkspace,
   interactive, stackIds, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, popupPhoto, popupStack, popupWidth, popupHeight, actions }) {
@@ -216,10 +237,18 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
     };
   });
 
+  // Every arrow is in the lower pane, below every photo in any FOTO layer, including the edit target's arrow
+  // (PhotoEditLayer adds it to this pane). One arrow per occurrence; none for unknown direction or a hidden photo.
   return (
-    <Pane name={PHOTO_MARKER_PANE} style={{ zIndex: PHOTO_MARKER_Z_INDEX }}>
-      {models.map((model) => <PhotoMarker key={`${model.markerKey}:${model.interactive ? 'i' : 'n'}`} {...model}
-        popupWidth={Math.min(340, Math.max(160, mapSize.x - 64))} popupHeight={Math.max(160, mapSize.y - 80)} actions={actions} />)}
-    </Pane>
+    <>
+      <Pane name={PHOTO_DIRECTION_PANE} style={{ zIndex: PHOTO_DIRECTION_Z_INDEX, pointerEvents: 'none' }}>
+        {models.map((model) => model.directionIcon && <PhotoDirectionMarker key={model.markerKey} layerId={model.layerId} photoId={model.photoId}
+          lat={model.lat} lng={model.lng} mode={model.mode} icon={model.directionIcon} zIndexOffset={model.zIndexOffset} />)}
+      </Pane>
+      <Pane name={PHOTO_MARKER_PANE} style={{ zIndex: PHOTO_MARKER_Z_INDEX }}>
+        {models.map(({ directionIcon, ...model }) => <PhotoMarker key={`${model.markerKey}:${model.interactive ? 'i' : 'n'}`} {...model}
+          popupWidth={Math.min(340, Math.max(160, mapSize.x - 64))} popupHeight={Math.max(160, mapSize.y - 80)} actions={actions} />)}
+      </Pane>
+    </>
   );
 }

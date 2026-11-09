@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { PHOTO_DIRECTION_COLOR, PHOTO_POSITION_SOURCES, PHOTO_THUMBNAIL_SIZE, photoDirectionArrow, PHOTO_STAGED_DASH, PHOTO_THUMBNAIL_MIN_ZOOM, photoMarkerIconKey, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible, cameraMarkerOptions, thumbnailMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
+import { PHOTO_DIRECTION_COLOR, PHOTO_POSITION_SOURCES, PHOTO_THUMBNAIL_SIZE, photoDirectionArrow, PHOTO_STAGED_DASH, PHOTO_THUMBNAIL_MIN_ZOOM, photoMarkerIconKey, photoDirectionMarkerOptions, photoDirectionIconKey, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible, cameraMarkerOptions, thumbnailMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { acceptPhotoCandidate, acceptManualPhotoPosition, emptySpatial } from '../src/lib/photos/photoSpatial.mjs';
 import { buildPhotoMapFeatures } from '../src/lib/photos/photoMapFeatures.mjs';
 
@@ -16,6 +16,7 @@ for (const source of PHOTO_POSITION_SOURCES) test(`accepted ${source.kind}: cent
   assert.strictEqual(photoPositionSourcePresentation(photoPositionSourceKind(occurrence)), source);
   for (const selected of [false, true]) for (const staged of [false, true]) {
     const options = cameraMarkerOptions({ sourceKind: source.kind, selected, degrees: 42, directionStaged: staged, staged });
+    const arrow = photoDirectionMarkerOptions('markers', { selected, degrees: 42, directionStaged: staged });
     assert(options.html.includes(`fill="${source.color}"`));
     assert(options.html.includes(`data-position-source="${source.kind}"`));
     assert.equal(options.html.includes('r="14"'), selected, 'selection has its own outlined ring');
@@ -23,10 +24,12 @@ for (const source of PHOTO_POSITION_SOURCES) test(`accepted ${source.kind}: cent
     assert.deepEqual(options.iconSize, [30, 30]);
     assert.deepEqual(options.iconAnchor, [15, 15]);
     // Direction is drawn whether selected or not, in navy with a white halo; staged is a dashed shaft.
-    assert(options.html.includes('stroke="white" stroke-width="5"'), 'arrow has independent white casing');
-    assert(options.html.includes(`stroke="${PHOTO_DIRECTION_COLOR}"`));
-    assert.equal(options.html.includes(`stroke-dasharray="${PHOTO_STAGED_DASH}"`), staged);
-    assert.equal(options.html.includes('stroke-linecap="butt"'), staged, 'dashes keep visible gaps');
+    // It is its own marker in the lower pane: the photo icon never carries an arrow.
+    assert(!options.html.includes('photo-direction-indicator'), 'no arrow inside the photo icon');
+    assert(arrow.html.includes('stroke="white" stroke-width="5"'), 'arrow has independent white casing');
+    assert(arrow.html.includes(`stroke="${PHOTO_DIRECTION_COLOR}"`));
+    assert.equal(arrow.html.includes(`stroke-dasharray="${PHOTO_STAGED_DASH}"`), staged);
+    assert.equal(arrow.html.includes('stroke-linecap="butt"'), staged, 'dashes keep visible gaps');
     assert.equal(options.html.includes('photo-marker-staged-dot'), staged);
     assert(!options.html.includes('#a34c00') && !options.html.includes('#075e9a'), 'retired orange/blue arrow colours');
   }
@@ -67,7 +70,8 @@ test('thumbnail icons: 44 px cover crop, provenance border, independent selected
     assert(options.html.includes(`data-position-source="${source.kind}"`));
     assert(options.html.includes('<img src="blob:http://app/thumb-1" alt="" decoding="async" draggable="false">'));
     assert.equal(options.className.includes('photo-marker-selected'), selected, 'selected ring is a modifier, the border stays');
-    assert(options.html.includes('rotate(120 50 50)'), 'arrow drawn outside the thumbnail box');
+    assert(!options.html.includes('photo-direction-indicator'), 'no arrow inside the thumbnail icon');
+    assert(photoDirectionMarkerOptions('thumbnails', { selected, degrees: 120 }).html.includes('rotate(120 50 50)'), 'arrow drawn outside the thumbnail box');
   }
   const fallback = thumbnailMarkerOptions({ sourceKind: 'gmi', thumbnailUrl: null });
   assert(!fallback.html.includes('<img')); assert(fallback.html.includes('photo-thumb-fallback'));
@@ -87,12 +91,25 @@ test('sibling, staged and stack modifiers; identical presentation shares one cac
   assert(!cameraMarkerOptions({ stackCount: 1 }).html.includes('photo-marker-stack'));
   assert(thumbnailMarkerOptions({ stackCount: 120 }).html.includes('>99<'));
   const base = { sourceKind: 'gmi', degrees: 90, selected: false };
-  assert.equal(photoMarkerIconKey('markers', base), photoMarkerIconKey('markers', { ...base, degrees: 450 }));
   assert.equal(photoMarkerIconKey('markers', { ...base, thumbnailUrl: 'blob:a' }), photoMarkerIconKey('markers', { ...base, thumbnailUrl: 'blob:b' }), 'markers ignore thumbnails');
   assert.notEqual(photoMarkerIconKey('thumbnails', { ...base, thumbnailUrl: 'blob:a' }), photoMarkerIconKey('thumbnails', { ...base, thumbnailUrl: 'blob:b' }));
-  for (const change of [{ selected: true }, { degrees: 91 }, { degrees: null }, { staged: true }, { directionStaged: true }, { sibling: true }, { stackCount: 2 }, { sourceKind: 'exif' }, { editing: true }]) {
+  for (const change of [{ selected: true }, { staged: true }, { sibling: true }, { stackCount: 2 }, { sourceKind: 'exif' }, { editing: true }]) {
     assert.notEqual(photoMarkerIconKey('markers', base), photoMarkerIconKey('markers', { ...base, ...change }), JSON.stringify(change));
   }
+  // Direction lives on the arrow marker: turning a photo never replaces its photo icon.
+  for (const change of [{ degrees: 91 }, { degrees: null }, { directionStaged: true }]) {
+    assert.equal(photoMarkerIconKey('markers', base), photoMarkerIconKey('markers', { ...base, ...change }), JSON.stringify(change));
+  }
+  for (const mode of ['markers', 'thumbnails']) {
+    assert.equal(photoDirectionIconKey(mode, base), photoDirectionIconKey(mode, { ...base, degrees: 450 }));
+    assert.equal(photoDirectionIconKey(mode, { ...base, sibling: true, selected: true }), photoDirectionIconKey(mode, { ...base, selected: true }), 'selected wins over sibling');
+    assert.equal(photoDirectionIconKey(mode, { degrees: null }), null, 'unknown direction: no arrow');
+    for (const change of [{ selected: true }, { degrees: 91 }, { directionStaged: true }, { sibling: true }, { editing: true }]) {
+      assert.notEqual(photoDirectionIconKey(mode, base), photoDirectionIconKey(mode, { ...base, ...change }), JSON.stringify(change));
+    }
+    assert.equal(photoDirectionIconKey(mode, { ...base, sourceKind: 'exif', stackCount: 4, thumbnailUrl: 'blob:z' }), photoDirectionIconKey(mode, base), 'provenance, stacks and images do not affect the arrow');
+  }
+  assert.notEqual(photoDirectionIconKey('markers', base), photoDirectionIconKey('thumbnails', base));
 });
 
 test('thumbnail zoom threshold starts at 16 and falls back to markers below it', () => {
@@ -146,34 +163,48 @@ test('thumbnail source badges distinguish all four sources without colour, along
 // Acceptance: the arrow emerged too far from the marker, worst on thumbnails. Its tip now clears the drawn edge by a fixed gap at
 // every heading, so a diagonal reaches past the corner of the square and an axis heading stays close to the side.
 test('direction arrow: starts behind the marker, tip just beyond its edge at any heading, in both modes', () => {
+  const arrowHtml = (mode, options) => photoDirectionMarkerOptions(mode, options).html;
   const tipDistance = (html) => { const [, size] = html.match(/width="(\d+)"/); const tip = Number(html.match(/L(\d+(?:\.\d+)?) (\d+(?:\.\d+)?)L/)[2]); return Number(size) / 2 - tip; };
   const rootDistance = (html) => { const [, size] = html.match(/width="(\d+)"/); return Number(size) / 2 - Number(html.match(/V(\d+(?:\.\d+)?)/)[1]); };
   const half = PHOTO_THUMBNAIL_SIZE / 2;
   for (const [degrees, edge] of [[0, half], [90, half], [180, half], [45, half * Math.SQRT2], [135, half * Math.SQRT2], [300, half / Math.cos(Math.PI / 6)]]) {
-    const html = thumbnailMarkerOptions({ degrees, thumbnailUrl: 'blob:http://app/t' }).html;
+    const html = arrowHtml('thumbnails', { degrees });
     assert(Math.abs(tipDistance(html) - (edge + 10)) < 0.02, `thumbnail ${degrees}°`);
     assert(rootDistance(html) < edge, `thumbnail ${degrees}°: the shaft starts under the photo`);
-    assert(html.indexOf('photo-direction-indicator') < html.indexOf('class="photo-thumb"'), 'drawn first, so the photo covers it');
+    assert.equal(html, photoDirectionArrow({ degrees, mode: 'thumbnails' }), 'the arrow marker draws exactly the accepted arrow');
   }
-  for (const degrees of [0, 45, 90, 225]) {
-    const plain = tipDistance(cameraMarkerOptions({ degrees }).html), selected = tipDistance(cameraMarkerOptions({ degrees, selected: true }).html);
+  for (const degrees of [0, 45, 90, 135, 180, 225]) {
+    const plain = tipDistance(arrowHtml('markers', { degrees })), selected = tipDistance(arrowHtml('markers', { degrees, selected: true }));
     assert(plain > 12 && plain < 18, `camera ${degrees}°: compact, ${plain}`);
     assert(selected > plain, 'clears the selection ring');
-    const html = cameraMarkerOptions({ degrees }).html;
-    assert(html.indexOf('photo-direction-indicator') < html.indexOf('photo-camera-glyph'), 'drawn first, so the camera covers it');
+    assert(Math.abs(selected - (22 * 16 / 24 + 8)) < 0.02, `camera ${degrees}°: 8 px past the selection ring`);
   }
-  assert(tipDistance(thumbnailMarkerOptions({ degrees: 0, selected: true }).html) > tipDistance(thumbnailMarkerOptions({ degrees: 0 }).html), 'clears the selection ring');
-  // The same anchor in both modes: each icon is centred on the point, and the arrow on the icon.
+  assert(tipDistance(arrowHtml('thumbnails', { degrees: 0, selected: true })) > tipDistance(arrowHtml('thumbnails', { degrees: 0 })), 'clears the selection ring');
+  assert(tipDistance(arrowHtml('thumbnails', { degrees: 0, sibling: true })) > tipDistance(arrowHtml('thumbnails', { degrees: 0 })), 'clears the sibling outline');
+  // The same anchor in both modes: each photo icon is centred on the point; the arrow icon has no size and its SVG
+  // is centred on that same point by CSS, so the arrow and its photo turn about one geographic anchor.
   assert.deepEqual(cameraMarkerOptions({ degrees: 30 }).iconAnchor.map((value) => value * 2), cameraMarkerOptions({ degrees: 30 }).iconSize);
   assert.deepEqual(thumbnailMarkerOptions({ degrees: 30 }).iconAnchor.map((value) => value * 2), thumbnailMarkerOptions({ degrees: 30 }).iconSize);
+  for (const mode of ['markers', 'thumbnails']) {
+    const options = photoDirectionMarkerOptions(mode, { degrees: 30, selected: true, editing: true });
+    assert.deepEqual([options.iconSize, options.iconAnchor], [[0, 0], [0, 0]]);
+    assert.equal(options.className, `photo-direction-marker photo-direction-marker-${mode} photo-direction-marker-selected photo-direction-marker-editing`);
+    assert.equal(photoDirectionMarkerOptions(mode, { degrees: null }), null);
+  }
   assert.equal(photoDirectionArrow({ degrees: null }), '');
   assert(photoDirectionArrow({ degrees: 10, staged: true }).includes('stroke-dasharray'));
 });
 
-test('direction arrow: translucent and never takes pointer events', async () => {
+test('direction arrow: translucent, centred on its anchor, never takes pointer events, in a pane below every photo', async () => {
   const css = await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8');
   const rule = css.match(/^\.photo-direction-indicator \{([^}]*)\}/m)[1];
   const opacity = Number(rule.match(/opacity:\s*([.\d]+)/)[1]);
   assert(opacity >= .75 && opacity <= .8);
   assert.match(rule, /pointer-events: none/);
+  assert.match(css, /^\.leaflet-marker-icon\.photo-direction-marker \{[^}]*pointer-events: none;/m);
+  assert.match(css, /^\.photo-direction-marker \.photo-direction-indicator \{[^}]*left: 0; top: 0; transform: translate\(-50%, -50%\);/m);
+  const panes = await import('../src/lib/photos/photoMapPanes.mjs');
+  assert(panes.PHOTO_DIRECTION_Z_INDEX > 600, 'above survey markers');
+  assert(panes.PHOTO_DIRECTION_Z_INDEX < panes.PHOTO_MARKER_Z_INDEX && panes.PHOTO_MARKER_Z_INDEX < panes.PHOTO_PLACEMENT_Z_INDEX, 'below every photo and the edit target');
+  assert.notEqual(panes.PHOTO_DIRECTION_PANE, panes.PHOTO_MARKER_PANE);
 });

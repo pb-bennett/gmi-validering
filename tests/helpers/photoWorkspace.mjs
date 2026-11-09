@@ -4,6 +4,14 @@ import { clickSourceControl } from './photoSourceWorkflow.mjs';
 export const editTarget = 'document.querySelector(".leaflet-photo-placement-pane .leaflet-marker-icon[data-edit-target]")';
 export const editKnob = 'document.querySelector(".photo-edit-knob")';
 export const commandBar = 'document.querySelector(".photo-edit-command-bar")';
+// Direction arrows are their own markers in a pane below every photo. An arrow belongs to the photo marker with the same
+// photo id (and FOTO layer); the edit target's arrow is marked like its marker. Returns the arrow SVG.
+export const DIRECTION_PANE = '.leaflet-photo-directions-pane';
+export const arrowOf = (marker) => `((m) => { if (!m) return null; const pane = document.querySelector('${DIRECTION_PANE}');
+  const own = m.dataset.editTarget ? '[data-direction-edit-target]' : ':not([data-direction-edit-target])[data-direction-photo-id="' + CSS.escape(m.dataset.photoId) + '"]'
+    + (m.dataset.layerId ? '[data-direction-layer-id="' + CSS.escape(m.dataset.layerId) + '"]' : '');
+  return pane?.querySelector('.leaflet-marker-icon.photo-direction-marker' + own + ' .photo-direction-indicator') || null; })(${marker})`;
+export const editArrow = arrowOf(editTarget);
 
 export const openTool = (browser, label) => clickSourceControl(browser, label, 'document');
 export const clickText = (browser, label, scope = 'document') => clickSourceControl(browser, label, scope);

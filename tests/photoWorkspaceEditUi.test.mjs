@@ -5,7 +5,7 @@ import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { exportDialog } from './helpers/photoExportWizard.mjs';
 import { createWorkspaceFixtures, openWorkspace } from './helpers/photoWorkspaceFixtures.mjs';
-import { KEYS, clickText, commandBar, discardEdits, dragSelectedMarker, editKnob, editTarget, elementCentre, enterEditMode, mouseDrag, openTool,
+import { KEYS, arrowOf, clickText, commandBar, discardEdits, dragSelectedMarker, editArrow, editKnob, editTarget, elementCentre, enterEditMode, mouseDrag, openTool,
   pressKey, rotateSelected, saveEdits, selectPhotoRow } from './helpers/photoWorkspace.mjs';
 import { PHOTO_POSITION_SOURCES } from '../src/lib/photos/photoMarkerPresentation.mjs';
 
@@ -43,7 +43,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
     // The inspector's detailed groups start collapsed; a user opens them to read provenance.
     const openInspectorDetails = () => browser.evaluate(`${inspector}.querySelectorAll('details').forEach((e) => { e.open = true; })`);
     const fingerprint = () => browser.evaluate(`JSON.stringify({ rows: Array.from(document.querySelectorAll('.photo-workspace-row')).map((e) => e.getAttribute('aria-label')),
-      markers: Array.from(document.querySelectorAll('.leaflet-marker-icon[data-photo-id]')).map((e) => [e.dataset.photoId, e.dataset.lat, e.dataset.lng, e.querySelector('[data-position-source]')?.dataset.positionSource, e.querySelector('.photo-direction-indicator')?.dataset.degrees || null]).sort() })`);
+      markers: Array.from(document.querySelectorAll('.leaflet-marker-icon[data-photo-id]')).map((e) => [e.dataset.photoId, e.dataset.lat, e.dataset.lng, e.querySelector('[data-position-source]')?.dataset.positionSource, ${arrowOf('e')}?.dataset.degrees || null]).sort() })`);
     try {
       await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: `const imageSrc=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
         Object.defineProperty(HTMLImageElement.prototype,'src',{...imageSrc,set(value){imageSrc.set.call(this,String(value).includes('cache.kartverket.no/')||String(value).includes('geonorge.no/')?${JSON.stringify(tile)}:value);}});` });
@@ -274,7 +274,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert(await browser.evaluate(`Boolean(${editTarget}) && ${editTarget}.dataset.photoId === ${JSON.stringify(ids.IMG_10)}`), 'the actual selected marker is the drag target');
         assert.equal(await browser.evaluate(`document.querySelectorAll('.leaflet-photo-markers-pane [data-photo-id="${ids.IMG_10}"]').length`), 0, 'no duplicate marker');
         assert.equal(await browser.evaluate(`${editKnob}.getAttribute('aria-label')`), 'Retning for IMG_10.png');
-        assert(await browser.evaluate(`!${editKnob}.classList.contains('photo-edit-knob-ghost') && ${editTarget}.querySelector('.photo-direction-indicator')?.dataset.degrees === '0'`), 'a default is drawn as a north heading');
+        assert(await browser.evaluate(`!${editKnob}.classList.contains('photo-edit-knob-ghost') && ${editArrow}?.dataset.degrees === '0'`), 'a default is drawn as a north heading');
       });
 
       await t.test('drag moves only the selected photo, stages at gesture end and shows manual provenance and displacement', async () => {
@@ -306,7 +306,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert(Math.abs(degrees - 135) <= 2, String(degrees));
         assert.equal(await browser.evaluate(`${editKnob}.getAttribute('aria-label')`), 'Retning for IMG_10.png');
         assert.match(await browser.evaluate(`${editKnob}.getAttribute('aria-valuetext')`), /^13\d grader, sørøst$/);
-        assert.equal(await browser.evaluate(`${editTarget}.querySelector('.photo-direction-indicator').dataset.staged`), 'true');
+        assert.equal(await browser.evaluate(`${editArrow}.dataset.staged`), 'true');
         await keyboardFocus(editKnob);
         assert.equal(await tooltipText(), 'Endre retning');
         await pressKey(browser, 'ArrowRight', KEYS.ArrowRight);
@@ -327,7 +327,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await browser.evaluate(`${field}.focus()`);
         await setInput(field, '45');
         await pressKey(browser, 'Enter', KEYS.Enter);
-        await browser.waitFor(`${editTarget}.querySelector('.photo-direction-indicator')?.dataset.degrees === '45'`);
+        await browser.waitFor(`${editArrow}?.dataset.degrees === '45'`);
         assert.equal(await browser.evaluate(editCount()), 2);
         await blur();
         await selectPhotoRow(browser, ids.unplaced);
@@ -447,9 +447,9 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await saveEdits(browser);
         assert.match(await browser.evaluate('document.querySelector(".photo-workspace-toast").innerText'), /Endringer lagret for 2 bilder/);
         await selectPhotoRow(browser, ids.unplaced);
-        const arrows = await browser.evaluate(`[${JSON.stringify(ids.IMG_10)}, ${JSON.stringify(ids.IMG_2)}].map((id) => { const e = document.querySelector('.leaflet-marker-icon[data-photo-id="' + id + '"]');
-          return [e.classList.contains('photo-camera-marker-selected'), e.querySelector('.photo-direction-indicator')?.dataset.degrees, e.querySelector('.photo-direction-indicator')?.dataset.staged,
-            e.querySelector('.photo-direction-indicator path:nth-child(2)')?.getAttribute('stroke')]; })`);
+        const arrows = await browser.evaluate(`[${JSON.stringify(ids.IMG_10)}, ${JSON.stringify(ids.IMG_2)}].map((id) => { const e = document.querySelector('.leaflet-marker-icon[data-photo-id="' + id + '"]'), arrow = ${arrowOf('e')};
+          return [e.classList.contains('photo-camera-marker-selected'), arrow?.dataset.degrees, arrow?.dataset.staged,
+            arrow?.querySelector('path:nth-child(2)')?.getAttribute('stroke')]; })`);
         assert.deepEqual(arrows, [[false, '200', 'false', '#0F172B'], [false, '90', 'false', '#0F172B']]);
         assert.equal(await browser.evaluate(`${marker(ids.IMG_10)}.querySelector('[data-position-source]').dataset.positionSource`), 'manual');
         assert.match(await browser.evaluate(`${row(ids.IMG_10)}.innerText`), /Manuell · 200° S$/m);
@@ -472,7 +472,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length === 2');
         const thumbs = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-thumb-marker')).map((e) => { const box = e.querySelector('.photo-thumb'), style = getComputedStyle(box), image = box.querySelector('img');
           return { id: e.dataset.photoId, size: [Math.round(box.getBoundingClientRect().width), Math.round(box.getBoundingClientRect().height)], border: style.borderTopColor, fit: image ? getComputedStyle(image).objectFit : null,
-            arrow: e.querySelector('.photo-direction-indicator')?.dataset.degrees, selected: e.classList.contains('photo-marker-selected'), shadow: style.boxShadow, title: e.getAttribute('title'), label: e.getAttribute('aria-label') }; })`);
+            arrow: ${arrowOf('e')}?.dataset.degrees, mode: ${arrowOf('e')}?.closest('[data-direction-mode]').dataset.directionMode, selected: e.classList.contains('photo-marker-selected'), shadow: style.boxShadow, title: e.getAttribute('title'), label: e.getAttribute('aria-label') }; })`);
         const colour = (kind) => PHOTO_POSITION_SOURCES.find((source) => source.kind === kind).color;
         const rgb = (hex) => `rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`;
         for (const thumb of thumbs) {
@@ -483,6 +483,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
           assert.match(thumb.label, /^Vis bilde: /);
         }
         assert.deepEqual(thumbs.map((thumb) => thumb.arrow).sort(), ['200', '90']);
+        assert.deepEqual(thumbs.map((thumb) => thumb.mode), ['thumbnails', 'thumbnails'], 'arrows use the thumbnail geometry');
         assert(thumbs.find((thumb) => thumb.id === ids.IMG_10).selected && /rgb\(15, 23, 43\)/.test(thumbs.find((thumb) => thumb.id === ids.IMG_10).shadow), 'navy selection ring outside the border');
         await hover(`document.querySelector('.photo-thumb-marker[data-photo-id="${ids.IMG_2}"]')`);
         await browser.waitFor('document.querySelector(".photo-thumb-preview img")');
@@ -504,7 +505,8 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         for (let i = 0; i < 3; i++) { await browser.evaluate('document.querySelector(".leaflet-control-zoom-out").click()'); await wait(350); }
         await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length === 0 && document.querySelectorAll(".photo-camera-marker[data-photo-id]").length === 2');
         assert.match(await browser.evaluate('document.querySelector(".photo-map-display-card").innerText'), /Miniatyrer vises fra zoom 16/);
-        assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker .photo-direction-indicator").length'), 2, 'arrows remain in the marker fallback');
+        assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll(".photo-camera-marker[data-photo-id]")).filter((e) => ${arrowOf('e')}?.closest('[data-direction-mode=markers]')).length`), 2, 'arrows remain in the marker fallback, with marker geometry');
+        assert.equal(await browser.evaluate('document.querySelectorAll(".leaflet-photo-directions-pane .photo-direction-marker").length'), 2, 'one arrow per photo, none left from thumbnail mode');
         for (let i = 0; i < 3; i++) { await browser.evaluate('document.querySelector(".leaflet-control-zoom-in").click()'); await wait(350); }
         await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length === 2');
       });

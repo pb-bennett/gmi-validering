@@ -7,7 +7,7 @@
 
 /* «Flytt med klikk»: photo markers let the click through to the map, so a crowded spot can be targeted exactly. */
 .photo-edit-click-move .leaflet-photo-markers-pane .leaflet-marker-icon, .photo-edit-click-move .leaflet-photo-placement-pane .leaflet-marker-icon[data-edit-target] { pointer-events: none; }
-.photo-edit-click-move .leaflet-photo-placement-pane .leaflet-marker-icon[data-edit-target] { opacity: .55; }
+.photo-edit-click-move .leaflet-photo-placement-pane .leaflet-marker-icon[data-edit-target], .photo-edit-click-move .leaflet-photo-directions-pane .photo-direction-marker-editing { opacity: .55; }
 
 /* The selected marker/thumbnail itself is the move handle. Its own pane (z 640) keeps it above every other photo,
    GMI geometry (overlay 400, markers 600) and the Gemini reference (380). A transparent ring around the visual
@@ -17,7 +17,8 @@
 .leaflet-photo-placement-pane .leaflet-marker-icon.photo-thumb-marker[data-edit-target]::before { inset: -7px; border-radius: 10px; }
 .leaflet-photo-placement-pane .leaflet-marker-icon[data-edit-target].leaflet-drag-target { cursor: grabbing; }
 .leaflet-photo-placement-pane .leaflet-marker-icon[data-edit-target]:focus-visible { outline: 2px solid var(--gmi-interactive, #007595); outline-offset: 3px; border-radius: 6px; }
-.photo-edit-rotating .leaflet-photo-placement-pane .leaflet-marker-icon[data-edit-target] .photo-direction-indicator { visibility: hidden; }
+/* While the knob is dragged it draws the live heading; the edit target's arrow hides, so only one arrow is ever shown. */
+.photo-edit-rotating .leaflet-photo-directions-pane .photo-direction-marker-editing { visibility: hidden; }
 
 /* Rotation knob: anchored at the photo position, offset in screen pixels along the heading. */
 .leaflet-marker-icon.photo-edit-knob-marker { background: transparent; border: 0; overflow: visible; }

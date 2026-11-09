@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
-import { KEYS, commandBar, discardEdits, dragSelectedMarker, editKnob, editTarget, elementCentre, enterEditMode, pressKey, rotateSelected, saveEdits } from './helpers/photoWorkspace.mjs';
+import { KEYS, arrowOf, commandBar, discardEdits, dragSelectedMarker, editKnob, editTarget, elementCentre, enterEditMode, pressKey, rotateSelected, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 const tempRoot = path.resolve(tmpdir());
@@ -32,7 +32,7 @@ test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, stag
     const position = () => browser.evaluate(fact('Koordinater'));
     const evidence = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('.photo-inspector-raw pre')).map(e=>e.textContent)`);
     const selectedIcon = `(${editTarget} || document.querySelector('.photo-camera-marker-selected'))`;
-    const indicator = `${selectedIcon}?.querySelector('.photo-direction-indicator')`;
+    const indicator = arrowOf(selectedIcon);
     const click = (text, scope = 'document') => clickSourceControl(browser, text, scope);
     const frames = () => browser.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     const settle = async () => { await browser.evaluate('new Promise(resolve=>setTimeout(resolve,400))'); await frames(); };
@@ -186,7 +186,7 @@ test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, stag
       await click('Avbryt', 'document.querySelector(".photo-collection-dialog")');
       assert.equal(await accepted(), '90° Ø');
       await enterEditMode(browser); await number(180); await browser.send('Page.reload');
-      await browser.waitFor('!document.querySelector(".photo-workspace-shell") && !document.querySelector(".photo-direction-indicator")');
+      await browser.waitFor('!document.querySelector(".photo-workspace-shell") && !document.querySelector(".photo-direction-indicator") && !document.querySelector(".photo-direction-marker")');
       console.log(JSON.stringify({ fixture: 'synthetic', photos: files.photos.length,
         checks: 'unknown/ghost, N/Ø/S/V geometry, staged dashed vs accepted solid, discard/save, knob drag/keyboard, numeric, move independence, source independence, occurrence independence, zoom/pan, boundary, reload', screenshots }));
     } catch (error) {

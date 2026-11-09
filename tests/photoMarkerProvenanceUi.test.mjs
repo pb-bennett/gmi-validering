@@ -9,7 +9,7 @@ import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, setPhotoFiles, stagePhotoSource, savePhotoSource, closePhotoSources } from './helpers/photoSourceWorkflow.mjs';
 import { PHOTO_POSITION_SOURCES } from '../src/lib/photos/photoMarkerPresentation.mjs';
-import { KEYS, commandBar, discardEdits, dragSelectedMarker, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
+import { KEYS, arrowOf, commandBar, discardEdits, dragSelectedMarker, editArrow, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, display card lifecycle and rendered layouts',
@@ -113,9 +113,9 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await browser.evaluate(`${commandBar}.querySelector('input[type=number]').focus()`);
         await browser.evaluate(`(() => { const input = ${commandBar}.querySelector('input[type=number]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '45'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
         await pressKey(browser, 'Enter', KEYS.Enter);
-        await browser.waitFor(`${editTarget}?.querySelector('.photo-direction-indicator[data-staged=true]')`);
+        await browser.waitFor(`${editArrow}?.dataset.staged === 'true'`);
         await saveEdits(browser);
-        await browser.waitFor('document.querySelector(".photo-camera-marker-selected .photo-direction-indicator[data-staged=false]")');
+        await browser.waitFor(`${arrowOf('document.querySelector(".photo-camera-marker-selected")')}?.dataset.staged === 'false'`);
         assert.equal(await sourceOfSelected(), 'manual');
       });
       await t.test('both viewport layouts keep the shared-palette display card clear of map controls', async () => {
@@ -175,7 +175,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-thumb").dataset.positionSource'), source.kind);
           assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-thumb-source").getAttribute("aria-label")'), source.kind==='manual'?'Manuelt plassert':`Plassering fra ${source.label}`);
         }
-        assert(await browser.evaluate('Boolean(document.querySelector(".photo-marker-selected .photo-direction-indicator"))'));
+        assert(await browser.evaluate(`Boolean(${arrowOf('document.querySelector(".photo-marker-selected")')})`));
         await screenshot('pass1c-four-source-thumbnails-workspace');
         await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         assert.deepEqual(await badges(), baseline, 'main map reuses exactly the same source dots and borders');

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { acceptManualPhotoDirection, normalizePhotoDirection, photoDirectionCompassWord, photoDirectionLabel, photoDirectionSpokenLabel } from '../src/lib/photos/photoDirection.mjs';
-import { cameraMarkerOptions, thumbnailMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
+import { cameraMarkerOptions, photoDirectionMarkerOptions, thumbnailMarkerOptions } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { planPhotoPositioning, photoPositioningRequests } from '../src/lib/photos/photoPositioning.mjs';
 
 const point = { crs: 'EPSG:4326', longitude: 10.43, latitude: 59.22 };
@@ -190,11 +190,14 @@ test('late metadata/thumbnail completion does not invalidate direction or overwr
 
 test('unknown direction draws no arrow; any known direction draws one in every mode, selected or not', () => {
   for (const selected of [false, true]) {
-    assert(!cameraMarkerOptions({ selected }).html.includes('photo-direction-indicator'));
-    assert(!thumbnailMarkerOptions({ selected }).html.includes('photo-direction-indicator'));
-    for (const degrees of [0, 90, 180, 270]) {
-      assert(cameraMarkerOptions({ selected, degrees }).html.includes(`rotate(${degrees} 32 32)`));
-      assert(thumbnailMarkerOptions({ selected, degrees }).html.includes(`rotate(${degrees} 50 50)`));
+    assert.equal(photoDirectionMarkerOptions('markers', { selected }), null);
+    assert.equal(photoDirectionMarkerOptions('thumbnails', { selected }), null);
+    for (const degrees of [0, 45, 90, 135, 180, 270]) {
+      assert(photoDirectionMarkerOptions('markers', { selected, degrees }).html.includes(`rotate(${degrees} 32 32)`));
+      assert(photoDirectionMarkerOptions('thumbnails', { selected, degrees }).html.includes(`rotate(${degrees} 50 50)`));
+      // The arrow is its own marker: a photo icon never carries one, whatever its direction.
+      assert(!cameraMarkerOptions({ selected, degrees }).html.includes('photo-direction-indicator'));
+      assert(!thumbnailMarkerOptions({ selected, degrees }).html.includes('photo-direction-indicator'));
     }
   }
   for (const options of [cameraMarkerOptions(), cameraMarkerOptions({ selected: true }), cameraMarkerOptions({ selected: true, degrees: 90 }), thumbnailMarkerOptions({ degrees: 90 })]) {

@@ -8,7 +8,7 @@ import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
 import { sourceWizard, clickSourceControl as click, setPhotoFiles, openPhotoSources, closePhotoSources, stagePhotoSource, savePhotoSource } from './helpers/photoSourceWorkflow.mjs';
-import { KEYS, commandBar, dragSelectedMarker, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
+import { KEYS, arrowOf, commandBar, dragSelectedMarker, editArrow, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 const inspector = 'document.querySelector(".photo-workspace-inspector")';
@@ -153,7 +153,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await browser.waitFor('document.querySelector("[data-edit-count]")');
       await browser.evaluate(`(() => {const input=${commandBar}.querySelector('input[type=number]');input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'75');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
       await pressKey(browser, 'Enter', KEYS.Enter);
-      await browser.waitFor(`${editTarget}?.querySelector('.photo-direction-indicator[data-degrees="75"]')`);
+      await browser.waitFor(`${editArrow}?.dataset.degrees === "75"`);
       await saveEdits(browser);
       assert.equal(await browser.evaluate(fact('Kilde')), 'Manuell');
       await select(a);
@@ -161,7 +161,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       assert.equal(await browser.evaluate(fact('Retning')), '0° N', 'its own default, untouched by the other occurrence');
       await select(b);
       assert.equal(await browser.evaluate(fact('Retning')), '75° Ø');
-      assert(await browser.evaluate(`Boolean(document.querySelector('.leaflet-photo-markers-pane .photo-camera-marker-selected .photo-direction-indicator[data-degrees="75"]'))`));
+      assert(await browser.evaluate(`${arrowOf("document.querySelector('.leaflet-photo-markers-pane .photo-camera-marker-selected')")}?.dataset.degrees === "75"`));
       await openPhotoSources(browser);
       await click(browser, 'Kontroller tilgjengelige posisjoner');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('li[data-photo-id="${b}"] select').value`), '');

@@ -9,7 +9,7 @@ import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiFile, realGrammarFamilies, sharedGuids, sharedFilename, sevenGuid } from './helpers/gmiPhotoFixtures.mjs';
 import { extractHyperlinkFilenames } from '../src/lib/hyperlinkFilenames.mjs';
 import { stagePhotoSource, savePhotoSource, closePhotoSources, openPhotoSources, applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
-import { KEYS, commandBar, dragSelectedMarker, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
+import { KEYS, commandBar, dragSelectedMarker, editArrow, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL, corpus = process.env.GMI_PHOTO_CORPUS;
 const dialog = 'document.querySelector(".photo-positioning-wizard")';
@@ -99,7 +99,7 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
       await browser.evaluate(`(() => {const input=${commandBar}.querySelector('input[type=number]'); input.focus();
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(String(degrees))}); input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
       await pressKey(browser, 'Enter', KEYS.Enter);
-      await browser.waitFor(`${editTarget}?.querySelector('.photo-direction-indicator[data-degrees="${degrees}"]')`);
+      await browser.waitFor(`${editArrow}?.dataset.degrees === "${degrees}"`);
       await saveEdits(browser);
     };
     const sourceCards = async () => {

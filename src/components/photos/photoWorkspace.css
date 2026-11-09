@@ -133,7 +133,6 @@
 .leaflet-marker-icon.photo-camera-marker .photo-marker-staged-dot, .leaflet-marker-icon.photo-thumb-marker .photo-marker-staged-dot { position: absolute; right: -2px; top: -2px; width: 9px; height: 9px; border-radius: 999px; background: var(--gmi-interactive, #007595); border: 2px solid white; pointer-events: none; }
 .photo-marker-stack { position: absolute; left: calc(100% - 8px); bottom: calc(100% - 8px); min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: var(--gmi-navy, #0F172B); color: white; border: 2px solid white; font: 600 10px/14px system-ui, sans-serif; text-align: center; pointer-events: none; }
 .leaflet-marker-icon.photo-thumb-marker { background: transparent; border: 0; display: grid; place-items: center; cursor: pointer; }
-.photo-thumb-marker .photo-direction-indicator { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); overflow: visible; pointer-events: none; filter: drop-shadow(0 1px 1px #15233544); }
 .photo-thumb { position: relative; width: 44px; height: 44px; box-sizing: border-box; border: 2px solid var(--photo-source, #64748b); border-radius: 4px; background: #e2e8f0; overflow: hidden; display: grid; place-items: center; box-shadow: 0 1px 3px #15233559; }
 .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 /* Provenance dot: sits on the thumbnail's bottom-left border, clear of the top-right stack/staged badges. */

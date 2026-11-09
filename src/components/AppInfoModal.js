@@ -13,6 +13,7 @@ import {
   CURRENT_APP_RELEASE,
   CURRENT_APP_VERSION,
 } from '@/data/appReleases.mjs';
+import { BUILD_INFO } from '@/lib/buildInfo.mjs';
 import ContactForm from './ContactForm';
 import BrandWordmark from './BrandWordmark';
 
@@ -83,6 +84,24 @@ function SourceCodeLink() {
       Se kildekoden på GitHub
       <ArrowSquareOutIcon size={15} weight="regular" aria-hidden="true" className="text-gmi-text-on-dark" />
     </a>
+  );
+}
+
+// The running build, so two deployments can be told apart. Values are inlined at build time (buildInfo.mjs).
+function BuildIdentity({ build = BUILD_INFO }) {
+  return (
+    <dl className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-4 text-gmi-text-subtle" data-app-build={build.environment}>
+      {build.shortSha && (
+        <div className="flex gap-1">
+          <dt>Versjon:</dt>
+          <dd><code className="font-mono text-gmi-text-muted" title={build.commitSha}>{build.shortSha}</code></dd>
+        </div>
+      )}
+      <div className="flex gap-1">
+        <dt>Miljø:</dt>
+        <dd>{build.environmentLabel}</dd>
+      </div>
+    </dl>
   );
 }
 
@@ -557,6 +576,7 @@ export default function AppInfoModal({
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <BrandWordmark appInfo />
               <span className="rounded-full bg-gmi-cyan-soft px-2 py-1 text-[11px] font-bold text-gmi-interactive">v{CURRENT_APP_VERSION}</span>
+              <BuildIdentity />
             </div>
             <p className="min-w-0 text-sm leading-5 text-gmi-text-muted">Informasjon, nyheter og versjonshistorikk</p>
           </div>
