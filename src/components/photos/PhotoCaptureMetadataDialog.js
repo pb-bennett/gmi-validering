@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { normalizePhotographer } from '@/lib/photos/photoCaptureMetadata.mjs';
+import { ESTIMATED_DATE_HELP, estimatedCaptureTime, isEstimatedCaptureTime } from '@/lib/photos/photoEstimatedDates.mjs';
 import { CAPTURE_TIME_ERRORS, captureTimeFields, captureTimeHelp, composeCaptureTime, hasPlaceholderSeconds } from '@/lib/photos/photoCaptureTimeInput.mjs';
 import { formatPhotoCaptureTime, photoMetadataSourceLabel, photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoCaptureTimeField from './PhotoCaptureTimeField';
@@ -39,6 +40,7 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
   const usableTimeEvidence = timeEvidence.some((item) => item.value);
   const timePrefill = accepted.captureTime?.value || timeEvidence.find((item) => item.value)?.value;
   const [timeFields, setTimeFields] = useState(() => captureTimeFields(timePrefill?.iso));
+  const [estimated, setEstimated] = useState(() => isEstimatedCaptureTime(accepted.captureTime));
   const [timeEdited, setTimeEdited] = useState(false);
   // A genuine :00 looks exactly like the prefill, so it is confirmed outright. It is saved as manual, never as the source's value.
   const [zeroSecondsConfirmed, setZeroSecondsConfirmed] = useState(false);
@@ -68,10 +70,15 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
       return { write: current?.provenance?.evidenceId === evidenceId ? null : { input: null, evidenceId } };
     }
     if (field === 'captureTime') {
+      if (estimated) {
+        const value = estimatedCaptureTime(manualInput.date);
+        if (!value) return { error: CAPTURE_TIME_ERRORS[manualInput.date ? 'invalid-value' : 'missing-date'] };
+        return { write: isEstimatedCaptureTime(current) && current.value.iso === value.iso ? null : { input: manualInput.date, estimated: true } };
+      }
       if (secondsUnknown && !zeroSecondsConfirmed) return { error: CAPTURE_TIME_ERRORS['missing-seconds'] };
       const composed = composeCaptureTime(manualInput);
       if (!composed.ok) return { error: CAPTURE_TIME_ERRORS[composed.error] };
-      const same = current?.provenance?.kind === 'manual' && current.value.iso === composed.value.iso;
+      const same = current?.provenance?.kind === 'manual' && !isEstimatedCaptureTime(current) && current.value.iso === composed.value.iso;
       return { write: same ? null : { input: composed.value.iso } };
     }
     const value = normalizePhotographer(manualInput);
@@ -87,7 +94,7 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
     if (time.error || name.error) return;
     const writes = [['captureTime', time.write], ['photographer', name.write]].filter(([, write]) => write);
     for (const [field, write] of writes) {
-      const result = photoSession.setCaptureMetadata(layerId, [photo.id], field, write.input, write.evidenceId ? { evidenceId: write.evidenceId } : undefined);
+      const result = photoSession.setCaptureMetadata(layerId, [photo.id], field, write.input, { evidenceId: write.evidenceId, estimated: write.estimated });
       if (!result.ok) { setErrors({ [field]: 'Verdien kunne ikke lagres. Kildeverdien er endret eller ugyldig.' }); return; }
     }
     if (writes.length) onSaved?.(`Opptaksdata lagret for ${photo.originalFilename}`);
@@ -106,14 +113,17 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
           <p className="photo-metadata-current">Godtatt: {accepted.captureTime ? `${timeText(accepted.captureTime.value)} · ${photoMetadataSourceLabel('captureTime', accepted.captureTime.provenance)}` : 'Ikke angitt'}</p>
           {timeMissing && <p className="photo-metadata-missing" data-metadata-missing="captureTime">{usableTimeEvidence
             ? 'Mangler. Velg en kildeverdi nedenfor, eller angi tiden selv under «Annen verdi».'
-            : 'Mangler, og ingen kilde har en brukbar tid. Skriv inn dato og klokkeslett med sekunder nedenfor, og trykk Lagre.'}</p>}
+            : 'Mangler, og ingen kilde har en brukbar tid. Angi en presis opptakstid eller velg «Anslått dato», og trykk Lagre.'}</p>}
           {timeEvidence.map((evidence) => <Choice key={evidence.id} name={`${id}-time`} value={`evidence:${evidence.id}`} checked={timeChoice === `evidence:${evidence.id}`}
             onChange={touch('captureTime', setTimeChoice)} disabled={!evidence.value}>
             {photoSourceLabel(evidence.kind)}{evidence.sourceFilename ? ` · ${evidence.sourceFilename}` : ''}: {evidence.value ? timeText(evidence.value) : `${typeof evidence.raw === 'string' ? evidence.raw : JSON.stringify(evidence.raw)} (kan ikke tolkes sikkert)`}
           </Choice>)}
           <Choice name={`${id}-time`} value="other" checked={timeChoice === 'other'} onChange={touch('captureTime', setTimeChoice)}>Annen verdi</Choice>
-          {timeChoice === 'other' && <PhotoCaptureTimeField value={timeFields} onChange={changeTimeFields} error={errors.captureTime} help={captureTimeHelp(exportProfile)} />}
-          {timeChoice === 'other' && secondsUnknown && <label className="photo-metadata-seconds">
+          {timeChoice === 'other' && <>
+            <label className="photo-metadata-estimated"><input type="checkbox" checked={estimated} onChange={(event) => touch('captureTime', setEstimated)(event.target.checked)} /> Anslått dato</label>
+            <PhotoCaptureTimeField value={timeFields} onChange={changeTimeFields} error={errors.captureTime} dateOnly={estimated} help={estimated ? ESTIMATED_DATE_HELP : captureTimeHelp(exportProfile)} />
+          </>}
+          {timeChoice === 'other' && !estimated && secondsUnknown && <label className="photo-metadata-seconds">
             <input type="checkbox" checked={zeroSecondsConfirmed} onChange={(event) => { setZeroSecondsConfirmed(event.target.checked); setErrors((previous) => ({ ...previous, captureTime: undefined })); }} />
             <span>Sekundene er 00 <span className="photo-metadata-consequence">Kilden oppgir bare minutter. Dette lagres som din manuelle verdi, ikke som kildens.</span></span>
           </label>}

@@ -113,6 +113,8 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   if (!gemini) warnings.push({ code: 'path-convention', message: 'Attachments/<filnavn> med skråstrek er appens testkonvensjon, ikke et dokumentert Gemini-krav.' });
   if (profile === 'asbuilt52') warnings.push({ code: 'experimental-2d', message: 'Eksperimentell 2D AsBuilt-fotogeometri uten Z. Gemini-aksept er ukjent.' });
   const missingTimestampCount = occurrences.filter((row) => !fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime)).length;
+  const estimatedCount = assets.filter((asset) => asset.metadata?.captureTime?.provenance?.estimated).length;
+  if (estimatedCount) warnings.push({ code: 'capture-time-estimated', message: `${estimatedCount} bilder har anslått dato. 12:00:00 eksporteres som teknisk standard, ikke målt opptakstid. Merkingen «Anslått» beholdes i appen. Denne GML-eksporten tar ikke med selve merkingen.` });
   const timezoneTransformCount = occurrences.filter((row) => /(?:Z|[+-]\d{2}:\d{2})$/.test(fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime) || '')).length;
   if (gemini) {
     warnings.push({ code: 'compatibility-z', message: `${occurrences.length} XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde.` });

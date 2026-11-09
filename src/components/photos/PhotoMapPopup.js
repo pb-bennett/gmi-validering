@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- Session-owned blob URLs: the thumbnail, then its display preview. */
 import { useEffect, useState } from 'react';
 import { ArrowSquareOutIcon, CaretLeftIcon, CaretRightIcon, XIcon } from '@phosphor-icons/react';
-import { photoCaptureTime } from '@/lib/photos/photoPresentation.mjs';
+import { photoCaptureTime, formatPhotoCaptureTime } from '@/lib/photos/photoPresentation.mjs';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPositionSourceDescription, photoPositionSourceKind, photoPositionSourcePresentation, photoSourceGlyph } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
@@ -31,7 +31,8 @@ export default function PhotoMapPopup({ photo: topPhoto, stack = null, onOpen, o
   const members = stack?.length > 1 ? stack : [topPhoto];
   const [index, setIndex] = useState(() => Math.max(0, members.findIndex((member) => member.id === topPhoto.id)));
   const photo = members[Math.min(index, members.length - 1)] || topPhoto;
-  const captureTime = photoCaptureTime(photo);
+  const acceptedTime = photo.captureMetadata?.captureTime;
+  const captureTime = acceptedTime?.provenance?.estimated ? formatPhotoCaptureTime(acceptedTime.value, acceptedTime.provenance)?.text : photoCaptureTime(photo);
   const source = photoPositionSourcePresentation(photoPositionSourceKind(photo));
   const imageUrl = useDisplayPreview(photo);
   useEffect(() => { onLayout?.(); }, [photo.id, onLayout]);

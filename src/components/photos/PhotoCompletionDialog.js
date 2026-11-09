@@ -39,6 +39,7 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
   const [focusOnArrival] = useState(Boolean(entry) || fromExport);
   const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState('');
+  const [dateUndo, setDateUndo] = useState(null);
 
   useEffect(() => {
     const dialog = ref.current, opener = openerRef?.current || document.activeElement;
@@ -97,7 +98,7 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
             </div>)}
           </nav>
           <div className="photo-completion-panel">
-            {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} recommendations={completionRecommendations(readiness, 'captureTime')} readiness={readiness} reading={reading > 0} onEdit={setEditingId} />}
+            {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} dateUndo={dateUndo} onDateUndo={setDateUndo} recommendations={completionRecommendations(readiness, 'captureTime')} readiness={readiness} reading={reading > 0} onEdit={setEditingId} />}
             {task.key === 'direction' && <PhotoCompletionDirectionPanel {...panelProps('direction')} recommendations={completionRecommendations(readiness, 'direction')} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} />}
             {task.key === 'photographer' && <PhotoCompletionPhotographerPanel {...panelProps('photographer')} onEdit={setEditingId} />}
             {task.key === 'placement' && <PhotoCompletionPlacementPanel task={model.placement} title={task.label} requirementLabel={task.requirementLabel} placed={readiness.counts.placed} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} onOpenSources={() => onOpenSources({ selections })} />}

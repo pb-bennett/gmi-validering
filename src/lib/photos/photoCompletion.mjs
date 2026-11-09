@@ -1,6 +1,7 @@
 import { PHOTO_EXPORT_PROFILE_METADATA } from './export/photoExportRules.mjs';
 import { photoDirectionLabel } from './photoDirection.mjs';
 import { evidenceEligibility } from './photoEvidenceAdoption.mjs';
+import { photoEstimatedDateModel } from './photoEstimatedDates.mjs';
 import { formatPhotoCaptureTime, photoDirectionEvidenceText, photoDirectionSourceLabel, photoMetadataSourceLabel, photoSourceLabel } from './photoPresentation.mjs';
 
 // Presentation over photoExportReadiness. States come from readiness and every write goes through the session,
@@ -39,7 +40,7 @@ function photoRow(photo) {
 // Selection is for rows a bulk action can write. Accepted values and rows still waiting for EXIF are left out;
 // a default direction counts as missing, because a manual value may replace it.
 const selectable = (row) => (!row.accepted || row.state === 'defaulted') && row.state !== 'pending' && !row.sourcePending;
-const originOf = (accepted, basis) => !accepted ? null : basis?.kind === 'default' ? 'default' : basis?.kind === 'manual' ? 'manual' : 'source';
+const originOf = (accepted, basis) => !accepted ? null : basis?.estimated ? 'estimated' : basis?.kind === 'default' ? 'default' : basis?.kind === 'manual' ? 'manual' : 'source';
 
 function captureNote(item) {
   if (item.sourcesDiffer) return 'Kildene oppgir ulike tider. Den prioriterte kilden er brukt.';
@@ -52,7 +53,8 @@ function captureNote(item) {
 function captureRow(item, photo) {
   const row = { ...item, ...photoRow(photo), key: item.assetId, sources: item.evidence.map((source) => line(source.id,
     `${sourceName(source)}: ${source.value ? timeText(source.value) : `${rawText(source.raw)} (kan ikke tolkes sikkert)`}`)),
-  acceptedText: item.accepted ? `${timeText(item.accepted.value)} · ${photoMetadataSourceLabel('captureTime', item.accepted.provenance)}` : null, note: captureNote(item),
+  acceptedText: item.accepted ? `${timeText(item.accepted.value)} · ${photoMetadataSourceLabel('captureTime', item.accepted.provenance)}` : null,
+  note: item.accepted?.provenance?.estimated ? '12:00:00 er teknisk standard, ikke målt opptakstid.' : captureNote(item),
   origin: originOf(item.accepted, item.accepted?.provenance) };
   return Object.freeze({ ...row, selectable: selectable(row) });
 }
@@ -133,6 +135,7 @@ export function photoCompletionModel(photos, readiness) {
   const { captureTime, direction, photographer, placement, context } = readiness.tasks;
   const capturePanel = panel(captureTime.items.map((item) => captureRow(item, byId.get(item.photoId))), CAPTURE_GROUPS,
     { requirement: captureTime.requirement, schemaName: readiness.levels.schema.name });
+  capturePanel.estimatedDates = photoEstimatedDateModel(photos);
   const directionPanel = panel(direction.items.map((item) => directionRow(item, byId.get(item.occurrenceId))), DIRECTION_GROUPS);
   const photographerPanel = panel(captureTime.items.map((item) => photographerRow(item, byId.get(item.photoId))), PHOTOGRAPHER_GROUPS);
   const unplaced = placement.occurrenceIds.map((id) => Object.freeze({ key: id, photoId: id, ...photoRow(byId.get(id)) }));
@@ -198,7 +201,7 @@ export function photoCaptureTimeSchemaWarning({ levels, tasks }) {
   return singularCopy(`${gap.count} bilder mangler full opptakstid, så GML-filen oppfyller ikke ${levels.schema.name}-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.`);
 }
 
-const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-sources-differ']);
+const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-estimated', 'capture-time-sources-differ']);
 const DIRECTION_RECOMMENDATIONS = Object.freeze(['direction-defaulted', 'direction-sources-differ', 'direction-bulk']);
 export const completionRecommendations = (readiness, task) => [...readiness.recommendations, ...readiness.notes]
   .filter((item) => (task === 'direction' ? DIRECTION_RECOMMENDATIONS : CAPTURE_RECOMMENDATIONS).includes(item.code))
@@ -238,6 +241,7 @@ export function completionCounts({ rows, done }, selected, eligible) {
 // Where the values came from. Each row counts once; "Valgt" cuts across and only shows with a selection.
 export function completionSummary({ rows }, selected) {
   return [['source', 'Fra kilde', rows.filter((row) => row.origin === 'source').length], ['manual', 'Manuelt', rows.filter((row) => row.origin === 'manual').length],
+    ['estimated', 'Anslått', rows.filter((row) => row.origin === 'estimated').length],
     ['default', 'Standardverdi', rows.filter((row) => row.origin === 'default').length], ['missing', 'Mangler', rows.filter((row) => !row.origin).length], ['selected', 'Valgt', selected.length]]
     .filter(([, , count]) => count > 0).map(([key, label, count]) => Object.freeze({ key, label, count }));
 }

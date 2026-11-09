@@ -30,7 +30,7 @@ const evidenceRaw = (raw) => typeof raw === 'string' ? raw : JSON.stringify(raw)
 function CaptureValue({ field, accepted }) {
   if (!accepted) return 'Ikke angitt';
   if (field !== 'captureTime') return accepted.value;
-  const formatted = formatPhotoCaptureTime(accepted.value);
+  const formatted = formatPhotoCaptureTime(accepted.value, accepted.provenance);
   return <>{formatted?.text || accepted.value.iso}{formatted?.notes.length ? <span className="photo-inspector-note"> · {formatted.notes.join(' · ')}</span> : null}</>;
 }
 

@@ -37,6 +37,13 @@
 .photo-export-levels dt { font-weight: 600; }
 .photo-export-levels dd { margin: 0; }
 .photo-completion-manual { padding: 6px 12px; border: 1px solid var(--gmi-border); border-radius: 8px; }
+.photo-completion-estimated { display: grid; gap: 8px; justify-items: start; padding: 12px; border: 1px solid var(--gmi-interactive); border-radius: 8px; background: var(--gmi-surface-soft); }
+.photo-completion-estimated form { display: grid; gap: 8px; justify-items: start; width: 100%; }
+.photo-completion-estimated h4, .photo-completion-estimated > button { display: flex; align-items: center; gap: 6px; }
+.photo-completion-estimated h4 { color: var(--gmi-navy); font-weight: 600; }
+.photo-completion-estimated p { font-size: 12px; }
+.photo-completion-estimated button { max-width: 100%; white-space: normal; }
+.photo-metadata-estimated { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .photo-completion-manual summary, .photo-completion-group summary { cursor: pointer; font-weight: 600; color: var(--gmi-navy); }
 .photo-completion-manual form { display: grid; gap: 8px; justify-items: start; margin-top: 8px; }
 .photo-completion-manual label { display: grid; gap: 4px; }

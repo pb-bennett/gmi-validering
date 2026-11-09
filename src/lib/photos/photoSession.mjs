@@ -9,6 +9,7 @@ import { acceptManualPhotoDirection, acceptEvidencePhotoDirection, emptyDirectio
 import { planEvidenceAdoption } from './photoEvidenceAdoption.mjs';
 import { planAutoCaptureTime, planAutoDirection, planAutoPhotographer } from './photoAutoMetadata.mjs';
 import { MANUAL_FILL_FIELDS, normalizeManualPhotoFill, planManualPhotoFill } from './photoManualFill.mjs';
+import { estimatedCaptureTime } from './photoEstimatedDates.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
@@ -46,6 +47,7 @@ export function createPhotoSession({
   const workflowMembers = new WeakMap();
   // One Edit-mode transaction per FOTO layer: a ticket of baseline identities, never staged values.
   const editSessions = new Map();
+  const captureTimeUndos = new WeakMap();
   let editSerial = 0;
   // Each asset has exactly one owner: the current import or one created FOTO layer.
   // Transfer changes membership, never copies the File or invalidates thumbnail work.
@@ -201,7 +203,7 @@ export function createPhotoSession({
         const record = records.get(id), asset = assets.get(record.assetId);
         const captureTime = planAutoCaptureTime(asset.captureMetadata, asset.metadataEvidence, acceptedAt);
         const photographer = planAutoPhotographer(asset.captureMetadata, asset.metadataEvidence, acceptedAt);
-        if (captureTime || photographer) assets.set(record.assetId, { ...asset, captureMetadata: immutable({ ...asset.captureMetadata,
+        if (captureTime || photographer) assets.set(record.assetId, { ...asset, captureMetadata: Object.freeze({ ...asset.captureMetadata,
           ...(captureTime ? { captureTime } : {}), ...(photographer ? { photographer } : {}) }) });
         const direction = planAutoDirection(record.direction, asset.directionEvidence, { exifPending: asset.spatial.exifRead.state === 'pending', acceptedAt });
         if (direction) records.set(id, { ...record, direction });
@@ -717,8 +719,9 @@ export function createPhotoSession({
     },
     // Owner-scoped, deduplicated asset writes. Stale occurrences are ignored;
     // invalid values and stale evidence fail before any write.
-    setCaptureMetadata(layerId, photoIds, field, input, { evidenceId = null } = {}) {
+    setCaptureMetadata(layerId, photoIds, field, input, { evidenceId = null, estimated = false } = {}) {
       if (!['captureTime', 'photographer'].includes(field)) return { ok: false, error: 'invalid-field', assetIds: [] };
+      if (estimated && (field !== 'captureTime' || evidenceId || !estimatedCaptureTime(input))) return { ok: false, error: 'invalid-value', assetIds: [] };
       const members = layerId ? layers.get(layerId)?.photoIds || [] : importIds;
       const ids = assetIds(photoIds.filter((id) => members.includes(id)));
       const changes = [];
@@ -726,46 +729,71 @@ export function createPhotoSession({
         const asset = assets.get(assetId);
         const evidence = evidenceId ? asset.metadataEvidence.find((item) => item.id === evidenceId && item.field === field) : null;
         const value = evidenceId ? evidence?.value : input === null ? null
-          : field === 'captureTime' ? normalizeCaptureTime(input) : normalizePhotographer(input);
+          : field === 'captureTime' ? estimated ? estimatedCaptureTime(input) : normalizeCaptureTime(input) : normalizePhotographer(input);
         if ((evidenceId && !value) || (input !== null && !evidenceId && !value)) return { ok: false, error: 'invalid-value', assetIds: [] };
         const accepted = value === null ? null : immutable({ value, provenance: evidence
           ? { kind: evidence.kind, evidenceId: evidence.id, sourceId: evidence.sourceId || null,
             sourceFilename: evidence.sourceFilename || null, sourceEntryId: evidence.sourceEntryId || null, tag: evidence.tag || null, raw: evidence.raw }
-          : { kind: 'manual' }, acceptedAt: Date.now() });
+          : { kind: 'manual', ...(estimated ? { estimated: true } : {}) }, acceptedAt: Date.now() });
         changes.push([assetId, accepted]);
       }
       // Removing a value is a decision too, so it is remembered: automatic acceptance must not bring it back.
       const clearedFlag = `${field}Cleared`;
       for (const [assetId, accepted] of changes) updateAsset(assetId, (asset) => {
         const { [clearedFlag]: _cleared, ...metadata } = asset.captureMetadata;
-        return { captureMetadata: immutable({ ...metadata, [field]: accepted, ...(accepted === null ? { [clearedFlag]: true } : {}) }) };
+        return { captureMetadata: Object.freeze({ ...metadata, [field]: accepted, ...(accepted === null ? { [clearedFlag]: true } : {}) }) };
       });
       if (changes.length) publish();
       return { ok: true, assetIds: ids };
     },
-    fillMissingPhotoValues(layerId, field, input, photoIds = null) {
+    fillMissingPhotoValues(layerId, field, input, photoIds = null, { estimated = false } = {}) {
       if (!MANUAL_FILL_FIELDS.includes(field)) return { ok: false, error: 'invalid-field' };
+      if (estimated && field !== 'captureTime') return { ok: false, error: 'invalid-field' };
       const members = layers.get(layerId)?.photoIds || [];
       const photos = members.map((id) => {
         const record = records.get(id);
         return { ...record, captureMetadata: assets.get(record.assetId).captureMetadata };
       });
       const plan = planManualPhotoFill(photos, field, photoIds ?? members);
-      const value = normalizeManualPhotoFill(field, input);
+      const value = estimated ? estimatedCaptureTime(input) : normalizeManualPhotoFill(field, input);
       if (value === null) return { ok: false, error: 'invalid-value', ...plan, counts: { ...plan.counts, adopted: 0, invalidInput: 1 } };
       const acceptedAt = Date.now();
+      const undoEntries = [];
       for (const target of plan.targets) {
         if (field === 'direction') records.set(target.photoId, { ...records.get(target.photoId),
           direction: acceptManualPhotoDirection(value, acceptedAt, { mode: 'bulk' }) });
         else {
           const asset = assets.get(target.assetId);
-          assets.set(target.assetId, { ...asset, captureMetadata: immutable({ ...asset.captureMetadata, [field]: {
-            value, provenance: { kind: 'manual', mode: 'bulk' }, acceptedAt,
-          } }) });
+          const before = asset.captureMetadata;
+          const { [`${field}Cleared`]: _cleared, ...metadata } = before;
+          assets.set(target.assetId, { ...asset, captureMetadata: Object.freeze({ ...metadata, [field]: immutable({
+            value, provenance: { kind: 'manual', mode: 'bulk', ...(estimated ? { estimated: true } : {}) }, acceptedAt,
+          }) }) });
+          if (estimated) undoEntries.push({ assetId: target.assetId, before, after: assets.get(target.assetId).captureMetadata.captureTime });
         }
       }
+      const undoToken = undoEntries.length ? Object.freeze({}) : null;
+      if (undoToken) captureTimeUndos.set(undoToken, { layerId, generation, entries: undoEntries });
       if (plan.targets.length) publish();
-      return { ok: true, ...plan, counts: { ...plan.counts, adopted: plan.targets.length, invalidInput: 0 } };
+      return { ok: true, ...plan, ...(estimated ? { undoToken } : {}), counts: { ...plan.counts, adopted: plan.targets.length, invalidInput: 0 } };
+    },
+    undoCaptureTimeFill(token) {
+      const undo = token && captureTimeUndos.get(token);
+      if (!undo || undo.generation !== generation || !layers.has(undo.layerId)) return { ok: false, restored: 0, skipped: 0 };
+      captureTimeUndos.delete(token);
+      const members = new Set(assetIds(layers.get(undo.layerId).photoIds));
+      let restored = 0, skipped = 0;
+      for (const { assetId, before, after } of undo.entries) {
+        const asset = assets.get(assetId);
+        // An individual adjustment made later must survive Undo. Other metadata is also left alone.
+        if (!members.has(assetId) || asset?.captureMetadata.captureTime !== after) { skipped++; continue; }
+        const { captureTimeCleared: _cleared, ...metadata } = asset.captureMetadata;
+        assets.set(assetId, { ...asset, captureMetadata: Object.freeze({ ...metadata, captureTime: before.captureTime,
+          ...(before.captureTimeCleared ? { captureTimeCleared: true } : {}) }) });
+        restored++;
+      }
+      if (restored) publish();
+      return { ok: true, restored, skipped };
     },
     adoptSourceEvidence(layerId, field, kind = 'exif', photoIds = null) {
       if (!['captureTime', 'photographer', 'direction'].includes(field) || !['exif', 'gml'].includes(kind)) return { ok: false, error: 'invalid-field' };
@@ -782,9 +810,9 @@ export function createPhotoSession({
         else {
           const asset = assets.get(target.assetId), evidence = target.evidence;
           // Metadata is projected from the asset; avoid a record scan per asset.
-          assets.set(target.assetId, { ...asset, captureMetadata: immutable({ ...asset.captureMetadata, [field]: {
+          assets.set(target.assetId, { ...asset, captureMetadata: Object.freeze({ ...asset.captureMetadata, [field]: immutable({
             value: evidence.value, provenance: evidenceProvenance(evidence, target.agreeingEvidence), acceptedAt,
-          } }) });
+          }) }) });
         }
       }
       if (plan.targets.length) publish();

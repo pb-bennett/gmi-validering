@@ -1,4 +1,5 @@
 import { evidenceValuesConflict } from './photoEvidenceAdoption.mjs';
+import { isEstimatedCaptureTime } from './photoEstimatedDates.mjs';
 
 export const photoSourceLabel = (kind) => ({ gml: 'GML', exif: 'EXIF', manual: 'Manuell', gmi: 'GMI' })[kind] || kind || 'Ukjent';
 export function photoCurrentSource(photo) {
@@ -11,6 +12,7 @@ export function photoCaptureTime(photo) {
 }
 // Accepted values decide export. "I kilde" only says a source has one that is not accepted yet.
 export function photoCaptureTimeStatus(photo) {
+  if (isEstimatedCaptureTime(photo.captureMetadata?.captureTime)) return 'Anslått opptaksdato';
   if (photo.captureMetadata?.captureTime) return 'Opptakstid kjent';
   return photo.metadataEvidence?.some((item) => item.field === 'captureTime' && item.value) ? 'Opptakstid i kilde' : 'Uten opptakstid';
 }
@@ -21,10 +23,11 @@ export const formatPhotoCoordinates = (position) => position
   : 'Ingen posisjon';
 
 // Shown exactly as recorded: no conversion through the host timezone and no invented offset.
-export function formatPhotoCaptureTime(value) {
+export function formatPhotoCaptureTime(value, provenance) {
   const match = value?.iso?.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?)?(Z|[+-]\d{2}:\d{2})?$/);
   if (!match) return null;
   const [, year, month, day, hour, minute, second, fraction, zone] = match;
+  if (provenance?.estimated) return { text: `${day}.${month}.${year} · Anslått`, notes: ['12:00:00 er teknisk standard, ikke målt opptakstid'] };
   const time = hour === undefined ? '' : ` ${hour}:${minute}${second === undefined ? '' : `:${second}${fraction ? fraction.replace('.', ',') : ''}`}`;
   const notes = [];
   if (value.precision === 'date') notes.push('bare dato');
@@ -35,6 +38,7 @@ export function formatPhotoCaptureTime(value) {
 
 export function photoMetadataSourceLabel(field, provenance) {
   if (!provenance) return null;
+  if (provenance.estimated) return 'Anslått';
   if (provenance.kind === 'manual') return provenance.mode === 'bulk' ? 'Manuell (samme verdi for flere)' : 'Manuell';
   if (provenance.kind === 'exif') return field === 'captureTime' ? 'EXIF DateTimeOriginal' : 'EXIF Artist';
   if (provenance.kind === 'gml') return `GML${provenance.sourceFilename ? ` · ${provenance.sourceFilename}` : ''}`;

@@ -29,6 +29,7 @@ const labels = {
   'capture-time-utc': 'Opptakstid i UTC',
   'capture-time-implausible': 'Usannsynlig dato',
   'capture-time-bulk': 'Samme manuelle opptakstid',
+  'capture-time-estimated': 'Anslått opptaksdato',
   'capture-time-in-source': 'Opptakstid finnes i kilde',
   'capture-time-sources-differ': 'Ulik opptakstid i kildene',
   'direction-defaulted': 'Standardretning',

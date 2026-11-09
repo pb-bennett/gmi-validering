@@ -61,7 +61,7 @@ const uniqueAssets = (photos) => [...new Map(photos.map((photo) => [photo.assetI
 
 // Equal values are not evidence of bulk fill: only values recorded as bulk count, and only when actually repeated.
 function repeatedBulkValues(items, basisOf, valueOf) {
-  const groups = Map.groupBy(items.filter((item) => { const basis = basisOf(item); return basis?.kind === 'manual' && basis.mode === 'bulk'; }), valueOf);
+  const groups = Map.groupBy(items.filter((item) => { const basis = basisOf(item); return basis?.kind === 'manual' && basis.mode === 'bulk' && !basis.estimated; }), valueOf);
   return [...groups].filter(([, group]) => group.length > 1).map(([value, group]) => ({ value, count: group.length }));
 }
 
@@ -90,6 +90,8 @@ function recommendationsFor({ profile, placed, assets, nowMs, captureItems, dire
   const implausible = assets.filter((photo) => timeOf(photo) && implausibleCaptureTime(timeOf(photo).value, nowMs));
   add('capture-time-implausible', implausible.length, `${implausible.length} bilder har en usannsynlig dato.`, { assetIds: implausible.map((photo) => photo.assetId) });
   const bulkTimes = repeatedBulkValues(assets, (photo) => timeOf(photo)?.provenance, (photo) => timeOf(photo).value.iso);
+  const estimated = assets.filter((photo) => timeOf(photo)?.provenance?.estimated);
+  add('capture-time-estimated', estimated.length, `${estimated.length} bilder har anslått dato. 12:00:00 er teknisk standard, ikke målt opptakstid.`, { assetIds: estimated.map((photo) => photo.assetId) });
   const bulkTimeCount = bulkTimes.reduce((total, group) => total + group.count, 0);
   add('capture-time-bulk', bulkTimeCount, `${bulkTimeCount} bilder har samme manuelt angitte tid.`, { groups: bulkTimes });
 
