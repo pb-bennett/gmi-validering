@@ -7,6 +7,7 @@ import { createContextualObjectInspection, createExactObjectInspection } from '.
 import { moveLayerInOrder } from './map/layerOrder.mjs';
 import { photoSession } from './photos/photoSession.mjs';
 import { bindLoadedGmiSurveyStore, loadedGmiSources } from './photos/loadedGmiSource.mjs';
+import { bindGmiEditSessionStore, gmiEditRemovalBlock, gmiEditSessions } from './gmiEditSessions.mjs';
 import { bindGeminiSurveyStore, geminiSession } from './gemini-wfs/geminiSession.mjs';
 import {
   DEFAULT_HIGHLIGHT_OPACITY,
@@ -218,6 +219,9 @@ const useStore = create(
         // ============================================
         layers: {}, // { [layerId]: LayerState }
         layerOrder: [], // Front-to-back layer IDs, shared by lists and map
+        // Lightweight GMI editing status per opened layer (gmiEditSessions.mjs).
+        // Never bytes, documents or datasets; not persisted.
+        gmiEditStatus: {},
         hydrated: false,
 
         // ============================================
@@ -2044,9 +2048,13 @@ const useStore = create(
         },
 
         /**
-         * Remove a layer by ID
+         * Remove a layer by ID. Refuses with `{ ok: false, code:
+         * 'gmi-edits-pending' }` while the layer's GMI editing session has
+         * unsaved changes, unless `{ discardGmiEdits: true }` is passed.
          */
-        removeLayer: (layerId) =>
+        removeLayer: (layerId, options = {}) => {
+          const blocked = gmiEditRemovalBlock([layerId], options);
+          if (blocked) return blocked;
           set(
             (state) => {
               const { [layerId]: removed, ...remainingLayers } =
@@ -2111,7 +2119,9 @@ const useStore = create(
             },
             false,
             'layers/remove',
-          ),
+          );
+          return { ok: true };
+        },
 
         moveLayerUp: (layerId) =>
           set(
@@ -2966,7 +2976,13 @@ const useStore = create(
         // ============================================
         // GLOBAL ACTIONS — cross-slice operations
         // ============================================
-        resetAll: () => {
+        // Refuses with `{ ok: false, code: 'gmi-edits-pending' }` while any
+        // GMI editing session has unsaved changes, unless
+        // `{ discardGmiEdits: true }` is passed.
+        resetAll: (options = {}) => {
+          const blocked = gmiEditRemovalBlock(null, options);
+          if (blocked) return blocked;
+          gmiEditSessions.clear();
           geminiSession.reset();
           photoSession.clear();
           set(
@@ -2996,6 +3012,7 @@ const useStore = create(
                   mapBaseLayer: preservedMapBaseLayer,
                   mapOverlayVisibility: preservedMapOverlayVisibility,
                 },
+                gmiEditStatus: {},
                 // Keep settings as-is
                 settings: state.settings,
               };
@@ -3003,6 +3020,7 @@ const useStore = create(
             false,
             'global/resetAll',
           );
+          return { ok: true };
         },
 
         // ============================================
@@ -3300,6 +3318,7 @@ const useStore = create(
 storeApi = useStore;
 bindGeminiSurveyStore(useStore);
 bindLoadedGmiSurveyStore(useStore, photoSession);
+bindGmiEditSessionStore(useStore);
 if (hydrationCompletedDuringInitialization) {
   useStore.setState({ hydrated: true }, false, 'persist/hydrated');
 }

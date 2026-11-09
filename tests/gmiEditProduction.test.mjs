@@ -364,16 +364,24 @@ test('gmi-edit stays a browser-safe core: no node:, test, photo or UI imports; t
   // pure Validator 2.0 library (revalidation and applicability reuse).
   const m2 = ['changeSet.mjs', 'diff.mjs', 'eligibility.mjs', 'proposed.mjs', 'session.mjs'];
   const validatorUsers = new Set(['eligibility.mjs', 'proposed.mjs']);
-  assert.deepEqual(files.sort(), [...m1, ...m2, 'index.mjs'].sort());
+  // M3 (session registry and field-only export): the registry is dependency-
+  // injected (no photo import); the export may use only the pure, import-free
+  // FOTO naming module so revised GMI and FOTO packages share one convention.
+  const m3 = ['editSessions.mjs', 'exportGmi.mjs'];
+  const extraAllowed = { 'exportGmi.mjs': ['../photos/export/photoExportNaming.mjs'] };
+  assert.deepEqual(files.sort(), [...m1, ...m2, ...m3, 'index.mjs'].sort());
   for (const name of files) {
     const source = await readFile(path.join(directory, name), 'utf8');
     for (const [, specifier] of source.matchAll(/from\s+'([^']+)'/g)) {
       const allowed = specifier.startsWith('./') || specifier.startsWith('../parsing/')
-        || (validatorUsers.has(name) && specifier.startsWith('../validation-v2/'));
+        || (validatorUsers.has(name) && specifier.startsWith('../validation-v2/'))
+        || (extraAllowed[name] || []).includes(specifier);
       assert(allowed, `${name} imports ${specifier}`);
       if (m1.includes(name) && specifier.startsWith('./')) assert(m1.includes(specifier.slice(2)), `M1 core ${name} must not depend on M2 ${specifier}`);
     }
   }
   const walk = async (dir) => (await readdir(dir, { withFileTypes: true })).flatMap((entry) => entry.isDirectory() ? [] : [path.join(dir, entry.name)]);
   for (const file of await walk(path.resolve('src/lib/gmi-edit'))) assert(!(await readFile(file, 'utf8')).includes('gmiEditHarness'));
+  const naming = await readFile(path.resolve('src/lib/photos/export/photoExportNaming.mjs'), 'utf8');
+  assert.equal([...naming.matchAll(/^import\s/gm)].length, 0, 'photoExportNaming must stay import-free for gmi-edit');
 });

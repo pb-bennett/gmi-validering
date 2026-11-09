@@ -62,3 +62,18 @@ export {
 } from './proposed.mjs';
 export { GMI_BATCH_ELIGIBILITY_RULES, evaluateGmiBatchEligibility } from './eligibility.mjs';
 export { diffGmiDatasets } from './diff.mjs';
+
+// M3 (editing-session registry and field-only export): see
+// docs/agent-reports/*-gmi-edit-m3-session-lifecycle-export.md.
+export { GMI_EDIT_LAYER_STATES, createGmiEditSessions } from './editSessions.mjs';
+export {
+  GMI_EXPORT_FAILURES,
+  GMI_EXPORT_MIME_TYPE,
+  buildGmiFieldExport,
+  createGmiExportBlob,
+  getGmiExportBytes,
+  getGmiExportReadiness,
+  gmiExportNames,
+  isGmiFieldExport,
+  recordGmiExportDownload,
+} from './exportGmi.mjs';

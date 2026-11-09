@@ -37,6 +37,18 @@ export function createLoadedGmiSources({ getLayer = () => null } = {}) {
       if (!isLive(ticket.binding)) throw new Error('stale-loaded-gmi');
       return source;
     },
+    // The exact imported bytes, for source-preserving GMI editing. Each call reads the captured File again and returns
+    // a fresh buffer that nothing else holds, so callers can never reach shared state. Nothing is cached here: the
+    // editing document keeps its own private copy, and modified bytes are never written back.
+    async readBytes(ticket) {
+      const input = tickets.get(ticket);
+      if (!input || !isLive(ticket.binding)) throw Object.assign(new Error('stale-loaded-gmi'), { code: 'stale-loaded-gmi' });
+      let buffer;
+      try { buffer = await input.file.arrayBuffer(); }
+      catch { throw Object.assign(new Error('loaded-gmi-unreadable'), { code: 'loaded-gmi-unreadable' }); }
+      if (!isLive(ticket.binding)) throw Object.assign(new Error('stale-loaded-gmi'), { code: 'stale-loaded-gmi' });
+      return new Uint8Array(buffer);
+    },
     reconcile() {
       for (const [id, input] of inputs) if (!isLive(input.binding)) inputs.delete(id);
     },
