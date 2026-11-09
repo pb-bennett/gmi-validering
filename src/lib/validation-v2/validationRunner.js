@@ -498,13 +498,9 @@ function createGeometryCounts() {
   };
 }
 
-/**
- * Run the small source-backed Validator 2.0 beta rule set for one GMI layer.
- *
- * @param {import('./contracts.js').GmiLayerAdapterInput} input
- * @returns {import('./contracts.js').ValidationRunV2}
- */
-export function runGmiValidationV2(input) {
+// Shared by runGmiValidationV2 and evaluateGmiRuleApplicability so both use
+// one schema binding, evidence and policy-context derivation.
+function createGmiRunContext(input) {
   const schemaBinding = bindGmiLayerSchema(input);
   const objectRefs = createGmiObjectRefs(input);
   const rules = getValidationRules();
@@ -547,6 +543,17 @@ export function runGmiValidationV2(input) {
     material: evidenceFor(ref, 'material'), materialValid: (() => { const material = evidenceFor(ref, 'material'); return material?.state === 'VALUE_PRESENT' && materialRule?.allowedValues.includes(raw(material)); })(), hydraulicClass: (() => { const identity = evidenceFor(ref, 'tema'); return identity.state === 'RESOLVED' && (ref.geometryScope === 'line') ? classifyHydraulicTema(identity.resolvedValue, rules.find((r) => r.ruleId === 'innmaling.line.tema.required')?.allowedValues || []) : null; })(),
     nyttYears, typeTemas, typeValues, referenceDate, currentYear: context.currentYear,
   });
+  return { schemaBinding, objectRefs, rules, referenceDate, context };
+}
+
+/**
+ * Run the small source-backed Validator 2.0 beta rule set for one GMI layer.
+ *
+ * @param {import('./contracts.js').GmiLayerAdapterInput} input
+ * @returns {import('./contracts.js').ValidationRunV2}
+ */
+export function runGmiValidationV2(input) {
+  const { schemaBinding, objectRefs, rules, referenceDate, context } = createGmiRunContext(input);
   const ruleResults = rules.map((rule) =>
     createRuleResult(rule, getRefsForRule(rule, objectRefs), context)
   );
@@ -577,5 +584,34 @@ export function runGmiValidationV2(input) {
       evaluatedPointCount: objectRefs.pointRefs.length,
       evaluatedLineCount: objectRefs.lineRefs.length,
     },
+  });
+}
+
+/**
+ * Per-object applicability and presence for one rule, derived exactly as
+ * runGmiValidationV2 derives the rule's diagnostic facts (same schema binding,
+ * evidence, policy context and evaluation). Used by GMI field editing to decide
+ * batch-correction eligibility without duplicating Validator business rules.
+ *
+ * @param {import('./contracts.js').GmiLayerAdapterInput} input
+ * @param {string} ruleId
+ * @returns {{ruleId: string, canonicalFieldId: string, schemaBinding: object, outcomes: Array<{objectRef: object, state: string, reasonCode: string|null, applicability: string, presence: string}>}}
+ */
+export function evaluateGmiRuleApplicability(input, ruleId) {
+  const { schemaBinding, objectRefs, rules, context } = createGmiRunContext(input);
+  const rule = rules.find((candidate) => candidate.ruleId === ruleId);
+  if (!rule) throw new Error(`unknown validation rule: ${ruleId}`);
+  const result = createRuleResult(rule, getRefsForRule(rule, objectRefs), context);
+  return deepFreeze({
+    ruleId,
+    canonicalFieldId: rule.canonicalFieldId,
+    schemaBinding,
+    outcomes: result.outcomes.map((outcome) => ({
+      objectRef: outcome.objectRef,
+      state: outcome.state,
+      reasonCode: outcome.reasonCode,
+      applicability: outcome.diagnosticFacts?.coverageApplicability ?? 'UNRESOLVED',
+      presence: outcome.diagnosticFacts?.presence ?? 'UNRESOLVED',
+    })),
   });
 }

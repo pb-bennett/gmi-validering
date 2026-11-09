@@ -1,5 +1,8 @@
-// Public M1 API for source-preserving GMI editing. Pure library; no UI.
-// See docs/agent-reports/*-gmi-edit-m1-source-patch-engine.md.
+// Public API for source-preserving GMI editing. Pure library; no UI.
+// M1 (source document, patch engine, verifier): see
+// docs/agent-reports/*-gmi-edit-m1-source-patch-engine.md.
+// M2 (ChangeSets, session state, proposed dataset, eligibility, diff): see
+// docs/agent-reports/*-gmi-edit-m2-changesets-editing-state.md.
 export {
   GMI_SOURCE_STATUS,
   MAX_GMI_EDIT_BYTES,
@@ -21,3 +24,41 @@ export {
 export { gmiCellKey, listGmiObjectCells, resolveGmiCell } from './targets.mjs';
 export { applyGmiPatches, editGmiFields, planGmiFieldPatches } from './patch.mjs';
 export { verifyGmiEdit } from './verify.mjs';
+
+// M2
+export {
+  GMI_CHANGE_SET_MODES,
+  GMI_CONFLICT_POLICIES,
+  GMI_SKIP_REASONS,
+  isGmiChangeSet,
+  isGmiFieldEditReservedColumn,
+} from './changeSet.mjs';
+export {
+  canRedoGmiEdit,
+  canUndoGmiEdit,
+  compileGmiEffectiveEdits,
+  createGmiBatchCorrection,
+  createGmiEditSession,
+  createGmiFieldChangeSet,
+  createGmiObjectCorrection,
+  discardAllGmiEdits,
+  discardGmiChangeSet,
+  getGmiEditCell,
+  isGmiEditSession,
+  listGmiEditCells,
+  redoGmiEdit,
+  stageGmiChangeSet,
+  summarizeGmiEditSession,
+  undoGmiEdit,
+} from './session.mjs';
+export {
+  createGmiProposedCache,
+  defaultGmiProposedCache,
+  getGmiDocumentDataset,
+  getGmiProposedBytes,
+  getGmiProposedState,
+  revalidateGmiEditSession,
+  validateGmiDataset,
+} from './proposed.mjs';
+export { GMI_BATCH_ELIGIBILITY_RULES, evaluateGmiBatchEligibility } from './eligibility.mjs';
+export { diffGmiDatasets } from './diff.mjs';
