@@ -178,7 +178,8 @@ test('final normal and diagnostic TanStack columns reject blank parser fields an
 test('diagnostic table keeps result in row metadata, inspected-field colour, movable context, and table geometry', async () => {
   const source = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/components/LayerDataTable.js', import.meta.url), 'utf8'));
   assert.doesNotMatch(source, /__validator_resultat/);
-  assert.match(source, /return createLayerDataTableColumns\(\{/);
+  assert.match(source, /const base = createLayerDataTableColumns\(\{/);
+  assert.match(source, /if \(!batchReview\) return base/);
   assert.match(source, /getDiagnosticColumnOrder\(fields, inspection\.presentation\)/);
   assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : showSelectionOnly \? displayItems : items/);
   assert.match(source, /contextualColumnOrder\?\.inspectionId === inspection\.id/);

@@ -148,6 +148,7 @@ export default function Home() {
   const [photoImport, setPhotoImport] = useState(null);
   const surveyLayers = useStore((state) => state.layers);
   const gmiEditLayerId = useStore((state) => state.gmiEditWorkspace?.layerId ?? null);
+  const gmiEditTableExpanded = useStore((state) => state.gmiEditTableExpanded);
   // A pending global reset that would discard GMI corrections: { layers } until the user confirms or cancels.
   const [resetConfirm, setResetConfirm] = useState(null);
   // The right-hand inspector slot of Rettinger; the workspace portals its object editor into it.
@@ -931,6 +932,7 @@ export default function Home() {
             )}
             bottomDockOpen={!workspaceLayer && layerDataTableOpen}
             bottomDock={<LayerDataTable />}
+            expandedTable={gmiEditActive && gmiEditTableExpanded}
             primary={(
               <div className={`flex h-full min-h-0 min-w-0 flex-1${workspaceLayer ? ' photo-workspace-primary' : ''}`}>
                 <MapPanePresentationProvider analysisOpen={analysisOpen} className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">

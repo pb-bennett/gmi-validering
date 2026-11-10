@@ -16,6 +16,8 @@ import GmiChangeList from './GmiChangeList';
 import GmiExportDialog from './GmiExportDialog';
 import GmiConfirmDialog from './GmiConfirmDialog';
 import GmiBatchDialog from './GmiBatchDialog';
+import GmiBatchInspector from './GmiBatchInspector';
+import { gmiSelectionTargets } from '@/lib/gmiBatchInspectorView.mjs';
 import GmiFullValidation from './GmiFullValidation';
 import './gmiEdit.css';
 
@@ -103,6 +105,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const [formRevision, setFormRevision] = useState(0);
   const correction = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.correction : null);
   const [batchOpen, setBatchOpen] = useState(Boolean(correction));
+  const [batchInspector, setBatchInspector] = useState(false);
+  const [batchInspected, setBatchInspected] = useState(null);
+  const closeBatchInspector = useCallback(() => { setBatchInspector(false); setBatchInspected(null); }, []);
   const objectDirtyRef = useRef(false), batchDirtyRef = useRef(false), batchResetRef = useRef(null);
   const dirtyRef = useRef(false);
   const onDirtyChange = useCallback((dirty) => { objectDirtyRef.current = dirty; dirtyRef.current = dirty || batchDirtyRef.current; onDraftChange?.(dirtyRef.current); }, [onDraftChange]);
@@ -119,6 +124,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   // Also covers temporary workspace unmounts, e.g. opening FOTO through the page guard.
   useEffect(() => () => {
     if (useStore.getState().gmiEditSelection?.binding.layerId === layerId) useStore.setState({ gmiEditSelection: null });
+    useStore.setState({ gmiBatchInspectorRequest: null, gmiBatchTableReview: null, gmiEditTableExpanded: false });
   }, [layerId]);
 
   const presentation = describeGmiEditStatus(descriptor);
@@ -155,6 +161,11 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   }, [layerId, openLayerDataTable, setLayerDataTableTab]);
 
   const select = useCallback((target, changeSetId = null) => {
+    if (batchInspector) {
+      const object = (target.scope === 'line' ? layer?.data?.lines : layer?.data?.points)?.[target.sourceIndex];
+      if (object) setBatchInspected({ ...target, object });
+      highlight(target); syncObjectTable(target); return;
+    }
     if (selected && target.scope === selected.scope && target.sourceIndex === selected.sourceIndex) {
       setActiveChangeSetId(changeSetId); syncObjectTable(target); return;
     }
@@ -162,7 +173,25 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       setSelected(target); setScope(target.scope); setActiveChangeSetId(changeSetId); highlight(target);
       syncObjectTable(target);
     });
-  }, [guard, highlight, selected, syncObjectTable]);
+  }, [guard, highlight, selected, syncObjectTable, batchInspector, layer]);
+
+  const onBatchRequest = useEffectEvent((request) => {
+    if (!request || request.layerId !== layerId) return;
+    useStore.setState({ gmiBatchInspectorRequest: null });
+    if (batchOpen || batchInspector || !view) return;
+    guard(() => {
+      // Re-read after the draft confirmation; its scope may have changed.
+      const selection = useStore.getState().gmiEditSelection;
+      const result = gmiSelectionTargets(view, selection);
+      if (!result.ok && result.code !== 'line-only') return;
+      setBatchInspector(true); setBatchInspected(null);
+      useStore.getState().changeGmiEditSelection(layerId, { type: 'show-only', value: true }, selection.binding);
+      syncObjectTable({ scope: selection.scope });
+    });
+  });
+  useEffect(() => useStore.subscribe((state, previous) => {
+    if (state.gmiBatchInspectorRequest !== previous.gmiBatchInspectorRequest) onBatchRequest(state.gmiBatchInspectorRequest);
+  }), []);
 
   // Row clicks in the Data Table arrive as one-shot store requests.
   const onObjectRequest = useEffectEvent((request) => {
@@ -286,7 +315,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     </div>
     <footer className="gmi-edit-footer">
       <button type="button" className="gmi-compact-button gmi-focus-ring gmi-batch-open" disabled={!editable}
-        onClick={() => guard(() => setBatchOpen(true), 'objektet')}><StackIcon size={16} aria-hidden="true" /> Masseendringer</button>
+        onClick={() => guard(() => { closeBatchInspector(); setBatchOpen(true); }, 'objektet')}><StackIcon size={16} aria-hidden="true" /> Masseendringer</button>
       <div className="gmi-edit-history">
         <PhotoIconButton icon={ArrowArcLeftIcon} label="Angre siste retting" tooltip={view?.summary.canUndo ? `Angre: ${labelOf(view.changeSets.at(-1).id)}` : 'Ingenting å angre'}
           unavailable={!editable || !view?.summary.canUndo} onClick={undo} />
@@ -299,7 +328,10 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
         <DownloadSimpleIcon size={16} aria-hidden="true" /> Last ned revidert GMI <span className="gmi-edit-experimental-tag">Eksperimentell</span>
       </button>
     </footer>
-    {inspectorRoot && createPortal(<GmiObjectEditor key={`${selectedKey}:${view?.handle.sessionId || descriptor?.state}:${formRevision}`} view={view} status={descriptor}
+    {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
+      onClose={closeBatchInspector} onRequestClose={() => guard(closeBatchInspector, 'masseendringen')} inspected={batchInspected} onInspectClose={() => setBatchInspected(null)}
+      onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice({ tone: 'ok', text: `Lagt til: ${changeSet.label}` }); }} />
+      : <GmiObjectEditor key={`${selectedKey}:${view?.handle.sessionId || descriptor?.state}:${formRevision}`} view={view} status={descriptor}
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate}
       onStaged={() => { setChangedOnly(false); }} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}
     {exportOpen && view && <GmiExportDialog layerId={layerId} view={view} status={status} onClose={() => setExportOpen(false)} />}

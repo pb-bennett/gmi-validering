@@ -9,6 +9,7 @@ export default function WorkspaceShell({
   bottomDock,
   bottomDockOpen,
   photoWorkspace = false,
+  expandedTable = false,
 }) {
   return (
     <div className={`flex h-screen w-screen overflow-hidden bg-gmi-surface-soft${photoWorkspace ? ' photo-workspace-shell' : ''}`}>
@@ -21,13 +22,13 @@ export default function WorkspaceShell({
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <section
           className="relative flex min-h-0 min-w-0 overflow-hidden"
-          style={bottomDockOpen ? { height: '62%', flex: '0 0 62%' } : { flex: '1 1 0%' }}
+          style={bottomDockOpen ? (expandedTable ? { height: '35%', flex: '0 0 35%' } : { height: '62%', flex: '0 0 62%' }) : { flex: '1 1 0%' }}
           aria-label="Kart og feltinspektør"
         >
           {primary}
         </section>
         {bottomDockOpen && (
-          <div className="min-h-0 min-w-0 flex-none" style={{ height: '38%' }}>
+          <div className="min-h-0 min-w-0 flex-none" style={expandedTable ? { height: '65%' } : { height: '38%' }}>
             {bottomDock}
           </div>
         )}

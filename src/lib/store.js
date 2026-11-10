@@ -225,6 +225,9 @@ const useStore = create(
         // Never bytes, documents or datasets; not persisted.
         gmiEditStatus: {},
         gmiEditSelection: null, // In-memory, bound to the active workspace/session/document.
+        gmiBatchInspectorRequest: null,
+        gmiBatchTableReview: null, // Small transient presentation records only, never engine previews.
+        gmiEditTableExpanded: false,
         changeGmiEditSelection: (layerId, action, expectedBinding) => {
           const binding = gmiSelectionBinding(layerId, gmiEditSessions.describe(layerId));
           if (!binding || !sameGmiSelectionBinding(binding, expectedBinding)) return;

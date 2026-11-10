@@ -27,6 +27,7 @@ import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
 import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns } from '@/lib/objectTablePresentation';
 import { validatorInspectionLayer } from '@/lib/gmiValidatorEditing.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
+import { Lexeme } from '@/components/gmi-edit/GmiObjectEditor';
 import { GMI_EDIT_TABLE_VIEWS, GMI_EDIT_TABLE_VIEW_LABELS, gmiEditMessage, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope } from '@/lib/gmiEditView.mjs';
 
 const ROW_HEIGHT = 28;
@@ -173,6 +174,8 @@ export default function LayerDataTable() {
   const highlightedFeatureId = useStore((state) => state.ui.highlightedFeatureId);
   const requestGmiEditObject = useStore((state) => state.requestGmiEditObject);
   const storedSelection = useStore((state) => state.gmiEditSelection);
+  const batchTableReview = useStore((state) => state.gmiBatchTableReview);
+  const tableExpanded = useStore((state) => state.gmiEditTableExpanded);
   const changeSelection = useStore((state) => state.changeGmiEditSelection);
   const [replaceSelection, setReplaceSelection] = useState(null);
 
@@ -263,6 +266,8 @@ export default function LayerDataTable() {
   const selectionDisplayKeys = showSelectionOnly ? selection.keys : null;
   const selectionWidth = selectionEnabled ? 32 : 0;
   const selectedKeys = useMemo(() => new Set(selection?.keys || []), [selection]);
+  const batchReview = selectionEnabled && batchTableReview?.layerId === layerId
+    && batchTableReview.selection === selection && batchTableReview.revision === gmiEditStatus?.revision ? batchTableReview : null;
 
   const { allItemsWithIndex, items, searchedItems, displayItems } = useMemo(() => deriveLayerTableRows({
     dataset: proposedData || layer?.data,
@@ -495,6 +500,7 @@ export default function LayerDataTable() {
   // Calculate column widths based on field names
   const columnWidths = useMemo(() => {
     const widths = { zoom: 36 };
+    if (batchReview) Object.assign(widths, { batchStatus: 300, batchValue: 145, batchFindings: 220 });
     orderedFields.forEach((field) => {
       const label = getFieldLabel(field);
       if (isContextualInspection && field === inspection.presentation.fieldColumn) {
@@ -508,10 +514,10 @@ export default function LayerDataTable() {
       }
     });
     return widths;
-  }, [orderedFields, isContextualInspection, inspection, contextualScopeRows]);
+  }, [orderedFields, isContextualInspection, inspection, contextualScopeRows, batchReview]);
 
   const columns = useMemo(() => {
-    return createLayerDataTableColumns({
+    const base = createLayerDataTableColumns({
       orderedFields,
       columnWidths,
       isContextualInspection,
@@ -537,7 +543,24 @@ export default function LayerDataTable() {
         return change ? <ChangedCell change={change}>{content}</ChangedCell> : content;
       },
     });
-  }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery, changedByObject]);
+    if (!batchReview) return base;
+    const reviewColumns = [['batchStatus', 'Status'], ['batchValue', 'Nå → Ny'], ['batchFindings', 'Nye funn / Validator']].map(([id, header]) => ({
+      id, header, enableSorting: false,
+      cell: ({ row }) => {
+        const entry = batchReview.rows[gmiSelectionKey(scope, row.original.__index)];
+        if (!entry) return <span>Ikke i gyldig forhåndsvisning</span>;
+        if (id === 'batchValue') return <span className="truncate" title={`Original: ${JSON.stringify(entry.original)} · Nå: ${JSON.stringify(entry.current)} → Ny: ${JSON.stringify(entry.proposed)}`}>«<Lexeme value={entry.current} empty="" />» → «<Lexeme value={entry.proposed} empty="" />»</span>;
+        if (id === 'batchFindings') return <span className="truncate" data-validation-tone={entry.newError ? 'error' : undefined} style={entry.newError ? { color: 'var(--validation-text)' } : undefined} title={entry.findings}>{entry.findings || 'Ingen relevante nye funn'}</span>;
+        return <div className="flex min-w-0 items-center gap-1" title={entry.explanation}>
+          <span className="truncate">{entry.label} · {entry.status}{entry.manual ? ' · Manuelt inkludert' : entry.reason ? ` · ${entry.reason}` : ''}</span>
+          {entry.canManual && <button type="button" className="gmi-compact-button gmi-focus-ring shrink-0 border border-gmi-border-strong px-1" aria-pressed={entry.manual}
+            onClick={(event) => { event.stopPropagation(); batchReview.onManual(entry.cellKey); }}>{entry.manual ? 'Fjern manuelt tillegg' : 'Inkluder manuelt'}</button>}
+        </div>;
+      },
+    }));
+    const fixed = base.filter((column) => column.id === 'zoom' || column.meta?.isFixed);
+    return [...fixed, ...reviewColumns, ...base.filter((column) => !fixed.includes(column))];
+  }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery, changedByObject, batchReview, scope]);
 
   const table = useReactTable({
     data: displayItems,
@@ -819,6 +842,7 @@ export default function LayerDataTable() {
       </div>
 
       {selectionEnabled && selectionCounts.total > 0 && <div data-gmi-selection-bar className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gmi-border px-3 py-1 text-[10px]">
+        <button type="button" className="gmi-primary-control gmi-focus-ring px-2 py-1" onClick={() => useStore.setState({ gmiBatchInspectorRequest: { layerId, at: Date.now() } })}>Rediger valgte ({selectionCounts.total})</button>
         <span role="status">{selectionCounts.total} valgt · {showSelectionOnly
           ? `${rows.length} vises · ${selectionCounts.visible} treffer filter/søk/visning · ${selectionCounts.hidden} utenfor`
           : `${selectionCounts.visible} synlige · ${selectionCounts.hidden} skjult av filter/søk/visning`}</span>
@@ -829,6 +853,12 @@ export default function LayerDataTable() {
             selectAction({ type: 'show-only', value: !showSelectionOnly });
           }}>Vis bare valgte</button>
         <button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => selectAction({ type: 'clear' })}>Fjern utvalg</button>
+        <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1" aria-pressed={tableExpanded}
+          onClick={() => useStore.setState({ gmiEditTableExpanded: !tableExpanded })}>{tableExpanded ? 'Mindre tabell' : 'Større tabell'}</button>
+      </div>}
+      {selectionEnabled && selectionCounts.total === 0 && tableExpanded && <div className="shrink-0 border-b border-gmi-border px-3 py-1">
+        <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-[10px]" aria-pressed="true"
+          onClick={() => useStore.setState({ gmiEditTableExpanded: false })}>Mindre tabell</button>
       </div>}
       {replaceSelection && <GmiConfirmDialog title={`Erstatt utvalget med ${scope === 'line' ? 'ledninger' : 'punkter'}?`}
         confirmLabel="Erstatt utvalget" testId="selection" onCancel={() => setReplaceSelection(null)}
