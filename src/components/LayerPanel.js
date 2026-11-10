@@ -944,7 +944,7 @@ function LayerFeltSection({
   onToggle,
   setGlobalFeltActive,
 }) {
-  const [tab, setTab] = useState('punkter');
+  const [tab, setTab] = useState(() => useStore.getState().ui.layerDataTable?.activeTabByLayer?.[layerId] || 'punkter');
   const toggleLayerFeltHiddenValue = useStore(
     (state) => state.toggleLayerFeltHiddenValue,
   );
@@ -1042,6 +1042,15 @@ function LayerFeltSection({
     >
       <button
         onClick={() => {
+          if (!isOpen) {
+            const state = useStore.getState();
+            const table = state.ui.layerDataTable;
+            const inspection = state.objectTableInspection;
+            const geometry = table?.isOpen && table.layerId === layerId && inspection
+              ? inspection.geometryScope === 'point' ? 'punkter' : 'ledninger'
+              : table?.activeTabByLayer?.[layerId] || 'punkter';
+            setTab(geometry);
+          }
           onToggle();
           setGlobalFeltActive(true);
         }}
@@ -1176,10 +1185,8 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
     (state) => state.setLayerFitBoundsTarget,
   );
 
-  if (!layer) return null;
-
   const isExpanded = expandedLayerId === layerId;
-  const data = layer.data;
+  const data = layer?.data;
   const pointCount = data?.points?.length || 0;
   const lineCount = data?.lines?.length || 0;
 
@@ -1198,6 +1205,8 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
       return 'tema';
     return null;
   });
+
+  if (!layer) return null;
 
   const toggleTema = () => {
     if (innerOpen === 'tema') {

@@ -298,59 +298,6 @@ export default function LayerDataTable() {
     [hiddenCodes, hiddenTypes, feltHiddenValues],
   );
 
-  // Count visible objects per tab so we can auto-switch when one tab is
-  // completely filtered away.
-  const visibleCountByTab = useMemo(() => {
-    const points = layer?.data?.points || [];
-    const lines = layer?.data?.lines || [];
-
-    if (!hasActiveFilters) {
-      return {
-        punkter: points.length,
-        ledninger: lines.length,
-      };
-    }
-
-    const visiblePoints = points.reduce(
-      (count, item) =>
-        count + (isItemHidden(item, 'punkter') ? 0 : 1),
-      0,
-    );
-    const visibleLines = lines.reduce(
-      (count, item) =>
-        count + (isItemHidden(item, 'ledninger') ? 0 : 1),
-      0,
-    );
-
-    return {
-      punkter: visiblePoints,
-      ledninger: visibleLines,
-    };
-  }, [layer?.data, hasActiveFilters, isItemHidden]);
-
-  useEffect(() => {
-    if (isExactInspection || !isOpen || !layerId || !hasActiveFilters) return;
-
-    const activeCount = visibleCountByTab[activeTab] || 0;
-    if (activeCount > 0) return;
-
-    const fallbackTab =
-      activeTab === 'punkter' ? 'ledninger' : 'punkter';
-    const fallbackCount = visibleCountByTab[fallbackTab] || 0;
-
-    if (fallbackCount > 0) {
-      setLayerDataTableTab(layerId, fallbackTab);
-    }
-  }, [
-    isOpen,
-    layerId,
-    hasActiveFilters,
-    activeTab,
-    visibleCountByTab,
-    setLayerDataTableTab,
-    isExactInspection,
-  ]);
-
   // Add __index and filter hidden items
   const allItemsWithIndex = useMemo(() => {
     if (isExactInspection) return rawItems;
@@ -696,6 +643,7 @@ export default function LayerDataTable() {
 
   return (
     <div
+      data-table-geometry={activeTab}
       className="flex h-full flex-col border-t border-gmi-border-strong bg-gmi-surface text-gmi-text"
     >
       <div
@@ -722,12 +670,14 @@ export default function LayerDataTable() {
 
         {!isExactInspection && <div className="flex items-center gap-0.5">
           <button
+            aria-pressed={activeTab === 'punkter'}
             onClick={() => setLayerDataTableTab(layerId, 'punkter')}
             className={`gmi-compact-button gmi-focus-ring px-2 py-0.5 text-[10px] font-medium ${activeTab === 'punkter' ? 'gmi-selected-control' : 'text-gmi-text-muted'}`}
           >
             Punkter
           </button>
           <button
+            aria-pressed={activeTab === 'ledninger'}
             onClick={() => setLayerDataTableTab(layerId, 'ledninger')}
             className={`gmi-compact-button gmi-focus-ring px-2 py-0.5 text-[10px] font-medium ${activeTab === 'ledninger' ? 'gmi-selected-control' : 'text-gmi-text-muted'}`}
           >
@@ -849,6 +799,15 @@ export default function LayerDataTable() {
         className="flex-1 overflow-auto"
         style={{ contain: 'strict' }}
       >
+        {!rows.length && (
+          <div role="status" className="p-4 text-xs text-gmi-text-muted">
+            {normalizedSearchQuery
+              ? 'Ingen objekter samsvarer med søket.'
+              : !isExactInspection && hiddenCount > 0
+                ? `Ingen synlige ${activeTab}. Tema/Felt-filtrene skjuler objektene. Juster filtrene eller velg Nullstill.`
+                : `Ingen ${activeTab} i denne visningen.`}
+          </div>
+        )}
         <div style={{ width: totalWidth, minWidth: '100%' }}>
           {/* Sticky header */}
           <div

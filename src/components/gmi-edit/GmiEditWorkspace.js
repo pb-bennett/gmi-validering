@@ -109,8 +109,13 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const onBatchDirtyChange = useCallback((dirty) => { batchDirtyRef.current = dirty; dirtyRef.current = dirty || objectDirtyRef.current; onDraftChange?.(dirtyRef.current); }, [onDraftChange]);
   const registerBatchReset = useCallback((reset) => { batchResetRef.current = reset; }, []);
 
-  // The Data Table is the main object browser in Rettinger: open it for this layer on entry.
-  useEffect(() => { if (layer && !useStore.getState().ui.layerDataTable?.isOpen) openLayerDataTable(layerId); }, [layerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Enter with the existing object-list scope, even if another layer or a Validator inspection was open.
+  const enterObjectTable = useEffectEvent(() => {
+    if (!layer) return;
+    openLayerDataTable(layerId);
+    setLayerDataTableTab(layerId, scopeToTableTab(scope));
+  });
+  useEffect(() => { enterObjectTable(); }, [layerId]);
 
   const presentation = describeGmiEditStatus(descriptor);
   const editable = presentation.editable && Boolean(view);
@@ -270,7 +275,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     </div>
     <div className="gmi-edit-body">
       {tab === 'objects'
-        ? <ObjectList layer={layer} scope={scope} onScope={setScope} query={query} onQuery={setQuery} changedOnly={changedOnly} onChangedOnly={setChangedOnly}
+        ? <ObjectList layer={layer} scope={scope} onScope={(nextScope) => { setScope(nextScope); syncObjectTable({ scope: nextScope }); }} query={query} onQuery={setQuery} changedOnly={changedOnly} onChangedOnly={setChangedOnly}
           changedObjects={changedObjects} selectedKey={selectedKey} onSelect={(target) => select(target)} />
         : <GmiChangeList changeSets={view?.changeSets || []} redoCount={view?.redo.length || 0} effective={view?.effective} activeChangeSetId={activeChangeSetId}
           editable={editable} onSelectObject={(target, id) => select(target, id)} onDiscard={discard} />}

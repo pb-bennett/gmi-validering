@@ -171,14 +171,16 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
         await click('Forkast skjema', editor);
       });
 
-      await t.test('selecting object type switches only the associated table, after the draft decision', async () => {
+      await t.test('scope switches synchronise the table; object selection still guards the draft', async () => {
         await edit('Merknad', 'Behold utkast');
         await click('Punkter (1)', workspace);
+        assert.equal(await tableType(), 'Punkter', 'explicit list scope switches the associated table');
         await browser.evaluate(`${workspace}.querySelector('[data-object-key="point:0"]').click()`);
         await browser.waitFor('document.querySelector("dialog[open][data-gmi-confirm=workspace]")');
         await click('Avbryt', 'document.querySelector("dialog[open]")');
-        assert.equal(await tableType(), 'Ledninger');
+        assert.equal(await tableType(), 'Punkter', 'cancelling object selection keeps the explicit scope');
         assert.equal(await browser.evaluate(`${editor}.dataset.gmiObject`), 'line:2');
+        assert.equal(await browser.evaluate(`${row('Merknad')}.querySelector('input').value`), 'Behold utkast');
         await click('Forkast skjema', editor);
         await select('point:0'); await checked();
         assert.equal(await tableType(), 'Punkter');

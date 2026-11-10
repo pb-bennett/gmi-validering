@@ -95,6 +95,8 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await browser.evaluate(`${workspace}.querySelector('[data-object-key="line:0"]').click()`);
         await browser.waitFor(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input')`);
         await value(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input')`, '17.0');
+        await click('Punkter', 'document.querySelector("[data-table-geometry]")');
+        await browser.waitFor('document.querySelector("[data-table-geometry]")?.dataset.tableGeometry === "punkter"');
         await click('\u00c5pne Validator', workspace);
         await browser.waitFor(`document.querySelector('[data-gmi-confirm="workspace"]')`);
         await click('Avbryt', `document.querySelector('[data-gmi-confirm="workspace"]')`);
@@ -112,6 +114,9 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await browser.evaluate(`Array.from(document.querySelectorAll('button[aria-label*="objekter i tabell:"]')).find(e => e.getAttribute('aria-label').includes('Ringstivhet')).click()`);
         await browser.waitFor(`document.body.innerText.includes('Objektutvalg: Foresl\u00e5tt')`);
         await browser.waitFor(`document.querySelectorAll('.group.flex.cursor-pointer').length === 1`);
+        assert.equal(await browser.evaluate('document.querySelector("[data-table-geometry]").dataset.tableGeometry'), 'ledninger', 'contextual Validator inspection pins requested line geometry');
+        const storedTabs = await browser.evaluate('Object.values(JSON.parse(localStorage.getItem("gmi-validator-storage")).state.ui.layerDataTable.activeTabByLayer)');
+        assert(storedTabs.includes('punkter'), 'inspection does not overwrite the explicit ordinary geometry');
         assert.match(await browser.evaluate(`document.querySelector('.group.flex.cursor-pointer').innerText`), /11/);
         await click('Lukk feltinformasjon');
         await shot('m5c-proposed-object-inspection');
