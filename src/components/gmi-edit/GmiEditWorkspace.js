@@ -20,6 +20,7 @@ import GmiBatchInspector from './GmiBatchInspector';
 import GmiChangeSetDetail from './GmiChangeSetDetail';
 import { gmiSelectionTargets } from '@/lib/gmiBatchInspectorView.mjs';
 import GmiFullValidation from './GmiFullValidation';
+import GmiLayerFilters from './GmiLayerFilters';
 import './gmiEdit.css';
 
 export const GMI_EDIT_INSPECTOR_ROOT_ID = 'gmi-edit-inspector-root';
@@ -347,6 +348,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     </header>
     <GmiFullValidation view={view} layerId={layerId} guard={guard} />
     <div className="gmi-edit-tabs" role="tablist" aria-label="Rettinger">
+      <button type="button" role="tab" aria-selected={tab === 'filter'} className="gmi-focus-ring" onClick={() => setTab('filter')}>Filter</button>
       <button type="button" role="tab" aria-selected={tab === 'objects'} className="gmi-focus-ring" onClick={() => setTab('objects')}>Objekter</button>
       <button type="button" role="tab" aria-selected={tab === 'changes'} className="gmi-focus-ring" onClick={() => setTab('changes')}>
         Endringer{view?.changeSets.length ? ` (${view.changeSets.length})` : ''}
@@ -354,7 +356,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       {!tableOpenOnLayer && <PhotoIconButton icon={TableIcon} size={16} label="Åpne datatabell" className="gmi-edit-tab-tool" onClick={() => openLayerDataTable(layerId)} />}
     </div>
     <div className="gmi-edit-body">
-      {tab === 'objects'
+      {tab === 'filter' ? <GmiLayerFilters layerId={layerId} layer={layer} status={status} /> : tab === 'objects'
         ? <ObjectList layer={layer} scope={scope} onScope={(nextScope) => { setScope(nextScope); syncObjectTable({ scope: nextScope }); }} query={query} onQuery={setQuery} changedOnly={changedOnly} onChangedOnly={setChangedOnly}
           changedObjects={changedObjects} selectedKey={selectedKey} onSelect={(target) => select(target)} />
         : <GmiChangeList changeSets={view?.changeSets || []} redoCount={view?.redo.length || 0} effective={view?.effective} activeChangeSetId={activeChangeSetId}

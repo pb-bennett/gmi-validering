@@ -43,6 +43,16 @@
 .gmi-edit-tabs [role=tab][aria-selected=true] { color: var(--gmi-navy); border-bottom-color: var(--gmi-interactive); font-weight: 600; }
 .gmi-edit-tab-tool { margin-left: auto; margin-bottom: 2px; }
 .gmi-edit-body { flex: 1; min-height: 0; overflow: auto; }
+.gmi-layer-filters { min-width: 0; overflow-wrap: anywhere; }
+.gmi-filter-basis { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--gmi-border); }
+.gmi-filter-basis p { margin: 0; }
+.gmi-filter-basis .gmi-edit-muted { flex-basis: 100%; }
+.gmi-layer-filters table { table-layout: fixed; }
+.gmi-layer-filters th { white-space: nowrap; }
+.gmi-layer-filters th:first-child { width: 40px; }
+.gmi-layer-filters th:nth-child(3) { width: 56px; }
+.gmi-layer-filters th:last-child { width: 60px; }
+.gmi-layer-filters td { overflow-wrap: anywhere; }
 
 .gmi-edit-object-panel { display: flex; flex-direction: column; min-height: 100%; }
 .gmi-edit-list-controls { position: sticky; top: 0; z-index: 1; display: grid; gap: 6px; padding: 8px 10px; background: var(--gmi-surface); border-bottom: 1px solid var(--gmi-border); }

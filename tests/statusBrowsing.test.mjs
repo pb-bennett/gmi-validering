@@ -7,12 +7,12 @@ import { STATUS_LABELS, getStatusLabel, formatStatusChoice } from '../src/lib/st
 register('./esmJsLoader.mjs', import.meta.url);
 const { SOSIParser } = await import('../src/lib/parsing/sosiParser.js');
 const { createAttributeColumnAccessors } = await import('../src/lib/objectTablePresentation.js');
-const sources = Object.fromEntries(await Promise.all(['Sidebar', 'LayerPanel', 'MapInner'].map(async (name) =>
+const sources = Object.fromEntries(await Promise.all(['Sidebar', 'LayerFilterSections', 'MapInner'].map(async (name) =>
   [name, await readFile(new URL(`../src/components/${name}.js`, import.meta.url), 'utf8')])));
 
 // Exercise the existing embedded field discovery and map predicate without a React/browser runtime.
 const sidebarAnalysis = sources.Sidebar.split('// Analyze fields separately for points and lines')[1].split('    return {')[0];
-const layerAnalysis = sources.LayerPanel.split('    const analysis = {')[1].split('    return analysis;')[0];
+const layerAnalysis = sources.LayerFilterSections.split('    const analysis = {')[1].split('    return analysis;')[0];
 const analyzeSidebar = new Function('data', `${sidebarAnalysis}; return fieldAnalysis;`);
 const analyzeLayer = new Function('data', `const analysis = {${layerAnalysis}; return analysis;`);
 const mapPredicate = sources.MapInner.split('const isHiddenByFeltFilter = useCallback(')[1].split('    [feltFilterActive, feltHiddenValues]')[0].trim().replace(/,$/, '');
@@ -50,7 +50,7 @@ test('both existing field lists discover canonical Status and keep every distinc
     assert.equal(analyze({ points: [{ attributes: {} }], lines: [] }).points.fieldOrder.includes('Status'), false);
   }
   assert.equal(analyzeSidebar(data).points.fields.Status.valueCounts['(Mangler)'], 1);
-  for (const name of ['Sidebar', 'LayerPanel']) {
+  for (const name of ['Sidebar', 'LayerFilterSections']) {
     assert.match(sources[name], /fieldName === 'Status' \? formatStatusChoice\(value\) : value/);
     assert.match(sources[name], /item\.value === value/);
   }
