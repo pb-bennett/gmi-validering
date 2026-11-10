@@ -5,7 +5,7 @@ import { createGmiSourceDocument, createGmiEditSession, createGmiObjectCorrectio
   discardAllGmiEdits, discardGmiChangeSet, revalidateGmiEditSession, getGmiProposedState, getGmiDocumentDataset, getGmiSourceBytes,
   evaluateGmiBatchEligibility, createGmiBatchCorrection, createGmiProposedCache, compileGmiEffectiveEdits } from '../src/lib/gmi-edit/index.mjs';
 import { CORRECTABLE_RULES, prepareValidatorCorrection, compareGmiValidationRuns, buildGmiValidationComparison,
-  isCurrentGmiComparison, validatorInspectionLayer } from '../src/lib/gmiValidatorEditing.mjs';
+  isCurrentGmiComparison, validatorInspectionLayer, validatorCorrectionSelection } from '../src/lib/gmiValidatorEditing.mjs';
 const date = '2026-11-09';
 const fresh = (options) => createGmiEditSession(createGmiSourceDocument(gmiEditBatchFixture(options)), { layerId: 'layer-one' });
 const stage = (session, index, values) => {
@@ -138,4 +138,28 @@ test('read-only sources remain inspectable with verified identical proposed stat
   const validation = revalidateGmiEditSession(session, { referenceDate: date });
   assert.equal(validation.ok, true); assert.equal(validation.proposed.identical, true);
   assert.equal(prepareValidatorCorrection(session, validation.original, ['innmaling.line.sdr.valid']).code, 'document-not-editable');
+});
+
+
+test('R5 accepts only exact prepared targets, field, layer, live session and immutable source identities', () => {
+  const session = fresh(), run = revalidateGmiEditSession(session, { referenceDate: date }).original;
+  const prepared = prepareValidatorCorrection(session, run, ['innmaling.line.pressure-class.valid']);
+  assert.equal(prepared.ok, true);
+  const correction = { ...prepared, sessionId: 'lineage' };
+  const layer = { id: session.layerId, data: getGmiDocumentDataset(session.document) };
+  const view = { session, document: session.document, handle: { sessionId: 'lineage', fingerprint: session.document.fingerprint } };
+  const result = validatorCorrectionSelection(correction, view, layer);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.selection.keys, correction.targets.map((t) => `${t.scope}:${t.sourceIndex}`));
+  assert.equal(result.selection.scope, 'line'); assert.equal(result.selection.showOnly, true);
+  assert.equal(result.selection.origin.canonicalFieldId, 'pressureClass');
+  assert.equal(session.changeSets.length, 0);
+  for (const patch of [{ layerId: 'other' }, { sessionId: 'old' }, { fingerprint: 'old' },
+    { session: stage(session, 0, { SDR: '11' }) }, { targets: [{ scope: 'point', sourceIndex: 0 }] },
+    { targets: [{ scope: 'line', sourceIndex: 999 }] }, { targets: [] }]) {
+    assert.equal(validatorCorrectionSelection({ ...correction, ...patch }, view, layer).ok, false);
+  }
+  const changed = { ...layer, data: { ...layer.data, lines: layer.data.lines.map((o) => ({ ...o, guid: 'replaced' })) } };
+  assert.equal(validatorCorrectionSelection(correction, view, changed).ok, false);
+  assert.equal(validatorCorrectionSelection(correction, null, layer).ok, false);
 });

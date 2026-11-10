@@ -666,6 +666,7 @@ export default function LayerDataTable() {
   const headerSelection = gmiSelectionCounts(selection, scope, visibleKeys);
   const selectAction = (action) => {
     if (!selectionEnabled) return;
+    if (selection?.origin?.kind === 'validator' && action.scope && action.scope !== selection.scope) return;
     if (selection?.keys.length && action.scope && action.scope !== selection.scope) {
       // A cross-geometry range has no anchor in the new geometry, so it selects one object.
       setReplaceSelection({ action, binding: selectionBinding, from: { scope: selection.scope, count: selection.keys.length },
@@ -941,13 +942,16 @@ export default function LayerDataTable() {
         </button>
       </div>
 
-      {selectionEnabled && selectionCounts.total > 0 && <div data-gmi-selection-bar className="gmi-selection-bar">
+      {selectionEnabled && (selectionCounts.total > 0 || selection?.origin?.kind === 'validator') && <div data-gmi-selection-bar className="gmi-selection-bar">
         <p className="gmi-selection-summary" role="status">
+          {selection?.origin?.kind === 'validator' && <span title="Utvalget kan bare reduseres. Gjør om til vanlig utvalg for å legge til objekter.">Fra Validator: {selection.origin.targets.length} objekter · bare fjerning tillatt. </span>}
           <strong>{selectionCounts.total}</strong> valgt<span className="gmi-selection-scope"> · {showSelectionOnly
             ? `${rows.length} vises · ${selectionCounts.visible} treffer filter/søk/visning · ${selectionCounts.hidden} utenfor`
             : `${selectionCounts.visible} synlige · ${selectionCounts.hidden} skjult av filter/søk/visning`}</span>
         </p>
         <div className="gmi-selection-actions">
+          {selection?.origin?.kind === 'validator' && <button type="button" className="gmi-bar-button gmi-focus-ring"
+            onClick={() => selectAction({ type: 'make-ordinary' })}>Gjør om til vanlig utvalg</button>}
           <div className="gmi-bar-segmented" role="group" aria-label="Rader i tabellen">
             <button type="button" aria-pressed={!showSelectionOnly} className="gmi-focus-ring" title="Vanlig visning med Tema/Felt-filtre og søk"
               onClick={() => { if (showSelectionOnly) selectAction({ type: 'show-only', value: false }); }}>Filtrert visning</button>

@@ -79,3 +79,26 @@ test('map channel follows full selection content at equal cardinality, independe
   assert.deepEqual([...gmiSelectedFeatureIds(add(['line:3', 'line:4']), 'a')], ['ledninger-a-3', 'ledninger-a-4']);
   assert.equal(gmiSelectedFeatureIds(add(['line:1']), 'b').size, 0);
 });
+
+
+test('R5 Validator origin is shrink-only across every shared action, even after clear; explicit conversion preserves keys', () => {
+  const ordinary = add(['line:1', 'line:3']);
+  const locked = { ...ordinary, showOnly: true, origin: { kind: 'validator', targets: [{ scope: 'line', sourceIndex: 1 }, { scope: 'line', sourceIndex: 3 }] } };
+  for (const action of [
+    { type: 'toggle', key: 'line:2' }, { type: 'add', keys: ['line:0', 'line:1'] },
+    { type: 'range', key: 'line:4', orderedKeys: ['line:1', 'line:2', 'line:3', 'line:4'] },
+    { type: 'add', keys: Array.from({ length: 80 }, (_, i) => `line:${i}`) },
+    { type: 'toggle', scope: 'point', key: 'point:0', replace: true },
+  ]) assert.equal(reduce(locked, action), locked);
+  const shrunk = reduce(locked, { type: 'toggle', key: 'line:1' });
+  assert.deepEqual(shrunk.keys, ['line:3']); assert.equal(shrunk.origin, locked.origin);
+  assert.equal(reduce(shrunk, { type: 'toggle', key: 'line:1' }), shrunk, 'removed original targets cannot implicitly widen either');
+  assert.deepEqual(reduce(locked, { type: 'range', key: 'line:1', orderedKeys: ['line:1'], checked: false }).keys, ['line:3']);
+  const empty = reduce(locked, { type: 'clear' });
+  assert.deepEqual(empty.keys, []); assert.equal(empty.origin, locked.origin);
+  assert.equal(reduce(empty, { type: 'add', keys: ['line:1'] }), empty);
+  assert.equal(reduce(empty, { type: 'toggle', scope: 'point', key: 'point:0', replace: true }), empty);
+  const converted = reduce(shrunk, { type: 'make-ordinary' });
+  assert.deepEqual(converted.keys, shrunk.keys); assert.equal(converted.showOnly, true); assert.equal(converted.origin, null);
+  assert.deepEqual(reduce(converted, { type: 'add', keys: ['line:2'] }).keys, ['line:3', 'line:2']);
+});

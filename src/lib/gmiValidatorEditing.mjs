@@ -1,5 +1,5 @@
 // M5C orchestration. Rules, applicability, parsing and mutations remain in M1/M2.
-import { evaluateGmiBatchEligibility, getGmiDocumentDataset } from './gmi-edit/index.mjs';
+import { evaluateGmiBatchEligibility, getGmiDocumentDataset, gmiSourceIntact } from './gmi-edit/index.mjs';
 import { getDatasetRevision } from './validation-v2/datasetRevision.js';
 
 export const CORRECTABLE_RULES = Object.freeze({
@@ -83,6 +83,31 @@ export function prepareValidatorCorrection(session, run, ruleIds) {
   if (!eligible.length) return { ok: false, code: 'no-editable-targets' };
   return { ok: true, layerId: session.layerId, session, fingerprint: session.document.fingerprint, ruleId, canonicalFieldId,
     targets: eligible.map(({ scope, sourceIndex }) => ({ scope, sourceIndex })), datasetRevision: run.datasetRevision };
+}
+
+export const VALIDATOR_CORRECTION_STALE = 'Kildegrunnlaget for Validator-utvalget er endret. Gå tilbake til Validator og lag et nytt utvalg.';
+
+/** Accept prepared targets only against their exact live session and immutable source. */
+export function validatorCorrectionSelection(correction, view, layer) {
+  const fail = () => ({ ok: false, code: 'stale-session', message: VALIDATOR_CORRECTION_STALE });
+  if (!correction?.ok || !view || !layer || correction.layerId !== layer.id
+    || correction.layerId !== view.session.layerId || correction.sessionId !== view.handle.sessionId
+    || correction.session !== view.session || correction.session.document !== view.document
+    || correction.fingerprint !== view.document.fingerprint || view.handle.fingerprint !== correction.fingerprint
+    || !gmiSourceIntact(view.document) || CORRECTABLE_RULES[correction.ruleId] !== correction.canonicalFieldId) return fail();
+  const dataset = getGmiDocumentDataset(view.document);
+  const keys = [];
+  for (const target of correction.targets || []) {
+    if (target.scope !== 'line' || !Number.isInteger(target.sourceIndex) || target.sourceIndex < 0) return fail();
+    const source = dataset.lines[target.sourceIndex], object = layer.data?.lines?.[target.sourceIndex];
+    if (!source || !object || source.id !== object.id || (source.guid ?? null) !== (object.guid ?? null)) return fail();
+    keys.push(`line:${target.sourceIndex}`);
+  }
+  if (!keys.length || new Set(keys).size !== keys.length) return fail();
+  const binding = { layerId: layer.id, sessionId: view.handle.sessionId, fingerprint: view.document.fingerprint };
+  return { ok: true, selection: { binding, scope: 'line', keys, anchor: null, showOnly: true,
+    origin: { kind: 'validator', ruleId: correction.ruleId, canonicalFieldId: correction.canonicalFieldId,
+      targets: correction.targets.map((target) => ({ ...target })), ...binding } } };
 }
 
 // Resolve an inspection against the exact verified session, never another layer

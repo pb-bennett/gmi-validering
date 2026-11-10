@@ -37,10 +37,10 @@ function RiskFindings({ tone, title, findings }) {
   </div>;
 }
 
-export default function GmiBatchInspector({ view, onDirtyChange, registerReset, onClose, onRequestClose, onStaged, inspected, onInspectClose, renderChangeSet }) {
+export default function GmiBatchInspector({ view, initialField = 'sdr', onDirtyChange, registerReset, onClose, onRequestClose, onStaged, inspected, onInspectClose, renderChangeSet }) {
   'use no memo';
   const selection = useStore((state) => state.gmiEditSelection);
-  const [field, setField] = useState('sdr'), [lexeme, setLexeme] = useState(''), [mode, setMode] = useState('fill-missing');
+  const [field, setField] = useState(initialField), [lexeme, setLexeme] = useState(''), [mode, setMode] = useState('fill-missing');
   const [review, setReview] = useState(null), [manual, setManual] = useState(new Set()), [advanced, setAdvanced] = useState(false);
   const [replace, setReplace] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState(null), [risk, setRisk] = useState(null);
   const [expanded, setExpanded] = useState(false);
@@ -48,7 +48,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const [staged, setStaged] = useState(null); // id of the ChangeSet just staged from this inspector
   const generation = useRef(0);
   const scopeExpanded = useRef(false);
-  const dirty = Boolean(lexeme || review || field !== 'sdr' || mode !== 'fill-missing');
+  const dirty = Boolean(lexeme || review || field !== initialField || mode !== 'fill-missing');
   const scopeProblem = gmiSelectionTargets(view, selection);
   const stale = review ? gmiBatchScopeState(view, selection, review) || (expanded ? 'expanded' : null) : null;
   useEffect(() => { if (stale === 'expanded') setExpanded(true); }, [stale]);
@@ -167,7 +167,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const stageBlocked = busy || Boolean(stale) || !plan?.ok || !plan.changeSet.cells.length || (conflicts > 0 && !replace);
   const newBatch = () => { setStaged(null); setConfigOpen(true); setMessage(null); };
   const configForm = <form onSubmit={(event) => { event.preventDefault(); if (canPreview) calculate(); }} className="gmi-inspector-config" data-gmi-batch-config>
-    <label>Felt<select aria-label="Felt for masseendring" value={field} disabled={busy} onChange={(event) => { invalidate(); setField(event.target.value); }}>{GMI_BATCH_FIELDS.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label>
+    <label>Felt<select aria-label="Felt for masseendring" value={field} disabled={busy || selection?.origin?.kind === 'validator'} onChange={(event) => { invalidate(); setField(event.target.value); }}>{GMI_BATCH_FIELDS.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label>
     <label>Ny verdi<input aria-label="Ny verdi" value={lexeme} autoComplete="off" spellCheck={false} aria-invalid={Boolean(problem)} onChange={(event) => { invalidate(); setLexeme(event.target.value); }} /></label>
     <fieldset className="gmi-batch-modes"><legend>Hvordan skal verdien brukes?</legend>
       {MODES.map(([value, label]) => <label key={value}><input type="radio" name="inspector-batch-mode" checked={mode === value} onChange={() => { invalidate(); setMode(value); }} /> {label}</label>)}

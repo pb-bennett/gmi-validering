@@ -10,6 +10,8 @@ import test from 'node:test';
 import path from 'node:path';
 import { readFile, readdir } from 'node:fs/promises';
 import { register } from 'node:module';
+import { prepareValidatorCorrection } from '../src/lib/gmiValidatorEditing.mjs';
+import { gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
 import { GMI_EDIT_FIXTURE_DIR } from './helpers/gmiEditFixtures.mjs';
 import { loadGmiDocument, verifyCellChanges } from './helpers/gmiEditHarness.mjs';
 import {
@@ -404,7 +406,7 @@ test('M5C store navigation retains sessions and staged edits; proposed inspectio
   useStore.getState().openGmiValidator(id, 'proposed', 'innmaling.line.sdr.valid', 'line');
   assert.equal(useStore.getState().gmiValidatorDatasets[id], 'proposed');
   assert.equal(useStore.getState().gmiValidatorDatasets[other], undefined, 'other layers still default to Original');
-  const request = { layerId: id, session, canonicalFieldId: 'sdr', targets: [{ scope: 'line', sourceIndex: 1 }] };
+  const request = { ok: true, layerId: id, session, sessionId: handle.sessionId, fingerprint: session.document.fingerprint, ruleId: 'innmaling.line.sdr.valid', canonicalFieldId: 'sdr', targets: [{ scope: 'line', sourceIndex: 1 }] };
   useStore.getState().openGmiEditWorkspace(id, request);
   assert.equal(useStore.getState().gmiEditWorkspace.correction, request);
   assert.equal(gmiEditSessions.getSession(handle).session, session);
@@ -426,4 +428,43 @@ test('M5C store navigation retains sessions and staged edits; proposed inspectio
   useStore.getState().setGmiValidatorDataset(other, 'proposed');
   resetStore();
   assert.deepEqual(useStore.getState().gmiValidatorDatasets, {});
+});
+
+
+test('R5 store handoff is atomic behind the draft guard and rechecks source/session before accepting', async (t) => {
+  resetStore(); t.after(() => { useStore.setState({ gmiEditWorkspaceGuard: null }); resetStore(); });
+  const { id } = await addStoreLayer(gmiEditBatchFixture());
+  const { handle } = await gmiEditSessions.open(id);
+  const session = gmiEditSessions.getSession(handle).session;
+  const run = gmiEditSessions.revalidate(handle, { referenceDate: '2026-11-09' }).original;
+  const request = { ...prepareValidatorCorrection(session, run, ['innmaling.line.sdr.valid']), sessionId: handle.sessionId };
+  assert.equal(request.ok, true);
+  useStore.getState().openGmiEditWorkspace(id);
+  const binding = { layerId: id, sessionId: handle.sessionId, fingerprint: handle.fingerprint };
+  useStore.getState().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:1'] }, binding);
+  useStore.getState().setGmiEditTableView(id, 'proposed');
+  let continuation;
+  useStore.setState({ gmiEditWorkspaceGuard: (run) => { continuation = run; } });
+  const before = useStore.getState();
+  assert.equal(before.openGmiEditWorkspace(id, request).ok, true);
+  for (const key of ['gmiEditWorkspace', 'gmiEditSelection', 'ui', 'gmiEditTableView']) assert.equal(useStore.getState()[key], before[key], 'guard cancellation preserves ' + key);
+  // Explicit approval accepts exactly the prepared source set, with no engine mutation.
+  continuation();
+  const accepted = useStore.getState();
+  assert.deepEqual(accepted.gmiEditSelection.keys, request.targets.map(t => `${t.scope}:${t.sourceIndex}`));
+  assert.equal(accepted.gmiEditSelection.origin.kind, 'validator');
+  assert.equal(accepted.gmiEditSelection.showOnly, true);
+  assert.equal(accepted.gmiEditTableView[id], 'original');
+  assert.equal(gmiEditSessions.getSession(handle).session, session);
+  const selected = accepted.gmiEditSelection;
+  accepted.changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:1'] }, binding);
+  assert.equal(useStore.getState().gmiEditSelection, selected);
+  accepted.openGmiEditWorkspace(id, request);
+  assert.equal(gmiEditSessions.stage(handle, createGmiObjectCorrection(session, { scope: 'line', sourceIndex: 0, values: { SDR: '11' } }).changeSet).ok, true);
+  continuation();
+  assert.equal(useStore.getState().gmiEditSelection, selected);
+  assert.match(useStore.getState().gmiEditHandoffError, /Kildegrunnlaget/);
+  assert.equal(useStore.getState().openGmiEditWorkspace(id, request).ok, false);
+  useStore.getState().removeLayer(id, { discardGmiEdits: true });
+  assert.equal(useStore.getState().openGmiEditWorkspace(id, request).ok, false);
 });

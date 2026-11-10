@@ -25,10 +25,13 @@ export function reconcileGmiEditSelection(selection, { workspaceLayerId, layers,
 export function reduceGmiEditSelection(selection, action, { binding, counts }) {
   if (!binding) return null;
   const current = sameGmiSelectionBinding(selection?.binding, binding) ? selection : null;
-  if (action.type === 'clear') return null;
+  const restricted = current?.origin?.kind === 'validator';
+  if (action.type === 'make-ordinary') return current ? { ...current, origin: null } : null;
+  if (action.type === 'clear') return restricted ? { ...current, keys: [], anchor: null } : null;
   if (action.type === 'show-only') return current ? { ...current, showOnly: Boolean(action.value) } : null;
   const scope = action.scope;
   if (!['point', 'line'].includes(scope)) return current;
+  if (restricted && scope !== current.scope) return current;
   if (current?.keys.length && current.scope !== scope && !action.replace) return current;
   const base = current?.scope === scope ? current : { binding, scope, keys: [], anchor: null, showOnly: false };
   const clean = (keys) => [...new Set((keys || []).filter((key) => validKey(key, scope, counts)))];
@@ -45,7 +48,9 @@ export function reduceGmiEditSelection(selection, action, { binding, counts }) {
   } else if (action.type === 'add' || action.type === 'remove') {
     for (const key of clean(action.keys)) { if (action.type === 'add') keys.add(key); else keys.delete(key); }
   } else return current;
-  return keys.size ? { ...base, keys: [...keys], anchor } : null;
+  // Every membership entry point (including replace/range/select-all) is shrink-only.
+  if (restricted && [...keys].some((key) => !base.keys.includes(key))) return current;
+  return keys.size || restricted ? { ...base, keys: [...keys], anchor } : null;
 }
 
 export function gmiSelectionCounts(selection, scope, visibleKeys) {

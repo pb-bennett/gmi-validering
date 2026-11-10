@@ -1,4 +1,4 @@
-import { validatorInspectionLayer } from './gmiValidatorEditing.mjs';
+import { validatorCorrectionSelection, validatorInspectionLayer } from './gmiValidatorEditing.mjs';
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { detectOutliers } from './analysis/outliers';
@@ -256,16 +256,33 @@ const useStore = create(
         gmiEditWorkspace: null, // { layerId } | null
         gmiEditTableView: {}, // { [layerId]: 'original' | 'proposed' | 'changed' }
         gmiEditObjectRequest: null, // { layerId, scope, sourceIndex, at } | null
-        openGmiEditWorkspace: (layerId, correction = null) =>
-          set(
-            (state) => ({
+        gmiEditWorkspaceGuard: null, // Mounted workspace's established draft guard; never persisted.
+        gmiEditHandoffError: null,
+        openGmiEditWorkspace: (layerId, correction = null) => {
+          const prepare = () => {
+            if (!correction) return { ok: true };
+            const handle = gmiEditSessions.getHandle(layerId);
+            const resolved = gmiEditSessions.resolve(handle);
+            return validatorCorrectionSelection(correction, resolved.ok ? { ...resolved, handle } : null, get().layers[layerId]);
+          };
+          const initial = prepare();
+          if (!initial.ok) return initial;
+          const commit = () => {
+            // The draft dialog can remain open while source/session state changes.
+            const prepared = prepare();
+            if (!prepared.ok) { set({ gmiEditHandoffError: prepared.message }); return; }
+            set((state) => ({
               gmiEditWorkspace: state.layers[layerId] ? { layerId, ...(correction ? { correction } : {}) } : null,
+              ...(correction ? { gmiEditSelection: prepared.selection, gmiEditTableView: { ...state.gmiEditTableView, [layerId]: 'original' } } : {}),
+              gmiEditHandoffError: null,
               gmiEditObjectRequest: null,
               ui: { ...state.ui, fieldValidationOpen: false },
-            }),
-            false,
-            'gmiEdit/openWorkspace',
-          ),
+            }), false, 'gmiEdit/openWorkspace');
+          };
+          const guard = get().gmiEditWorkspaceGuard;
+          if (get().gmiEditWorkspace && guard) guard(commit); else commit();
+          return { ok: true };
+        },
         closeGmiEditWorkspace: () =>
           set({ gmiEditWorkspace: null, gmiEditObjectRequest: null }, false, 'gmiEdit/closeWorkspace'),
         setGmiEditTableView: (layerId, view) =>

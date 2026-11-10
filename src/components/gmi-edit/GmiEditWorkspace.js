@@ -105,8 +105,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const [notice, setNotice] = useState(null);
   const [formRevision, setFormRevision] = useState(0);
   const correction = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.correction : null);
-  const [batchOpen, setBatchOpen] = useState(Boolean(correction));
-  const [batchInspector, setBatchInspector] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchInspector, setBatchInspector] = useState(Boolean(correction));
   const [batchInspected, setBatchInspected] = useState(null);
   // A history entry shown in the right inspector (read-only ChangeSet details).
   const [detailId, setDetailId] = useState(null);
@@ -121,7 +121,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const enterObjectTable = useEffectEvent(() => {
     if (!layer) return;
     openLayerDataTable(layerId);
-    setLayerDataTableTab(layerId, scopeToTableTab(scope));
+    setLayerDataTableTab(layerId, scopeToTableTab(correction ? 'line' : scope));
   });
   useEffect(() => { enterObjectTable(); }, [layerId]);
   // Also covers temporary workspace unmounts, e.g. opening FOTO through the page guard.
@@ -155,6 +155,20 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       run: () => { batchResetRef.current?.(); onDirtyChange(false); onBatchDirtyChange(false); setFormRevision((revision) => revision + 1); run(); },
     });
   }, [onDirtyChange, onBatchDirtyChange]);
+
+  useEffect(() => {
+    useStore.setState({ gmiEditWorkspaceGuard: guard });
+    return () => { if (useStore.getState().gmiEditWorkspaceGuard === guard) useStore.setState({ gmiEditWorkspaceGuard: null }); };
+  }, [guard]);
+  // Also handles a new handoff while this workspace is already mounted.
+  const enterCorrection = useEffectEvent(() => {
+    if (!correction) return;
+    setBatchOpen(false); setBatchInspector(true); setBatchInspected(null); setDetailId(null);
+    setScope('line'); openLayerDataTable(layerId); setLayerDataTableTab(layerId, 'ledninger');
+    setFormRevision((revision) => revision + 1);
+  });
+  useEffect(() => { enterCorrection(); }, [correction]);
+  const handoffError = useStore((state) => state.gmiEditHandoffError);
 
   const highlight = useCallback((target) => {
     setHighlightedFeature(`${scopeToTableTab(target.scope)}-${layerId}-${target.sourceIndex}`);
@@ -362,7 +376,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
         <DownloadSimpleIcon size={16} aria-hidden="true" /> Last ned revidert GMI <span className="gmi-edit-experimental-tag">Eksperimentell</span>
       </button>
     </footer>
-    {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
+    {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector key={`batch:${formRevision}`} initialField={correction?.canonicalFieldId} view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onClose={closeBatchInspector} onRequestClose={() => guard(closeBatchInspector, 'masseendringen')} inspected={batchInspected} onInspectClose={() => setBatchInspected(null)}
       renderChangeSet={(changeSet) => renderChangeSet(changeSet, 'staged')}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice(null); }} />
@@ -371,8 +385,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate}
       onStaged={() => { setChangedOnly(false); }} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}
     {exportOpen && view && <GmiExportDialog layerId={layerId} view={view} status={status} onClose={() => setExportOpen(false)} />}
-    {batchOpen && view && <GmiBatchDialog correction={correction} view={view} onClose={() => { setBatchOpen(false); if (correction) useStore.setState({ gmiEditWorkspace: { layerId } }); }} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
+    {batchOpen && view && <GmiBatchDialog view={view} onClose={() => setBatchOpen(false)} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice({ tone: 'ok', text: `Lagt til: ${changeSet.label}` }); }} />}
+    {handoffError && <p role="alert">{handoffError}</p>}
     {pending && <GmiConfirmDialog title={pending.title} confirmLabel={pending.confirmLabel} testId="workspace"
       onCancel={() => setPending(null)} onConfirm={() => { const run = pending.run; setPending(null); run(); }}>{pending.body}</GmiConfirmDialog>}
   </section>;

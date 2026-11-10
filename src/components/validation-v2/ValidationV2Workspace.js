@@ -359,8 +359,8 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
       const correction = resolved.ok ? prepareValidatorCorrection(resolved.session, result, presentation.rules.map((rule) => rule.ruleId)) : resolved;
       if (!correction.ok) throw new Error(correction.code === 'field-absent' ? 'Kolonnen mangler. Den kan ikke opprettes før strukturell redigering støttes.'
         : 'Ingen aktuelle manglende verdier kan rettes sikkert. Utfylte, uavklarte og ikke-redigerbare objekter tas ikke med.');
-      closeValidatorOwnedObjectTable();
-      useStore.getState().openGmiEditWorkspace(selectedLayerId, { ...correction, sessionId: handle.sessionId });
+      const handoff = useStore.getState().openGmiEditWorkspace(selectedLayerId, { ...correction, sessionId: handle.sessionId });
+      if (!handoff.ok) throw new Error(handoff.message);
     } catch (failure) { setCorrectionError(failure.message); }
   };
 
