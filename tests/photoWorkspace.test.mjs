@@ -63,7 +63,7 @@ test('workspace modes, filter and sort are transient presentation and never chan
   assert.equal(state.filter.changed, false, 'the changed filter only exists in Edit mode');
   state = photoWorkspaceReducer(state, { type: 'mode', mode: 'edit' });
   state = photoWorkspaceReducer(state, { type: 'filter', filter: { changed: true, placement: 'gmi', missingDirection: 1, placementBogus: 'x' } });
-  assert.deepEqual(state.filter, { placement: 'gmi', missingDirection: true, missingCaptureTime: false, repeated: false, changed: true });
+  assert.deepEqual(state.filter, { placement: 'gmi', missingDirection: true, missingCaptureTime: false, repeated: false, changed: true, delivery: 'all' });
   state = photoWorkspaceReducer(state, { type: 'filter', filter: { placement: 'nonsense' } });
   assert.equal(state.filter.placement, 'gmi');
   state = photoWorkspaceReducer(state, { type: 'sort', sort: 'capture-desc' });

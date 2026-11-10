@@ -13,6 +13,7 @@ import { estimatedCaptureTime } from './photoEstimatedDates.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
+import { PHOTO_DELIVERY_INTENTS, buildPhotoDeliverySnapshot, photoDeliveryEntry, photoLayerDelivery } from './photoDeliveryIntent.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
   photos: Object.freeze([]), selectedId: null, batchSelectedIds: Object.freeze([]),
@@ -78,6 +79,9 @@ export function createPhotoSession({
   const gmiReviews = new WeakMap();
   const sourceWorkflows = new Map();
   const workflowReviews = new WeakMap();
+  // Combined-delivery decisions (M8), one per occurrence (record id), kept apart from the records so that no
+  // positioning, metadata or edit action can change them. Only the two explicit delivery actions write here.
+  const deliveryDecisions = new Map();
 
   function sourceWorkflowIsLive(ticket) {
     return Boolean(ticket && ticket.generation === generation && sourceWorkflows.get(ticket.layerId) === ticket
@@ -347,7 +351,7 @@ export function createPhotoSession({
 
   function release(ids) {
     const candidates = assetIds(ids);
-    for (const id of ids) { records.delete(id); appendOverrideIds.delete(id); }
+    for (const id of ids) { records.delete(id); appendOverrideIds.delete(id); deliveryDecisions.delete(id); }
     const live = new Set([...records.values()].map((record) => record.assetId));
     const removed = new Set(candidates.filter((id) => !live.has(id)));
     queue = queue.filter((job) => !removed.has(job.id));
@@ -817,6 +821,70 @@ export function createPhotoSession({
       }
       if (plan.targets.length) publish();
       return { ok: true, ...plan, counts: { ...plan.counts, adopted: plan.targets.length } };
+    },
+    // Combined delivery (M8). Explicit, atomic and owner-scoped: every id is validated before any write, a repeated
+    // value is a no-op, and nothing else (positions, directions, metadata, sources, hyperlinks) is touched.
+    setDeliveryIntent(layerId, photoIds, intent) {
+      const fail = (error, invalidIds = []) => ({ ok: false, error, invalidIds, changedIds: [] });
+      if (!Object.values(PHOTO_DELIVERY_INTENTS).includes(intent)) return fail('invalid-intent');
+      const layer = layers.get(layerId);
+      if (!layer) return fail('layer-not-found');
+      if (!Array.isArray(photoIds) || !photoIds.length || new Set(photoIds).size !== photoIds.length) return fail('invalid-selection');
+      const stale = photoIds.filter((id) => !layer.photoIds.includes(id) || !records.has(id));
+      if (stale.length) return fail('stale-occurrence', stale);
+      const unlinked = photoIds.filter((id) => !records.get(id).occurrence);
+      if (unlinked.length) return fail('not-gmi-linked', unlinked);
+      const entries = photoIds.map((id) => photoDeliveryEntry(layer, records.get(id), deliveryDecisions.get(id) || null));
+      if (intent === PHOTO_DELIVERY_INTENTS.TRANSFER) {
+        const unavailable = entries.filter((entry) => !entry.canTransfer).map((entry) => entry.photoId);
+        if (unavailable.length) return fail('association-unavailable', unavailable);
+      }
+      const changed = entries.filter((entry) => entry.status !== intent).map((entry) => entry.photoId);
+      for (const id of changed) {
+        if (intent === PHOTO_DELIVERY_INTENTS.KEEP_LINK) deliveryDecisions.delete(id);
+        else deliveryDecisions.set(id, Object.freeze({ kind: 'gmi', occurrenceKey: records.get(id).occurrence.key, intent }));
+      }
+      if (changed.length) publish();
+      return { ok: true, changedIds: changed, unchangedIds: photoIds.filter((id) => !changed.includes(id)) };
+    },
+    setCombinedDeliveryInclusion(layerId, photoIds, include) {
+      const fail = (error, invalidIds = []) => ({ ok: false, error, invalidIds, changedIds: [] });
+      if (typeof include !== 'boolean') return fail('invalid-inclusion');
+      const layer = layers.get(layerId);
+      if (!layer) return fail('layer-not-found');
+      if (!Array.isArray(photoIds) || !photoIds.length || new Set(photoIds).size !== photoIds.length) return fail('invalid-selection');
+      const stale = photoIds.filter((id) => !layer.photoIds.includes(id) || !records.has(id));
+      if (stale.length) return fail('stale-occurrence', stale);
+      const linked = photoIds.filter((id) => records.get(id).occurrence);
+      if (linked.length) return fail('gmi-linked-occurrence', linked);
+      const entries = photoIds.map((id) => photoDeliveryEntry(layer, records.get(id), deliveryDecisions.get(id) || null));
+      // A photo linked from a GMI object without a FOTO occurrence (line) keeps its link; it cannot also be
+      // included as an unlinked photo. Clearing a stale inclusion is always allowed.
+      const withoutOccurrence = entries.filter((entry) => entry.linkedWithoutOccurrence).map((entry) => entry.photoId);
+      if (include && withoutOccurrence.length) return fail('linked-without-occurrence', withoutOccurrence);
+      const target = include ? 'include' : 'not-selected';
+      const changed = entries.filter((entry) => (include ? entry.status !== target
+        : entry.status === 'include' || (entry.status === 'review' && deliveryDecisions.get(entry.photoId)?.kind === 'unlinked'))).map((entry) => entry.photoId);
+      for (const id of changed) {
+        if (include) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true }));
+        else deliveryDecisions.delete(id);
+      }
+      if (changed.length) publish();
+      return { ok: true, changedIds: changed, unchangedIds: photoIds.filter((id) => !changed.includes(id)) };
+    },
+    // Read-only: per-occurrence delivery state and counts for the workspace.
+    getLayerDelivery(layerId) {
+      const layer = layers.get(layerId);
+      return layer ? photoLayerDelivery(layer, records, deliveryDecisions) : null;
+    },
+    // Read-only, deterministic snapshot for the combined delivery planner (M9).
+    getPhotoDeliverySnapshot(layerId) {
+      const layer = layers.get(layerId);
+      return layer ? buildPhotoDeliverySnapshot(layer, records, deliveryDecisions, { generation }) : null;
+    },
+    isPhotoDeliverySnapshotCurrent(deliverySnapshot) {
+      const layer = deliverySnapshot && layers.get(deliverySnapshot.layerId);
+      return Boolean(layer) && buildPhotoDeliverySnapshot(layer, records, deliveryDecisions, { generation }).stateKey === deliverySnapshot.stateKey;
     },
     getFile: fileFor,
     getAssetFile: (assetId) => assets.get(assetId)?.file || null,

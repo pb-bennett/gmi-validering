@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useId, useRef, useState } from 'react';
-import { ArrowsOutCardinalIcon, CaretDownIcon, ExportIcon, InfoIcon, ListChecksIcon, MapPinAreaIcon, PlusIcon, TrashIcon, WrenchIcon } from '@phosphor-icons/react';
+import { ArrowsLeftRightIcon, ArrowsOutCardinalIcon, CaretDownIcon, ExportIcon, InfoIcon, ListChecksIcon, MapPinAreaIcon, PlusIcon, TrashIcon, WrenchIcon } from '@phosphor-icons/react';
 import { usePhotoIconTooltip } from './PhotoIconButton';
 
 // Workspace- and layer-level tools only. Photo-specific actions (Rediger opptaksdata…) stay in the inspector.
@@ -18,6 +18,8 @@ export const PHOTO_WORKSPACE_TOOLS = Object.freeze([
   { group: 'Eksport', items: [
     { key: 'complete', label: 'Fullfør opplysninger…', icon: ListChecksIcon, needsPhotos: true },
     { key: 'export', label: 'Eksporter…', icon: ExportIcon, needsPhotos: true },
+    // Changes mode only: the choices are used by a later combined GMI + FOTO delivery; nothing is exported here.
+    { key: 'delivery', label: 'Velg samlet levering', icon: ArrowsLeftRightIcon, needsPhotos: true },
   ] },
   { group: 'Fjerning', destructive: true, items: [
     { key: 'remove', label: 'Fjern bilder fra laget…', icon: TrashIcon, needsPhotos: true },

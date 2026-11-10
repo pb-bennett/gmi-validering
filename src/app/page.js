@@ -202,8 +202,11 @@ export default function Home() {
   const effectiveWorkspacePhotos = useMemo(() => photoEditing ? workspacePhotos.map((photo) => effectivePhoto(photo, photoEdit)) : workspacePhotos,
     [photoEditing, workspacePhotos, photoEdit]);
   const changedIds = useMemo(() => new Set(photoEditing ? changedPhotoIds(photoEdit) : []), [photoEditing, photoEdit]);
-  const workspaceView = useMemo(() => photoWorkspaceView(effectiveWorkspacePhotos, photoWorkspace, { changedIds }),
-    [effectiveWorkspacePhotos, photoWorkspace, changedIds]);
+  // Combined-delivery decisions (M8) are read from the session like the photos, on every publish.
+  const workspaceDelivery = useMemo(() => photoLayers.some((layer) => layer.id === photoWorkspace.layerId)
+    ? photoSession.getLayerDelivery(photoWorkspace.layerId) : null, [photoLayers, photoWorkspace.layerId]);
+  const workspaceView = useMemo(() => photoWorkspaceView(effectiveWorkspacePhotos, photoWorkspace, { changedIds, delivery: workspaceDelivery }),
+    [effectiveWorkspacePhotos, photoWorkspace, changedIds, workspaceDelivery]);
   const activeWorkspacePhoto = effectiveWorkspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
   const activeSiblings = activeWorkspacePhoto ? effectiveWorkspacePhotos.filter((photo) => photo.assetId === activeWorkspacePhoto.assetId) : [];
   const [photoSourceWorkflow, setPhotoSourceWorkflow] = useState(null);
@@ -291,7 +294,7 @@ export default function Home() {
   // otherwise: the hub's own step to the map comes through here too, before any handoff exists.
   const requestWorkspaceAction = (action = () => {}, { keepFlow = false } = {}) => {
     const run = keepFlow ? action : () => { if (closePhotoExportFlow()) setPhotoExportReturn(null); action(); };
-    if (photoWorkspace.mode === 'remove') dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
+    if (photoWorkspace.mode === 'remove' || photoWorkspace.mode === 'delivery') dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
     if (photoWorkspace.mode !== 'edit') { run(); return; }
     if (!changedPhotoIds(photoEdit).length) { endPhotoEditSession(); run(); return; }
     setPhotoBoundary({ variant: 'boundary', then: run });
@@ -408,6 +411,7 @@ export default function Home() {
     else if (tool === 'complete') { if (photoExportFlow) leavePhotoEditMode(); else openCompletePhotoDetails(opener); }
     else if (tool === 'export') requestWorkspaceAction(() => { photoToolOpenerRef.current = opener; setPhotoExportReturn(null); setPhotoExportResumed(false); setPhotoDialog('export'); });
     else if (tool === 'remove') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'remove' }));
+    else if (tool === 'delivery') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'delivery' }));
   };
   const closePhotos = () => {
     photoSession.cancelImport();
@@ -467,7 +471,7 @@ export default function Home() {
     }
     if (event.key !== 'Escape') return;
     if (photoEditing) { event.preventDefault(); leavePhotoEditMode(); }
-    else if (photoWorkspace.mode === 'remove') { event.preventDefault(); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); }
+    else if (photoWorkspace.mode === 'remove' || photoWorkspace.mode === 'delivery') { event.preventDefault(); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); }
   });
   const photoKeysActive = Boolean(workspaceLayer) && photoWorkspace.mode !== 'browse';
   useEffect(() => {
@@ -902,7 +906,7 @@ export default function Home() {
             appInfoTriggerRef={appInfoTriggerRef}
             sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={effectiveWorkspacePhotos}
               view={workspaceView} workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace} editing={photoEditing} changedIds={changedIds}
-              onExit={exitPhotoWorkspace} onTool={runWorkspaceTool} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} />
+              delivery={workspaceDelivery} onNotify={notifyPhoto} onExit={exitPhotoWorkspace} onTool={runWorkspaceTool} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} />
               : gmiEditActive ? <GmiEditWorkspace key={gmiEditLayerId} layerId={gmiEditLayerId} inspectorRoot={gmiEditInspector}
                 onGuardChange={registerGmiEditGuard} onDraftChange={setGmiEditDraft} /> : fieldValidationOpen ? (
               <FieldValidationSidebar
@@ -1055,7 +1059,7 @@ export default function Home() {
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
             {!photoImport && <PhotoWorkspaceInspector key={activeWorkspacePhoto?.assetId || 'empty'} photo={activeWorkspacePhoto} layer={workspaceLayer}
-              siblings={activeSiblings} editing={photoEditing} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} onLocate={locatePhoto}
+              siblings={activeSiblings} editing={photoEditing} delivery={workspaceDelivery} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} onLocate={locatePhoto}
               onEditMetadata={() => requestWorkspaceAction(() => setPhotoDialog('metadata'))} onOpenViewer={() => setPhotoViewerOpen(true)} />}
           </aside> : gmiEditActive ? <aside id={GMI_EDIT_INSPECTOR_ROOT_ID} key={gmiEditLayerId} ref={setGmiEditInspector} className="gmi-edit-inspector" aria-label="Objektinspektør" />
             : <div id="validation-v2-field-inspector-root" className="contents" />}

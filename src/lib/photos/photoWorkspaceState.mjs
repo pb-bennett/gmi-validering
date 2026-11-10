@@ -1,16 +1,18 @@
-export const PHOTO_WORKSPACE_MODES = Object.freeze(['browse', 'edit', 'remove']);
-export const DEFAULT_PHOTO_FILTER = Object.freeze({ placement: 'all', missingDirection: false, missingCaptureTime: false, repeated: false, changed: false });
+export const PHOTO_WORKSPACE_MODES = Object.freeze(['browse', 'edit', 'remove', 'delivery']);
+export const DEFAULT_PHOTO_FILTER = Object.freeze({ placement: 'all', missingDirection: false, missingCaptureTime: false, repeated: false, changed: false, delivery: 'all' });
 export const DEFAULT_PHOTO_SORT = 'filename-asc';
 export const emptyPhotoWorkspace = Object.freeze({ layerId: null, activePhotoId: null, photoIds: Object.freeze([]),
-  mode: 'browse', removalIds: Object.freeze([]), filter: DEFAULT_PHOTO_FILTER, sort: DEFAULT_PHOTO_SORT });
+  mode: 'browse', removalIds: Object.freeze([]), deliveryIds: Object.freeze([]), filter: DEFAULT_PHOTO_FILTER, sort: DEFAULT_PHOTO_SORT });
 
 const FILTER_PLACEMENTS = ['all', 'placed', 'unplaced', 'exif', 'gmi', 'gml', 'manual', 'unknown'];
 const FILTER_FLAGS = ['missingDirection', 'missingCaptureTime', 'repeated', 'changed'];
+const FILTER_DELIVERY = ['all', 'keep-link', 'transfer', 'include', 'not-selected', 'review'];
 
 function normalizeFilter(filter, patch) {
   const next = { ...filter };
   if (patch.placement !== undefined && FILTER_PLACEMENTS.includes(patch.placement)) next.placement = patch.placement;
   for (const flag of FILTER_FLAGS) if (patch[flag] !== undefined) next[flag] = Boolean(patch[flag]);
+  if (patch.delivery !== undefined && FILTER_DELIVERY.includes(patch.delivery)) next.delivery = patch.delivery;
   // A fixed work list from Fullfør opplysninger ({ ids, label }). Only present while one is set.
   if (patch.work) next.work = patch.work;
   else if (patch.work === null) delete next.work;
@@ -32,14 +34,15 @@ export function photoWorkspaceReducer(state, action) {
     const activePhotoId = photoIds.includes(state.activePhotoId) ? state.activePhotoId
       : state.photoIds.slice(oldIndex + 1).find((id) => photoIds.includes(id))
         || state.photoIds.slice(0, oldIndex).reverse().find((id) => photoIds.includes(id)) || photoIds[0] || null;
-    return { ...state, photoIds, activePhotoId, removalIds: state.removalIds.filter((id) => photoIds.includes(id)) };
+    return { ...state, photoIds, activePhotoId, removalIds: state.removalIds.filter((id) => photoIds.includes(id)),
+      deliveryIds: (state.deliveryIds || []).filter((id) => photoIds.includes(id)) };
   }
   if (action.type === 'active') return state.photoIds.includes(action.photoId) && state.activePhotoId !== action.photoId
     ? { ...state, activePhotoId: action.photoId } : state;
   if (action.type === 'mode' && PHOTO_WORKSPACE_MODES.includes(action.mode) && state.layerId) {
     if (state.mode === action.mode) return state;
-    // The "changed" filter only exists inside Edit mode; removal selection only inside removal mode.
-    return { ...state, mode: action.mode, removalIds: [],
+    // The "changed" filter only exists inside Edit mode; removal and delivery selections only inside their modes.
+    return { ...state, mode: action.mode, removalIds: [], deliveryIds: [],
       filter: action.mode !== 'edit' && state.filter.changed ? normalizeFilter(state.filter, { changed: false }) : state.filter };
   }
   if (action.type === 'filter') {
@@ -52,6 +55,13 @@ export function photoWorkspaceReducer(state, action) {
     removalIds: state.removalIds.includes(action.photoId) ? state.removalIds.filter((id) => id !== action.photoId) : [...state.removalIds, action.photoId] };
   if (action.type === 'select-removal' && state.mode === 'remove') return { ...state,
     removalIds: action.photoIds.filter((id) => state.photoIds.includes(id)) };
+  // Delivery selection (M8): the same explicit, occurrence-level convention as removal.
+  if (action.type === 'toggle-delivery' && state.mode === 'delivery' && state.photoIds.includes(action.photoId)) {
+    const ids = state.deliveryIds || [];
+    return { ...state, deliveryIds: ids.includes(action.photoId) ? ids.filter((id) => id !== action.photoId) : [...ids, action.photoId] };
+  }
+  if (action.type === 'select-delivery' && state.mode === 'delivery') return { ...state,
+    deliveryIds: action.photoIds.filter((id) => state.photoIds.includes(id)) };
   return state;
 }
 

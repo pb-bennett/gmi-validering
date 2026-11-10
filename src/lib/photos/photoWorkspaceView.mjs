@@ -3,6 +3,7 @@ import { gmiObjectContext } from './photoImportOutcome.mjs';
 import { isPhotoPosition } from './photoSpatial.mjs';
 import { photoAssetSequence } from './photoStacks.mjs';
 import { DEFAULT_PHOTO_FILTER, DEFAULT_PHOTO_SORT, photoFilterIsDefault } from './photoWorkspaceState.mjs';
+import { PHOTO_DELIVERY_FILTERS } from './photoDeliveryIntent.mjs';
 
 export const PHOTO_SORT_MODES = Object.freeze([
   Object.freeze({ key: 'filename-asc', label: 'Filnavn A–Å' }),
@@ -39,8 +40,12 @@ function matchesPlacement(photo, placement) {
   return photoPlacementKind(photo) === placement;
 }
 
-export function photoMatchesFilter(photo, filter, changedIds) {
+// Delivery status comes from the session's derived entries (M8); without them only "all" matches.
+const matchesDelivery = (photo, delivery, statuses) => !delivery || delivery === 'all' || statuses?.[photo.id]?.status === delivery;
+
+export function photoMatchesFilter(photo, filter, changedIds, deliveryStatuses = null) {
   return (!filter.work || filter.work.ids.has(photo.id))
+    && matchesDelivery(photo, filter.delivery, deliveryStatuses)
     && matchesPlacement(photo, filter.placement)
     && (!filter.missingDirection || photoMissingDirection(photo))
     && (!filter.missingCaptureTime || photoMissingCaptureTime(photo))
@@ -84,17 +89,19 @@ export function photoFilterSummary(filter) {
     filter.work?.label, filter.placement !== 'all' && PHOTO_PLACEMENT_FILTERS.find((item) => item.key === filter.placement)?.label,
     filter.missingDirection && 'Mangler retning', filter.missingCaptureTime && 'Mangler opptakstid',
     filter.repeated && 'Flere plasseringer', filter.changed && 'Endret',
+    filter.delivery && filter.delivery !== 'all' && PHOTO_DELIVERY_FILTERS.find((item) => item.key === filter.delivery)?.label,
   ].filter(Boolean);
 }
 
 // One derived view for the list and the workspace map. The selected occurrence is never hidden:
 // when filtered out it is pinned in the list and still rendered on the map.
-export function photoWorkspaceView(photos, { activePhotoId = null, filter = DEFAULT_PHOTO_FILTER, sort = DEFAULT_PHOTO_SORT } = {}, { changedIds = new Set() } = {}) {
+export function photoWorkspaceView(photos, { activePhotoId = null, filter = DEFAULT_PHOTO_FILTER, sort = DEFAULT_PHOTO_SORT } = {}, { changedIds = new Set(), delivery = null } = {}) {
+  const deliveryStatuses = delivery?.byPhotoId || null;
   const entries = photos.map((photo, index) => ({ photo, index, capture: photoLocalCaptureKey(photo),
     object: photo.occurrence?.object ? gmiObjectContext(photo.occurrence.object) : null }));
   const hasObjects = entries.some((entry) => entry.object !== null);
   const sortKey = comparators[sort] && (sort !== 'object' || hasObjects) ? sort : DEFAULT_PHOTO_SORT;
-  const matching = entries.filter((entry) => photoMatchesFilter(entry.photo, filter, changedIds));
+  const matching = entries.filter((entry) => photoMatchesFilter(entry.photo, filter, changedIds, deliveryStatuses));
   const rows = matching.sort(comparators[sortKey]).map((entry) => entry.photo);
   const active = photos.find((photo) => photo.id === activePhotoId) || null;
   const pinned = active && !rows.includes(active) ? active : null;
@@ -110,6 +117,8 @@ export function photoWorkspaceView(photos, { activePhotoId = null, filter = DEFA
       missingDirection: photos.filter(photoMissingDirection).length,
       missingCaptureTime: photos.filter(photoMissingCaptureTime).length,
       repeated: photos.filter(photoIsRepeated).length,
-      changed: photos.filter((photo) => changedIds.has(photo.id)).length },
+      changed: photos.filter((photo) => changedIds.has(photo.id)).length,
+      delivery: Object.fromEntries(PHOTO_DELIVERY_FILTERS.map((item) => [item.key, item.key === 'all' ? photos.length
+        : photos.filter((photo) => deliveryStatuses?.[photo.id]?.status === item.key).length])) },
   };
 }

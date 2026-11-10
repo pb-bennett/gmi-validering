@@ -86,7 +86,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
             focused: document.activeElement?.dataset.tool }; })()`);
         assert.deepEqual(menu.groups, ['Bilder', 'Posisjoner og kilder', 'Eksport', 'Fjerning']);
         assert.equal(menu.separators, 3);
-        assert.deepEqual(menu.items.map((item) => item.label), ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Fjern bilder fra laget…']);
+        assert.deepEqual(menu.items.map((item) => item.label), ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Velg samlet levering', 'Fjern bilder fra laget…']);
         assert(menu.items.every((item) => item.svg && item.disabled === null && item.tip === null), 'every item: icon, enabled, no tooltip');
         assert.equal(new Set(menu.items.map((item) => item.className)).size, 1, 'Fullfør opplysninger… is styled exactly like every other item');
         assert(!menu.items.some((item) => /opptaksdata/i.test(item.label)));
@@ -183,13 +183,16 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
       });
 
       await t.test('inspector is read-only with one contextual action; occurrence switcher selects siblings', async () => {
-        const buttons = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).filter((b) => !b.closest('.photo-occurrence-switcher')
+        // M8: the «Samlet levering» section is the one place with a per-occurrence choice; everything else stays read-only.
+        const delivery = 'section[aria-label="Samlet levering"]';
+        const buttons = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).filter((b) => !b.closest('.photo-occurrence-switcher') && !b.closest('${delivery}')
           && !/^(Vis |Zoom til )/.test(b.getAttribute('aria-label') || '')).map((b) => ({ text: b.innerText.trim(), section: b.closest('section[aria-label]')?.getAttribute('aria-label') }))`);
         assert.deepEqual(buttons, [{ text: 'Rediger opptaksdata…', section: 'Opptak' }]);
         assert.equal(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).some((b) => /Lagre|Nullstill|Flytt|Plasser|Juster|Bruk /.test(b.innerText))`), false);
-        assert.equal(await browser.evaluate(`${inspector}.querySelectorAll('input, select, textarea').length`), 0);
+        assert.equal(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('input, select, textarea')).filter((e) => !e.closest('${delivery}')).length`), 0);
+        assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('${delivery} input, ${delivery} select, ${delivery} textarea')).every((e) => ['radio', 'checkbox'].includes(e.type))`));
         const sections = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.photo-inspector-section h3')).map((h) => h.firstChild.textContent)`);
-        assert.deepEqual(sections, ['Plassering', 'Opptak', 'Koblinger', 'Fil']);
+        assert.deepEqual(sections, ['Plassering', 'Opptak', 'Samlet levering', 'Koblinger', 'Fil']);
         const locate = `${inspector}.querySelector('.photo-inspector-locate')`;
         assert.deepEqual(await browser.evaluate(`({ label: ${locate}.getAttribute('aria-label'), tip: ${locate}.dataset.iconTooltip })`), { label: 'Zoom til IMG_10.png på kartet', tip: 'Zoom til bildet' });
         assert(await browser.evaluate(`${inspector}.querySelector('.photo-collection-original').getBoundingClientRect().height >= 300`), 'large preview');

@@ -15,6 +15,7 @@ import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { formatPhotoCaptureTime, formatPhotoCoordinates, formatPhotoMoveDistance, photoCaptureTimeStatus, photoDirectionEvidenceText, photoDirectionSourceLabel, photoMetadataConflict,
   photoMetadataSourceLabel, photoPlacementBasisLabel, photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoIconButton from './PhotoIconButton';
+import PhotoDeliveryControls from './PhotoDeliveryControls';
 import './photoCollectionPanel.css';
 
 function formatSize(size) {
@@ -97,7 +98,7 @@ function Section({ title, scope, children, className = '' }) {
 // contextual action that opens the focused metadata dialog. Nothing is edited inside the inspector itself.
 // Photo first: the default view is the photo, its status chips, coordinates and concise capture data.
 // Provenance, evidence, associations, file details and raw diagnostics are kept, one click away.
-export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], editing = false, onSelect, onLocate, onEditMetadata, onOpenViewer }) {
+export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], editing = false, delivery = null, onSelect, onLocate, onEditMetadata, onOpenViewer }) {
   if (!photo) return <section className="photo-collection-inspector photo-workspace-inspector-body" aria-label="Bilde som vises">
     <h2 className="truncate text-sm font-semibold text-gmi-navy">Velg et bilde</h2>
     <Preview photo={null} />
@@ -206,6 +207,9 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
         <PencilSimpleIcon size={15} weight="regular" aria-hidden="true" />Rediger opptaksdata…
       </button>
     </Section>
+
+    <PhotoDeliveryControls photo={photo} layerId={layer.id} entry={delivery?.byPhotoId[photo.id]} siblings={siblings}
+      entries={delivery?.byPhotoId} onSelect={onSelect} />
 
     <CollapsibleSection id="links" title="Koblinger" count={links.length}
       scope={thisLink ? `denne plasseringen: ${gmiObjectContext(thisLink.object)}` : links.length ? null : 'ingen GMI-objekter'}>
