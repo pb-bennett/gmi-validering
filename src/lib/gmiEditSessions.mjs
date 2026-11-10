@@ -17,6 +17,7 @@
 // - a `beforeunload` listener is attached only while unsaved changes exist.
 import { createGmiEditSessions } from './gmi-edit/editSessions.mjs';
 import { isLoadedGmiSurveyLayer, loadedGmiSources } from './photos/loadedGmiSource.mjs';
+import { reconcileGmiEditSelection } from './gmiEditSelection.mjs';
 
 let surveyStore = null, unsubscribeStore = null, unloadGuard = null;
 
@@ -71,6 +72,12 @@ export function bindGmiEditSessionStore(store, { unloadTarget = typeof window ==
   unloadGuard = unloadTarget ? createGmiEditUnloadGuard(unloadTarget, gmiEditSessions) : null;
   unsubscribeStore = store.subscribe((state, previous) => {
     if (state.layers !== previous.layers) gmiEditSessions.reconcile();
+    // Re-read after reconcile: it can synchronously publish invalidation status.
+    const live = store.getState();
+    const selection = reconcileGmiEditSelection(live.gmiEditSelection, {
+      workspaceLayerId: live.gmiEditWorkspace?.layerId, layers: live.layers, statuses: live.gmiEditStatus || {},
+    });
+    if (selection !== live.gmiEditSelection) store.setState({ gmiEditSelection: selection }, false, 'gmiEdit/selectionReconcile');
   });
 }
 

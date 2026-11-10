@@ -28,7 +28,7 @@ export function isLayerTableItemHidden(item, tab, { hiddenCodes = [], hiddenType
  * for the final searched/sorted set (not virtual rows), retaining TanStack's sorting
  * and tie-breaking rather than maintaining another sorting/filtering implementation.
  */
-export function deriveLayerTableRows({ dataset, tab, filters = {}, view = 'original', changedByObject, inspectionRows = null, searchQuery = '' }) {
+export function deriveLayerTableRows({ dataset, tab, filters = {}, view = 'original', changedByObject, inspectionRows = null, searchQuery = '', selectionKeys = null }) {
   const scope = tab === 'punkter' ? 'point' : 'line';
   const rawItems = inspectionRows ?? (tab === 'punkter' ? dataset?.points : dataset?.lines) ?? [];
   const indexed = inspectionRows !== null ? rawItems : rawItems.map((item, __index) => ({ ...item, __index }));
@@ -38,5 +38,10 @@ export function deriveLayerTableRows({ dataset, tab, filters = {}, view = 'origi
   const items = inspectionRows !== null || !hasActiveFilters ? allItemsWithIndex
     : allItemsWithIndex.filter((item) => !isLayerTableItemHidden(item, tab, filters));
   const searchedItems = filterTableSearchRows(items, normalizeTableSearchQuery(searchQuery));
-  return { allItemsWithIndex, items, searchedItems };
+  // Explicit selection display override: inspect the complete selection without
+  // rewriting filters/search or restricting it to effectively changed objects.
+  const selected = selectionKeys === null ? null : new Set(selectionKeys);
+  const displayItems = selected && inspectionRows === null
+    ? indexed.filter((item) => selected.has(`${scope}:${item.__index}`)) : searchedItems;
+  return { allItemsWithIndex, items, searchedItems, displayItems };
 }

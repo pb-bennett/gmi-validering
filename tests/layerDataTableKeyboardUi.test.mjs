@@ -57,7 +57,7 @@ test('R2 production: keyboard rows, virtualization, sorting/search, guarded edit
           marked: ${current}.dataset.keyboardCurrent, cells: ${current}.querySelectorAll('[role=gridcell]').length,
           selection: ${current}.getAttribute('aria-selected') })`);
         assert.equal(appearance.outline, '2px'); assert.equal(appearance.marked, 'true');
-        assert(appearance.cells >= 2); assert.equal(appearance.selection, null, 'navigation does not claim multi-selection');
+        assert(appearance.cells >= 2); assert.equal(appearance.selection, 'false', 'keyboard navigation alone does not check an object');
         const { nodes } = await browser.send('Accessibility.getFullAXTree');
         const accessibleGrid = nodes.find((node) => node.role?.value === 'grid' && node.name?.value === 'Objekter i datatabellen');
         assert(accessibleGrid && !accessibleGrid.ignored, 'grid is exposed to assistive technology');

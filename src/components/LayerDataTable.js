@@ -19,6 +19,8 @@ import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowCounterClockwiseIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon, XIcon } from '@phosphor-icons/react';
 import { normalizeTableSearchQuery, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
 import { deriveLayerTableRows } from '@/lib/layerTableRows.mjs';
+import { gmiSelectionBinding, sameGmiSelectionBinding, gmiSelectionKey, gmiSelectionCounts } from '@/lib/gmiEditSelection.mjs';
+import GmiConfirmDialog from './gmi-edit/GmiConfirmDialog';
 import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
 import FilenameCopyButton from '@/components/FilenameCopyButton';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
@@ -30,6 +32,16 @@ import { GMI_EDIT_TABLE_VIEWS, GMI_EDIT_TABLE_VIEW_LABELS, gmiEditMessage, gmiOb
 const ROW_HEIGHT = 28;
 const MAX_COLUMN_WIDTH = 180;
 const MIN_COLUMN_WIDTH = 50;
+
+function SelectionCheckbox({ label, checked, indeterminate = false, onToggle, tabIndex = -1 }) {
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current) ref.current.indeterminate = indeterminate; }, [indeterminate]);
+  return <input ref={ref} type="checkbox" aria-label={label} checked={checked} tabIndex={tabIndex}
+    className="gmi-focus-ring h-3.5 w-3.5 shrink-0 cursor-pointer accent-gmi-interactive"
+    style={{ accentColor: 'var(--gmi-interactive)' }} onChange={() => {}}
+    onClick={(event) => { event.stopPropagation(); onToggle(event.shiftKey); }}
+    onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); onToggle(event.shiftKey); } }} />;
+}
 
 function getFieldLabel(fieldName) {
   const fieldDef = fieldsData.find((f) => f.fieldKey === fieldName);
@@ -160,6 +172,9 @@ export default function LayerDataTable() {
   const gmiEditWorkspaceLayerId = useStore((state) => state.gmiEditWorkspace?.layerId ?? null);
   const highlightedFeatureId = useStore((state) => state.ui.highlightedFeatureId);
   const requestGmiEditObject = useStore((state) => state.requestGmiEditObject);
+  const storedSelection = useStore((state) => state.gmiEditSelection);
+  const changeSelection = useStore((state) => state.changeGmiEditSelection);
+  const [replaceSelection, setReplaceSelection] = useState(null);
 
   const tableContainerRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -240,7 +255,16 @@ export default function LayerDataTable() {
       ? layerDataTable.activeTabByLayer[layerId]
       : 'punkter';
 
-  const { allItemsWithIndex, items, searchedItems } = useMemo(() => deriveLayerTableRows({
+  const selectionBinding = gmiSelectionBinding(layerId, gmiEditStatus);
+  const selectionEnabled = !isExactInspection && gmiEditWorkspaceLayerId === layerId && Boolean(selectionBinding);
+  const selection = selectionEnabled && sameGmiSelectionBinding(storedSelection?.binding, selectionBinding) ? storedSelection : null;
+  const scope = tableTabToScope(activeTab);
+  const showSelectionOnly = Boolean(selection?.showOnly && selection.scope === scope);
+  const selectionDisplayKeys = showSelectionOnly ? selection.keys : null;
+  const selectionWidth = selectionEnabled ? 32 : 0;
+  const selectedKeys = useMemo(() => new Set(selection?.keys || []), [selection]);
+
+  const { allItemsWithIndex, items, searchedItems, displayItems } = useMemo(() => deriveLayerTableRows({
     dataset: proposedData || layer?.data,
     tab: activeTab,
     filters: { hiddenCodes, hiddenTypes, feltHiddenValues },
@@ -248,8 +272,9 @@ export default function LayerDataTable() {
     changedByObject,
     inspectionRows: isExactInspection ? exactRows || [] : null,
     searchQuery: normalizedSearchQuery,
+    selectionKeys: selectionDisplayKeys,
   }), [proposedData, layer?.data, activeTab, hiddenCodes, hiddenTypes, feltHiddenValues,
-    tableView, changedByObject, isExactInspection, exactRows, normalizedSearchQuery]);
+    tableView, changedByObject, isExactInspection, exactRows, normalizedSearchQuery, selectionDisplayKeys]);
   const totalCount = allItemsWithIndex.length;
   const filteredCount = items.length;
   const hiddenCount = totalCount - filteredCount;
@@ -263,7 +288,7 @@ export default function LayerDataTable() {
     const requiredFields = isContextualInspection
       ? [inspection.presentation.temaColumn, inspection.presentation.fieldColumn]
       : [];
-    const fieldItems = isContextualInspection ? contextualScopeRows : items;
+    const fieldItems = isContextualInspection ? contextualScopeRows : showSelectionOnly ? displayItems : items;
     if (fieldItems.length === 0) return [...new Set(requiredFields)];
 
     const fieldSet = new Set();
@@ -312,7 +337,7 @@ export default function LayerDataTable() {
       presentFields.unshift('S_FCODE');
     }
 
-    if (tableView === GMI_EDIT_TABLE_VIEWS.CHANGED && changedByObject) {
+    if (!showSelectionOnly && tableView === GMI_EDIT_TABLE_VIEWS.CHANGED && changedByObject) {
       // Kun endrede: identity columns plus the corrected fields of the shown objects.
       const scope = tableTabToScope(activeTab);
       const changedFields = new Set();
@@ -322,7 +347,7 @@ export default function LayerDataTable() {
     }
 
     return [...new Set([...presentFields, ...requiredFields])];
-  }, [items, contextualScopeRows, isContextualInspection, inspection, tableView, changedByObject, activeTab]);
+  }, [items, contextualScopeRows, isContextualInspection, inspection, tableView, changedByObject, activeTab, showSelectionOnly, displayItems]);
 
   const savedOrder = useMemo(() => {
     return layerId &&
@@ -515,7 +540,7 @@ export default function LayerDataTable() {
   }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery, changedByObject]);
 
   const table = useReactTable({
-    data: searchedItems,
+    data: displayItems,
     columns,
     state: { sorting },
     onSortingChange: (updater) => {
@@ -531,6 +556,22 @@ export default function LayerDataTable() {
   });
 
   const { rows } = table.getRowModel();
+  // This snapshot is the actual final sorted model, never the virtual viewport.
+  const visibleKeys = rows.map((row) => gmiSelectionKey(scope, row.original.__index));
+  const selectionCounts = gmiSelectionCounts(selection, scope, searchedItems.map((row) => gmiSelectionKey(scope, row.__index)));
+  const headerSelection = gmiSelectionCounts(selection, scope, visibleKeys);
+  const selectAction = (action) => {
+    if (!selectionEnabled) return;
+    if (selection?.keys.length && action.scope && action.scope !== selection.scope) {
+      setReplaceSelection({ action, binding: selectionBinding }); return;
+    }
+    changeSelection(layerId, action, selectionBinding);
+  };
+  const toggleSelectionRow = (row, range = false) => {
+    const key = gmiSelectionKey(scope, row.__index);
+    selectAction(range ? { type: 'range', key, scope, orderedKeys: visibleKeys, checked: !selectedKeys.has(key) }
+      : { type: 'toggle', key, scope });
+  };
 
   // DOM focus stays on the grid; its active descendant uses stable source identity.
   // Filtering removes a cursor by falling back to the first remaining sorted row.
@@ -570,7 +611,7 @@ export default function LayerDataTable() {
       if (event.target.closest('[data-table-row]')) {
         if (event.key === 'Escape') { event.preventDefault(); grid.focus(); }
         if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-          const controls = [...event.target.closest('[data-table-row]').querySelectorAll('button:not(:disabled), a[href]')];
+          const controls = [...event.target.closest('[data-table-row]').querySelectorAll('button:not(:disabled), a[href], input[type=checkbox]')];
           const index = controls.indexOf(event.target);
           const next = controls[index + (event.key === 'ArrowRight' ? 1 : -1)];
           if (next) { event.preventDefault(); next.focus(); }
@@ -579,6 +620,9 @@ export default function LayerDataTable() {
       return;
     }
     if (!navigationRow) return;
+    if (event.key === ' ' && selectionEnabled) {
+      event.preventDefault(); toggleSelectionRow(navigationRow.original, event.shiftKey); return;
+    }
     if (event.key === 'Enter') {
       event.preventDefault(); handleRowClick(navigationRow.original.__index, activeTab); return;
     }
@@ -600,18 +644,18 @@ export default function LayerDataTable() {
   if (!isOpen || !layer) return null;
 
   // Calculate total table width for horizontal scrolling
-  const totalWidth = Object.values(columnWidths).reduce(
+  const totalWidth = selectionWidth + Object.values(columnWidths).reduce(
     (a, b) => a + b,
     0,
   );
   const stickyLeftFor = (columnId) => {
-    if (columnId === 'zoom') return 0;
+    if (columnId === 'zoom') return selectionWidth;
     const position = orderedFields.indexOf(columnId);
     if (position < 0) return undefined;
     const column = columns.find((entry) => entry.id === columnId);
     if (!column?.meta?.pinned && !column?.meta?.isFixed) return undefined;
-    if (!isContextualInspection) return 36;
-    return 36 + orderedFields.slice(0, position)
+    if (!isContextualInspection) return 36 + selectionWidth;
+    return 36 + selectionWidth + orderedFields.slice(0, position)
       .filter((field) => {
         const meta = columns.find((entry) => entry.id === field)?.meta;
         return meta?.pinned || meta?.isFixed;
@@ -697,7 +741,9 @@ export default function LayerDataTable() {
         {/* Filter status */}
         <div className="flex items-center gap-1.5 text-[10px]">
           <span className="text-gmi-text-muted">
-            {isExactInspection ? (
+            {showSelectionOnly ? (
+              <span>{rows.length} valgte {activeTab}</span>
+            ) : isExactInspection ? (
               <span>{totalCount} {activeTab === 'punkter' ? 'punkter' : 'ledninger'}</span>
             ) : hasActiveFilters ? (
               <>
@@ -757,7 +803,7 @@ export default function LayerDataTable() {
           </div>
           {normalizedSearchQuery && (
             <span className="shrink-0 text-[10px] text-gmi-text-muted" role="status">
-              {searchedItems.length} treff
+              {searchedItems.length} treff{showSelectionOnly && ' i normalvisning'}
             </span>
           )}
         </div>
@@ -772,13 +818,31 @@ export default function LayerDataTable() {
         </button>
       </div>
 
+      {selectionEnabled && selectionCounts.total > 0 && <div data-gmi-selection-bar className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gmi-border px-3 py-1 text-[10px]">
+        <span role="status">{selectionCounts.total} valgt · {showSelectionOnly
+          ? `${rows.length} vises · ${selectionCounts.visible} treffer filter/søk/visning · ${selectionCounts.hidden} utenfor`
+          : `${selectionCounts.visible} synlige · ${selectionCounts.hidden} skjult av filter/søk/visning`}</span>
+        <button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => selectAction({ type: 'add', scope, keys: visibleKeys })}>Velg alle {rows.length} synlige</button>
+        <button type="button" aria-pressed={showSelectionOnly} className="gmi-compact-button gmi-focus-ring" title="Vis hele utvalget uten å endre Tema/Felt, søk eller visningsvalg"
+          onClick={() => {
+            if (selection.scope !== scope) setLayerDataTableTab(layerId, selection.scope === 'line' ? 'ledninger' : 'punkter');
+            selectAction({ type: 'show-only', value: !showSelectionOnly });
+          }}>Vis bare valgte</button>
+        <button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => selectAction({ type: 'clear' })}>Fjern utvalg</button>
+      </div>}
+      {replaceSelection && <GmiConfirmDialog title={`Erstatt utvalget med ${scope === 'line' ? 'ledninger' : 'punkter'}?`}
+        confirmLabel="Erstatt utvalget" testId="selection" onCancel={() => setReplaceSelection(null)}
+        onConfirm={() => { changeSelection(layerId, { ...replaceSelection.action, replace: true }, replaceSelection.binding); setReplaceSelection(null); }}>
+        <p>Utvalget kan bare inneholde én geometri. Det eksisterende utvalget erstattes hvis du fortsetter.</p>
+      </GmiConfirmDialog>}
       <div
         ref={tableContainerRef}
         role="grid"
         aria-label="Objekter i datatabellen"
         aria-readonly="true"
         aria-rowcount={rows.length + 1}
-        aria-colcount={columns.length}
+        aria-colcount={columns.length + (selectionEnabled ? 1 : 0)}
+        aria-multiselectable={selectionEnabled ? 'true' : undefined}
         aria-activedescendant={navigationRow ? rowElementId(navigationRow) : undefined}
         aria-describedby="layer-table-keyboard-help"
         tabIndex={0}
@@ -807,6 +871,10 @@ export default function LayerDataTable() {
             aria-rowindex={1}
             className="sticky top-0 z-20 flex bg-gmi-surface-soft"
           >
+            {selectionEnabled && <div role="columnheader" aria-colindex={1} className="sticky left-0 z-30 flex shrink-0 items-center justify-center border-b border-gmi-border-strong bg-gmi-surface-soft" style={{ width: selectionWidth }}>
+              <SelectionCheckbox label={`Velg alle ${rows.length} synlige objekter`} tabIndex={0} checked={headerSelection.checked} indeterminate={headerSelection.indeterminate}
+                onToggle={() => selectAction({ type: headerSelection.checked ? 'remove' : 'add', scope, keys: visibleKeys })} />
+            </div>}
             {table.getHeaderGroups().map((headerGroup) =>
               headerGroup.headers.map((header, index) => {
                 const isZoom = index === 0;
@@ -821,7 +889,7 @@ export default function LayerDataTable() {
                   <div
                     key={header.id}
                     role="columnheader"
-                    aria-colindex={index + 1}
+                    aria-colindex={index + 1 + (selectionEnabled ? 1 : 0)}
                     aria-sort={isZoom ? undefined : header.column.getIsSorted() === 'asc' ? 'ascending' : header.column.getIsSorted() === 'desc' ? 'descending' : 'none'}
                     draggable={!isZoom && (!isContextualInspection || !isFixed)}
                     onDragStart={() => handleDragStart(headerId)}
@@ -883,6 +951,7 @@ export default function LayerDataTable() {
                   role="row"
                   aria-rowindex={virtualRow.index + 2}
                   aria-current={isActiveObject ? 'true' : undefined}
+                  aria-selected={selectionEnabled ? selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) : undefined}
                   data-table-row={row.original.__index}
                   data-keyboard-current={gridHasFocus && row.id === navigationRow?.id ? 'true' : undefined}
                   onClick={() => {
@@ -896,7 +965,7 @@ export default function LayerDataTable() {
                     )
                   }
                   onMouseLeave={handleRowHoverEnd}
-                  className={`group flex cursor-pointer border-b border-gmi-border ${isActiveObject ? 'bg-gmi-cyan-soft' : 'bg-gmi-surface'} hover:bg-gmi-surface-soft`}
+                  className={`group flex cursor-pointer border-b border-gmi-border ${isActiveObject || selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) ? 'bg-gmi-cyan-soft' : 'bg-gmi-surface'} hover:bg-gmi-surface-soft`}
                   style={{
                     outline: gridHasFocus && row.id === navigationRow?.id ? '2px solid var(--gmi-interactive)' : undefined,
                     outlineOffset: '-2px',
@@ -908,6 +977,10 @@ export default function LayerDataTable() {
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
+                  {selectionEnabled && <div role="gridcell" aria-colindex={1} className="sticky left-0 z-10 flex shrink-0 items-center justify-center bg-gmi-surface" style={{ width: selectionWidth, height: ROW_HEIGHT }}>
+                    <SelectionCheckbox label={`${selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) ? 'Fjern' : 'Velg'} ${scope === 'line' ? 'ledning' : 'punkt'} ${row.original.__index + 1}`}
+                      checked={selectedKeys.has(gmiSelectionKey(scope, row.original.__index))} onToggle={(range) => toggleSelectionRow(row.original, range)} />
+                  </div>}
                   {row.getVisibleCells().map((cell, index) => {
                     const isZoom = index === 0;
                     const isFixed = cell.column.columnDef.meta?.isFixed || cell.column.columnDef.meta?.pinned;
@@ -919,7 +992,7 @@ export default function LayerDataTable() {
                       <div
                         key={cell.id}
                         role="gridcell"
-                        aria-colindex={index + 1}
+                        aria-colindex={index + 1 + (selectionEnabled ? 1 : 0)}
                         className={`flex shrink-0 items-center px-1.5 text-[10px] ${
                           isZoom ? 'justify-center' : ''
                         } ${isZoom || isFixed ? 'sticky z-10' : ''} ${
@@ -959,6 +1032,7 @@ export default function LayerDataTable() {
         className="flex shrink-0 items-center justify-end border-t border-gmi-border bg-gmi-surface-soft px-3 py-1 text-[9px] text-gmi-text-subtle"
       >
         <span id="layer-table-keyboard-help">
+          {selectionEnabled && 'Space: velg objekt. Shift+Space eller Shift+klikk: velg område. '}
           Piltaster: naviger objekter. Enter: åpne. F2: radverktøy, venstre/høyre: bytt verktøy, Escape: tilbake. Dra kolonner for å endre rekkefølge • Klikk for å sortere
         </span>
       </div>

@@ -23,6 +23,7 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import useStore from '@/lib/store';
+import { gmiSelectedFeatureIds } from '@/lib/gmiEditSelection.mjs';
 import usePhotoSession from './photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { buildPhotoMapItems } from '@/lib/photos/photoMapFeatures.mjs';
@@ -1585,6 +1586,11 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
 
   // Use store-level map update nonce to trigger GeoJSON remounts when filters/visibility change
   const mapUpdateNonce = useStore((state) => state.ui.mapUpdateNonce);
+  const gmiSelection = useStore((state) => state.gmiEditSelection);
+  const gmiWorkspaceLayerId = useStore((state) => state.gmiEditWorkspace?.layerId);
+  const selectedFeatureIds = useMemo(() => gmiSelectedFeatureIds(gmiSelection, gmiWorkspaceLayerId), [gmiSelection, gmiWorkspaceLayerId]);
+  // Full content, not cardinality: replacing one selected object must repaint.
+  const selectionStyleKey = [...selectedFeatureIds].join('|');
 
   // Include highlighted feature IDs content (not just size) so single-item hover
   // updates trigger immediate style refresh when moving between rows.
@@ -2064,6 +2070,21 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
   );
 
   // Memoized onEachFeature function
+  const selectionData = useMemo(() => ({ type: 'FeatureCollection', features: geoJsonData.features.filter((feature) => {
+    const kind = feature.geometry?.type === 'Point' ? 'points' : 'lines';
+    return selectedFeatureIds.has(getFeatureIds(feature, kind).layeredId);
+  }) }), [geoJsonData, selectedFeatureIds, getFeatureIds]);
+  const selectionLineStyle = (feature) => {
+    const base = lineStyle(feature);
+    return { color: 'var(--gmi-interactive)', opacity: base.opacity > 0 ? 0.85 : 0, weight: base.opacity > 0 ? base.weight + 5 : 0,
+      dashArray: '4 3', interactive: false, className: 'gmi-edit-selection-halo' };
+  };
+  const selectionPointToLayer = (feature, latlng) => {
+    const base = pointToLayer(feature, latlng);
+    return L.circleMarker(latlng, { pane: 'gmi-edit-selection', radius: 11, color: 'var(--gmi-interactive)', weight: 2, fill: false,
+      dashArray: '3 2', opacity: base.options.opacity === 0 ? 0 : 0.95, interactive: false, className: 'gmi-edit-selection-halo' });
+  };
+
   const onEachFeature = useCallback(
     (feature, layer) => {
       // If hidden by code, type, or felt filter, don't bind popup or do anything
@@ -2194,6 +2215,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       />
       <MapLifecycleGuard />
       <Pane name="layer-highlight-casing" style={{ zIndex: 390, pointerEvents: 'none' }} />
+      <Pane name="gmi-edit-selection" style={{ zIndex: 399, pointerEvents: 'none' }} />
       <GeminiReferenceLayer inspectionEnabled={!measureMode && !photoEdit} hoverControllerRef={hoverControllerRef} />
       <PhotoMarkersLayer items={photoItems} onOpenPhoto={onOpenPhoto} workspace={photoWorkspace} displayMode={photoDisplay?.mode} onSelectPhoto={onSelectPhoto} />
       {photoEdit && <PhotoEditLayer photo={photoEdit.photo} displayMode={photoWorkspace?.displayMode} connectors={photoEdit.connectors}
@@ -2274,6 +2296,8 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
           interactive={false}
         />
       )}
+      {selectionData.features.length > 0 && <GeoJSON key={`selection-${geoJsonDataKey}-${styleVersionKey}-${selectionStyleKey}`}
+        data={selectionData} pane="gmi-edit-selection" interactive={false} style={selectionLineStyle} pointToLayer={selectionPointToLayer} />}
       <GeoJSON
         key={`geojson-${geoJsonDataKey}-${styleVersionKey}`}
         data={geoJsonData}

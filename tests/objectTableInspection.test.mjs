@@ -180,7 +180,7 @@ test('diagnostic table keeps result in row metadata, inspected-field colour, mov
   assert.doesNotMatch(source, /__validator_resultat/);
   assert.match(source, /return createLayerDataTableColumns\(\{/);
   assert.match(source, /getDiagnosticColumnOrder\(fields, inspection\.presentation\)/);
-  assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : items/);
+  assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : showSelectionOnly \? displayItems : items/);
   assert.match(source, /contextualColumnOrder\?\.inspectionId === inspection\.id/);
   assert.match(source, /setContextualColumnOrder\(\{ inspectionId: inspection\.id, fields: nextOrder \}\)/);
   assert.match(source, /draggable=\{!isZoom && \(!isContextualInspection \|\| !isFixed\)\}/);

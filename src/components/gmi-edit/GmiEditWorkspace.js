@@ -116,6 +116,10 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     setLayerDataTableTab(layerId, scopeToTableTab(scope));
   });
   useEffect(() => { enterObjectTable(); }, [layerId]);
+  // Also covers temporary workspace unmounts, e.g. opening FOTO through the page guard.
+  useEffect(() => () => {
+    if (useStore.getState().gmiEditSelection?.binding.layerId === layerId) useStore.setState({ gmiEditSelection: null });
+  }, [layerId]);
 
   const presentation = describeGmiEditStatus(descriptor);
   const editable = presentation.editable && Boolean(view);

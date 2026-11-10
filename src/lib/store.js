@@ -9,6 +9,7 @@ import { moveLayerInOrder } from './map/layerOrder.mjs';
 import { photoSession } from './photos/photoSession.mjs';
 import { bindLoadedGmiSurveyStore, loadedGmiSources } from './photos/loadedGmiSource.mjs';
 import { bindGmiEditSessionStore, gmiEditRemovalBlock, gmiEditSessions } from './gmiEditSessions.mjs';
+import { gmiSelectionBinding, sameGmiSelectionBinding, reduceGmiEditSelection } from './gmiEditSelection.mjs';
 import { bindGeminiSurveyStore, geminiSession } from './gemini-wfs/geminiSession.mjs';
 import {
   DEFAULT_HIGHLIGHT_OPACITY,
@@ -223,6 +224,15 @@ const useStore = create(
         // Lightweight GMI editing status per opened layer (gmiEditSessions.mjs).
         // Never bytes, documents or datasets; not persisted.
         gmiEditStatus: {},
+        gmiEditSelection: null, // In-memory, bound to the active workspace/session/document.
+        changeGmiEditSelection: (layerId, action, expectedBinding) => {
+          const binding = gmiSelectionBinding(layerId, gmiEditSessions.describe(layerId));
+          if (!binding || !sameGmiSelectionBinding(binding, expectedBinding)) return;
+          set((state) => state.gmiEditWorkspace?.layerId !== layerId ? {} : ({
+            gmiEditSelection: reduceGmiEditSelection(state.gmiEditSelection, action, { binding,
+              counts: { line: state.layers[layerId]?.data?.lines?.length, point: state.layers[layerId]?.data?.points?.length } }),
+          }), false, 'gmiEdit/selection');
+        },
         // Rettinger workspace view state (M4): the layer being corrected, the
         // Data Table display mode per layer and a one-shot object selection
         // request from the Data Table. View state only; never GMI data, and

@@ -490,6 +490,44 @@ async function addStoreLayer(bytes, name = 'Synthetic edit.gmi') {
 }
 const resetStore = () => useStore.getState().resetAll({ discardGmiEdits: true });
 
+test('R3 store: selection identity survives edits/history and clears on exit, replacement, removal and reset', async (t) => {
+  resetStore(); t.after(resetStore);
+  const { id, data } = await addStoreLayer(CORE);
+  const handle = await openOk(gmiEditSessions, id);
+  useStore.getState().openGmiEditWorkspace(id);
+  const binding = { layerId: id, sessionId: handle.sessionId, fingerprint: handle.fingerprint };
+  const select = () => useStore.getState().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:1'] }, binding);
+  select();
+  const selection = useStore.getState().gmiEditSelection;
+  assert.deepEqual(selection.keys, ['line:1']);
+  assert.equal(gmiEditSessions.describe(id).changeSetCount, 0, 'checking objects never stages edits');
+  assert.deepEqual(gmiEditSessions.originalBytes(handle).bytes, CORE, 'selection leaves original bytes intact');
+  stageSdr(gmiEditSessions, handle); gmiEditSessions.undo(handle); gmiEditSessions.redo(handle);
+  useStore.getState().setGmiEditTableView(id, 'proposed');
+  useStore.getState().toggleLayerHiddenCode(id, 'VL');
+  assert.strictEqual(useStore.getState().gmiEditSelection, selection);
+  assert.strictEqual(useStore.getState().layers[id].data, data);
+  useStore.getState().closeGmiEditWorkspace();
+  assert.equal(useStore.getState().gmiEditSelection, null);
+  useStore.getState().openGmiEditWorkspace(id); select();
+  useStore.setState((state) => ({ layers: { ...state.layers, [id]: { ...state.layers[id], data: { ...data } } } }));
+  assert.equal(useStore.getState().gmiEditSelection, null);
+  select(); assert.equal(useStore.getState().gmiEditSelection, null, 'old binding cannot select after invalidation');
+  resetStore();
+  const added = await addStoreLayer(CORE); const opened = await openOk(gmiEditSessions, added.id);
+  useStore.getState().openGmiEditWorkspace(added.id);
+  const newBinding = { layerId: added.id, sessionId: opened.sessionId, fingerprint: opened.fingerprint };
+  const again = () => useStore.getState().changeGmiEditSelection(added.id, { type: 'toggle', scope: 'point', key: 'point:0' }, newBinding);
+  again(); assert(useStore.getState().gmiEditSelection);
+  useStore.getState().removeLayer(added.id); assert.equal(useStore.getState().gmiEditSelection, null);
+  const third = await addStoreLayer(CORE); const thirdHandle = await openOk(gmiEditSessions, third.id);
+  useStore.getState().openGmiEditWorkspace(third.id);
+  useStore.getState().changeGmiEditSelection(third.id, { type: 'add', scope: 'line', keys: ['line:0'] }, { layerId: third.id, sessionId: thirdHandle.sessionId, fingerprint: thirdHandle.fingerprint });
+  assert(useStore.getState().gmiEditSelection, 'reset starts with a live selection');
+  assert.equal(useStore.getState().resetAll({ discardGmiEdits: true }).ok, true);
+  assert.equal(useStore.getState().gmiEditSelection, null);
+});
+
 test('store: sessions bind to survey layers; status is lightweight, not persisted, and does not touch layers', async (t) => {
   resetStore(); t.after(resetStore);
   const { id, data } = await addStoreLayer(CORE);
