@@ -15,6 +15,8 @@
   --gmi-validation-warning-border: var(--color-orange-200);
   --gmi-validation-warning-icon: var(--color-orange-700);
   --gmi-validation-warning-dot: var(--color-orange-500);
+  /* Compact rule counts reuse the established yellow warning text palette. */
+  --gmi-validation-rule-count-warning-text: var(--color-yellow-700);
   --gmi-validation-success-bg: var(--color-green-50);
   --gmi-validation-success-text: var(--color-green-800);
   --gmi-validation-success-border: var(--color-green-200);
@@ -27,6 +29,7 @@
 [data-validation-tone='info'] { --validation-bg: var(--gmi-surface-soft); --validation-text: var(--gmi-text-muted); --validation-border: var(--gmi-border-strong); --validation-icon: var(--gmi-text-muted); }
 .gmi-validation-dot { background: var(--validation-dot); }
 .gmi-validation-accent { color: var(--validation-icon); }
+.gmi-validation-rule-counts [data-validation-tone='warning'] { --validation-icon: var(--gmi-validation-rule-count-warning-text); }
 .gmi-validation-panel { border-color: var(--validation-border); background: color-mix(in srgb, var(--validation-bg) 60%, transparent); color: var(--validation-text); }
 
 /* Intermediate, session-only Bilder shell. Both panes retain their own scroll. */

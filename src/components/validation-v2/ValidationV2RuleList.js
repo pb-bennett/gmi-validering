@@ -37,7 +37,12 @@ export default function ValidationV2RuleList({
         const isExpanded = expandedRuleKey === presentation.expansionKey;
         const { counts } = presentation;
         const checkCount = (counts.checkCount || 0) + counts.indeterminateCount;
-        const countLabel = `${counts.evaluatedCount} objekter: ${counts.failCount} FEIL, ${checkCount} SJEKK, ${counts.passCount} OK`;
+        const visibleCounts = [
+          { tone: 'error', value: counts.failCount },
+          { tone: 'warning', value: checkCount },
+          { tone: 'success', value: counts.passCount },
+        ].filter(({ value }) => value > 0);
+        const countLabel = `${counts.evaluatedCount} objekter i kontrollgrunnlaget: ${counts.failCount} FEIL, ${checkCount} SJEKK, ${counts.passCount} OK.${counts.notEvaluatedCount > 0 ? ` Ikke evaluert: ${counts.notEvaluatedCount}.` : ''}${visibleCounts.length === 0 ? ' Ingen tellbare resultater.' : ''}`;
         return (
           <div key={presentation.expansionKey}>
             <button
@@ -59,14 +64,13 @@ export default function ValidationV2RuleList({
               <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gmi-navy">
                 {presentation.displayName}
               </span>
-              <span title={countLabel} aria-hidden="true" className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-gmi-text">
-                {counts.evaluatedCount} (
-                <span data-validation-tone="error" className="gmi-validation-accent font-medium">{counts.failCount}</span>
-                {' · '}
-                <span data-validation-tone="warning" className="gmi-validation-accent font-medium">{checkCount}</span>
-                {' · '}
-                <span data-validation-tone="success" className="gmi-validation-accent font-medium">{counts.passCount}</span>
-                )
+              <span title={countLabel} aria-hidden="true" className="gmi-validation-rule-counts shrink-0 whitespace-nowrap text-[11px] tabular-nums text-gmi-text">
+                {visibleCounts.length === 0 ? 'Ingen resultater' : visibleCounts.map(({ tone, value }, index) => (
+                  <span key={tone}>
+                    {index > 0 && ' · '}
+                    <span data-validation-tone={tone} className="gmi-validation-accent font-medium">{value}</span>
+                  </span>
+                ))}
               </span>
               <span aria-hidden="true" className="ml-1 shrink-0 text-gmi-text-subtle">
                 <CaretDownIcon size={16} weight="regular" aria-hidden="true" className={isExpanded ? 'rotate-180' : ''} />
