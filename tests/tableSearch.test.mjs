@@ -146,7 +146,8 @@ test('table UI contract: compact toolbar input, local state, clear/focus, counts
   assert.match(source, /\[searchQuery, setSearchQuery\] = useState\(''\)/);
   assert.match(source, /deriveLayerTableRows\(\{/);
   assert.match(source, /searchQuery: normalizedSearchQuery/);
-  assert.match(source, /data: displayItems/);
+  assert.match(source, /data: tableData/);
+  assert.match(source, /const tableData = useMemo\(\(\) => batchReview \? \[\.\.\.displayItems\] : displayItems/);
   assert.match(source, /const filteredCount = items.length/);
   assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : showSelectionOnly \? displayItems : items/);
   assert.match(source, /getRowId: \(row\) => `\$\{layerId\}:\$\{activeTab\}:\$\{row.__index\}`/);

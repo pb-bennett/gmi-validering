@@ -3,6 +3,23 @@ const HORIZONTAL_PADDING = 24;
 const COMPACT_MISSING_FIELD_WIDTH = 104;
 const COMPACT_ORDINARY_COLUMN_WIDTH = 64;
 
+/** Selective sizing; ordinary prose keeps the existing comfortable header width.
+ * Read the whole geometry scope so search/selection never makes columns jump.
+ */
+export function getOrdinaryColumnWidth({ field, label, values = [], format }) {
+  const supplied = values.filter((value) => value !== null && value !== undefined && value !== '');
+  const longest = supplied.reduce((length, value) => Math.max(length, String(value).length), 0);
+  const headerWidth = Math.min(180, Math.max(50, String(label || field).length * 7 + 24));
+  if (field === 'S_FCODE') return Math.min(180, Math.max(56, longest * 6 + 20));
+  if (!supplied.length) return 72;
+  const numeric = supplied.every((value) => /^[-+]?\d+(?:[.,]\d+)?$/.test(String(value).trim()));
+  if (format === 'Kode' || numeric || longest <= 8) {
+    // Keep some header context without allowing long names to dominate short values.
+    return Math.min(180, Math.max(64, longest * 6 + 24, Math.min(headerWidth, 88)));
+  }
+  return headerWidth;
+}
+
 function renderedValue(value) {
   return value === null || value === undefined || value === '' ? '-' : String(value);
 }
@@ -48,7 +65,7 @@ export function createAttributeColumnAccessors(fields) {
 
 /** Final column definitions passed to TanStack in either table mode. */
 export function createLayerDataTableColumns({ orderedFields, columnWidths, isContextualInspection, inspection, getFieldLabel, zoomCell, dataCell }) {
-  const zoomColumn = { id: 'zoom', header: '', size: 36, cell: zoomCell };
+  const zoomColumn = { id: 'zoom', header: '', size: columnWidths.zoom || 36, cell: zoomCell };
   const dataColumns = createAttributeColumnAccessors(orderedFields).map(({ id, accessorFn }) => ({
     id,
     accessorFn,

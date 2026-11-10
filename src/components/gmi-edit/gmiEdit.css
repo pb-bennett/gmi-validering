@@ -220,7 +220,7 @@
 [role=columnheader][data-focus-column] { box-shadow: inset 0 -2px 0 var(--gmi-interactive); color: var(--gmi-interactive); }
 
 /* Object identity column. */
-.gmi-object-number { display: block; width: 100%; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--gmi-navy); }
+.gmi-object-number { display: block; width: 100%; text-align: left; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--gmi-navy); }
 .gmi-object-number:not([data-numbered]) { font-weight: 400; font-style: italic; color: var(--gmi-text-subtle); }
 
 /* Batch review columns: the actual staged outcome per object. */
@@ -236,6 +236,8 @@
 .gmi-manual-toggle:hover { background: #e6f6f9; }
 .gmi-manual-toggle[aria-pressed=true] { border-color: var(--gmi-border-strong); color: var(--gmi-text-muted); }
 .gmi-manual-toggle[aria-pressed=true]:hover { border-color: var(--gmi-validation-error-border); color: var(--gmi-validation-error-text); background: var(--gmi-validation-error-bg); }
+.gmi-review-change, .gmi-review-hypothetical { display: block; min-width: 0; max-width: 100%; }
+.gmi-review-change .gmi-edit-lexeme, .gmi-review-hypothetical .gmi-edit-lexeme { white-space: pre; overflow-wrap: normal; }
 .gmi-review-change strong .gmi-edit-lexeme { color: var(--gmi-interactive); font-weight: 700; }
 .gmi-review-change .gmi-edit-lexeme, .gmi-review-hypothetical .gmi-edit-lexeme { font-size: 10.5px; }
 .gmi-review-hypothetical { color: var(--gmi-text-subtle); font-style: italic; }

@@ -191,7 +191,7 @@ test('diagnostic table keeps result in row metadata, inspected-field colour, mov
   assert.match(presentation, /contextualField: isContextualInspection && id === inspection\.presentation\.fieldColumn/);
   assert.match(source, /row\.original\.__contextualResult === 'FAIL' \? '#fef2f2' : row\.original\.__contextualResult === 'CHECK' \? '#fffbeb' : '#f0fdf4'/);
   assert.match(source, /const ROW_HEIGHT = 28/);
-  assert.match(source, /const widths = \{ zoom: 36 \}/);
+  assert.match(source, /const widths = \{ zoom: zoomWidth \}/);
   assert.match(source, /useVirtualizer\(/);
   assert.match(source, /className="gmi-focus-ring flex-1 overflow-auto"/);
 });
@@ -222,7 +222,7 @@ test('ordinary contextual headers wrap accessibly without changing special or wh
   assert.match(presentation, /contextualOrdinary:/);
   assert.match(source, /contextualField \|\| header\.column\.columnDef\.meta\?\.contextualOrdinary/);
   assert.match(source, /line-clamp-2 leading-3/);
-  assert.match(source, /else \{\s*widths\[field\] = estimateColumnWidth/);
+  assert.match(source, /else \{\s*widths\[field\] = getOrdinaryColumnWidth/);
 });
 
 test('Validator close targets only Validator-owned inspection sessions and leaves generic sessions alone', async () => {

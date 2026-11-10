@@ -28,7 +28,8 @@ import GmiConfirmDialog from './gmi-edit/GmiConfirmDialog';
 import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
 import FilenameCopyButton from '@/components/FilenameCopyButton';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
-import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns, applyColumnFocus } from '@/lib/objectTablePresentation';
+import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns, applyColumnFocus } from '@/lib/objectTablePresentation';
+import { BATCH_REVIEW_COLUMNS, createBatchReviewColumnAccessors, getBatchReviewColumnWidths } from '@/lib/gmiTableReviewPresentation.mjs';
 import { GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
 import { validatorInspectionLayer } from '@/lib/gmiValidatorEditing.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
@@ -37,9 +38,7 @@ import { GMI_EDIT_TABLE_VIEWS, GMI_EDIT_TABLE_VIEW_LABELS, gmiEditMessage, gmiOb
   gmiObjectNumber, gmiObjectMatchesQuery, gmiObjectCountLabel } from '@/lib/gmiEditView.mjs';
 
 const ROW_HEIGHT = 28;
-const MAX_COLUMN_WIDTH = 180;
-const MIN_COLUMN_WIDTH = 50;
-const OBJECT_NUMBER_WIDTH = 44;
+const OBJECT_NUMBER_WIDTH = 40;
 const NO_FIELDS = Object.freeze([]);
 // Fixed identity columns stay ahead of any temporarily focused (edited) field.
 const LEADING_FIELDS = Object.freeze(['S_FCODE']);
@@ -66,7 +65,7 @@ function ReviewFindings({ entry }) {
   const title = findings.map((finding) => `${finding.severity}${finding.introduced ? ' (ny)' : ''}: ${finding.reason}`).join('\n');
   return <span className={`gmi-review-finding truncate${actual ? '' : ' gmi-review-hypothetical'}`} data-validation-tone={first.tone} title={actual ? title : `Hvis inkludert:\n${title}`}>
     <Icon size={13} weight="regular" aria-hidden="true" />
-    {!actual && 'Hvis inkludert: '}<strong>{first.severity}{first.introduced ? ' (ny)' : ''}</strong> {first.reason}{rest.length > 0 && ` · +${rest.length}`}
+    <span className="min-w-0 truncate">{!actual && 'Hvis inkludert: '}<strong>{first.severity}{first.introduced ? ' (ny)' : ''}</strong> {first.reason}{rest.length > 0 && ` · +${rest.length}`}</span>
   </span>;
 }
 
@@ -85,19 +84,10 @@ function getFieldLabel(fieldName) {
   return fieldDef?.label || fieldName;
 }
 
-function estimateColumnWidth(fieldName, label) {
-  // Estimate width based on label length, with min/max bounds
-  const charWidth = 7;
-  const padding = 24;
-  const labelWidth = label.length * charWidth + padding;
-  return Math.min(
-    MAX_COLUMN_WIDTH,
-    Math.max(MIN_COLUMN_WIDTH, labelWidth),
-  );
-}
-
 function visibleHeaderLabel(label, width, multiline = false) {
   const text = String(label || '');
+  // Single-line headers use actual rendered glyph widths and CSS ellipsis.
+  if (!multiline) return text;
   const capacity = Math.max(1, Math.floor((width - 12) / 7) * (multiline ? 2 : 1));
   return text.length > capacity ? `${text.slice(0, Math.max(0, capacity - 1))}…` : text;
 }
@@ -117,12 +107,11 @@ const DataCell = React.memo(function DataCell({ value, missingLabel = '-', searc
     ? missingLabel
     : String(value);
   const isMissing = displayValue === missingLabel;
-  const needsTooltip = displayValue.length > 25;
 
   return (
     <span
       className={`block truncate ${isMissing ? 'text-gmi-text-subtle italic' : ''}`}
-      title={needsTooltip ? displayValue : undefined}
+      title={!isMissing ? displayValue : undefined}
     >
       {!isMissing && tableSearchScalarText(value) !== null && searchQuery
         ? segmentTableSearchText(displayValue, searchQuery).map((segment, index) => segment.match
@@ -311,6 +300,7 @@ export default function LayerDataTable() {
   // Rettinger object labels ("Ledning 38"): a compact, stable source-number column, also in
   // Validator inspections opened inside Rettinger. Never derived from the sorted/virtual row.
   const showObjectNumber = Boolean(layerId) && gmiEditWorkspaceLayerId === layerId;
+  const zoomWidth = showObjectNumber ? 32 : 36;
   const numberWidth = showObjectNumber ? OBJECT_NUMBER_WIDTH : 0;
   const sourceData = importedLayer?.data;
   const objectIdOf = useCallback((objectScope, index) => (objectScope === 'line' ? sourceData?.lines : sourceData?.points)?.[index]?.id ?? null, [sourceData]);
@@ -457,12 +447,12 @@ export default function LayerDataTable() {
     if (isExactInspection || !layerId) return;
     if (tableView === GMI_EDIT_TABLE_VIEWS.CHANGED) return;
     const validSorting = Array.isArray(sorting)
-      ? sorting.filter((sort) => fields.includes(sort.id) || (showObjectNumber && sort.id === 'objectNumber'))
+      ? sorting.filter((sort) => fields.includes(sort.id) || (showObjectNumber && sort.id === 'objectNumber') || (batchReview && BATCH_REVIEW_COLUMNS.includes(sort.id)))
       : [];
     if (validSorting.length !== sorting.length) {
       setLayerDataTableSorting(layerId, activeTab, validSorting);
     }
-  }, [activeTab, fields, layerId, sorting, setLayerDataTableSorting, isExactInspection, tableView, showObjectNumber]);
+  }, [activeTab, fields, layerId, sorting, setLayerDataTableSorting, isExactInspection, tableView, showObjectNumber, batchReview]);
 
   const [draggedField, setDraggedField] = useState(null);
 
@@ -557,11 +547,12 @@ export default function LayerDataTable() {
     setHighlightedFeatureIds(null);
   }, [setHighlightedFeatureIds]);
 
-  // Calculate column widths based on field names
-  const columnWidths = useMemo(() => {
-    const widths = { zoom: 36 };
+  // Complete geometry scope keeps widths stable through filtering and selection.
+  const attributeColumnWidths = useMemo(() => {
+    const widths = { zoom: zoomWidth };
     if (showObjectNumber) widths.objectNumber = OBJECT_NUMBER_WIDTH;
-    if (batchReview) Object.assign(widths, { batchStatus: 300, batchValue: 130, batchFindings: 240 });
+    const dataset = proposedData || layer?.data;
+    const sizingRows = (activeTab === 'punkter' ? dataset?.points : dataset?.lines) || [];
     orderedFields.forEach((field) => {
       const label = getFieldLabel(field);
       if (isContextualInspection && field === inspection.presentation.fieldColumn) {
@@ -571,11 +562,15 @@ export default function LayerDataTable() {
       } else if (isContextualInspection) {
         widths[field] = getContextualOrdinaryColumnWidth({ values: contextualScopeRows.map((row) => row.attributes?.[field]) });
       } else {
-        widths[field] = estimateColumnWidth(field, label);
+        widths[field] = getOrdinaryColumnWidth({ field, label, values: sizingRows.map((row) => row.attributes?.[field]),
+          format: fieldsData.find((definition) => definition.fieldKey === field)?.fieldFormat });
       }
     });
     return widths;
-  }, [orderedFields, isContextualInspection, inspection, contextualScopeRows, batchReview, showObjectNumber]);
+  }, [orderedFields, isContextualInspection, inspection, contextualScopeRows, showObjectNumber, zoomWidth, proposedData, layer?.data, activeTab]);
+  const columnWidths = useMemo(() => batchReview
+    ? { ...attributeColumnWidths, ...getBatchReviewColumnWidths(batchReview.rows) }
+    : attributeColumnWidths, [attributeColumnWidths, batchReview]);
 
   const columns = useMemo(() => {
     const base = createLayerDataTableColumns({
@@ -620,15 +615,17 @@ export default function LayerDataTable() {
     if (!batchReview) return showObjectNumber ? [zoom, ...numberColumn, ...attributes] : base;
     const fixed = attributes.filter((column) => column.meta?.isFixed);
     const ordinary = attributes.filter((column) => !column.meta?.isFixed);
-    const reviewColumns = [['batchStatus', 'Status'], ['batchValue', 'Endring'], ['batchFindings', 'Funn etter endring']].map(([id, header]) => ({
-      id, header, enableSorting: false,
+    const reviewLabels = { batchStatus: 'Status', batchValue: 'Endring', batchFindings: 'Funn etter endring' };
+    const reviewColumns = createBatchReviewColumnAccessors({ rows: batchReview.rows, scope }).map((accessor) => ({
+      ...accessor, header: reviewLabels[accessor.id], size: columnWidths[accessor.id],
       cell: ({ row }) => {
+        const id = accessor.id;
         // Objects outside the reviewed selection get neutral empty cells.
         const entry = batchReview.rows[gmiSelectionKey(scope, row.original.__index)];
         if (!entry) return null;
         if (id === 'batchValue') return <ReviewChange entry={entry} />;
         if (id === 'batchFindings') return <ReviewFindings entry={entry} />;
-        return <div className="gmi-review-status" title={entry.explanation || entry.detail || undefined}>
+        return <div className="gmi-review-status" title={[GMI_BATCH_OUTCOME_LABELS[entry.outcome], entry.detail, entry.explanation].filter(Boolean).join('\n')}>
           <span className="gmi-outcome-badge" data-outcome={entry.outcome}>{GMI_BATCH_OUTCOME_LABELS[entry.outcome]}</span>
           {entry.detail && <span className="gmi-outcome-detail truncate">{entry.detail}</span>}
           {entry.canManual && <button type="button" className="gmi-manual-toggle gmi-focus-ring" aria-pressed={entry.manualOn}
@@ -643,8 +640,11 @@ export default function LayerDataTable() {
     return [zoom, ...numberColumn, ...fixed, ...reviewColumns, ...ordinary];
   }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery, changedByObject, batchReview, scope, showObjectNumber, objectIdOf]);
 
+  // TanStack caches accessor values on its core rows. Review outcomes can change
+  // without changing source/display rows (for example, manual inclusion).
+  const tableData = useMemo(() => batchReview ? [...displayItems] : displayItems, [displayItems, batchReview]);
   const table = useReactTable({
-    data: displayItems,
+    data: tableData,
     columns,
     state: { sorting },
     onSortingChange: (updater) => {
@@ -755,10 +755,10 @@ export default function LayerDataTable() {
     0,
   );
   // Sticky lead: selection checkbox, zoom tool, then (in Rettinger) the object number.
-  const leadWidth = selectionWidth + 36 + numberWidth;
+  const leadWidth = selectionWidth + zoomWidth + numberWidth;
   const stickyLeftFor = (columnId) => {
     if (columnId === 'zoom') return selectionWidth;
-    if (columnId === 'objectNumber') return selectionWidth + 36;
+    if (columnId === 'objectNumber') return selectionWidth + zoomWidth;
     const position = orderedFields.indexOf(columnId);
     if (position < 0) return undefined;
     const column = columns.find((entry) => entry.id === columnId);
