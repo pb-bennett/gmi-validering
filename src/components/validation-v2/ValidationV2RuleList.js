@@ -36,6 +36,8 @@ export default function ValidationV2RuleList({
         const panelId = `${rowId}-summary`;
         const isExpanded = expandedRuleKey === presentation.expansionKey;
         const { counts } = presentation;
+        const checkCount = (counts.checkCount || 0) + counts.indeterminateCount;
+        const countLabel = `${counts.evaluatedCount} objekter: ${counts.failCount} FEIL, ${checkCount} SJEKK, ${counts.passCount} OK`;
         return (
           <div key={presentation.expansionKey}>
             <button
@@ -43,7 +45,7 @@ export default function ValidationV2RuleList({
               type="button"
               aria-expanded={isExpanded}
               aria-controls={panelId}
-              aria-label={`${presentation.displayName}: ${presentation.status.label} for denne kontrollen for valgt geometri`}
+              aria-label={`${presentation.displayName}: ${presentation.status.label} for denne kontrollen for valgt geometri. ${countLabel}`}
               onClick={() => onToggle(presentation.expansionKey)}
               className={`flex min-h-10 w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs transition-colors hover:bg-gmi-surface-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gmi-interactive ${isExpanded ? 'bg-gmi-surface-soft' : 'bg-gmi-surface'}`}
             >
@@ -57,7 +59,16 @@ export default function ValidationV2RuleList({
               <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gmi-navy">
                 {presentation.displayName}
               </span>
-              <span aria-hidden="true" className="shrink-0 text-gmi-text-subtle">
+              <span title={countLabel} aria-hidden="true" className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-gmi-text">
+                {counts.evaluatedCount} (
+                <span data-validation-tone="error" className="gmi-validation-accent font-medium">{counts.failCount}</span>
+                {' · '}
+                <span data-validation-tone="warning" className="gmi-validation-accent font-medium">{checkCount}</span>
+                {' · '}
+                <span data-validation-tone="success" className="gmi-validation-accent font-medium">{counts.passCount}</span>
+                )
+              </span>
+              <span aria-hidden="true" className="ml-1 shrink-0 text-gmi-text-subtle">
                 <CaretDownIcon size={16} weight="regular" aria-hidden="true" className={isExpanded ? 'rotate-180' : ''} />
               </span>
             </button>

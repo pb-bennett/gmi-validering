@@ -202,7 +202,9 @@ export function getValidationV2RulePresentations(ruleResults = [], geometryScope
       const evaluatedCount = Math.max(0, ...ownerCounts.map((item) => getCount(item, 'evaluatedCount')));
       const failCount = Math.max(0, ...ownerCounts.map((item) => getCount(item, 'failCount')));
       const checkCount = Math.max(0, ...ownerCounts.map((item) => getCount(item, 'checkCount') + getCount(item, 'indeterminateCount')));
-      counts = { evaluatedCount, failCount, checkCount, passCount: Math.max(0, evaluatedCount - failCount - checkCount), notEvaluatedCount: 0, indeterminateCount: 0 };
+      // Aggregate-only results must not turn skipped/unsupported objects into passes.
+      const passCount = Math.max(0, ...ownerCounts.map((item) => getCount(item, 'passCount')));
+      counts = { evaluatedCount, failCount, checkCount, passCount, notEvaluatedCount: 0, indeterminateCount: 0 };
     }
     const status = getValidationV2AggregateStatus(counts);
     if (status.enum === null) return [];
