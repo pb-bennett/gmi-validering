@@ -343,13 +343,16 @@ Reason: the field is rarely legitimately used and should always be brought to th
 
 ## 23. InnvendigUtvendig
 
-**Scope:** point + line by deliberate validator policy.
+**Scope:** point + line by deliberate validator policy. Point policy revised 2026-11-10.
 
-- Required on both points and lines.
-- `ID` → **Pass**.
-- `OD` → **Pass**.
-- Missing / empty → **Feil**.
-- Any other value → **Feil**.
+- Points: required when Bredde is populated (including numeric zero). Missing both fields gives no qualifier finding; existing Bredde requirements remain independent.
+- Points: valid `ID`/`OD` without Bredde → **Sjekk**.
+- Points with Bredde: missing / empty qualifier → **Feil**.
+- KUM with Bredde: normally internal (`ID`); `OD` → **Sjekk**.
+- LOK with Bredde: normally external (`OD`); `ID` → **Sjekk**.
+- These Tema conventions are project/domain recommendations, not proof that an alternative measurement is wrong. Other Tema receive no such recommendation.
+- Lines: qualifier remains required; `ID` and `OD` → **Pass**, missing / empty → **Feil**.
+- Any unsupported supplied code → **Feil** on both scopes, including points without Bredde.
 
 ## 24. Tykkelse
 

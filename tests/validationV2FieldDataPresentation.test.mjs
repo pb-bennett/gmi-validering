@@ -32,8 +32,8 @@ function summarize(dataset, result, canonicalFieldId, geometryScope, layerId = '
 
 test('inside/outside distribution uses exact source meanings and shows missing as Mangler with actual status', () => {
   const dataset = makeDataset([
-    ...Array.from({ length: 387 }, () => ({ InnvendigUtvendig: null })),
-    ...Array.from({ length: 83 }, () => ({ InnvendigUtvendig: 'ID' })),
+    ...Array.from({ length: 387 }, () => ({ Bredde: '1000', InnvendigUtvendig: null })),
+    ...Array.from({ length: 83 }, () => ({ Bredde: '1000', InnvendigUtvendig: 'ID' })),
   ]);
   const result = run(dataset);
   const summary = summarize(dataset, result, 'insideOutside', 'point');

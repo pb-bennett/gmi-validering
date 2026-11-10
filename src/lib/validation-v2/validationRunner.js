@@ -373,6 +373,7 @@ function createDiagnosticFacts(rule, policyContext, evaluation, evidence) {
     manholeShape: ['tema'],
     width: ['tema'],
     verticalLevel: ['tema'],
+    insideOutside: ['tema'],
     wallThickness: ['tema'],
     bottomDistance: ['tema'],
     type: ['tema'],
@@ -549,6 +550,7 @@ function createGmiRunContext(input, options = {}) {
   const positioningCauseRule = rules.find((rule) => rule.ruleId === 'innmaling.common.positioning-cause.valid');
   for (const ref of allRefs) context.policyContexts.set(ref.key, {
     localOnly: Boolean(options.localOnly),
+    width: evidenceFor(ref, 'width'),
     ringStiffness: evidenceFor(ref, 'ringStiffness'),
     tema: evidenceFor(ref, 'tema'),
     temaValid: (() => { const identity = evidenceFor(ref, 'tema'); return identity.state === 'RESOLVED' && (ref.geometryScope === 'point' ? rules.find((r) => r.ruleId === 'innmaling.point.tema.required') : rules.find((r) => r.ruleId === 'innmaling.line.tema.required'))?.allowedValues.includes(identity.resolvedValue); })(),

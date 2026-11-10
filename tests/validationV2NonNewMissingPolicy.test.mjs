@@ -67,8 +67,9 @@ test('line Tykkelse, required SDR and required Ringstivhet use the same missing 
 
 test('strict missing fields and Anleggsår retain their existing severities', () => {
   const point = run([{ Tema: 'DIV', [cause]: 'UENDR' }, { Tema: 'KUM', [cause]: 'UENDR' }]);
-  for (const id of ['innmaling.point.type.valid', 'innmaling.point.inside-outside.valid']) assert.equal(outcome(point, 'point', id, 0).state, 'FAIL');
-  for (const id of ['innmaling.point.manhole-shape.valid', 'innmaling.point.inside-outside.valid', 'innmaling.point.width.integer']) assert.equal(outcome(point, 'point', id, 1).state, 'FAIL');
+  assert.equal(outcome(point, 'point', 'innmaling.point.type.valid', 0).state, 'FAIL');
+  for (const i of [0, 1]) assert.equal(outcome(point, 'point', 'innmaling.point.inside-outside.valid', i).state, 'PASS');
+  for (const id of ['innmaling.point.manhole-shape.valid', 'innmaling.point.width.integer']) assert.equal(outcome(point, 'point', id, 1).state, 'FAIL');
   const line = run([], [{ Tema: 'AF', [cause]: 'UENDR', Rørform: 'E' }]);
   for (const id of ['dimension.required', 'vertical-dimension.valid', 'material.required', 'network-type.valid', 'inside-outside.valid']) assert.equal(outcome(line, 'line', `innmaling.line.${id}`, 0).state, 'FAIL', id);
   const missingShape = run([], [{ Tema: 'AF', [cause]: 'UENDR' }]);

@@ -111,6 +111,21 @@ function anniversary(reference, years) {
 }
 
 export function evaluateFieldPolicy(value, policy, rule, context = {}) {
+  if (policy === 'insideOutside' && rule.geometryScopes.includes('point')) {
+    const issue = structural(value); if (issue) return issue;
+    if (!missing(value)) {
+      const invalid = listed(value, rule.allowedValues); if (invalid) return invalid;
+    }
+    const widthIssue = structural(context.width); if (widthIssue) return widthIssue;
+    if (missing(context.width)) return missing(value)
+      ? { state: EvaluationState.PASS, reasonCode: null }
+      : { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE };
+    if (missing(value)) return { state: EvaluationState.FAIL, reasonCode: RuleReasonCode.REQUIRED_VALUE_MISSING };
+    const tema = resolvedTema(context);
+    return (tema === 'KUM' && lexeme(value) === 'OD') || (tema === 'LOK' && lexeme(value) === 'ID')
+      ? { state: EvaluationState.CHECK, reasonCode: RuleReasonCode.UNUSUAL_VALID_VALUE }
+      : { state: EvaluationState.PASS, reasonCode: null };
+  }
   if (policy === 'sdrRingExclusive') {
     const ring = context.ringStiffness;
     const issue = structural(value) || structural(ring);

@@ -381,7 +381,7 @@ const POLICY_METADATA = Object.freeze({
   manholeShape: ['Kumform er kontekstavhengig etter eksplisitt Tema-applicability. Manglende verdi er Feil når feltet gjelder.', []],
   constructionMethod: ['Byggemetode er kontekstavhengig etter eksplisitt Tema-applicability. UK er gyldig, men gir Sjekk.', []],
   cone: ['Kjegle er kontekstavhengig etter eksplisitt Tema-applicability. Manglende verdi er Feil når feltet gjelder.', []],
-  insideOutside: ['InnvendigUtvendig er påkrevd for punkt og ledning. Bare ID og OD er godkjent.', []],
+  insideOutside: ['For punkt er InnvendigUtvendig påkrevd når Bredde er oppgitt. Kode uten Bredde gir Sjekk. KUM forventes normalt målt innvendig (ID), LOK utvendig (OD); motsatt kode gir Sjekk. For ledning er feltet påkrevd. Bare ID og OD er godkjent.', []],
   width: ['Bredde er et kontekstavhengig heltall i mm. Når feltet gjelder, gir minst 20 Pass og 0–19 Sjekk. For GUT gir manglende Bredde Sjekk.', []],
   length: ['Lengde er valgfritt. En levert gyldig heltallsverdi fremheves alltid med Sjekk.', []],
   wallThickness: ['Punkt-Tykkelse er et kontekstavhengig tall i mm. Heltall og desimaler med komma eller punktum godtas. Positiv verdi gir Pass når feltet gjelder; 0 gir Sjekk.', []],

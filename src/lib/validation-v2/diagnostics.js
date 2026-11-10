@@ -161,7 +161,8 @@ function contextKey(finding, type) {
     return JSON.stringify({ requirement: 'EXPECTED' });
   }
   if (type === T.CONTEXT_INCOMPATIBLE) return '{}';
-  const visibleContext = [T.CONTEXT_REQUIRED_MISSING, T.CONTEXT_UNEXPECTED_VALUE, T.CONTEXT_INCOMPATIBLE].includes(type);
+  const visibleContext = [T.CONTEXT_REQUIRED_MISSING, T.CONTEXT_UNEXPECTED_VALUE, T.CONTEXT_INCOMPATIBLE].includes(type)
+    || (finding.canonicalFieldId === 'insideOutside' && type === T.VALID_VALUE_REVIEW);
   const relevantFieldIds = visibleContext ? (facts.explanationContextFieldIds || (
     [T.CONTEXT_REQUIRED_MISSING, T.CONTEXT_UNEXPECTED_VALUE, T.CONTEXT_INCOMPATIBLE].includes(type)
       ? ['tema']
@@ -431,6 +432,16 @@ function contextText(diagnostic) {
 }
 
 export function renderValidationV2Diagnostic(diagnostic) {
+  if (diagnostic.field.canonicalFieldId === 'insideOutside' && diagnostic.field.geometryScope === 'point') {
+    const reasons = diagnostic.reasonCodes || [];
+    if (reasons.includes(RuleReasonCode.REQUIRED_VALUE_MISSING)) return 'Bredde er oppgitt, men InnvendigUtvendig mangler. Angi om bredden er målt innvendig (ID) eller utvendig (OD).';
+    if (reasons.includes(RuleReasonCode.APPLICABILITY_UNEXPECTED_VALUE)) return 'InnvendigUtvendig er oppgitt uten Bredde. Kontroller om dimensjonen mangler eller om kvalifikatoren er overflødig.';
+    if (reasons.includes(RuleReasonCode.UNUSUAL_VALID_VALUE)) {
+      const tema = diagnostic.contextFacts?.context?.find((item) => item.fieldId === 'tema')?.value;
+      if (tema === 'KUM') return 'KUM har InnvendigUtvendig = OD. Kontroller om oppgitt bredde faktisk er målt utvendig.';
+      if (tema === 'LOK') return 'LOK har InnvendigUtvendig = ID. Kontroller om oppgitt bredde faktisk er målt innvendig.';
+    }
+  }
   if (diagnostic.reasonCodes?.includes(RuleReasonCode.SDR_RING_STIFFNESS_CONFLICT)) {
     return 'Både SDR og Ringstivhet er utfylt. Disse egenskapene skal ikke brukes samtidig på samme ledning.';
   }

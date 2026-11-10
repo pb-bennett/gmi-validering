@@ -521,7 +521,7 @@ const BASE_VALIDATION_RULES = [
     evaluatorKind: RuleEvaluatorKind.REQUIRED_ALLOWED_VALUE,
     category: RuleCategory.REQUIRED_ALLOWED_VALUE,
     title: 'Punktets innvendig/utvendig-kode er gyldig',
-    description: 'Alle punktobjekt skal ha en gyldig innvendig/utvendig-kode.',
+    description: 'Når Bredde er oppgitt, kreves ID eller OD. KUM med OD og LOK med ID gir Sjekk; kode uten Bredde gir Sjekk.',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
     source: { document: 'Innmålingsinstruks Vedlegg A', pages: '4, 14' },
