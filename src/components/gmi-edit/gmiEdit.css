@@ -93,8 +93,7 @@
 .gmi-batch-inspector input { accent-color: var(--gmi-interactive); }
 .gmi-batch-inspector input:focus-visible, .gmi-batch-inspector select:focus-visible { outline: 2px solid var(--gmi-interactive); outline-offset: 2px; }
 .gmi-batch-object-detail dl > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; overflow-wrap: anywhere; }
-[data-gmi-selection-bar] > .gmi-compact-button { border: 1px solid var(--gmi-border-strong); border-radius: 4px; padding: 2px 6px; }
-.gmi-batch-inspector .gmi-primary-control, [data-gmi-selection-bar] > .gmi-primary-control { background: var(--gmi-interactive); border-color: var(--gmi-interactive); color: white; }
+.gmi-batch-inspector .gmi-primary-control, [data-gmi-selection-bar] .gmi-primary-control { background: var(--gmi-interactive); border-color: var(--gmi-interactive); color: white; }
 .gmi-inspector-configuration > summary { cursor: pointer; color: var(--gmi-interactive); font-size: 11px; margin-bottom: 4px; }
 .gmi-batch-inspector .gmi-edit-muted { font-size: 11px; }
 .gmi-edit-editor-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
@@ -168,8 +167,7 @@
 .gmi-batch-exclusions > li:has(input:checked) { border-left: 3px solid #007595; background: var(--gmi-surface-soft); }
 .gmi-edit-manual-history ul { max-height: 200px; overflow: auto; padding-left: 16px; }
 .gmi-batch-risk-findings { max-height: 180px; overflow: auto; }
-.gmi-batch-dialog .gmi-primary-control,
-.gmi-edit-dialog[data-gmi-confirm='batch-risk'] .gmi-edit-actions button:last-child { background: var(--gmi-interactive); color: white; border-color: var(--gmi-interactive); }
+.gmi-batch-dialog .gmi-primary-control { background: var(--gmi-interactive); color: white; border-color: var(--gmi-interactive); }
 .gmi-edit-dialog h2 { font-size: 17px; font-weight: 600; color: var(--gmi-navy); margin-bottom: 10px; }
 .gmi-edit-dialog > * + * { margin-top: 10px; }
 .gmi-edit-confirm-dialog { width: min(460px, calc(100vw - 32px)); }
@@ -199,3 +197,133 @@
 .gmi-edit-layer-pill[data-downloaded] { border-style: solid; border-color: #9fd3c7; color: #276749; }
 .gmi-edit-layer-notice { margin: 0 8px 6px; padding: 4px 6px; border-radius: 6px; border: 1px solid #ecc8c3; background: #fdf3f2; color: #7f1d1d; font-size: 10px; display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
 .gmi-edit-change-cells tbody th, .gmi-edit-review-table tbody th { overflow-wrap: normal; word-break: keep-all; white-space: nowrap; }
+
+/* R4 polish: selection bar (Data Table, Rettinger only). */
+.gmi-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; flex-shrink: 0; padding: 5px 12px; border-bottom: 1px solid var(--gmi-border); background: #f3fafc; font-size: 11px; color: var(--gmi-text-muted); }
+.gmi-selection-summary { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.gmi-selection-summary strong { font-size: 13px; font-weight: 700; color: var(--gmi-navy); font-variant-numeric: tabular-nums; }
+.gmi-selection-scope { color: var(--gmi-text-subtle); }
+.gmi-selection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gmi-bar-button { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border: 1px solid var(--gmi-border-strong); border-radius: 6px; background: var(--gmi-surface); color: var(--gmi-text); font-size: 11px; font-weight: 500; white-space: nowrap; transition: border-color .12s, color .12s, background-color .12s; }
+.gmi-bar-button:hover:not(:disabled) { border-color: var(--gmi-interactive); color: var(--gmi-interactive); background: #e6f6f9; }
+.gmi-bar-button:disabled { opacity: .5; cursor: default; }
+.gmi-bar-segmented { display: inline-flex; padding: 1px; border: 1px solid var(--gmi-border-strong); border-radius: 6px; background: var(--gmi-surface); }
+.gmi-bar-segmented button { height: 22px; padding: 0 8px; border-radius: 5px; font-size: 11px; font-weight: 500; color: var(--gmi-text-muted); white-space: nowrap; }
+.gmi-bar-segmented button:hover:not([aria-pressed=true]) { color: var(--gmi-interactive); background: #e6f6f9; }
+.gmi-bar-segmented button[aria-pressed=true] { background: var(--gmi-interactive); color: #fff; }
+.gmi-batch-entry { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 14px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.gmi-batch-mode-indicator { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--gmi-interactive); border-radius: 6px; background: #e6f6f9; color: var(--gmi-interactive); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.photo-icon-button.gmi-table-icon-button { width: 26px; height: 22px; border-radius: 6px; border: 1px solid var(--gmi-border-strong); color: var(--gmi-interactive); background: var(--gmi-surface); }
+.photo-icon-button.gmi-table-icon-button:hover { background: #e6f6f9; border-color: var(--gmi-interactive); }
+.gmi-column-focus { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border: 1px dashed var(--gmi-border-strong); border-radius: 999px; font-size: 10px; font-weight: 600; color: var(--gmi-text-muted); background: var(--gmi-surface); }
+.gmi-column-focus[aria-pressed=true] { border-style: solid; border-color: var(--gmi-interactive); color: var(--gmi-interactive); background: #e6f6f9; }
+[role=columnheader][data-focus-column] { box-shadow: inset 0 -2px 0 var(--gmi-interactive); color: var(--gmi-interactive); }
+
+/* Object identity column. */
+.gmi-object-number { display: block; width: 100%; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--gmi-navy); }
+.gmi-object-number:not([data-numbered]) { font-weight: 400; font-style: italic; color: var(--gmi-text-subtle); }
+
+/* Batch review columns: the actual staged outcome per object. */
+.gmi-review-status { display: flex; align-items: center; gap: 5px; min-width: 0; width: 100%; }
+.gmi-outcome-badge { flex-shrink: 0; display: inline-flex; align-items: center; height: 17px; padding: 0 6px; border: 1px solid var(--gmi-border-strong); border-radius: 999px; font-size: 10px; font-weight: 600; white-space: nowrap; color: var(--gmi-text-muted); background: var(--gmi-surface); }
+.gmi-outcome-badge[data-outcome=change] { border-color: #8fcbdb; background: #e6f6f9; color: var(--gmi-interactive); }
+.gmi-outcome-badge[data-outcome=manual] { border: 1px dashed var(--gmi-validation-warning-dot); background: var(--gmi-validation-warning-bg); color: var(--gmi-validation-warning-text); }
+.gmi-outcome-badge[data-outcome=unchanged] { background: var(--gmi-surface-soft); }
+.gmi-outcome-badge[data-outcome=excluded] { border-style: dashed; color: var(--gmi-text-subtle); font-style: italic; }
+.gmi-outcome-badge[data-outcome=stale], .gmi-outcome-badge[data-outcome=added] { border-color: var(--gmi-validation-warning-border); background: var(--gmi-validation-warning-bg); color: var(--gmi-validation-warning-text); }
+.gmi-outcome-detail { min-width: 0; flex: 1; color: var(--gmi-text-subtle); }
+.gmi-manual-toggle { flex-shrink: 0; margin-left: auto; display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 6px; border: 1px solid var(--gmi-interactive); border-radius: 5px; background: var(--gmi-surface); color: var(--gmi-interactive); font-size: 10px; font-weight: 600; white-space: nowrap; }
+.gmi-manual-toggle:hover { background: #e6f6f9; }
+.gmi-manual-toggle[aria-pressed=true] { border-color: var(--gmi-border-strong); color: var(--gmi-text-muted); }
+.gmi-manual-toggle[aria-pressed=true]:hover { border-color: var(--gmi-validation-error-border); color: var(--gmi-validation-error-text); background: var(--gmi-validation-error-bg); }
+.gmi-review-change strong .gmi-edit-lexeme { color: var(--gmi-interactive); font-weight: 700; }
+.gmi-review-change .gmi-edit-lexeme, .gmi-review-hypothetical .gmi-edit-lexeme { font-size: 10.5px; }
+.gmi-review-hypothetical { color: var(--gmi-text-subtle); font-style: italic; }
+.gmi-review-none { color: var(--gmi-text-subtle); }
+.gmi-review-finding { display: flex; align-items: center; gap: 3px; min-width: 0; color: var(--validation-text); }
+.gmi-review-finding svg { flex-shrink: 0; color: var(--validation-icon); }
+.gmi-review-finding.gmi-review-hypothetical { opacity: .8; }
+[data-review-outcome=excluded] > [role=gridcell], [data-review-outcome=skipped] > [role=gridcell] { color: var(--gmi-text-subtle); }
+
+/* Batch inspector: header, steps, proposal summary and staging. */
+.gmi-batch-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.gmi-batch-head h2 { font-size: 15px; font-weight: 600; color: var(--gmi-navy); }
+.gmi-batch-steps { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0; padding: 0; list-style: none; font-size: 10.5px; color: var(--gmi-text-subtle); }
+.gmi-batch-steps li { display: inline-flex; align-items: center; gap: 3px; }
+.gmi-batch-steps li > span { display: inline-grid; place-items: center; width: 14px; height: 14px; border: 1px solid currentColor; border-radius: 999px; font-size: 9px; }
+.gmi-batch-steps li[data-done] { color: var(--gmi-interactive); }
+.gmi-batch-steps li[aria-current=step] { color: var(--gmi-navy); font-weight: 600; }
+.gmi-batch-steps li[aria-current=step] > span { border-color: var(--gmi-interactive); background: var(--gmi-interactive); color: #fff; }
+.gmi-batch-proposal { display: grid; gap: 3px; padding: 8px 10px; border: 1px solid var(--gmi-border-strong); border-left: 3px solid var(--gmi-interactive); border-radius: 6px; background: #f7fcfd; }
+.gmi-batch-proposal[data-state=stale] { border-left-color: var(--gmi-validation-warning-dot); background: var(--gmi-surface-soft); }
+.gmi-batch-proposal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gmi-batch-proposal-kicker { font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--gmi-interactive); }
+.gmi-batch-proposal[data-state=stale] .gmi-batch-proposal-kicker { color: var(--gmi-validation-warning-text); }
+.gmi-batch-proposal-change { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; font-size: 16px; line-height: 1.3; color: var(--gmi-text-muted); }
+.gmi-batch-proposal-field { font-weight: 600; color: var(--gmi-navy); }
+.gmi-batch-proposal-field::after { content: ':'; }
+.gmi-batch-proposal-from { font-style: italic; color: var(--gmi-text-subtle); font-size: 14px; }
+.gmi-batch-proposal-value .gmi-edit-lexeme { font-size: 17px; font-weight: 700; color: var(--gmi-interactive); }
+.gmi-batch-proposal-mode { margin: 0; font-size: 11px; color: var(--gmi-text-muted); }
+.gmi-batch-proposal-count { margin: 2px 0 0; font-size: 12px; color: var(--gmi-text); }
+.gmi-batch-proposal-count strong { font-size: 15px; color: var(--gmi-navy); font-variant-numeric: tabular-nums; }
+.gmi-batch-breakdown { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; color: var(--gmi-text-muted); }
+.gmi-batch-severity { margin: 2px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.gmi-severity-count { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border: 1px solid var(--gmi-border); border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--gmi-text-subtle); background: var(--gmi-surface); }
+.gmi-severity-count[data-validation-tone] { border-color: var(--validation-border); background: var(--validation-bg); color: var(--validation-text); }
+.gmi-severity-count[data-validation-tone] svg { color: var(--validation-icon); }
+.gmi-severity-none { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--gmi-validation-success-text); }
+.gmi-batch-stale { display: grid; gap: 6px; margin-top: 2px; }
+.gmi-batch-stale p { display: flex; align-items: flex-start; gap: 5px; margin: 0; color: var(--gmi-validation-warning-text); font-size: 11.5px; line-height: 1.4; }
+.gmi-batch-stale svg { flex-shrink: 0; margin-top: 2px; }
+.gmi-batch-primary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.gmi-inspector-configuration { display: grid; gap: 4px; }
+.gmi-inspector-config .gmi-batch-primary { grid-column: 1 / -1; justify-self: start; }
+.gmi-batch-options { display: grid; gap: 6px; }
+.gmi-batch-advanced { align-items: flex-start; }
+.gmi-batch-stage { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--gmi-border); }
+.gmi-batch-stage .gmi-batch-primary { width: 100%; min-height: 32px; font-size: 13px; }
+.gmi-manual-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 6px 8px; border: 1px dashed var(--gmi-validation-warning-dot); border-radius: 6px; background: #fffcf5; color: var(--gmi-validation-warning-text); font-size: 11.5px; line-height: 1.4; }
+.gmi-manual-note svg { flex-shrink: 0; margin-top: 2px; }
+.gmi-manual-note p { margin: 0; }
+.gmi-manual-note ul { margin: 2px 0 0; padding-left: 16px; list-style: disc; }
+.gmi-batch-finding-list { display: grid; gap: 2px; padding-left: 0; list-style: none; }
+.gmi-batch-finding-list li { color: var(--validation-text); }
+
+/* ChangeSet details in the inspector (after staging, or opened from Endringer). */
+.gmi-change-detail { display: grid; gap: 6px; }
+.gmi-change-detail-success { display: flex; align-items: center; gap: 6px; margin: 0; padding: 5px 8px; border: 1px solid var(--gmi-validation-success-border); border-radius: 6px; background: var(--gmi-validation-success-bg); color: var(--gmi-validation-success-text); font-weight: 600; }
+.gmi-change-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.gmi-change-detail-title { margin: 1px 0 0; font-size: 16px; font-weight: 600; color: var(--gmi-navy); overflow-wrap: anywhere; }
+.gmi-change-detail-meta { margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: 11px; color: var(--gmi-text-muted); }
+.gmi-change-detail-state { display: inline-flex; align-items: center; padding: 0 6px; border: 1px dashed #b7791f; border-radius: 999px; color: #7a4f00; font-size: 10px; font-weight: 600; line-height: 16px; }
+.gmi-change-detail-state[data-download-state=downloaded] { border-style: solid; border-color: #9fd3c7; color: #276749; background: #effaf5; }
+.gmi-change-detail-scroll { max-height: min(320px, 40vh); overflow: auto; border: 1px solid var(--gmi-border); border-radius: 6px; }
+.gmi-change-detail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.gmi-change-detail-table th, .gmi-change-detail-table td { padding: 3px 8px; text-align: left; vertical-align: top; border-top: 1px solid var(--gmi-border); overflow-wrap: anywhere; }
+.gmi-change-detail-table thead th { position: sticky; top: 0; z-index: 1; border-top: 0; background: var(--gmi-surface-soft); color: var(--gmi-text-subtle); font-size: 10.5px; font-weight: 500; }
+.gmi-change-detail-table tbody th { font-weight: 500; white-space: nowrap; }
+.gmi-change-detail-table tbody th .gmi-edit-link { margin-left: 0; font-size: 12px; }
+.gmi-change-detail-next > .gmi-edit-lexeme { color: var(--gmi-interactive); font-weight: 600; }
+.gmi-change-detail-table tr[data-superseded] td { color: var(--gmi-text-subtle); }
+.gmi-change-detail-skipped summary { cursor: pointer; color: #7a4f00; font-size: 11px; }
+.gmi-change-detail-skipped ul { margin: 4px 0 0; padding-left: 16px; list-style: disc; font-size: 11px; color: var(--gmi-text-muted); }
+.gmi-change-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gmi-edit-change-summary { margin: 0; font-size: 11.5px; color: var(--gmi-text); }
+.gmi-edit-change-summary > span:first-child { font-weight: 600; }
+.gmi-edit-change-detail-link { justify-self: start; display: inline-flex; align-items: center; gap: 2px; padding: 1px 0; color: var(--gmi-interactive); font-size: 11px; font-weight: 500; }
+.gmi-edit-change-detail-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+.gmi-edit-change-detail-link[aria-pressed=true] { font-weight: 600; }
+
+/* Risk approval: severity first; the approval itself is distinct from an ordinary confirm. */
+.gmi-edit-dialog[data-tone=risk] { border-top: 3px solid var(--gmi-validation-warning-dot); }
+.gmi-risk-operation { font-size: 14px; }
+.gmi-risk-group { padding: 6px 8px; border: 1px solid var(--validation-border); border-radius: 6px; background: var(--validation-bg); color: var(--validation-text); }
+.gmi-risk-group-title { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; }
+.gmi-risk-group-title svg { color: var(--validation-icon); }
+.gmi-risk-group ul { max-height: 140px; overflow: auto; margin: 4px 0 0; padding-left: 22px; list-style: disc; font-size: 12px; }
+.gmi-risk-manual { font-size: 12.5px; }
+.gmi-edit-dialog .gmi-edit-actions .gmi-edit-risk-approve { display: inline-flex; align-items: center; gap: 6px; background: var(--gmi-validation-warning-text); border-color: var(--gmi-validation-warning-text); color: #fff; font-weight: 600; }
+.gmi-edit-dialog .gmi-edit-actions .gmi-edit-risk-approve:hover { background: #7c2d12; }
+.gmi-inspector-config .gmi-batch-modes { margin: 4px 0 0; gap: 4px; }
+.gmi-inspector-config .gmi-batch-modes legend { margin-bottom: 2px; }

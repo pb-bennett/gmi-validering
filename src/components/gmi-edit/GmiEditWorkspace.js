@@ -7,7 +7,7 @@ import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
   describeGmiEditStatus, describeGmiObject, gmiChangeSetDependents, gmiEditDownloadState, gmiEditMessage, gmiObjectContext,
-  gmiObjectKey, scopeToTableTab, summarizeGmiEditCounts,
+  gmiObjectKey, scopeToTableTab, summarizeGmiEditCounts, GMI_EDIT_TABLE_VIEWS,
 } from '@/lib/gmiEditView.mjs';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import useGmiEditLayer from './useGmiEditLayer';
@@ -17,6 +17,7 @@ import GmiExportDialog from './GmiExportDialog';
 import GmiConfirmDialog from './GmiConfirmDialog';
 import GmiBatchDialog from './GmiBatchDialog';
 import GmiBatchInspector from './GmiBatchInspector';
+import GmiChangeSetDetail from './GmiChangeSetDetail';
 import { gmiSelectionTargets } from '@/lib/gmiBatchInspectorView.mjs';
 import GmiFullValidation from './GmiFullValidation';
 import './gmiEdit.css';
@@ -107,6 +108,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const [batchOpen, setBatchOpen] = useState(Boolean(correction));
   const [batchInspector, setBatchInspector] = useState(false);
   const [batchInspected, setBatchInspected] = useState(null);
+  // A history entry shown in the right inspector (read-only ChangeSet details).
+  const [detailId, setDetailId] = useState(null);
   const closeBatchInspector = useCallback(() => { setBatchInspector(false); setBatchInspected(null); }, []);
   const objectDirtyRef = useRef(false), batchDirtyRef = useRef(false), batchResetRef = useRef(null);
   const dirtyRef = useRef(false);
@@ -124,8 +127,14 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   // Also covers temporary workspace unmounts, e.g. opening FOTO through the page guard.
   useEffect(() => () => {
     if (useStore.getState().gmiEditSelection?.binding.layerId === layerId) useStore.setState({ gmiEditSelection: null });
-    useStore.setState({ gmiBatchInspectorRequest: null, gmiBatchTableReview: null, gmiEditTableExpanded: false });
+    useStore.setState({ gmiBatchInspectorRequest: null, gmiBatchTableReview: null, gmiEditTableExpanded: false, gmiBatchInspectorLayerId: null, gmiEditColumnFocus: null });
   }, [layerId]);
+  // The Data Table shows a batch-mode indicator instead of «Rediger valgte» while this is open.
+  useEffect(() => {
+    if (!batchInspector) return undefined;
+    useStore.setState({ gmiBatchInspectorLayerId: layerId });
+    return () => { if (useStore.getState().gmiBatchInspectorLayerId === layerId) useStore.setState({ gmiBatchInspectorLayerId: null }); };
+  }, [batchInspector, layerId]);
 
   const presentation = describeGmiEditStatus(descriptor);
   const editable = presentation.editable && Boolean(view);
@@ -166,11 +175,12 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       if (object) setBatchInspected({ ...target, object });
       highlight(target); syncObjectTable(target); return;
     }
+    // Choosing an object always returns the inspector from ChangeSet details to the editor.
     if (selected && target.scope === selected.scope && target.sourceIndex === selected.sourceIndex) {
-      setActiveChangeSetId(changeSetId); syncObjectTable(target); return;
+      setActiveChangeSetId(changeSetId); setDetailId(null); syncObjectTable(target); return;
     }
     guard(() => {
-      setSelected(target); setScope(target.scope); setActiveChangeSetId(changeSetId); highlight(target);
+      setSelected(target); setScope(target.scope); setActiveChangeSetId(changeSetId); setDetailId(null); highlight(target);
       syncObjectTable(target);
     });
   }, [guard, highlight, selected, syncObjectTable, batchInspector, layer]);
@@ -235,9 +245,29 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     const cell = changeSet?.cells[0];
     return cell ? { scope: cell.scope, sourceIndex: cell.sourceIndex } : null;
   };
-  const undo = () => {
+  const undo = ({ reveal = true } = {}) => {
     const id = view?.changeSets.at(-1)?.id, label = labelOf(id), target = firstObjectOf(id);
-    if (runTransition(gmiEditSessions.undo(view.handle), `Angret: ${label}`) && target) select(target, null);
+    if (runTransition(gmiEditSessions.undo(view.handle), `Angret: ${label}`) && target && reveal) select(target, null);
+  };
+  /** Open one history entry's details in the right inspector (through the draft guard). */
+  const showChangeSet = (id) => {
+    if (detailId === id && !batchInspector) { setDetailId(null); return; }
+    guard(() => { closeBatchInspector(); setDetailId(id); setActiveChangeSetId(id); }, batchInspector ? 'masseendringen' : 'objektet');
+  };
+  /** Review a correction in the Data Table: Foreslått, its geometry, edited fields in focus. */
+  const showProposed = (changeSet) => {
+    const state = useStore.getState(), table = state.ui.layerDataTable;
+    if (!table?.isOpen || table.layerId !== layerId || state.objectTableInspection) openLayerDataTable(layerId);
+    if (changeSet.cells[0]) setLayerDataTableTab(layerId, scopeToTableTab(changeSet.cells[0].scope));
+    useStore.getState().setGmiEditTableView(layerId, GMI_EDIT_TABLE_VIEWS.PROPOSED);
+  };
+  const renderChangeSet = (changeSet, variant) => {
+    const index = view.changeSets.findIndex((entry) => entry.id === changeSet.id);
+    return <GmiChangeSetDetail key={changeSet.id} layerId={layerId} changeSet={changeSet} number={index + 1} effective={view.effective}
+      downloadState={gmiEditDownloadState(status) === 'downloaded' ? 'downloaded' : 'unsaved'} editable={editable}
+      isLast={index === view.changeSets.length - 1} variant={variant}
+      onSelectObject={(target, id) => select(target, id)} onShowProposed={showProposed}
+      onUndo={() => undo({ reveal: false })} onDiscard={discard} onClose={variant === 'history' ? () => setDetailId(null) : undefined} />;
   };
   const redo = () => {
     const id = view?.redo.at(-1)?.id, label = labelOf(id), target = firstObjectOf(id);
@@ -249,6 +279,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       const result = gmiEditSessions.discard(view.handle, id);
       runTransition(result, `Forkastet: ${labelOf(id)}${dependents.length ? '. Senere rettinger er beholdt; kontroller dem.' : ''}`);
       if (activeChangeSetId === id) setActiveChangeSetId(null);
+      if (detailId === id) setDetailId(null);
     };
     if (!dependents.length) { perform(); return; }
     setPending({
@@ -272,6 +303,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   });
 
   if (!layer) return null;
+  // Undone/discarded entries close their details automatically.
+  const detailChangeSet = detailId ? view?.changeSets.find((changeSet) => changeSet.id === detailId) || null : null;
   const counts = summarizeGmiEditCounts(status);
   const downloadState = gmiEditDownloadState(status);
   const problem = openError && descriptor?.state !== 'editable' && descriptor?.state !== 'read-only' && descriptor?.state !== 'error' ? gmiEditMessage(openError) : null;
@@ -311,7 +344,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
         ? <ObjectList layer={layer} scope={scope} onScope={(nextScope) => { setScope(nextScope); syncObjectTable({ scope: nextScope }); }} query={query} onQuery={setQuery} changedOnly={changedOnly} onChangedOnly={setChangedOnly}
           changedObjects={changedObjects} selectedKey={selectedKey} onSelect={(target) => select(target)} />
         : <GmiChangeList changeSets={view?.changeSets || []} redoCount={view?.redo.length || 0} effective={view?.effective} activeChangeSetId={activeChangeSetId}
-          editable={editable} onSelectObject={(target, id) => select(target, id)} onDiscard={discard} />}
+          detailChangeSetId={batchInspector ? null : detailChangeSet?.id || null} editable={editable} onSelectObject={(target, id) => select(target, id)}
+          onDiscard={discard} onShowDetail={view ? showChangeSet : undefined} />}
     </div>
     <footer className="gmi-edit-footer">
       <button type="button" className="gmi-compact-button gmi-focus-ring gmi-batch-open" disabled={!editable}
@@ -330,7 +364,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     </footer>
     {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onClose={closeBatchInspector} onRequestClose={() => guard(closeBatchInspector, 'masseendringen')} inspected={batchInspected} onInspectClose={() => setBatchInspected(null)}
-      onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice({ tone: 'ok', text: `Lagt til: ${changeSet.label}` }); }} />
+      renderChangeSet={(changeSet) => renderChangeSet(changeSet, 'staged')}
+      onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice(null); }} />
+      : detailChangeSet && view ? <div className="gmi-edit-editor">{renderChangeSet(detailChangeSet, 'history')}</div>
       : <GmiObjectEditor key={`${selectedKey}:${view?.handle.sessionId || descriptor?.state}:${formRevision}`} view={view} status={descriptor}
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate}
       onStaged={() => { setChangedOnly(false); }} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}

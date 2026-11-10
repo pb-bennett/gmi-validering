@@ -32,11 +32,10 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
     const text = () => browser.evaluate(`${inspector}.innerText`);
     const stageDisabled = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring').disabled`);
     const calculate = async () => {
-      if (await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).some(e => e.innerText === 'Beregn utvalget på nytt')`)) await click('Beregn utvalget på nytt', inspector);
-      else {
-        await browser.evaluate(`(() => { const details = ${inspector}.querySelector('.gmi-inspector-configuration'); if (!details.open) details.querySelector('summary').click(); })()`);
-        await click('Beregn utvalg', inspector);
-      }
+      // Stale reviews offer «Oppdater forhåndsvisning» in the summary; otherwise the configuration form.
+      const label = await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')); return b.some(e => e.innerText === 'Oppdater forhåndsvisning') ? 'Oppdater forhåndsvisning' : b.some(e => e.innerText === 'Forhåndsvis endringer') ? 'Forhåndsvis endringer' : null; })()`);
+      if (!label) await click('Endre oppsett', inspector);
+      await click(label || 'Oppdater forhåndsvisning', inspector);
       await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]') && ${inspector}.getAttribute('aria-busy') === 'false'`);
     };
     try {
@@ -73,18 +72,19 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, 'a;b');
         assert.match(await text(), /Semikolon/);
         await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '11'); await calculate();
-        assert.match(await text(), /Valgt: 2/); assert.match(await text(), /Kvalifisert: 2/); assert.match(await text(), /Endres: 2/);
+        assert.match(await text(), /2 av 2 ledninger endres/); assert.match(await text(), /0 nye FEIL/);
         assert.equal(await browser.evaluate(`${grid}.getAttribute('aria-rowcount')`), '3');
         assert.match(await browser.evaluate(`${row(0)}.innerText`), /Endres/);
-        assert.match(await browser.evaluate(`${row(0)}.innerText`), /«» → «11»/);
+        assert.match(await browser.evaluate(`${row(0)}.innerText`), /tom\s*→[\s\S]*11/);
         await browser.evaluate(`${box(1)}.click()`);
-        await browser.waitFor(`${inspector}.innerText.includes('Endres: 1')`);
-        assert.match(await text(), /Valgt: 1/); assert.equal(await stageDisabled(), false);
+        await browser.waitFor(`${inspector}.innerText.includes('1 av 1 ledning endres')`);
+        assert.equal(await stageDisabled(), false);
       });
 
       await t.test('expanding requires recalculation; applicability override is separate, explicit and risky', async () => {
-        await click('Vis bare valgte', bar);
+        await click('Filtrert visning', bar);
         await browser.waitFor(`${row(1)}.innerText.includes('Utelatt av deg')`);
+        assert.doesNotMatch(await browser.evaluate(`${row(1)}.innerText`), /11/, 'an excluded object shows no proposed value');
         await browser.evaluate(`${box(1)}.click()`);
         await browser.waitFor(`${inspector}.innerText.includes('Utvalget er utvidet')`);
         assert.equal(await stageDisabled(), true);
@@ -94,16 +94,17 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await browser.waitFor(box(2)); await browser.evaluate(`${box(2)}.click()`);
         await browser.waitFor(`${inspector}.innerText.includes('Utvalget er utvidet')`);
         assert.equal(await stageDisabled(), true);
-        await calculate(); assert.match(await text(), /Valgt: 2/); assert.match(await text(), /Kvalifisert: 1/); assert.match(await text(), /Hoppes over: 1/);
+        await calculate(); assert.match(await text(), /1 av 2 ledninger endres/); assert.match(await text(), /Hoppes over: 1/);
         assert.match(await browser.evaluate(`${row(2)}.innerText`), /Hoppes over/);
-        await browser.evaluate(`${inspector}.querySelector('.gmi-edit-check input').click()`);
-        assert.match(await text(), /Manuelt inkludert: 0/);
+        await browser.evaluate(`${inspector}.querySelector('.gmi-batch-advanced input').click()`);
+        assert.doesNotMatch(await text(), /Manuelt inkludert: /);
         await click('Inkluder manuelt', row(2));
         await browser.waitFor(`${inspector}.innerText.includes('Manuelt inkludert: 1')`);
-        assert.match(await text(), /Endres: 2/);
+        assert.match(await text(), /2 av 2 ledninger endres/);
         await browser.evaluate(`${row(2)}.click()`);
         await browser.waitFor(`${inspector}.querySelector('.gmi-batch-object-detail')`);
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '11');
+        // Row inspection keeps the reviewed proposal (and its draft) intact.
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
         await click('Tilbake til masseendringen', inspector);
         await click('Legg til masseendring', inspector);
         const risk = `document.querySelector('dialog[open][data-gmi-confirm=batch-risk]')`;
@@ -112,6 +113,8 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await click('Godkjenn og legg til', risk);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length === 1`);
         await browser.waitFor(`${inspector}.innerText.includes('Utvalget er beholdt')`);
+        assert.match(await text(), /Lagt til i arbeidskopien/);
+        await click('Ny masseendring for utvalget', inspector);
         assert.match(await browser.evaluate(`${bar}.innerText`), /2 valgt/);
       });
 
@@ -123,9 +126,12 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '17');
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await calculate();
         await click('Angre siste retting', workspace);
-        await browser.waitFor(`${inspector}.innerText.includes('økten er endret')`); assert.equal(await stageDisabled(), true);
+        await browser.waitFor(`${inspector}.innerText.includes('rettingene er endret')`); assert.equal(await stageDisabled(), true);
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'stale');
         await click('Gjør om retting', workspace); assert.equal(await stageDisabled(), true);
         await click('Avslutt', inspector); await browser.waitFor(confirm); await click('Avbryt', confirm);
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '17');
+        await click('Endre oppsett', inspector);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '17');
         await click('Avslutt', inspector); await browser.waitFor(confirm); await click('Forkast skjemaet', confirm);
         await browser.waitFor(`!${inspector}`);
@@ -148,7 +154,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await browser.evaluate(`${grid}.querySelector('[role=columnheader] input').click()`);
         await click('Rediger valgte (24)', bar); await browser.waitFor(inspector);
         await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '11'); await calculate();
-        await click('Større tabell', bar);
+        await click('Større tabell');
         for (const [width, height] of [[1920, 1080], [1366, 768], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           const bounds = await browser.evaluate(`(() => { const g=${grid}, r=g.getBoundingClientRect(), i=${inspector}.closest('aside').getBoundingClientRect(); return { width: document.documentElement.scrollWidth, tableHeight: r.height, inspectorHeight: i.height, inspectorWidth: i.width }; })()`);
@@ -156,19 +162,19 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
           const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
           await writeFile(path.join(tmpdir(), `gmi-r4-${width}x${height}.png`), Buffer.from(data, 'base64'));
         }
-        await click('Mindre tabell', bar);
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '11');
-        assert.match(await text(), /Valgt: 24/);
+        await click('Mindre tabell');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
+        assert.match(await text(), /av 24 ledninger endres/);
         for (const [width, height] of [[1920, 1080], [1366, 768], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           assert(await browser.evaluate(`document.documentElement.scrollWidth <= ${width}`));
           const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
           await writeFile(path.join(tmpdir(), `gmi-r4-normal-${width}x${height}.png`), Buffer.from(data, 'base64'));
         }
-        await click('Større tabell', bar); await click('Fjern utvalg', bar);
+        await click('Større tabell'); await click('Fjern utvalg', bar);
         assert.equal(await stageDisabled(), true);
         await click('Mindre tabell');
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '11');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
       });
       assert.equal(browser.events.filter((event) => event.method === 'Runtime.exceptionThrown').length, 0);
       assert.equal(await (await import('node:fs/promises')).readFile(file, 'latin1'), source);

@@ -179,12 +179,12 @@ test('diagnostic table keeps result in row metadata, inspected-field colour, mov
   const source = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/components/LayerDataTable.js', import.meta.url), 'utf8'));
   assert.doesNotMatch(source, /__validator_resultat/);
   assert.match(source, /const base = createLayerDataTableColumns\(\{/);
-  assert.match(source, /if \(!batchReview\) return base/);
+  assert.match(source, /if \(!batchReview\) return showObjectNumber \? \[zoom, \.\.\.numberColumn, \.\.\.attributes\] : base/);
   assert.match(source, /getDiagnosticColumnOrder\(fields, inspection\.presentation\)/);
   assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : showSelectionOnly \? displayItems : items/);
   assert.match(source, /contextualColumnOrder\?\.inspectionId === inspection\.id/);
   assert.match(source, /setContextualColumnOrder\(\{ inspectionId: inspection\.id, fields: nextOrder \}\)/);
-  assert.match(source, /draggable=\{!isZoom && \(!isContextualInspection \|\| !isFixed\)\}/);
+  assert.match(source, /draggable=\{!isZoom && !isIdentity && \(!isContextualInspection \|\| !isFixed\)\}/);
   const presentation = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../src/lib/objectTablePresentation.js', import.meta.url), 'utf8'));
   assert.match(presentation, /isFixed: id === 'S_FCODE'/);
   assert.match(presentation, /pinned: isContextualInspection && \(id === inspection\.presentation\.temaColumn \|\| id === inspection\.presentation\.fieldColumn\)/);

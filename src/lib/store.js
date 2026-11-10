@@ -228,6 +228,8 @@ const useStore = create(
         gmiBatchInspectorRequest: null,
         gmiBatchTableReview: null, // Small transient presentation records only, never engine previews.
         gmiEditTableExpanded: false,
+        gmiBatchInspectorLayerId: null, // Layer whose right inspector is in batch mode (presentation only).
+        gmiEditColumnFocus: null, // { layerId, key, fields } temporary Data Table column focus; never persisted.
         changeGmiEditSelection: (layerId, action, expectedBinding) => {
           const binding = gmiSelectionBinding(layerId, gmiEditSessions.describe(layerId));
           if (!binding || !sameGmiSelectionBinding(binding, expectedBinding)) return;

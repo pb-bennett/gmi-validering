@@ -83,13 +83,13 @@ test('R3 production: source-bound snapshot selection, full filtered model, teal 
         await input(`document.querySelector('[aria-label="Søk i data"]')`, 'Object 00');
         await browser.waitFor(`${grid}.getAttribute('aria-rowcount') === '6'`);
         assert.match(await selectionText(), /3 valgt · 2 synlige · 1 skjult/);
-        await click('Vis bare valgte', bar);
+        await click('Bare valgte', bar);
         await browser.waitFor(`${grid}.getAttribute('aria-rowcount') === '4'`);
         assert.deepEqual(await checkedRows(), [0, 2, 12]);
         assert.match(await selectionText(), /3 valgt · 3 vises · 2 treffer filter\/søk\/visning · 1 utenfor/);
         assert.match(await browser.evaluate(`document.querySelector('[data-table-geometry]').innerText`), /3 valgte ledninger/);
         assert.equal(await browser.evaluate(`document.querySelector('[aria-label="Søk i data"]').value`), 'Object 00');
-        await click('Vis bare valgte', bar);
+        await click('Filtrert visning', bar);
         await browser.waitFor(`${grid}.getAttribute('aria-rowcount') === '6'`);
         assert.match(await selectionText(), /3 valgt · 2 synlige · 1 skjult/);
       });
@@ -132,6 +132,9 @@ test('R3 production: source-bound snapshot selection, full filtered model, teal 
         await waitTotal(40);
         await browser.evaluate(`${box(0)}.click()`);
         await browser.waitFor('document.querySelector("dialog[open][data-gmi-confirm=selection]")');
+        const wording = await browser.evaluate('document.querySelector("dialog[open][data-gmi-confirm=selection]").innerText');
+        assert.match(wording, /Erstatt 40 valgte ledninger med ett punkt\?/);
+        assert.match(wording, /fjernes de 40 valgte ledningene fra utvalget/);
         await click('Avbryt', `document.querySelector('dialog[open]')`); await waitTotal(40);
         await browser.evaluate(`${box(0)}.click()`);
         await click('Erstatt utvalget', `document.querySelector('dialog[open]')`); await waitTotal(1);

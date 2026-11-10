@@ -177,6 +177,29 @@ export function describeGmiObject(scope, sourceIndex, objectId = null) {
   return Number.isFinite(objectId) ? `${kind} ${objectId}` : `${kind} nr. ${sourceIndex + 1} i filen`;
 }
 
+/**
+ * Compact Data Table identity, derived from the same source object number as
+ * describeGmiObject: "38" for "Ledning 38", or "(5)" (file position) when the
+ * file has no object number. Never derived from a sorted/virtual row position.
+ */
+export function gmiObjectNumber(scope, sourceIndex, objectId = null) {
+  const numbered = Number.isFinite(objectId);
+  return Object.freeze({ text: numbered ? String(objectId) : `(${sourceIndex + 1})`, numbered,
+    label: describeGmiObject(scope, sourceIndex, objectId), sortValue: numbered ? objectId : sourceIndex + 1 });
+}
+
+/**
+ * Whether a normalized table search names this object exactly: "38", "#38",
+ * "nr 38", "l38"/"ledning 38" for lines and "p5"/"punkt 5" for points.
+ * Partial numbers never match, so ordinary attribute search is unchanged.
+ */
+export function gmiObjectMatchesQuery(normalizedQuery, scope, sourceIndex, objectId = null) {
+  const match = /^(?:#|nr\.?\s*|(ledning|l|punkt|p)\s*)?(\d+)$/.exec(String(normalizedQuery || ''));
+  if (!match) return false;
+  if (match[1] && (match[1].startsWith('l') ? 'line' : 'point') !== scope) return false;
+  return gmiObjectNumber(scope, sourceIndex, objectId).sortValue === Number(match[2]);
+}
+
 /** Secondary text for an object row: S_FCODE · Tema/Type · Material. */
 export function gmiObjectContext(attributes = {}) {
   const parts = [attributes.S_FCODE, attributes.Tema ?? attributes.Type, attributes.Material]
@@ -304,6 +327,29 @@ export function gmiChangeSetCellViews(changeSet, effectiveByKey) {
       superseded: Boolean(effective && effective.changeSetId !== changeSet.id),
     });
   }));
+}
+
+/** "1 ledning", "2 ledninger", "3 punkter", "2 objekter" (mixed or unknown scope). */
+export function gmiObjectCountLabel(count, scope = null) {
+  const [one, many] = { line: ['ledning', 'ledninger'], point: ['punkt', 'punkter'] }[scope] || ['objekt', 'objekter'];
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/**
+ * Readable summary of one staged ChangeSet: "Fyll SDR · 11" for a uniform batch
+ * correction, otherwise its history label. Read only from the ChangeSet itself.
+ */
+export function summarizeGmiChangeSet(changeSet) {
+  const cells = changeSet?.cells || [];
+  const scopes = new Set(cells.map((cell) => cell.scope));
+  const objects = new Set(cells.map((cell) => gmiObjectKey(cell.scope, cell.sourceIndex))).size;
+  const fields = [...new Set(cells.map((cell) => cell.field))];
+  const values = [...new Set(cells.map((cell) => cell.next))];
+  const uniform = fields.length === 1 && values.length === 1;
+  const title = changeSet?.origin === 'batch' && uniform
+    ? `${changeSet.mode === 'overwrite' ? 'Sett' : 'Fyll'} ${fields[0]} · ${values[0]}` : (changeSet?.label || changeSet?.id || '');
+  return Object.freeze({ title, fields: Object.freeze(fields), objects, scope: scopes.size === 1 ? [...scopes][0] : null,
+    objectsLabel: gmiObjectCountLabel(objects, scopes.size === 1 ? [...scopes][0] : null), uniform, value: uniform ? values[0] : null });
 }
 
 /** Map<cellKey, changed cell> from registry.inspect(handle).cells.changed. */

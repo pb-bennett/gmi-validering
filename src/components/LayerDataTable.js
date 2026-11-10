@@ -16,7 +16,11 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowCounterClockwiseIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon, XIcon } from '@phosphor-icons/react';
+import {
+  ArrowCounterClockwiseIcon, ArrowsInLineVerticalIcon, ArrowsOutLineVerticalIcon, ListChecksIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon,
+  MinusCircleIcon, PencilSimpleIcon, PlusCircleIcon, TextColumnsIcon, WarningIcon, WarningOctagonIcon, XIcon,
+} from '@phosphor-icons/react';
+import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import { normalizeTableSearchQuery, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
 import { deriveLayerTableRows } from '@/lib/layerTableRows.mjs';
 import { gmiSelectionBinding, sameGmiSelectionBinding, gmiSelectionKey, gmiSelectionCounts } from '@/lib/gmiEditSelection.mjs';
@@ -24,15 +28,47 @@ import GmiConfirmDialog from './gmi-edit/GmiConfirmDialog';
 import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
 import FilenameCopyButton from '@/components/FilenameCopyButton';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
-import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns } from '@/lib/objectTablePresentation';
+import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns, applyColumnFocus } from '@/lib/objectTablePresentation';
+import { GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
 import { validatorInspectionLayer } from '@/lib/gmiValidatorEditing.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { Lexeme } from '@/components/gmi-edit/GmiObjectEditor';
-import { GMI_EDIT_TABLE_VIEWS, GMI_EDIT_TABLE_VIEW_LABELS, gmiEditMessage, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope } from '@/lib/gmiEditView.mjs';
+import { GMI_EDIT_TABLE_VIEWS, GMI_EDIT_TABLE_VIEW_LABELS, gmiEditMessage, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope,
+  gmiObjectNumber, gmiObjectMatchesQuery, gmiObjectCountLabel } from '@/lib/gmiEditView.mjs';
 
 const ROW_HEIGHT = 28;
 const MAX_COLUMN_WIDTH = 180;
 const MIN_COLUMN_WIDTH = 50;
+const OBJECT_NUMBER_WIDTH = 44;
+const NO_FIELDS = Object.freeze([]);
+// Fixed identity columns stay ahead of any temporarily focused (edited) field.
+const LEADING_FIELDS = Object.freeze(['S_FCODE']);
+
+/** Batch review: the actual staged change, or a clearly labelled hypothetical for a manual candidate. */
+function ReviewChange({ entry }) {
+  const change = entry.change || entry.hypothetical?.change;
+  if (!change) return <span className="gmi-review-none" aria-label="Ingen endring">—</span>;
+  const value = <><Lexeme value={change.from} /> <span aria-hidden="true">→</span><span className="sr-only">til</span> <strong><Lexeme value={change.to} /></strong></>;
+  const title = `${entry.change ? '' : 'Hvis inkludert: '}${JSON.stringify(change.from)} → ${JSON.stringify(change.to)}`;
+  return entry.change
+    ? <span className="gmi-review-change truncate" title={title}>{value}</span>
+    : <span className="gmi-review-hypothetical truncate" title={title}>Hvis inkludert: {value}</span>;
+}
+
+/** Most severe finding first, coloured with the shared Validator severity tokens. */
+function ReviewFindings({ entry }) {
+  const actual = Boolean(entry.change);
+  const findings = actual ? entry.findings : entry.hypothetical?.findings;
+  if (!findings) return null;
+  if (!findings.length) return actual ? <span className="gmi-review-none">Ingen nye funn</span> : null;
+  const [first, ...rest] = findings;
+  const Icon = first.tone === 'error' ? WarningOctagonIcon : WarningIcon;
+  const title = findings.map((finding) => `${finding.severity}${finding.introduced ? ' (ny)' : ''}: ${finding.reason}`).join('\n');
+  return <span className={`gmi-review-finding truncate${actual ? '' : ' gmi-review-hypothetical'}`} data-validation-tone={first.tone} title={actual ? title : `Hvis inkludert:\n${title}`}>
+    <Icon size={13} weight="regular" aria-hidden="true" />
+    {!actual && 'Hvis inkludert: '}<strong>{first.severity}{first.introduced ? ' (ny)' : ''}</strong> {first.reason}{rest.length > 0 && ` · +${rest.length}`}
+  </span>;
+}
 
 function SelectionCheckbox({ label, checked, indeterminate = false, onToggle, tabIndex = -1 }) {
   const ref = useRef(null);
@@ -177,7 +213,11 @@ export default function LayerDataTable() {
   const batchTableReview = useStore((state) => state.gmiBatchTableReview);
   const tableExpanded = useStore((state) => state.gmiEditTableExpanded);
   const changeSelection = useStore((state) => state.changeGmiEditSelection);
+  const batchInspectorLayerId = useStore((state) => state.gmiBatchInspectorLayerId);
+  const columnFocusRequest = useStore((state) => state.gmiEditColumnFocus);
   const [replaceSelection, setReplaceSelection] = useState(null);
+  // The focus key the user turned off (toggle or manual column drag); a new focus applies again.
+  const [columnFocusOff, setColumnFocusOff] = useState(null);
 
   const tableContainerRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -268,6 +308,17 @@ export default function LayerDataTable() {
   const selectedKeys = useMemo(() => new Set(selection?.keys || []), [selection]);
   const batchReview = selectionEnabled && batchTableReview?.layerId === layerId
     && batchTableReview.selection === selection && batchTableReview.revision === gmiEditStatus?.revision ? batchTableReview : null;
+  // Rettinger object labels ("Ledning 38"): a compact, stable source-number column, also in
+  // Validator inspections opened inside Rettinger. Never derived from the sorted/virtual row.
+  const showObjectNumber = Boolean(layerId) && gmiEditWorkspaceLayerId === layerId;
+  const numberWidth = showObjectNumber ? OBJECT_NUMBER_WIDTH : 0;
+  const sourceData = importedLayer?.data;
+  const objectIdOf = useCallback((objectScope, index) => (objectScope === 'line' ? sourceData?.lines : sourceData?.points)?.[index]?.id ?? null, [sourceData]);
+  const identityMatches = useMemo(() => showObjectNumber
+    ? (item, query) => gmiObjectMatchesQuery(query, scope, item.__index, objectIdOf(scope, item.__index)) : null, [showObjectNumber, scope, objectIdOf]);
+  const columnFocus = showObjectNumber && !isContextualInspection && columnFocusRequest?.layerId === layerId ? columnFocusRequest : null;
+  const columnFocusActive = Boolean(columnFocus && columnFocusOff !== columnFocus.key);
+  const focusFields = columnFocusActive ? columnFocus.fields : NO_FIELDS;
 
   const { allItemsWithIndex, items, searchedItems, displayItems } = useMemo(() => deriveLayerTableRows({
     dataset: proposedData || layer?.data,
@@ -278,8 +329,9 @@ export default function LayerDataTable() {
     inspectionRows: isExactInspection ? exactRows || [] : null,
     searchQuery: normalizedSearchQuery,
     selectionKeys: selectionDisplayKeys,
+    identityMatches,
   }), [proposedData, layer?.data, activeTab, hiddenCodes, hiddenTypes, feltHiddenValues,
-    tableView, changedByObject, isExactInspection, exactRows, normalizedSearchQuery, selectionDisplayKeys]);
+    tableView, changedByObject, isExactInspection, exactRows, normalizedSearchQuery, selectionDisplayKeys, identityMatches]);
   const totalCount = allItemsWithIndex.length;
   const filteredCount = items.length;
   const hiddenCount = totalCount - filteredCount;
@@ -336,6 +388,11 @@ export default function LayerDataTable() {
       }
     }
 
+    // An edited field stays visible even while it is still empty everywhere (fill mode).
+    for (const field of focusFields) {
+      if (fieldSet.has(field) && !presentFields.includes(field)) presentFields.push(field);
+    }
+
     const sfcodeIndex = presentFields.indexOf('S_FCODE');
     if (sfcodeIndex > -1) {
       presentFields.splice(sfcodeIndex, 1);
@@ -352,7 +409,7 @@ export default function LayerDataTable() {
     }
 
     return [...new Set([...presentFields, ...requiredFields])];
-  }, [items, contextualScopeRows, isContextualInspection, inspection, tableView, changedByObject, activeTab, showSelectionOnly, displayItems]);
+  }, [items, contextualScopeRows, isContextualInspection, inspection, tableView, changedByObject, activeTab, showSelectionOnly, displayItems, focusFields]);
 
   const savedOrder = useMemo(() => {
     return layerId &&
@@ -362,12 +419,13 @@ export default function LayerDataTable() {
   }, [layerId, layerDataTable?.columnOrderByLayer, activeTab]);
 
   const orderedFields = useMemo(() => {
-    if (!isContextualInspection) return normalizeColumnOrder(fields, savedOrder);
+    // Review focus is display-only: the saved order (persisted below) stays the user's own.
+    if (!isContextualInspection) return applyColumnFocus(normalizeColumnOrder(fields, savedOrder), focusFields, LEADING_FIELDS);
     const initial = getDiagnosticColumnOrder(fields, inspection.presentation);
     return contextualColumnOrder?.inspectionId === inspection.id
       ? normalizeColumnOrder(initial, contextualColumnOrder.fields)
       : initial;
-  }, [fields, savedOrder, isContextualInspection, inspection, contextualColumnOrder]);
+  }, [fields, savedOrder, isContextualInspection, inspection, contextualColumnOrder, focusFields]);
 
   useEffect(() => {
     if (isExactInspection || !layerId || fields.length === 0 || tableView === GMI_EDIT_TABLE_VIEWS.CHANGED) return;
@@ -399,12 +457,12 @@ export default function LayerDataTable() {
     if (isExactInspection || !layerId) return;
     if (tableView === GMI_EDIT_TABLE_VIEWS.CHANGED) return;
     const validSorting = Array.isArray(sorting)
-      ? sorting.filter((sort) => fields.includes(sort.id))
+      ? sorting.filter((sort) => fields.includes(sort.id) || (showObjectNumber && sort.id === 'objectNumber'))
       : [];
     if (validSorting.length !== sorting.length) {
       setLayerDataTableSorting(layerId, activeTab, validSorting);
     }
-  }, [activeTab, fields, layerId, sorting, setLayerDataTableSorting, isExactInspection, tableView]);
+  }, [activeTab, fields, layerId, sorting, setLayerDataTableSorting, isExactInspection, tableView, showObjectNumber]);
 
   const [draggedField, setDraggedField] = useState(null);
 
@@ -432,6 +490,8 @@ export default function LayerDataTable() {
       nextOrder.splice(targetIndex, 0, draggedField);
       if (isContextualInspection) setContextualColumnOrder({ inspectionId: inspection.id, fields: nextOrder });
       else if (!isExactInspection) setLayerDataTableColumnOrder(layerId, activeTab, nextOrder);
+      // A manual arrangement wins: the visible order is saved and the temporary focus stops.
+      if (columnFocusActive) setColumnFocusOff(columnFocus.key);
       setDraggedField(null);
     },
     [
@@ -439,7 +499,7 @@ export default function LayerDataTable() {
       layerId,
       orderedFields,
       activeTab,
-      setLayerDataTableColumnOrder, isExactInspection, isContextualInspection, inspection,
+      setLayerDataTableColumnOrder, isExactInspection, isContextualInspection, inspection, columnFocusActive, columnFocus,
     ],
   );
 
@@ -500,7 +560,8 @@ export default function LayerDataTable() {
   // Calculate column widths based on field names
   const columnWidths = useMemo(() => {
     const widths = { zoom: 36 };
-    if (batchReview) Object.assign(widths, { batchStatus: 300, batchValue: 145, batchFindings: 220 });
+    if (showObjectNumber) widths.objectNumber = OBJECT_NUMBER_WIDTH;
+    if (batchReview) Object.assign(widths, { batchStatus: 300, batchValue: 130, batchFindings: 240 });
     orderedFields.forEach((field) => {
       const label = getFieldLabel(field);
       if (isContextualInspection && field === inspection.presentation.fieldColumn) {
@@ -514,7 +575,7 @@ export default function LayerDataTable() {
       }
     });
     return widths;
-  }, [orderedFields, isContextualInspection, inspection, contextualScopeRows, batchReview]);
+  }, [orderedFields, isContextualInspection, inspection, contextualScopeRows, batchReview, showObjectNumber]);
 
   const columns = useMemo(() => {
     const base = createLayerDataTableColumns({
@@ -543,24 +604,44 @@ export default function LayerDataTable() {
         return change ? <ChangedCell change={change}>{content}</ChangedCell> : content;
       },
     });
-    if (!batchReview) return base;
-    const reviewColumns = [['batchStatus', 'Status'], ['batchValue', 'Nå → Ny'], ['batchFindings', 'Nye funn / Validator']].map(([id, header]) => ({
+    const numberColumn = showObjectNumber ? [{
+      id: 'objectNumber', header: 'Nr.', size: OBJECT_NUMBER_WIDTH, sortingFn: 'basic', meta: { identity: true },
+      accessorFn: (row) => gmiObjectNumber(scope, row.__index, objectIdOf(scope, row.__index)).sortValue,
+      cell: ({ row }) => {
+        const number = gmiObjectNumber(scope, row.original.__index, objectIdOf(scope, row.original.__index));
+        const matched = normalizedSearchQuery && gmiObjectMatchesQuery(normalizedSearchQuery, scope, row.original.__index, objectIdOf(scope, row.original.__index));
+        return <span className="gmi-object-number" data-numbered={number.numbered || undefined} title={number.numbered ? number.label : `${number.label} (filen har ikke objektnummer)`}>
+          {matched ? <mark className="rounded-sm bg-gmi-cyan-soft text-inherit">{number.text}</mark> : number.text}
+        </span>;
+      },
+    }] : [];
+    // The ordinary application keeps its exact columns; Rettinger adds Nr. after the zoom tool.
+    const [zoom, ...attributes] = base;
+    if (!batchReview) return showObjectNumber ? [zoom, ...numberColumn, ...attributes] : base;
+    const fixed = attributes.filter((column) => column.meta?.isFixed);
+    const ordinary = attributes.filter((column) => !column.meta?.isFixed);
+    const reviewColumns = [['batchStatus', 'Status'], ['batchValue', 'Endring'], ['batchFindings', 'Funn etter endring']].map(([id, header]) => ({
       id, header, enableSorting: false,
       cell: ({ row }) => {
+        // Objects outside the reviewed selection get neutral empty cells.
         const entry = batchReview.rows[gmiSelectionKey(scope, row.original.__index)];
-        if (!entry) return <span>Ikke i gyldig forhåndsvisning</span>;
-        if (id === 'batchValue') return <span className="truncate" title={`Original: ${JSON.stringify(entry.original)} · Nå: ${JSON.stringify(entry.current)} → Ny: ${JSON.stringify(entry.proposed)}`}>«<Lexeme value={entry.current} empty="" />» → «<Lexeme value={entry.proposed} empty="" />»</span>;
-        if (id === 'batchFindings') return <span className="truncate" data-validation-tone={entry.newError ? 'error' : undefined} style={entry.newError ? { color: 'var(--validation-text)' } : undefined} title={entry.findings}>{entry.findings || 'Ingen relevante nye funn'}</span>;
-        return <div className="flex min-w-0 items-center gap-1" title={entry.explanation}>
-          <span className="truncate">{entry.label} · {entry.status}{entry.manual ? ' · Manuelt inkludert' : entry.reason ? ` · ${entry.reason}` : ''}</span>
-          {entry.canManual && <button type="button" className="gmi-compact-button gmi-focus-ring shrink-0 border border-gmi-border-strong px-1" aria-pressed={entry.manual}
-            onClick={(event) => { event.stopPropagation(); batchReview.onManual(entry.cellKey); }}>{entry.manual ? 'Fjern manuelt tillegg' : 'Inkluder manuelt'}</button>}
+        if (!entry) return null;
+        if (id === 'batchValue') return <ReviewChange entry={entry} />;
+        if (id === 'batchFindings') return <ReviewFindings entry={entry} />;
+        return <div className="gmi-review-status" title={entry.explanation || entry.detail || undefined}>
+          <span className="gmi-outcome-badge" data-outcome={entry.outcome}>{GMI_BATCH_OUTCOME_LABELS[entry.outcome]}</span>
+          {entry.detail && <span className="gmi-outcome-detail truncate">{entry.detail}</span>}
+          {entry.canManual && <button type="button" className="gmi-manual-toggle gmi-focus-ring" aria-pressed={entry.manualOn}
+            title={entry.manualOn ? 'Fjern objektet fra masseendringen igjen.' : 'Ta med objektet selv om Validator ikke anbefaler feltet her. Kan gi FEIL og krever egen godkjenning.'}
+            onClick={(event) => { event.stopPropagation(); batchReview.onManual(entry.cellKey); }}>
+            {entry.manualOn ? <MinusCircleIcon size={13} weight="regular" aria-hidden="true" /> : <PlusCircleIcon size={13} weight="regular" aria-hidden="true" />}
+            {entry.manualOn ? 'Fjern manuelt tillegg' : 'Inkluder manuelt'}
+          </button>}
         </div>;
       },
     }));
-    const fixed = base.filter((column) => column.id === 'zoom' || column.meta?.isFixed);
-    return [...fixed, ...reviewColumns, ...base.filter((column) => !fixed.includes(column))];
-  }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery, changedByObject, batchReview, scope]);
+    return [zoom, ...numberColumn, ...fixed, ...reviewColumns, ...ordinary];
+  }, [activeTab, orderedFields, columnWidths, handleZoomTo, isContextualInspection, inspection, normalizedSearchQuery, changedByObject, batchReview, scope, showObjectNumber, objectIdOf]);
 
   const table = useReactTable({
     data: displayItems,
@@ -586,7 +667,9 @@ export default function LayerDataTable() {
   const selectAction = (action) => {
     if (!selectionEnabled) return;
     if (selection?.keys.length && action.scope && action.scope !== selection.scope) {
-      setReplaceSelection({ action, binding: selectionBinding }); return;
+      // A cross-geometry range has no anchor in the new geometry, so it selects one object.
+      setReplaceSelection({ action, binding: selectionBinding, from: { scope: selection.scope, count: selection.keys.length },
+        to: { scope: action.scope, count: action.type === 'add' ? new Set(action.keys).size : 1 } }); return;
     }
     changeSelection(layerId, action, selectionBinding);
   };
@@ -671,14 +754,17 @@ export default function LayerDataTable() {
     (a, b) => a + b,
     0,
   );
+  // Sticky lead: selection checkbox, zoom tool, then (in Rettinger) the object number.
+  const leadWidth = selectionWidth + 36 + numberWidth;
   const stickyLeftFor = (columnId) => {
     if (columnId === 'zoom') return selectionWidth;
+    if (columnId === 'objectNumber') return selectionWidth + 36;
     const position = orderedFields.indexOf(columnId);
     if (position < 0) return undefined;
     const column = columns.find((entry) => entry.id === columnId);
     if (!column?.meta?.pinned && !column?.meta?.isFixed) return undefined;
-    if (!isContextualInspection) return 36 + selectionWidth;
-    return 36 + selectionWidth + orderedFields.slice(0, position)
+    if (!isContextualInspection) return leadWidth;
+    return leadWidth + orderedFields.slice(0, position)
       .filter((field) => {
         const meta = columns.find((entry) => entry.id === field)?.meta;
         return meta?.pinned || meta?.isFixed;
@@ -705,12 +791,13 @@ export default function LayerDataTable() {
               Objektutvalg: {inspection.context.title}{inspection.context.reason ? ` · ${inspection.context.reason}` : ''}
             </span>
           )}
-          <span
+          {/* Rettinger already names the file in its header; the room goes to the table controls. */}
+          {!showObjectNumber && <span
             className="max-w-50 truncate text-[10px] text-gmi-text-subtle"
             title={layer.name}
           >
             {layer.name}
-          </span>
+          </span>}
         </div>
 
         {!isExactInspection && <div className="flex items-center gap-0.5">
@@ -745,9 +832,17 @@ export default function LayerDataTable() {
           <span className="text-[10px] text-red-700" role="status">{gmiEditMessage(proposedView.code)} Viser originalen.</span>
         )}
         {tableView !== GMI_EDIT_TABLE_VIEWS.ORIGINAL && (
-          <span className="gmi-edit-table-banner" role="status">
-            {tableView === GMI_EDIT_TABLE_VIEWS.PROPOSED ? 'Foreslått kopi – originalen er uendret' : `Kun endrede · ${proposedView.changed.byKey.size} felt`}
+          <span className="gmi-edit-table-banner" role="status" title={tableView === GMI_EDIT_TABLE_VIEWS.PROPOSED ? 'Foreslått kopi – originalen er uendret' : undefined}>
+            {/* Narrow tables keep the short form so the toolbar stays on one line. */}
+            {tableView === GMI_EDIT_TABLE_VIEWS.PROPOSED ? <>Foreslått kopi<span className={showObjectNumber ? 'hidden min-[1700px]:inline' : undefined}> – originalen er uendret</span></> : `Kun endrede · ${proposedView.changed.byKey.size} felt`}
           </span>
+        )}
+        {columnFocus && (
+          <button type="button" className="gmi-column-focus gmi-focus-ring" aria-pressed={columnFocusActive} data-gmi-column-focus={columnFocus.fields.join(',')}
+            title={columnFocusActive ? 'Feltet som rettes vises først. Din egen kolonnerekkefølge er uendret. Klikk for vanlig rekkefølge.' : 'Vis feltet som rettes først i tabellen.'}
+            onClick={() => setColumnFocusOff(columnFocusActive ? columnFocus.key : null)}>
+            <TextColumnsIcon size={13} weight="regular" aria-hidden="true" />{columnFocus.fields.join(', ')} først
+          </button>
         )}
 
         {isContextualInspection && inspection.focusIndices.length !== inspection.scopeIndices.length && (
@@ -831,6 +926,11 @@ export default function LayerDataTable() {
           )}
         </div>
 
+        {/* Rettinger layout: one compact icon toggle for the 62/38 ↔ 35/65 split, always reachable. */}
+        {showObjectNumber && <PhotoIconButton icon={tableExpanded ? ArrowsInLineVerticalIcon : ArrowsOutLineVerticalIcon} size={14}
+          label={tableExpanded ? 'Mindre tabell' : 'Større tabell'} data-gmi-table-size={tableExpanded ? 'expanded' : 'normal'}
+          tooltip={tableExpanded ? 'Mindre tabell: gi kartet og inspektøren mer plass igjen' : 'Større tabell: vis flere rader (kart og inspektør blir lavere)'}
+          className="gmi-table-icon-button" onClick={() => useStore.setState({ gmiEditTableExpanded: !tableExpanded })} />}
         <button
           onClick={closeLayerDataTable}
           className="gmi-compact-button gmi-focus-ring flex h-[19px] w-[26px] items-center justify-center text-gmi-text-muted hover:text-gmi-navy"
@@ -841,30 +941,44 @@ export default function LayerDataTable() {
         </button>
       </div>
 
-      {selectionEnabled && selectionCounts.total > 0 && <div data-gmi-selection-bar className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gmi-border px-3 py-1 text-[10px]">
-        <button type="button" className="gmi-primary-control gmi-focus-ring px-2 py-1" onClick={() => useStore.setState({ gmiBatchInspectorRequest: { layerId, at: Date.now() } })}>Rediger valgte ({selectionCounts.total})</button>
-        <span role="status">{selectionCounts.total} valgt · {showSelectionOnly
-          ? `${rows.length} vises · ${selectionCounts.visible} treffer filter/søk/visning · ${selectionCounts.hidden} utenfor`
-          : `${selectionCounts.visible} synlige · ${selectionCounts.hidden} skjult av filter/søk/visning`}</span>
-        <button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => selectAction({ type: 'add', scope, keys: visibleKeys })}>Velg alle {rows.length} synlige</button>
-        <button type="button" aria-pressed={showSelectionOnly} className="gmi-compact-button gmi-focus-ring" title="Vis hele utvalget uten å endre Tema/Felt, søk eller visningsvalg"
-          onClick={() => {
-            if (selection.scope !== scope) setLayerDataTableTab(layerId, selection.scope === 'line' ? 'ledninger' : 'punkter');
-            selectAction({ type: 'show-only', value: !showSelectionOnly });
-          }}>Vis bare valgte</button>
-        <button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => selectAction({ type: 'clear' })}>Fjern utvalg</button>
-        <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1" aria-pressed={tableExpanded}
-          onClick={() => useStore.setState({ gmiEditTableExpanded: !tableExpanded })}>{tableExpanded ? 'Mindre tabell' : 'Større tabell'}</button>
+      {selectionEnabled && selectionCounts.total > 0 && <div data-gmi-selection-bar className="gmi-selection-bar">
+        <p className="gmi-selection-summary" role="status">
+          <strong>{selectionCounts.total}</strong> valgt<span className="gmi-selection-scope"> · {showSelectionOnly
+            ? `${rows.length} vises · ${selectionCounts.visible} treffer filter/søk/visning · ${selectionCounts.hidden} utenfor`
+            : `${selectionCounts.visible} synlige · ${selectionCounts.hidden} skjult av filter/søk/visning`}</span>
+        </p>
+        <div className="gmi-selection-actions">
+          <div className="gmi-bar-segmented" role="group" aria-label="Rader i tabellen">
+            <button type="button" aria-pressed={!showSelectionOnly} className="gmi-focus-ring" title="Vanlig visning med Tema/Felt-filtre og søk"
+              onClick={() => { if (showSelectionOnly) selectAction({ type: 'show-only', value: false }); }}>Filtrert visning</button>
+            <button type="button" aria-pressed={showSelectionOnly} className="gmi-focus-ring" title="Vis hele utvalget uten å endre Tema/Felt, søk eller visningsvalg"
+              onClick={() => {
+                if (showSelectionOnly) return;
+                if (selection.scope !== scope) setLayerDataTableTab(layerId, selection.scope === 'line' ? 'ledninger' : 'punkter');
+                selectAction({ type: 'show-only', value: true });
+              }}>Bare valgte</button>
+          </div>
+          {!showSelectionOnly && <button type="button" className="gmi-bar-button gmi-focus-ring" disabled={!rows.length || headerSelection.checked}
+            onClick={() => selectAction({ type: 'add', scope, keys: visibleKeys })}><ListChecksIcon size={13} weight="regular" aria-hidden="true" />Velg alle {rows.length} synlige</button>}
+          <button type="button" className="gmi-bar-button gmi-focus-ring" onClick={() => selectAction({ type: 'clear' })}><XIcon size={12} weight="regular" aria-hidden="true" />Fjern utvalg</button>
+        </div>
+        {batchInspectorLayerId === layerId
+          ? <span className="gmi-batch-mode-indicator" role="status"><PencilSimpleIcon size={14} weight="regular" aria-hidden="true" />Masseendring pågår · se panelet til høyre</span>
+          : <button type="button" className="gmi-primary-control gmi-focus-ring gmi-batch-entry" onClick={() => useStore.setState({ gmiBatchInspectorRequest: { layerId, at: Date.now() } })}>
+            <PencilSimpleIcon size={14} weight="regular" aria-hidden="true" />Rediger valgte ({selectionCounts.total})</button>}
       </div>}
-      {selectionEnabled && selectionCounts.total === 0 && tableExpanded && <div className="shrink-0 border-b border-gmi-border px-3 py-1">
-        <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-[10px]" aria-pressed="true"
-          onClick={() => useStore.setState({ gmiEditTableExpanded: false })}>Mindre tabell</button>
-      </div>}
-      {replaceSelection && <GmiConfirmDialog title={`Erstatt utvalget med ${scope === 'line' ? 'ledninger' : 'punkter'}?`}
-        confirmLabel="Erstatt utvalget" testId="selection" onCancel={() => setReplaceSelection(null)}
-        onConfirm={() => { changeSelection(layerId, { ...replaceSelection.action, replace: true }, replaceSelection.binding); setReplaceSelection(null); }}>
-        <p>Utvalget kan bare inneholde én geometri. Det eksisterende utvalget erstattes hvis du fortsetter.</p>
-      </GmiConfirmDialog>}
+      {replaceSelection && (() => {
+        const { from, to } = replaceSelection;
+        const plural = { line: ['ledning', 'ledninger', 'ledningene'], point: ['punkt', 'punkter', 'punktene'] };
+        const target = to.count === 1 ? (to.scope === 'line' ? 'én ledning' : 'ett punkt') : gmiObjectCountLabel(to.count, to.scope);
+        const removed = from.count === 1 ? (from.scope === 'line' ? 'den valgte ledningen' : 'det valgte punktet') : `de ${from.count} valgte ${plural[from.scope][2]}`;
+        return <GmiConfirmDialog title={`Erstatt ${from.count} valgte ${plural[from.scope][from.count === 1 ? 0 : 1]} med ${target}?`}
+          confirmLabel="Erstatt utvalget" testId="selection" onCancel={() => setReplaceSelection(null)}
+          onConfirm={() => { changeSelection(layerId, { ...replaceSelection.action, replace: true }, replaceSelection.binding); setReplaceSelection(null); }}>
+          <p>Et utvalg kan bare inneholde én geometritype. Fortsetter du, fjernes {removed} fra utvalget, og utvalget består av {target}.</p>
+          <p className="gmi-edit-muted">Ingen objekter eller rettinger endres.{batchInspectorLayerId === layerId ? ' Masseendringen må forhåndsvises på nytt.' : ''}</p>
+        </GmiConfirmDialog>;
+      })()}
       <div
         ref={tableContainerRef}
         role="grid"
@@ -908,7 +1022,8 @@ export default function LayerDataTable() {
             {table.getHeaderGroups().map((headerGroup) =>
               headerGroup.headers.map((header, index) => {
                 const isZoom = index === 0;
-                const isFixed = header.column.columnDef.meta?.isFixed || header.column.columnDef.meta?.pinned;
+                const isIdentity = Boolean(header.column.columnDef.meta?.identity);
+                const isFixed = header.column.columnDef.meta?.isFixed || header.column.columnDef.meta?.pinned || isIdentity;
                 const headerId = header.column.id;
                 const width = columnWidths[headerId] || 80;
                 const stickyLeft = stickyLeftFor(headerId);
@@ -921,10 +1036,11 @@ export default function LayerDataTable() {
                     role="columnheader"
                     aria-colindex={index + 1 + (selectionEnabled ? 1 : 0)}
                     aria-sort={isZoom ? undefined : header.column.getIsSorted() === 'asc' ? 'ascending' : header.column.getIsSorted() === 'desc' ? 'descending' : 'none'}
-                    draggable={!isZoom && (!isContextualInspection || !isFixed)}
+                    data-focus-column={focusFields.includes(headerId) || undefined}
+                    draggable={!isZoom && !isIdentity && (!isContextualInspection || !isFixed)}
                     onDragStart={() => handleDragStart(headerId)}
                     onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => (!isContextualInspection || !isFixed) && handleDrop(headerId)}
+                    onDrop={() => !isIdentity && (!isContextualInspection || !isFixed) && handleDrop(headerId)}
                     className={`shrink-0 select-none border-b border-gmi-border-strong bg-gmi-surface-soft px-1.5 py-1 text-left text-[10px] font-medium text-gmi-text-muted ${
                       isZoom
                         ? 'text-center'
@@ -935,12 +1051,13 @@ export default function LayerDataTable() {
                       minWidth: width,
                       maxWidth: width,
                       left: stickyLeft,
-                      boxShadow: isFixed
+                      boxShadow: isFixed && !isIdentity
                         ? '2px 0 4px -2px rgba(15,23,43,0.18)'
                         : undefined,
                     }}
                   >
-                    <button type="button" disabled={isZoom} aria-label={isZoom ? 'Kart' : `Sorter etter ${fullHeaderLabel}`}
+                    <button type="button" disabled={isZoom} aria-label={isZoom ? 'Kart' : isIdentity ? 'Sorter etter objektnummer' : `Sorter etter ${fullHeaderLabel}`}
+                      title={isIdentity ? 'Objektnummer – samme nummer som «Ledning 38» i Rettinger' : undefined}
                       onClick={header.column.getToggleSortingHandler()}
                       className={`gmi-focus-ring flex w-full items-center gap-0.5 text-left ${multiline ? 'items-start' : 'truncate'}`}>
                       <span className={multiline ? 'line-clamp-2 leading-3' : 'truncate'} title={fullHeaderLabel || undefined}>
@@ -983,6 +1100,7 @@ export default function LayerDataTable() {
                   aria-current={isActiveObject ? 'true' : undefined}
                   aria-selected={selectionEnabled ? selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) : undefined}
                   data-table-row={row.original.__index}
+                  data-review-outcome={batchReview?.rows[gmiSelectionKey(scope, row.original.__index)]?.outcome}
                   data-keyboard-current={gridHasFocus && row.id === navigationRow?.id ? 'true' : undefined}
                   onClick={() => {
                     setNavigationRowId(row.id);
@@ -1008,12 +1126,13 @@ export default function LayerDataTable() {
                   }}
                 >
                   {selectionEnabled && <div role="gridcell" aria-colindex={1} className="sticky left-0 z-10 flex shrink-0 items-center justify-center bg-gmi-surface" style={{ width: selectionWidth, height: ROW_HEIGHT }}>
-                    <SelectionCheckbox label={`${selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) ? 'Fjern' : 'Velg'} ${scope === 'line' ? 'ledning' : 'punkt'} ${row.original.__index + 1}`}
+                    <SelectionCheckbox label={`${selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) ? 'Fjern' : 'Velg'} ${gmiObjectNumber(scope, row.original.__index, objectIdOf(scope, row.original.__index)).label.toLowerCase()}`}
                       checked={selectedKeys.has(gmiSelectionKey(scope, row.original.__index))} onToggle={(range) => toggleSelectionRow(row.original, range)} />
                   </div>}
                   {row.getVisibleCells().map((cell, index) => {
                     const isZoom = index === 0;
-                    const isFixed = cell.column.columnDef.meta?.isFixed || cell.column.columnDef.meta?.pinned;
+                    const isIdentity = Boolean(cell.column.columnDef.meta?.identity);
+                    const isFixed = cell.column.columnDef.meta?.isFixed || cell.column.columnDef.meta?.pinned || isIdentity;
                     const cellId = cell.column.id;
                     const width = columnWidths[cellId] || 80;
                     const stickyLeft = stickyLeftFor(cellId);
@@ -1039,7 +1158,7 @@ export default function LayerDataTable() {
                           maxWidth: width,
                           left: stickyLeft,
                           height: ROW_HEIGHT,
-                          boxShadow: isZoom && isActiveObject ? 'inset 3px 0 var(--gmi-interactive)' : isFixed
+                          boxShadow: isZoom && isActiveObject ? 'inset 3px 0 var(--gmi-interactive)' : isFixed && !isIdentity
                             ? '2px 0 4px -2px rgba(15,23,43,0.18)'
                             : undefined,
                         }}

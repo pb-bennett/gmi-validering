@@ -1,17 +1,20 @@
 'use client';
 
-import { TrashIcon } from '@phosphor-icons/react';
-import { formatGmiChangeTime, gmiChangeSetCellViews, gmiSkipReasonLabel, describeGmiObject } from '@/lib/gmiEditView.mjs';
+import { CaretRightIcon, TrashIcon } from '@phosphor-icons/react';
+import { formatGmiChangeTime, gmiChangeSetCellViews, gmiSkipReasonLabel, describeGmiObject, summarizeGmiChangeSet } from '@/lib/gmiEditView.mjs';
 import { Lexeme } from './GmiObjectEditor';
 
 const ORIGIN = Object.freeze({ 'object-editor': 'Objektretting', batch: 'Samleretting' });
 
+const OBJECT_PREVIEW = 6;
+
 /**
  * Staged ChangeSets in order, newest last (the M2 history; nothing is kept
- * here). Each entry shows the object, fields, original → proposed values,
- * label, time and anything skipped or replaced.
+ * here). A compact history/navigation surface: single-object corrections keep
+ * their small field table; multi-object corrections show a summary, and their
+ * object-by-object values open in the right inspector («Vis detaljer»).
  */
-export default function GmiChangeList({ changeSets, redoCount, effective, activeChangeSetId, editable, onSelectObject, onDiscard }) {
+export default function GmiChangeList({ changeSets, redoCount, effective, activeChangeSetId, detailChangeSetId, editable, onSelectObject, onDiscard, onShowDetail }) {
   // Opted out of the React Compiler: it turns optional chains on nullable session views (`view?.x`)
   // into non-optional memo dependencies and crashes before a session exists. Derived values are
   // memoized explicitly per published editing revision instead.
@@ -28,7 +31,10 @@ export default function GmiChangeList({ changeSets, redoCount, effective, active
       {changeSets.map((changeSet, index) => {
         const cells = gmiChangeSetCellViews(changeSet, effective);
         const objects = [...new Map(cells.map((cell) => [`${cell.scope}:${cell.sourceIndex}`, cell])).values()];
-        return <li key={changeSet.id} data-change-set={changeSet.id} className={activeChangeSetId === changeSet.id ? 'gmi-edit-change-active' : undefined}>
+        const summary = summarizeGmiChangeSet(changeSet);
+        const compact = objects.length > 1;
+        return <li key={changeSet.id} data-change-set={changeSet.id} data-detail-open={detailChangeSetId === changeSet.id || undefined}
+          className={activeChangeSetId === changeSet.id || detailChangeSetId === changeSet.id ? 'gmi-edit-change-active' : undefined}>
           <div className="gmi-edit-change-head">
             <span className="gmi-edit-change-number" aria-hidden="true">{index + 1}</span>
             <div className="min-w-0 flex-1">
@@ -39,9 +45,13 @@ export default function GmiChangeList({ changeSets, redoCount, effective, active
               <TrashIcon size={14} aria-hidden="true" /> Forkast
             </button>}
           </div>
+          {compact && <p className="gmi-edit-change-summary">{summary.uniform
+            ? <><span>{summary.fields[0]}</span> → <Lexeme value={summary.value} /></>
+            : <>{summary.fields.join(', ')} · {summary.objectsLabel}</>}</p>}
           <div className="gmi-edit-change-objects">
-            {objects.map((cell) => <button key={`${cell.scope}:${cell.sourceIndex}`} type="button" className="gmi-edit-link"
+            {(compact ? objects.slice(0, OBJECT_PREVIEW) : objects).map((cell) => <button key={`${cell.scope}:${cell.sourceIndex}`} type="button" className="gmi-edit-link"
               onClick={() => onSelectObject({ scope: cell.scope, sourceIndex: cell.sourceIndex }, changeSet.id)}>{cell.object}</button>)}
+            {compact && objects.length > OBJECT_PREVIEW && <span className="gmi-edit-muted">+{objects.length - OBJECT_PREVIEW} til</span>}
           </div>
           {changeSet.eligibility?.manualOverrides?.length > 0 && <details className="gmi-edit-manual-history">
             <summary>Manuelt overstyrt anvendelighet ({changeSet.eligibility.manualOverrides.length})</summary>
@@ -51,7 +61,7 @@ export default function GmiChangeList({ changeSets, redoCount, effective, active
               {!changeSet.cells.some((cell) => cell.key === entry.key) && ' · Ingen verdi endret'}
             </li>)}</ul>
           </details>}
-          <table className="gmi-edit-change-cells">
+          {!compact && <table className="gmi-edit-change-cells">
             <thead><tr><th scope="col">Felt</th><th scope="col">Original</th><th scope="col">Foreslått</th></tr></thead>
             <tbody>{cells.map((cell) => <tr key={cell.key} data-superseded={cell.superseded || undefined}>
               <th scope="row">{cell.field}</th>
@@ -61,8 +71,11 @@ export default function GmiChangeList({ changeSets, redoCount, effective, active
                 {cell.overwritesPopulated && <span className="gmi-edit-badge gmi-edit-badge-warning">Overskrev verdi</span>}
                 {cell.superseded && <span className="gmi-edit-badge">Erstattet senere</span>}</td>
             </tr>)}</tbody>
-          </table>
-          {changeSet.skipped.length > 0 && <p className="gmi-edit-skipped">
+          </table>}
+          {onShowDetail && <button type="button" className="gmi-edit-change-detail-link gmi-focus-ring" aria-pressed={detailChangeSetId === changeSet.id}
+            onClick={() => onShowDetail(changeSet.id)}>{compact ? `Vis detaljer for ${summary.objectsLabel}` : 'Vis detaljer'} <CaretRightIcon size={12} weight="regular" aria-hidden="true" /></button>}
+          {compact && changeSet.skipped.length > 0 && <p className="gmi-edit-skipped">{changeSet.skipped.length} hoppet over – se detaljer.</p>}
+          {!compact && changeSet.skipped.length > 0 && <p className="gmi-edit-skipped">
             Hoppet over: {changeSet.skipped.map((cell) => `${cell.field} på ${describeGmiObject(cell.scope, cell.sourceIndex, cell.objectId ?? null)} (${gmiSkipReasonLabel(cell.reason).toLowerCase()})`).join('; ')}
           </p>}
           {changeSet.conflicts.some((conflict) => conflict.resolution === 'replaced') && <p className="gmi-edit-muted">

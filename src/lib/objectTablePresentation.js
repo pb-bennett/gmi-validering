@@ -64,3 +64,15 @@ export function createLayerDataTableColumns({ orderedFields, columnWidths, isCon
   }));
   return [zoomColumn, ...dataColumns];
 }
+
+/**
+ * Temporary review ordering: the edited fields directly after the fixed
+ * identity columns, everything else in the user's own saved order. Display
+ * only; the saved column order is never rewritten from this.
+ */
+export function applyColumnFocus(orderedFields, focusFields = [], leadingFields = []) {
+  const focus = focusFields.filter((field) => orderedFields.includes(field) && !leadingFields.includes(field));
+  if (!focus.length) return orderedFields;
+  const leading = leadingFields.filter((field) => orderedFields.includes(field));
+  return [...leading, ...focus, ...orderedFields.filter((field) => !focus.includes(field) && !leading.includes(field))];
+}

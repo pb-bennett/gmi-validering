@@ -8,20 +8,24 @@ const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-stro
  * Modal confirmation used by every action that could lose GMI corrections.
  * Cancel is the default (focused, Escape); the destructive action is explicit.
  */
-export default function GmiConfirmDialog({ title, children, confirmLabel, cancelLabel = 'Avbryt', destructive = true, onCancel, onConfirm, testId }) {
+export default function GmiConfirmDialog({ title, children, confirmLabel, cancelLabel = 'Avbryt', destructive = true, onCancel, onConfirm, testId,
+  tone = null, confirmIcon: ConfirmIcon = null }) {
   const ref = useRef(null), headingId = useId();
   useEffect(() => {
     const dialog = ref.current, opener = document.activeElement;
     dialog.showModal();
     return () => { dialog.close(); if (opener?.isConnected) opener.focus(); };
   }, []);
-  return <dialog ref={ref} className="gmi-edit-dialog gmi-edit-confirm-dialog" aria-labelledby={headingId} data-gmi-confirm={testId}
+  // tone="risk": an explicit risk approval, visually distinct from an ordinary confirmation.
+  return <dialog ref={ref} className="gmi-edit-dialog gmi-edit-confirm-dialog" aria-labelledby={headingId} data-gmi-confirm={testId} data-tone={tone || undefined}
     onCancel={(event) => { event.preventDefault(); onCancel(); }}>
     <h2 id={headingId}>{title}</h2>
     <div className="gmi-edit-confirm-body">{children}</div>
     <div className="gmi-edit-actions">
       <button type="button" className={control} onClick={onCancel} autoFocus>{cancelLabel}</button>
-      <button type="button" className={`${control}${destructive ? ' gmi-edit-destructive' : ''}`} onClick={onConfirm}>{confirmLabel}</button>
+      <button type="button" className={`${control}${destructive ? ' gmi-edit-destructive' : ''}${tone === 'risk' ? ' gmi-edit-risk-approve' : ''}`} onClick={onConfirm}>
+        {ConfirmIcon && <ConfirmIcon size={16} weight="regular" aria-hidden="true" />}{confirmLabel}
+      </button>
     </div>
   </dialog>;
 }

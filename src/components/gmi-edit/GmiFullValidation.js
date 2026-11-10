@@ -6,12 +6,19 @@ import useStore from '@/lib/store';
 import { getCanonicalField } from '@/lib/validation-v2/registry/registry';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { buildGmiValidationComparison, isCurrentGmiComparison, validatorCheckCount } from '@/lib/gmiValidatorEditing.mjs';
+import { getGmiDocumentDataset } from '@/lib/gmi-edit/index.mjs';
+import { describeGmiObject } from '@/lib/gmiEditView.mjs';
 
 export default function GmiFullValidation({ view, layerId, guard }) {
   'use no memo';
   const referenceDate = useStore((state) => state.gmiValidatorReferenceDate);
   const [comparison, setComparison] = useState(null), [error, setError] = useState(null), [busy, setBusy] = useState(false);
   const severityLabel = (state) => state === 'FAIL' ? 'FEIL' : 'SJEKK';
+  // Same object labels as the Rettinger object list, Data Table and history (source object number).
+  const objectLabel = (scope, sourceIndex) => {
+    const object = view ? getGmiDocumentDataset(view.document)?.[scope === 'line' ? 'lines' : 'points']?.[sourceIndex] : null;
+    return describeGmiObject(scope, sourceIndex, object?.id ?? null);
+  };
   const current = isCurrentGmiComparison(comparison, view?.session, referenceDate);
   const inspect = (dataset = null, ruleId = null, geometryScope = null) => guard(() => {
     const state = useStore.getState();
@@ -51,7 +58,7 @@ export default function GmiFullValidation({ view, layerId, guard }) {
           ...comparison.severityChanged.map(({ previous, finding }) => ({ finding, label: `Alvorlighet ${severityLabel(previous.state)} → ${severityLabel(finding.state)}`, dataset: 'proposed' })),
           ...comparison.resolved.map((finding) => ({ finding, label: 'Løst', dataset: 'original' }))].sort((a, b) => (a.dataset === 'original' ? 2 : a.finding.state === 'FAIL' ? 0 : 1) - (b.dataset === 'original' ? 2 : b.finding.state === 'FAIL' ? 0 : 1)).map(({ finding, label, dataset }, index) => <li key={index} className="my-1">
             <button type="button" className="gmi-edit-link" onClick={() => inspect(dataset, finding.ruleId || finding.canonicalFieldId, finding.geometryScope)}>
-              <ArrowSquareOutIcon size={14} /> {label} · {finding.state === 'FAIL' ? 'FEIL' : 'SJEKK'} · {getCanonicalField(finding.canonicalFieldId)?.displayLabel || 'Skjemakontroll'} · {finding.objectRef ? `${finding.geometryScope === 'line' ? 'Ledning' : 'Punkt'} ${finding.objectRef.sourceIndex + 1}` : 'Skjema'}
+              <ArrowSquareOutIcon size={14} /> {label} · {finding.state === 'FAIL' ? 'FEIL' : 'SJEKK'} · {getCanonicalField(finding.canonicalFieldId)?.displayLabel || 'Skjemakontroll'} · {finding.objectRef ? objectLabel(finding.geometryScope, finding.objectRef.sourceIndex) : 'Skjema'}
             </button>
           </li>)}
       </ul></details>

@@ -33,7 +33,7 @@ test('R4 selected, eligible, skipped, manual, changed and new FEIL counts use M5
   assert.equal(review.preview.eligibility.counts.total, 4);
   const ordinary = planGmiInspectorBatch(view, selection, review);
   assert.equal(ordinary.ok, true);
-  assert.deepEqual(ordinary.counts, { selected: 4, eligible: 3, manual: 0, changed: 3, unchanged: 0, skipped: 1, newErrors: 1 });
+  assert.deepEqual(ordinary.counts, { selected: 4, eligible: 3, manual: 0, changed: 3, unchanged: 0, skipped: 1, excluded: 0, newErrors: 1, newChecks: 0 });
   const excluded = review.preview.skippedRows.find((row) => row.sourceIndex === 2);
   assert.equal(planGmiInspectorBatch(view, selection, review, new Set([excluded.key]), false, false).counts.manual, 0);
   const overridden = planGmiInspectorBatch(view, selection, review, new Set([excluded.key]), false, true);

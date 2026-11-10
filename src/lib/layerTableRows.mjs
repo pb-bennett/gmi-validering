@@ -1,4 +1,4 @@
-import { filterTableSearchRows, normalizeTableSearchQuery } from './tableSearch.js';
+import { filterTableSearchRows, normalizeTableSearchQuery, rowMatchesTableSearch } from './tableSearch.js';
 
 // These normalisations intentionally match the table's historical predicates,
 // including layer-wide Tema/Type and geometry-specific Felt hiding.
@@ -28,7 +28,7 @@ export function isLayerTableItemHidden(item, tab, { hiddenCodes = [], hiddenType
  * for the final searched/sorted set (not virtual rows), retaining TanStack's sorting
  * and tie-breaking rather than maintaining another sorting/filtering implementation.
  */
-export function deriveLayerTableRows({ dataset, tab, filters = {}, view = 'original', changedByObject, inspectionRows = null, searchQuery = '', selectionKeys = null }) {
+export function deriveLayerTableRows({ dataset, tab, filters = {}, view = 'original', changedByObject, inspectionRows = null, searchQuery = '', selectionKeys = null, identityMatches = null }) {
   const scope = tab === 'punkter' ? 'point' : 'line';
   const rawItems = inspectionRows ?? (tab === 'punkter' ? dataset?.points : dataset?.lines) ?? [];
   const indexed = inspectionRows !== null ? rawItems : rawItems.map((item, __index) => ({ ...item, __index }));
@@ -37,7 +37,11 @@ export function deriveLayerTableRows({ dataset, tab, filters = {}, view = 'origi
   const hasActiveFilters = (filters.hiddenCodes?.length || filters.hiddenTypes?.length || filters.feltHiddenValues?.length || 0) > 0;
   const items = inspectionRows !== null || !hasActiveFilters ? allItemsWithIndex
     : allItemsWithIndex.filter((item) => !isLayerTableItemHidden(item, tab, filters));
-  const searchedItems = filterTableSearchRows(items, normalizeTableSearchQuery(searchQuery));
+  const query = normalizeTableSearchQuery(searchQuery);
+  // Optional exact object-number match (Rettinger labels), in addition to attribute search.
+  const searchedItems = query && identityMatches
+    ? items.filter((item) => rowMatchesTableSearch(item, query) || identityMatches(item, query))
+    : filterTableSearchRows(items, normalizeTableSearchQuery(searchQuery));
   // Explicit selection display override: inspect the complete selection without
   // rewriting filters/search or restricting it to effectively changed objects.
   const selected = selectionKeys === null ? null : new Set(selectionKeys);
