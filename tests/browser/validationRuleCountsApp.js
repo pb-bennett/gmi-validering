@@ -30,6 +30,8 @@ function App() {
     <button onClick={() => setShowLarge(!showLarge)}>Store tall</button>
     <ValidationV2RuleList presentations={[...presentations, ...examplePresentations]} expandedRuleKey={expanded}
       onToggle={(key) => setExpanded(expanded === key ? null : key)}
+      canCorrect={(presentation) => presentation.expansionKey === presentations[0].expansionKey}
+      onCorrect={(presentation) => setInfo(`Retting: ${presentation.displayName}`)}
       onInfo={(presentation) => setInfo(presentation.displayName)} />
     <output>{info}</output>
   </main>;

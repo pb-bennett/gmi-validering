@@ -42,6 +42,14 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
     browser = await openTestChrome();
     await browser.send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}` });
     await browser.waitFor('document.querySelector("button[aria-expanded]")');
+    const headerLayout = `(() => {
+      const header = document.querySelector('button[aria-expanded]'), summary = header.querySelector('.gmi-validation-rule-counts');
+      const box = element => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
+      return { boxes: [header, header.children[1], summary, header.lastElementChild].map(box),
+        label: header.getAttribute('aria-label'), title: summary.title, visibility: getComputedStyle(summary).visibility,
+        slotVisibility: Array.from(summary.querySelectorAll('[data-validation-count-slot]')).map(s => getComputedStyle(s).visibility),
+        visibleText: header.innerText };
+    })()`;
     for (const [width, height] of [[1366, 768], [1280, 720]]) {
       await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
       for (const scheme of ['light', 'dark']) {
@@ -66,7 +74,8 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
         })()`);
         assert.match(actual.label, /73 objekter i kontrollgrunnlaget: 5 FEIL, 1 SJEKK, 67 OK/);
         assert.equal(actual.title, '73 objekter i kontrollgrunnlaget: 5 FEIL, 1 SJEKK, 67 OK.');
-        assert.equal(actual.text, '5 · 1 · 67');
+        assert.equal(actual.text, '5167');
+        assert(!/[·|]/.test(actual.text));
         assert.deepEqual(actual.values, ['5', '1', '67']);
         assert.deepEqual(actual.tones, ['error', 'warning', 'success']);
         assert.equal(new Set(actual.colors).size, 3);
@@ -84,7 +93,8 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
               left: s.getBoundingClientRect().left, right: s.getBoundingClientRect().right, width: s.getBoundingClientRect().width,
               fits: s.scrollWidth <= s.clientWidth,
             })),
-            separators: Array.from(summary.querySelectorAll('[data-validation-count-separator]')).map(s => s.textContent.trim()),
+            columns: getComputedStyle(summary).gridTemplateColumns.split(' ').length,
+            columnGap: parseFloat(getComputedStyle(summary).columnGap),
             width: summary.getBoundingClientRect().width,
             gap: header.lastElementChild.getBoundingClientRect().left - summary.getBoundingClientRect().right,
             fits: header.scrollWidth <= header.clientWidth, height: summary.getBoundingClientRect().height,
@@ -99,15 +109,15 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
           assert.deepEqual(example.values, cases[index]);
           const values = new Map(cases[index]);
           const ordered = ['error', 'warning', 'success'].map(tone => values.get(tone) || '');
-          const expectedText = ordered.map((value, i) => value + (i < 2 && value && ordered[i + 1] ? ' · ' : '')).join('');
+          const expectedText = ordered.join('');
           assert.equal(example.text, cases[index].length ? expectedText : 'Ingen resultater');
-          assert(!/[()]/.test(example.text)); assert(example.fits); assert(example.height < 20);
+          assert(!/[()·|]/.test(example.text)); assert(example.fits); assert(example.height < 20);
+          assert.equal(example.columns, 3); assert(example.columnGap > 0);
           assert(example.gap >= 8);
           assert(Math.abs(example.width - examples[0].width) < .1, 'summary width stays stable, including fallback');
           if (cases[index].length) {
             assert.deepEqual(example.slots.map(s => s.tone), ['error', 'warning', 'success']);
             assert.deepEqual(example.slots.map(s => s.text), ordered, 'zero categories have empty slots');
-            assert.deepEqual(example.separators, ordered.slice(0, 2).map((value, i) => value && ordered[i + 1] ? '·' : ''));
             example.slots.forEach((slot, i) => {
               const reference = examples[0].slots[i];
               assert(Math.abs(slot.left - reference.left) < .1, `${slot.tone} left edge aligned`);
@@ -140,6 +150,26 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
           const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
           await writeFile(path.join(process.env.GMI_COUNTS_SCREENSHOT_DIR, `counts-${width}-${scheme}.png`), Buffer.from(data, 'base64'));
         }
+        const collapsed = await browser.evaluate(headerLayout);
+        assert.equal(collapsed.visibility, 'visible');
+        await browser.evaluate('document.querySelector("button[aria-expanded]").click()');
+        await browser.waitFor('document.querySelector("button[aria-expanded=true]")');
+        const expanded = await browser.evaluate(headerLayout);
+        assert.equal(expanded.visibility, 'hidden');
+        assert(expanded.slotVisibility.every(value => value === 'hidden'));
+        assert.doesNotMatch(expanded.visibleText, /\d/, 'expanded header paints no compact counts');
+        assert.deepEqual(expanded.boxes, collapsed.boxes, 'header, name, reserved counts and chevron do not shift');
+        assert.equal(expanded.label, collapsed.label); assert.equal(expanded.title, collapsed.title);
+        assert.match(await browser.evaluate('document.querySelector("[role=region]").textContent'), /Objekter73Feil5Sjekk1Pass67Vis/);
+        if (process.env.GMI_COUNTS_SCREENSHOT_DIR) {
+          const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+          await writeFile(path.join(process.env.GMI_COUNTS_SCREENSHOT_DIR, `expanded-${width}-${scheme}.png`), Buffer.from(data, 'base64'));
+        }
+        await browser.evaluate('document.querySelector("button[aria-expanded]").focus()');
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+        await browser.waitFor('!document.querySelector("[role=region]")');
+        assert.deepEqual(await browser.evaluate(headerLayout), collapsed, 'keyboard collapse restores the same header');
       }
     }
     await browser.evaluate('document.querySelectorAll("main > button")[1].click()');
@@ -164,20 +194,25 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
       const probe = document.createElement('span'); probe.style.color = 'var(--color-orange-700)'; document.body.append(probe);
       const unchanged = getComputedStyle(count).color === getComputedStyle(probe).color; probe.remove(); return unchanged;
     })()`), true, 'expanded warning details retain the shared orange palette');
-    assert.match(await browser.evaluate('document.querySelector("button[aria-expanded]").textContent'), /5 · 1 · 67/);
+    assert.equal((await browser.evaluate(headerLayout)).visibility, 'hidden');
     await browser.evaluate('document.querySelector("button[title=Vis]").click()');
     await browser.waitFor('document.querySelector("output").textContent');
     assert.match(await browser.evaluate('document.querySelector("output").textContent'), /Innvendig/);
+    await browser.evaluate(`Array.from(document.querySelectorAll('[role=region] button')).find(button => button.textContent.startsWith('Lag retting')).click()`);
+    await browser.waitFor('document.querySelector("output").textContent.startsWith("Retting:")');
+    assert.match(await browser.evaluate('document.querySelector("output").textContent'), /Retting: Innvendig/);
     await browser.evaluate('document.querySelector("main > button").click()');
     await browser.waitFor('document.querySelector("button[aria-expanded] .gmi-validation-rule-counts").textContent === "73"');
     assert.equal(await browser.evaluate('document.querySelector("button[aria-expanded] .gmi-validation-rule-counts [data-validation-tone]").dataset.validationTone'), 'success');
     assert.deepEqual(await browser.evaluate('Array.from(document.querySelectorAll("button[aria-expanded] .gmi-validation-rule-counts")[0].querySelectorAll("[data-validation-count-slot]")).map(s => s.textContent)'), ['', '', '73']);
     assert.match(await browser.evaluate('document.querySelector("button[aria-expanded]").getAttribute("aria-label")'), /73 objekter.*0 FEIL, 0 SJEKK, 73 OK/);
     assert.match(await browser.evaluate('document.querySelector("[role=region]").textContent'), /Objekter73Pass73Vis/);
+    assert.equal((await browser.evaluate(headerLayout)).visibility, 'hidden', 'updated expanded header stays hidden');
     await browser.evaluate('document.querySelector("button[aria-expanded]").click()');
     await browser.waitFor('!document.querySelector("[role=region]")');
     await browser.evaluate('document.querySelector("main > button").click()');
-    await browser.waitFor('document.querySelector("button[aria-expanded] .gmi-validation-rule-counts").textContent === "5 · 1 · 67"');
+    await browser.waitFor('document.querySelector("button[aria-expanded] .gmi-validation-rule-counts").textContent === "5167"');
+    assert.equal((await browser.evaluate(headerLayout)).visibility, 'visible');
   } finally {
     await browser?.close();
     if (server) await new Promise((resolve) => server.close(resolve));

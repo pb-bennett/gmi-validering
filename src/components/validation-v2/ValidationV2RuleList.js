@@ -1,7 +1,6 @@
 'use client';
 
 import { ArrowSquareOutIcon, CaretDownIcon } from '@phosphor-icons/react';
-import { Fragment } from 'react';
 
 const STATUS_TONES = Object.freeze({
   red: 'error',
@@ -71,13 +70,10 @@ export default function ValidationV2RuleList({
               <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gmi-navy">
                 {presentation.displayName}
               </span>
-              <span title={countLabel} aria-hidden="true" className="gmi-validation-rule-counts inline-grid shrink-0 items-baseline whitespace-nowrap text-[11px] font-medium tabular-nums text-gmi-text"
-                style={{ gridTemplateColumns: `repeat(2, ${countSlotWidth}ch 1.5ch) ${countSlotWidth}ch` }}>
-                {visibleCounts.length === 0 ? <span className="col-span-5 text-right font-normal">Ingen resultater</span> : countSlots.map(({ tone, value }, index) => (
-                  <Fragment key={tone}>
-                    <span data-validation-count-slot={tone} data-validation-tone={value > 0 ? tone : undefined} className="gmi-validation-accent text-right font-medium">{value > 0 ? value : null}</span>
-                    {index < 2 && <span data-validation-count-separator className="text-center">{value > 0 && countSlots[index + 1].value > 0 ? ' · ' : null}</span>}
-                  </Fragment>
+              <span title={countLabel} aria-hidden="true" className={`gmi-validation-rule-counts inline-grid shrink-0 items-baseline gap-x-[1.5ch] whitespace-nowrap text-[11px] font-medium tabular-nums text-gmi-text ${isExpanded ? 'invisible' : ''}`}
+                style={{ gridTemplateColumns: `repeat(3, ${countSlotWidth}ch)` }}>
+                {visibleCounts.length === 0 ? <span className="col-span-3 text-right font-normal">Ingen resultater</span> : countSlots.map(({ tone, value }) => (
+                  <span key={tone} data-validation-count-slot={tone} data-validation-tone={value > 0 ? tone : undefined} className="gmi-validation-accent text-right font-medium">{value > 0 ? value : null}</span>
                 ))}
               </span>
               <span aria-hidden="true" className="ml-1 shrink-0 text-gmi-text-subtle">
