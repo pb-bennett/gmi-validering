@@ -15,9 +15,10 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowCounterClockwiseIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon, XIcon } from '@phosphor-icons/react';
-import { normalizeTableSearchQuery, filterTableSearchRows, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
+import { normalizeTableSearchQuery, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
+import { deriveLayerTableRows } from '@/lib/layerTableRows.mjs';
 import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
 import FilenameCopyButton from '@/components/FilenameCopyButton';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
@@ -91,7 +92,7 @@ const HyperlinkCell = React.memo(function HyperlinkCell({ value, searchQuery }) 
       {filenames.length > 0 && (
         <div className="flex max-w-24 shrink-0 items-center gap-0.5 overflow-x-auto" aria-label="Filnavn">
           {filenames.map((filename, index) => (
-            <FilenameCopyButton key={filename} filename={filename} referenceNumber={filenames.length > 1 ? index + 1 : undefined} />
+            <FilenameCopyButton tabIndex={-1} key={filename} filename={filename} referenceNumber={filenames.length > 1 ? index + 1 : undefined} />
           ))}
         </div>
       )}
@@ -116,6 +117,7 @@ const ZoomButton = React.memo(function ZoomButton({ onClick }) {
     <button
       onClick={onClick}
       className="gmi-focus-ring flex h-5 w-5 items-center justify-center rounded bg-gmi-surface-soft text-gmi-interactive transition-colors hover:bg-gmi-cyan-soft"
+      tabIndex={-1}
       title="Zoom til"
       aria-label="Zoom til"
     >
@@ -156,6 +158,7 @@ export default function LayerDataTable() {
   const gmiEditTableView = useStore((state) => (state.ui.layerDataTable?.layerId ? state.gmiEditTableView?.[state.ui.layerDataTable.layerId] : null) ?? GMI_EDIT_TABLE_VIEWS.ORIGINAL);
   const setGmiEditTableView = useStore((state) => state.setGmiEditTableView);
   const gmiEditWorkspaceLayerId = useStore((state) => state.gmiEditWorkspace?.layerId ?? null);
+  const highlightedFeatureId = useStore((state) => state.ui.highlightedFeatureId);
   const requestGmiEditObject = useStore((state) => state.requestGmiEditObject);
 
   const tableContainerRef = useRef(null);
@@ -237,98 +240,19 @@ export default function LayerDataTable() {
       ? layerDataTable.activeTabByLayer[layerId]
       : 'punkter';
 
-  // Memoize raw items with stable reference
-  const rawItems = useMemo(() => {
-    if (isExactInspection) return exactRows || [];
-    const data = proposedData || layer?.data;
-    if (!data) return [];
-    return activeTab === 'punkter'
-      ? data.points || []
-      : data.lines || [];
-  }, [layer?.data, proposedData, activeTab, isExactInspection, exactRows]);
-
-  // Helper to check if an item is hidden by filters
-  const isItemHidden = useCallback(
-    (item, objectType) => {
-      const attrs = item.attributes || {};
-      const rawFcode = attrs.S_FCODE;
-      const fcode =
-        rawFcode === null ||
-        rawFcode === undefined ||
-        String(rawFcode).trim() === ''
-          ? '(Ingen verdi)'
-          : String(rawFcode);
-      const typeVal = attrs.Type || '(Mangler Type)';
-
-      // Check hiddenCodes
-      if (hiddenCodes.includes(fcode)) {
-        return true;
-      }
-
-      // Check hiddenTypes
-      const isHiddenByType = hiddenTypes.some(
-        (ht) =>
-          ht.type === typeVal &&
-          (ht.code === null || ht.code === fcode),
-      );
-      if (isHiddenByType) {
-        return true;
-      }
-
-      // Check feltHiddenValues
-      const mappedObjectType =
-        objectType === 'punkter' ? 'points' : 'lines';
-      const isHiddenByFelt = feltHiddenValues.some((hidden) => {
-        if (hidden.objectType !== mappedObjectType) return false;
-        const featureValue = attrs[hidden.fieldName];
-        const normalizedValue =
-          featureValue === null ||
-          featureValue === undefined ||
-          featureValue === ''
-            ? '(Mangler)'
-            : String(featureValue);
-        return normalizedValue === hidden.value;
-      });
-      if (isHiddenByFelt) {
-        return true;
-      }
-
-      return false;
-    },
-    [hiddenCodes, hiddenTypes, feltHiddenValues],
-  );
-
-  // Add __index and filter hidden items
-  const allItemsWithIndex = useMemo(() => {
-    if (isExactInspection) return rawItems;
-    const scope = tableTabToScope(activeTab);
-    const indexed = rawItems.map((item, index) => ({
-      ...item,
-      __index: index,
-    }));
-    // Kun endrede: only objects with an effective correction (source index = parser order = table index).
-    return tableView === GMI_EDIT_TABLE_VIEWS.CHANGED
-      ? indexed.filter((item) => changedByObject?.has(gmiObjectKey(scope, item.__index)))
-      : indexed;
-  }, [rawItems, isExactInspection, tableView, changedByObject, activeTab]);
-
-  // Filtered items (respecting sidebar filters)
-  const items = useMemo(() => {
-    if (isExactInspection || !hasActiveFilters) {
-      return allItemsWithIndex;
-    }
-    return allItemsWithIndex.filter(
-      (item) => !isItemHidden(item, activeTab),
-    );
-  }, [allItemsWithIndex, hasActiveFilters, isItemHidden, activeTab, isExactInspection]);
-
+  const { allItemsWithIndex, items, searchedItems } = useMemo(() => deriveLayerTableRows({
+    dataset: proposedData || layer?.data,
+    tab: activeTab,
+    filters: { hiddenCodes, hiddenTypes, feltHiddenValues },
+    view: tableView,
+    changedByObject,
+    inspectionRows: isExactInspection ? exactRows || [] : null,
+    searchQuery: normalizedSearchQuery,
+  }), [proposedData, layer?.data, activeTab, hiddenCodes, hiddenTypes, feltHiddenValues,
+    tableView, changedByObject, isExactInspection, exactRows, normalizedSearchQuery]);
   const totalCount = allItemsWithIndex.length;
   const filteredCount = items.length;
   const hiddenCount = totalCount - filteredCount;
-  const searchedItems = useMemo(
-    () => filterTableSearchRows(items, normalizedSearchQuery),
-    [items, normalizedSearchQuery],
-  );
 
   useEffect(() => {
     if (tableContainerRef.current) tableContainerRef.current.scrollTop = 0;
@@ -608,16 +532,70 @@ export default function LayerDataTable() {
 
   const { rows } = table.getRowModel();
 
+  // DOM focus stays on the grid; its active descendant uses stable source identity.
+  // Filtering removes a cursor by falling back to the first remaining sorted row.
+  const [navigationRowId, setNavigationRowId] = useState(null);
+  const [gridHasFocus, setGridHasFocus] = useState(false);
+  const cursorIndex = rows.findIndex((row) => row.id === navigationRowId);
+  const navigationIndex = cursorIndex < 0 ? 0 : cursorIndex;
+  const navigationRow = rows[navigationIndex];
+  const rowElementId = (row) => `table-row-${encodeURIComponent(row.id)}`;
+  const rangeExtractor = useCallback((range) => [...new Set([
+    ...defaultRangeExtractor(range), ...(range.count ? [navigationIndex] : []),
+  ])].sort((a, b) => a - b), [navigationIndex]);
+
   // Virtual row handling
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => tableContainerRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
+    getItemKey: (index) => rows[index].id,
+    rangeExtractor,
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
+
+  useEffect(() => {
+    if (gridHasFocus && navigationRow && document.activeElement === tableContainerRef.current) {
+      rowVirtualizer.scrollToIndex(navigationIndex, { align: 'auto' });
+    }
+  }, [navigationIndex, navigationRow, gridHasFocus, rowVirtualizer]);
+
+  const handleGridKeyDown = (event) => {
+    const grid = tableContainerRef.current;
+    if (event.target !== grid) {
+      // F2 enters a row's existing controls; Escape returns to row navigation.
+      if (event.target.closest('[data-table-row]')) {
+        if (event.key === 'Escape') { event.preventDefault(); grid.focus(); }
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+          const controls = [...event.target.closest('[data-table-row]').querySelectorAll('button:not(:disabled), a[href]')];
+          const index = controls.indexOf(event.target);
+          const next = controls[index + (event.key === 'ArrowRight' ? 1 : -1)];
+          if (next) { event.preventDefault(); next.focus(); }
+        }
+      }
+      return;
+    }
+    if (!navigationRow) return;
+    if (event.key === 'Enter') {
+      event.preventDefault(); handleRowClick(navigationRow.original.__index, activeTab); return;
+    }
+    if (event.key === 'F2') {
+      event.preventDefault();
+      document.getElementById(rowElementId(navigationRow))?.querySelector('button:not(:disabled), a[href]')?.focus();
+      return;
+    }
+    const nextIndex = event.key === 'ArrowDown' ? Math.min(rows.length - 1, navigationIndex + 1)
+      : event.key === 'ArrowUp' ? Math.max(0, navigationIndex - 1)
+        : event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : null;
+    if (nextIndex !== null) {
+      event.preventDefault();
+      setNavigationRowId(rows[nextIndex].id);
+      rowVirtualizer.scrollToIndex(nextIndex, { align: 'auto' });
+    }
+  };
 
   if (!isOpen || !layer) return null;
 
@@ -796,7 +774,21 @@ export default function LayerDataTable() {
 
       <div
         ref={tableContainerRef}
-        className="flex-1 overflow-auto"
+        role="grid"
+        aria-label="Objekter i datatabellen"
+        aria-readonly="true"
+        aria-rowcount={rows.length + 1}
+        aria-colcount={columns.length}
+        aria-activedescendant={navigationRow ? rowElementId(navigationRow) : undefined}
+        aria-describedby="layer-table-keyboard-help"
+        tabIndex={0}
+        onKeyDown={handleGridKeyDown}
+        onFocusCapture={(event) => {
+          setGridHasFocus(event.target === event.currentTarget || Boolean(event.target.closest('[data-table-row]')));
+          if (event.target === event.currentTarget && navigationRow) rowVirtualizer.scrollToIndex(navigationIndex, { align: 'auto' });
+        }}
+        onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setGridHasFocus(false); }}
+        className="gmi-focus-ring flex-1 overflow-auto"
         style={{ contain: 'strict' }}
       >
         {!rows.length && (
@@ -811,6 +803,8 @@ export default function LayerDataTable() {
         <div style={{ width: totalWidth, minWidth: '100%' }}>
           {/* Sticky header */}
           <div
+            role="row"
+            aria-rowindex={1}
             className="sticky top-0 z-20 flex bg-gmi-surface-soft"
           >
             {table.getHeaderGroups().map((headerGroup) =>
@@ -826,15 +820,13 @@ export default function LayerDataTable() {
                 return (
                   <div
                     key={header.id}
+                    role="columnheader"
+                    aria-colindex={index + 1}
+                    aria-sort={isZoom ? undefined : header.column.getIsSorted() === 'asc' ? 'ascending' : header.column.getIsSorted() === 'desc' ? 'descending' : 'none'}
                     draggable={!isZoom && (!isContextualInspection || !isFixed)}
                     onDragStart={() => handleDragStart(headerId)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => (!isContextualInspection || !isFixed) && handleDrop(headerId)}
-                    onClick={
-                      isZoom
-                        ? undefined
-                        : header.column.getToggleSortingHandler()
-                    }
                     className={`shrink-0 select-none border-b border-gmi-border-strong bg-gmi-surface-soft px-1.5 py-1 text-left text-[10px] font-medium text-gmi-text-muted ${
                       isZoom
                         ? 'text-center'
@@ -850,7 +842,9 @@ export default function LayerDataTable() {
                         : undefined,
                     }}
                   >
-                    <div className={`flex items-center gap-0.5 ${multiline ? 'items-start' : 'truncate'}`}>
+                    <button type="button" disabled={isZoom} aria-label={isZoom ? 'Kart' : `Sorter etter ${fullHeaderLabel}`}
+                      onClick={header.column.getToggleSortingHandler()}
+                      className={`gmi-focus-ring flex w-full items-center gap-0.5 text-left ${multiline ? 'items-start' : 'truncate'}`}>
                       <span className={multiline ? 'line-clamp-2 leading-3' : 'truncate'} title={fullHeaderLabel || undefined}>
                         {visibleHeaderLabel(fullHeaderLabel, width, multiline)}
                       </span>
@@ -863,7 +857,7 @@ export default function LayerDataTable() {
                             : '↓'}
                         </span>
                       )}
-                    </div>
+                    </button>
                   </div>
                 );
               }),
@@ -872,6 +866,7 @@ export default function LayerDataTable() {
 
           {/* Virtualized body */}
           <div
+            role="rowgroup"
             style={{
               height: totalSize,
               width: '100%',
@@ -880,12 +875,20 @@ export default function LayerDataTable() {
           >
             {virtualRows.map((virtualRow) => {
               const row = rows[virtualRow.index];
+              const isActiveObject = highlightedFeatureId === `${activeTab}-${layerId}-${row.original.__index}`;
               return (
                 <div
                   key={row.id}
-                  onClick={() =>
-                    handleRowClick(row.original.__index, activeTab)
-                  }
+                  id={rowElementId(row)}
+                  role="row"
+                  aria-rowindex={virtualRow.index + 2}
+                  aria-current={isActiveObject ? 'true' : undefined}
+                  data-table-row={row.original.__index}
+                  data-keyboard-current={gridHasFocus && row.id === navigationRow?.id ? 'true' : undefined}
+                  onClick={() => {
+                    setNavigationRowId(row.id);
+                    handleRowClick(row.original.__index, activeTab);
+                  }}
                   onMouseEnter={() =>
                     handleRowHoverStart(
                       row.original.__index,
@@ -893,8 +896,10 @@ export default function LayerDataTable() {
                     )
                   }
                   onMouseLeave={handleRowHoverEnd}
-                  className="group flex cursor-pointer border-b border-gmi-border bg-gmi-surface hover:bg-gmi-surface-soft"
+                  className={`group flex cursor-pointer border-b border-gmi-border ${isActiveObject ? 'bg-gmi-cyan-soft' : 'bg-gmi-surface'} hover:bg-gmi-surface-soft`}
                   style={{
+                    outline: gridHasFocus && row.id === navigationRow?.id ? '2px solid var(--gmi-interactive)' : undefined,
+                    outlineOffset: '-2px',
                     position: 'absolute',
                     top: 0,
                     left: 0,
@@ -913,11 +918,13 @@ export default function LayerDataTable() {
                     return (
                       <div
                         key={cell.id}
+                        role="gridcell"
+                        aria-colindex={index + 1}
                         className={`flex shrink-0 items-center px-1.5 text-[10px] ${
                           isZoom ? 'justify-center' : ''
                         } ${isZoom || isFixed ? 'sticky z-10' : ''} ${
                           (isZoom || isFixed) && !cell.column.columnDef.meta?.contextualField
-                            ? 'bg-gmi-surface group-hover:bg-gmi-surface-soft'
+                            ? `${isActiveObject ? 'bg-gmi-cyan-soft' : 'bg-gmi-surface'} group-hover:bg-gmi-surface-soft`
                             : ''
                         }`}
                         style={{
@@ -929,7 +936,7 @@ export default function LayerDataTable() {
                           maxWidth: width,
                           left: stickyLeft,
                           height: ROW_HEIGHT,
-                          boxShadow: isFixed
+                          boxShadow: isZoom && isActiveObject ? 'inset 3px 0 var(--gmi-interactive)' : isFixed
                             ? '2px 0 4px -2px rgba(15,23,43,0.18)'
                             : undefined,
                         }}
@@ -951,8 +958,8 @@ export default function LayerDataTable() {
       <div
         className="flex shrink-0 items-center justify-end border-t border-gmi-border bg-gmi-surface-soft px-3 py-1 text-[9px] text-gmi-text-subtle"
       >
-        <span>
-          Dra kolonner for å endre rekkefølge • Klikk for å sortere
+        <span id="layer-table-keyboard-help">
+          Piltaster: naviger objekter. Enter: åpne. F2: radverktøy, venstre/høyre: bytt verktøy, Escape: tilbake. Dra kolonner for å endre rekkefølge • Klikk for å sortere
         </span>
       </div>
     </div>

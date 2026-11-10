@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CopyIcon, CheckIcon } from '@phosphor-icons/react';
 import { createFilenameCopyAction, filenameCopyFeedback } from '@/lib/filenameClipboard.mjs';
 
-export default function FilenameCopyButton({ filename, referenceNumber }) {
+export default function FilenameCopyButton({ filename, referenceNumber, tabIndex }) {
   const [status, setStatus] = useState('idle');
   const action = useRef(null);
   useEffect(() => {
@@ -16,6 +16,7 @@ export default function FilenameCopyButton({ filename, referenceNumber }) {
   return (
     <button
       type="button"
+      tabIndex={tabIndex}
       onClick={(event) => action.current?.copy(event)}
       disabled={status === 'pending'}
       aria-label={`Kopier filnavn ${filename}`}

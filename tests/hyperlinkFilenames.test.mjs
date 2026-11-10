@@ -152,13 +152,15 @@ test('disposed/pending copy actions suppress duplicate writes and late feedback'
 test('table copy UI is field-specific and retains raw search, row IDs and virtualization', async () => {
   const table = await readFile(new URL('../src/components/LayerDataTable.js', import.meta.url), 'utf8');
   const button = await readFile(new URL('../src/components/FilenameCopyButton.js', import.meta.url), 'utf8');
+  const rows = await readFile(new URL('../src/lib/layerTableRows.mjs', import.meta.url), 'utf8');
   assert.match(table, /id === 'S_HYPERLINK'\s*\? <HyperlinkCell value=\{info.getValue\(\)\}/);
   assert.match(table, /: <DataCell value=\{info.getValue\(\)\}/);
   assert.match(table, /extractHyperlinkFilenames\(value\)/);
   assert.match(table, /filenames.map\(\(filename, index\)/);
-  assert.match(table, /<FilenameCopyButton key=\{filename\} filename=\{filename\}/);
+  assert.match(table, /<FilenameCopyButton tabIndex=\{-1\} key=\{filename\} filename=\{filename\}/);
   assert.match(table, /<DataCell value=\{value\} searchQuery=\{searchQuery\}/);
-  assert.match(table, /filterTableSearchRows\(items, normalizedSearchQuery\)/);
+  assert.match(table, /deriveLayerTableRows\(\{/);
+  assert.match(rows, /filterTableSearchRows\(items, normalizeTableSearchQuery\(searchQuery\)\)/);
   assert.match(table, /getRowId: \(row\) => `\$\{layerId\}:\$\{activeTab\}:\$\{row.__index\}`/);
   assert.match(table, /useVirtualizer\(\{/);
   assert.match(button, /createFilenameCopyAction\(filename, setStatus\)/);

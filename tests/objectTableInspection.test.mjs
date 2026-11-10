@@ -192,7 +192,7 @@ test('diagnostic table keeps result in row metadata, inspected-field colour, mov
   assert.match(source, /const ROW_HEIGHT = 28/);
   assert.match(source, /const widths = \{ zoom: 36 \}/);
   assert.match(source, /useVirtualizer\(/);
-  assert.match(source, /className="flex-1 overflow-auto"/);
+  assert.match(source, /className="gmi-focus-ring flex-1 overflow-auto"/);
 });
 
 test('contextual missing-field display is presentation-only and whole-layer cell behavior stays unchanged', async () => {

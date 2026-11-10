@@ -144,7 +144,8 @@ test('table UI contract: compact toolbar input, local state, clear/focus, counts
   assert.match(toolbar, /setLayerDataTableTab\(layerId, 'punkter'\)/);
   assert.match(toolbar, /setLayerDataTableTab\(layerId, 'ledninger'\)/);
   assert.match(source, /\[searchQuery, setSearchQuery\] = useState\(''\)/);
-  assert.match(source, /filterTableSearchRows\(items, normalizedSearchQuery\)/);
+  assert.match(source, /deriveLayerTableRows\(\{/);
+  assert.match(source, /searchQuery: normalizedSearchQuery/);
   assert.match(source, /data: searchedItems/);
   assert.match(source, /const filteredCount = items.length/);
   assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : items/);
