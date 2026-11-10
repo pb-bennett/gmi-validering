@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, DownloadSimpleIcon, MagnifyingGlassIcon, TableIcon, StackIcon } from '@phosphor-icons/react';
+import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, DownloadSimpleIcon, TableIcon, StackIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
-  describeGmiEditStatus, describeGmiObject, gmiChangeSetDependents, gmiEditDownloadState, gmiEditMessage, gmiObjectContext,
+  describeGmiEditStatus, gmiChangeSetDependents, gmiEditDownloadState, gmiEditMessage,
   gmiObjectKey, scopeToTableTab, summarizeGmiEditCounts, GMI_EDIT_TABLE_VIEWS,
 } from '@/lib/gmiEditView.mjs';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
@@ -24,61 +24,9 @@ import GmiLayerFilters from './GmiLayerFilters';
 import './gmiEdit.css';
 
 export const GMI_EDIT_INSPECTOR_ROOT_ID = 'gmi-edit-inspector-root';
-const LIST_PAGE = 200;
-const NO_CELLS = Object.freeze([]);
-// Memo bodies avoid optional chains on possibly-null values: the React Compiler can turn
-// `value?.field` into a non-optional memo dependency (`value.field`) and crash on null.
-
-function ObjectList({ layer, scope, onScope, query, onQuery, changedOnly, onChangedOnly, changedObjects, selectedKey, onSelect }) {
-  'use no memo';
-  const listKey = `${scope}|${query.trim().toLowerCase()}|${changedOnly}`;
-  const [page, setPage] = useState({ key: listKey, limit: LIST_PAGE });
-  const limit = page.key === listKey ? page.limit : LIST_PAGE;
-  const data = layer.data || null;
-  const objects = useMemo(() => (data ? (scope === 'line' ? data.lines : data.points) : null) || [], [data, scope]);
-  const needle = query.trim().toLowerCase();
-  const rows = useMemo(() => {
-    const out = [];
-    objects.forEach((object, sourceIndex) => {
-      const key = gmiObjectKey(scope, sourceIndex);
-      if (changedOnly && !changedObjects.has(key)) return;
-      const title = describeGmiObject(scope, sourceIndex, object.id ?? null);
-      const context = gmiObjectContext(object.attributes);
-      if (needle && !`${title} ${context} ${object.guid || ''}`.toLowerCase().includes(needle)) return;
-      out.push({ key, sourceIndex, title, context, changed: changedObjects.has(key) });
-    });
-    return out;
-  }, [objects, scope, changedOnly, changedObjects, needle]);
-  const lines = layer.data?.lines?.length || 0, points = layer.data?.points?.length || 0;
-  return <div className="gmi-edit-object-panel">
-    <div className="gmi-edit-list-controls">
-      <div className="gmi-edit-segmented" role="group" aria-label="Objekttype">
-        {[['line', `Ledninger (${lines})`], ['point', `Punkter (${points})`]].map(([key, text]) => <button key={key} type="button" aria-pressed={scope === key}
-          className={`gmi-compact-button gmi-focus-ring${scope === key ? ' gmi-selected-control' : ''}`} onClick={() => onScope(key)}>{text}</button>)}
-      </div>
-      <div className="gmi-edit-search">
-        <MagnifyingGlassIcon size={14} aria-hidden="true" />
-        <input type="search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Søk nummer, tema, GUID…" aria-label="Søk etter objekt" />
-      </div>
-      <label className="gmi-edit-check"><input type="checkbox" checked={changedOnly} onChange={(event) => onChangedOnly(event.target.checked)} />Bare objekter med rettinger</label>
-    </div>
-    <ul className="gmi-edit-object-list" aria-label={scope === 'line' ? 'Ledninger' : 'Punkter'}>
-      {rows.slice(0, limit).map((row) => <li key={row.key}>
-        <button type="button" className="gmi-edit-object-row gmi-focus-ring" aria-pressed={row.key === selectedKey} data-object-key={row.key}
-          onClick={() => onSelect({ scope, sourceIndex: row.sourceIndex })}>
-          <span className="gmi-edit-object-title">{row.title}{row.changed && <span className="gmi-edit-changed-pill">Rettet</span>}</span>
-          {row.context && <span className="gmi-edit-object-context">{row.context}</span>}
-        </button>
-      </li>)}
-      {!rows.length && <li className="gmi-edit-empty">{changedOnly ? 'Ingen objekter med rettinger.' : 'Ingen objekter funnet.'}</li>}
-      {rows.length > limit && <li><button type="button" className="gmi-edit-link gmi-edit-pad" onClick={() => setPage({ key: listKey, limit: limit + LIST_PAGE })}>Vis flere ({rows.length - limit} til)</button></li>}
-    </ul>
-  </div>;
-}
-
 /**
  * Rettinger: individual corrections of one imported GMI survey layer.
- * Left panel (this component): layer and session status, objects, change
+ * Left panel (this component): layer and session status, filters, change
  * list, undo/redo and the revised-GMI download. The object editor is
  * portalled into the right inspector slot rendered by the page.
  */
@@ -95,10 +43,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const setLayerDataTableTab = useStore((state) => state.setLayerDataTableTab);
   const tableOpenOnLayer = useStore((state) => state.ui.layerDataTable?.isOpen && state.ui.layerDataTable?.layerId === layerId);
 
-  const [tab, setTab] = useState('objects');
-  const [scope, setScope] = useState(() => (layer?.data?.lines?.length ? 'line' : 'point'));
-  const [query, setQuery] = useState('');
-  const [changedOnly, setChangedOnly] = useState(false);
+  const [tab, setTab] = useState('filter');
   const [selected, setSelected] = useState(null);
   const [activeChangeSetId, setActiveChangeSetId] = useState(null);
   const [pending, setPending] = useState(null);   // { title, body, confirmLabel, run }
@@ -118,11 +63,12 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const onBatchDirtyChange = useCallback((dirty) => { batchDirtyRef.current = dirty; dirtyRef.current = dirty || objectDirtyRef.current; onDraftChange?.(dirtyRef.current); }, [onDraftChange]);
   const registerBatchReset = useCallback((reset) => { batchResetRef.current = reset; }, []);
 
-  // Enter with the existing object-list scope, even if another layer or a Validator inspection was open.
+  // The Data Table owns geometry. Preserve its explicit per-layer choice; a fresh layer defaults to lines.
   const enterObjectTable = useEffectEvent(() => {
     if (!layer) return;
+    const storedTab = useStore.getState().ui.layerDataTable?.activeTabByLayer?.[layerId];
     openLayerDataTable(layerId);
-    setLayerDataTableTab(layerId, scopeToTableTab(correction ? 'line' : scope));
+    setLayerDataTableTab(layerId, correction ? 'ledninger' : storedTab || (layer.data?.lines?.length ? 'ledninger' : 'punkter'));
   });
   useEffect(() => { enterObjectTable(); }, [layerId]);
   // Also covers temporary workspace unmounts, e.g. opening FOTO through the page guard.
@@ -139,8 +85,6 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
 
   const presentation = describeGmiEditStatus(descriptor);
   const editable = presentation.editable && Boolean(view);
-  const changedList = view ? view.changedCells : NO_CELLS;
-  const changedObjects = useMemo(() => new Set(changedList.map((cell) => gmiObjectKey(cell.scope, cell.sourceIndex))), [changedList]);
   const selectedKey = selected ? gmiObjectKey(selected.scope, selected.sourceIndex) : null;
   const selectedObject = selected ? (selected.scope === 'line' ? layer?.data?.lines : layer?.data?.points)?.[selected.sourceIndex] ?? null : null;
 
@@ -165,7 +109,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const enterCorrection = useEffectEvent(() => {
     if (!correction) return;
     setBatchOpen(false); setBatchInspector(true); setBatchInspected(null); setDetailId(null);
-    setScope('line'); openLayerDataTable(layerId); setLayerDataTableTab(layerId, 'ledninger');
+    openLayerDataTable(layerId); setLayerDataTableTab(layerId, 'ledninger');
     setFormRevision((revision) => revision + 1);
   });
   useEffect(() => { enterCorrection(); }, [correction]);
@@ -195,7 +139,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       setActiveChangeSetId(changeSetId); setDetailId(null); syncObjectTable(target); return;
     }
     guard(() => {
-      setSelected(target); setScope(target.scope); setActiveChangeSetId(changeSetId); setDetailId(null); highlight(target);
+      setSelected(target); setActiveChangeSetId(changeSetId); setDetailId(null); highlight(target);
       syncObjectTable(target);
     });
   }, [guard, highlight, selected, syncObjectTable, batchInspector, layer]);
@@ -349,16 +293,13 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     <GmiFullValidation view={view} layerId={layerId} guard={guard} />
     <div className="gmi-edit-tabs" role="tablist" aria-label="Rettinger">
       <button type="button" role="tab" aria-selected={tab === 'filter'} className="gmi-focus-ring" onClick={() => setTab('filter')}>Filter</button>
-      <button type="button" role="tab" aria-selected={tab === 'objects'} className="gmi-focus-ring" onClick={() => setTab('objects')}>Objekter</button>
       <button type="button" role="tab" aria-selected={tab === 'changes'} className="gmi-focus-ring" onClick={() => setTab('changes')}>
         Endringer{view?.changeSets.length ? ` (${view.changeSets.length})` : ''}
       </button>
       {!tableOpenOnLayer && <PhotoIconButton icon={TableIcon} size={16} label="Åpne datatabell" className="gmi-edit-tab-tool" onClick={() => openLayerDataTable(layerId)} />}
     </div>
     <div className="gmi-edit-body">
-      {tab === 'filter' ? <GmiLayerFilters layerId={layerId} layer={layer} status={status} /> : tab === 'objects'
-        ? <ObjectList layer={layer} scope={scope} onScope={(nextScope) => { setScope(nextScope); syncObjectTable({ scope: nextScope }); }} query={query} onQuery={setQuery} changedOnly={changedOnly} onChangedOnly={setChangedOnly}
-          changedObjects={changedObjects} selectedKey={selectedKey} onSelect={(target) => select(target)} />
+      {tab === 'filter' ? <GmiLayerFilters layerId={layerId} layer={layer} status={status} />
         : <GmiChangeList changeSets={view?.changeSets || []} redoCount={view?.redo.length || 0} effective={view?.effective} activeChangeSetId={activeChangeSetId}
           detailChangeSetId={batchInspector ? null : detailChangeSet?.id || null} editable={editable} onSelectObject={(target, id) => select(target, id)}
           onDiscard={discard} onShowDetail={view ? showChangeSet : undefined} />}
@@ -385,7 +326,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       : detailChangeSet && view ? <div className="gmi-edit-editor">{renderChangeSet(detailChangeSet, 'history')}</div>
       : <GmiObjectEditor key={`${selectedKey}:${view?.handle.sessionId || descriptor?.state}:${formRevision}`} view={view} status={descriptor}
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate}
-      onStaged={() => { setChangedOnly(false); }} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}
+      onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}
     {exportOpen && view && <GmiExportDialog layerId={layerId} view={view} status={status} onClose={() => setExportOpen(false)} />}
     {batchOpen && view && <GmiBatchDialog view={view} onClose={() => setBatchOpen(false)} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice({ tone: 'ok', text: `Lagt til: ${changeSet.label}` }); }} />}

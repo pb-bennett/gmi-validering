@@ -85,8 +85,7 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
         await browser.evaluate(`Array.from(${felt}.querySelectorAll('button')).find(e => e.innerText.startsWith('Ledninger (')).click()`);
         await browser.waitFor(`${table}.dataset.tableGeometry === 'ledninger'`);
         await click('Bare valgte'); await count(2); assert.deepEqual(await selected(), [0, 2]);
-        await click('Objekter', workspace);
-        assert.equal(await browser.evaluate(`${workspace}.querySelectorAll('[data-object-key]').length`), 3);
+        assert.equal(await browser.evaluate(`${workspace}.querySelectorAll('[data-object-key]').length`), 0);
         await click('Filter', workspace); await click('Nullstill filtre', panel);
       });
 

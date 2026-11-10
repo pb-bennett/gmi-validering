@@ -102,7 +102,7 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
   // A review is bound to the session value it was built on; any staged, undone or discarded change voids it.
   const reviewStale = review && review.stateKey !== view?.session?.stateKey;
 
-  if (!object) return <div className="gmi-edit-inspector-empty"><p>Velg et objekt i listen eller i datatabellen for å se og rette verdiene.</p></div>;
+  if (!object) return <div className="gmi-edit-inspector-empty"><p>Velg en rad i datatabellen for å se og rette objektets verdier.</p></div>;
 
   const title = describeGmiObject(scope, sourceIndex, object.id ?? null);
   const context = gmiObjectContext(object.attributes);

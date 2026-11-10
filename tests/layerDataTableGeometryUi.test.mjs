@@ -33,13 +33,13 @@ test('R1: geometry survives Felt and Tema hide/show; explicit scope and inspecti
       await setPhotoFiles(browser, 'input[type=file]', [path.join(GMI_EDIT_FIXTURE_DIR, 'core-crlf-latin1.gmi')]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
 
-      await t.test('fresh Rettinger entry and explicit list scope switches synchronise table geometry', async () => {
+      await t.test('fresh Rettinger entry and explicit table switches retain one geometry context', async () => {
         await browser.evaluate('document.querySelector("[data-gmi-edit-action]").click()');
         await browser.waitFor(workspace);
         await geometry('ledninger');
-        await browser.waitFor(`${workspace}.querySelector('[aria-label="Objekttype"] button[aria-pressed=true]')?.innerText === 'Ledninger (3)'`);
-        await click('Punkter (3)', workspace); await geometry('punkter');
-        await click('Ledninger (3)', workspace); await geometry('ledninger');
+        assert.equal(await browser.evaluate(`${workspace}.querySelector('[role=tab][aria-selected=true]').innerText`), 'Filter');
+        await click('Punkter', table); await geometry('punkter');
+        await click('Ledninger', table); await geometry('ledninger');
         await click('Tilbake til appen', workspace);
         await browser.waitFor(`!${workspace}`);
       });

@@ -57,10 +57,9 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
       await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
       await browser.waitFor(box(0));
 
-      await t.test('object numbers come from source identity through sorting, search, virtualization and the object list', async () => {
+      await t.test('object numbers come from source identity through sorting, search and virtualization', async () => {
         assert.deepEqual((await headers()).slice(0, 3), ['', '', 'Nr.']);
         assert.equal(await numbersMatchSource(), true);
-        assert.match(await text(`${workspace}.querySelector('[data-object-key="line:37"]')`), /Ledning 138/);
         // Numeric columns may start descending; click until the highest number leads.
         for (let i = 0; i < 3 && await browser.evaluate(`${grid}.querySelector('[data-table-row]').dataset.tableRow !== '47'`); i++) await click('Sorter etter objektnummer');
         await browser.waitFor(`${grid}.querySelector('[data-table-row]').dataset.tableRow === '47'`);

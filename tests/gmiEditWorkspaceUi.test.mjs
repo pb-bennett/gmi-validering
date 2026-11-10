@@ -1,3 +1,4 @@
+import { clickGmiTableObject } from './helpers/gmiTableNavigation.mjs';
 // M4 browser test: the Rettinger workspace in the real app (production build
 // or dev server at PHOTO_UI_URL), driven through the visible UI only.
 // Synthetic M0 fixtures; downloads go to a temporary directory.
@@ -43,7 +44,7 @@ function ui(browser) {
     input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const edit = (field, value) => setValue(`${row(field)}.querySelector('input')`, value);
   const selectObject = async (key) => {
-    await browser.evaluate(`${workspace}.querySelector('[data-object-key="${key}"]').click()`);
+    await clickGmiTableObject(browser, key);
   };
   const waitObject = (key) => browser.waitFor(`${editor}?.dataset.gmiObject === ${JSON.stringify(key)}`);
   const text = (expression) => browser.evaluate(`(${expression})?.innerText ?? null`);
@@ -284,9 +285,6 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
 
       await t.test('reset with unsaved corrections: cancel keeps GMI, FOTO and page state; confirm discards', async () => {
         assert(downloaded);
-        await browser.evaluate(`Array.from(${workspace}.querySelectorAll('[role=tab]')).find((e) => e.innerText === 'Objekter').click()`);
-        await browser.evaluate(`Array.from(${workspace}.querySelectorAll('.gmi-edit-segmented button')).find((e) => e.innerText.startsWith('Punkter')).click()`);
-        await browser.waitFor(`${workspace}.querySelector('[data-object-key="point:1"]')`);
         await u.selectObject('point:1');
         await u.waitObject('point:1');
         await u.edit('Kumform', 'R');

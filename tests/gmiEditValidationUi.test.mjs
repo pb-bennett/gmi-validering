@@ -1,3 +1,4 @@
+import { clickGmiTableObject } from './helpers/gmiTableNavigation.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -30,7 +31,7 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
       input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     const select = async (key) => {
-      await browser.evaluate(`${workspace}.querySelector('[data-object-key="${key}"]').click()`);
+      await clickGmiTableObject(browser, key);
       await browser.waitFor(`${editor}?.dataset.gmiObject === ${JSON.stringify(key)}`);
     };
     const checked = () => browser.waitFor(`${editor}.querySelector('[data-gmi-object-validation]')?.innerText.startsWith('Objektkontroll:')`);
@@ -173,9 +174,9 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
 
       await t.test('scope switches synchronise the table; object selection still guards the draft', async () => {
         await edit('Merknad', 'Behold utkast');
-        await click('Punkter (1)', workspace);
-        assert.equal(await tableType(), 'Punkter', 'explicit list scope switches the associated table');
-        await browser.evaluate(`${workspace}.querySelector('[data-object-key="point:0"]').click()`);
+        await click('Punkter', 'document.querySelector("[data-table-geometry]")');
+        assert.equal(await tableType(), 'Punkter', 'explicit table geometry switches the browsing context');
+        await clickGmiTableObject(browser, 'point:0');
         await browser.waitFor('document.querySelector("dialog[open][data-gmi-confirm=workspace]")');
         await click('Avbryt', 'document.querySelector("dialog[open]")');
         assert.equal(await tableType(), 'Punkter', 'cancelling object selection keeps the explicit scope');
@@ -187,7 +188,7 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
         await click('Ledninger', 'document.querySelector(".gmi-edit-table-modes").parentElement');
         await select('point:0');
         assert.equal(await tableType(), 'Punkter', 'reselecting the same object restores its table type');
-        await click('Ledninger (3)', workspace); await select('line:0'); await checked();
+        await click('Ledninger', 'document.querySelector("[data-table-geometry]")'); await select('line:0'); await checked();
         assert.equal(await tableType(), 'Ledninger');
       });
 

@@ -33,7 +33,7 @@ test('R6A both hosts mount the one shared implementation; display-only context c
   assert.match(editing, /geometryTab=\{geometry\}/);
   assert.doesNotMatch(shared + editing, /changeGmiEditSelection|gmiEditSelection:|gmiBatchTableReview:|openGmiEditWorkspace|createGmiBatchCorrection/);
   assert.match(workspace, /<GmiLayerFilters/);
-  assert.match(workspace, /<ObjectList/);
+  assert.doesNotMatch(workspace, /ObjectList|data-object-key/);
   assert.match(workspace, /<GmiChangeList/);
 });
 

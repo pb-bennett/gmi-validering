@@ -305,7 +305,9 @@ export default function LayerDataTable() {
   const sourceData = importedLayer?.data;
   const objectIdOf = useCallback((objectScope, index) => (objectScope === 'line' ? sourceData?.lines : sourceData?.points)?.[index]?.id ?? null, [sourceData]);
   const identityMatches = useMemo(() => showObjectNumber
-    ? (item, query) => gmiObjectMatchesQuery(query, scope, item.__index, objectIdOf(scope, item.__index)) : null, [showObjectNumber, scope, objectIdOf]);
+    // Preserve source-GUID lookup from the retired list; numeric queries keep Nr. semantics.
+    ? (item, query) => gmiObjectMatchesQuery(query, scope, item.__index, objectIdOf(scope, item.__index))
+      || (!/^\d+$/.test(query) && typeof item.guid === 'string' && item.guid.toLowerCase().includes(query)) : null, [showObjectNumber, scope, objectIdOf]);
   const columnFocus = showObjectNumber && !isContextualInspection && columnFocusRequest?.layerId === layerId ? columnFocusRequest : null;
   const columnFocusActive = Boolean(columnFocus && columnFocusOff !== columnFocus.key);
   const focusFields = columnFocusActive ? columnFocus.fields : NO_FIELDS;

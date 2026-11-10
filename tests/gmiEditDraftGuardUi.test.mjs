@@ -1,3 +1,4 @@
+import { clickGmiTableObject } from './helpers/gmiTableNavigation.mjs';
 // M4 follow-up: unsubmitted Rettinger form values (a draft, no staged
 // ChangeSet) must never be lost silently. Every page-level path that would
 // unmount the workspace goes through the workspace's own draft dialog:
@@ -36,7 +37,7 @@ function ui(browser) {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
     input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const select = async (key) => {
-    await browser.evaluate(`${workspace}.querySelector('[data-object-key="${key}"]').click()`);
+    await clickGmiTableObject(browser, key);
     await browser.waitFor(`${editor}?.dataset.gmiObject === ${JSON.stringify(key)}`);
   };
   const openRettinger = async () => {

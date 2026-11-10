@@ -1,3 +1,4 @@
+import { clickGmiTableObject } from './helpers/gmiTableNavigation.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -120,8 +121,7 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
       });
       await t.test('verified Foreslått and unchanged Original, retained selection and remaining exact targets', async () => {
         await click('Avslutt', dialog);
-        await click('Objekter', workspace);
-        await browser.evaluate(`${workspace}.querySelector('[data-object-key="line:0"]').click()`);
+        await clickGmiTableObject(browser, 'line:0');
         await browser.waitFor(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input')`);
         await value(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input')`, '17.0');
         await click('Punkter', 'document.querySelector("[data-table-geometry]")');
