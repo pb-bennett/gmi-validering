@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowSquareOutIcon, CaretDownIcon } from '@phosphor-icons/react';
+import { Fragment } from 'react';
 
 const STATUS_TONES = Object.freeze({
   red: 'error',
@@ -29,6 +30,11 @@ export default function ValidationV2RuleList({
   canCorrect,
   onCorrect,
 }) {
+  // Share the widest value across the list so every category stays aligned,
+  // including datasets with counts larger than three digits.
+  const countSlotWidth = Math.max(3, ...presentations.flatMap(({ counts }) => [
+    counts.failCount, (counts.checkCount || 0) + counts.indeterminateCount, counts.passCount,
+  ].map((value) => String(value).length)));
   return (
     <div className="gmi-elevated-surface divide-y divide-gmi-border overflow-hidden rounded-lg">
       {presentations.map((presentation) => {
@@ -37,11 +43,12 @@ export default function ValidationV2RuleList({
         const isExpanded = expandedRuleKey === presentation.expansionKey;
         const { counts } = presentation;
         const checkCount = (counts.checkCount || 0) + counts.indeterminateCount;
-        const visibleCounts = [
+        const countSlots = [
           { tone: 'error', value: counts.failCount },
           { tone: 'warning', value: checkCount },
           { tone: 'success', value: counts.passCount },
-        ].filter(({ value }) => value > 0);
+        ];
+        const visibleCounts = countSlots.filter(({ value }) => value > 0);
         const countLabel = `${counts.evaluatedCount} objekter i kontrollgrunnlaget: ${counts.failCount} FEIL, ${checkCount} SJEKK, ${counts.passCount} OK.${counts.notEvaluatedCount > 0 ? ` Ikke evaluert: ${counts.notEvaluatedCount}.` : ''}${visibleCounts.length === 0 ? ' Ingen tellbare resultater.' : ''}`;
         return (
           <div key={presentation.expansionKey}>
@@ -64,12 +71,13 @@ export default function ValidationV2RuleList({
               <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gmi-navy">
                 {presentation.displayName}
               </span>
-              <span title={countLabel} aria-hidden="true" className="gmi-validation-rule-counts shrink-0 whitespace-nowrap text-[11px] tabular-nums text-gmi-text">
-                {visibleCounts.length === 0 ? 'Ingen resultater' : visibleCounts.map(({ tone, value }, index) => (
-                  <span key={tone}>
-                    {index > 0 && ' · '}
-                    <span data-validation-tone={tone} className="gmi-validation-accent font-medium">{value}</span>
-                  </span>
+              <span title={countLabel} aria-hidden="true" className="gmi-validation-rule-counts inline-grid shrink-0 items-baseline whitespace-nowrap text-[11px] font-medium tabular-nums text-gmi-text"
+                style={{ gridTemplateColumns: `repeat(2, ${countSlotWidth}ch 1.5ch) ${countSlotWidth}ch` }}>
+                {visibleCounts.length === 0 ? <span className="col-span-5 text-right font-normal">Ingen resultater</span> : countSlots.map(({ tone, value }, index) => (
+                  <Fragment key={tone}>
+                    <span data-validation-count-slot={tone} data-validation-tone={value > 0 ? tone : undefined} className="gmi-validation-accent text-right font-medium">{value > 0 ? value : null}</span>
+                    {index < 2 && <span data-validation-count-separator className="text-center">{value > 0 && countSlots[index + 1].value > 0 ? ' · ' : null}</span>}
+                  </Fragment>
                 ))}
               </span>
               <span aria-hidden="true" className="ml-1 shrink-0 text-gmi-text-subtle">

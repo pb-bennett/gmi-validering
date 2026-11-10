@@ -79,6 +79,14 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
           const summary = header.querySelector('.gmi-validation-rule-counts'), name = header.children[1];
           return { text: summary.textContent, title: summary.title, label: header.getAttribute('aria-label'),
             values: Array.from(summary.querySelectorAll('[data-validation-tone]')).map(s => [s.dataset.validationTone, s.textContent]),
+            slots: Array.from(summary.querySelectorAll('[data-validation-count-slot]')).map(s => ({
+              tone: s.dataset.validationCountSlot, text: s.textContent,
+              left: s.getBoundingClientRect().left, right: s.getBoundingClientRect().right, width: s.getBoundingClientRect().width,
+              fits: s.scrollWidth <= s.clientWidth,
+            })),
+            separators: Array.from(summary.querySelectorAll('[data-validation-count-separator]')).map(s => s.textContent.trim()),
+            width: summary.getBoundingClientRect().width,
+            gap: header.lastElementChild.getBoundingClientRect().left - summary.getBoundingClientRect().right,
             fits: header.scrollWidth <= header.clientWidth, height: summary.getBoundingClientRect().height,
             truncated: name.scrollWidth > name.clientWidth, overflow: getComputedStyle(name).textOverflow };
         })`);
@@ -89,8 +97,25 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
         ];
         examples.forEach((example, index) => {
           assert.deepEqual(example.values, cases[index]);
-          assert.equal(example.text, cases[index].length ? cases[index].map(([, value]) => value).join(' · ') : 'Ingen resultater');
+          const values = new Map(cases[index]);
+          const ordered = ['error', 'warning', 'success'].map(tone => values.get(tone) || '');
+          const expectedText = ordered.map((value, i) => value + (i < 2 && value && ordered[i + 1] ? ' · ' : '')).join('');
+          assert.equal(example.text, cases[index].length ? expectedText : 'Ingen resultater');
           assert(!/[()]/.test(example.text)); assert(example.fits); assert(example.height < 20);
+          assert(example.gap >= 8);
+          assert(Math.abs(example.width - examples[0].width) < .1, 'summary width stays stable, including fallback');
+          if (cases[index].length) {
+            assert.deepEqual(example.slots.map(s => s.tone), ['error', 'warning', 'success']);
+            assert.deepEqual(example.slots.map(s => s.text), ordered, 'zero categories have empty slots');
+            assert.deepEqual(example.separators, ordered.slice(0, 2).map((value, i) => value && ordered[i + 1] ? '·' : ''));
+            example.slots.forEach((slot, i) => {
+              const reference = examples[0].slots[i];
+              assert(Math.abs(slot.left - reference.left) < .1, `${slot.tone} left edge aligned`);
+              assert(Math.abs(slot.right - reference.right) < .1, `${slot.tone} numeric right edge aligned`);
+              assert(Math.abs(slot.width - reference.width) < .1 && slot.width > 0, 'blank slots retain full width');
+              assert(slot.fits, 'large counts fit their slots');
+            });
+          }
         });
         assert.match(examples[2].title, /169 objekter.*0 FEIL, 0 SJEKK, 169 OK/);
         assert.match(examples[6].label, /0 objekter.*0 FEIL, 0 SJEKK, 0 OK.*Ingen tellbare resultater/);
@@ -117,6 +142,20 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
         }
       }
     }
+    await browser.evaluate('document.querySelectorAll("main > button")[1].click()');
+    await browser.waitFor('document.querySelectorAll("button[aria-expanded]").length === 10');
+    const largeSlots = await browser.evaluate(`Array.from(document.querySelectorAll('button[aria-expanded]')).map(header =>
+      Array.from(header.querySelectorAll('[data-validation-count-slot]')).map(s => ({
+        right: s.getBoundingClientRect().right, width: s.getBoundingClientRect().width,
+        text: s.textContent, fits: s.scrollWidth <= s.clientWidth,
+      })))`);
+    assert.deepEqual(largeSlots.at(-1).map(s => s.text), ['12345', '1', '65']);
+    largeSlots.forEach(slots => slots.forEach((slot, i) => {
+      assert(Math.abs(slot.right - largeSlots[0][i].right) < .1);
+      assert.equal(slot.width, largeSlots[0][i].width); assert(slot.fits);
+    }));
+    await browser.evaluate('document.querySelectorAll("main > button")[1].click()');
+    await browser.waitFor('document.querySelectorAll("button[aria-expanded]").length === 9');
     await browser.evaluate('document.querySelector("button[aria-expanded]").click()');
     await browser.waitFor('document.querySelector("[role=region]")');
     assert.match(await browser.evaluate('document.querySelector("[role=region]").textContent'), /Objekter73Feil5Sjekk1Pass67Vis/);
@@ -132,6 +171,7 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
     await browser.evaluate('document.querySelector("main > button").click()');
     await browser.waitFor('document.querySelector("button[aria-expanded] .gmi-validation-rule-counts").textContent === "73"');
     assert.equal(await browser.evaluate('document.querySelector("button[aria-expanded] .gmi-validation-rule-counts [data-validation-tone]").dataset.validationTone'), 'success');
+    assert.deepEqual(await browser.evaluate('Array.from(document.querySelectorAll("button[aria-expanded] .gmi-validation-rule-counts")[0].querySelectorAll("[data-validation-count-slot]")).map(s => s.textContent)'), ['', '', '73']);
     assert.match(await browser.evaluate('document.querySelector("button[aria-expanded]").getAttribute("aria-label")'), /73 objekter.*0 FEIL, 0 SJEKK, 73 OK/);
     assert.match(await browser.evaluate('document.querySelector("[role=region]").textContent'), /Objekter73Pass73Vis/);
     await browser.evaluate('document.querySelector("button[aria-expanded]").click()');
