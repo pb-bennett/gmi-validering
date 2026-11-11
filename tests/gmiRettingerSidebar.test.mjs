@@ -21,6 +21,6 @@ test('R6B has only Filter/Endringer, with one geometry owner and the existing gu
   assert.match(workspace, /onSelectObject=\{\(target, id\) => select\(target, id\)\}/);
   assert.match(editor, /Velg en rad i datatabellen/);
   assert.doesNotMatch(editor, /Velg et objekt i listen/);
-  assert.match(table, /showObjectNumber\s*\n.*\n.*gmiObjectMatchesQuery/);
+  assert.match(table, /showObjectNumber\s*\r?\n.*\r?\n.*gmiObjectMatchesQuery/);
   assert.match(table, /typeof item.guid === 'string' && item.guid.toLowerCase\(\).includes\(query\)/);
 });

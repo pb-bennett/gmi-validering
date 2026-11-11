@@ -5,7 +5,7 @@
 // `listGmiObjectCells`. Nothing here edits, patches or verifies; every
 // correction still goes through `createGmiObjectCorrection` and the registry.
 // User-facing text is Norwegian and never includes raw exception text.
-import { isGmiFieldEditReservedColumn, validateGmiFieldLexeme } from './gmi-edit/index.mjs';
+import { checkGmiFieldDraft, gmiEditColumnPolicy } from './gmiEditFields.mjs';
 
 export const GMI_EDIT_TABLE_VIEWS = Object.freeze({
   ORIGINAL: 'original',
@@ -207,21 +207,13 @@ export function gmiObjectContext(attributes = {}) {
   return parts.join(' · ');
 }
 
-// Identifier-like columns stay read-only even though M1 could patch them:
-// object identity (GUIDs, ids) is checked by the edit engine and must not move.
-const IDENTIFIER_COLUMN = /^(s_)?(guid|uuid|objid|objekt_?id|lokal_?id|id)$/i;
-
 /**
  * UI editing policy for one M1 cell (`listGmiObjectCells` entry). Returns
  * `{editable, reason}`; the reason is a code for gmiEditMessage. The engine's
  * own reasons always win; the UI only adds restrictions.
  */
 export function gmiEditFieldPolicy(cell) {
-  if (!cell) return Object.freeze({ editable: false, reason: 'field-absent' });
-  if (isGmiFieldEditReservedColumn(cell.field)) return Object.freeze({ editable: false, reason: 'field-owned-by-photo-delivery' });
-  if (!cell.editable) return Object.freeze({ editable: false, reason: cell.reason || 'document-not-editable' });
-  if (IDENTIFIER_COLUMN.test(String(cell.field).trim())) return Object.freeze({ editable: false, reason: 'identifier-column' });
-  return Object.freeze({ editable: true, reason: null });
+  return gmiEditColumnPolicy(cell);
 }
 
 /** Parser-equivalent missing (the parser trims, then maps '' to null). */
@@ -262,8 +254,8 @@ export function planGmiObjectForm(rows, drafts, encodingClass) {
     const draft = drafts[row.field];
     if (draft === row.proposed) continue;
     edited.push(row.field);
-    const check = validateGmiFieldLexeme(draft, encodingClass);
-    if (!check.ok) { problems[row.field] = gmiLexemeProblem(check, draft); continue; }
+    const check = checkGmiFieldDraft(row, draft, encodingClass, { restrictEnumeration: false, normalizeCase: false });
+    if (!check.ok) { problems[row.field] = gmiLexemeProblem(check.problem, draft); continue; }
     values[row.field] = draft;
     if (!gmiLexemeMissing(row.original)) needsOverwrite.push(row.field);
     if (row.touched) needsReplace.push(row.field);
