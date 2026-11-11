@@ -41,7 +41,7 @@ test('G4 point presentation preserves exclusions, manual applicability, exact va
   const rows = gmiFieldInspectorRows(prepared.preview, batch, selection, false, null);
   assert.deepEqual(rows['point:0'].change, { from: '', to: 'OD', overwrites: false });
   assert.deepEqual(rows['point:2'].change, { from: 'ID', to: 'OD', overwrites: true });
-  assert.deepEqual(gmiInspectorMixedFields(prepared.preview, batch.dryRun.current.dataset, selection), ['Tema', 'InnvendigUtvendig']);
+  assert.deepEqual(gmiInspectorMixedFields(prepared.preview, batch.dryRun.current.dataset, batch.changeSet), ['Tema', 'InnvendigUtvendig']);
   assert(gmiBatchDatasetFindings(batch.dryRun).every((finding) => finding.reason && !finding.reason.includes('REQUIRED_')));
   const narrowed = { ...selection, keys: ['point:0'] };
   assert.equal(gmiFieldInspectorRows(prepared.preview, batch, narrowed, false, null)['point:1'].outcome, 'excluded');
@@ -54,6 +54,63 @@ test('G4 point presentation preserves exclusions, manual applicability, exact va
   assert.equal(presentation.canManual, true);
   assert.equal(presentation.detail, 'Gjelder ikke ifølge Validator');
   assert.deepEqual(presentation.hypothetical.change, { from: '', to: 'R' });
+});
+
+test('G4 mixed gate compares only objects that change in the checked ChangeSet', async () => {
+  const document = await loadGmiSourceDocument(gmiFieldBatchFixture());
+  const session = createGmiEditSession(document, { layerId: 'g4-mixed' });
+  const handle = { layerId: 'g4-mixed', sessionId: 'g4-mixed-session', fingerprint: document.fingerprint };
+  const view = { document, session, handle };
+  const dataset = getGmiProposedState(session).dataset;
+  const mixed = async (scope, indices, sourceKey, operation, value) => {
+    const selection = { binding: handle, scope, keys: indices.map((index) => `${scope}:${index}`) };
+    const prepared = await prepareGmiFieldBatch(view, { scope, sourceKey, operation, value, selection });
+    assert.equal(prepared.ok, true, `${sourceKey} preview`);
+    const candidate = buildGmiFieldBatch(session, prepared.preview);
+    assert.equal(candidate.ok, true, `${sourceKey} batch`);
+    const changing = candidate.changeSet.cells.map((cell) => cell.sourceIndex);
+    return { changing, fields: gmiInspectorMixedFields(prepared.preview, dataset, candidate.changeSet) };
+  };
+  // Fill-missing: one empty and one populated line. Only the empty one changes.
+  assert.deepEqual(await mixed('line', [0, 1], 'Material', 'fill-missing', 'PVC'), { changing: [0], fields: [] });
+  // A skipped object with another Tema (VL vs SP) does not make the change mixed.
+  assert.deepEqual(await mixed('line', [0, 2], 'Material', 'fill-missing', 'PE'), { changing: [0], fields: [] });
+  // Mixed across the selection (empty, blank, populated) but uniform among the changing objects.
+  assert.deepEqual(await mixed('point', [0, 1, 3], 'InnvendigUtvendig', 'fill-missing', 'OD'), { changing: [0, 1], fields: [] });
+  // Two changing objects with different Tema still raise Tema.
+  assert.deepEqual(await mixed('line', [0, 2], 'Merknad', 'set', 'Kontrollert'), { changing: [0, 2], fields: ['Tema'] });
+  // Set mode: an object that already has the value is unchanged and ignored (VL PE vs SP unlisted).
+  assert.deepEqual(await mixed('line', [1, 2], 'Material', 'set', 'PE'), { changing: [2], fields: [] });
+  // Set mode overwriting different existing values still raises the edited field.
+  assert.deepEqual(await mixed('line', [0, 1, 2], 'Merknad', 'set', 'Kontrollert'), { changing: [0, 1, 2], fields: ['Tema', 'Merknad'] });
+  assert.deepEqual(await mixed('point', [0, 2], 'InnvendigUtvendig', 'set', 'OD'), { changing: [0, 2], fields: ['Tema', 'InnvendigUtvendig'] });
+  // A single changing object is never mixed, and no ChangeSet means no mix.
+  assert.deepEqual(await mixed('point', [2], 'InnvendigUtvendig', 'set', 'OD'), { changing: [2], fields: [] });
+  assert.deepEqual(gmiInspectorMixedFields(null, dataset, null), []);
+});
+
+test('S3 one severity symbol mapping is shared by the object editor, batch inspector, risk dialog and table', async () => {
+  const source = (file) => readFile(new URL(`../src/${file}`, import.meta.url), 'utf8');
+  const icon = await source('components/gmi-edit/GmiSeverityIcon.js');
+  assert.match(icon, /error: XCircleIcon, warning: WarningIcon, success: CheckCircleIcon/);
+  assert.match(icon, /weight="regular" aria-hidden="true"/);
+  for (const file of ['components/gmi-edit/GmiObjectEditor.js', 'components/gmi-edit/GmiBatchInspector.js', 'components/LayerDataTable.js']) {
+    const text = await source(file);
+    assert.match(text, /import GmiSeverityIcon\b.*from '\.\/(gmi-edit\/)?GmiSeverityIcon'/, file);
+    assert.doesNotMatch(text, /WarningCircleIcon|WarningOctagonIcon|XCircleIcon/, `${file} must use the shared mapping`);
+  }
+  const editor = await source('components/gmi-edit/GmiObjectEditor.js');
+  assert.match(editor, /icon=\{GMI_SEVERITY_ICONS\[tone\]\}/);
+  // Selectors used by the M5A browser checks stay on the finding control.
+  assert.match(editor, /data-severity=\{finding\.state\} data-transition=\{finding\.transition\}/);
+  const inspector = await source('components/gmi-edit/GmiBatchInspector.js');
+  assert.match(inspector, /<GmiSeverityIcon tone=\{tone\} size=\{14\} \/>\{newCount\(count, label\)\}/, 'severity count pills');
+  assert.match(inspector, /<GmiSeverityIcon tone=\{tone\} size=\{16\} \/>\{title\}/, 'risk dialog groups');
+  assert.match(inspector, /<GmiSeverityIcon tone=\{finding\.tone\} size=\{13\} \/><strong>\{finding\.severity\}/, 'inspected-object findings');
+  assert.match(await source('components/LayerDataTable.js'), /<GmiSeverityIcon tone=\{first\.tone\} size=\{13\} \/>/);
+  // The compact accent is an alias of the existing yellow-700, not a new colour.
+  assert.match(await source('app/globals.css'), /--gmi-validation-compact-warning-text: var\(--gmi-validation-rule-count-warning-text\);/);
+  assert.doesNotMatch(await source('components/gmi-edit/gmiEdit.css'), /gmi-review-hypothetical \{ opacity/);
 });
 
 test('G4 hydraulic fill preserves M2 populated exclusions even when the listed value is equal', async () => {

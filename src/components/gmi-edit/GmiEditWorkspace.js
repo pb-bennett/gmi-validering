@@ -48,7 +48,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const [activeChangeSetId, setActiveChangeSetId] = useState(null);
   const [pending, setPending] = useState(null);   // { title, body, confirmLabel, run }
   const [exportOpen, setExportOpen] = useState(false);
-  const [notice, setNotice] = useState(null);
+  const [notice, setNotice] = useState(null);   // { tone, text, redoId? }
+  const noticeRef = useRef(null), focusNotice = useRef(false);
   const [formRevision, setFormRevision] = useState(0);
   const correction = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.correction : null);
   const [batchOpen, setBatchOpen] = useState(false);
@@ -192,9 +193,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     return () => onGuardChange?.(null);
   }, [onGuardChange, guard]);
 
-  const runTransition = (result, text) => {
+  const runTransition = (result, text, extra = null) => {
     if (!result.ok) { setNotice({ tone: 'error', text: gmiEditMessage(result.code) }); return false; }
-    setNotice({ tone: 'ok', text });
+    setNotice({ tone: 'ok', text, ...extra });
     return true;
   };
   const labelOf = (id) => view?.changeSets.find((changeSet) => changeSet.id === id)?.label
@@ -206,7 +207,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   };
   const undo = ({ reveal = true } = {}) => {
     const id = view?.changeSets.at(-1)?.id, label = labelOf(id), target = firstObjectOf(id);
-    if (runTransition(gmiEditSessions.undo(view.handle), `Angret: ${label}`) && target && reveal) select(target, null);
+    // The notice offers «Gjør om» while this entry is next on the redo stack.
+    if (runTransition(gmiEditSessions.undo(view.handle), `Angret: ${label}`, { redoId: id }) && target && reveal) select(target, null);
   };
   /** Open one history entry's details in the right inspector (through the draft guard). */
   const showChangeSet = (id) => {
@@ -232,6 +234,12 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     const id = view?.redo.at(-1)?.id, label = labelOf(id), target = firstObjectOf(id);
     if (runTransition(gmiEditSessions.redo(view.handle), `Gjort om: ${label}`) && target) select(target, id);
   };
+  /** Contextual «Gjør om» (notice, Endringer): the footer redo, then keep keyboard focus on the result. */
+  const redoInContext = () => { focusNotice.current = true; redo(); };
+  useEffect(() => {
+    if (!focusNotice.current) return;
+    focusNotice.current = false; noticeRef.current?.focus();
+  }, [notice]);
   const discard = (id) => {
     const dependents = gmiChangeSetDependents(view.changeSets, id);
     const perform = () => {
@@ -266,6 +274,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const detailChangeSet = detailId ? view?.changeSets.find((changeSet) => changeSet.id === detailId) || null : null;
   const counts = summarizeGmiEditCounts(status);
   const downloadState = gmiEditDownloadState(status);
+  // Stage, discard and discard-all clear the redo stack; another undo/redo changes its top.
+  const noticeRedo = Boolean(notice?.redoId && editable && view?.redo.at(-1)?.id === notice.redoId);
   const problem = openError && descriptor?.state !== 'editable' && descriptor?.state !== 'read-only' && descriptor?.state !== 'error' ? gmiEditMessage(openError) : null;
 
   return <section className="gmi-edit-workspace" aria-label="Rettinger" data-gmi-edit-state={descriptor?.state || 'none'}>
@@ -288,7 +298,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
         {(descriptor?.state === 'error' || descriptor?.state === 'invalidated') && <button type="button" className="gmi-edit-link" onClick={retry}>Åpne filen på nytt</button>}
       </div>}
       {problem && <p className="gmi-edit-message" data-tone="error" role="alert">{problem}</p>}
-      {notice && <p className="gmi-edit-message gmi-edit-notice" data-tone={notice.tone} role="status">{notice.text}</p>}
+      {notice && <p ref={noticeRef} tabIndex={-1} className="gmi-edit-message gmi-edit-notice" data-tone={notice.tone} role="status">{notice.text}
+        {noticeRedo && <>{' '}<button type="button" className="gmi-edit-link gmi-focus-ring" data-gmi-context-redo="notice" onClick={redoInContext}>Gjør om</button></>}</p>}
     </header>
     <GmiFullValidation view={view} layerId={layerId} guard={guard} />
     <div className="gmi-edit-tabs" role="tablist" aria-label="Rettinger">
@@ -300,7 +311,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     </div>
     <div className="gmi-edit-body">
       {tab === 'filter' ? <GmiLayerFilters layerId={layerId} layer={layer} status={status} />
-        : <GmiChangeList changeSets={view?.changeSets || []} redoCount={view?.redo.length || 0} effective={view?.effective} activeChangeSetId={activeChangeSetId}
+        : <GmiChangeList changeSets={view?.changeSets || []} redoCount={view?.redo.length || 0} effective={view?.effective}
+          redoLabel={view?.redo.length ? labelOf(view.redo.at(-1).id) : null} onRedo={editable && view?.summary.canRedo ? redoInContext : undefined} activeChangeSetId={activeChangeSetId}
           detailChangeSetId={batchInspector ? null : detailChangeSet?.id || null} editable={editable} onSelectObject={(target, id) => select(target, id)}
           onDiscard={discard} onShowDetail={view ? showChangeSet : undefined} />}
     </div>

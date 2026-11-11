@@ -17,6 +17,8 @@
   --gmi-validation-warning-dot: var(--color-orange-500);
   /* Compact rule counts reuse the established yellow warning text palette. */
   --gmi-validation-rule-count-warning-text: var(--color-yellow-700);
+  /* Rettinger's compact SJEKK icons and labels: an alias of the same yellow-700, not a new colour. */
+  --gmi-validation-compact-warning-text: var(--gmi-validation-rule-count-warning-text);
   --gmi-validation-success-bg: var(--color-green-50);
   --gmi-validation-success-text: var(--color-green-800);
   --gmi-validation-success-border: var(--color-green-200);

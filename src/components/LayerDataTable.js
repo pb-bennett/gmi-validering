@@ -18,13 +18,14 @@ import {
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowCounterClockwiseIcon, ArrowsInLineVerticalIcon, ArrowsOutLineVerticalIcon, ListChecksIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon,
-  MinusCircleIcon, PencilSimpleIcon, PlusCircleIcon, TextColumnsIcon, WarningIcon, WarningOctagonIcon, XIcon,
+  MinusCircleIcon, PencilSimpleIcon, PlusCircleIcon, TextColumnsIcon, XIcon,
 } from '@phosphor-icons/react';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import { normalizeTableSearchQuery, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
 import { deriveLayerTableRows } from '@/lib/layerTableRows.mjs';
 import { gmiSelectionBinding, sameGmiSelectionBinding, gmiSelectionKey, gmiSelectionCounts } from '@/lib/gmiEditSelection.mjs';
 import GmiConfirmDialog from './gmi-edit/GmiConfirmDialog';
+import GmiSeverityIcon from './gmi-edit/GmiSeverityIcon';
 import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
 import FilenameCopyButton from '@/components/FilenameCopyButton';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
@@ -61,10 +62,9 @@ function ReviewFindings({ entry }) {
   if (!findings) return null;
   if (!findings.length) return actual ? <span className="gmi-review-none">Ingen nye funn</span> : null;
   const [first, ...rest] = findings;
-  const Icon = first.tone === 'error' ? WarningOctagonIcon : WarningIcon;
   const title = findings.map((finding) => `${finding.severity}${finding.introduced ? ' (ny)' : ''}: ${finding.reason}`).join('\n');
   return <span className={`gmi-review-finding truncate${actual ? '' : ' gmi-review-hypothetical'}`} data-validation-tone={first.tone} title={actual ? title : `Hvis inkludert:\n${title}`}>
-    <Icon size={13} weight="regular" aria-hidden="true" />
+    <GmiSeverityIcon tone={first.tone} size={13} />
     <span className="min-w-0 truncate">{!actual && 'Hvis inkludert: '}<strong>{first.severity}{first.introduced ? ' (ny)' : ''}</strong> {first.reason}{rest.length > 0 && ` · +${rest.length}`}</span>
   </span>;
 }

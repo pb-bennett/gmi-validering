@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowsClockwiseIcon, CheckCircleIcon, CheckIcon, HandPointingIcon, SealWarningIcon, WarningIcon, WarningOctagonIcon } from '@phosphor-icons/react';
+import { ArrowsClockwiseIcon, CheckIcon, HandPointingIcon, SealWarningIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { getGmiProposedState } from '@/lib/gmi-edit/index.mjs';
@@ -13,6 +13,7 @@ import useGmiBatchValidation from './useGmiBatchValidation';
 import { gmiSelectionTargets, gmiInspectorFields, gmiFieldInspectorRows, gmiInspectorMixedFields, gmiBatchDatasetFindings, gmiBatchFindingList, gmiBatchSkipSummary, GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
 import { gmiEditMessage, gmiLexemeProblem, describeGmiObject, gmiObjectCountLabel } from '@/lib/gmiEditView.mjs';
 import GmiConfirmDialog from './GmiConfirmDialog';
+import GmiSeverityIcon from './GmiSeverityIcon';
 import { Lexeme } from './GmiObjectEditor';
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1';
@@ -24,18 +25,16 @@ const newCount = (count, label) => `${count} ${count === 1 ? 'ny' : 'nye'} ${lab
 
 /** "1 ny FEIL" / "0 nye SJEKK": always visible, coloured only when non-zero. */
 function SeverityCount({ count, tone, label }) {
-  const Icon = tone === 'error' ? WarningOctagonIcon : WarningIcon;
   return <span className="gmi-severity-count" data-validation-tone={count ? tone : undefined} data-count={count}>
-    <Icon size={14} weight="regular" aria-hidden="true" />{newCount(count, label)}
+    <GmiSeverityIcon tone={tone} size={14} />{newCount(count, label)}
   </span>;
 }
 
 /** Finding list for the risk dialog: most severe group first, with objects. */
 function RiskFindings({ tone, title, findings }) {
   if (!findings.length) return null;
-  const Icon = tone === 'error' ? WarningOctagonIcon : WarningIcon;
   return <div className="gmi-risk-group" data-validation-tone={tone}>
-    <p className="gmi-risk-group-title"><Icon size={16} weight="regular" aria-hidden="true" />{title}</p>
+    <p className="gmi-risk-group-title"><GmiSeverityIcon tone={tone} size={16} />{title}</p>
     <ul>{findings.map((finding) => <li key={finding.key}><strong>{finding.objects.join(', ')}</strong>: {finding.reason}</li>)}</ul>
   </div>;
 }
@@ -157,7 +156,8 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     const changeSet = checked.changeSet;
     const manualRows = plan.rows.filter((row) => row.outcome === 'changed' && ['not-applicable', 'unresolved'].includes(row.reason))
       .map((row) => ({ key: row.key, label: describeGmiObject(row.scope, row.sourceIndex, row.objectId), reason: tableRows[row.key].detail }));
-    const mixed = gmiInspectorMixedFields(review.preview, checked.dryRun.current.dataset, selection);
+    // Only the objects that actually change in the checked ChangeSet can be mixed.
+    const mixed = gmiInspectorMixedFields(review.preview, checked.dryRun.current.dataset, changeSet);
     const unvalidated = review.preview.column.validatorKind !== 'bound' || !review.preview.column.governingRuleId;
     if (!approval && (manualRows.length || changeSet.counts.populatedOverwrites || changeSet.counts.overwritten
       || checked.dryRun.diff.newCounts.fail || mixed.length || unvalidated)) {
@@ -284,7 +284,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
         {inspectedReview.resolvedFindings?.length > 0 && <ul>{inspectedReview.resolvedFindings.map((finding) => <li key={finding.key}>Løses hvis objektet endres: {finding.reason}</li>)}</ul>}
         {['change', 'manual'].includes(inspectedOutcome?.outcome) ? null : <p className="gmi-edit-muted">Funnene under gjelder bare hvis objektet faktisk endres.</p>}
         <ul className="gmi-batch-finding-list">{[...gmiBatchFindingList(inspectedReview.findings), ...gmiBatchFindingList(inspectedReview.otherFindings)].map((finding) => <li key={finding.key} data-validation-tone={finding.tone}>
-          <strong>{finding.severity}{finding.introduced ? ' (ny)' : ''}</strong>: {finding.reason}</li>)}</ul></>}
+          <GmiSeverityIcon tone={finding.tone} size={13} /><strong>{finding.severity}{finding.introduced ? ' (ny)' : ''}</strong>: {finding.reason}</li>)}</ul></>}
       <dl>{Object.entries(detail.attributes).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{detail.attributes[GMI_SOURCE_LEXEMES]?.[key] ?? String(value ?? '')}</dd></div>)}</dl>
     </details>}
     {risk && <GmiConfirmDialog testId="batch-risk" tone="risk" confirmIcon={SealWarningIcon}
@@ -295,7 +295,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
         const findings = risk.findings.filter((finding) => finding.tone === tone && finding.introduced);
         return <RiskFindings key={tone} tone={tone} title={newCount(findings.length, label)} findings={findings} />;
       })}
-      {risk.mixed.length > 0 && <p>Blandet utvalg: {risk.mixed.join(', ')}. Bekreft at samme verdi skal brukes på disse objektene.</p>}
+      {risk.mixed.length > 0 && <p>Blandet blant objektene som endres: {risk.mixed.join(', ')}. Bekreft at samme verdi skal brukes på disse objektene.</p>}
       {risk.unvalidated && <p>Feltet kontrolleres ikke av Validator. Bekreft at verdien er vurdert manuelt.</p>}
       {risk.manualRows.length > 0 && <div className="gmi-manual-note gmi-risk-manual">
         <HandPointingIcon size={16} weight="regular" aria-hidden="true" />
@@ -305,7 +305,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       {(risk.changeSet.counts.populatedOverwrites > 0 || risk.changeSet.counts.overwritten > 0) && <p>{risk.changeSet.counts.populatedOverwrites} utfylte verdier overskrives. {risk.changeSet.counts.overwritten} tidligere rettinger erstattes.</p>}
       {risk.findings.some((finding) => !finding.introduced) && <details className="gmi-edit-muted"><summary>Eksisterende funn på feltet ({risk.findings.filter((finding) => !finding.introduced).length})</summary>
         <ul>{risk.findings.filter((finding) => !finding.introduced).map((finding) => <li key={finding.key}>{finding.severity}: {finding.reason} ({finding.objects.join(', ')})</li>)}</ul></details>}
-      {!risk.findings.some((finding) => finding.introduced) && <p className="gmi-severity-none"><CheckCircleIcon size={14} weight="regular" aria-hidden="true" /> Ingen nye FEIL eller SJEKK for objektene som endres.</p>}
+      {!risk.findings.some((finding) => finding.introduced) && <p className="gmi-severity-none"><GmiSeverityIcon tone="success" size={14} /> Ingen nye FEIL eller SJEKK for objektene som endres.</p>}
     </GmiConfirmDialog>}
   </section>;
 }

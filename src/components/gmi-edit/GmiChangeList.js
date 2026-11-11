@@ -8,13 +8,25 @@ const ORIGIN = Object.freeze({ 'object-editor': 'Objektretting', batch: 'Samlere
 
 const OBJECT_PREVIEW = 6;
 
+const undoneCount = (count) => `${count} angret ${count === 1 ? 'retting' : 'rettinger'} kan gjøres om`;
+
+/** The next redo as a visible action while editing is possible; otherwise only the count. */
+function RedoHint({ redoCount, redoLabel, onRedo, className }) {
+  if (!redoCount) return null;
+  if (!onRedo || !redoLabel) return <p className={className}>{undoneCount(redoCount)}.</p>;
+  return <p className={className}>
+    <button type="button" className="gmi-edit-link gmi-focus-ring" data-gmi-context-redo="changes" onClick={onRedo}>Gjør om: {redoLabel}</button>
+    {redoCount > 1 && <> · {undoneCount(redoCount)}</>}
+  </p>;
+}
+
 /**
  * Staged ChangeSets in order, newest last (the M2 history; nothing is kept
  * here). A compact history/navigation surface: single-object corrections keep
  * their small field table; multi-object corrections show a summary, and their
  * object-by-object values open in the right inspector («Vis detaljer»).
  */
-export default function GmiChangeList({ changeSets, redoCount, effective, activeChangeSetId, detailChangeSetId, editable, onSelectObject, onDiscard, onShowDetail }) {
+export default function GmiChangeList({ changeSets, redoCount, redoLabel, onRedo, effective, activeChangeSetId, detailChangeSetId, editable, onSelectObject, onDiscard, onShowDetail }) {
   // Opted out of the React Compiler: it turns optional chains on nullable session views (`view?.x`)
   // into non-optional memo dependencies and crashes before a session exists. Derived values are
   // memoized explicitly per published editing revision instead.
@@ -23,7 +35,7 @@ export default function GmiChangeList({ changeSets, redoCount, effective, active
     return <div className="gmi-edit-empty">
       <p>Ingen rettinger er lagt til.</p>
       <p className="gmi-edit-muted">Velg et objekt, endre verdier og velg «Se gjennom» for å legge til en retting.</p>
-      {redoCount > 0 && <p className="gmi-edit-muted">{redoCount} angret {redoCount === 1 ? 'retting' : 'rettinger'} kan gjøres om.</p>}
+      <RedoHint redoCount={redoCount} redoLabel={redoLabel} onRedo={onRedo} className="gmi-edit-muted" />
     </div>;
   }
   return <>
@@ -84,6 +96,6 @@ export default function GmiChangeList({ changeSets, redoCount, effective, active
         </li>;
       })}
     </ol>
-    {redoCount > 0 && <p className="gmi-edit-muted gmi-edit-pad">{redoCount} angret {redoCount === 1 ? 'retting' : 'rettinger'} kan gjøres om.</p>}
+    <RedoHint redoCount={redoCount} redoLabel={redoLabel} onRedo={onRedo} className="gmi-edit-muted gmi-edit-pad" />
   </>;
 }

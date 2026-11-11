@@ -240,7 +240,8 @@
 .gmi-review-none { color: var(--gmi-text-subtle); }
 .gmi-review-finding { display: flex; align-items: center; gap: 3px; min-width: 0; color: var(--validation-text); }
 .gmi-review-finding svg { flex-shrink: 0; color: var(--validation-icon); }
-.gmi-review-finding.gmi-review-hypothetical { opacity: .8; }
+/* Hypothetical findings: muted text instead of opacity, so text and icon keep ≥4.5:1 on selected (cyan-soft) rows. */
+.gmi-review-finding.gmi-review-hypothetical { color: var(--gmi-text-muted); }
 [data-review-outcome=excluded] > [role=gridcell], [data-review-outcome=skipped] > [role=gridcell] { color: var(--gmi-text-subtle); }
 
 /* Batch inspector: header, steps, proposal summary and staging. */
@@ -270,6 +271,13 @@
 .gmi-severity-count { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border: 1px solid var(--gmi-border); border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--gmi-text-subtle); background: var(--gmi-surface); }
 .gmi-severity-count[data-validation-tone] { border-color: var(--validation-border); background: var(--validation-bg); color: var(--validation-text); }
 .gmi-severity-count[data-validation-tone] svg { color: var(--validation-icon); }
+/* S3: compact SJEKK icons and labels in the inspector reuse the rule-count yellow-700 (≥4.6:1 on white, the field-row
+   tints and orange-50 pills). Panels, tooltips and Data Table cells keep the shared orange: selected rows are cyan-soft,
+   where yellow-700 measures 4.39:1. */
+:is(.gmi-edit-finding, .gmi-severity-count, .gmi-batch-finding-list li, .gmi-edit-legend-item)[data-validation-tone='warning'] { --validation-icon: var(--gmi-validation-compact-warning-text); }
+:is(.gmi-severity-count, .gmi-batch-finding-list li)[data-validation-tone='warning'] { color: var(--gmi-validation-compact-warning-text); }
+.gmi-edit-legend-item { white-space: nowrap; }
+.gmi-edit-legend-item svg, .gmi-batch-finding-list li svg { display: inline; vertical-align: -2px; margin-right: 2px; color: var(--validation-icon); }
 .gmi-severity-none { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--gmi-validation-success-text); }
 .gmi-batch-stale { display: grid; gap: 6px; margin-top: 2px; }
 .gmi-batch-stale p { display: flex; align-items: flex-start; gap: 5px; margin: 0; color: var(--gmi-validation-warning-text); font-size: 11.5px; line-height: 1.4; }

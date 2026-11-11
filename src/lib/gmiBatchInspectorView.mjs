@@ -52,18 +52,25 @@ export function gmiFieldInspectorRows(preview, batch, selection, advanced, stale
   return result;
 }
 
-/** G4's basic mixed gate: effective Tema and edited lexeme, including empties. */
-export function gmiInspectorMixedFields(preview, dataset, selection) {
-  if (!preview || !dataset) return [];
-  const selected = new Set(selection.keys), rows = preview.rows.filter((row) => selected.has(row.key));
+/**
+ * G4's basic mixed gate: effective Tema and the edited field's current lexeme
+ * (including empties), compared only across the objects that change in the
+ * checked ChangeSet. Its cells cover manual inclusions and replaced conflicts;
+ * skipped, unchanged and deselected objects have no cell and are ignored.
+ */
+export function gmiInspectorMixedFields(preview, dataset, changeSet) {
+  if (!preview || !dataset || !changeSet) return [];
   const objects = dataset[preview.scope === 'point' ? 'points' : 'lines'];
-  const tema = (row) => {
-    const attributes = objects[row.sourceIndex]?.attributes || {};
+  const changing = [...new Map(changeSet.cells.filter((cell) => cell.scope === preview.scope && cell.field === preview.sourceKey)
+    .map((cell) => [cell.sourceIndex, cell])).values()];
+  if (changing.length < 2) return [];
+  const tema = (cell) => {
+    const attributes = objects[cell.sourceIndex]?.attributes || {};
     const key = Object.keys(attributes).find((name) => /^(tema|s_fcode)$/i.test(name));
     return String(attributes[key] ?? '').trim();
   };
-  return [['Tema', tema], [preview.sourceKey, (row) => String(row.current ?? '').trim()]]
-    .filter(([, value]) => new Set(rows.map(value)).size > 1).map(([field]) => field);
+  return [['Tema', tema], [preview.sourceKey, (cell) => String(cell.previous ?? '').trim()]]
+    .filter(([, value]) => new Set(changing.map(value)).size > 1).map(([field]) => field);
 }
 
 export function gmiBatchDatasetFindings(dryRun, transition = 'introduced') {

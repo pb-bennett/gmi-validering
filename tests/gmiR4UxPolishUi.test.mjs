@@ -17,6 +17,34 @@ const box = (index) => `${grid}.querySelector('[data-table-row="${index}"] input
 const row = (index) => `${grid}.querySelector('[data-table-row="${index}"]')`;
 const ID_OFFSET = 101; // :L numbers deliberately differ from file positions.
 
+// S3: per severity element, its symbol and the WCAG contrast of its text and icon against the nearest opaque
+// background, including any inherited opacity (the hypothetical case). Tokens are normalised through canvas.
+const severityAppearance = (browser, selector) => browser.evaluate(`(() => {
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1; const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const pixel = (layers) => { ctx.clearRect(0, 0, 1, 1); for (const [colour, alpha] of layers) { ctx.globalAlpha = alpha; ctx.fillStyle = colour; ctx.fillRect(0, 0, 1, 1); } ctx.globalAlpha = 1; return Array.from(ctx.getImageData(0, 0, 1, 1).data); };
+  const lum = (rgba) => rgba.slice(0, 3).map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((s, v, i) => s + v * [.2126, .7152, .0722][i], 0);
+  const background = (el) => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (pixel([[c, 1]])[3] === 255) return c; } return '#fff'; };
+  const opacity = (el) => { let o = 1; for (let e = el; e; e = e.parentElement) o *= Number(getComputedStyle(e).opacity); return o; };
+  const ratio = (fg, bg, alpha) => { const a = lum(pixel([[bg, 1], [fg, alpha]])), b = lum(pixel([[bg, 1]])); return (Math.max(a, b) + .05) / (Math.min(a, b) + .05); };
+  const token = (name) => pixel([[getComputedStyle(document.documentElement).getPropertyValue(name).trim(), 1]]).join(',');
+  return { yellow: token('--gmi-validation-compact-warning-text'), orangeText: token('--gmi-validation-warning-text'), orangeIcon: token('--gmi-validation-warning-icon'),
+    items: Array.from(document.querySelectorAll(${JSON.stringify(selector)})).map(el => {
+      const icon = el.querySelector('svg[data-severity-icon]'), bg = background(el), alpha = opacity(el);
+      return { tone: el.dataset.validationTone || null, icon: icon?.dataset.severityIcon || null,
+        text: ratio(getComputedStyle(el).color, bg, alpha), glyph: icon ? ratio(getComputedStyle(icon).color, bg, alpha) : null,
+        color: pixel([[getComputedStyle(el).color, 1]]).join(','), iconColor: icon ? pixel([[getComputedStyle(icon).color, 1]]).join(',') : null,
+        hypothetical: el.classList.contains('gmi-review-hypothetical') };
+    }) };
+})()`);
+const assertSeverityContrast = (label, { items }) => {
+  assert(items.length > 0, `${label}: no severity elements`);
+  for (const item of items) {
+    assert(item.text >= 4.5, `${label} ${item.tone} text contrast ${item.text.toFixed(2)}`);
+    if (item.glyph !== null) assert(item.glyph >= 4.5, `${label} ${item.tone} icon contrast ${item.glyph.toFixed(2)}`);
+  }
+  return items.map((item) => `${item.tone}${item.hypothetical ? '(hyp)' : ''} ${item.text.toFixed(2)}/${item.glyph?.toFixed(2)}`).join(', ');
+};
+
 test('R4 UX polish production: accurate review, object numbers, focus, severity, staging feedback and layouts',
   { skip: !app || !chromePath, timeout: 300000 }, async (t) => {
     const directory = await mkdtemp(path.join(tmpdir(), 'gmi-r4-ux-'));
@@ -135,6 +163,14 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
         const manual = await browser.evaluate(`(() => { const b = ${row(0)}.querySelector('.gmi-manual-toggle'); const s = getComputedStyle(b); return { tag: b.tagName, text: b.innerText.trim(), border: s.borderTopColor, color: s.color, pressed: b.getAttribute('aria-pressed') }; })()`);
         assert.deepEqual(manual, { tag: 'BUTTON', text: 'Inkluder manuelt', border: 'rgb(0, 117, 149)', color: 'rgb(0, 117, 149)', pressed: 'false' });
         assert.match(await text(row(0)), /Hvis inkludert:/);
+        // S3: hypothetical findings keep ≥4.5:1 (no opacity) on the selected row, with the matching symbol.
+        for (const scheme of ['light', 'dark']) {
+          await browser.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] });
+          const hypothetical = await severityAppearance(browser, '.gmi-review-finding.gmi-review-hypothetical');
+          console.log(`S3 hypothetical ${scheme}: ${assertSeverityContrast(`hypothetical ${scheme}`, hypothetical)}`);
+          assert(hypothetical.items.every((item) => item.hypothetical && item.icon === item.tone), JSON.stringify(hypothetical.items));
+        }
+        await browser.send('Emulation.setEmulatedMedia', { features: [] });
         assert.equal(await browser.evaluate(`${row(1)}.querySelector('.gmi-manual-toggle')`), null, 'populated values cannot be manually included in fill mode');
         assert.match(await text(`${inspector}.querySelector('[data-gmi-batch-counts]')`), /0 nye FEIL/, 'hypotheticals are not counted');
         await click('Inkluder manuelt', row(0));
@@ -143,8 +179,30 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
         const chips = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.gmi-severity-count')).map(e => ({ text: e.innerText.trim(), tone: e.dataset.validationTone || null, color: getComputedStyle(e).color }))`);
         assert.deepEqual(chips.map(({ text: label, tone }) => [label, tone]), [['1 ny FEIL', 'error'], ['1 ny SJEKK', 'warning']]);
         assert.notEqual(chips[0].color, chips[1].color);
+        // S3: FEIL ⓧ / SJEKK ⚠ symbols; compact SJEKK pills use the yellow-700 alias, table cells keep the shared orange.
+        for (const scheme of ['light', 'dark']) {
+          await browser.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] });
+          const pills = await severityAppearance(browser, '.gmi-severity-count[data-validation-tone]');
+          const cells = await severityAppearance(browser, '.gmi-review-finding:not(.gmi-review-hypothetical)');
+          console.log(`S3 pills ${scheme}: ${assertSeverityContrast(`pills ${scheme}`, pills)}; table ${assertSeverityContrast(`table ${scheme}`, cells)}`);
+          for (const item of [...pills.items, ...cells.items]) assert.equal(item.icon, item.tone, JSON.stringify(item));
+          const [error, warning] = ['error', 'warning'].map((tone) => pills.items.find((item) => item.tone === tone));
+          assert.equal(warning.color, pills.yellow, 'SJEKK pill text'); assert.equal(warning.iconColor, pills.yellow, 'SJEKK pill icon');
+          assert.notEqual(error.color, warning.color);
+          for (const cell of cells.items.filter((item) => item.tone === 'warning')) assert.equal(cell.color, cells.orangeText, 'Data Table SJEKK keeps the shared orange');
+        }
+        await browser.send('Emulation.setEmulatedMedia', { features: [] });
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await shot(`severity-${width}x${height}`);
+        }
         await browser.waitFor(`${inspector}.getAttribute('aria-busy') === 'false'`);
         await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        // Risk dialog: panels keep the shared orange/red palette with the shared symbols.
+        const groups = await severityAppearance(browser, 'dialog[open] .gmi-risk-group');
+        console.log(`S3 risk groups: ${assertSeverityContrast('risk groups', groups)}`);
+        assert.deepEqual(groups.items.map((item) => [item.tone, item.icon]), [['error', 'error'], ['warning', 'warning']]);
+        assert.equal(groups.items[1].color, groups.orangeText); assert.equal(groups.items[1].iconColor, groups.orangeIcon);
         const dialog = await browser.evaluate(`(() => {
           const d = ${risk}; const groups = Array.from(d.querySelectorAll('.gmi-risk-group')).map(e => e.dataset.validationTone);
           const approve = Array.from(d.querySelectorAll('button')).find(e => e.innerText.trim() === 'Godkjenn og legg til');

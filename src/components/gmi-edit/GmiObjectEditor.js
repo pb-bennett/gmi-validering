@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowCounterClockwiseIcon, CheckCircleIcon, CrosshairSimpleIcon, LockSimpleIcon, WarningCircleIcon, WarningIcon } from '@phosphor-icons/react';
+import { ArrowCounterClockwiseIcon, CrosshairSimpleIcon, LockSimpleIcon, WarningIcon } from '@phosphor-icons/react';
 import fieldsData from '@/data/fields.json';
 import { createGmiObjectCorrection, listGmiObjectCells } from '@/lib/gmi-edit/index.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
@@ -11,14 +11,18 @@ import {
 } from '@/lib/gmiEditView.mjs';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import useGmiObjectValidation from './useGmiObjectValidation';
+import GmiSeverityIcon, { GMI_SEVERITY_ICONS, gmiFindingTone } from './GmiSeverityIcon';
 
 function FindingIcon({ finding }) {
-  const tone = finding.transition === 'resolved' ? 'success' : finding.state === 'FAIL' ? 'error' : 'warning';
-  return <PhotoIconButton icon={finding.transition === 'resolved' ? CheckCircleIcon : WarningCircleIcon} size={18}
+  const tone = gmiFindingTone(finding);
+  return <PhotoIconButton icon={GMI_SEVERITY_ICONS[tone]} size={18}
     label={finding.tooltip} tooltip={finding.tooltip} className="gmi-edit-finding"
     tooltipTone={tone} data-validation-tone={tone}
     data-gmi-finding={finding.ruleId} data-severity={finding.state} data-transition={finding.transition} />;
 }
+
+/** One severity in the object-check legend: the same symbol as the field icons, plus its name. */
+const LegendItem = ({ tone, children }) => <span className="gmi-edit-legend-item" data-validation-tone={tone}><GmiSeverityIcon tone={tone} size={12} />{children}</span>;
 
 const fieldLabel = (field) => fieldsData.find((entry) => entry.fieldKey === field)?.label || null;
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-3 py-1.5 text-xs font-medium';
@@ -241,7 +245,8 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
       </div>}
     </form>}
     {view && <p className="gmi-edit-muted" data-gmi-object-validation aria-live="polite">
-      {validation.pending ? 'Kontrollerer objektet…' : 'Objektkontroll: rødt = FEIL · oransje = SJEKK · + = nytt · grønn hake = løst.'}
+      {validation.pending ? 'Kontrollerer objektet…' : <>Objektkontroll: <LegendItem tone="error">FEIL</LegendItem> · <LegendItem tone="warning">SJEKK</LegendItem> · + = nytt
+        · <LegendItem tone="success">løst</LegendItem>.</>}
       {' '}NYTT-år på tvers av objekter vurderes ikke lokalt.
     </p>}
     {unboundFindings.length > 0 && <details className="gmi-edit-unbound-findings">

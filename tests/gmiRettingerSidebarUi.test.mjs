@@ -19,6 +19,7 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
       if (!e || e.disabled) throw new Error('Unavailable: ' + ${JSON.stringify(label)}); e.click(); })()`);
     const input = (selector, value) => browser.evaluate(`(() => { const e = ${selector}; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(e, ${JSON.stringify(value)}); e.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     const edit = (field, value) => input(`${editor}.querySelector('tr[data-field="${field}"] input')`, value);
+    const text = (expression) => browser.evaluate(`${expression}.innerText`);
     const focus = async (key) => { await clickGmiTableObject(browser, key); await browser.waitFor(`${editor}?.dataset.gmiObject === ${JSON.stringify(key)}`); };
     const open = async () => {
       await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
@@ -77,6 +78,50 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         await click('Gjør om retting', workspace);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
         await click('Original', table);
+      });
+
+      await t.test('S6: contextual «Gjør om» after undo restores the same entry, keeps the draft guard and disappears on a new stage', async () => {
+        const redoButtons = () => browser.evaluate(`Array.from(${workspace}.querySelectorAll('[data-gmi-context-redo]')).map(e => [e.dataset.gmiContextRedo, e.innerText.trim(), e.tabIndex, e.disabled])`);
+        const entry = () => browser.evaluate(`${workspace}.querySelector('[data-change-set]')?.dataset.changeSet ?? null`);
+        const id = await entry(), label = await text(`${workspace}.querySelector('.gmi-edit-change-label')`);
+        assert(id && label);
+        assert.deepEqual(await redoButtons(), []);
+        // 1. Footer undo: notice and Endringer both offer the redo; keyboard Enter activates it.
+        await click('Angre siste retting', workspace);
+        await browser.waitFor(`!${workspace}.querySelector('[data-gmi-edit-counts]')`);
+        assert((await text(`${workspace}.querySelector('.gmi-edit-notice')`)).startsWith(`Angret: ${label}`));
+        assert.deepEqual(await redoButtons(), [['notice', 'Gjør om', 0, false], ['changes', `Gjør om: ${label}`, 0, false]]);
+        await browser.evaluate(`${workspace}.querySelector('[data-gmi-context-redo=notice]').focus()`);
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' });
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+        await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
+        assert.equal(await entry(), id, 'the same ChangeSet id is restored');
+        assert.deepEqual(await redoButtons(), [], 'nothing left to redo');
+        assert.match(await text(`${workspace}.querySelector('.gmi-edit-notice')`), /^Gjort om: /);
+        assert.equal(await browser.evaluate(`document.activeElement === ${workspace}.querySelector('.gmi-edit-notice')`), true, 'focus is not dropped to body');
+        // 2. Undo from the ChangeSet details; redo from Endringer goes through the same draft guard as the footer.
+        await click('Vis detaljer', workspace);
+        await click('Angre', 'document.querySelector(".gmi-edit-inspector")');
+        await browser.waitFor(`!${workspace}.querySelector('[data-gmi-edit-counts]')`);
+        assert.equal((await redoButtons()).length, 2);
+        await focus('line:0'); await edit('Merknad', 'S6-utkast');
+        await click(`Gjør om: ${label}`, workspace);
+        const confirm = 'document.querySelector("dialog[open][data-gmi-confirm=workspace]")';
+        await browser.waitFor(confirm); await click('Avbryt', confirm);
+        assert.equal(await entry(), id, 'redo applied before the guard, exactly as the footer redo');
+        assert.equal(await browser.evaluate(`${editor}.dataset.gmiObject`), 'line:0');
+        assert.equal(await browser.evaluate(`${editor}.querySelector('tr[data-field=Merknad] input').value`), 'S6-utkast', 'draft kept');
+        await click('Forkast skjema', editor);
+        // 3. A new stage clears the redo stack: both contextual actions disappear.
+        await click('Angre siste retting', workspace);
+        await browser.waitFor(`${workspace}.querySelector('[data-gmi-context-redo=notice]')`);
+        await focus('line:1');
+        await edit('SDR', '11'); await click('Se gjennom (1)', editor);
+        await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`); await click('Legg til retting', editor);
+        await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
+        assert.notEqual(await entry(), id);
+        assert.deepEqual(await redoButtons(), []);
+        assert.equal(await browser.evaluate(`${workspace}.querySelector('.gmi-edit-history [aria-label="Gjør om retting"]').getAttribute('aria-disabled')`), 'true');
       });
 
       await t.test('row navigation still guards drafts; table closure has an accessible reopen path', async () => {

@@ -95,11 +95,22 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await stage();
         assert.equal(await browser.evaluate(`${workspace}.querySelectorAll('[data-change-set]').length`), 1);
         const id = await browser.evaluate(`${workspace}.querySelector('[data-change-set]').getAttribute('data-change-set')`);
+        const contextRedo = () => browser.evaluate(`Array.from(${workspace}.querySelectorAll('[data-gmi-context-redo]')).map(e => [e.dataset.gmiContextRedo, e.innerText.trim()])`);
+        // S6: undo from the staged batch view offers a visible «Gjør om» that restores the same entry.
+        await click('Angre', inspector);
+        await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===0 && ${inspector}.dataset.batchStep!=='3'`);
+        assert.deepEqual((await contextRedo()).map(([where, label]) => [where, label.startsWith('Gjør om')]), [['notice', true], ['changes', true]]);
+        await browser.evaluate(`${workspace}.querySelector('[data-gmi-context-redo=notice]').click()`);
+        await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===1`);
+        assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-change-set]').getAttribute('data-change-set')`), id);
+        assert.deepEqual(await contextRedo(), []);
         await click('Angre siste retting', workspace);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===0`);
+        assert.equal((await contextRedo()).length, 2, 'footer undo also offers the contextual redo');
         await click('Gjør om retting', workspace);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===1`);
         assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-change-set]').getAttribute('data-change-set')`), id);
+        assert.deepEqual(await contextRedo(), [], 'the footer redo removes the contextual actions');
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
         await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
         const exportDialog = `document.querySelector('dialog[open].gmi-edit-export')`;
@@ -120,12 +131,18 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await selectObjects('Ledninger', [0, 1]);
         await choose('Felt for masseendring', 'Material'); await choose('Ny verdi', 'PE'); await preview();
         assert.match(await text(), /1 av 2 ledninger endres/);
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk); assert.match(await text(risk), /Blandet utvalg: Material/);
-        await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
+        // S1 (deliberate update): only the empty line changes, so the populated,
+        // skipped line no longer makes the selection «mixed». It stages directly.
+        await ready(); await click('Legg til masseendring', inspector);
+        await browser.waitFor(`${risk} || ${inspector}.dataset.batchStep==='3'`);
+        assert.equal(await browser.evaluate(`Boolean(${risk})`), false, 'no mixed dialog for a skipped populated object');
+        await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
         await click('Ny masseendring for utvalget', inspector);
         await choose('Felt for masseendring', 'Merknad'); await input('Kontrollert');
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await preview();
         await click('Legg til masseendring', inspector); await browser.waitFor(risk); assert.match(await text(risk), /1 utfylte verdier overskrives/);
+        // Both lines change and their current Merknad differs (tom vs «old»): still mixed.
+        assert.match(await text(risk), /Blandet blant objektene som endres: Merknad\./);
         await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
         await click('Ny masseendring for utvalget', inspector);
         await choose('Felt for masseendring', 'Merknad'); await input('Ny vurdering');
@@ -153,12 +170,23 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         assert.match(await text(risk), /kontrolleres ikke av Validator/); await click('Tilbake til utvalget', risk);
       });
 
-      await t.test('mixed point Tema and existing values are named before approval', async () => {
+      await t.test('mixed point Tema and existing values are named only across the objects that change', async () => {
         await selectObjects('Punkter', [0, 4]);
+        // S1 (deliberate update): point 1 already has «OD» from the first ChangeSet and is unchanged, so only
+        // the KUM point changes. The overwrite still needs approval; the LOK/KUM mix is no longer reported.
         await choose('Felt for masseendring', 'InnvendigUtvendig'); await choose('Ny verdi', 'OD');
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await preview();
+        assert.match(await text(), /1 av 2 punkter endres/);
         await click('Legg til masseendring', inspector); await browser.waitFor(risk);
-        assert.match(await text(risk), /Blandet utvalg: Tema, InnvendigUtvendig/);
+        assert.match(await text(risk), /1 utfylte verdier overskrives/);
+        assert.doesNotMatch(await text(risk), /Blandet/);
+        await click('Tilbake til utvalget', risk);
+        // Both points change (LOK 650 and KUM 1000): Tema and the edited field are still named.
+        await click('Endre oppsett', inspector); await choose('Felt for masseendring', 'Bredde'); await input('800');
+        await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await preview();
+        assert.match(await text(), /2 av 2 punkter endres/);
+        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        assert.match(await text(risk), /Blandet blant objektene som endres: Tema, Bredde/);
         await click('Tilbake til utvalget', risk);
       });
 
