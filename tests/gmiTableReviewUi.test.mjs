@@ -37,10 +37,22 @@ test('R4 follow-up production: frozen layout, review sorting, actual severity an
       await browser.waitFor(`${row(0)}?.querySelector('input[type=checkbox]')`);
       for (const index of [0, 1, 2, 3]) await browser.evaluate(`${row(index)}.querySelector('input[type=checkbox]').click()`);
       await click('Rediger valgte (4)'); await browser.waitFor(inspector);
-      await browser.evaluate(`(() => { const i = ${inspector}.querySelector('[aria-label="Ny verdi"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, '11'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      // Since G4 the inspector starts without a field (deliberate setup fix: this test failed at the Pass 1 baseline).
+      const choose = (label, value) => browser.evaluate(`(() => { const e = ${inspector}.querySelector('[aria-label=${JSON.stringify(label)}]');
+        const select = e.tagName === 'SELECT'; Object.getOwnPropertyDescriptor(select ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(e, ${JSON.stringify(value)});
+        e.dispatchEvent(new Event(select ? 'change' : 'input', { bubbles: true })); })()`);
+      await choose('Felt for masseendring', 'SDR'); await choose('Ny verdi', '11.0');
       await preview();
+      await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK')`);
+      // S2: an actual change with only unchanged existing findings reads «Ingen nye funn»; existing ones stay in the tooltip.
+      const none = await browser.evaluate(`(() => { const e = ${row(2)}.querySelector('.gmi-review-none'); return e && { text: e.innerText, tip: e.title, existing: Number(e.dataset.existingCount) }; })()`);
+      assert.equal(none?.text, 'Ingen nye funn');
+      if (none.existing) assert.match(none.tip, new RegExp(`${none.existing} eksisterende funn uendret`));
+      assert.match(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-severity').innerText`), /0 nye FEIL[\s\S]*0 nye SJEKK[\s\S]*løst/, 'resolved count is visible without expanding');
       await click('Filtrert visning', 'document.querySelector("[data-gmi-selection-bar]")');
       await browser.waitFor(`${grid}.getAttribute('aria-rowcount') === '81'`);
+      // The view switch revalidates; S2's «løst» pill appears once the full check is ready again.
+      await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK') && ${inspector}.getAttribute('aria-busy') === 'false'`);
       const counts = await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').innerText`);
       await click('Sorter etter Status'); await browser.waitFor(`${first} === '2'`);
       assert.equal(await browser.evaluate(`${row(2)}.querySelector('.gmi-object-number').innerText`), '3');
@@ -69,9 +81,43 @@ test('R4 follow-up production: frozen layout, review sorting, actual severity an
         assert.deepEqual(layout.headers, layout.cells);
         for (let i = 1; i < 4; i++) assert(Math.abs(layout.headers[i].x - layout.headers[i - 1].x - layout.headers[i - 1].width) < 1);
         assert.equal(layout.align, 'left'); assert(layout.scroll); assert(layout.page <= width);
+        // S4: free text is content-sized up to 240 px; codes stay compact; horizontal scrolling stays inside the grid.
+        const columnWidth = (label) => browser.evaluate(`[...${grid}.querySelectorAll('[role=columnheader]')].find(h => h.innerText.trim() === ${JSON.stringify(label)})?.getBoundingClientRect().width`);
+        assert.equal(await columnWidth('Merknad'), 240, `Merknad at ${width}×${height}`);
+        assert((await columnWidth('Nett type')) < 100, 'code column unchanged');
+        assert(await browser.evaluate(`${grid}.getBoundingClientRect().right <= ${width}`));
         const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
         await writeFile(path.join(tmpdir(), `gmi-table-review-${width}.png`), Buffer.from(data, 'base64'));
       }
+      // S4: widths stay stable when filtering (computed from the complete geometry scope).
+      const merknadWidth = () => browser.evaluate(`[...${grid}.querySelectorAll('[role=columnheader]')].find(h => h.innerText.trim() === 'Merknad').getBoundingClientRect().width`);
+      const search = (value) => browser.evaluate(`(() => { const i = document.querySelector('[aria-label="Søk i data"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(value)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      const unfiltered = await merknadWidth();
+      await search('SP'); await browser.waitFor(`${grid}.getAttribute('aria-rowcount') !== '81'`);
+      assert.equal(await merknadWidth(), unfiltered, 'Merknad width is unchanged by filtering');
+      await search(''); await browser.waitFor(`${grid}.getAttribute('aria-rowcount') === '81'`);
+      // S4: keyboard access to the truncated full value: grid row → full-text region (Tab) → Escape back.
+      const key = async (name, code, modifiers = 0) => {
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code: name, windowsVirtualKeyCode: code, modifiers });
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code: name, windowsVirtualKeyCode: code, modifiers });
+      };
+      const fullText = `document.querySelector('[data-table-full-text]')`;
+      await browser.evaluate(`${grid}.focus()`); await key('ArrowDown', 40); await key('ArrowUp', 38);
+      await browser.waitFor(fullText);
+      assert.match(await browser.evaluate(`${fullText}.innerText`), /Merknad:\s*En lang merknad som bevarer god plass for vanlige tekstfelt/);
+      assert.equal(await browser.evaluate(`${fullText}.getAttribute('aria-label')`), 'Full tekst i aktiv rad');
+      const selectedObject = await browser.evaluate(`document.querySelector('[data-gmi-batch-inspector] .gmi-batch-object-detail') !== null`);
+      await key('Enter', 13, 8);
+      assert.equal(await browser.evaluate(`document.activeElement === ${fullText}`), true, 'Shift+Enter reaches the full text');
+      assert.equal(await browser.evaluate(`document.querySelector('[data-gmi-batch-inspector] .gmi-batch-object-detail') !== null`), selectedObject, 'Shift+Enter does not open the object');
+      assert.match(await browser.evaluate(`${fullText}.innerText`), /Shift\+Enter i tabellen/, 'the region states how to reach it');
+      const region = await browser.evaluate(`(() => { const r = ${fullText}.getBoundingClientRect(), g = ${grid}.getBoundingClientRect(); return { height: r.height, grid: g.height, footer: document.getElementById('layer-table-keyboard-help').getBoundingClientRect().height }; })()`);
+      assert(region.height <= 57, `compact region ${JSON.stringify(region)}`);
+      assert(region.footer < 16, 'the keyboard hint still fits on one line');
+      await key('Escape', 27);
+      assert.equal(await browser.evaluate(`document.activeElement === ${grid}`), true, 'Escape returns to the grid');
+      const { data: keyboardShot } = await browser.send('Page.captureScreenshot', { format: 'png' });
+      await writeFile(path.join(tmpdir(), 'gmi-table-review-fulltext-1280.png'), Buffer.from(keyboardShot, 'base64'));
       assert.equal(browser.events.filter((event) => event.method === 'Runtime.exceptionThrown').length, 0);
       assert.deepEqual(await readFile(file), source);
     } catch (error) {

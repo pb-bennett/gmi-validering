@@ -3,7 +3,14 @@ const HORIZONTAL_PADDING = 24;
 const COMPACT_MISSING_FIELD_WIDTH = 104;
 const COMPACT_ORDINARY_COLUMN_WIDTH = 64;
 
-/** Selective sizing; ordinary prose keeps the existing comfortable header width.
+/** Free text (Tekst and other long non-code values) never grows beyond this. */
+export const PROSE_COLUMN_MAX_WIDTH = 240;
+const PROSE_CHARACTER_WIDTH = 6; // Data cells use 10px text.
+
+/** Selective sizing. Codes, numbers, empties and short values stay compact;
+ * free text is sized by its longest value, with the heading as the minimum and
+ * a 240 px cap (S4). The full value stays available through the cell tooltip
+ * and the table's keyboard full-text region.
  * Read the whole geometry scope so search/selection never makes columns jump.
  */
 export function getOrdinaryColumnWidth({ field, label, values = [], format }) {
@@ -17,7 +24,7 @@ export function getOrdinaryColumnWidth({ field, label, values = [], format }) {
     // Keep some header context without allowing long names to dominate short values.
     return Math.min(180, Math.max(64, longest * 6 + 24, Math.min(headerWidth, 88)));
   }
-  return headerWidth;
+  return Math.min(PROSE_COLUMN_MAX_WIDTH, Math.max(headerWidth, longest * PROSE_CHARACTER_WIDTH + 24));
 }
 
 function renderedValue(value) {

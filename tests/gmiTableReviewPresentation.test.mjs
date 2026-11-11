@@ -54,11 +54,45 @@ test('selective widths reclaim short codes/numbers/empty fields while prose keep
   assert(width('InnvendigUtvendig', ['ID', 'UD'], 'Kode') < 100);
   assert(width('Langt numerisk attributtnavn', [null, '', 0, 150]) < 100);
   assert.equal(width('Et tomt attributt med langt navn', [null, '', undefined]), 72);
-  assert.equal(width('En beskrivelse med lang overskrift', ['Dette er en lengre beskrivelse']), 180);
+  // S4 (deliberate update): prose is sized by content with the heading as minimum, 30 chars → 204 (was heading-only 180).
+  assert.equal(width('En beskrivelse med lang overskrift', ['Dette er en lengre beskrivelse']), 204);
   assert(width('Høydereferanse', ['UNDERKANT_UTVENDIG'], 'Kode') > width('Høydereferanse', ['ID'], 'Kode'));
   assert.equal(width('S_FCODE', ['x'.repeat(10000)]), 180);
   const ordinary = getBatchReviewColumnWidths({ a: { outcome: 'change', change, findings: [] } });
   const manual = getBatchReviewColumnWidths({ a: { outcome: 'manual', change, canManual: true, findings: [error] } });
   assert(ordinary.batchStatus < manual.batchStatus);
   assert(ordinary.batchFindings < manual.batchFindings);
+});
+
+test('S4: free text is content-sized with the heading as minimum and a 240 px cap; other columns are unchanged', () => {
+  const merknad = (values, format = 'Tekst') => getOrdinaryColumnWidth({ field: 'Merknad', label: 'Merknad', values, format });
+  const before = (field, values, format) => getOrdinaryColumnWidth({ field, label: field, values, format });
+  assert.equal(merknad(['Kort']), 73, 'short values keep the unchanged compact rule');
+  assert.equal(merknad(['Kontrollert i felt']), 132, '18 characters');
+  assert.equal(merknad(['Kontrollert av feltmåler etter graving.']), 240, '40 characters reach the cap');
+  assert.equal(merknad(['Merknad '.repeat(10)]), 240, '80 characters');
+  assert.equal(merknad(['x'.repeat(10000)]), 240, 'very long values are capped');
+  assert.equal(merknad(['Kontrollert i felt'], undefined), 132, 'unknown free-text fields follow the same rule');
+  assert.equal(merknad(['', null, undefined]), 72, 'empty column');
+  // Codes, numbers and S_FCODE keep their earlier rule, however long the values are.
+  assert(before('Høydereferanse', ['UNDERKANT_UTVENDIG_MED_LANG_KODE'], 'Kode') <= 180);
+  assert(before('Dimensjon', ['1234567890123'], undefined) <= 180);
+  assert.equal(before('S_FCODE', ['x'.repeat(10000)]), 180);
+  // Stability: the width depends only on the complete scope's values, not their order or a filtered subset view.
+  const scope = ['Kort', 'Kontrollert av feltmåler etter graving.', ''];
+  assert.equal(merknad(scope), merknad([...scope].reverse()));
+});
+
+test('S4: the review «Endring» column may use the same 240 px cap only for a free-text field', () => {
+  const long = { a: { outcome: 'change', change: { from: '', to: 'Kontrollert av feltmåler etter graving i 2026.' }, findings: [] } };
+  assert.equal(getBatchReviewColumnWidths(long).batchValue, 200);
+  assert.equal(getBatchReviewColumnWidths(long, { textField: true }).batchValue, 240);
+  assert.equal(getBatchReviewColumnWidths({ a: { outcome: 'change', change, findings: [] } }, { textField: true }).batchValue, 104);
+});
+
+test('S2: transition records keep the review sort (worsened = new FEIL, improved = new SJEKK, existing not ranked)', () => {
+  const entry = (findings) => ({ outcome: 'change', change, findings });
+  assert.equal(batchReviewSortValue(entry([{ tone: 'error', introduced: true, transition: 'worsened' }]), 'batchFindings'), 0);
+  assert.equal(batchReviewSortValue(entry([{ tone: 'warning', introduced: true, transition: 'improved' }]), 'batchFindings'), 1);
+  assert.equal(batchReviewSortValue(entry([]), 'batchFindings'), 2, 'only existing findings: «Ingen nye funn»');
 });

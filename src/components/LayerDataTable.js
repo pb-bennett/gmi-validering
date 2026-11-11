@@ -60,12 +60,17 @@ function ReviewFindings({ entry }) {
   const actual = Boolean(entry.change);
   const findings = actual ? entry.findings : entry.hypothetical?.findings;
   if (!findings) return null;
-  if (!findings.length) return actual ? <span className="gmi-review-none">Ingen nye funn</span> : null;
+  // S2: only what the change does is listed; unchanged existing findings and resolved ones are counted in the tooltip.
+  const source = actual ? entry : entry.hypothetical;
+  const context = [source.existingCount ? `${source.existingCount} eksisterende funn uendret` : '', source.resolvedCount ? `${source.resolvedCount} løst` : '']
+    .filter(Boolean).join(' · ');
+  if (!findings.length) return actual ? <span className="gmi-review-none" title={context || undefined} data-existing-count={source.existingCount || 0}>Ingen nye funn</span> : null;
   const [first, ...rest] = findings;
-  const title = findings.map((finding) => `${finding.severity}${finding.introduced ? ' (ny)' : ''}: ${finding.reason}`).join('\n');
-  return <span className={`gmi-review-finding truncate${actual ? '' : ' gmi-review-hypothetical'}`} data-validation-tone={first.tone} title={actual ? title : `Hvis inkludert:\n${title}`}>
+  const label = (finding) => finding.label || `${finding.severity}${finding.introduced ? ' (ny)' : ''}`;
+  const title = [...findings.map((finding) => `${label(finding)}${finding.note ? ` (${finding.note})` : ''}: ${finding.reason}`), context].filter(Boolean).join('\n');
+  return <span className={`gmi-review-finding truncate${actual ? '' : ' gmi-review-hypothetical'}`} data-validation-tone={first.tone} data-transition={first.transition} title={actual ? title : `Hvis inkludert:\n${title}`}>
     <GmiSeverityIcon tone={first.tone} size={13} />
-    <span className="min-w-0 truncate">{!actual && 'Hvis inkludert: '}<strong>{first.severity}{first.introduced ? ' (ny)' : ''}</strong> {first.reason}{rest.length > 0 && ` · +${rest.length}`}</span>
+    <span className="min-w-0 truncate">{!actual && 'Hvis inkludert: '}<strong>{label(first)}</strong> {first.reason}{rest.length > 0 && ` · +${rest.length}`}</span>
   </span>;
 }
 
@@ -121,6 +126,18 @@ const DataCell = React.memo(function DataCell({ value, missingLabel = '-', searc
     </span>
   );
 });
+
+/**
+ * S4: full text of the visibly truncated cells in one rendered row, read from the
+ * cells' own tooltips (`title`), so keyboard users get what mouse users hover.
+ */
+function truncatedCellTexts(rowElement) {
+  const clipped = (element) => [element, ...element.querySelectorAll('*')]
+    .some((node) => node.clientWidth > 0 && node.scrollWidth > node.clientWidth + 1);
+  return [...rowElement.querySelectorAll('[role=gridcell][data-column-label]')].flatMap((cell) => [...cell.querySelectorAll('[title]')]
+    .filter((element) => !cell.contains(element.parentElement?.closest('[title]')) && element.title && clipped(element))
+    .map((element) => ({ label: cell.dataset.columnLabel, text: element.title })));
+}
 
 const HyperlinkCell = React.memo(function HyperlinkCell({ value, searchQuery }) {
   const filenames = useMemo(() => extractHyperlinkFilenames(value), [value]);
@@ -571,7 +588,8 @@ export default function LayerDataTable() {
     return widths;
   }, [orderedFields, isContextualInspection, inspection, contextualScopeRows, showObjectNumber, zoomWidth, proposedData, layer?.data, activeTab]);
   const columnWidths = useMemo(() => batchReview
-    ? { ...attributeColumnWidths, ...getBatchReviewColumnWidths(batchReview.rows) }
+    ? { ...attributeColumnWidths, ...getBatchReviewColumnWidths(batchReview.rows,
+      { textField: fieldsData.find((definition) => definition.fieldKey === batchReview.field)?.fieldFormat === 'Tekst' }) }
     : attributeColumnWidths, [attributeColumnWidths, batchReview]);
 
   const columns = useMemo(() => {
@@ -686,6 +704,10 @@ export default function LayerDataTable() {
   // Filtering removes a cursor by falling back to the first remaining sorted row.
   const [navigationRowId, setNavigationRowId] = useState(null);
   const [gridHasFocus, setGridHasFocus] = useState(false);
+  // S4: truncated text of the keyboard-active row, shown below the grid while it (or the region) has focus.
+  const [activeFullText, setActiveFullText] = useState(null);
+  const [fullTextFocused, setFullTextFocused] = useState(false);
+  const fullTextRef = useRef(null);
   const cursorIndex = rows.findIndex((row) => row.id === navigationRowId);
   const navigationIndex = cursorIndex < 0 ? 0 : cursorIndex;
   const navigationRow = rows[navigationIndex];
@@ -712,6 +734,15 @@ export default function LayerDataTable() {
       rowVirtualizer.scrollToIndex(navigationIndex, { align: 'auto' });
     }
   }, [navigationIndex, navigationRow, gridHasFocus, rowVirtualizer]);
+  useEffect(() => {
+    if (fullTextFocused) return;
+    // Keyboard only: a mouse click on the grid has the cell tooltips and must not shift the layout.
+    const keyboard = gridHasFocus && tableContainerRef.current?.matches(':focus-visible');
+    const element = keyboard && navigationRow ? document.getElementById(`table-row-${encodeURIComponent(navigationRow.id)}`) : null;
+    const entries = element ? truncatedCellTexts(element) : [];
+    const next = entries.length ? { rowId: navigationRow.id, entries } : null;
+    setActiveFullText((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+  }, [gridHasFocus, navigationRow, fullTextFocused, columnWidths, columns, batchReview]);
 
   const handleGridKeyDown = (event) => {
     const grid = tableContainerRef.current;
@@ -731,6 +762,10 @@ export default function LayerDataTable() {
     if (!navigationRow) return;
     if (event.key === ' ' && selectionEnabled) {
       event.preventDefault(); toggleSelectionRow(navigationRow.original, event.shiftKey); return;
+    }
+    if (event.key === 'Enter' && event.shiftKey) {
+      // S4: move to the full text of the active row's truncated cells (shown only when there is any).
+      event.preventDefault(); fullTextRef.current?.focus(); return;
     }
     if (event.key === 'Enter') {
       event.preventDefault(); handleRowClick(navigationRow.original.__index, activeTab); return;
@@ -1148,6 +1183,7 @@ export default function LayerDataTable() {
                         key={cell.id}
                         role="gridcell"
                         aria-colindex={index + 1 + (selectionEnabled ? 1 : 0)}
+                        data-column-label={isZoom || typeof cell.column.columnDef.header !== 'string' ? undefined : cell.column.columnDef.header || cellId}
                         className={`flex shrink-0 items-center px-1.5 text-[10px] ${
                           isZoom ? 'justify-center' : ''
                         } ${isZoom || isFixed ? 'sticky z-10' : ''} ${
@@ -1183,6 +1219,25 @@ export default function LayerDataTable() {
         </div>
       </div>
 
+      {activeFullText && (gridHasFocus || fullTextFocused) && (
+        <div
+          ref={fullTextRef}
+          role="region"
+          aria-label="Full tekst i aktiv rad"
+          data-table-full-text={activeFullText.rowId}
+          tabIndex={0}
+          onFocus={() => setFullTextFocused(true)}
+          onBlur={() => setFullTextFocused(false)}
+          onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); tableContainerRef.current?.focus(); } }}
+          className="gmi-focus-ring max-h-14 shrink-0 overflow-y-auto border-t border-gmi-border bg-gmi-surface px-3 py-0.5 text-[11px] leading-snug text-gmi-text"
+        >
+          <p className="text-[9px] text-gmi-text-muted">Full tekst i aktiv rad · Shift+Enter i tabellen: gå hit for å rulle · Escape: tilbake til tabellen</p>
+          <dl>{activeFullText.entries.map((entry, index) => (
+            <div key={index} className="flex gap-1"><dt className="shrink-0 font-medium">{entry.label}:</dt>
+              <dd className="min-w-0 whitespace-pre-wrap break-words">{entry.text}</dd></div>
+          ))}</dl>
+        </div>
+      )}
       <div
         className="flex shrink-0 items-center justify-end border-t border-gmi-border bg-gmi-surface-soft px-3 py-1 text-[9px] text-gmi-text-subtle"
       >

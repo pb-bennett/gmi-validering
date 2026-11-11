@@ -37,16 +37,17 @@ export function gmiFieldInspectorRows(preview, batch, selection, advanced, stale
     const manual = changed && ['not-applicable', 'unresolved'].includes(row.reason);
     const reason = current?.skipReason || row.reason;
     const canManual = advanced && row.canInclude && ['not-applicable', 'unresolved'].includes(row.reason);
-    const findings = gmiBatchFindingList(row.findings);
+    const { findings, existingCount, resolvedCount } = gmiObjectFindingTransitions(row);
     const unchanged = (!row.reason && row.current === preview.lexeme) || reason === 'unchanged';
     const detail = reason === 'operation-mismatch' ? `Har allerede verdi «${row.current}»`
       : reason === 'not-applicable' && !preview.hydraulicReview ? 'Gjelder ikke ifølge Validator'
         : reason === 'unchanged' ? `Har allerede «${row.current}»` : gmiBatchSkipSummary(row, preview.sourceKey, reason);
     result[row.key] = { outcome: changed ? manual ? 'manual' : 'change' : unchanged ? 'unchanged' : 'skipped',
       detail: changed && !manual ? '' : detail, findings: changed ? findings : [],
+      ...(changed ? { existingCount, resolvedCount } : {}),
       change: changed ? { from: row.current, to: preview.lexeme, overwrites: !row.missing } : undefined,
       canManual, manualOn: manual, cellKey: row.key, explanation: row.explanation,
-      hypothetical: !changed && canManual ? { change: { from: row.current, to: preview.lexeme }, findings } : null };
+      hypothetical: !changed && canManual ? { change: { from: row.current, to: preview.lexeme }, findings, existingCount, resolvedCount } : null };
   }
   for (const key of selected) if (!result[key]) result[key] = { outcome: 'added', detail: '', findings: [] };
   return result;
@@ -87,11 +88,41 @@ export function gmiBatchDatasetFindings(dryRun, transition = 'introduced') {
     const diagnostics = groups.get(group);
     const diagnostic = diagnostics.find((entry) => entry.state === finding.state && entry.reasonCodes.includes(finding.reasonCode));
     return { key: `${transition}:${index}`, introduced: transition === 'introduced', objectRef: finding.objectRef,
+      ruleId: finding.ruleId, state: finding.state,
       tone: finding.state === 'FAIL' ? 'error' : 'warning', severity: finding.state === 'FAIL' ? 'FEIL' : 'SJEKK',
       reason: diagnostic ? renderValidationV2Diagnostic(diagnostic) : rule?.description || 'Kontroller feltkoblingen i Validator' };
   });
   cached.set(transition, findings);
   return findings;
+}
+
+/**
+ * S2, presentation only: the dataset dry run with severity changes shown once.
+ * An introduced and a resolved finding of the same rule on the same object with
+ * a different severity become one «Forverret» (SJEKK → FEIL) or «Forbedret»
+ * (FEIL → SJEKK) record. Same-severity reason changes stay new + resolved.
+ * Approval never reads these counts: it keeps `dryRun.diff.newCounts`, where a
+ * worsened FEIL is an introduced FEIL.
+ */
+export function gmiBatchDatasetTransitions(dryRun) {
+  let cached = datasetFindingCache.get(dryRun);
+  if (!cached) { cached = new Map(); datasetFindingCache.set(dryRun, cached); }
+  if (cached.has('transitions')) return cached.get('transitions');
+  const identity = (finding) => finding.objectRef
+    ? `${finding.ruleId}|${finding.objectRef.geometryScope}:${finding.objectRef.sourceIndex}` : null;
+  const { paired, resolved } = pairSeverityChanges(gmiBatchDatasetFindings(dryRun), gmiBatchDatasetFindings(dryRun, 'resolved'), identity);
+  const introduced = gmiBatchDatasetFindings(dryRun).map((finding) => withTransition(finding, paired.get(finding)));
+  const result = { added: introduced.filter((finding) => finding.transition === 'new'),
+    worsened: introduced.filter((finding) => finding.transition === 'worsened'),
+    improved: introduced.filter((finding) => finding.transition === 'improved'),
+    resolved: resolved.map((finding) => ({ ...finding, transition: 'resolved', label: `Løst ${finding.severity}` })) };
+  result.counts = { newFail: result.added.filter((finding) => finding.state === 'FAIL').length,
+    newCheck: result.added.filter((finding) => finding.state !== 'FAIL').length,
+    worsened: result.worsened.length, improved: result.improved.length,
+    resolvedFail: result.resolved.filter((finding) => finding.state === 'FAIL').length,
+    resolvedCheck: result.resolved.filter((finding) => finding.state !== 'FAIL').length };
+  cached.set('transitions', result);
+  return result;
 }
 
 export function gmiSelectionTargets(view, selection, { lineOnly = false } = {}) {
@@ -173,6 +204,61 @@ export function gmiBatchSkipSummary(row, field, reason = row.reason) {
   return `${field} anbefales ikke for objektet`;
 }
 
+const isFail = (finding) => finding.state === 'FAIL';
+
+/** One-to-one pairing of introduced/resolved findings with the same identity and a different severity. */
+function pairSeverityChanges(introduced, resolved, identity) {
+  const open = [...resolved], paired = new Map();
+  for (const finding of introduced) {
+    const key = identity(finding);
+    if (key === null || key === undefined) continue;
+    const index = open.findIndex((previous) => identity(previous) === key && isFail(previous) !== isFail(finding));
+    if (index >= 0) { paired.set(finding, open[index]); open.splice(index, 1); }
+  }
+  return { paired, resolved: open };
+}
+
+const TRANSITION_RANK = Object.freeze({ new: 0, worsened: 1, improved: 3 });
+
+/** Shared transition label: «FEIL (ny)», «Forverret: SJEKK → FEIL», «Forbedret: FEIL → SJEKK». */
+function withTransition(finding, previous) {
+  const severity = isFail(finding) ? 'FEIL' : 'SJEKK';
+  if (!previous) return { ...finding, transition: 'new', label: `${severity} (ny)` };
+  const from = isFail(previous) ? 'FEIL' : 'SJEKK';
+  return { ...finding, transition: isFail(finding) ? 'worsened' : 'improved', previousSeverity: from,
+    label: isFail(finding) ? `Forverret: ${from} → ${severity}` : `Forbedret: ${from} → ${severity}`,
+    // The remaining SJEKK is still a finding; say so wherever there is room.
+    note: isFail(finding) ? 'Telles som ny FEIL ved godkjenning' : 'SJEKK gjenstår' };
+}
+
+/**
+ * S2, presentation only: one object's findings after the change. `findings`
+ * holds only what the change does (new, worsened, improved), most severe first;
+ * unchanged existing findings are kept separately and counted, so an existing
+ * FEIL can never hide a new SJEKK. Every record keeps `introduced`, so the
+ * review sort is unchanged.
+ */
+export function gmiObjectFindingTransitions(row) {
+  const after = row?.findings || [], other = row?.otherFindings || [];
+  const introduced = after.filter((finding) => finding.batchIntroduced);
+  const afterKeys = new Set([...after, ...other].map((finding) => finding.key));
+  const before = row?.resolvedFindings ?? (row?.currentFindings || []).filter((finding) => !afterKeys.has(finding.key));
+  const { paired, resolved } = pairSeverityChanges(introduced, before, (finding) => finding.ruleId);
+  const record = (finding, transition, extra = {}) => ({ key: finding.key, tone: isFail(finding) ? 'error' : 'warning',
+    severity: isFail(finding) ? 'FEIL' : 'SJEKK', introduced: transition !== 'existing' && transition !== 'resolved',
+    transition, reason: finding.reason, ...extra });
+  const findings = introduced.map((finding) => {
+    const { transition, label, previousSeverity, note } = withTransition(finding, paired.get(finding));
+    return record(finding, transition, { label, previousSeverity, note });
+  }).sort((a, b) => (TRANSITION_RANK[a.transition] + (a.transition === 'new' && a.tone === 'warning' ? 2 : 0))
+    - (TRANSITION_RANK[b.transition] + (b.transition === 'new' && b.tone === 'warning' ? 2 : 0)));
+  const existing = gmiBatchFindingList([...after.filter((finding) => !finding.batchIntroduced), ...other])
+    .map((finding) => ({ ...finding, transition: 'existing', label: finding.severity }));
+  return { findings, existing, existingCount: existing.length,
+    resolved: resolved.map((finding) => record(finding, 'resolved', { label: `Løst ${isFail(finding) ? 'FEIL' : 'SJEKK'}` })),
+    resolvedCount: resolved.length };
+}
+
 /** Findings most-severe first: new FEIL, FEIL, new SJEKK, SJEKK. */
 export function gmiBatchFindingList(findings = []) {
   const rank = (finding) => (finding.state === 'FAIL' ? 0 : 2) + (finding.batchIntroduced ? 0 : 1);
@@ -181,6 +267,11 @@ export function gmiBatchFindingList(findings = []) {
     severity: finding.state === 'FAIL' ? 'FEIL' : 'SJEKK', introduced: Boolean(finding.batchIntroduced), reason: finding.reason,
   }));
 }
+
+const gmiReviewFindingFields = (row) => {
+  const { findings, existingCount, resolvedCount } = gmiObjectFindingTransitions(row);
+  return { findings, existingCount, resolvedCount };
+};
 
 export const GMI_BATCH_OUTCOME_LABELS = Object.freeze({
   change: 'Endres', manual: 'Manuelt inkludert', unchanged: 'Uendret', skipped: 'Hoppes over',
@@ -221,7 +312,7 @@ export function gmiBatchReviewRows({ review, plan, selection, advanced = false, 
     const cell = cells.get(row.key);
     if (cell) {
       out[key] = { outcome: manual.has(row.key) ? 'manual' : 'change', detail: manual.has(row.key) ? gmiBatchSkipSummary(row, field) : '',
-        change: { from: cell.previous, to: cell.next, overwrites: cell.overwritesPopulated }, findings: gmiBatchFindingList(row.findings),
+        change: { from: cell.previous, to: cell.next, overwrites: cell.overwritesPopulated }, ...gmiReviewFindingFields(row),
         canManual: manual.has(row.key) && advanced, manualOn: manual.has(row.key), cellKey: row.key, explanation: row.explanation };
       continue;
     }
@@ -231,7 +322,7 @@ export function gmiBatchReviewRows({ review, plan, selection, advanced = false, 
     out[key] = { outcome: 'skipped', detail: gmiBatchSkipSummary(row, field, reason), findings: [], explanation: row.explanation,
       canManual, manualOn: false, cellKey: row.key,
       // Decision support only: what manual inclusion would do. Never counted.
-      hypothetical: canManual ? { change: { from: row.current, to: lexeme }, findings: gmiBatchFindingList(row.findings) } : null };
+      hypothetical: canManual ? { change: { from: row.current, to: lexeme }, ...gmiReviewFindingFields(row) } : null };
   }
   return out;
 }

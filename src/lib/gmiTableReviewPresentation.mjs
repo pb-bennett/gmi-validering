@@ -22,7 +22,8 @@ export function createBatchReviewColumnAccessors({ rows, scope }) {
   }));
 }
 
-export function getBatchReviewColumnWidths(rows) {
+/** `textField`: the edited field is free text (Tekst), whose «Endring» may use the same 240 px cap as its column (S4). */
+export function getBatchReviewColumnWidths(rows, { textField = false } = {}) {
   const entries = Object.values(rows);
   const valueLength = entries.reduce((longest, entry) => {
     const change = entry.change || entry.hypothetical?.change;
@@ -31,7 +32,7 @@ export function getBatchReviewColumnWidths(rows) {
   return {
     // Manual actions need room alongside the badge; long explanations keep their tooltip.
     batchStatus: entries.some((entry) => entry.canManual) ? 320 : 180,
-    batchValue: Math.min(200, Math.max(104, valueLength * 6 + 24)),
+    batchValue: Math.min(textField ? 240 : 200, Math.max(104, valueLength * 6 + 24)),
     batchFindings: entries.some((entry) => (entry.change ? entry.findings : entry.hypothetical?.findings)?.length) ? 224 : 136,
   };
 }

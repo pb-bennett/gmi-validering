@@ -131,6 +131,11 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await selectObjects('Ledninger', [0, 1]);
         await choose('Felt for masseendring', 'Material'); await choose('Ny verdi', 'PE'); await preview();
         assert.match(await text(), /1 av 2 ledninger endres/);
+        // S2: the changed line keeps its unchanged existing findings out of «Funn etter endring».
+        await ready();
+        const cell = await browser.evaluate(`(() => { const e = ${row(0)}.querySelector('.gmi-review-none, .gmi-review-finding'); return e && { text: e.innerText, tip: e.title }; })()`);
+        assert.match(cell?.tip || '', /eksisterende funn uendret/, JSON.stringify(cell));
+        assert.match(cell.text, /Ingen nye funn|\(ny\)|Forverret|Forbedret/, 'only what the change does is shown');
         // S1 (deliberate update): only the empty line changes, so the populated,
         // skipped line no longer makes the selection «mixed». It stages directly.
         await ready(); await click('Legg til masseendring', inspector);
@@ -201,9 +206,19 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText==='Legg til masseendring').disabled`));
         await browser.evaluate('window.setTimeout=window.g4Timeout');
         await click('Kjør full kontroll', inspector); await ready();
-        assert.match(await text(), /ny FEIL|nye FEIL/);
+        // S2 (deliberate update): the line's empty Anleggsår is a SJEKK, so «ugyldig» worsens it to FEIL.
+        // It is shown once as «Forverret», not also as «ny FEIL» and «løst SJEKK».
+        const severity = await text(`${inspector}.querySelector('.gmi-batch-severity')`);
+        assert.match(severity, /0 nye FEIL/); assert.match(severity, /1 forverret/); assert.match(severity, /0 løst/);
+        assert.match(await text(row(0)), /Forverret: SJEKK → FEIL/);
+        // Safety: the worsened FEIL still counts as a new FEIL for approval, so the risk dialog is required.
         await click('Legg til masseendring', inspector); await browser.waitFor(risk);
-        assert.match(await text(risk), /ny FEIL|nye FEIL/); await click('Tilbake til utvalget', risk);
+        assert.match(await text(risk), /1 ny eller forverret FEIL/); assert.match(await text(risk), /Forverret: SJEKK → FEIL/);
+        assert.doesNotMatch(await text(risk), /Ingen nye FEIL/);
+        assert.deepEqual(await browser.evaluate(`Array.from(${risk}.querySelectorAll('.gmi-risk-group')).map(e => e.dataset.validationTone)`), ['error']);
+        await click('Tilbake til utvalget', risk);
+        await browser.evaluate(`${inspector}.querySelector('.gmi-batch-dataset-findings summary').click()`);
+        assert.deepEqual(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('[data-finding-group]')).map(e => e.dataset.findingGroup)`), ['Forverret']);
         await click('Angre siste retting', workspace);
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state==='stale'`);
         assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText==='Legg til masseendring').disabled`));

@@ -7,7 +7,9 @@ import { gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
 import { loadGmiDocument, verifyCellChanges } from './helpers/gmiEditHarness.mjs';
 import { getGmiProposedBytes } from '../src/lib/gmi-edit/index.mjs';
 import { readFile } from 'node:fs/promises';
-import { gmiInspectorFields, gmiFieldInspectorRows, gmiInspectorMixedFields, gmiBatchDatasetFindings } from '../src/lib/gmiBatchInspectorView.mjs';
+import { gmiInspectorFields, gmiFieldInspectorRows, gmiInspectorMixedFields, gmiBatchDatasetFindings, gmiBatchDatasetTransitions, gmiObjectFindingTransitions } from '../src/lib/gmiBatchInspectorView.mjs';
+import { getGmiFieldBatchApproval } from '../src/lib/gmiFieldBatchPlan.mjs';
+import { batchReviewSortValue } from '../src/lib/gmiTableReviewPresentation.mjs';
 import { prepareGmiFieldBatch, buildGmiFieldBatch, dryRunGmiFieldBatch } from '../src/lib/gmiFieldBatchPlan.mjs';
 import { gmiFieldBatchFixture } from './helpers/gmiFieldBatchFixture.mjs';
 
@@ -111,6 +113,80 @@ test('S3 one severity symbol mapping is shared by the object editor, batch inspe
   // The compact accent is an alias of the existing yellow-700, not a new colour.
   assert.match(await source('app/globals.css'), /--gmi-validation-compact-warning-text: var\(--gmi-validation-rule-count-warning-text\);/);
   assert.doesNotMatch(await source('components/gmi-edit/gmiEdit.css'), /gmi-review-hypothetical \{ opacity/);
+});
+
+async function transitionCase(sourceKey, value, indices) {
+  const lineFields = ['Tema', 'Material', 'Merknad', 'SDR', 'Trykklasse', 'Ringstivhet', 'Dimensjon', 'Rørform', 'VertikalDimensjon', 'Anleggsår'];
+  const base = ['VL', 'PE', '', '', '', '', '160', 'S', ''];
+  const document = await loadGmiSourceDocument(gmiFieldBatchFixture({ lineFields, lines: [[...base, ''], [...base, 'ugyldig'], [...base, '2999']] }));
+  const session = createGmiEditSession(document, { layerId: 's2' });
+  const handle = { layerId: 's2', sessionId: 's2-session', fingerprint: document.fingerprint };
+  const view = { document, session, handle };
+  const selection = { binding: handle, scope: 'line', keys: indices.map((index) => `line:${index}`) };
+  const prepared = await prepareGmiFieldBatch(view, { scope: 'line', sourceKey, operation: 'set', value, selection });
+  assert.equal(prepared.ok, true);
+  const batch = await dryRunGmiFieldBatch(session, buildGmiFieldBatch(session, prepared.preview));
+  assert.equal(batch.ok, true);
+  return { session, batch, rows: gmiFieldInspectorRows(prepared.preview, batch, selection, false, null) };
+}
+
+test('S2 SJEKK → FEIL is shown once as «Forverret» but still counts as a new FEIL for approval', async () => {
+  // Line 0: empty Anleggsår (SJEKK) → «ugyldig» (FEIL). Line 2: future year (FEIL) → «ugyldig» (FEIL, other reason).
+  const { session, batch, rows } = await transitionCase('Anleggsår', 'ugyldig', [0, 2]);
+  // Safety: approval data and gate counts are untouched; the worsened FEIL is an introduced FEIL.
+  assert.deepEqual(batch.dryRun.diff.newCounts, { fail: 2, check: 0 });
+  assert.deepEqual(batch.datasetCounts.introduced, { fail: 2, check: 0 });
+  assert.equal(getGmiFieldBatchApproval(session, batch).dryRun.diff.newCounts.fail, 2, 'the risk dialog gate still fires');
+  const transitions = gmiBatchDatasetTransitions(batch.dryRun);
+  assert.equal(gmiBatchDatasetTransitions(batch.dryRun), transitions, 'cached per dry run');
+  assert.deepEqual(transitions.counts, { newFail: 1, newCheck: 0, worsened: 1, improved: 0, resolvedFail: 1, resolvedCheck: 0 });
+  assert.equal(transitions.worsened[0].objectRef.sourceIndex, 0);
+  assert.equal(transitions.worsened[0].label, 'Forverret: SJEKK → FEIL');
+  assert.equal(transitions.added[0].objectRef.sourceIndex, 2, 'a same-severity reason change stays new + resolved');
+  assert.equal(transitions.resolved[0].objectRef.sourceIndex, 2);
+  assert.equal(transitions.added.length + transitions.worsened.length, batch.dryRun.introduced.length, 'every introduced finding is shown exactly once');
+  // Per object (Data Table and inspected object).
+  const [worse] = rows['line:0'].findings;
+  assert.deepEqual([worse.transition, worse.label, worse.tone, worse.introduced, worse.previousSeverity], ['worsened', 'Forverret: SJEKK → FEIL', 'error', true, 'SJEKK']);
+  assert.equal(rows['line:0'].findings.length, 1, 'the resolved SJEKK is not listed again');
+  assert.equal(rows['line:0'].resolvedCount, 0);
+  assert(rows['line:0'].existingCount > 0, 'unchanged findings are counted, not listed');
+  assert.deepEqual(rows['line:2'].findings.map((finding) => finding.label), ['FEIL (ny)']);
+  assert.equal(rows['line:2'].resolvedCount, 1);
+  assert.equal(batchReviewSortValue(rows['line:0'], 'batchFindings'), 0, 'sorting is unchanged');
+});
+
+test('S2 FEIL → SJEKK is shown once as «Forbedret» and the remaining SJEKK stays visible', async () => {
+  const { batch, rows } = await transitionCase('Anleggsår', '1800', [1]);
+  const transitions = gmiBatchDatasetTransitions(batch.dryRun);
+  assert.deepEqual(transitions.counts, { newFail: 0, newCheck: 0, worsened: 0, improved: 1, resolvedFail: 0, resolvedCheck: 0 });
+  assert.deepEqual([transitions.improved[0].label, transitions.improved[0].note, transitions.improved[0].tone], ['Forbedret: FEIL → SJEKK', 'SJEKK gjenstår', 'warning']);
+  const [better] = rows['line:1'].findings;
+  assert.deepEqual([better.transition, better.label, better.tone, better.note], ['improved', 'Forbedret: FEIL → SJEKK', 'warning', 'SJEKK gjenstår']);
+  assert.equal(batchReviewSortValue(rows['line:1'], 'batchFindings'), 1, 'still sorts with new SJEKK');
+});
+
+test('S2 unchanged existing findings never hide new ones; only existing findings read «Ingen nye funn»', async () => {
+  const { batch, rows } = await transitionCase('Merknad', 'Kontrollert', [0, 1]);
+  assert.deepEqual(batch.dryRun.diff.newCounts, { fail: 0, check: 0 });
+  for (const key of ['line:0', 'line:1']) {
+    assert.deepEqual(rows[key].findings, [], `${key}: nothing new`);
+    assert(rows[key].existingCount > 0, `${key}: existing findings are kept as a count`);
+  }
+  // Existing FEIL + new SJEKK: the new SJEKK leads, the FEIL is secondary.
+  const mixed = gmiObjectFindingTransitions({ findings: [
+    { key: 'old', ruleId: 'r1', state: 'FAIL', batchIntroduced: false, reason: 'gammel feil' },
+    { key: 'new', ruleId: 'r2', state: 'CHECK', batchIntroduced: true, reason: 'ny sjekk' }], resolvedFindings: [] });
+  assert.deepEqual(mixed.findings.map((finding) => [finding.label, finding.reason]), [['SJEKK (ny)', 'ny sjekk']]);
+  assert.deepEqual(mixed.existing.map((finding) => [finding.severity, finding.transition]), [['FEIL', 'existing']]);
+  // Ranking: new FEIL, worsened, new SJEKK, improved. Hydraulic rows (currentFindings/otherFindings) pair the same way.
+  const ranked = gmiObjectFindingTransitions({
+    findings: [{ key: 'c', ruleId: 'c', state: 'CHECK', batchIntroduced: true }, { key: 'w', ruleId: 'w', state: 'FAIL', batchIntroduced: true },
+      { key: 'i', ruleId: 'i', state: 'CHECK', batchIntroduced: true }, { key: 'f', ruleId: 'f', state: 'FAIL', batchIntroduced: true }],
+    otherFindings: [{ key: 'o', ruleId: 'o', state: 'CHECK' }],
+    currentFindings: [{ key: 'w0', ruleId: 'w', state: 'CHECK' }, { key: 'i0', ruleId: 'i', state: 'FAIL' }, { key: 'o', ruleId: 'o', state: 'CHECK' }, { key: 'gone', ruleId: 'g', state: 'FAIL' }] });
+  assert.deepEqual(ranked.findings.map((finding) => `${finding.transition}:${finding.key}`), ['new:f', 'worsened:w', 'new:c', 'improved:i']);
+  assert.deepEqual([ranked.existingCount, ranked.resolvedCount, ranked.resolved[0].key], [1, 1, 'gone']);
 });
 
 test('G4 hydraulic fill preserves M2 populated exclusions even when the listed value is equal', async () => {
