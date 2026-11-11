@@ -62,6 +62,7 @@ export {
 } from './proposed.mjs';
 export { GMI_BATCH_ELIGIBILITY_RULES, evaluateGmiBatchEligibility } from './eligibility.mjs';
 export { diffGmiDatasets } from './diff.mjs';
+export { dryRunGmiChangeSet, isCurrentGmiDryRun } from './dryRun.mjs';
 
 // M3 (editing-session registry and field-only export): see
 // docs/agent-reports/*-gmi-edit-m3-session-lifecycle-export.md.

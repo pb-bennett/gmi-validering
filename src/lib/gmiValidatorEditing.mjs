@@ -1,6 +1,8 @@
 // M5C orchestration. Rules, applicability, parsing and mutations remain in M1/M2.
 import { evaluateGmiBatchEligibility, getGmiDocumentDataset, gmiSourceIntact } from './gmi-edit/index.mjs';
 import { getDatasetRevision } from './validation-v2/datasetRevision.js';
+import { compareGmiValidationRuns } from './validation-v2/findingDiff.js';
+export { compareGmiValidationRuns } from './validation-v2/findingDiff.js';
 
 export const CORRECTABLE_RULES = Object.freeze({
   'innmaling.line.sdr.valid': 'sdr',
@@ -11,48 +13,6 @@ export const CORRECTABLE_RULES = Object.freeze({
 export const isCorrectableMissingFinding = (finding) => ['REQUIRED_VALUE_MISSING', 'APPLICABILITY_REQUIRED_MISSING', 'NON_NEW_REQUIRED_VALUE_MISSING', 'EXISTING_INFRASTRUCTURE_VALUE_MISSING'].includes(finding.reasonCode);
 
 export const validatorCheckCount = (summary) => summary.checkFindingCount + summary.indeterminateFindingCount;
-const attention = (state) => ['FAIL', 'CHECK', 'INDETERMINATE'].includes(state);
-const findingsOf = (run) => [...run.ruleResults.flatMap((rule) => rule.findings), ...(run.schemaFindings || [])].filter((f) => attention(f.state));
-
-// Unique GUIDs survive enumeration changes. With no unique GUID, M1's immutable
-// geometry/sourceIndex identity is authoritative (structural edits are forbidden).
-function objectIdentities(dataset) {
-  return Object.fromEntries(['point', 'line'].map((scope) => {
-    const objects = (scope === 'line' ? dataset.lines : dataset.points) || [];
-    const counts = new Map();
-    for (const object of objects) if (object.guid) { const guid = object.guid.toLowerCase(); counts.set(guid, (counts.get(guid) || 0) + 1); }
-    return [scope, objects.map((object, index) => {
-      const guid = object.guid?.toLowerCase();
-      return guid && counts.get(guid) === 1 ? `guid:${guid}` : `index:${index}`;
-    })];
-  }));
-}
-function identity(finding, identities) {
-  const ref = finding.objectRef;
-  const scope = ref?.geometryScope || finding.geometryScope;
-  return JSON.stringify([finding.ruleId || finding.canonicalFieldId, scope,
-    ref ? identities[scope][ref.sourceIndex] : `schema:${finding.reasonCode}`]);
-}
-
-export function compareGmiValidationRuns(original, revised, originalDataset, proposedDataset) {
-  if (original.layerId !== revised.layerId || original.runContext.referenceDate !== revised.runContext.referenceDate) throw new Error('Comparison identity/date mismatch');
-  const originalIds = objectIdentities(originalDataset), proposedIds = objectIdentities(proposedDataset);
-  const before = new Map(findingsOf(original).map((finding) => [identity(finding, originalIds), finding]));
-  const introduced = [], resolved = [], unchanged = [], severityChanged = [];
-  for (const finding of findingsOf(revised)) {
-    const key = identity(finding, proposedIds), previous = before.get(key);
-    if (!previous) introduced.push(finding);
-    else if (previous.state !== finding.state) severityChanged.push({ previous, finding });
-    else if (previous.reasonCode !== finding.reasonCode) { introduced.push(finding); resolved.push(previous); }
-    else unchanged.push(finding);
-    before.delete(key);
-  }
-  resolved.push(...before.values());
-  introduced.sort((a, b) => Number(b.state === 'FAIL') - Number(a.state === 'FAIL'));
-  const counts = (list) => ({ fail: list.filter((f) => f.state === 'FAIL').length, check: list.filter((f) => f.state !== 'FAIL').length });
-  return { introduced, resolved, unchanged, severityChanged, newCounts: counts(introduced), resolvedCounts: counts(resolved) };
-}
-
 export function buildGmiValidationComparison(session, validation, referenceDate) {
   if (!validation.ok) return { ok: false, code: 'proposed-validation-failed' };
   if (session.layerId !== validation.original.layerId || validation.original.runContext.referenceDate !== referenceDate) return { ok: false, code: 'comparison-mismatch' };

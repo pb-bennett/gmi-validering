@@ -1,6 +1,6 @@
-// G2: inspection and explicit ChangeSet construction only. No staging or dry run.
+// G2/G3: inspection, explicit ChangeSets and hypothetical validation. No live staging.
 import { createGmiBatchCorrection, getGmiEditCell, gmiSourceIntact, isGmiEditSession,
-  gmiCellKey, listGmiObjectCells, resolveGmiCell } from './gmi-edit/index.mjs';
+  dryRunGmiChangeSet, isCurrentGmiDryRun, gmiCellKey, listGmiObjectCells, resolveGmiCell } from './gmi-edit/index.mjs';
 import { isGmiMissingLexeme as missing } from './gmi-edit/changeSet.mjs';
 import { gmiSessionEffectiveCells } from './gmi-edit/session.mjs';
 import { checkGmiFieldDraft, describeGmiEditColumns, gmiEditColumnPolicy } from './gmiEditFields.mjs';
@@ -11,6 +11,7 @@ import { sameGmiSelectionBinding } from './gmiEditSelection.mjs';
 import { gmiObjectCountLabel } from './gmiEditView.mjs';
 
 const previews = new WeakMap();
+const batches = new WeakMap();
 const keyOf = (target) => `${target?.scope}:${target?.sourceIndex}`;
 const reject = (code, detail = {}) => ({ ok: false, code, ...detail });
 const yieldDefault = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -208,9 +209,54 @@ export function buildGmiFieldBatch(session, preview, { included, replace = false
   const rows = preview.rows.map((row) => ({ ...row, included: included.has(row.key),
     outcome: changed.has(row.cellKey) ? 'changed' : unchanged.has(row.cellKey) ? 'unchanged'
       : included.has(row.key) ? 'skipped' : 'excluded', skipReason: skipped.get(row.cellKey) || row.reason }));
-  return { ...result, rows, counts: { selected: rows.length, included: selected.length, changed: changed.size,
+  const batch = freeze({ ...result, rows, dryRun: null, approvalReady: false,
+    counts: { selected: rows.length, included: selected.length, changed: changed.size,
     unchanged: unchanged.size, skipped: rows.filter((row) => row.outcome === 'skipped').length,
     excluded: rows.length - selected.length,
     newErrors: rows.filter((row) => changed.has(row.cellKey) && row.findings.some((finding) => finding.batchIntroduced && finding.state === 'FAIL')).length,
-    newChecks: rows.filter((row) => changed.has(row.cellKey) && row.findings.some((finding) => finding.batchIntroduced && finding.state === 'CHECK')).length } };
+    newChecks: rows.filter((row) => changed.has(row.cellKey) && row.findings.some((finding) => finding.batchIntroduced && finding.state === 'CHECK')).length } });
+  basis.latestBatch = batch;
+  batches.set(batch, { batch, preview, included: [...included], changeSet: batch.changeSet, generation: 0 });
+  return batch;
+}
+
+function currentBatch(session, batch) {
+  const built = batches.get(batch), basis = built && previews.get(built.preview);
+  if (!basis || basis.latestBatch !== built.batch || session !== built.preview.session || basis.view.session !== session
+    || batch.changeSet !== built.changeSet || !basis.isLive() || !liveView(basis.view)) return false;
+  return !basis.selection || built.included.every((key) => basis.selection.keys.includes(key));
+}
+
+/** Validate the exact built candidate after decisions, not a newly rebuilt set.
+ * G4 can call this after each rebuild and must query readiness immediately
+ * before approval. The raw synchronous G2 builder never claims readiness.
+ */
+export async function dryRunGmiFieldBatch(session, batch, options = {}) {
+  if (!currentBatch(session, batch)) return reject('stale-batch', { approvalReady: false });
+  const basis = batches.get(batch), generation = ++basis.generation;
+  const externalLive = options.isLive || (() => true);
+  const isLive = () => basis.generation === generation && currentBatch(session, batch) && externalLive();
+  const dryRun = await dryRunGmiChangeSet(session, basis.changeSet, { ...options, isLive });
+  if (!dryRun.ok) return reject(dryRun.code, { dryRun, approvalReady: false });
+  if (!isLive()) return reject('stale-batch', { approvalReady: false });
+  const changedObjects = new Set(batch.changeSet.cells.map(keyOf));
+  const outside = (finding) => !finding.objectRef
+    || !changedObjects.has(`${finding.objectRef.geometryScope}:${finding.objectRef.sourceIndex}`);
+  const checked = freeze({ ...batch, dryRun, approvalReady: true, referenceDate: dryRun.referenceDate,
+    rows: batch.rows.map((row) => ({ ...row, datasetChecked: true,
+      datasetIntroduced: dryRun.byObject[row.key]?.introduced || [], datasetResolved: dryRun.byObject[row.key]?.resolved || [] })),
+    datasetCounts: { introduced: dryRun.diff.newCounts, resolved: dryRun.diff.resolvedCounts },
+    crossObject: { introduced: dryRun.introduced.filter(outside), resolved: dryRun.resolved.filter(outside) } });
+  batches.set(checked, basis);
+  return checked;
+}
+
+export function isCurrentGmiFieldBatchValidation(session, batch, options = {}) {
+  return currentBatch(session, batch) && isCurrentGmiDryRun(batch.dryRun, session, batch.changeSet, options);
+}
+
+/** Source/validation readiness only. User-facing risk confirmation stays in G4. */
+export function getGmiFieldBatchApproval(session, batch, options = {}) {
+  if (!isCurrentGmiFieldBatchValidation(session, batch, options)) return reject('dry-run-required', { approvalReady: false });
+  return { ok: true, changeSet: batch.changeSet, dryRun: batch.dryRun };
 }

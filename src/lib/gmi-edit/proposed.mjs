@@ -143,7 +143,7 @@ export function getGmiProposedBytes(proposed) {
 
 const validationRuns = new WeakMap();   // dataset -> Map(key -> run)
 
-function isoDate(referenceDate) {
+export function gmiValidationReferenceDate(referenceDate) {
   if (referenceDate === undefined || referenceDate === null) return new Date().toISOString().slice(0, 10);
   if (typeof referenceDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(referenceDate)) throw new TypeError('referenceDate must be YYYY-MM-DD');
   return referenceDate;
@@ -155,7 +155,7 @@ function isoDate(referenceDate) {
  */
 export function validateGmiDataset(dataset, { layerId, referenceDate } = {}) {
   if (typeof layerId !== 'string' || !layerId.trim()) throw new TypeError('layerId must be a non-empty string');
-  const date = isoDate(referenceDate);
+  const date = gmiValidationReferenceDate(referenceDate);
   let runs = validationRuns.get(dataset);
   if (!runs) { runs = new Map(); validationRuns.set(dataset, runs); }
   const key = `${layerId}|${date}`;
@@ -172,7 +172,7 @@ export function validateGmiDataset(dataset, { layerId, referenceDate } = {}) {
 export function revalidateGmiEditSession(session, { layerId = session.layerId, referenceDate, cache } = {}) {
   const proposed = getGmiProposedState(session, cache ? { cache } : undefined);
   if (!proposed.ok) return Object.freeze({ ok: false, proposed });
-  const date = isoDate(referenceDate);
+  const date = gmiValidationReferenceDate(referenceDate);
   const original = validateGmiDataset(getGmiDocumentDataset(session.document), { layerId, referenceDate: date });
   const revised = validateGmiDataset(proposed.dataset, { layerId, referenceDate: date });
   return Object.freeze({

@@ -368,14 +368,18 @@ test('gmi-edit stays a browser-safe core: no node:, test, photo or UI imports; t
   // injected (no photo import); the export may use only the pure, import-free
   // FOTO naming module so revised GMI and FOTO packages share one convention.
   const m3 = ['editSessions.mjs', 'exportGmi.mjs'];
+    // G3 composes hypothetical sessions and verified proposed state, with
+    // only the shared pure finding comparison as an external dependency.
+    const g3 = ['dryRun.mjs'];
   // M7 (hyperlink removal): reuses the production hyperlink extractor and the
   // FOTO GMI evidence factory (createGmiPhotoSource); no other photo import.
   const m7 = ['hyperlinkRemoval.mjs'];
   const extraAllowed = {
+      'dryRun.mjs': ['../validation-v2/findingDiff.js'],
     'exportGmi.mjs': ['../photos/export/photoExportNaming.mjs'],
     'hyperlinkRemoval.mjs': ['../hyperlinkFilenames.mjs', '../photos/gmiPhotoSource.mjs'],
   };
-  assert.deepEqual(files.sort(), [...m1, ...m2, ...m3, ...m7, 'index.mjs'].sort());
+    assert.deepEqual(files.sort(), [...m1, ...m2, ...m3, ...m7, ...g3, 'index.mjs'].sort());
   for (const name of files) {
     const source = await readFile(path.join(directory, name), 'utf8');
     for (const [, specifier] of source.matchAll(/from\s+'([^']+)'/g)) {
