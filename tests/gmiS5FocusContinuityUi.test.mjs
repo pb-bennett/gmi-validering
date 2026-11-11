@@ -1,6 +1,7 @@
 // S5 (G4 UI refinements): Data Table column focus from the Felt choice, through staging and
 // «Ny masseendring»; an explicit «off» survives the batch → ChangeSet handover; Original → Foreslått
-// after object and batch staging unless the user chose Original; keyboard focus is never left on body.
+// after object and batch staging unless the user chose Original; keyboard focus is never left on body
+// (also after «Angre» from the staged batch view: the undo notice, then «Gjør om»).
 // Synthetic fixture only; production build via PHOTO_UI_URL, run serially with the other browser tests.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -45,8 +46,13 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
     /** A meaningful, visible element owns keyboard focus (never body). */
     const activeElement = () => browser.evaluate(`(() => { const e=document.activeElement, r=e.getBoundingClientRect();
       return { body: e===document.body, tag: e.tagName, label: e.getAttribute('aria-label'), text: e.innerText?.trim().slice(0,80),
-        staged: e.matches('[data-gmi-staged-success]'), message: e.matches('[data-gmi-object-message]'),
+        staged: e.matches('[data-gmi-staged-success]'), message: e.matches('[data-gmi-object-message]'), notice: e.matches('.gmi-edit-notice'),
         visible: r.width>0 && r.height>0 && r.bottom>0 && r.top<innerHeight && r.right>0 && r.left<innerWidth }; })()`);
+    const press = async (key, code, windowsVirtualKeyCode, text) => {
+      await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode, ...(text ? { text } : {}) });
+      await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
+    };
+    const counts = () => browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText ?? null`);
     const ready = () => browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK') && ${inspector}.getAttribute('aria-busy')==='false'`);
     const stage = async (expectRisk) => {
       await ready(); await click('Legg til masseendring', inspector);
@@ -173,12 +179,27 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         assert.equal(await view(), 'original', 'explicit Original kept after a batch stage');
         assert((await activeElement()).staged);
         // Undo the just-staged batch: no stale ChangeSet focus; the chosen field's batch focus remains.
+        const stagedCounts = await counts();
         await click('Angre', inspector);
         await browser.waitFor(`${inspector}.dataset.batchStep !== '3'`);
         state = await focusState();
         assert.deepEqual([state.fields, state.active], ['Material', 'true']);
-        // Undo focus belongs to S6 and is unchanged here; recorded for the report only.
-        t.diagnostic(`after undo from the staged view: ${JSON.stringify(await activeElement())}`);
+        // «Angre» unmounts with the staged details: keyboard focus continues on the visible undo notice.
+        await browser.waitFor(`document.activeElement?.matches('.gmi-edit-notice')`);
+        let focused = await activeElement();
+        assert(focused.notice && focused.visible && !focused.body, JSON.stringify(focused));
+        assert.match(focused.text, /^Angret: /);
+        assert.notEqual(await counts(), stagedCounts, 'undo removed the batch');
+        // Tab reaches the contextual «Gjør om»; the keyboard redo restores the batch and keeps focus on the result.
+        await press('Tab', 'Tab', 9);
+        assert.equal(await browser.evaluate(`document.activeElement?.dataset.gmiContextRedo ?? null`), 'notice', 'Tab reaches «Gjør om»');
+        await press('Enter', 'Enter', 13, '\r');
+        await browser.waitFor(`document.activeElement?.matches('.gmi-edit-notice') && document.activeElement.innerText.startsWith('Gjort om: ')`);
+        focused = await activeElement();
+        assert(focused.notice && focused.visible && !focused.body, JSON.stringify(focused));
+        assert.equal(await counts(), stagedCounts, '«Gjør om» restored the batch');
+        assert.equal(await browser.evaluate(`Boolean(document.querySelector('[data-gmi-context-redo=notice]'))`), false, 'nothing left to redo in context');
+        assert.equal(await browser.evaluate(`${inspector}.dataset.batchStep !== '3'`), true, 'redo does not reopen the staged view');
         await click('Avslutt', inspector); await browser.waitFor(`!${inspector}`);
         assert.equal((await focusState()).fields, null, 'nothing retained after the inspector closes');
         for (const [width, height] of [[1280, 720], [1366, 768]]) {

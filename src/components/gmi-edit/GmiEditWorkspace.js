@@ -208,7 +208,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const undo = ({ reveal = true } = {}) => {
     const id = view?.changeSets.at(-1)?.id, label = labelOf(id), target = firstObjectOf(id);
     // The notice offers «Gjør om» while this entry is next on the redo stack.
-    if (runTransition(gmiEditSessions.undo(view.handle), `Angret: ${label}`, { redoId: id }) && target && reveal) select(target, null);
+    const ok = runTransition(gmiEditSessions.undo(view.handle), `Angret: ${label}`, { redoId: id });
+    if (ok && target && reveal) select(target, null);
+    return ok;
   };
   /** Open one history entry's details in the right inspector (through the draft guard). */
   const showChangeSet = (id) => {
@@ -224,11 +226,12 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   };
   const renderChangeSet = (changeSet, variant) => {
     const index = view.changeSets.findIndex((entry) => entry.id === changeSet.id);
+    // A staged batch's «Angre» unmounts with its details: keyboard focus continues on the undo notice («Gjør om»).
     return <GmiChangeSetDetail key={changeSet.id} layerId={layerId} changeSet={changeSet} number={index + 1} effective={view.effective}
       downloadState={gmiEditDownloadState(status) === 'downloaded' ? 'downloaded' : 'unsaved'} editable={editable}
       isLast={index === view.changeSets.length - 1} variant={variant}
       onSelectObject={(target, id) => select(target, id)} onShowProposed={showProposed}
-      onUndo={() => undo({ reveal: false })} onDiscard={discard} onClose={variant === 'history' ? () => setDetailId(null) : undefined} />;
+      onUndo={() => { if (undo({ reveal: false }) && variant === 'staged') focusNotice.current = true; }} onDiscard={discard} onClose={variant === 'history' ? () => setDetailId(null) : undefined} />;
   };
   const redo = () => {
     const id = view?.redo.at(-1)?.id, label = labelOf(id), target = firstObjectOf(id);
