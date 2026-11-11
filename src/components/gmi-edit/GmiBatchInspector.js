@@ -49,7 +49,7 @@ export default function GmiBatchInspector({ view, initialField = 'sdr', onDirtyC
   const generation = useRef(0);
   const scopeExpanded = useRef(false);
   const dirty = Boolean(lexeme || review || field !== initialField || mode !== 'fill-missing');
-  const scopeProblem = gmiSelectionTargets(view, selection);
+  const scopeProblem = gmiSelectionTargets(view, selection, { lineOnly: true });
   const stale = review ? gmiBatchScopeState(view, selection, review) || (expanded ? 'expanded' : null) : null;
   useEffect(() => { if (stale === 'expanded') setExpanded(true); }, [stale]);
   useEffect(() => useStore.subscribe((state, previous) => {
@@ -98,7 +98,7 @@ export default function GmiBatchInspector({ view, initialField = 'sdr', onDirtyC
   const invalidate = () => { generation.current++; scopeExpanded.current = false; setBusy(false); setReview(null); setRisk(null); setManual(new Set()); setAdvanced(false); setReplace(false); setExpanded(false); setMessage(null); };
   const calculate = async () => {
     const state = useStore.getState(), currentSelection = state.gmiEditSelection;
-    const targets = gmiSelectionTargets(view, currentSelection);
+    const targets = gmiSelectionTargets(view, currentSelection, { lineOnly: true });
     if (!targets.ok) return;
     const token = ++generation.current;
     scopeExpanded.current = false;

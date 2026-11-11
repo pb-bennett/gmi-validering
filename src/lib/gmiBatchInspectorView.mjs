@@ -3,26 +3,27 @@ import { getGmiDocumentDataset, gmiSourceIntact } from './gmi-edit/index.mjs';
 import { sameGmiSelectionBinding } from './gmiEditSelection.mjs';
 import { buildGmiBatchSelection, canManuallySelectGmiBatchRow } from './gmiEditBatchView.mjs';
 
-export function gmiSelectionTargets(view, selection) {
+export function gmiSelectionTargets(view, selection, { lineOnly = false } = {}) {
   const binding = { layerId: view.session.layerId, sessionId: view.handle.sessionId, fingerprint: view.document.fingerprint };
   if (!sameGmiSelectionBinding(binding, selection?.binding) || view.handle.fingerprint !== binding.fingerprint
     || view.session.document !== view.document || !gmiSourceIntact(view.document)) return { ok: false, code: 'stale-session' };
-  if (selection.scope !== 'line') return { ok: false, code: 'line-only' };
+  if (lineOnly && selection.scope !== 'line') return { ok: false, code: 'line-only' };
+  if (!['point', 'line'].includes(selection.scope) || !Array.isArray(selection.keys)) return { ok: false, code: 'invalid-targets' };
   const dataset = getGmiDocumentDataset(view.document);
   const targets = [];
   for (const key of selection.keys) {
-    const match = /^line:(0|[1-9]\d*)$/.exec(key);
-    const sourceIndex = match ? Number(match[1]) : -1;
-    const object = dataset.lines[sourceIndex];
+    const match = /^(point|line):(0|[1-9]\d*)$/.exec(key);
+    const sourceIndex = match && match[1] === selection.scope ? Number(match[2]) : -1;
+    const object = dataset[selection.scope === 'point' ? 'points' : 'lines'][sourceIndex];
     if (!object) return { ok: false, code: 'invalid-targets' };
-    targets.push({ scope: 'line', sourceIndex, objectId: object.id, guid: object.guid ?? null });
+    targets.push({ scope: selection.scope, sourceIndex, objectId: object.id, guid: object.guid ?? null });
   }
   return targets.length && new Set(selection.keys).size === targets.length
     ? { ok: true, targets } : { ok: false, code: 'invalid-targets' };
 }
 
 export function gmiBatchScopeState(view, selection, review) {
-  const targets = gmiSelectionTargets(view, selection);
+  const targets = gmiSelectionTargets(view, selection, { lineOnly: true });
   if (!targets.ok) return targets.code;
   if (review.preview.session !== view.session || !sameGmiSelectionBinding(review.binding, selection.binding)) return 'stale-session';
   if (selection.keys.some((key) => !review.keys.includes(key))) return 'expanded';

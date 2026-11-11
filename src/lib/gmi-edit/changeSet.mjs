@@ -121,7 +121,7 @@ const RESOLVE_SKIPS = new Set(['object-not-editable']);
  *   requests: [{ scope, sourceIndex, field, lexeme, objectId?, guid? }],
  *   mode?: 'fill-missing' (default) | 'overwrite',
  *   conflictPolicy?: 'skip' (default) | 'replace',
- *   origin?, label?, createdAt?,
+ *   origin?, label?, createdAt?, intent?,
  *   preSkipped?: [{ scope, sourceIndex, field, reason, ... }],  // from eligibility
  *   eligibility?: { ruleId, canonicalFieldId, counts },          // summary only
  * }
@@ -141,6 +141,13 @@ export function buildGmiChangeSet(context, spec) {
   if (!Object.values(GMI_CONFLICT_POLICIES).includes(conflictPolicy)) rejections.push({ code: 'invalid-conflict-policy' });
   if (!Array.isArray(spec.requests) || spec.requests.length === 0) rejections.push({ code: 'no-requests' });
   if (!document.editable) rejections.push({ code: 'document-not-editable', status: document.status });
+  const intent = spec.intent;
+  if (intent != null && (typeof intent !== 'object'
+    || typeof intent.operation !== 'string' || typeof intent.sourceKey !== 'string' || typeof intent.value !== 'string'
+    || !['point', 'line'].includes(intent.scope) || (intent.match != null && typeof intent.match !== 'string')
+    || !intent.excluded || !['notApplicable', 'user', 'mismatch'].every((key) => Number.isInteger(intent.excluded[key]) && intent.excluded[key] >= 0))) {
+    rejections.push({ code: 'invalid-intent' });
+  }
   if (rejections.length) return rejected(rejections);
 
   const resolvedRequests = [];
@@ -233,6 +240,11 @@ export function buildGmiChangeSet(context, spec) {
     unchanged,
     conflicts,
     eligibility: spec.eligibility ?? null,
+    // Copy the defined metadata shape; freezing a ChangeSet must not freeze
+    // caller-owned objects or preserve mutable references to them.
+    intent: intent == null ? null : { operation: intent.operation, sourceKey: intent.sourceKey, value: intent.value,
+      match: intent.match ?? null, scope: intent.scope, excluded: { notApplicable: intent.excluded.notApplicable,
+        user: intent.excluded.user, mismatch: intent.excluded.mismatch } },
     counts: {
       requested: spec.requests.length + (spec.preSkipped?.length || 0),
       applied: cells.length,

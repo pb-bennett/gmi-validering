@@ -51,7 +51,7 @@ function diagnosticsFor(result, scope) {
 }
 
 /** Current effective cell lexemes + local drafts, compared with the immutable original. */
-export function gmiEditObjectDiagnostics({ view, scope, sourceIndex, rows, drafts = {} }) {
+export function gmiEditObjectDiagnostics({ view, scope, sourceIndex, rows, drafts = {}, governingRuleId = null }) {
   if (!view || !scope || !Number.isInteger(sourceIndex)) return { findings: [], deferred: false };
   const cached = validatorFor(view.document, view.handle.layerId);
   const object = cached.dataset[scope === 'line' ? 'lines' : 'points'][sourceIndex];
@@ -73,5 +73,6 @@ export function gmiEditObjectDiagnostics({ view, scope, sourceIndex, rows, draft
       .filter((finding) => !result.deferred.some((outcome) => outcome.ruleId === finding.ruleId))
       .map((finding) => ({ ...finding, transition: 'resolved' })),
   ].map((finding) => ({ ...finding, tooltip: `${finding.transition === 'resolved' ? 'OK' : finding.state === 'FAIL' ? 'FEIL' : 'SJEKK'} · ${TRANSITION[finding.transition]}\n${finding.transition === 'resolved' ? 'Opprinnelig funn: ' : ''}${finding.reason}` }));
-  return { findings, deferred: result.deferred.length > 0 };
+  return { findings, deferred: result.deferred.length > 0, deferredRuleIds: result.deferred.map((outcome) => outcome.ruleId),
+    governingOutcome: result.outcomes.find((outcome) => outcome.ruleId === governingRuleId) || null };
 }

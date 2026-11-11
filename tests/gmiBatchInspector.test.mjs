@@ -20,12 +20,12 @@ async function setup(indices = [0, 2, 6, 7]) {
   return { bytes, view, selection, review: { preview, binding, keys: selection.keys } };
 }
 
-test('R4 exact source targets reject foreign identity, malformed keys and point geometry', async () => {
+test('R4 exact source targets reject foreign identity, malformed keys and absent point objects', async () => {
   const { view, selection } = await setup([0, 7]);
   assert.deepEqual(gmiSelectionTargets(view, selection).targets, [0, 7].map((sourceIndex) => ({ scope: 'line', sourceIndex, objectId: sourceIndex + 1, guid: null })));
   for (const field of ['layerId', 'sessionId', 'fingerprint']) assert.equal(gmiSelectionTargets(view, { ...selection, binding: { ...selection.binding, [field]: 'foreign' } }).ok, false);
   for (const keys of [[], ['line:9999'], ['line:01'], ['point:0'], ['line:0', 'line:0']]) assert.equal(gmiSelectionTargets(view, { ...selection, keys }).ok, false);
-  assert.equal(gmiSelectionTargets(view, { ...selection, scope: 'point', keys: ['point:0'] }).code, 'line-only');
+  assert.equal(gmiSelectionTargets(view, { ...selection, scope: 'point', keys: ['point:0'] }).code, 'invalid-targets');
 });
 
 test('R4 selected, eligible, skipped, manual, changed and new FEIL counts use M5B results', async () => {
