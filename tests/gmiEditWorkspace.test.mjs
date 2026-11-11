@@ -23,7 +23,7 @@ import { createGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
 import { GMIParser } from '../src/lib/parsing/gmiParser.js';
 import { decodeGmiBytes } from '../src/lib/parsing/gmiDecoding.js';
 import {
-  GMI_EDIT_TABLE_VIEWS, describeGmiEditStatus, describeGmiObject, gmiChangeSetCellViews, gmiChangeSetDependents, gmiEditDownloadState,
+  GMI_EDIT_TABLE_VIEW_BY, GMI_EDIT_TABLE_VIEWS, gmiTableViewAfterStage, describeGmiEditStatus, describeGmiObject, gmiChangeSetCellViews, gmiChangeSetDependents, gmiEditDownloadState,
   gmiEditFieldPolicy, gmiEditMessage, gmiLexemeSegments, gmiObjectCorrectionLabel, gmiProposedViewForStatus, gmiSkipReasonLabel,
   indexGmiChangedCells, planGmiObjectForm, summarizeGmiEditCounts,
 } from '../src/lib/gmiEditView.mjs';
@@ -431,6 +431,80 @@ test('M5C store navigation retains sessions and staged edits; proposed inspectio
 });
 
 
+test('S5 view intent: staging turns an automatic Original into Foreslått and keeps an explicit choice', () => {
+  const { ORIGINAL, PROPOSED, CHANGED } = GMI_EDIT_TABLE_VIEWS, { USER, AUTO } = GMI_EDIT_TABLE_VIEW_BY;
+  assert.equal(gmiTableViewAfterStage(undefined, undefined), PROPOSED, 'unset view defaults to Original and is automatic');
+  assert.equal(gmiTableViewAfterStage(ORIGINAL, undefined), PROPOSED);
+  assert.equal(gmiTableViewAfterStage(ORIGINAL, AUTO), PROPOSED, 'handoff Original');
+  assert.equal(gmiTableViewAfterStage(ORIGINAL, USER), ORIGINAL, 'explicit Original is respected');
+  for (const by of [USER, AUTO, undefined]) {
+    assert.equal(gmiTableViewAfterStage(PROPOSED, by), PROPOSED);
+    assert.equal(gmiTableViewAfterStage(CHANGED, by), CHANGED, 'Kun endrede is never replaced');
+  }
+});
+
+test('S5 store: the view switch after staging respects user choices, exact inspections, layer removal and reset', async (t) => {
+  resetStore(); t.after(() => { useStore.setState({ objectTableInspection: null }); resetStore(); });
+  const { id } = await addStoreLayer(CORE);
+  const { id: other } = await addStoreLayer(CORE, 'Other.gmi');
+  const store = () => useStore.getState();
+  store().openGmiEditWorkspace(id);
+  // First stage, nothing chosen yet: automatic switch.
+  store().showGmiEditProposedAfterStage(id);
+  assert.equal(store().gmiEditTableView[id], 'proposed');
+  assert.equal(store().gmiEditTableViewBy[id], 'auto');
+  // Toolbar choices default to `user`; an explicit Original survives later stages.
+  store().setGmiEditTableView(id, 'original');
+  assert.equal(store().gmiEditTableViewBy[id], 'user');
+  const chosen = store().gmiEditTableView;
+  store().showGmiEditProposedAfterStage(id); store().showGmiEditProposedAfterStage(id);
+  assert.strictEqual(store().gmiEditTableView, chosen, 'explicit Original kept through repeated stages');
+  store().setGmiEditTableView(id, 'changed');
+  store().showGmiEditProposedAfterStage(id);
+  assert.equal(store().gmiEditTableView[id], 'changed');
+  // An automatic Original (workspace) switches again; the other layer is untouched.
+  store().setGmiEditTableView(id, 'original', { by: 'auto' });
+  store().showGmiEditProposedAfterStage(id);
+  assert.equal(store().gmiEditTableView[id], 'proposed');
+  assert.equal(store().gmiEditTableView[other], undefined);
+  // Exact Validator inspections have no view modes: nothing is rewritten.
+  store().setGmiEditTableView(id, 'original', { by: 'auto' });
+  for (const kind of ['exact-object-set', 'contextual-object-set']) {
+    useStore.setState({ objectTableInspection: { kind } });
+    const before = store();
+    store().showGmiEditProposedAfterStage(id);
+    assert.strictEqual(store().gmiEditTableView, before.gmiEditTableView, kind);
+    assert.strictEqual(store().gmiEditTableViewBy, before.gmiEditTableViewBy, kind);
+  }
+  useStore.setState({ objectTableInspection: null });
+  store().setGmiEditTableView(other, 'original');
+  store().removeLayer(other);
+  assert.deepEqual(Object.keys(store().gmiEditTableViewBy), [id], 'removed layer intent dropped');
+  resetStore();
+  assert.deepEqual(store().gmiEditTableViewBy, {});
+});
+
+test('S5 wiring: object and batch staging switch the view; column focus starts at Felt and survives the ChangeSet handover', async () => {
+  const workspace = await source('src/components/gmi-edit/GmiEditWorkspace.js');
+  assert.match(workspace, /const showStagedResult = \(\) => useStore\.getState\(\)\.showGmiEditProposedAfterStage\(layerId\);/);
+  assert.match(workspace, /<GmiObjectEditor [\s\S]*?onStaged=\{showStagedResult\}/);
+  assert.match(workspace, /onStaged=\{\(changeSet\) => \{ setTab\('changes'\); setActiveChangeSetId\(changeSet\.id\); setNotice\(null\); showStagedResult\(\); \}\}/);
+  // «Vis i Foreslått» and the toolbar are explicit choices (default `by`).
+  assert.match(workspace, /setGmiEditTableView\(layerId, GMI_EDIT_TABLE_VIEWS\.PROPOSED\);/);
+  const table = await source('src/components/LayerDataTable.js');
+  assert.match(table, /onClick=\{\(\) => setGmiEditTableView\(layerId, mode\.key\)\}/);
+  assert.match(table, /columnFocusOff !== columnFocusSignature/);
+  assert.doesNotMatch(table, /columnFocusOff !== columnFocus\.key|setColumnFocusOff\(columnFocus\.key\)/, 'off choice is not keyed on batch:/change-set:');
+  const inspector = await source('src/components/gmi-edit/GmiBatchInspector.js');
+  // Choosing a field alone never makes the inspector dirty.
+  assert.match(inspector, /const dirty = Boolean\(lexeme \|\| review \|\| mode !== 'fill-missing'\);/);
+  assert.match(inspector, /setField\(event\.target\.value\); setFocusChoice\(event\.target\.value\);/);
+  assert.match(inspector, /if \(!focusField \|\| stagedFocusOwner\) return undefined;/);
+  const detail = await source('src/components/gmi-edit/GmiChangeSetDetail.js');
+  assert.match(detail, /if \(variant === 'staged'\) successRef\.current\?\.focus\(\);/);
+  assert.match(await source('src/components/gmi-edit/GmiObjectEditor.js'), /ref=\{messageRef\} tabIndex=\{-1\}/);
+});
+
 test('R5 store handoff is atomic behind the draft guard and rechecks source/session before accepting', async (t) => {
   resetStore(); t.after(() => { useStore.setState({ gmiEditWorkspaceGuard: null }); resetStore(); });
   const { id } = await addStoreLayer(gmiEditBatchFixture());
@@ -455,6 +529,8 @@ test('R5 store handoff is atomic behind the draft guard and rechecks source/sess
   assert.equal(accepted.gmiEditSelection.origin.kind, 'validator');
   assert.equal(accepted.gmiEditSelection.showOnly, true);
   assert.equal(accepted.gmiEditTableView[id], 'original');
+  // S5: the handoff's Original is automatic, so the next stage may show Foreslått.
+  assert.equal(accepted.gmiEditTableViewBy[id], 'auto', 'handoff resets an explicit view choice');
   assert.equal(gmiEditSessions.getSession(handle).session, session);
   const selected = accepted.gmiEditSelection;
   accepted.changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:1'] }, binding);

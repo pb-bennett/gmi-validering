@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowCounterClockwiseIcon, CrosshairSimpleIcon, LockSimpleIcon, WarningIcon } from '@phosphor-icons/react';
 import fieldsData from '@/data/fields.json';
 import { createGmiObjectCorrection, listGmiObjectCells } from '@/lib/gmi-edit/index.mjs';
@@ -84,6 +84,12 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
   const [allowReplace, setAllowReplace] = useState(false);
   const [review, setReview] = useState(null);   // { changeSet } built against one session value
   const [message, setMessage] = useState(null);
+  // S5: staging unmounts «Legg til retting»; keyboard focus moves to the result instead of falling to body.
+  const messageRef = useRef(null), focusMessage = useRef(false);
+  useEffect(() => {
+    if (!focusMessage.current || !message) return;
+    focusMessage.current = false; messageRef.current?.focus();
+  }, [message]);
   const validation = useGmiObjectValidation(view, scope, sourceIndex, rows, drafts);
   const unboundFindings = validation.findings.filter((finding) => !finding.fields.some((field) => rows?.some((row) => row.field === field)));
 
@@ -138,6 +144,7 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
   };
 
   const stage = () => {
+    focusMessage.current = true;
     const result = gmiEditSessions.stage(view.handle, review.changeSet);
     if (!result.ok) {
       setReview(null);
@@ -255,7 +262,7 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
         <FindingIcon finding={finding} /> {finding.reason}
       </li>)}</ul>
     </details>}
-    {message && <p className="gmi-edit-message" data-tone={message.tone} role="status">{message.text}</p>}
+    {message && <p ref={messageRef} tabIndex={-1} className="gmi-edit-message gmi-focus-ring" data-tone={message.tone} role="status" data-gmi-object-message>{message.text}</p>}
     <p className="gmi-edit-hint">Geometri, koordinater, objektnummer, GUID og filhode kan ikke rettes. Nye kolonner kan ikke legges til.</p>
   </div>;
 }

@@ -59,6 +59,10 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const [expanded, setExpanded] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [staged, setStaged] = useState(null); // id of the ChangeSet just staged from this inspector
+  // S5: the field the user last chose. It leads the Data Table from the choice on, through staging and
+  // «Ny masseendring», until another field is chosen. Presentation only: it never makes the form dirty.
+  const [focusChoice, setFocusChoice] = useState('');
+  const fieldSelectRef = useRef(null), focusFieldSelect = useRef(false);
   const generation = useRef(0);
   const scopeExpanded = useRef(false);
   const dirty = Boolean(lexeme || review || mode !== 'fill-missing');
@@ -113,14 +117,22 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       field: review.preview.sourceKey, lexeme: review.preview.lexeme, onManual: toggleManual } });
     return () => useStore.setState({ gmiBatchTableReview: null });
   }, [plan, review, selection, view, toggleManual, stale, tableRows]);
-  // The edited field leads the Data Table while previewing.
-  const focusField = review?.preview.sourceKey || null;
+  // The edited field leads the Data Table as soon as it is chosen. While a staged ChangeSet is shown, its
+  // details own the focus (same field); when they close («Ny masseendring», undo, discard) this one returns.
+  const focusField = review?.preview.sourceKey
+    || (focusChoice && fields.some((entry) => entry.sourceKey === focusChoice && !entry.disabled) ? focusChoice : null);
+  const stagedFocusOwner = stagedChangeSet?.id || null;
   useEffect(() => {
-    if (!focusField) return undefined;
+    if (!focusField || stagedFocusOwner) return undefined;
     const key = `batch:${focusField}`;
     useStore.setState({ gmiEditColumnFocus: { layerId: view.session.layerId, key, fields: [focusField] } });
     return () => { if (useStore.getState().gmiEditColumnFocus?.key === key) useStore.setState({ gmiEditColumnFocus: null }); };
-  }, [focusField, view.session.layerId]);
+  }, [focusField, stagedFocusOwner, view.session.layerId]);
+  // «Ny masseendring» unmounts its own button; keyboard focus continues in the field choice.
+  useEffect(() => {
+    if (!focusFieldSelect.current || stagedChangeSet) return;
+    focusFieldSelect.current = false; fieldSelectRef.current?.focus();
+  });
   useEffect(() => { onDirtyChange(dirty); return () => onDirtyChange(false); }, [dirty, onDirtyChange]);
   useEffect(() => { registerReset(onClose); return () => registerReset(null); }, [registerReset, onClose]);
   useEffect(() => () => { generation.current++; }, []);
@@ -203,9 +215,9 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const breakdown = counts ? [['Hoppes over', counts.skipped], ['Utelatt av deg', counts.excluded], ['Manuelt inkludert', counts.manual],
     ['Uendret', counts.unchanged], ['Overskriver utfylte', plan.ok ? plan.changeSet.counts.populatedOverwrites : 0]].filter(([, value]) => value > 0) : [];
   const stageBlocked = busy || Boolean(stale) || !plan?.ok || !plan.changeSet.cells.length || (conflicts > 0 && !replace) || validation.state?.status !== 'ready';
-  const newBatch = () => { setStaged(null); setConfigOpen(true); setMessage(null); };
+  const newBatch = () => { focusFieldSelect.current = true; setStaged(null); setConfigOpen(true); setMessage(null); };
   const configForm = <form onSubmit={(event) => { event.preventDefault(); if (canPreview) calculate(); }} className="gmi-inspector-config" data-gmi-batch-config>
-    <label>Felt<select aria-label="Felt for masseendring" value={field} disabled={busy} onChange={(event) => { invalidate(); setField(event.target.value); setLexeme(''); }}>
+    <label>Felt<select ref={fieldSelectRef} aria-label="Felt for masseendring" value={field} disabled={busy} onChange={(event) => { invalidate(); setField(event.target.value); setFocusChoice(event.target.value); setLexeme(''); }}>
       <option value="">Velg felt…</option>
       {fields.map((entry, index) => <option key={index} value={entry.sourceKey ?? `absent:${entry.canonicalFieldId}`} disabled={entry.disabled}>
         {entry.sourceKey || entry.label || '(uten navn)'}{entry.explanation ? ` – ${entry.explanation}` : ''}

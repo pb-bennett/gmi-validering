@@ -10,6 +10,7 @@ import { photoSession } from './photos/photoSession.mjs';
 import { bindLoadedGmiSurveyStore, loadedGmiSources } from './photos/loadedGmiSource.mjs';
 import { bindGmiEditSessionStore, gmiEditRemovalBlock, gmiEditSessions } from './gmiEditSessions.mjs';
 import { gmiSelectionBinding, sameGmiSelectionBinding, reduceGmiEditSelection } from './gmiEditSelection.mjs';
+import { GMI_EDIT_TABLE_VIEW_BY, gmiTableViewAfterStage } from './gmiEditView.mjs';
 import { bindGeminiSurveyStore, geminiSession } from './gemini-wfs/geminiSession.mjs';
 import {
   DEFAULT_HIGHLIGHT_OPACITY,
@@ -255,6 +256,7 @@ const useStore = create(
         setGmiValidatorReferenceDate: (date) => set({ gmiValidatorReferenceDate: date }),
         gmiEditWorkspace: null, // { layerId } | null
         gmiEditTableView: {}, // { [layerId]: 'original' | 'proposed' | 'changed' }
+        gmiEditTableViewBy: {}, // { [layerId]: 'user' | 'auto' } who set the view (S5); never persisted.
         gmiEditObjectRequest: null, // { layerId, scope, sourceIndex, at } | null
         gmiEditWorkspaceGuard: null, // Mounted workspace's established draft guard; never persisted.
         gmiEditHandoffError: null,
@@ -273,7 +275,8 @@ const useStore = create(
             if (!prepared.ok) { set({ gmiEditHandoffError: prepared.message }); return; }
             set((state) => ({
               gmiEditWorkspace: state.layers[layerId] ? { layerId, ...(correction ? { correction } : {}) } : null,
-              ...(correction ? { gmiEditSelection: prepared.selection, gmiEditTableView: { ...state.gmiEditTableView, [layerId]: 'original' } } : {}),
+              ...(correction ? { gmiEditSelection: prepared.selection, gmiEditTableView: { ...state.gmiEditTableView, [layerId]: 'original' },
+                gmiEditTableViewBy: { ...state.gmiEditTableViewBy, [layerId]: GMI_EDIT_TABLE_VIEW_BY.AUTO } } : {}),
               gmiEditHandoffError: null,
               gmiEditObjectRequest: null,
               ui: { ...state.ui, fieldValidationOpen: false },
@@ -285,12 +288,21 @@ const useStore = create(
         },
         closeGmiEditWorkspace: () =>
           set({ gmiEditWorkspace: null, gmiEditObjectRequest: null }, false, 'gmiEdit/closeWorkspace'),
-        setGmiEditTableView: (layerId, view) =>
+        // `by: 'user'` (default) marks an explicit choice that staging respects; the workspace passes 'auto'.
+        setGmiEditTableView: (layerId, view, { by = GMI_EDIT_TABLE_VIEW_BY.USER } = {}) =>
           set(
-            (state) => ({ gmiEditTableView: { ...state.gmiEditTableView, [layerId]: view } }),
+            (state) => ({ gmiEditTableView: { ...state.gmiEditTableView, [layerId]: view }, gmiEditTableViewBy: { ...state.gmiEditTableViewBy, [layerId]: by } }),
             false,
             'gmiEdit/tableView',
           ),
+        // S5/T2 after a successful stage: Original → Foreslått unless the user chose Original.
+        // Exact Validator inspections have no view modes; their table and the stored choice stay as they are.
+        showGmiEditProposedAfterStage: (layerId) => {
+          const state = get();
+          if (['exact-object-set', 'contextual-object-set'].includes(state.objectTableInspection?.kind)) return;
+          const current = state.gmiEditTableView[layerId], next = gmiTableViewAfterStage(current, state.gmiEditTableViewBy[layerId]);
+          if (next !== (current || 'original')) state.setGmiEditTableView(layerId, next, { by: GMI_EDIT_TABLE_VIEW_BY.AUTO });
+        },
         requestGmiEditObject: (layerId, scope, sourceIndex) =>
           set(
             { gmiEditObjectRequest: { layerId, scope, sourceIndex, at: Date.now() } },
@@ -2145,6 +2157,8 @@ const useStore = create(
               );
               const { [layerId]: removedView, ...remainingTableViews } =
                 state.gmiEditTableView || {};
+              const { [layerId]: removedViewBy, ...remainingTableViewsBy } = state.gmiEditTableViewBy || {};
+              void removedViewBy;
               const { [layerId]: removedValidatorDataset, ...remainingValidatorDatasets } = state.gmiValidatorDatasets;
               void removedValidatorDataset;
               void removedView;
@@ -2156,6 +2170,7 @@ const useStore = create(
                     ? null
                     : state.gmiEditWorkspace,
                 gmiEditTableView: remainingTableViews,
+                gmiEditTableViewBy: remainingTableViewsBy,
                 gmiValidatorDatasets: remainingValidatorDatasets,
                 gmiValidatorFocus: state.gmiValidatorFocus?.layerId === layerId ? null : state.gmiValidatorFocus,
                 gmiEditObjectRequest:
@@ -3114,6 +3129,7 @@ const useStore = create(
                 gmiEditStatus: {},
                 gmiEditWorkspace: null,
                 gmiEditTableView: {},
+                gmiEditTableViewBy: {},
                 gmiEditObjectRequest: null,
                 // Keep settings as-is
                 settings: state.settings,

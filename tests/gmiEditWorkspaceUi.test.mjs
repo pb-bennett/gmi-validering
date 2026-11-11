@@ -181,6 +181,10 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await browser.evaluate(`Array.from(${table}.querySelectorAll('button')).find((e) => e.innerText.trim() === 'Ledninger').click()`);
         const changedCells = () => browser.evaluate(`${table}.querySelectorAll('[data-gmi-changed-cell]').length`);
         const visibleRows = () => browser.evaluate(`${table}.querySelectorAll('.group.flex.cursor-pointer').length`);
+        // S5/T2 (deliberate update): the first stage switched the automatic Original to Foreslått.
+        assert.equal(await browser.evaluate(`document.querySelector(".gmi-edit-table-modes").dataset.gmiTableView`), 'proposed');
+        await u.clickButton('Original', 'document.querySelector(".gmi-edit-table-modes")');
+        await browser.waitFor(`document.querySelector(".gmi-edit-table-modes").dataset.gmiTableView === 'original'`);
         assert.equal(await changedCells(), 0, 'Original shows the imported data only');
         await u.clickButton('Foreslått', 'document.querySelector(".gmi-edit-table-modes")');
         await browser.waitFor(`document.querySelector(".gmi-edit-table-modes").dataset.gmiTableView === 'proposed'`);

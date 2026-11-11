@@ -19,6 +19,19 @@ export const GMI_EDIT_TABLE_VIEW_LABELS = Object.freeze([
   Object.freeze({ key: GMI_EDIT_TABLE_VIEWS.CHANGED, label: 'Kun endrede', description: 'Bare objekter og felt som har rettinger' }),
 ]);
 
+/** Who set a layer's Data Table view: the user (toolbar, «Vis i Foreslått») or the workspace (handoff, staging). */
+export const GMI_EDIT_TABLE_VIEW_BY = Object.freeze({ USER: 'user', AUTO: 'auto' });
+
+/**
+ * S5/T2: the Data Table view after a successful stage. Original (also the
+ * unset default) becomes Foreslått unless the user explicitly chose Original;
+ * every other view, and any explicit choice, is kept.
+ */
+export function gmiTableViewAfterStage(view, chosenBy) {
+  const current = view || GMI_EDIT_TABLE_VIEWS.ORIGINAL;
+  return current === GMI_EDIT_TABLE_VIEWS.ORIGINAL && chosenBy !== GMI_EDIT_TABLE_VIEW_BY.USER ? GMI_EDIT_TABLE_VIEWS.PROPOSED : current;
+}
+
 // ------------------------------------------------------------ messages
 
 const MESSAGES = Object.freeze({

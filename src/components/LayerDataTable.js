@@ -222,8 +222,10 @@ export default function LayerDataTable() {
   const batchInspectorLayerId = useStore((state) => state.gmiBatchInspectorLayerId);
   const columnFocusRequest = useStore((state) => state.gmiEditColumnFocus);
   const [replaceSelection, setReplaceSelection] = useState(null);
-  // The focus key the user turned off (toggle or manual column drag); a new focus applies again.
+  // The focused field set the user turned off (toggle or manual column drag). Compared on layer and fields,
+  // not on the request key, so the choice survives batch → ChangeSet handover; other fields apply again.
   const [columnFocusOff, setColumnFocusOff] = useState(null);
+  const [lastColumnFocus, setLastColumnFocus] = useState(null);
 
   const tableContainerRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -326,7 +328,13 @@ export default function LayerDataTable() {
     ? (item, query) => gmiObjectMatchesQuery(query, scope, item.__index, objectIdOf(scope, item.__index))
       || (!/^\d+$/.test(query) && typeof item.guid === 'string' && item.guid.toLowerCase().includes(query)) : null, [showObjectNumber, scope, objectIdOf]);
   const columnFocus = showObjectNumber && !isContextualInspection && columnFocusRequest?.layerId === layerId ? columnFocusRequest : null;
-  const columnFocusActive = Boolean(columnFocus && columnFocusOff !== columnFocus.key);
+  const columnFocusSignature = columnFocus ? [columnFocus.layerId, ...columnFocus.fields].join('\u0000') : null;
+  // A focus on other fields ends the earlier «off» choice; a gap without focus (handover) does not.
+  if (columnFocusSignature && columnFocusSignature !== lastColumnFocus) {
+    setLastColumnFocus(columnFocusSignature);
+    if (columnFocusOff && columnFocusOff !== columnFocusSignature) setColumnFocusOff(null);
+  }
+  const columnFocusActive = Boolean(columnFocus && columnFocusOff !== columnFocusSignature);
   const focusFields = columnFocusActive ? columnFocus.fields : NO_FIELDS;
 
   const { allItemsWithIndex, items, searchedItems, displayItems } = useMemo(() => deriveLayerTableRows({
@@ -500,7 +508,7 @@ export default function LayerDataTable() {
       if (isContextualInspection) setContextualColumnOrder({ inspectionId: inspection.id, fields: nextOrder });
       else if (!isExactInspection) setLayerDataTableColumnOrder(layerId, activeTab, nextOrder);
       // A manual arrangement wins: the visible order is saved and the temporary focus stops.
-      if (columnFocusActive) setColumnFocusOff(columnFocus.key);
+      if (columnFocusActive) setColumnFocusOff(columnFocusSignature);
       setDraggedField(null);
     },
     [
@@ -508,7 +516,7 @@ export default function LayerDataTable() {
       layerId,
       orderedFields,
       activeTab,
-      setLayerDataTableColumnOrder, isExactInspection, isContextualInspection, inspection, columnFocusActive, columnFocus,
+      setLayerDataTableColumnOrder, isExactInspection, isContextualInspection, inspection, columnFocusActive, columnFocusSignature,
     ],
   );
 
@@ -878,7 +886,7 @@ export default function LayerDataTable() {
         {columnFocus && (
           <button type="button" className="gmi-column-focus gmi-focus-ring" aria-pressed={columnFocusActive} data-gmi-column-focus={columnFocus.fields.join(',')}
             title={columnFocusActive ? 'Feltet som rettes vises først. Din egen kolonnerekkefølge er uendret. Klikk for vanlig rekkefølge.' : 'Vis feltet som rettes først i tabellen.'}
-            onClick={() => setColumnFocusOff(columnFocusActive ? columnFocus.key : null)}>
+            onClick={() => setColumnFocusOff(columnFocusActive ? columnFocusSignature : null)}>
             <TextColumnsIcon size={13} weight="regular" aria-hidden="true" />{columnFocus.fields.join(', ')} først
           </button>
         )}

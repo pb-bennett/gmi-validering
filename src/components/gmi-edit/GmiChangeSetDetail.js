@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ArrowArcLeftIcon, CheckCircleIcon, HandPointingIcon, TableIcon, TrashIcon, XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { describeGmiObject, formatGmiChangeTime, gmiChangeSetCellViews, gmiSkipReasonLabel, summarizeGmiChangeSet } from '@/lib/gmiEditView.mjs';
@@ -28,9 +28,12 @@ export default function GmiChangeSetDetail({ layerId, changeSet, number, effecti
     useStore.setState({ gmiEditColumnFocus: { layerId, key: focusKey, fields: fieldsKey.split('\u0000') } });
     return () => { if (useStore.getState().gmiEditColumnFocus?.key === focusKey) useStore.setState({ gmiEditColumnFocus: null }); };
   }, [layerId, focusKey, fieldsKey]);
+  // S5: right after staging, the button that staged is gone; keyboard focus lands on the visible result.
+  const successRef = useRef(null);
+  useEffect(() => { if (variant === 'staged') successRef.current?.focus(); }, [variant]);
   const manual = changeSet.eligibility?.manualOverrides || [];
   return <section className="gmi-change-detail" data-gmi-change-detail={changeSet.id} data-variant={variant} aria-label={`Retting ${number}: ${summary.title}`}>
-    {variant === 'staged' && <p className="gmi-change-detail-success" role="status"><CheckCircleIcon size={16} weight="regular" aria-hidden="true" /> Lagt til i arbeidskopien – originalfilen er uendret</p>}
+    {variant === 'staged' && <p ref={successRef} tabIndex={-1} className="gmi-change-detail-success gmi-focus-ring" role="status" data-gmi-staged-success><CheckCircleIcon size={16} weight="regular" aria-hidden="true" /> Lagt til i arbeidskopien – originalfilen er uendret</p>}
     <div className="gmi-change-detail-head">
       <div className="min-w-0">
         <p className="gmi-edit-kicker">Retting {number} · {ORIGIN[changeSet.origin] || 'Retting'}</p>
