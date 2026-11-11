@@ -2,6 +2,90 @@
 import { getGmiDocumentDataset, gmiSourceIntact } from './gmi-edit/index.mjs';
 import { sameGmiSelectionBinding } from './gmiEditSelection.mjs';
 import { buildGmiBatchSelection, canManuallySelectGmiBatchRow } from './gmiEditBatchView.mjs';
+import { describeGmiEditColumns } from './gmiEditFields.mjs';
+import { buildFieldDiagnostics, renderValidationV2Diagnostic } from './validation-v2/diagnostics.js';
+
+const FIELD_REASONS = {
+  'field-absent': 'Finnes ikke i filen – kolonnen kan ikke opprettes',
+  'linked-tema': 'Tema og S_FCODE må rettes sammen – støttes ikke ennå',
+  'identifier-column': 'Identifikator – kan ikke masseendres',
+  'individual-only': 'Kan bare rettes enkeltvis',
+  'field-owned-by-photo-delivery': 'Forvaltes av fotoleveransen',
+  'duplicate-field-name': 'Flere kolonner har samme navn',
+  'unnamed-field': 'Kolonnen mangler navn',
+  'field-binding-unresolved': 'Feltkoblingen er tvetydig',
+};
+const datasetFindingCache = new WeakMap();
+
+export function gmiInspectorFields(view, scope) {
+  if (!['point', 'line'].includes(scope)) return [];
+  const { columns, absent } = describeGmiEditColumns(view, scope);
+  return [...columns.map((column) => {
+    const reason = !column.editable ? column.reason : column.operationKind === 'linked-tema' ? 'linked-tema'
+      : column.bindingState === 'AMBIGUOUS' ? 'field-binding-unresolved' : null;
+    return { ...column, disabled: Boolean(reason), explanation: reason ? FIELD_REASONS[reason] || 'Kan ikke rettes sikkert' : null };
+  }), ...absent.map((column) => ({ ...column, sourceKey: null, disabled: true, explanation: FIELD_REASONS[column.reason] }))];
+}
+
+export function gmiFieldInspectorRows(preview, batch, selection, advanced, stale) {
+  const result = {}, selected = new Set(selection?.keys || []);
+  const rows = new Map(batch?.rows?.map((row) => [row.key, row]));
+  for (const row of preview.rows) {
+    if (!selected.has(row.key)) { result[row.key] = { outcome: 'excluded', detail: '', findings: [] }; continue; }
+    if (stale) { result[row.key] = { outcome: 'stale', detail: '', findings: [] }; continue; }
+    const current = rows.get(row.key), changed = current?.outcome === 'changed';
+    const manual = changed && ['not-applicable', 'unresolved'].includes(row.reason);
+    const reason = current?.skipReason || row.reason;
+    const canManual = advanced && row.canInclude && ['not-applicable', 'unresolved'].includes(row.reason);
+    const findings = gmiBatchFindingList(row.findings);
+    const unchanged = (!row.reason && row.current === preview.lexeme) || reason === 'unchanged';
+    const detail = reason === 'operation-mismatch' ? `Har allerede verdi «${row.current}»`
+      : reason === 'not-applicable' && !preview.hydraulicReview ? 'Gjelder ikke ifølge Validator'
+        : reason === 'unchanged' ? `Har allerede «${row.current}»` : gmiBatchSkipSummary(row, preview.sourceKey, reason);
+    result[row.key] = { outcome: changed ? manual ? 'manual' : 'change' : unchanged ? 'unchanged' : 'skipped',
+      detail: changed && !manual ? '' : detail, findings: changed ? findings : [],
+      change: changed ? { from: row.current, to: preview.lexeme, overwrites: !row.missing } : undefined,
+      canManual, manualOn: manual, cellKey: row.key, explanation: row.explanation,
+      hypothetical: !changed && canManual ? { change: { from: row.current, to: preview.lexeme }, findings } : null };
+  }
+  for (const key of selected) if (!result[key]) result[key] = { outcome: 'added', detail: '', findings: [] };
+  return result;
+}
+
+/** G4's basic mixed gate: effective Tema and edited lexeme, including empties. */
+export function gmiInspectorMixedFields(preview, dataset, selection) {
+  if (!preview || !dataset) return [];
+  const selected = new Set(selection.keys), rows = preview.rows.filter((row) => selected.has(row.key));
+  const objects = dataset[preview.scope === 'point' ? 'points' : 'lines'];
+  const tema = (row) => {
+    const attributes = objects[row.sourceIndex]?.attributes || {};
+    const key = Object.keys(attributes).find((name) => /^(tema|s_fcode)$/i.test(name));
+    return String(attributes[key] ?? '').trim();
+  };
+  return [['Tema', tema], [preview.sourceKey, (row) => String(row.current ?? '').trim()]]
+    .filter(([, value]) => new Set(rows.map(value)).size > 1).map(([field]) => field);
+}
+
+export function gmiBatchDatasetFindings(dryRun, transition = 'introduced') {
+  let cached = datasetFindingCache.get(dryRun);
+  if (!cached) { cached = new Map(); datasetFindingCache.set(dryRun, cached); }
+  if (cached.has(transition)) return cached.get(transition);
+  const result = transition === 'resolved' ? dryRun.before : dryRun.after;
+  const groups = new Map();
+  const findings = dryRun[transition].map((finding, index) => {
+    const scope = finding.objectRef?.geometryScope || finding.geometryScope;
+    const rule = result.ruleResults.find((entry) => entry.rule.ruleId === finding.ruleId)?.rule;
+    const group = `${finding.ruleId}:${scope}`;
+    if (!groups.has(group)) groups.set(group, rule ? buildFieldDiagnostics({ result, rule, geometryScope: scope }).diagnostics : []);
+    const diagnostics = groups.get(group);
+    const diagnostic = diagnostics.find((entry) => entry.state === finding.state && entry.reasonCodes.includes(finding.reasonCode));
+    return { key: `${transition}:${index}`, introduced: transition === 'introduced', objectRef: finding.objectRef,
+      tone: finding.state === 'FAIL' ? 'error' : 'warning', severity: finding.state === 'FAIL' ? 'FEIL' : 'SJEKK',
+      reason: diagnostic ? renderValidationV2Diagnostic(diagnostic) : rule?.description || 'Kontroller feltkoblingen i Validator' };
+  });
+  cached.set(transition, findings);
+  return findings;
+}
 
 export function gmiSelectionTargets(view, selection, { lineOnly = false } = {}) {
   const binding = { layerId: view.session.layerId, sessionId: view.handle.sessionId, fingerprint: view.document.fingerprint };

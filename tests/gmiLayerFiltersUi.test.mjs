@@ -33,7 +33,7 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
       await browser.evaluate(`(() => { const e = (${root}).querySelector('button'); if (e.getAttribute('aria-expanded') !== 'true') e.click(); })()`);
     };
     const value = (text) => browser.evaluate(`(() => { const e = ${inspector}.querySelector('[aria-label="Ny verdi"]');
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(e, ${JSON.stringify(text)}); e.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      Object.getOwnPropertyDescriptor(e.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(e, ${JSON.stringify(text)}); e.dispatchEvent(new Event(e.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); })()`);
     const count = (n) => browser.waitFor(`${table}.querySelectorAll('[data-table-row]').length === ${n}`);
     const selected = () => browser.evaluate(`Array.from(${table}.querySelectorAll('[aria-selected=true][data-table-row]')).map(e => Number(e.dataset.tableRow))`);
     const hideMaterial = async () => {
@@ -91,8 +91,10 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
 
       await t.test('shared filters do not stale an existing batch review and approved staging remains explicit', async () => {
         await click('Rediger valgte (2)'); await browser.waitFor(inspector);
-        await value('11'); await click('Forhåndsvis endringer', inspector);
+        await browser.evaluate(`(() => { const s=${inspector}.querySelector('[aria-label="Felt for masseendring"]'); s.value='SDR'; s.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+        await value('11.0'); await click('Forhåndsvis endringer', inspector);
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]')?.dataset.state === 'valid'`);
+        await browser.waitFor(`${inspector}.getAttribute('aria-busy') === 'false'`);
         await hideMaterial();
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'valid');
         assert.equal(await stageDisabled(), false);

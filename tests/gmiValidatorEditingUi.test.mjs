@@ -23,7 +23,7 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
     const click = (label, scope = 'document') => browser.evaluate(`(() => { const button = Array.from(${scope}.querySelectorAll('button')).find(e => e.innerText.trim() === ${JSON.stringify(label)} || e.getAttribute('aria-label') === ${JSON.stringify(label)});
       if (!button || button.disabled) throw new Error('Unavailable: ' + ${JSON.stringify(label)}); button.click(); })()`);
     const choose = (selector, value) => browser.evaluate(`(() => { const e = ${selector}; e.value = ${JSON.stringify(value)}; e.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-    const value = (selector, text) => browser.evaluate(`(() => { const e = ${selector}; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(e, ${JSON.stringify(text)}); e.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    const value = (selector, text) => browser.evaluate(`(() => { const e = ${selector}; Object.getOwnPropertyDescriptor(e.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(e, ${JSON.stringify(text)}); e.dispatchEvent(new Event(e.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); })()`);
     const shot = async (name) => {
       if (!process.env.GMI_EDIT_SCREENSHOT_DIR) return;
       await mkdir(process.env.GMI_EDIT_SCREENSHOT_DIR, { recursive: true });
@@ -57,9 +57,9 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await openSdr();
         await click('Lag retting…');
         await browser.waitFor(`${dialog}?.dataset.batchStep === '1'`);
-        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Felt for masseendring"]').value`), 'sdr');
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Felt for masseendring"]').value`), '');
         assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Ny verdi"]').value`), '');
-        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Felt for masseendring"]').disabled`), true);
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Felt for masseendring"]').disabled`), false);
         assert.match(await browser.evaluate(`document.querySelector('[data-gmi-selection-bar]').innerText`), /Fra Validator: 3 objekter/);
         assert.equal(await browser.evaluate(`Boolean(document.querySelector('dialog[open].gmi-batch-dialog'))`), false);
         assert.equal(await browser.evaluate(`Boolean(document.querySelector('[data-gmi-batch-counts]'))`), false);
@@ -75,6 +75,7 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         }
       });
       await t.test('exact scope preserved through review, exclusion and M5B staging; no automatic value', async () => {
+        await choose(`${dialog}.querySelector('[aria-label="Felt for masseendring"]')`, 'SDR');
         await value(`${dialog}.querySelector('[aria-label="Ny verdi"]')`, '11.0');
         await click('Forhåndsvis endringer', dialog);
         await browser.waitFor(`${dialog}?.dataset.batchStep === '2' && ${dialog}.getAttribute('aria-busy') === 'false'`);
@@ -99,7 +100,11 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
           await shot(`r5-inspector-${width}x${height}`);
         }
         await shot('m5c-exact-batch-review');
-        await click('Legg til masseendring', dialog); await browser.waitFor(`${dialog}?.dataset.batchStep === '3'`);
+        await browser.waitFor(`${dialog}.getAttribute('aria-busy') === 'false'`);
+        await click('Legg til masseendring', dialog);
+        await browser.waitFor(`document.querySelector('dialog[open][data-gmi-confirm=batch-risk]')`);
+        await click('Godkjenn og legg til', `document.querySelector('dialog[open][data-gmi-confirm=batch-risk]')`);
+        await browser.waitFor(`${dialog}?.dataset.batchStep === '3'`);
         await click('Kontroller endringer', workspace);
         await browser.waitFor('document.querySelector("[data-gmi-full-comparison]")');
         const text = await browser.evaluate('document.querySelector("[data-gmi-full-comparison]").innerText');

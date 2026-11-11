@@ -6,6 +6,66 @@ import { gmiSelectionTargets, gmiBatchScopeState, planGmiInspectorBatch } from '
 import { gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
 import { loadGmiDocument, verifyCellChanges } from './helpers/gmiEditHarness.mjs';
 import { getGmiProposedBytes } from '../src/lib/gmi-edit/index.mjs';
+import { readFile } from 'node:fs/promises';
+import { gmiInspectorFields, gmiFieldInspectorRows, gmiInspectorMixedFields, gmiBatchDatasetFindings } from '../src/lib/gmiBatchInspectorView.mjs';
+import { prepareGmiFieldBatch, buildGmiFieldBatch, dryRunGmiFieldBatch } from '../src/lib/gmiFieldBatchPlan.mjs';
+import { gmiFieldBatchFixture } from './helpers/gmiFieldBatchFixture.mjs';
+
+test('G4 field choices use capabilities for both scopes, explain unavailable columns and start without a field', async () => {
+  const document = await loadGmiSourceDocument(gmiFieldBatchFixture());
+  const view = { document, handle: { layerId: 'g4' } };
+  for (const scope of ['point', 'line']) {
+    const fields = gmiInspectorFields(view, scope);
+    assert(fields.some((field) => field.sourceKey === 'Merknad' && !field.disabled));
+    assert(fields.some((field) => !field.sourceKey && field.disabled && field.explanation.includes('Finnes ikke i filen')));
+  }
+  const component = await readFile(new URL('../src/components/gmi-edit/GmiBatchInspector.js', import.meta.url), 'utf8');
+  assert.match(component, /\[field, setField\] = useState\(''\)/);
+  assert.doesNotMatch(component, /initialField|GMI_BATCH_FIELDS/);
+  const input = await readFile(new URL('../src/components/gmi-edit/GmiFieldValueInput.js', import.meta.url), 'utf8');
+  assert.match(input, /domain\.options\.map/);
+  assert.match(input, /<select/);
+});
+
+test('G4 point presentation preserves exclusions, manual applicability, exact values and dataset consequences', async () => {
+  const document = await loadGmiSourceDocument(gmiFieldBatchFixture());
+  const session = createGmiEditSession(document, { layerId: 'g4' });
+  const handle = { layerId: 'g4', sessionId: 'g4-session', fingerprint: document.fingerprint };
+  const view = { document, session, handle };
+  const selection = { binding: handle, scope: 'point', keys: ['point:0', 'point:1', 'point:2'] };
+  const prepared = await prepareGmiFieldBatch(view, { scope: 'point', sourceKey: 'InnvendigUtvendig', operation: 'set', value: 'OD', selection });
+  assert.equal(prepared.ok, true);
+  const candidate = buildGmiFieldBatch(session, prepared.preview);
+  const batch = await dryRunGmiFieldBatch(session, candidate);
+  assert.equal(batch.ok, true);
+  const rows = gmiFieldInspectorRows(prepared.preview, batch, selection, false, null);
+  assert.deepEqual(rows['point:0'].change, { from: '', to: 'OD', overwrites: false });
+  assert.deepEqual(rows['point:2'].change, { from: 'ID', to: 'OD', overwrites: true });
+  assert.deepEqual(gmiInspectorMixedFields(prepared.preview, batch.dryRun.current.dataset, selection), ['Tema', 'InnvendigUtvendig']);
+  assert(gmiBatchDatasetFindings(batch.dryRun).every((finding) => finding.reason && !finding.reason.includes('REQUIRED_')));
+  const narrowed = { ...selection, keys: ['point:0'] };
+  assert.equal(gmiFieldInspectorRows(prepared.preview, batch, narrowed, false, null)['point:1'].outcome, 'excluded');
+  assert.equal(gmiFieldInspectorRows(prepared.preview, batch, selection, false, 'stale')['point:0'].outcome, 'stale');
+  const manual = await prepareGmiFieldBatch(view, { scope: 'point', sourceKey: 'Kumform', operation: 'set', value: 'R', selection });
+  const excluded = manual.preview.rows.find((row) => row.key === 'point:0');
+  assert.equal(excluded.reason, 'not-applicable');
+  const presentation = gmiFieldInspectorRows(manual.preview, null, selection, true, null)['point:0'];
+  assert.equal(presentation.outcome, 'skipped');
+  assert.equal(presentation.canManual, true);
+  assert.equal(presentation.detail, 'Gjelder ikke ifølge Validator');
+  assert.deepEqual(presentation.hypothetical.change, { from: '', to: 'R' });
+});
+
+test('G4 hydraulic fill preserves M2 populated exclusions even when the listed value is equal', async () => {
+  const { view, selection } = await setup([0, 1]);
+  const prepared = await prepareGmiFieldBatch(view, { scope: 'line', sourceKey: 'SDR', operation: 'fill-missing', value: '11.0', selection });
+  assert.equal(prepared.ok, true);
+  const batch = buildGmiFieldBatch(view.session, prepared.preview);
+  const rows = gmiFieldInspectorRows(prepared.preview, batch, selection, true, null);
+  assert.equal(rows['line:1'].outcome, 'skipped');
+  assert.equal(rows['line:1'].canManual, false);
+  assert.equal(rows['line:1'].detail, 'Har allerede verdi «11.0»');
+});
 
 async function setup(indices = [0, 2, 6, 7]) {
   const bytes = gmiEditBatchFixture(), document = await loadGmiSourceDocument(bytes);

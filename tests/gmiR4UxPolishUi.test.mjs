@@ -29,7 +29,7 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
     await writeFile(file, Buffer.from(source, 'latin1'));
     const browser = await openTestChrome();
     const click = (label, root = 'document') => browser.evaluate(`(() => { const b = Array.from((${root}).querySelectorAll('button')).find(e => e.innerText.trim() === ${JSON.stringify(label)} || e.getAttribute('aria-label') === ${JSON.stringify(label)}); if (!b || b.disabled) throw new Error('Unavailable: ' + ${JSON.stringify(label)}); b.click(); })()`);
-    const input = (element, value) => browser.evaluate(`(() => { const i = ${element}; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(value)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    const input = (element, value) => browser.evaluate(`(() => { const i = ${element}; Object.getOwnPropertyDescriptor(i.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(value)}); i.dispatchEvent(new Event(i.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); })()`);
     const search = (value) => input(`document.querySelector('[aria-label="Søk i data"]')`, value);
     const text = (expression) => browser.evaluate(`${expression}.innerText`);
     const stageDisabled = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring').disabled`);
@@ -102,7 +102,8 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
       await t.test('review: excluded objects show no change, unrelated rows stay neutral, re-adding invalidates', async () => {
         await click('Rediger valgte (4)', bar); await browser.waitFor(inspector);
         assert.match(await text(bar), /Masseendring pågår/, 'entry action becomes a mode indicator');
-        await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '11');
+        await browser.evaluate(`(() => { const s=${inspector}.querySelector('select'); s.value='SDR'; s.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+        await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '11.0');
         await preview();
         const summary = await text(`${inspector}.querySelector('[data-gmi-batch-counts]')`);
         assert.match(summary, /SDR/); assert.match(summary, /Fyll manglende verdier/); assert.match(summary, /2 av 4 ledninger endres/);
@@ -142,6 +143,7 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
         const chips = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.gmi-severity-count')).map(e => ({ text: e.innerText.trim(), tone: e.dataset.validationTone || null, color: getComputedStyle(e).color }))`);
         assert.deepEqual(chips.map(({ text: label, tone }) => [label, tone]), [['1 ny FEIL', 'error'], ['1 ny SJEKK', 'warning']]);
         assert.notEqual(chips[0].color, chips[1].color);
+        await browser.waitFor(`${inspector}.getAttribute('aria-busy') === 'false'`);
         await click('Legg til masseendring', inspector); await browser.waitFor(risk);
         const dialog = await browser.evaluate(`(() => {
           const d = ${risk}; const groups = Array.from(d.querySelectorAll('.gmi-risk-group')).map(e => e.dataset.validationTone);
@@ -156,6 +158,7 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
         await shot('risk');
         await click('Tilbake til utvalget', risk);
         assert.equal(await browser.evaluate(`${workspace}.querySelectorAll('[data-change-set]').length`), 0);
+        await browser.waitFor(`${inspector}.getAttribute('aria-busy') === 'false'`);
         await click('Legg til masseendring', inspector); await browser.waitFor(risk);
         await click('Godkjenn og legg til', risk);
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-change-detail]')`);
@@ -166,7 +169,7 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
         assert.match(staged, /Lagt til i arbeidskopien/); assert.match(staged, /Fyll SDR · 11/); assert.match(staged, /3 ledninger/);
         assert.match(staged, /I arbeidskopien · ikke lastet ned/);
         const objects = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('[data-gmi-change-detail-cells] tbody tr')).map(r => Array.from(r.children).map(c => c.innerText.trim()))`);
-        assert.deepEqual(objects, [['Ledning 101', 'tom', '11'], ['Ledning 138', 'tom', '11'], ['Ledning 143', 'tom', '11']]);
+        assert.deepEqual(objects, [['Ledning 101', 'tom', '11.0'], ['Ledning 138', 'tom', '11.0'], ['Ledning 143', 'tom', '11.0']]);
         const history = await browser.evaluate(`Array.from(${workspace}.querySelectorAll('[data-change-set] .gmi-edit-change-objects button')).map(e => e.innerText)`);
         assert.deepEqual(history, ['Ledning 101', 'Ledning 138', 'Ledning 143']);
         assert.match(await text(`${workspace}.querySelector('[data-change-set]')`), /SDR → 11/);
@@ -213,6 +216,7 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
 
       await t.test('icon table-size toggle and laptop layouts with a live preview', async () => {
         await click('Rediger valgte (4)', bar); await browser.waitFor(inspector);
+        await browser.evaluate(`(() => { const s=${inspector}.querySelector('select'); s.value='SDR'; s.dispatchEvent(new Event('change', {bubbles:true})); })()`);
         await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '13.6'); await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`);
         await preview();
         const toggle = `document.querySelector('[data-gmi-table-size]')`;

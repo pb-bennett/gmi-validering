@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
 import { gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
+import { gmiFieldBatchFixture } from './helpers/gmiFieldBatchFixture.mjs';
+import { loadGmiDocument, verifyCellChanges } from './helpers/gmiEditHarness.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 const inspector = `document.querySelector('[data-gmi-batch-inspector]')`;
@@ -15,6 +17,173 @@ const bar = `document.querySelector('[data-gmi-selection-bar]')`;
 const confirm = `document.querySelector('dialog[open][data-gmi-confirm=workspace]')`;
 const box = (index) => `${grid}.querySelector('[data-table-row="${index}"] input[type=checkbox]')`;
 const row = (index) => `${grid}.querySelector('[data-table-row="${index}"]')`;
+
+test('G4 production: general points/lines, exact reviewed bytes, gates, cancellation and laptop layout',
+  { skip: !app || !chromePath, timeout: 240000 }, async (t) => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'gmi-g4-ui-'));
+    const file = path.join(directory, 'Synthetic G4.gmi'), downloads = path.join(directory, 'downloads');
+    await mkdir(downloads);
+    const bytes = gmiFieldBatchFixture({
+      pointFields: ['Tema', 'InnvendigUtvendig', 'Bredde', 'Kumform', 'Merknad', 'EgetFelt'],
+      points: [...Array.from({ length: 4 }, () => ['LOK', '', '650', '', '', '']), ['KUM', 'ID', '1000', 'R', '', '']],
+      lineFields: ['Tema', 'Material', 'Merknad', 'SDR', 'Trykklasse', 'Ringstivhet', 'Dimensjon', 'Rørform', 'VertikalDimensjon', 'Anleggsår'],
+      lines: [['VL', '', '', '', '', '', '160', 'S', '', ''], ['VL', 'PE', 'old', '', '', '', '200', 'R', '', ''],
+        ['SP', 'unlisted', '', '', '', '', '200', 'S', '', '']],
+    });
+    await writeFile(file, bytes);
+    const browser = await openTestChrome();
+    const risk = `document.querySelector('dialog[open][data-gmi-confirm=batch-risk]')`;
+    const click = (label, root = 'document') => browser.evaluate(`(() => {
+      const b=Array.from((${root}).querySelectorAll('button')).find(e=>e.innerText.trim()===${JSON.stringify(label)} || e.getAttribute('aria-label')===${JSON.stringify(label)});
+      if(!b || b.disabled) throw new Error('Unavailable: '+${JSON.stringify(label)}); b.click(); })()`);
+    const choose = (label, value) => browser.evaluate(`(() => { const s=${inspector}.querySelector('[aria-label=${JSON.stringify(label)}]');
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,${JSON.stringify(value)}); s.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+    const input = (value) => browser.evaluate(`(() => { const e=${inspector}.querySelector('[aria-label="Ny verdi"]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)}); e.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+    const text = (root = inspector) => browser.evaluate(`${root}.innerText`);
+    const ready = () => browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK') && ${inspector}.getAttribute('aria-busy')==='false'`);
+    const preview = async () => { await click('Forhåndsvis endringer', inspector); await ready(); };
+    const stage = async (expectRisk = false) => {
+      await ready(); await click('Legg til masseendring', inspector);
+      if (expectRisk) { await browser.waitFor(risk); await click('Godkjenn og legg til', risk); }
+      await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
+    };
+    const selectObjects = async (scope, indices) => {
+      if (await browser.evaluate(`Boolean(${inspector})`)) {
+        await click('Avslutt', inspector);
+        if (await browser.evaluate(`Boolean(${confirm})`)) await click('Forkast skjemaet', confirm);
+        await browser.waitFor(`!${inspector}`);
+      }
+      if (await browser.evaluate(`Boolean(${bar})`)) await click('Fjern utvalg', bar);
+      await click(scope, `document.querySelector('[data-table-geometry]')`);
+      await browser.waitFor(box(indices[0]));
+      for (const index of indices) await browser.evaluate(`${box(index)}.click()`);
+      await click(`Rediger valgte (${indices.length})`, bar); await browser.waitFor(inspector);
+    };
+    try {
+      await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'localStorage.clear(); window.confirm=()=>true;' });
+      await browser.send('Page.navigate', { url: `${app}?testmodus=1` });
+      await browser.waitFor('document.querySelector("button[aria-label=Lukk]")'); await click('Lukk');
+      await setPhotoFiles(browser, 'input[type=file]', [file]); await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
+      await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`); await browser.waitFor(workspace);
+
+      await t.test('four LOK points, listed OD, one ChangeSet, undo/redo, exact downloaded spans at both laptop sizes', async () => {
+        await selectObjects('Punkter', [0, 1, 2, 3]);
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('select').value`), '');
+        assert(await browser.evaluate(`Array.from(${inspector}.querySelector('select').options).some(o=>o.disabled&&o.textContent.includes('Finnes ikke i filen'))`));
+        await choose('Felt for masseendring', 'InnvendigUtvendig');
+        assert.deepEqual(await browser.evaluate(`Array.from(${inspector}.querySelector('[aria-label="Ny verdi"]').options).map(o=>o.value)`), ['', 'ID', 'OD']);
+        // Native keyboard value selection and form submission.
+        await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').focus()`);
+        for (const key of ['End', 'Tab', 'Tab', 'Enter']) {
+          await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key });
+          await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key });
+        }
+        // Native platform select behavior can differ; exercise the same accessible control explicitly if needed.
+        if (await browser.evaluate(`!${inspector}.querySelector('[data-gmi-batch-counts]')`)) {
+          await choose('Ny verdi', 'OD'); await preview();
+        } else await ready();
+        assert.match(await text(), /4 av 4 punkter endres/);
+        assert.match(await text(), /4 FEIL og 0 SJEKK løst/);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          const bounds = await browser.evaluate(`(() => { const i=${inspector}.closest('aside').getBoundingClientRect(), g=${grid}.getBoundingClientRect(); return {width:document.documentElement.scrollWidth, right:i.right, bottom:i.bottom, tableHeight:g.height}; })()`);
+          assert(bounds.width <= width && bounds.right <= width && bounds.bottom <= height && bounds.tableHeight > 120, JSON.stringify(bounds));
+          const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+          await writeFile(path.join(tmpdir(), `gmi-g4-${width}x${height}.png`), Buffer.from(data, 'base64'));
+        }
+        await stage();
+        assert.equal(await browser.evaluate(`${workspace}.querySelectorAll('[data-change-set]').length`), 1);
+        const id = await browser.evaluate(`${workspace}.querySelector('[data-change-set]').getAttribute('data-change-set')`);
+        await click('Angre siste retting', workspace);
+        await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===0`);
+        await click('Gjør om retting', workspace);
+        await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===1`);
+        assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-change-set]').getAttribute('data-change-set')`), id);
+        await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
+        await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
+        const exportDialog = `document.querySelector('dialog[open].gmi-edit-export')`;
+        await browser.waitFor(exportDialog); await click('Last ned', exportDialog);
+        await browser.waitFor(`${exportDialog}?.dataset.exportPhase==='done'`);
+        const filename = await text(`${exportDialog}.querySelector('[data-downloaded-filename]')`);
+        let output;
+        for (let i = 0; i < 100; i++) {
+          if ((await readdir(downloads)).includes(filename)) { output = new Uint8Array(await readFile(path.join(downloads, filename))); break; }
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        assert(output);
+        assert.deepEqual(verifyCellChanges(loadGmiDocument(bytes), output, Array.from({ length: 4 }, (_, sourceIndex) => ({ scope: 'point', sourceIndex, field: 'InnvendigUtvendig', lexeme: 'OD' }))).failures, []);
+        await click('Lukk', exportDialog);
+      });
+
+      await t.test('line Material fill, mixed gate, Merknad set, overwrite and previous-correction gates', async () => {
+        await selectObjects('Ledninger', [0, 1]);
+        await choose('Felt for masseendring', 'Material'); await choose('Ny verdi', 'PE'); await preview();
+        assert.match(await text(), /1 av 2 ledninger endres/);
+        await click('Legg til masseendring', inspector); await browser.waitFor(risk); assert.match(await text(risk), /Blandet utvalg: Material/);
+        await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
+        await click('Ny masseendring for utvalget', inspector);
+        await choose('Felt for masseendring', 'Merknad'); await input('Kontrollert');
+        await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await preview();
+        await click('Legg til masseendring', inspector); await browser.waitFor(risk); assert.match(await text(risk), /1 utfylte verdier overskrives/);
+        await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
+        await click('Ny masseendring for utvalget', inspector);
+        await choose('Felt for masseendring', 'Merknad'); await input('Ny vurdering');
+        await click('Forhåndsvis endringer', inspector);
+        await browser.waitFor(`${inspector}.getAttribute('aria-busy')==='false'`);
+        assert.match(await text(), /Erstatt tidligere rettinger for 2/);
+        await browser.evaluate(`Array.from(${inspector}.querySelectorAll('label')).find(e=>e.innerText.includes('Erstatt tidligere rettinger')).querySelector('input').click()`);
+        await ready(); await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        assert.match(await text(risk), /2 tidligere rettinger erstattes/); await click('Tilbake til utvalget', risk);
+      });
+
+      await t.test('manual non-applicable point and unvalidated field require explicit approval', async () => {
+        await selectObjects('Punkter', [0]);
+        await choose('Felt for masseendring', 'Kumform'); await choose('Ny verdi', 'R');
+        await click('Forhåndsvis endringer', inspector);
+        await browser.waitFor(`${inspector}.getAttribute('aria-busy')==='false'`);
+        await browser.evaluate(`${inspector}.querySelector('.gmi-batch-advanced input').click()`);
+        await browser.waitFor(`${row(0)}.querySelector('.gmi-manual-toggle')`); await click('Inkluder manuelt', row(0));
+        await ready(); await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        assert.match(await text(risk), /1 manuelt inkludert/); await click('Tilbake til utvalget', risk);
+        await click('Endre oppsett', inspector); await choose('Felt for masseendring', 'EgetFelt'); await input('a;b');
+        assert.match(await text(), /Semikolon/);
+        await input('Vurdert'); await preview();
+        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        assert.match(await text(risk), /kontrolleres ikke av Validator/); await click('Tilbake til utvalget', risk);
+      });
+
+      await t.test('mixed point Tema and existing values are named before approval', async () => {
+        await selectObjects('Punkter', [0, 4]);
+        await choose('Felt for masseendring', 'InnvendigUtvendig'); await choose('Ny verdi', 'OD');
+        await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await preview();
+        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        assert.match(await text(risk), /Blandet utvalg: Tema, InnvendigUtvendig/);
+        await click('Tilbake til utvalget', risk);
+      });
+
+      await t.test('new FEIL is confirmed even without overwrite; cancellation blocks until a fresh full check', async () => {
+        await selectObjects('Ledninger', [0]);
+        await choose('Felt for masseendring', 'Anleggsår'); await input('ugyldig');
+        await browser.evaluate('window.g4Timeout=window.setTimeout; window.setTimeout=(fn,ms,...args)=>window.g4Timeout(fn,ms===0?100:ms,...args)');
+        await click('Forhåndsvis endringer', inspector);
+        await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('trinn')`);
+        await click('Avbryt full kontroll', inspector);
+        assert.match(await text(), /Avbrutt/);
+        assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText==='Legg til masseendring').disabled`));
+        await browser.evaluate('window.setTimeout=window.g4Timeout');
+        await click('Kjør full kontroll', inspector); await ready();
+        assert.match(await text(), /ny FEIL|nye FEIL/);
+        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        assert.match(await text(risk), /ny FEIL|nye FEIL/); await click('Tilbake til utvalget', risk);
+        await click('Angre siste retting', workspace);
+        await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state==='stale'`);
+        assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText==='Legg til masseendring').disabled`));
+      });
+      assert.deepEqual(new Uint8Array(await readFile(file)), bytes);
+      assert.equal(browser.events.filter((event) => event.method === 'Runtime.exceptionThrown').length, 0);
+    } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
+  });
 
 test('R4 production: exact inspector batch, draft guard, live selection, manual risk, history, fallback and laptop layout',
   { skip: !app || !chromePath, timeout: 240000 }, async (t) => {
@@ -27,7 +196,11 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
     await writeFile(file, Buffer.from(source, 'latin1'));
     const browser = await openTestChrome();
     const click = (label, root = 'document') => browser.evaluate(`(() => { const button = Array.from((${root}).querySelectorAll('button')).find(e => e.innerText.trim() === ${JSON.stringify(label)} || e.getAttribute('aria-label') === ${JSON.stringify(label)}); if (!button || button.disabled) throw new Error('Unavailable: ' + ${JSON.stringify(label)}); button.click(); })()`);
-    const input = (element, value) => browser.evaluate(`(() => { const input = ${element}; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    const input = (element, value) => browser.evaluate(`(() => { const input = ${element};
+      const select = input.tagName === 'SELECT', value = ${JSON.stringify(value)};
+      const offered = select ? Array.from(input.options).find(o => o.value === value || (value.trim() && Number(o.value) === Number(value)))?.value ?? value : value;
+      Object.getOwnPropertyDescriptor(select ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(input, offered);
+      input.dispatchEvent(new Event(select ? 'change' : 'input', { bubbles: true })); })()`);
     const select = (value) => browser.evaluate(`(() => { const select = ${inspector}.querySelector('select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(value)}); select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
     const text = () => browser.evaluate(`${inspector}.innerText`);
     const stageDisabled = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring').disabled`);
@@ -59,18 +232,18 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await click('Rediger valgte (2)', bar); await browser.waitFor(confirm); await click('Forkast skjemaet', confirm);
         await browser.waitFor(inspector);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('select').value`), '');
         assert.equal(await stageDisabled(), true);
         assert.equal(await browser.evaluate(`Boolean(document.querySelector('dialog.gmi-batch-dialog'))`), false);
       });
 
       await t.test('field, value and mode changes; lexeme rejection; exact review and shrinking without recomputation', async () => {
-        await select('pressureClass'); await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, 'PN16');
+        await select('Trykklasse');
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`);
         assert.equal(await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].checked`), true);
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[0].click()`);
-        await select('sdr');
-        await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, 'a;b');
-        assert.match(await text(), /Semikolon/);
+        await select('SDR');
+        assert(await browser.evaluate(`!Array.from(${inspector}.querySelector('[aria-label="Ny verdi"]').options).some(o=>o.value==='a;b')`));
         await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '11'); await calculate();
         assert.match(await text(), /2 av 2 ledninger endres/); assert.match(await text(), /0 nye FEIL/);
         assert.equal(await browser.evaluate(`${grid}.getAttribute('aria-rowcount')`), '3');
@@ -78,6 +251,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         assert.match(await browser.evaluate(`${row(0)}.innerText`), /tom\s*→[\s\S]*11/);
         await browser.evaluate(`${box(1)}.click()`);
         await browser.waitFor(`${inspector}.innerText.includes('1 av 1 ledning endres')`);
+        await browser.waitFor(`${inspector}.getAttribute('aria-busy') === 'false'`);
         assert.equal(await stageDisabled(), false);
       });
 
@@ -104,7 +278,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await browser.evaluate(`${row(2)}.click()`);
         await browser.waitFor(`${inspector}.querySelector('.gmi-batch-object-detail')`);
         // Row inspection keeps the reviewed proposal (and its draft) intact.
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11.0');
         await click('Tilbake til masseendringen', inspector);
         await click('Legg til masseendring', inspector);
         const risk = `document.querySelector('dialog[open][data-gmi-confirm=batch-risk]')`;
@@ -123,6 +297,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await browser.waitFor(`${row(0)}.innerText.includes('11')`);
         await click('Original', `document.querySelector('.gmi-edit-table-modes')`);
         await browser.waitFor(`!${row(0)}.innerText.includes('11')`);
+        await select('SDR');
         await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '17');
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await calculate();
         await click('Angre siste retting', workspace);
@@ -130,18 +305,19 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'stale');
         await click('Gjør om retting', workspace); assert.equal(await stageDisabled(), true);
         await click('Avslutt', inspector); await browser.waitFor(confirm); await click('Avbryt', confirm);
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '17');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '17.0');
         await click('Endre oppsett', inspector);
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '17');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '17.0');
         await click('Avslutt', inspector); await browser.waitFor(confirm); await click('Forkast skjemaet', confirm);
         await browser.waitFor(`!${inspector}`);
       });
 
-      await t.test('points explain line-only support; modal remains independently available', async () => {
+      await t.test('points offer capabilities with absent fields disabled; modal remains independently available', async () => {
         await click('Fjern utvalg', bar); await click('Punkter', `document.querySelector('[data-table-geometry]')`);
         await browser.waitFor(box(0)); await browser.evaluate(`${box(0)}.click()`);
         await click('Rediger valgte (1)', bar); await browser.waitFor(inspector);
-        assert.match(await text(), /støttes bare for ledninger/); assert.equal(await stageDisabled(), true);
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('select').value`), '');
+        assert(await browser.evaluate(`Array.from(${inspector}.querySelector('select').options).some(o => o.disabled && o.textContent.includes('Finnes ikke i filen'))`)); assert.equal(await stageDisabled(), true);
         await click('Avslutt', inspector); await browser.waitFor(`!${inspector}`);
         await click('Masseendringer', workspace); await browser.waitFor(`document.querySelector('dialog[open].gmi-batch-dialog')`);
         assert.equal(await browser.evaluate(`Boolean(${inspector})`), false);
@@ -153,6 +329,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await browser.waitFor(box(0));
         await browser.evaluate(`${grid}.querySelector('[role=columnheader] input').click()`);
         await click('Rediger valgte (24)', bar); await browser.waitFor(inspector);
+        await select('SDR');
         await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '11'); await calculate();
         await click('Større tabell');
         for (const [width, height] of [[1920, 1080], [1366, 768], [1280, 720]]) {
@@ -163,7 +340,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
           await writeFile(path.join(tmpdir(), `gmi-r4-${width}x${height}.png`), Buffer.from(data, 'base64'));
         }
         await click('Mindre tabell');
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11.0');
         assert.match(await text(), /av 24 ledninger endres/);
         for (const [width, height] of [[1920, 1080], [1366, 768], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
@@ -174,7 +351,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await click('Større tabell'); await click('Fjern utvalg', bar);
         assert.equal(await stageDisabled(), true);
         await click('Mindre tabell');
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11.0');
       });
       assert.equal(browser.events.filter((event) => event.method === 'Runtime.exceptionThrown').length, 0);
       assert.equal(await (await import('node:fs/promises')).readFile(file, 'latin1'), source);

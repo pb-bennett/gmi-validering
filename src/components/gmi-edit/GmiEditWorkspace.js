@@ -319,7 +319,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
         <DownloadSimpleIcon size={16} aria-hidden="true" /> Last ned revidert GMI <span className="gmi-edit-experimental-tag">Eksperimentell</span>
       </button>
     </footer>
-    {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector key={`batch:${formRevision}`} initialField={correction?.canonicalFieldId} view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
+    {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector key={`batch:${formRevision}`} view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onClose={closeBatchInspector} onRequestClose={() => guard(closeBatchInspector, 'masseendringen')} inspected={batchInspected} onInspectClose={() => setBatchInspected(null)}
       renderChangeSet={(changeSet) => renderChangeSet(changeSet, 'staged')}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice(null); }} />
