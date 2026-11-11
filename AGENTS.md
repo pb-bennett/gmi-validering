@@ -6,6 +6,7 @@
 - Keep changes focused. Reuse existing components, state owners, validation policies and helpers; avoid parallel mechanisms, unrelated refactors and dependency changes unless needed for the task.
 - Follow nearby code conventions. Use existing design tokens, Phosphor icons and Norwegian user-facing terminology. Preserve keyboard access, accessible names, draft guards and usable scrolling/layout at laptop sizes.
 - Active GMI Validator V2 lives under `src/lib/validation-v2/`; legacy JSON rules are not its rule owner. Keep feature-specific architecture and acceptance decisions in their reports, not here.
+- **Language:** Use English for all AI-agent communication, progress updates, terminal summaries, planning documents, and completion reports. Use Norwegian for application UI text and other end-user-facing content. Preserve established Norwegian field names and technical terminology where appropriate.
 
 ## Source and data safety
 
