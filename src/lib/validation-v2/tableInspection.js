@@ -1,4 +1,5 @@
 import { getCanonicalField } from './registry/registry.js';
+import { objectInspectionSelectionKey } from '../objectTableInspection.js';
 
 const RESULT_RANK = Object.freeze({ PASS: 0, CHECK: 1, FAIL: 2 });
 
@@ -17,8 +18,9 @@ function resolveBoundColumn(field, objects) {
 
 /** Build Validator's rich request from structured outcomes only. */
 export function buildValidatorFieldInspectionRequest({
-  layerId, datasetRevision, geometryScope, objects, rules, result, diagnostic, fieldLabel,
+  layerId, datasetRevision, geometryScope, objects, rules, result, diagnostic, fieldLabel, datasetKind = 'original',
 }) {
+  if (!['original', 'proposed'].includes(datasetKind)) return null;
   if (!diagnostic?.hasCompleteExactObjectRefs || !Array.isArray(diagnostic.exactObjectRefs)) return null;
   const ruleIds = new Set((rules || []).map((rule) => rule?.ruleId).filter(Boolean));
   if (!ruleIds.size) return null;
@@ -44,6 +46,10 @@ export function buildValidatorFieldInspectionRequest({
   const temaColumn = resolveBoundColumn(temaField, sourceObjects);
   const fieldColumn = resolveBoundColumn(currentField, sourceObjects);
   return {
+    selection: {
+      key: objectInspectionSelectionKey({ layerId, geometryScope, canonicalFieldId: canonicalField, datasetKind }),
+      canonicalFieldId: canonicalField, ruleIds: [...ruleIds], fieldLabel, datasetKind,
+    },
     scope: {
       kind: 'contextual-object-set', layerId, datasetRevision, geometryScope,
       objectRefs: [...refsByKey.values()],

@@ -66,6 +66,8 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   const toggleFieldValidation = useStore((state) => state.toggleFieldValidation);
   const openObjectTable = useStore((state) => state.openObjectTable);
   const closeValidatorOwnedObjectTable = useStore((state) => state.closeValidatorOwnedObjectTable);
+  const inspection = useStore((state) => state.objectTableInspection);
+  const inspectionTable = useStore((state) => state.ui.layerDataTable);
   const expandedLayerId = useStore((state) => state.ui.expandedLayerId);
   const availableLayerIds = useMemo(
     () => layerOrder.filter((layerId) => layers[layerId]?.data),
@@ -99,7 +101,10 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     ? requestedLayerId
     : availableLayerIds[0] || '';
   const importedLayer = layers[selectedLayerId];
-  const { view: editView, descriptor } = useGmiEditLayer(selectedLayerId);
+  const { view: editView, descriptor } = useGmiEditLayer(selectedLayerId, {
+    autoOpen: Boolean(inspection?.selectionContext && inspection.layerId === selectedLayerId
+      && inspectionTable?.isOpen && inspectionTable.layerId === selectedLayerId),
+  });
   const proposed = useMemo(() => {
     if (!editView) return null;
     try { return gmiEditSessions.proposed(editView.handle); }
@@ -166,6 +171,14 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     setInspectorHost(document.getElementById('validation-v2-field-inspector-root'));
   }, []);
 
+  useEffect(() => () => closeValidatorOwnedObjectTable(), [closeValidatorOwnedObjectTable]);
+
+  // At modal widths the object table must become reachable after «Vis N objekter».
+  // Reopening the same field still permits another diagnostic without dropping its selection.
+  useEffect(() => {
+    if (!canDockInspector && inspection?.selectionContext) setSelectedValidatorField(null);
+  }, [canDockInspector, inspection?.selectionContext]);
+
   useEffect(() => {
     onDockedInspectorChange?.(dockedInspectorVisible);
     return () => onDockedInspectorChange?.(false);
@@ -174,9 +187,10 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   useEffect(() => {
     if (previousWorkspaceIdentityRef.current === workspaceIdentity) return;
     previousWorkspaceIdentityRef.current = workspaceIdentity;
+    closeValidatorOwnedObjectTable();
     setSelectedValidatorField(null);
     setActiveFieldTab('result');
-  }, [workspaceIdentity]);
+  }, [workspaceIdentity, closeValidatorOwnedObjectTable]);
 
   useEffect(() => {
     if (!filterPanelOpen && !openMenu) return undefined;
@@ -242,6 +256,8 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   };
 
   const openFieldInfo = (presentation, opener) => {
+    const inspectedField = selectedValidatorField?.field.canonicalFieldId || inspection?.selectionContext?.canonicalFieldId;
+    if (inspectedField !== presentation.rule.canonicalFieldId) closeValidatorOwnedObjectTable();
     fieldInfoOpenerRef.current = opener;
     setSelectedValidatorField({
       field: composeFieldInformation({
@@ -258,6 +274,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   };
 
   const closeFieldInspector = () => {
+    closeValidatorOwnedObjectTable();
     setSelectedValidatorField(null);
     requestAnimationFrame(() => fieldInfoOpenerRef.current?.focus());
   };
@@ -280,6 +297,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
       result,
       diagnostic,
       fieldLabel: diagnostic.field.displayName,
+      datasetKind,
     });
     if (!inspectionRequest) return;
     openObjectTable({
@@ -295,6 +313,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   }, [openObjectTable, selectedLayerId, selectedRevision, selectedValidatorField, result, selectedLayer, datasetKind, datasetLabel, editView]);
 
   const selectLayer = (event) => {
+    closeValidatorOwnedObjectTable();
     const nextLayerId = event.target.value;
     const nextLayer = layers[nextLayerId];
     setRequestedLayerId(nextLayerId);
@@ -310,6 +329,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   const runValidation = () => {
     const input = createValidationV2Input(selectedLayer);
     if (!input) return;
+    closeValidatorOwnedObjectTable();
     setRunState('running');
     setRunError(false);
     setRunTarget({ layerId: input.layerId, datasetRevision: input.datasetRevision });
@@ -379,6 +399,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   }, [result, focus, selectedLayerId, selectedRevision, controller, activeGeometry]);
 
   const selectGeometry = (scope) => {
+    closeValidatorOwnedObjectTable();
     setSelectedValidatorField(null);
     setActiveFieldTab('result');
     dispatchPresentation({ type: 'GEOMETRY_CHANGED' });

@@ -159,7 +159,9 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         const storedTabs = await browser.evaluate('Object.values(JSON.parse(localStorage.getItem("gmi-validator-storage")).state.ui.layerDataTable.activeTabByLayer)');
         assert(storedTabs.includes('punkter'), 'inspection does not overwrite the explicit ordinary geometry');
         assert.match(await browser.evaluate(`document.querySelector('.group.flex.cursor-pointer').innerText`), /11/);
-        await click('Lukk feltinformasjon');
+        // H2 dismisses the narrow field modal when its object table opens, exposing the checkboxes.
+        assert.equal(await browser.evaluate(`Boolean(document.querySelector('[role=dialog][aria-modal=true]'))`), false);
+        assert.equal(await browser.evaluate(`document.querySelectorAll('[data-table-row][aria-selected=true]').length`), 0, 'Vis remains inspection-only');
         await shot('m5c-proposed-object-inspection');
         await choose(dataset, 'original');
         await browser.waitFor('document.querySelector("#validation-v2-geometry-panel")?.innerText.startsWith("Original")');

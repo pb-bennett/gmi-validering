@@ -23,7 +23,7 @@ import {
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import { normalizeTableSearchQuery, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
 import { deriveLayerTableRows } from '@/lib/layerTableRows.mjs';
-import { gmiSelectionBinding, sameGmiSelectionBinding, gmiSelectionKey, gmiSelectionCounts } from '@/lib/gmiEditSelection.mjs';
+import { gmiSelectionBinding, sameGmiSelectionBinding, sameGmiSelectionHost, GMI_RETTINGER_SELECTION_HOST, gmiSelectionKey, gmiSelectionCounts } from '@/lib/gmiEditSelection.mjs';
 import GmiConfirmDialog from './gmi-edit/GmiConfirmDialog';
 import GmiSeverityIcon from './gmi-edit/GmiSeverityIcon';
 import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
@@ -35,7 +35,7 @@ import { GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
 import { validatorInspectionLayer } from '@/lib/gmiValidatorEditing.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { Lexeme } from '@/components/gmi-edit/GmiObjectEditor';
-import { GMI_EDIT_TABLE_VIEWS, gmiEditMessage, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope,
+import { GMI_EDIT_TABLE_VIEWS, gmiEditMessage, describeGmiEditStatus, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope,
   gmiObjectNumber, gmiObjectMatchesQuery, gmiObjectCountLabel, gmiTableViewControls } from '@/lib/gmiEditView.mjs';
 
 const ROW_HEIGHT = 28;
@@ -243,6 +243,7 @@ export default function LayerDataTable() {
   }, [importedLayer, inspection, gmiEditStatus]);
   const isExactInspection = ['exact-object-set', 'contextual-object-set'].includes(inspection?.kind);
   const isContextualInspection = inspection?.kind === 'contextual-object-set';
+  const isSelectableInspection = isContextualInspection && Boolean(inspection.selectionContext);
   const [contextualSorting, setContextualSorting] = useState([]);
   const [contextualColumnOrder, setContextualColumnOrder] = useState(null);
 
@@ -284,6 +285,10 @@ export default function LayerDataTable() {
   useEffect(() => setContextualSorting([]), [inspection?.id]);
 
   useEffect(() => {
+    if (isOpen && isSelectableInspection) tableContainerRef.current?.focus();
+  }, [isOpen, isSelectableInspection, inspection?.id]);
+
+  useEffect(() => {
     return () => {
       setHighlightedFeatureIds(null);
     };
@@ -310,14 +315,20 @@ export default function LayerDataTable() {
       : 'punkter';
 
   const selectionBinding = gmiSelectionBinding(layerId, gmiEditStatus);
-  const selectionEnabled = !isExactInspection && gmiEditWorkspaceLayerId === layerId && Boolean(selectionBinding);
-  const selection = selectionEnabled && sameGmiSelectionBinding(storedSelection?.binding, selectionBinding) ? storedSelection : null;
+  const selectionHost = useMemo(() => isSelectableInspection ? { kind: 'inspection', key: inspection.selectionContext.key }
+    : GMI_RETTINGER_SELECTION_HOST, [isSelectableInspection, inspection?.selectionContext?.key]);
+  const selectionEnabled = Boolean(selectionBinding) && (isSelectableInspection && exactRows !== null
+    || !isExactInspection && gmiEditWorkspaceLayerId === layerId);
+  const selection = selectionEnabled && sameGmiSelectionBinding(storedSelection?.binding, selectionBinding)
+    && sameGmiSelectionHost(storedSelection?.host, selectionHost) ? storedSelection : null;
+  const selectionDescriptor = isSelectableInspection && !selectionEnabled ? gmiEditStatus || gmiEditSessions.describe(layerId) : null;
+  const selectionUnavailable = selectionDescriptor ? describeGmiEditStatus(selectionDescriptor) : null;
   const scope = tableTabToScope(activeTab);
-  const showSelectionOnly = Boolean(selection?.showOnly && selection.scope === scope);
+  const showSelectionOnly = !isExactInspection && Boolean(selection?.showOnly && selection.scope === scope);
   const selectionDisplayKeys = showSelectionOnly ? selection.keys : null;
   const selectionWidth = selectionEnabled ? 32 : 0;
   const selectedKeys = useMemo(() => new Set(selection?.keys || []), [selection]);
-  const batchReview = selectionEnabled && batchTableReview?.layerId === layerId
+  const batchReview = !isExactInspection && selectionEnabled && batchTableReview?.layerId === layerId
     && batchTableReview.selection === selection && batchTableReview.revision === gmiEditStatus?.revision ? batchTableReview : null;
   // Rettinger object labels ("Ledning 38"): a compact, stable source-number column, also in
   // Validator inspections opened inside Rettinger. Never derived from the sorted/virtual row.
@@ -703,7 +714,7 @@ export default function LayerDataTable() {
       setReplaceSelection({ action, binding: selectionBinding, from: { scope: selection.scope, count: selection.keys.length },
         to: { scope: action.scope, count: action.type === 'add' ? new Set(action.keys).size : 1 } }); return;
     }
-    changeSelection(layerId, action, selectionBinding);
+    changeSelection(layerId, action, selectionBinding, selectionHost);
   };
   const toggleSelectionRow = (row, range = false) => {
     const key = gmiSelectionKey(scope, row.__index);
@@ -990,17 +1001,21 @@ export default function LayerDataTable() {
         </button>
       </div>
 
+      {selectionUnavailable && <div data-gmi-selection-unavailable className="gmi-selection-bar" role="status">
+        {['unloaded', 'loading'].includes(selectionDescriptor.state) ? 'Klargjør objektutvalg…'
+          : <>Objektutvalg er ikke tilgjengelig. {selectionUnavailable.message || 'Filen kan bare vises og ikke rettes.'}</>}
+      </div>}
       {selectionEnabled && (selectionCounts.total > 0 || selection?.origin?.kind === 'validator') && <div data-gmi-selection-bar className="gmi-selection-bar">
         <p className="gmi-selection-summary" role="status">
           {selection?.origin?.kind === 'validator' && <span title="Utvalget kan bare reduseres. Gjør om til vanlig utvalg for å legge til objekter.">Fra Validator: {selection.origin.targets.length} objekter · bare fjerning tillatt. </span>}
           <strong>{selectionCounts.total}</strong> valgt<span className="gmi-selection-scope"> · {showSelectionOnly
             ? `${rows.length} vises · ${selectionCounts.visible} treffer filter/søk/visning · ${selectionCounts.hidden} utenfor`
-            : `${selectionCounts.visible} synlige · ${selectionCounts.hidden} skjult av filter/søk/visning`}</span>
+            : `${selectionCounts.visible} synlige · ${selectionCounts.hidden} skjult av ${isSelectableInspection ? 'utvalg/søk' : 'filter/søk/visning'}`}</span>
         </p>
         <div className="gmi-selection-actions">
           {selection?.origin?.kind === 'validator' && <button type="button" className="gmi-bar-button gmi-focus-ring"
             onClick={() => selectAction({ type: 'make-ordinary' })}>Gjør om til vanlig utvalg</button>}
-          <div className="gmi-bar-segmented" role="group" aria-label="Rader i tabellen">
+          {!isExactInspection && <div className="gmi-bar-segmented" role="group" aria-label="Rader i tabellen">
             <button type="button" aria-pressed={!showSelectionOnly} className="gmi-focus-ring" title="Vanlig visning med Tema/Felt-filtre og søk"
               onClick={() => { if (showSelectionOnly) selectAction({ type: 'show-only', value: false }); }}>Filtrert visning</button>
             <button type="button" aria-pressed={showSelectionOnly} className="gmi-focus-ring" title="Vis hele utvalget uten å endre Tema/Felt, søk eller visningsvalg"
@@ -1009,15 +1024,15 @@ export default function LayerDataTable() {
                 if (selection.scope !== scope) setLayerDataTableTab(layerId, selection.scope === 'line' ? 'ledninger' : 'punkter');
                 selectAction({ type: 'show-only', value: true });
               }}>Bare valgte</button>
-          </div>
+          </div>}
           {!showSelectionOnly && <button type="button" className="gmi-bar-button gmi-focus-ring" disabled={!rows.length || headerSelection.checked}
             onClick={() => selectAction({ type: 'add', scope, keys: visibleKeys })}><ListChecksIcon size={13} weight="regular" aria-hidden="true" />Velg alle {rows.length} synlige</button>}
           <button type="button" className="gmi-bar-button gmi-focus-ring" onClick={() => selectAction({ type: 'clear' })}><XIcon size={12} weight="regular" aria-hidden="true" />Fjern utvalg</button>
         </div>
-        {batchInspectorLayerId === layerId
+        {!isExactInspection && (batchInspectorLayerId === layerId
           ? <span className="gmi-batch-mode-indicator" role="status"><PencilSimpleIcon size={14} weight="regular" aria-hidden="true" />Masseendring pågår · se panelet til høyre</span>
           : <button type="button" className="gmi-primary-control gmi-focus-ring gmi-batch-entry" onClick={() => useStore.setState({ gmiBatchInspectorRequest: { layerId, at: Date.now() } })}>
-            <PencilSimpleIcon size={14} weight="regular" aria-hidden="true" />Rediger valgte ({selectionCounts.total})</button>}
+            <PencilSimpleIcon size={14} weight="regular" aria-hidden="true" />Rediger valgte ({selectionCounts.total})</button>)}
       </div>}
       {replaceSelection && (() => {
         const { from, to } = replaceSelection;
@@ -1026,7 +1041,7 @@ export default function LayerDataTable() {
         const removed = from.count === 1 ? (from.scope === 'line' ? 'den valgte ledningen' : 'det valgte punktet') : `de ${from.count} valgte ${plural[from.scope][2]}`;
         return <GmiConfirmDialog title={`Erstatt ${from.count} valgte ${plural[from.scope][from.count === 1 ? 0 : 1]} med ${target}?`}
           confirmLabel="Erstatt utvalget" testId="selection" onCancel={() => setReplaceSelection(null)}
-          onConfirm={() => { changeSelection(layerId, { ...replaceSelection.action, replace: true }, replaceSelection.binding); setReplaceSelection(null); }}>
+          onConfirm={() => { changeSelection(layerId, { ...replaceSelection.action, replace: true }, replaceSelection.binding, selectionHost); setReplaceSelection(null); }}>
           <p>Et utvalg kan bare inneholde én geometritype. Fortsetter du, fjernes {removed} fra utvalget, og utvalget består av {target}.</p>
           <p className="gmi-edit-muted">Ingen objekter eller rettinger endres.{batchInspectorLayerId === layerId ? ' Masseendringen må forhåndsvises på nytt.' : ''}</p>
         </GmiConfirmDialog>;

@@ -154,3 +154,15 @@ test('H1 inspection lifecycle follows its field key, geometry, layer and editabl
     { statuses: { a: { ...binding, state: 'editable', fingerprint: 'replacement' } } },
   ]) assert.equal(reconcileGmiEditSelection(selection, { ...context, workspaceLayerId: 'a', ...patch }), null, JSON.stringify(patch));
 });
+
+test('H2 restricts inspection membership and ranges to the complete evaluated field population', () => {
+  const host = { kind: 'inspection', key: 'field' }, allowedKeys = new Set(['line:1', 'line:3']);
+  const context = { binding, counts, host, allowedKeys };
+  const first = reduce(null, { type: 'add', keys: ['line:0', 'line:1', 'line:2', 'line:3'] }, context);
+  assert.deepEqual(first.keys, ['line:1', 'line:3']);
+  assert.equal(reduce(first, { type: 'toggle', key: 'line:2' }, context), first);
+  assert.equal(reduce(first, { type: 'range', key: 'line:2', orderedKeys: ['line:1', 'line:2'] }, context), first);
+  const pruned = reconcileGmiEditSelection(first, { inspection: { layerId: 'a', geometryScope: 'line', selectionContext: { key: 'field' }, scopeIndices: [1] },
+    layers: { a: { data: { lines: Array(80) } } }, statuses: { a: { ...binding, state: 'editable' } } });
+  assert.deepEqual(pruned.keys, ['line:1']);
+});

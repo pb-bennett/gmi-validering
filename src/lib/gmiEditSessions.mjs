@@ -74,9 +74,15 @@ export function bindGmiEditSessionStore(store, { unloadTarget = typeof window ==
     if (state.layers !== previous.layers) gmiEditSessions.reconcile();
     // Re-read after reconcile: it can synchronously publish invalidation status.
     const live = store.getState();
+    let inspection = live.ui.layerDataTable?.isOpen && live.ui.layerDataTable.layerId === live.objectTableInspection?.layerId ? live.objectTableInspection : null;
+    // Proposed inspections belong to an exact immutable session snapshot, unlike Original selections.
+    const basis = inspection?.editBasis;
+    if (basis && live.gmiEditSelection?.host?.kind === 'inspection'
+      && (live.gmiEditStatus[basis.layerId] !== previous.gmiEditStatus?.[basis.layerId] || live.objectTableInspection !== previous.objectTableInspection)
+      && gmiEditSessions.resolve(gmiEditSessions.getHandle(basis.layerId)).session !== basis.session) inspection = null;
     const selection = reconcileGmiEditSelection(live.gmiEditSelection, {
       workspaceLayerId: live.gmiEditWorkspace?.layerId, layers: live.layers, statuses: live.gmiEditStatus || {},
-      inspection: live.ui.layerDataTable?.isOpen && live.ui.layerDataTable.layerId === live.objectTableInspection?.layerId ? live.objectTableInspection : null,
+      inspection,
     });
     if (selection !== live.gmiEditSelection) store.setState({ gmiEditSelection: selection }, false, 'gmiEdit/selectionReconcile');
   });

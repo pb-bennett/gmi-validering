@@ -1588,7 +1588,8 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
   const mapUpdateNonce = useStore((state) => state.ui.mapUpdateNonce);
   const gmiSelection = useStore((state) => state.gmiEditSelection);
   const gmiWorkspaceLayerId = useStore((state) => state.gmiEditWorkspace?.layerId);
-  const selectedFeatureIds = useMemo(() => gmiSelectedFeatureIds(gmiSelection, gmiWorkspaceLayerId), [gmiSelection, gmiWorkspaceLayerId]);
+  const selectedFeatureIds = useMemo(() => gmiSelectedFeatureIds(gmiSelection,
+    gmiSelection?.host?.kind === 'inspection' ? gmiSelection.binding.layerId : gmiWorkspaceLayerId), [gmiSelection, gmiWorkspaceLayerId]);
   // Full content, not cardinality: replacing one selected object must repaint.
   const selectionStyleKey = [...selectedFeatureIds].join('|');
 

@@ -16,13 +16,16 @@ import { GMI_EDIT_FIXTURE_DIR } from './helpers/gmiEditFixtures.mjs';
 import { loadGmiDocument, verifyCellChanges } from './helpers/gmiEditHarness.mjs';
 import {
   GMI_EDIT_LAYER_STATES, GMI_EXPORT_FAILURES, buildGmiFieldExport, createGmiEditSessions, createGmiExportBlob, createGmiObjectCorrection,
-  createGmiProposedCache, getGmiExportBytes, listGmiObjectCells, recordGmiExportDownload,
+  createGmiProposedCache, getGmiExportBytes, getGmiSourceBytes, listGmiObjectCells, recordGmiExportDownload,
 } from '../src/lib/gmi-edit/index.mjs';
 import { createLoadedGmiSources, isLoadedGmiSurveyLayer } from '../src/lib/photos/loadedGmiSource.mjs';
 import { createGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
 import { GMIParser } from '../src/lib/parsing/gmiParser.js';
 import { decodeGmiBytes } from '../src/lib/parsing/gmiDecoding.js';
 import { gmiSelectionBinding } from '../src/lib/gmiEditSelection.mjs';
+import { buildValidatorFieldInspectionRequest } from '../src/lib/validation-v2/tableInspection.js';
+import { createObjectRef } from '../src/lib/validation-v2/objectRef.js';
+import { getDatasetRevision } from '../src/lib/validation-v2/datasetRevision.js';
 import {
   GMI_EDIT_TABLE_VIEW_BY, GMI_EDIT_TABLE_VIEWS, gmiTableViewAfterStage, gmiTableViewControls, describeGmiEditStatus, describeGmiObject, gmiChangeSetCellViews, gmiChangeSetDependents, gmiEditDownloadState,
   gmiEditFieldPolicy, gmiEditMessage, gmiLexemeSegments, gmiObjectCorrectionLabel, gmiProposedViewForStatus, gmiSkipReasonLabel,
@@ -388,6 +391,74 @@ test('H1 store invalidates inspection selections on every host/source/session ex
     assert.equal(useStore.getState().gmiEditSelection, null, name);
     useStore.getState().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:2'] }, binding, host);
     assert.equal(useStore.getState().gmiEditSelection, null, `${name}: stale events refused`);
+  }
+});
+
+function storeInspectionRequest(id, data, { datasetKind = 'original', field = 'sdr', geometryScope = 'line', focus = 0 } = {}) {
+  const datasetRevision = getDatasetRevision(data);
+  const ref = (objectIndex) => createObjectRef({ layerId: id, datasetRevision, geometryScope, objectIndex });
+  return { ...buildValidatorFieldInspectionRequest({ layerId: id, datasetRevision, geometryScope, objects: geometryScope === 'line' ? data.lines : data.points,
+    datasetKind, fieldLabel: field, rules: [{ ruleId: 'synthetic-rule' }],
+    diagnostic: { hasCompleteExactObjectRefs: true, exactObjectRefs: [ref(focus)], field: { canonicalFieldId: field } },
+    result: { outcomes: [0, 1].map((index) => ({ ruleId: 'synthetic-rule', state: index ? 'CHECK' : 'FAIL', objectRef: ref(index) })) } }),
+    context: { source: 'validation-v2-diagnostic' } };
+}
+
+test('H2 real inspection requests retain exact field scope across diagnostics and cannot cross dataset/basis ownership', async (t) => {
+  resetStore(); t.after(resetStore);
+  const { id, data } = await addStoreLayer(CORE), store = () => useStore.getState();
+  const request = storeInspectionRequest(id, data);
+  assert.equal(store().openObjectTable(request), true);
+  assert.equal(gmiEditSessions.describe(id).state, 'unloaded');
+  const { handle } = await gmiEditSessions.open(id), originalSession = gmiEditSessions.resolve(handle).session;
+  const binding = gmiSelectionBinding(id, store().gmiEditStatus[id]);
+  const host = { kind: 'inspection', key: store().objectTableInspection.selectionContext.key };
+  const add = (keys, owner = host) => store().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys }, binding, owner);
+  add(['line:0', 'line:1', 'line:2']);
+  assert.deepEqual(store().gmiEditSelection.keys, ['line:0', 'line:1'], 'out-of-population source object refused');
+  const selection = store().gmiEditSelection;
+  assert.equal(store().openObjectTable(storeInspectionRequest(id, data, { focus: 1 })), true);
+  store().setObjectTableInspectionView('scope');
+  assert.equal(store().gmiEditSelection, selection);
+  assert.equal(gmiEditSessions.resolve(handle).session, originalSession, 'opening and selecting never stages a ChangeSet');
+  assert.deepEqual(getGmiSourceBytes(gmiEditSessions.resolve(handle).document), CORE, 'inspection leaves every original byte unchanged');
+  assert.equal(store().gmiEditStatus[id].changeSetCount, 0);
+  const before = store().objectTableInspection;
+  assert.equal(store().openObjectTable({ ...request, editBasis: { layerId: id, session: originalSession, datasetRevision: getDatasetRevision(data) } }), false, 'Original cannot claim a proposed basis');
+  const proposed = gmiEditSessions.proposed(handle);
+  const proposedRequest = storeInspectionRequest(id, proposed.dataset, { datasetKind: 'proposed' });
+  assert.equal(store().openObjectTable(proposedRequest), false, 'proposed inspection requires an exact editing basis');
+  assert.equal(store().objectTableInspection, before);
+  assert.equal(store().openObjectTable({ ...proposedRequest, editBasis: { layerId: id, session: originalSession, datasetRevision: getDatasetRevision(proposed.dataset) } }), true);
+  assert.equal(store().gmiEditSelection, null, 'atomic dataset replacement has a different host');
+  add(['line:0']); assert.equal(store().gmiEditSelection, null, 'stale Original events refused');
+  const proposedHost = { kind: 'inspection', key: store().objectTableInspection.selectionContext.key };
+  add(['line:1'], proposedHost); assert.deepEqual(store().gmiEditSelection.keys, ['line:1']);
+  const built = createGmiObjectCorrection(originalSession, { scope: 'line', sourceIndex: 1, values: { SDR: '11' } });
+  assert.equal(gmiEditSessions.stage(handle, built.changeSet).ok, true);
+  assert.equal(store().gmiEditSelection, null, 'history invalidates the exact proposed inspection immediately');
+  add(['line:0'], proposedHost);
+  assert.equal(store().gmiEditSelection, null, 'stale proposed inspection cannot accept further checkbox events');
+  store().closeLayerDataTable(); assert.equal(store().gmiEditSelection, null);
+});
+
+test('H2 actual read-only, unavailable and unsupported sessions cannot select inspection objects', async (t) => {
+  resetStore(); t.after(resetStore);
+  for (const kind of ['read-only', 'unavailable', 'unsupported']) {
+    resetStore();
+    let id, data;
+    if (kind === 'read-only') ({ id, data } = await addStoreLayer(MIXED_EOL));
+    else {
+      data = parse(CORE).data;
+      id = useStore.getState().addLayer({ file: { name: 'Synthetic inspection.gmi', format: kind === 'unsupported' ? 'SOSI' : 'GMI' }, data });
+    }
+    const request = storeInspectionRequest(id, data);
+    assert.equal(useStore.getState().openObjectTable(request), true);
+    await gmiEditSessions.open(id);
+    assert.equal(gmiEditSessions.describe(id).state, kind);
+    useStore.getState().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:0'] },
+      { layerId: id, sessionId: 'forged', fingerprint: 'forged' }, { kind: 'inspection', key: request.selection.key });
+    assert.equal(useStore.getState().gmiEditSelection, null, kind);
   }
 });
 

@@ -7,6 +7,7 @@ import { getDatasetRevision } from '../src/lib/validation-v2/datasetRevision.js'
 import {
   createExactObjectInspection,
   createContextualObjectInspection,
+  objectInspectionSelectionKey,
   resolveExactObjectInspectionRows,
 } from '../src/lib/objectTableInspection.js';
 import { buildValidatorFieldInspectionRequest } from '../src/lib/validation-v2/tableInspection.js';
@@ -97,6 +98,51 @@ test('Validator field request aggregates grouped outcomes by ObjectRef with Feil
   assert.equal(request.contextual.resultByObjectKey[ref(0).key], 'FAIL');
   assert.equal(request.contextual.resultByObjectKey[ref(1).key], 'CHECK');
   assert.equal(request.contextual.presentation.fieldColumn, 'Type');
+});
+
+function selectableRequest(target, { field = 'type', geometryScope = 'point', datasetKind = 'original', focus = 0 } = {}) {
+  const datasetRevision = getDatasetRevision(target.data);
+  const ref = (objectIndex) => createObjectRef({ layerId: target.id, datasetRevision, geometryScope, objectIndex });
+  const objects = geometryScope === 'point' ? target.data.points : target.data.lines;
+  return buildValidatorFieldInspectionRequest({ layerId: target.id, datasetRevision, geometryScope, datasetKind, objects,
+    rules: [{ ruleId: 'synthetic-one' }, { ruleId: 'synthetic-two' }], fieldLabel: field,
+    diagnostic: { hasCompleteExactObjectRefs: true, exactObjectRefs: [ref(focus)], field: { canonicalFieldId: field } },
+    result: { outcomes: objects.map((_, index) => ({ ruleId: 'synthetic-one', state: index ? 'CHECK' : 'FAIL', objectRef: ref(index) })) } });
+}
+
+test('H2 selection context is immutable, field-stable across diagnostics and distinct across datasets/layers/geometries', () => {
+  const target = layer(), request = selectableRequest(target);
+  const first = createContextualObjectInspection({ layer: target, request });
+  assert.deepEqual(first.selectionContext, request.selection);
+  assert(Object.isFrozen(first.selectionContext)); assert(Object.isFrozen(first.selectionContext.ruleIds));
+  const next = createContextualObjectInspection({ layer: target, request: selectableRequest(target, { focus: 1 }) });
+  assert.equal(next.selectionContext.key, first.selectionContext.key);
+  assert.notEqual(next.id, first.id);
+  assert.deepEqual(next.scopeIndices, first.scopeIndices);
+  const identities = [
+    selectableRequest(target, { datasetKind: 'proposed' }).selection,
+    selectableRequest(target, { field: 'tema' }).selection,
+    selectableRequest(target, { geometryScope: 'line', field: 'tema' }).selection,
+    selectableRequest(layer('other')).selection,
+  ];
+  for (const context of identities) assert.notEqual(context.key, first.selectionContext.key);
+  request.selection.ruleIds.push('mutated'); request.selection.fieldLabel = 'mutated';
+  assert.deepEqual(first.selectionContext.ruleIds, ['synthetic-one', 'synthetic-two']);
+  assert.equal(first.selectionContext.fieldLabel, 'type');
+});
+
+test('H2 refuses malformed or foreign inspection selection context and preserves ordinary inspections', () => {
+  const target = layer(), request = selectableRequest(target), selection = request.selection;
+  for (const patch of [
+    { key: '' }, { canonicalFieldId: '' }, { ruleIds: [] }, { ruleIds: [null] }, { datasetKind: 'unknown' },
+    { key: objectInspectionSelectionKey({ layerId: 'other', geometryScope: 'point', canonicalFieldId: 'type', datasetKind: 'original' }) },
+    { key: objectInspectionSelectionKey({ layerId: target.id, geometryScope: 'line', canonicalFieldId: 'type', datasetKind: 'original' }) },
+    { datasetKind: 'proposed' }, { canonicalFieldId: 'tema' },
+  ]) assert.throws(() => createContextualObjectInspection({ layer: target, request: { ...request, selection: { ...selection, ...patch } } }));
+  assert.equal(createContextualObjectInspection({ layer: target, request: { ...request, selection: undefined } }).selectionContext, null);
+  assert.equal(createExactObjectInspection({ layer: target, request: { ...request, scope: { ...request.scope, kind: 'exact-object-set' } } }).selectionContext, undefined);
+  const foreign = selectableRequest(layer('other'));
+  assert.throws(() => createContextualObjectInspection({ layer: target, request: foreign }));
 });
 
 test('contextual widths use the complete scope, keep normal Type and Tema codes readable, and bound pathological values', () => {

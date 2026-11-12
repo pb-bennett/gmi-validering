@@ -5,6 +5,7 @@ import { detectOutliers } from './analysis/outliers';
 import { analyzeIncline } from './analysis/incline';
 import { analyzeZValues } from './analysis/zValidation';
 import { createContextualObjectInspection, createExactObjectInspection } from './objectTableInspection';
+import { getDatasetRevision } from './validation-v2/datasetRevision.js';
 import { moveLayerInOrder } from './map/layerOrder.mjs';
 import { photoSession } from './photos/photoSession.mjs';
 import { bindLoadedGmiSurveyStore, loadedGmiSources } from './photos/loadedGmiSource.mjs';
@@ -239,7 +240,13 @@ const useStore = create(
             if (!state.layers[layerId] || !gmiSelectionHostIsActive(host, layerId, {
               workspaceLayerId: state.gmiEditWorkspace?.layerId, inspection,
             }) || (host.kind === 'inspection' && action.scope && action.scope !== inspection.geometryScope)) return {};
+            if (host.kind === 'inspection') {
+              const inspectionLayer = validatorInspectionLayer(gmiEditSessions, state.layers[layerId], inspection.editBasis);
+              if (!inspectionLayer || (inspection.datasetRevision && getDatasetRevision(inspectionLayer.data) !== inspection.datasetRevision)) return {};
+            }
             return { gmiEditSelection: reduceGmiEditSelection(state.gmiEditSelection, action, { binding, host,
+              allowedKeys: host.kind === 'inspection' && inspection.scopeIndices
+                ? new Set(inspection.scopeIndices.map((index) => `${inspection.geometryScope}:${index}`)) : null,
               counts: { line: state.layers[layerId].data?.lines?.length, point: state.layers[layerId].data?.points?.length } }) };
           }, false, 'gmiEdit/selection');
         },
@@ -1669,6 +1676,7 @@ const useStore = create(
         openObjectTable: (request) => {
           const state = get();
           const layerId = request?.scope?.layerId;
+          if (request?.selection && (request.selection.datasetKind === 'proposed') !== Boolean(request.editBasis)) return false;
           let inspection;
           try {
             inspection = request?.scope?.kind === 'contextual-object-set'

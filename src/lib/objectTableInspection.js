@@ -3,6 +3,23 @@ import { assertObjectRefOwnership, createObjectRef } from './validation-v2/objec
 
 let inspectionSequence = 0;
 
+// Dataset kind participates so even an atomic Original/Foreslått replacement starts a new host.
+export const objectInspectionSelectionKey = ({ layerId, geometryScope, canonicalFieldId, datasetKind }) =>
+  JSON.stringify([layerId, geometryScope, canonicalFieldId, datasetKind]);
+
+function normalizeSelectionContext(selection, scope) {
+  if (selection == null) return null;
+  if (typeof selection.canonicalFieldId !== 'string' || !selection.canonicalFieldId
+    || !['original', 'proposed'].includes(selection.datasetKind)
+    || !Array.isArray(selection.ruleIds) || !selection.ruleIds.length
+    || selection.ruleIds.some((id) => typeof id !== 'string' || !id)
+    || selection.key !== objectInspectionSelectionKey({ ...scope, ...selection, layerId: scope.layerId, geometryScope: scope.geometryScope })) {
+    throw new TypeError('selection context does not belong to this inspection');
+  }
+  return Object.freeze({ key: selection.key, canonicalFieldId: selection.canonicalFieldId,
+    ruleIds: Object.freeze([...new Set(selection.ruleIds)]), fieldLabel: String(selection.fieldLabel || selection.canonicalFieldId), datasetKind: selection.datasetKind });
+}
+
 function collectionForGeometry(layer, geometryScope) {
   if (!layer?.data || !['point', 'line'].includes(geometryScope)) return null;
   const collection = geometryScope === 'point' ? layer.data.points : layer.data.lines;
@@ -102,6 +119,7 @@ export function createContextualObjectInspection({ layer, request }) {
     id: `object-inspection-${inspectionSequence}`,
     kind: 'contextual-object-set',
     layerId, datasetRevision, geometryScope,
+    selectionContext: normalizeSelectionContext(request.selection, scope),
     scopeIndices: Object.freeze([...scopeRefs.values()].map((ref) => ref.sourceIndex)),
     focusIndices: Object.freeze([...focusRefs.values()].map((ref) => ref.sourceIndex)),
     activeView: 'focus',

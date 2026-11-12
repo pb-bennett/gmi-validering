@@ -20,9 +20,9 @@ export function gmiSelectionHostIsActive(host = GMI_RETTINGER_SELECTION_HOST, la
     && sameGmiSelectionHost(host, { kind: 'inspection', key: inspection.selectionContext?.key });
 }
 
-function validKey(key, scope, counts) {
+function validKey(key, scope, counts, allowedKeys) {
   const match = /^(line|point):(0|[1-9]\d*)$/.exec(key);
-  return Boolean(match && match[1] === scope && Number(match[2]) < (counts[scope] || 0));
+  return Boolean(match && match[1] === scope && Number(match[2]) < (counts[scope] || 0) && (!allowedKeys || allowedKeys.has(key)));
 }
 
 export function reconcileGmiEditSelection(selection, { workspaceLayerId, inspection, layers, statuses }) {
@@ -32,12 +32,14 @@ export function reconcileGmiEditSelection(selection, { workspaceLayerId, inspect
     || !layers[id] || !sameGmiSelectionBinding(selection.binding, gmiSelectionBinding(id, statuses[id]))) return null;
   if (selection.host?.kind === 'inspection' && selection.scope !== inspection.geometryScope) return null;
   const counts = { line: layers[id].data?.lines?.length, point: layers[id].data?.points?.length };
-  const keys = selection.keys.filter((key) => validKey(key, selection.scope, counts));
+  const allowedKeys = selection.host?.kind === 'inspection' && inspection.scopeIndices
+    ? new Set(inspection.scopeIndices.map((index) => gmiSelectionKey(inspection.geometryScope, index))) : null;
+  const keys = selection.keys.filter((key) => validKey(key, selection.scope, counts, allowedKeys));
   return keys.length === selection.keys.length ? selection : keys.length ? { ...selection, keys, anchor: null } : null;
 }
 
 /** Explicit snapshot actions. Filters/search/sorting/focus are not actions here. */
-export function reduceGmiEditSelection(selection, action, { binding, counts, host = GMI_RETTINGER_SELECTION_HOST }) {
+export function reduceGmiEditSelection(selection, action, { binding, counts, host = GMI_RETTINGER_SELECTION_HOST, allowedKeys }) {
   if (!binding || !sameGmiSelectionHost(host, host)) return null;
   const current = sameGmiSelectionBinding(selection?.binding, binding) && sameGmiSelectionHost(selection?.host, host) ? selection : null;
   const restricted = current?.origin?.kind === 'validator';
@@ -49,12 +51,12 @@ export function reduceGmiEditSelection(selection, action, { binding, counts, hos
   if (restricted && scope !== current.scope) return current;
   if (current?.keys.length && current.scope !== scope && !action.replace) return current;
   const base = current?.scope === scope ? current : { binding, host: Object.freeze({ ...host }), scope, keys: [], anchor: null, showOnly: false };
-  const clean = (keys) => [...new Set((keys || []).filter((key) => validKey(key, scope, counts)))];
+  const clean = (keys) => [...new Set((keys || []).filter((key) => validKey(key, scope, counts, allowedKeys)))];
   let keys = new Set(base.keys), anchor = base.anchor;
-  if (action.type === 'toggle' && validKey(action.key, scope, counts)) {
+  if (action.type === 'toggle' && validKey(action.key, scope, counts, allowedKeys)) {
     if (keys.has(action.key)) keys.delete(action.key); else keys.add(action.key);
     anchor = action.key;
-  } else if (action.type === 'range' && validKey(action.key, scope, counts)) {
+  } else if (action.type === 'range' && validKey(action.key, scope, counts, allowedKeys)) {
     const ordered = clean(action.orderedKeys);
     const start = ordered.indexOf(base.anchor), end = ordered.indexOf(action.key);
     const range = start < 0 || end < 0 ? [action.key] : ordered.slice(Math.min(start, end), Math.max(start, end) + 1);
