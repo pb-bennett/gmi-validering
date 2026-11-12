@@ -153,6 +153,16 @@ export function gmiBatchScopeState(view, selection, review) {
   return null;
 }
 
+/** B3: source identity, never table order or editing revision, owns the itinerary. */
+export function gmiIndividualSelection(view, selection, selected, binding = selection?.binding) {
+  if (!view || !sameGmiSelectionBinding(binding, selection?.binding)) return { ok: false, targets: [], index: -1 };
+  const result = gmiSelectionTargets(view, selection);
+  if (!result.ok) return { ...result, targets: [], index: -1 };
+  const targets = [...result.targets].sort((a, b) => a.sourceIndex - b.sourceIndex);
+  const index = targets.findIndex((target) => target.scope === selected?.scope && target.sourceIndex === selected?.sourceIndex);
+  return { ok: true, targets, index };
+}
+
 export function planGmiInspectorBatch(view, selection, review, manual = new Set(), replace = false, advanced = false) {
   const stale = gmiBatchScopeState(view, selection, review);
   if (stale) return { ok: false, code: stale };

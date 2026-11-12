@@ -18,7 +18,7 @@ import GmiConfirmDialog from './GmiConfirmDialog';
 import GmiBatchDialog from './GmiBatchDialog';
 import GmiBatchInspector from './GmiBatchInspector';
 import GmiChangeSetDetail from './GmiChangeSetDetail';
-import { gmiSelectionTargets } from '@/lib/gmiBatchInspectorView.mjs';
+import { gmiSelectionTargets, gmiIndividualSelection } from '@/lib/gmiBatchInspectorView.mjs';
 import { gmiValidatorReturnTarget } from '@/lib/gmiValidatorEditing.mjs';
 import GmiFullValidation from './GmiFullValidation';
 import GmiLayerFilters from './GmiLayerFilters';
@@ -57,6 +57,11 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchInspector, setBatchInspector] = useState(Boolean(correction) || handoff?.mode === 'batch');
   const [batchInspected, setBatchInspected] = useState(null);
+  const selection = useStore((state) => state.gmiEditSelection);
+  const [individualBinding, setIndividualBinding] = useState(null);
+  const individual = gmiIndividualSelection(view, selection, selected, individualBinding);
+  const individualStatus = useRef(null);
+  useEffect(() => { if (individualBinding) individualStatus.current?.focus(); }, [individualBinding]);
   // A history entry shown in the right inspector (read-only ChangeSet details).
   const [detailId, setDetailId] = useState(null);
   const closeBatchInspector = useCallback(() => { setBatchInspector(false); setBatchInspected(null); }, []);
@@ -117,6 +122,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   // Also handles a new handoff while this workspace is already mounted.
   const enterCorrection = useEffectEvent(() => {
     if (!correction) return;
+    setIndividualBinding(null);
     setBatchOpen(false); setBatchInspector(true); setBatchInspected(null); setDetailId(null);
     openLayerDataTable(layerId); setLayerDataTableTab(layerId, 'ledninger');
     setFormRevision((revision) => revision + 1);
@@ -124,6 +130,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   useEffect(() => { enterCorrection(); }, [correction]);
   const enterHandoff = useEffectEvent(() => {
     if (!handoff) return;
+    setIndividualBinding(null);
     setBatchOpen(false); setBatchInspector(handoff.mode === 'batch'); setBatchInspected(null);
     setSelected(handoff.focus); setActiveChangeSetId(null); setDetailId(null); setNotice(null);
     setFormRevision((revision) => revision + 1);
@@ -144,21 +151,39 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     setLayerDataTableTab(layerId, scopeToTableTab(target.scope));
   }, [layerId, openLayerDataTable, setLayerDataTableTab]);
 
-  const select = useCallback((target, changeSetId = null) => {
-    if (batchInspector) {
+  const select = useCallback((target, changeSetId = null, { individual = false } = {}) => {
+    if (batchInspector && !individual) {
       const object = (target.scope === 'line' ? layer?.data?.lines : layer?.data?.points)?.[target.sourceIndex];
       if (object) setBatchInspected({ ...target, object });
       highlight(target); syncObjectTable(target); return;
     }
     // Choosing an object always returns the inspector from ChangeSet details to the editor.
-    if (selected && target.scope === selected.scope && target.sourceIndex === selected.sourceIndex) {
+    if (!individual && selected && target.scope === selected.scope && target.sourceIndex === selected.sourceIndex) {
       setActiveChangeSetId(changeSetId); setDetailId(null); syncObjectTable(target); return;
     }
     guard(() => {
+      if (individual) {
+        const current = useStore.getState().gmiEditSelection;
+        const itinerary = gmiIndividualSelection(view, current, target);
+        if (!itinerary.ok || itinerary.index < 0) return;
+        closeBatchInspector(); setIndividualBinding(current.binding);
+      }
       setSelected(target); setActiveChangeSetId(changeSetId); setDetailId(null); highlight(target);
       syncObjectTable(target);
     });
-  }, [guard, highlight, selected, syncObjectTable, batchInspector, layer]);
+  }, [guard, highlight, selected, syncObjectTable, batchInspector, layer, view, closeBatchInspector]);
+
+  const editIndividually = () => {
+    const itinerary = gmiIndividualSelection(view, useStore.getState().gmiEditSelection, null);
+    if (itinerary.ok) select(itinerary.targets[0], null, { individual: true });
+  };
+  const returnToSelection = () => guard(() => {
+    setIndividualBinding(null); setDetailId(null); setBatchInspector(true); setBatchInspected(null);
+  });
+  const stepSelection = (offset) => guard(() => {
+    const live = gmiIndividualSelection(view, useStore.getState().gmiEditSelection, selected, individualBinding);
+    if (live.ok && live.index >= 0 && live.targets[live.index + offset]) select(live.targets[live.index + offset]);
+  });
 
   const onBatchRequest = useEffectEvent((request) => {
     if (!request || request.layerId !== layerId) return;
@@ -170,6 +195,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       const result = gmiSelectionTargets(view, selection);
       if (!result.ok && result.code !== 'line-only') return;
       setBatchInspector(true); setBatchInspected(null);
+      setIndividualBinding(null);
       useStore.getState().changeGmiEditSelection(layerId, { type: 'show-only', value: true }, selection.binding);
       syncObjectTable({ scope: selection.scope });
     });
@@ -360,12 +386,23 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     </footer>
     {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector key={`batch:${formRevision}`} view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onClose={closeBatchInspector} onRequestClose={() => guard(closeBatchInspector, 'masseendringen')} inspected={batchInspected} onInspectClose={() => setBatchInspected(null)}
+      onEditIndividually={editIndividually}
       renderChangeSet={(changeSet) => renderChangeSet(changeSet, 'staged')}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice(null); showStagedResult(); }} />
       : detailChangeSet && view ? <div className="gmi-edit-editor">{renderChangeSet(detailChangeSet, 'history')}</div>
-      : <GmiObjectEditor key={`${selectedKey}:${view?.handle.sessionId || descriptor?.state}:${formRevision}`} view={view} status={descriptor}
+      : <>{individualBinding && <nav className="gmi-individual-selection" aria-label="Rett én og én" data-gmi-individual-selection>
+        <button type="button" className="gmi-edit-link gmi-focus-ring" onClick={returnToSelection}>Tilbake til utvalget</button>
+        <p ref={individualStatus} tabIndex={-1} className="gmi-focus-ring" role="status">{individual.ok && individual.index >= 0 ? `Objekt ${individual.index + 1} av ${individual.targets.length} i utvalget`
+          : 'Objektet er ikke lenger i et gyldig utvalg. Gå tilbake til utvalget.'}</p>
+        <div className="gmi-edit-history">
+          <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1" disabled={!individual.ok || individual.index <= 0}
+            onClick={() => stepSelection(-1)}>Forrige</button>
+          <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1" disabled={!individual.ok || individual.index < 0 || individual.index >= individual.targets.length - 1}
+            onClick={() => stepSelection(1)}>Neste</button>
+        </div>
+      </nav>}<GmiObjectEditor key={`${selectedKey}:${view?.handle.sessionId || descriptor?.state}:${formRevision}`} view={view} status={descriptor}
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate} onStaged={showStagedResult}
-      validatorCheck={validatorCheck} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}
+      validatorCheck={validatorCheck} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} /></>, inspectorRoot)}
     {exportOpen && view && <GmiExportDialog layerId={layerId} view={view} status={status} onClose={() => setExportOpen(false)} />}
     {batchOpen && view && <GmiBatchDialog view={view} onClose={() => setBatchOpen(false)} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice({ tone: 'ok', text: `Lagt til: ${changeSet.label}` }); showStagedResult(); }} />}

@@ -372,3 +372,16 @@
 .gmi-edit-dialog .gmi-edit-actions .gmi-edit-risk-approve:hover { background: #7c2d12; }
 .gmi-inspector-config .gmi-batch-modes { margin: 4px 0 0; gap: 4px; }
 .gmi-inspector-config .gmi-batch-modes legend { margin-bottom: 2px; }
+.gmi-individual-selection {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--gmi-surface);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--gmi-border);
+  display: grid;
+  gap: 6px;
+}
+.gmi-individual-selection p { margin: 0; font-size: 12px; }
+.gmi-individual-selection > button { justify-self: start; }
+.gmi-individual-alternative { display: grid; gap: 4px; margin-block: 8px; }

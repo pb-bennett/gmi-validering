@@ -52,7 +52,7 @@ function RiskFindings({ tone, title, findings }) {
   </div>;
 }
 
-export default function GmiBatchInspector({ view, onDirtyChange, registerReset, onClose, onRequestClose, onStaged, inspected, onInspectClose, renderChangeSet }) {
+export default function GmiBatchInspector({ view, onDirtyChange, registerReset, onClose, onRequestClose, onStaged, inspected, onInspectClose, renderChangeSet, onEditIndividually }) {
   'use no memo';
   const selection = useStore((state) => state.gmiEditSelection);
   const [field, setField] = useState(''), [lexeme, setLexeme] = useState(''), [mode, setMode] = useState('fill-missing');
@@ -272,6 +272,10 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       <div className="min-w-0"><p className="gmi-edit-kicker">Masseendring</p><h2>{countLabel} valgt</h2></div>
       <button type="button" className={control} onClick={onRequestClose}>Avslutt</button>
     </header>
+    <div className="gmi-individual-alternative">
+      <button type="button" className={control} disabled={!scopeProblem.ok || busy} onClick={onEditIndividually}>Rett én og én</button>
+      <p className="gmi-edit-muted">Bruk ulike verdier eller rett andre felt på hvert objekt. Utvalget beholdes. SDR, Trykklasse og Ringstivhet kan bare masseendres på ledninger. Felt merket «Kan bare rettes enkeltvis» rettes i objektskjemaet; låste eller manglende felt kan ikke rettes der heller.</p>
+    </div>
     <ol className="gmi-batch-steps" aria-label="Fremgang">
       {STEPS.map((label, index) => <li key={label} data-done={index < step || step === 3 || undefined} aria-current={index === step ? 'step' : undefined}>
         {index < step || step === 3 ? <CheckIcon size={11} weight="regular" aria-hidden="true" /> : <span aria-hidden="true">{index + 1}</span>}{label}
