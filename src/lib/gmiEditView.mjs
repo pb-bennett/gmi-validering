@@ -20,15 +20,18 @@ export const GMI_EDIT_TABLE_VIEW_LABELS = Object.freeze([
 ]);
 
 /** U4: presentation only; never rewrite the stored preference or its user/auto intent. */
-export function gmiTableViewControls({ status, view, inRettinger = false, isInspection = false }) {
+export function gmiTableViewControls({ status, view, inRettinger = false, isInspection = false, allowIdenticalProposed = false }) {
   const available = !isInspection && ['editable', 'read-only'].includes(status?.state);
   const hasCorrections = available && status.changeSetCount > 0;
-  const effectiveView = hasCorrections && Object.values(GMI_EDIT_TABLE_VIEWS).includes(view) ? view : GMI_EDIT_TABLE_VIEWS.ORIGINAL;
+  const identicalProposed = available && inRettinger && allowIdenticalProposed;
+  const effectiveView = (hasCorrections || identicalProposed && view === GMI_EDIT_TABLE_VIEWS.PROPOSED)
+    && Object.values(GMI_EDIT_TABLE_VIEWS).includes(view) ? view : GMI_EDIT_TABLE_VIEWS.ORIGINAL;
   return {
     visible: available && (inRettinger || hasCorrections),
     effectiveView,
     modes: GMI_EDIT_TABLE_VIEW_LABELS.map((mode) => {
-      const disabled = !available || (mode.key !== GMI_EDIT_TABLE_VIEWS.ORIGINAL && !hasCorrections);
+      const disabled = !available || (mode.key !== GMI_EDIT_TABLE_VIEWS.ORIGINAL && !hasCorrections
+        && !(identicalProposed && mode.key === GMI_EDIT_TABLE_VIEWS.PROPOSED));
       return { ...mode, disabled, description: disabled && available
         ? 'Legg til en retting for å vise Foreslått eller Kun endrede.' : mode.description };
     }),

@@ -52,8 +52,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const noticeRef = useRef(null), focusNotice = useRef(false);
   const [formRevision, setFormRevision] = useState(0);
   const correction = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.correction : null);
+  const handoff = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.handoff : null);
   const [batchOpen, setBatchOpen] = useState(false);
-  const [batchInspector, setBatchInspector] = useState(Boolean(correction));
+  const [batchInspector, setBatchInspector] = useState(Boolean(correction) || handoff?.mode === 'batch');
   const [batchInspected, setBatchInspected] = useState(null);
   // A history entry shown in the right inspector (read-only ChangeSet details).
   const [detailId, setDetailId] = useState(null);
@@ -66,16 +67,22 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
 
   // The Data Table owns geometry. Preserve its explicit per-layer choice; a fresh layer defaults to lines.
   const enterObjectTable = useEffectEvent(() => {
-    if (!layer) return;
+    if (!layer || handoff) return; // H3 already committed table, geometry and reveal atomically.
     const storedTab = useStore.getState().ui.layerDataTable?.activeTabByLayer?.[layerId];
     openLayerDataTable(layerId);
     setLayerDataTableTab(layerId, correction ? 'ledninger' : storedTab || (layer.data?.lines?.length ? 'ledninger' : 'punkter'));
   });
   useEffect(() => { enterObjectTable(); }, [layerId]);
   // Also covers temporary workspace unmounts, e.g. opening FOTO through the page guard.
-  useEffect(() => () => {
-    if (useStore.getState().gmiEditSelection?.binding.layerId === layerId) useStore.setState({ gmiEditSelection: null });
-    useStore.setState({ gmiBatchInspectorRequest: null, gmiBatchTableReview: null, gmiEditTableExpanded: false, gmiBatchInspectorLayerId: null, gmiEditColumnFocus: null });
+  const mountGeneration = useRef({ generation: 0 });
+  useEffect(() => {
+    const lifecycle = mountGeneration.current, generation = ++lifecycle.generation;
+    return () => queueMicrotask(() => {
+      // Strict Mode replays effects without leaving the workspace.
+      if (lifecycle.generation !== generation) return;
+      if (useStore.getState().gmiEditSelection?.binding.layerId === layerId) useStore.setState({ gmiEditSelection: null });
+      useStore.setState({ gmiBatchInspectorRequest: null, gmiBatchTableReview: null, gmiEditTableExpanded: false, gmiBatchInspectorLayerId: null, gmiEditColumnFocus: null });
+    });
   }, [layerId]);
   // The Data Table shows a batch-mode indicator instead of «Rediger valgte» while this is open.
   useEffect(() => {
@@ -114,6 +121,13 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     setFormRevision((revision) => revision + 1);
   });
   useEffect(() => { enterCorrection(); }, [correction]);
+  const enterHandoff = useEffectEvent(() => {
+    if (!handoff) return;
+    setBatchOpen(false); setBatchInspector(handoff.mode === 'batch'); setBatchInspected(null);
+    setSelected(handoff.focus); setActiveChangeSetId(null); setDetailId(null); setNotice(null);
+    setFormRevision((revision) => revision + 1);
+  });
+  useEffect(() => { enterHandoff(); }, [handoff]);
   const handoffError = useStore((state) => state.gmiEditHandoffError);
 
   const highlight = useCallback((target) => {

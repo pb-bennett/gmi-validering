@@ -47,6 +47,38 @@ export function prepareValidatorCorrection(session, run, ruleIds) {
 
 export const VALIDATOR_CORRECTION_STALE = 'Kildegrunnlaget for Validator-utvalget er endret. Gå tilbake til Validator og lag et nytt utvalg.';
 
+/** Navigation only: checked source identities, without a field or editing permission. */
+export function validatorSelectionHandoff(handoff, view, layer) {
+  const fail = () => ({ ok: false, code: 'stale-session', message: VALIDATOR_CORRECTION_STALE });
+  const binding = handoff?.binding;
+  if (handoff?.kind !== 'validator-selection' || !binding || !view?.session || !view.handle || !layer
+    || binding.layerId !== layer.id || binding.layerId !== view.session.layerId
+    || view.handle.layerId !== layer.id || binding.sessionId !== view.handle.sessionId
+    || handoff.sessionId !== binding.sessionId || handoff.session !== view.session
+    || handoff.document !== view.document || view.session.document !== view.document
+    || !binding.fingerprint || binding.fingerprint !== view.document.fingerprint
+    || view.handle.fingerprint !== binding.fingerprint || !view.document.editable || !gmiSourceIntact(view.document)
+    || !['point', 'line'].includes(handoff.scope) || !Array.isArray(handoff.keys) || !handoff.keys.length
+    || !['original', 'proposed'].includes(handoff.provenance?.datasetKind)) return fail();
+  const objects = handoff.scope === 'point' ? 'points' : 'lines';
+  const dataset = getGmiDocumentDataset(view.document);
+  for (const key of handoff.keys) {
+    const match = /^(point|line):(0|[1-9]\d*)$/.exec(key);
+    if (!match || match[1] !== handoff.scope) return fail();
+    const index = Number(match[2]), source = dataset[objects]?.[index], object = layer.data?.[objects]?.[index];
+    if (!Number.isSafeInteger(index) || !source || !object || source.id !== object.id
+      || (source.guid ?? null) !== (object.guid ?? null)) return fail();
+  }
+  if (new Set(handoff.keys).size !== handoff.keys.length) return fail();
+  const provenance = { ...handoff.provenance, ruleIds: [...(handoff.provenance.ruleIds || [])] };
+  const keys = [...handoff.keys], focus = keys.length === 1
+    ? { scope: handoff.scope, sourceIndex: Number(keys[0].split(':')[1]) } : null;
+  return { ok: true, datasetKind: provenance.datasetKind,
+    handoff: { mode: focus ? 'object' : 'batch', focus, provenance },
+    selection: { binding: { ...binding }, host: { kind: 'rettinger' }, scope: handoff.scope, keys,
+      anchor: null, showOnly: keys.length > 1, origin: { kind: 'validator-selection', ...provenance, count: keys.length } } };
+}
+
 /** Accept prepared targets only against their exact live session and immutable source. */
 export function validatorCorrectionSelection(correction, view, layer) {
   const fail = () => ({ ok: false, code: 'stale-session', message: VALIDATOR_CORRECTION_STALE });

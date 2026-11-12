@@ -1,4 +1,4 @@
-import { validatorCorrectionSelection, validatorInspectionLayer } from './gmiValidatorEditing.mjs';
+import { validatorCorrectionSelection, validatorSelectionHandoff, validatorInspectionLayer, VALIDATOR_CORRECTION_STALE } from './gmiValidatorEditing.mjs';
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { detectOutliers } from './analysis/outliers';
@@ -44,6 +44,7 @@ const updateLayerHighlight = (state, layerId, getChanges) => {
 
 let storeApi = null;
 let hydrationCompletedDuringInitialization = false;
+let validatorHandoffSequence = 0;
 
 const markStoreHydrated = (state) => {
   if (state) state.hydrated = true;
@@ -277,26 +278,62 @@ const useStore = create(
         gmiEditObjectRequest: null, // { layerId, scope, sourceIndex, at } | null
         gmiEditWorkspaceGuard: null, // Mounted workspace's established draft guard; never persisted.
         gmiEditHandoffError: null,
+        openGmiValidatorSelection: (layerId) => {
+          const state = get(), selection = state.gmiEditSelection, inspection = state.objectTableInspection;
+          const handle = gmiEditSessions.getHandle(layerId), resolved = gmiEditSessions.resolve(handle);
+          return state.openGmiEditWorkspace(layerId, {
+            kind: 'validator-selection', binding: selection?.binding, sessionId: selection?.binding.sessionId,
+            scope: selection?.scope, keys: selection?.keys, session: resolved.session, document: resolved.document,
+            provenance: inspection?.selectionContext, selection, inspection,
+          });
+        },
         openGmiEditWorkspace: (layerId, correction = null) => {
+          const selectionHandoff = correction?.kind === 'validator-selection';
           const prepare = () => {
             if (!correction) return { ok: true };
             const handle = gmiEditSessions.getHandle(layerId);
             const resolved = gmiEditSessions.resolve(handle);
+            if (selectionHandoff) {
+              const state = get(), inspection = state.objectTableInspection;
+              if (!state.ui.fieldValidationOpen || !state.ui.layerDataTable?.isOpen || state.ui.layerDataTable.layerId !== layerId
+                || correction.selection !== state.gmiEditSelection || correction.inspection !== inspection
+                || correction.keys !== correction.selection?.keys || correction.binding !== correction.selection?.binding
+                || correction.scope !== correction.selection?.scope
+                || correction.binding?.layerId !== layerId || inspection?.layerId !== layerId
+                || correction.selection?.host?.kind !== 'inspection' || correction.selection.host.key !== inspection?.selectionContext?.key
+                || correction.scope !== inspection.geometryScope || correction.provenance !== inspection.selectionContext
+                || (inspection.editBasis && validatorInspectionLayer(gmiEditSessions, state.layers[layerId], inspection.editBasis) === null)) {
+                return { ok: false, code: 'stale-session', message: VALIDATOR_CORRECTION_STALE };
+              }
+              return validatorSelectionHandoff(correction, resolved.ok ? { ...resolved, handle } : null, state.layers[layerId]);
+            }
             return validatorCorrectionSelection(correction, resolved.ok ? { ...resolved, handle } : null, get().layers[layerId]);
           };
           const initial = prepare();
-          if (!initial.ok) return initial;
+          if (!initial.ok) { set({ gmiEditHandoffError: initial.message }); return initial; }
           const commit = () => {
             // The draft dialog can remain open while source/session state changes.
             const prepared = prepare();
             if (!prepared.ok) { set({ gmiEditHandoffError: prepared.message }); return; }
             set((state) => ({
-              gmiEditWorkspace: state.layers[layerId] ? { layerId, ...(correction ? { correction } : {}) } : null,
-              ...(correction ? { gmiEditSelection: prepared.selection, gmiEditTableView: { ...state.gmiEditTableView, [layerId]: 'original' },
+              gmiEditWorkspace: state.layers[layerId] ? { layerId, ...(selectionHandoff
+                ? { handoff: { ...prepared.handoff, id: ++validatorHandoffSequence } } : correction ? { correction } : {}) } : null,
+              ...(correction ? { gmiEditSelection: prepared.selection, gmiEditTableView: { ...state.gmiEditTableView, [layerId]: selectionHandoff ? prepared.datasetKind : 'original' },
                 gmiEditTableViewBy: { ...state.gmiEditTableViewBy, [layerId]: GMI_EDIT_TABLE_VIEW_BY.AUTO } } : {}),
+              ...(selectionHandoff ? {
+                objectTableInspection: null, gmiBatchTableReview: null, gmiBatchInspectorRequest: null, gmiEditColumnFocus: null,
+                layerTableReveal: prepared.handoff.focus ? { layerId, targets: [prepared.handoff.focus], fields: [], at: Date.now() } : null,
+              } : {}),
               gmiEditHandoffError: null,
               gmiEditObjectRequest: null,
-              ui: { ...state.ui, fieldValidationOpen: false },
+              ui: { ...state.ui, fieldValidationOpen: false, ...(selectionHandoff ? {
+                highlightedFeatureId: prepared.handoff.focus
+                  ? `${correction.scope === 'point' ? 'punkter' : 'ledninger'}-${layerId}-${prepared.handoff.focus.sourceIndex}` : null,
+                layerDataTable: {
+                  ...state.ui.layerDataTable, isOpen: true, layerId,
+                  activeTabByLayer: { ...state.ui.layerDataTable?.activeTabByLayer, [layerId]: correction.scope === 'point' ? 'punkter' : 'ledninger' },
+                },
+              } : {}) },
             }), false, 'gmiEdit/openWorkspace');
           };
           const guard = get().gmiEditWorkspaceGuard;

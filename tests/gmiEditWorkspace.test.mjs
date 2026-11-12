@@ -729,3 +729,95 @@ test('R5 store handoff is atomic behind the draft guard and rechecks source/sess
   useStore.getState().removeLayer(id, { discardGmiEdits: true });
   assert.equal(useStore.getState().openGmiEditWorkspace(id, request).ok, false);
 });
+
+test('H3 proposed handoff retains the identical proposed dataset without enabling Kun endrede or changing ordinary U4 controls', () => {
+  const input = { status: { state: 'editable', changeSetCount: 0 }, view: 'proposed', inRettinger: true };
+  assert.equal(gmiTableViewControls(input).effectiveView, 'original');
+  const retained = gmiTableViewControls({ ...input, allowIdenticalProposed: true });
+  assert.equal(retained.effectiveView, 'proposed');
+  assert.equal(retained.modes.find((mode) => mode.key === 'proposed').disabled, false);
+  assert.equal(retained.modes.find((mode) => mode.key === 'changed').disabled, true);
+  assert.equal(gmiTableViewControls({ ...input, allowIdenticalProposed: true, isInspection: true }).effectiveView, 'original');
+  assert.equal(gmiTableViewControls({ ...input, allowIdenticalProposed: true, view: 'original' }).effectiveView, 'original');
+});
+
+for (const [geometryScope, keys] of [['point', ['point:1']], ['line', ['line:1', 'line:0']]]) {
+  for (const datasetKind of ['original', 'proposed']) {
+    test(`H3 store ${geometryScope}/${datasetKind}: one atomic navigation, exact indices, no staging, ordinary selection and dataset intent`, async (t) => {
+      resetStore(); t.after(resetStore);
+      const { id, data } = await addStoreLayer(CORE), state = () => useStore.getState();
+      const { handle } = await gmiEditSessions.open(id), { session, document } = gmiEditSessions.resolve(handle);
+      state().openGmiValidator(id, datasetKind);
+      const dataset = datasetKind === 'proposed' ? gmiEditSessions.proposed(handle).dataset : data;
+      const request = storeInspectionRequest(id, dataset, { geometryScope, datasetKind });
+      if (datasetKind === 'proposed') request.editBasis = { layerId: id, session, datasetRevision: getDatasetRevision(dataset) };
+      assert.equal(state().openObjectTable(request), true);
+      const binding = gmiSelectionBinding(id, state().gmiEditStatus[id]);
+      state().changeGmiEditSelection(id, { type: 'add', scope: geometryScope, keys }, binding,
+        { kind: 'inspection', key: state().objectTableInspection.selectionContext.key });
+      state().setGmiEditTableView(id, datasetKind === 'original' ? 'proposed' : 'original');
+      const transitions = [], stop = useStore.subscribe((next, previous) => {
+        if (next.gmiEditWorkspace !== previous.gmiEditWorkspace) transitions.push(next);
+      });
+      assert.equal(state().openGmiValidatorSelection(id).ok, true); stop();
+      assert.equal(transitions.length, 1);
+      const accepted = transitions[0];
+      assert.equal(accepted, state());
+      assert.equal(accepted.ui.fieldValidationOpen, false); assert.equal(accepted.objectTableInspection, null);
+      assert.deepEqual(accepted.gmiEditSelection.keys, keys); assert.equal(accepted.gmiEditSelection.showOnly, keys.length > 1);
+      assert.equal(accepted.gmiEditSelection.host.kind, 'rettinger');
+      assert.equal(accepted.gmiEditSelection.origin.kind, 'validator-selection');
+      assert.equal(accepted.gmiEditTableView[id], datasetKind); assert.equal(accepted.gmiEditTableViewBy[id], 'auto');
+      assert.equal(accepted.gmiEditWorkspace.handoff.mode, keys.length === 1 ? 'object' : 'batch');
+      assert.equal(accepted.gmiEditWorkspace.correction, undefined);
+      if (keys.length === 1) {
+        assert.deepEqual(accepted.layerTableReveal.targets, [{ scope: geometryScope, sourceIndex: 1 }]);
+        assert.deepEqual(accepted.layerTableReveal.fields, []);
+        assert.equal(accepted.ui.highlightedFeatureId, `punkter-${id}-1`);
+      } else assert.equal(accepted.layerTableReveal, null);
+      assert.equal(accepted.gmiBatchTableReview, null); assert.equal(accepted.gmiEditObjectRequest, null);
+      assert.equal(gmiEditSessions.resolve(handle).session, session);
+      assert.equal(session.changeSets.length, 0); assert.deepEqual(getGmiSourceBytes(document), CORE);
+      state().changeGmiEditSelection(id, { type: 'add', scope: geometryScope, keys: [`${geometryScope}:2`] }, binding);
+      assert.deepEqual(state().gmiEditSelection.keys, [...keys, `${geometryScope}:2`], 'H3 selection can widen without R5 make-ordinary');
+    });
+  }
+}
+
+test('H3 store revalidates source/session, selection and inspection after the draft guard; refusal stays in Validator', async (t) => {
+  resetStore(); t.after(() => { useStore.setState({ gmiEditWorkspaceGuard: null }); resetStore(); });
+  for (const mutate of ['session', 'source', 'selection', 'inspection', 'none']) {
+    resetStore();
+    const { id, data } = await addStoreLayer(CORE), state = () => useStore.getState();
+    const { handle } = await gmiEditSessions.open(id), { session } = gmiEditSessions.resolve(handle);
+    state().openGmiEditWorkspace(id);
+    // An inspection can coexist with a mounted workspace (and its dirty draft).
+    useStore.setState({ ui: { ...state().ui, fieldValidationOpen: true } });
+    state().openObjectTable(storeInspectionRequest(id, data));
+    const binding = gmiSelectionBinding(id, state().gmiEditStatus[id]);
+    state().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:0', 'line:1'] }, binding,
+      { kind: 'inspection', key: state().objectTableInspection.selectionContext.key });
+    let resume;
+    useStore.setState({ gmiEditWorkspaceGuard: (run) => { resume = run; } });
+    const before = state();
+    assert.equal(before.openGmiValidatorSelection(id).ok, true);
+    assert.equal(state(), before, 'waiting/cancelling guard does not publish any part of the transition');
+    if (mutate === 'session') {
+      const result = createGmiObjectCorrection(session, { scope: 'line', sourceIndex: 1, values: { SDR: '11' } });
+      assert.equal(gmiEditSessions.stage(handle, result.changeSet).ok, true);
+    } else if (mutate === 'source') {
+      useStore.setState({ layers: { ...state().layers, [id]: { ...state().layers[id], data: parse(CORE).data } } });
+    } else if (mutate === 'selection') state().changeGmiEditSelection(id, { type: 'clear' }, binding,
+      { kind: 'inspection', key: state().objectTableInspection.selectionContext.key });
+    else if (mutate === 'inspection') state().openObjectTable(storeInspectionRequest(id, data, { field: 'material' }));
+    const workspace = state().gmiEditWorkspace;
+    resume();
+    if (mutate === 'none') {
+      assert.equal(state().ui.fieldValidationOpen, false); assert.equal(state().gmiEditWorkspace.handoff.mode, 'batch');
+      assert.equal(gmiEditSessions.resolve(handle).session, session);
+    } else {
+      assert.equal(state().gmiEditWorkspace, workspace); assert.equal(state().ui.fieldValidationOpen, true);
+      assert.match(state().gmiEditHandoffError, /Kildegrunnlaget/);
+    }
+  }
+});

@@ -114,7 +114,8 @@ test('H2 production: Validator checkbox hosts, persistence, map halos, lifecycle
         await click('Velg alle 5 synlige', bar); await browser.waitFor(`${halos}.length === 5`);
         assert.deepEqual(await checked(), [0, 1, 2, 3, 4]);
         assert.equal(await browser.evaluate(`${bar}.querySelector('[aria-label="Rader i tabellen"]') !== null`), false);
-        assert.doesNotMatch(await browser.evaluate(`${bar}.innerText`), /Rediger valgte|Åpne i Rettinger|Bare valgte/);
+        assert.doesNotMatch(await browser.evaluate(`${bar}.innerText`), /Rediger valgte|Bare valgte/);
+        assert.match(await browser.evaluate(`${bar}.innerText`), /Åpne i Rettinger \(5\)/);
         assert.equal(await browser.evaluate('document.querySelector("#validation-v2-geometry-panel").innerText.split(String.fromCharCode(10))[0]'), resultSummary);
       });
 

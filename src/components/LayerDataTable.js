@@ -302,7 +302,9 @@ export default function LayerDataTable() {
   // GMI editing display modes. Only for a layer with an open editing session, and never for exact
   // object inspections (their rows are bound to the original dataset revision). The verified proposed
   // view is computed once per published editing revision (status object), not per render.
-  const viewControls = gmiTableViewControls({ status: gmiEditStatus, view: gmiEditTableView,
+  const handoffDataset = useStore((state) => state.gmiEditWorkspace?.layerId === layerId
+    ? state.gmiEditWorkspace.handoff?.provenance.datasetKind : null);
+  const viewControls = gmiTableViewControls({ status: gmiEditStatus, view: gmiEditTableView, allowIdenticalProposed: handoffDataset === 'proposed',
     inRettinger: Boolean(layerId) && gmiEditWorkspaceLayerId === layerId, isInspection: isExactInspection });
   const gmiEditModesAvailable = viewControls.visible;
   const proposedView = useMemo(
@@ -328,6 +330,7 @@ export default function LayerDataTable() {
     && sameGmiSelectionHost(storedSelection?.host, selectionHost) ? storedSelection : null;
   const selectionDescriptor = isSelectableInspection && !selectionEnabled ? gmiEditStatus || gmiEditSessions.describe(layerId) : null;
   const selectionUnavailable = selectionDescriptor ? describeGmiEditStatus(selectionDescriptor) : null;
+  const handoffError = useStore((state) => state.gmiEditHandoffError);
   const scope = tableTabToScope(activeTab);
   const showSelectionOnly = !isExactInspection && Boolean(selection?.showOnly && selection.scope === scope);
   const selectionDisplayKeys = showSelectionOnly ? selection.keys : null;
@@ -1062,9 +1065,11 @@ export default function LayerDataTable() {
         {['unloaded', 'loading'].includes(selectionDescriptor.state) ? 'Klargjør objektutvalg…'
           : <>Objektutvalg er ikke tilgjengelig. {selectionUnavailable.message || 'Filen kan bare vises og ikke rettes.'}</>}
       </div>}
+      {isSelectableInspection && handoffError && <p role="alert" className="gmi-selection-bar">{handoffError}</p>}
       {selectionEnabled && (selectionCounts.total > 0 || selection?.origin?.kind === 'validator') && <div data-gmi-selection-bar className="gmi-selection-bar">
         <p className="gmi-selection-summary" role="status">
           {selection?.origin?.kind === 'validator' && <span title="Utvalget kan bare reduseres. Gjør om til vanlig utvalg for å legge til objekter.">Fra Validator: {selection.origin.targets.length} objekter · bare fjerning tillatt. </span>}
+          {selection?.origin?.kind === 'validator-selection' && <span data-gmi-validator-provenance>Valgt i Validator · {selection.origin.fieldLabel} · {selection.origin.count} {selection.origin.count === 1 ? 'objekt' : 'objekter'}. </span>}
           <strong>{selectionCounts.total}</strong> valgt<span className="gmi-selection-scope"> · {showSelectionOnly
             ? `${rows.length} vises · ${selectionCounts.visible} treffer filter/søk/visning · ${selectionCounts.hidden} utenfor`
             : `${selectionCounts.visible} synlige · ${selectionCounts.hidden} skjult av ${isSelectableInspection ? 'utvalg/søk' : 'filter/søk/visning'}`}</span>
@@ -1086,6 +1091,9 @@ export default function LayerDataTable() {
             onClick={() => selectAction({ type: 'add', scope, keys: visibleKeys })}><ListChecksIcon size={13} weight="regular" aria-hidden="true" />Velg alle {rows.length} synlige</button>}
           <button type="button" className="gmi-bar-button gmi-focus-ring" onClick={() => selectAction({ type: 'clear' })}><XIcon size={12} weight="regular" aria-hidden="true" />Fjern utvalg</button>
         </div>
+        {isSelectableInspection && <button type="button" className="gmi-primary-control gmi-focus-ring gmi-batch-entry"
+          onClick={() => useStore.getState().openGmiValidatorSelection(layerId)}>
+          <PencilSimpleIcon size={14} weight="regular" aria-hidden="true" />Åpne i Rettinger ({selectionCounts.total})</button>}
         {!isExactInspection && (batchInspectorLayerId === layerId
           ? <span className="gmi-batch-mode-indicator" role="status"><PencilSimpleIcon size={14} weight="regular" aria-hidden="true" />Masseendring pågår · se panelet til høyre</span>
           : <button type="button" className="gmi-primary-control gmi-focus-ring gmi-batch-entry" onClick={() => useStore.setState({ gmiBatchInspectorRequest: { layerId, at: Date.now() } })}>
