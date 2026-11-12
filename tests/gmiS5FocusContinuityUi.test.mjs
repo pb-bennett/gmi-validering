@@ -52,6 +52,12 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
       await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode, ...(text ? { text } : {}) });
       await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
     };
+    const continuity = () => browser.evaluate(`({
+      geometry: ${table}.dataset.tableGeometry, top: ${grid}.scrollTop, left: ${grid}.scrollLeft,
+      selected: Array.from(${grid}.querySelectorAll('[data-table-row][aria-selected=true]')).map(e=>e.dataset.tableRow),
+      active: ${grid}.querySelector('[data-table-row][aria-current=true]')?.dataset.tableRow ?? null,
+      map: Array.from(document.querySelectorAll('.leaflet-gmi-edit-selection-pane path, .leaflet-layer-highlight-casing-pane path')).map(e=>[e.getAttribute('d'),e.getAttribute('opacity'),e.getAttribute('stroke-opacity')])
+    })`);
     const counts = () => browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText ?? null`);
     const ready = () => browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK') && ${inspector}.getAttribute('aria-busy')==='false'`);
     const stage = async (expectRisk) => {
@@ -77,16 +83,19 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
       await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
       await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'localStorage.clear(); window.confirm=()=>true;' });
 
-      await t.test('object staging switches Original → Foreslått once, then an explicit Original is kept; focus lands on the result', async () => {
+      await t.test('object staging switches Original → Foreslått on first and subsequent stages, then an explicit Original is kept; focus lands on the result', async () => {
         await load();
         assert.equal(await view(), 'original');
         await clickGmiTableObject(browser, 'line:0'); await browser.waitFor(`${editor}?.dataset.gmiObject === 'line:0'`);
+        await browser.evaluate(`${grid}.scrollLeft = 100`);
         const scrollBefore = await browser.evaluate(`${grid}.scrollTop`);
         await typeInto(`${editor}.querySelector('tr[data-field="Merknad"] input')`, 'Kontrollert');
         await click('Se gjennom (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
+        const beforeIndividualStage = await continuity();
         await click('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
         await browser.waitFor(`${modes}.dataset.gmiTableView === 'proposed'`);
+        assert.deepEqual(await continuity(), beforeIndividualStage, 'individual stage preserves table and map context');
         const focused = await activeElement();
         assert(focused.message && focused.visible && !focused.body, JSON.stringify(focused));
         assert.match(focused.text, /Rettingen er lagt til/);
@@ -95,13 +104,24 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         assert.equal(await browser.evaluate(`${editor}.dataset.gmiObject`), 'line:0');
         assert.equal(await browser.evaluate(`${grid}.scrollTop`), scrollBefore);
         assert.equal(await browser.evaluate(`Boolean(${draftDialog})`), false);
+        // A subsequent individual stage keeps the automatic proposed view.
+        await click('Punkter', table);
+        await clickGmiTableObject(browser, 'point:0'); await browser.waitFor(`${editor}?.dataset.gmiObject === 'point:0'`);
+        await typeInto(`${editor}.querySelector('tr[data-field="Merknad"] input')`, 'Kontrollert igjen');
+        await click('Se gjennom (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
+        assert.equal(await view(), 'proposed', 'preview preserves the current view');
+        await click('Legg til retting', editor);
+        await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('2 rettinger')`);
+        assert.equal(await view(), 'proposed', 'subsequent individual stage');
+        assert((await activeElement()).message, 'existing result focus is retained');
+        await click('Ledninger', table);
         // Explicit Original survives the next stage (another object, an empty field).
         await click('Original', modes); await browser.waitFor(`${modes}.dataset.gmiTableView === 'original'`);
         await clickGmiTableObject(browser, 'line:2'); await browser.waitFor(`${editor}?.dataset.gmiObject === 'line:2'`);
         await typeInto(`${editor}.querySelector('tr[data-field="Merknad"] input')`, 'Sjekket');
         await click('Se gjennom (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
         await click('Legg til retting', editor);
-        await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('2 rettinger')`);
+        await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('3 rettinger')`);
         assert.equal(await view(), 'original', 'explicit Original kept');
         assert((await activeElement()).message, 'focus on the result again');
       });
@@ -124,8 +144,17 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         await choose('Felt for masseendring', 'Merknad');
         await typeInto(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, 'Kontrollert');
         await click('Forhåndsvis endringer', inspector);
+        assert.equal(await view(), 'original', 'batch preview never switches views');
+        await ready(); await click('Legg til masseendring', inspector);
+        await browser.waitFor(risk);
+        assert.equal(await view(), 'original', 'pending approval never switches views');
+        await click('Tilbake til utvalget', risk); await browser.waitFor(`!${risk}`);
+        assert.equal(await view(), 'original', 'cancelled staging never switches views');
+        const beforeStage = await continuity();
+        assert(beforeStage.map.length > 0, 'map highlights are present before staging');
         await stage(true); // Merknad is not validated: explicit approval.
         await browser.waitFor(`${modes}.dataset.gmiTableView === 'proposed'`);
+        assert.deepEqual(await continuity(), beforeStage, 'automatic view preserves geometry, scroll, selection, active row and map paths');
         state = await focusState();
         assert.deepEqual([state.fields, state.active, state.header], ['Merknad', 'true', 'Merknad'], 'ChangeSet keeps the focus');
         const focused = await activeElement();
@@ -161,6 +190,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         await ready();
         assert.equal((await focusState()).active, 'false', 'preview keeps the off choice');
         await stage(true);
+        assert.equal(await view(), 'proposed', 'subsequent batch stage keeps the automatic proposed view');
         let state = await focusState();
         assert.deepEqual([state.fields, state.active, state.header], ['Merknad', 'false', null], 'not reactivated by the ChangeSet');
         await click('Ny masseendring for utvalget', inspector);
@@ -190,6 +220,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         assert(focused.notice && focused.visible && !focused.body, JSON.stringify(focused));
         assert.match(focused.text, /^Angret: /);
         assert.notEqual(await counts(), stagedCounts, 'undo removed the batch');
+        assert.equal(await view(), 'original', 'undo alone keeps the explicit view');
         // Tab reaches the contextual «Gjør om»; the keyboard redo restores the batch and keeps focus on the result.
         await press('Tab', 'Tab', 9);
         assert.equal(await browser.evaluate(`document.activeElement?.dataset.gmiContextRedo ?? null`), 'notice', 'Tab reaches «Gjør om»');
@@ -198,6 +229,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         focused = await activeElement();
         assert(focused.notice && focused.visible && !focused.body, JSON.stringify(focused));
         assert.equal(await counts(), stagedCounts, '«Gjør om» restored the batch');
+        assert.equal(await view(), 'original', 'redo alone keeps the explicit view');
         assert.equal(await browser.evaluate(`Boolean(document.querySelector('[data-gmi-context-redo=notice]'))`), false, 'nothing left to redo in context');
         assert.equal(await browser.evaluate(`${inspector}.dataset.batchStep !== '3'`), true, 'redo does not reopen the staged view');
         await click('Avslutt', inspector); await browser.waitFor(`!${inspector}`);

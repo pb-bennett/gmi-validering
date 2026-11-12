@@ -79,6 +79,7 @@ export default function GmiBatchDialog({ view, onClose, onDirtyChange, onStaged,
     if (gmiEditSessions.getSession(view.handle).session !== preview.session) { setRiskOpen(false); setMessage('Utvalget er utdatert. Beregn og se gjennom på nytt.'); return; }
     const result = gmiEditSessions.stage(view.handle, changeSet);
     if (!result.ok) { setMessage(gmiEditMessage(result.code)); return; }
+    if (!result.staged) { setMessage('Ingen verdier ble endret, så ingen retting ble lagt til.'); return; }
     onDirtyChange(false); onStaged(changeSet); reset();
   };
   const confirm = () => {

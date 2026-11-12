@@ -213,6 +213,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     }
     const result = gmiEditSessions.stage(view.handle, changeSet);
     if (!result.ok) { setMessage(gmiEditMessage(result.code)); return; }
+    if (!result.staged) { setMessage('Ingen verdier ble endret, så ingen retting ble lagt til.'); return; }
     invalidate(); setLexeme(''); setField(''); onDirtyChange(false); setRisk(null); setStaged(changeSet.id); onStaged(changeSet);
   };
   // Domains offer values; the existing Validator/dry-run owns verdicts, including numeric equivalence.
