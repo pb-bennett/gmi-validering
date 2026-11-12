@@ -194,8 +194,9 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     if (!result.ok) { setMessage(gmiEditMessage(result.code)); return; }
     invalidate(); setLexeme(''); setField(''); onDirtyChange(false); setRisk(null); setStaged(changeSet.id); onStaged(changeSet);
   };
-  const draft = checkGmiFieldDraft(column, lexeme, view.document.encoding.encodingClass);
-  const problem = lexeme ? draft.problem?.code === 'value-out-of-domain' ? 'Velg en verdi fra listen.' : gmiLexemeProblem(draft.problem, lexeme) : null;
+  // Domains offer values; the existing Validator/dry-run owns verdicts, including numeric equivalence.
+  const draft = checkGmiFieldDraft(column, lexeme, view.document.encoding.encodingClass, { restrictEnumeration: false });
+  const problem = lexeme ? gmiLexemeProblem(draft.problem, lexeme) : null;
   const conflicts = plan?.rows?.filter((row) => selection.keys.includes(row.key) && row.changedBy?.length && row.current !== lexeme).length || 0;
   const detail = inspected ? getGmiProposedState(view.session).dataset?.[inspected.scope === 'line' ? 'lines' : 'points']?.[inspected.sourceIndex] : null;
   const inspectedReview = inspected && review ? review.preview.rows.find((row) => row.scope === inspected.scope && row.sourceIndex === inspected.sourceIndex) : null;
@@ -224,7 +225,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       </option>)}
     </select></label>
     {field && <p className="gmi-edit-muted">{field}: tom i {emptyCount} av {count}.</p>}
-    <GmiFieldValueInput column={column} value={lexeme} problem={problem} disabled={busy || !field} onChange={(value) => { invalidate(); setLexeme(value); }} />
+    <GmiFieldValueInput key={`${selection?.scope}:${field}`} column={column} value={lexeme} problem={problem} disabled={busy || !field} onChange={(value) => { invalidate(); setLexeme(value); }} />
     <fieldset className="gmi-batch-modes"><legend>Hvordan skal verdien brukes?</legend>
       {MODES.map(([value, label]) => <label key={value}><input type="radio" name="inspector-batch-mode" checked={mode === value} onChange={() => { invalidate(); setMode(value); }} /> {label}</label>)}
     </fieldset>

@@ -36,8 +36,8 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
     const click = (label, root = 'document') => browser.evaluate(`(() => {
       const b=Array.from((${root}).querySelectorAll('button')).find(e=>e.innerText.trim()===${JSON.stringify(label)} || e.getAttribute('aria-label')===${JSON.stringify(label)});
       if(!b || b.disabled) throw new Error('Unavailable: '+${JSON.stringify(label)}); b.click(); })()`);
-    const choose = (label, value) => browser.evaluate(`(() => { const s=${inspector}.querySelector('[aria-label=${JSON.stringify(label)}]');
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,${JSON.stringify(value)}); s.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+    const choose = (label, value) => browser.evaluate(`(() => { const s=${inspector}.querySelector('[aria-label=${JSON.stringify(label)}]'), select=s.tagName==='SELECT';
+      Object.getOwnPropertyDescriptor(select?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(s,${JSON.stringify(value)}); s.dispatchEvent(new Event(select?'change':'input',{bubbles:true})); })()`);
     const input = (value) => browser.evaluate(`(() => { const e=${inspector}.querySelector('[aria-label="Ny verdi"]');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)}); e.dispatchEvent(new Event('input',{bubbles:true})); })()`);
     const text = (root = inspector) => browser.evaluate(`${root}.innerText`);
@@ -72,10 +72,10 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         assert.equal(await browser.evaluate(`${inspector}.querySelector('select').value`), '');
         assert(await browser.evaluate(`Array.from(${inspector}.querySelector('select').options).some(o=>o.disabled&&o.textContent.includes('Finnes ikke i filen'))`));
         await choose('Felt for masseendring', 'InnvendigUtvendig');
-        assert.deepEqual(await browser.evaluate(`Array.from(${inspector}.querySelector('[aria-label="Ny verdi"]').options).map(o=>o.value)`), ['', 'ID', 'OD']);
+        assert.deepEqual(await browser.evaluate(`Array.from(${inspector}.querySelector('[aria-label="Ny verdi"]').options).slice(0,-1).map(o=>o.value)`), ['', 'ID', 'OD']);
         // Native keyboard value selection and form submission.
         await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').focus()`);
-        for (const key of ['End', 'Tab', 'Tab', 'Enter']) {
+        for (const key of ['Home', 'ArrowDown', 'ArrowDown', 'Tab', 'Tab', 'Enter']) {
           await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key });
           await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key });
         }
@@ -258,8 +258,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
     const click = (label, root = 'document') => browser.evaluate(`(() => { const button = Array.from((${root}).querySelectorAll('button')).find(e => e.innerText.trim() === ${JSON.stringify(label)} || e.getAttribute('aria-label') === ${JSON.stringify(label)}); if (!button || button.disabled) throw new Error('Unavailable: ' + ${JSON.stringify(label)}); button.click(); })()`);
     const input = (element, value) => browser.evaluate(`(() => { const input = ${element};
       const select = input.tagName === 'SELECT', value = ${JSON.stringify(value)};
-      const offered = select ? Array.from(input.options).find(o => o.value === value || (value.trim() && Number(o.value) === Number(value)))?.value ?? value : value;
-      Object.getOwnPropertyDescriptor(select ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(input, offered);
+      Object.getOwnPropertyDescriptor(select ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(input, value);
       input.dispatchEvent(new Event(select ? 'change' : 'input', { bubbles: true })); })()`);
     const select = (value) => browser.evaluate(`(() => { const select = ${inspector}.querySelector('select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(value)}); select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
     const text = () => browser.evaluate(`${inspector}.innerText`);
@@ -303,7 +302,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         assert.equal(await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].checked`), true);
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[0].click()`);
         await select('SDR');
-        assert(await browser.evaluate(`!Array.from(${inspector}.querySelector('[aria-label="Ny verdi"]').options).some(o=>o.value==='a;b')`));
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').getAttribute('role')`), 'combobox');
         await input(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, '11'); await calculate();
         assert.match(await text(), /2 av 2 ledninger endres/); assert.match(await text(), /0 nye FEIL/);
         assert.equal(await browser.evaluate(`${grid}.getAttribute('aria-rowcount')`), '3');
@@ -338,7 +337,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await browser.evaluate(`${row(2)}.click()`);
         await browser.waitFor(`${inspector}.querySelector('.gmi-batch-object-detail')`);
         // Row inspection keeps the reviewed proposal (and its draft) intact.
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11.0');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
         await click('Tilbake til masseendringen', inspector);
         await click('Legg til masseendring', inspector);
         const risk = `document.querySelector('dialog[open][data-gmi-confirm=batch-risk]')`;
@@ -365,9 +364,9 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'stale');
         await click('Gjør om retting', workspace); assert.equal(await stageDisabled(), true);
         await click('Avslutt', inspector); await browser.waitFor(confirm); await click('Avbryt', confirm);
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '17.0');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '17');
         await click('Endre oppsett', inspector);
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '17.0');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '17');
         await click('Avslutt', inspector); await browser.waitFor(confirm); await click('Forkast skjemaet', confirm);
         await browser.waitFor(`!${inspector}`);
       });
@@ -400,7 +399,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
           await writeFile(path.join(tmpdir(), `gmi-r4-${width}x${height}.png`), Buffer.from(data, 'base64'));
         }
         await click('Mindre tabell');
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11.0');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
         assert.match(await text(), /av 24 ledninger endres/);
         for (const [width, height] of [[1920, 1080], [1366, 768], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
@@ -411,7 +410,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await click('Større tabell'); await click('Fjern utvalg', bar);
         assert.equal(await stageDisabled(), true);
         await click('Mindre tabell');
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11.0');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
       });
       assert.equal(browser.events.filter((event) => event.method === 'Runtime.exceptionThrown').length, 0);
       assert.equal(await (await import('node:fs/promises')).readFile(file, 'latin1'), source);

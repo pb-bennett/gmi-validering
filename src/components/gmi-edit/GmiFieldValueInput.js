@@ -2,20 +2,15 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 
-/** Keep the accepted G4 batch interface unchanged. D3 integration is a separate slice. */
+/** Batch adapter: retain its public interface and label, using the same domain control as individual editing. */
 function BatchFieldValueInput({ column, value, onChange, problem, disabled }) {
-  const domain = column?.domain;
-  const enumerated = domain?.kind === 'enumeration';
-  const props = { 'aria-label': 'Ny verdi', value, disabled, 'aria-invalid': Boolean(problem),
-    onChange: (event) => onChange(event.target.value) };
-  return <label>Ny verdi{enumerated ? <select {...props}>
-    <option value="">Velg verdi…</option>
-    {domain.options.map((option) => <option key={option.value} value={option.value}>
-      {option.value}{option.label !== option.value ? ` – ${option.label}` : ''}
-    </option>)}
-  </select> : <input {...props} type="text" autoComplete="off" spellCheck={false}
-    inputMode={['integer', 'year'].includes(domain?.kind) ? 'numeric' : domain?.kind === 'decimal' ? 'decimal' : 'text'}
-    placeholder={domain?.format || undefined} />}</label>;
+  const id = useId();
+  return <div className="gmi-batch-value-input">
+    <label htmlFor={id}>Ny verdi</label>
+    <ObjectFieldValueInput id={id} domain={column?.domain} value={value} disabled={disabled} onChange={onChange}
+      aria-label="Ny verdi" aria-invalid={Boolean(problem)} className="gmi-edit-input" emptyLabel="Velg verdi…"
+      unlistedHint={column?.domain?.comparison === 'numeric' ? null : undefined} />
+  </div>;
 }
 
 const optionLabel = (option) => [option.value, option.label !== option.value ? option.label : null, option.longLabel].filter(Boolean).join(' – ');
@@ -23,7 +18,8 @@ const optionLabel = (option) => [option.value, option.label !== option.value ? o
 /** Offered values and format hints only: all verdicts still come from the Validator.
  * Only typed drafts are uppercased. Mounting, list selection and external value resets preserve exact lexemes.
  */
-function ObjectFieldValueInput({ domain, value, onChange, id, ...props }) {
+function ObjectFieldValueInput({ domain, value, onChange, id, emptyLabel = 'Tom verdi',
+  unlistedHint = 'Verdien er ikke i kodelisten. Validator vurderer verdien.', ...props }) {
   const [custom, setCustom] = useState(false);
   const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [active, setActive] = useState(-1);
   const customOption = `custom-${useId()}`;
@@ -33,7 +29,7 @@ function ObjectFieldValueInput({ domain, value, onChange, id, ...props }) {
   const searchable = enumerated && options.length > 12;
   const current = options.find((option) => option.value === value);
   const matches = options.filter((option) => optionLabel(option).toLocaleLowerCase('nb').includes(query.toLocaleLowerCase('nb')));
-  const hint = [current ? current.label !== current.value ? current.label : null : enumerated && value ? 'Verdien er ikke i kodelisten. Validator vurderer verdien.' : null,
+  const hint = [current ? current.label !== current.value ? current.label : null : enumerated && value ? unlistedHint : null,
     domain?.format, domain?.unit].filter(Boolean).join(' · ');
   const hintId = `${id}-domain`, listId = `${id}-options`;
   const controlProps = { ...props, id, value, 'aria-describedby': [props['aria-describedby'], hint ? hintId : null].filter(Boolean).join(' ') || undefined };
@@ -48,7 +44,7 @@ function ObjectFieldValueInput({ domain, value, onChange, id, ...props }) {
       if (event.target.value === customOption) setCustom(true);
       else onChange(event.target.value);
     }}>
-      <option value="">Tom verdi</option>
+      <option value="">{emptyLabel}</option>
       {value && !current && <option value={value}>{value} – ikke i kodelisten</option>}
       {options.map((option) => <option key={option.value} value={option.value}>{optionLabel(option)}</option>)}
       <option value={customOption}>Annen verdi…</option>

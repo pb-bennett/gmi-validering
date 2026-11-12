@@ -84,6 +84,7 @@
 .gmi-edit-editor { padding: 10px 12px 16px; display: grid; gap: 8px; }
 .gmi-inspector-config { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(80px, 1fr); gap: 6px; }
 .gmi-inspector-config > label { display: grid; gap: 3px; }
+.gmi-inspector-config .gmi-batch-value-input { display: grid; gap: 3px; grid-column: 1 / -1; }
 .gmi-inspector-config input:not([type=radio]), .gmi-inspector-config select { width: 100%; min-width: 0; padding: 3px 5px; border: 1px solid var(--gmi-border-strong); border-radius: 4px; }
 .gmi-inspector-config fieldset { grid-column: 1 / -1; }
 .gmi-batch-inspector input { accent-color: var(--gmi-interactive); }

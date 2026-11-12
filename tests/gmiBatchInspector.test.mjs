@@ -25,8 +25,11 @@ test('G4 field choices use capabilities for both scopes, explain unavailable col
   assert.match(component, /\[field, setField\] = useState\(''\)/);
   assert.doesNotMatch(component, /initialField|GMI_BATCH_FIELDS/);
   const input = await readFile(new URL('../src/components/gmi-edit/GmiFieldValueInput.js', import.meta.url), 'utf8');
-  assert.match(input, /domain\.options\.map/);
+  assert.match(input, /<ObjectFieldValueInput id=\{id\} domain=\{column\?\.domain\}/);
+  assert.match(input, /options\.map/);
   assert.match(input, /<select/);
+  assert.match(component, /Boolean\(field && column && !column\.disabled\)/);
+  assert.match(component, /const dirty = Boolean\(lexeme \|\| review \|\| mode !== 'fill-missing'\)/);
 });
 
 test('G4 point presentation preserves exclusions, manual applicability, exact values and dataset consequences', async () => {

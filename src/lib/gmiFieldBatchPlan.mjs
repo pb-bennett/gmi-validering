@@ -115,7 +115,8 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
     if (!hydraulicReview.ok) return hydraulicReview;
     if (hydraulicReview.eligibility.field !== sourceKey) return reject('field-binding-unresolved');
   } else {
-    const draft = checkGmiFieldDraft(column, value, view.document.encoding.encodingClass);
+    // Custom codes are reviewed by the Validator, just as in the individual editor.
+    const draft = checkGmiFieldDraft(column, value, view.document.encoding.encodingClass, { restrictEnumeration: false });
     if (!draft.ok) return reject(draft.problem.code);
     lexeme = draft.lexeme;
   }

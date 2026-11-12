@@ -49,7 +49,7 @@ function verify(view, result) {
   return staged.session;
 }
 
-test('multiple points: source order, exact approved subset, empty/whitespace/populated/unlisted originals and strict domains', async () => {
+test('multiple points: exact approved subset and original lexemes; Validator owns custom-code verdicts', async () => {
   const view = await setup();
   const fill = await prepare(view, 'point', 'InnvendigUtvendig', 'fill-missing', 'od', [3, 2, 1, 0]);
   assert.deepEqual(fill.rows.map((row) => row.key), ['point:0', 'point:1', 'point:2', 'point:3']);
@@ -64,8 +64,24 @@ test('multiple points: source order, exact approved subset, empty/whitespace/pop
   const replaced = buildGmiFieldBatch(view.session, set);
   assert.deepEqual(replaced.changeSet.cells.map((cell) => cell.sourceIndex), [0, 1, 3]);
   verify(view, replaced);
-  for (const value of ['unlisted', '', ' ID ', 'a;b']) {
-    assert.equal((await prepareGmiFieldBatch(view, { scope: 'point', sourceKey: 'InnvendigUtvendig', operation: 'set', value, targets: targets(view, 'point', [0]) }, immediate)).ok, false);
+  // D3 deliberately replaces the strict-list gate: safe custom lexemes reach the real Validator.
+  const custom = await prepare(view, 'point', 'InnvendigUtvendig', 'set', 'unlisted', [0]);
+  assert.equal(custom.lexeme, 'UNLISTED');
+  assert.equal(custom.rows[0].proposedOutcome.state, 'FAIL');
+  assert(custom.rows[0].findings.some((finding) => finding.state === 'FAIL' && finding.batchIntroduced));
+  assert.equal((await prepareGmiFieldBatch(view, { scope: 'point', sourceKey: 'InnvendigUtvendig', operation: 'set', value: 'a;b', targets: targets(view, 'point', [0]) }, immediate)).code, 'lexeme-semicolon');
+});
+
+test('D3 numeric SDR offers accept equivalent spellings without rewriting the chosen lexeme or eligibility', async () => {
+  const view = await setup(gmiEditBatchFixture());
+  for (const value of ['11', '11.0', '11,0']) {
+    const preview = await prepare(view, 'line', 'SDR', 'fill-missing', value, [0, 7]);
+    assert.equal(preview.lexeme, value);
+    const batch = buildGmiFieldBatch(view.session, preview);
+    assert.equal(batch.ok, true);
+    assert(batch.changeSet.eligibility, 'hydraulic eligibility remains the owner');
+    assert(batch.changeSet.cells.every((cell) => cell.next === value));
+    verify(view, batch);
   }
 });
 
