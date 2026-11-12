@@ -15,6 +15,8 @@ import { gmiEditMessage, gmiLexemeProblem, describeGmiObject, gmiObjectCountLabe
 import GmiConfirmDialog from './GmiConfirmDialog';
 import GmiSeverityIcon from './GmiSeverityIcon';
 import { Lexeme } from './GmiObjectEditor';
+import GmiSelectionProfile from './GmiSelectionProfile';
+import { buildGmiSelectionProfile, gmiSelectionNarrowing, gmiSelectionProfileSources } from '@/lib/gmiSelectionProfile.mjs';
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1';
 const primary = 'gmi-primary-control gmi-focus-ring gmi-batch-primary';
@@ -62,6 +64,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   // S5: the field the user last chose. It leads the Data Table from the choice on, through staging and
   // «Ny masseendring», until another field is chosen. Presentation only: it never makes the form dirty.
   const [focusChoice, setFocusChoice] = useState('');
+  const [profileNotice, setProfileNotice] = useState(null); // { selection, text }: shown only for the narrowed selection
   const fieldSelectRef = useRef(null), focusFieldSelect = useRef(false);
   const generation = useRef(0);
   const scopeExpanded = useRef(false);
@@ -79,6 +82,11 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const stale = review ? review.preview.session !== view.session || !scopeProblem.ok || selection.scope !== review.preview.scope
     ? 'stale-session' : expanded || selection.keys.some((key) => !review.keys.includes(key)) ? 'expanded' : null : null;
   useEffect(() => { if (stale === 'expanded') setExpanded(true); }, [stale]);
+  // B1: profile of the proposed working copy (staged corrections included); rule context only from a valid preview.
+  const profileSources = useMemo(() => gmiSelectionProfileSources(view, selection?.scope), [view, selection?.scope]);
+  const profile = useMemo(() => selection && scopeProblem.ok ? buildGmiSelectionProfile({ dataset: currentDataset, scope: selection.scope,
+    keys: selection.keys, sources: profileSources, ruleRows: review && !stale ? review.preview.rows : null }) : null,
+  [currentDataset, selection, scopeProblem.ok, profileSources, review, stale]);
   useEffect(() => useStore.subscribe((state, previous) => {
     if (!review || state.gmiEditSelection === previous.gmiEditSelection) return;
     const before = new Set(previous.gmiEditSelection?.keys || []);
@@ -216,6 +224,20 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const breakdown = counts ? [['Hoppes over', counts.skipped], ['Utelatt av deg', counts.excluded], ['Manuelt inkludert', counts.manual],
     ['Uendret', counts.unchanged], ['Overskriver utfylte', plan.ok ? plan.changeSet.counts.populatedOverwrites : 0]].filter(([, value]) => value > 0) : [];
   const stageBlocked = busy || Boolean(stale) || !plan?.ok || !plan.changeSet.cells.length || (conflicts > 0 && !replace) || validation.state?.status !== 'ready';
+  // «Behold bare disse»: one shrink-only reducer action. A shrink keeps the preview valid; approval is never carried over.
+  const narrowSelection = (dimension, group) => {
+    const current = useStore.getState().gmiEditSelection;
+    if (busy || current !== selection) return false;
+    const action = gmiSelectionNarrowing(current, group.keys);
+    if (!action) return false;
+    useStore.getState().changeGmiEditSelection(current.binding.layerId, { type: action.type, scope: action.scope, keys: [...action.keys] }, current.binding, current.host);
+    const next = useStore.getState().gmiEditSelection;
+    const before = new Set(current.keys);
+    if (!next || next === current || next.keys.some((key) => !before.has(key))) return false;
+    setRisk(null);
+    setProfileNotice({ selection: next, text: `Utvalget er innsnevret til ${gmiObjectCountLabel(next.keys.length, next.scope)} (${dimension.label}: ${group.label}).` });
+    return true;
+  };
   const newBatch = () => { focusFieldSelect.current = true; setStaged(null); setConfigOpen(true); setMessage(null); };
   const configForm = <form onSubmit={(event) => { event.preventDefault(); if (canPreview) calculate(); }} className="gmi-inspector-config" data-gmi-batch-config>
     <label>Felt<select ref={fieldSelectRef} aria-label="Felt for masseendring" value={field} disabled={busy} onChange={(event) => { invalidate(); setField(event.target.value); setFocusChoice(event.target.value); setLexeme(''); }}>
@@ -278,6 +300,8 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
           {plan?.ok === false && !plan.included?.size && <p className="gmi-edit-muted">Ingen av de valgte objektene kan endres med dette oppsettet.</p>}
         </>}
       </div>}
+      {/* B1: after the proposal, so a live preview stays visible without scrolling. */}
+      <GmiSelectionProfile profile={profile} disabled={busy} notice={profileNotice?.selection === selection ? profileNotice.text : null} onNarrow={narrowSelection} />
       {(!review || configOpen) && <div className="gmi-inspector-configuration">{review && <p className="gmi-edit-muted">Endringer i oppsettet krever ny forhåndsvisning.</p>}{configForm}</div>}
 
       {plan?.counts && !stale && <div className="gmi-batch-options">
