@@ -195,6 +195,23 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await click('Tilbake til utvalget', risk);
       });
 
+      await t.test('S3: an actual table SJEKK uses the shared warning symbol and compact label at laptop sizes', async () => {
+        await selectObjects('Ledninger', [0]);
+        await choose('Felt for masseendring', 'Anleggsår'); await input('1800'); await preview();
+        const finding = `${row(0)}.querySelector('.gmi-review-finding[data-validation-tone=warning]')`;
+        await browser.waitFor(finding);
+        assert.match(await text(finding), /SJEKK/);
+        assert.equal(await browser.evaluate(`${finding}.querySelector('[data-severity-icon]').dataset.severityIcon`), 'warning');
+        assert.equal(await browser.evaluate(`${finding}.querySelector('svg').getAttribute('aria-hidden')`), 'true');
+        assert.match(await browser.evaluate(`${finding}.title`), /SJEKK/);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          assert(await browser.evaluate(`document.documentElement.scrollWidth <= ${width}`));
+          const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+          await writeFile(path.join(tmpdir(), `gmi-pass1-table-sjekk-${width}x${height}.png`), Buffer.from(data, 'base64'));
+        }
+      });
+
       await t.test('new FEIL is confirmed even without overwrite; cancellation blocks until a fresh full check', async () => {
         await selectObjects('Ledninger', [0]);
         await choose('Felt for masseendring', 'Anleggsår'); await input('ugyldig');

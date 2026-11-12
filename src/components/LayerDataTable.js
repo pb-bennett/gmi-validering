@@ -69,8 +69,9 @@ function ReviewFindings({ entry }) {
   const label = (finding) => finding.label || `${finding.severity}${finding.introduced ? ' (ny)' : ''}`;
   const title = [...findings.map((finding) => `${label(finding)}${finding.note ? ` (${finding.note})` : ''}: ${finding.reason}`), context].filter(Boolean).join('\n');
   return <span className={`gmi-review-finding truncate${actual ? '' : ' gmi-review-hypothetical'}`} data-validation-tone={first.tone} data-transition={first.transition} title={actual ? title : `Hvis inkludert:\n${title}`}>
-    <GmiSeverityIcon tone={first.tone} size={13} />
-    <span className="min-w-0 truncate">{!actual && 'Hvis inkludert: '}<strong>{label(first)}</strong> {first.reason}{rest.length > 0 && ` · +${rest.length}`}</span>
+    <span className="gmi-review-severity"><GmiSeverityIcon tone={first.tone} size={13} />
+      <strong className="truncate">{!actual && 'Hvis inkludert: '}{label(first)}</strong></span>
+    <span className="min-w-0 truncate">{' '}{first.reason}{rest.length > 0 && ` · +${rest.length}`}</span>
   </span>;
 }
 

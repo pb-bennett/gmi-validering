@@ -240,6 +240,10 @@
 .gmi-review-none { color: var(--gmi-text-subtle); }
 .gmi-review-finding { display: flex; align-items: center; gap: 3px; min-width: 0; color: var(--validation-text); }
 .gmi-review-finding svg { flex-shrink: 0; color: var(--validation-icon); }
+.gmi-review-severity { display: inline-flex; align-items: center; gap: 3px; min-width: 0; flex-shrink: 0; max-width: 100%; }
+/* Yellow-700 needs an orange-50 backing on cyan selected rows to retain 4.5:1 contrast.
+   Only the compact symbol/label gets the existing warning surface; row and prose colours stay intact. */
+.gmi-review-finding[data-validation-tone='warning'] .gmi-review-severity { color: var(--gmi-validation-compact-warning-text); --validation-icon: var(--gmi-validation-compact-warning-text); background: var(--validation-bg); border-radius: 3px; padding: 0 2px; }
 /* Hypothetical findings: muted text instead of opacity, so text and icon keep ≥4.5:1 on selected (cyan-soft) rows. */
 .gmi-review-finding.gmi-review-hypothetical { color: var(--gmi-text-muted); }
 [data-review-outcome=excluded] > [role=gridcell], [data-review-outcome=skipped] > [role=gridcell] { color: var(--gmi-text-subtle); }
@@ -271,11 +275,10 @@
 .gmi-transition-count, .gmi-severity-count { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border: 1px solid var(--gmi-border); border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--gmi-text-subtle); background: var(--gmi-surface); }
 :is(.gmi-severity-count, .gmi-transition-count)[data-validation-tone] { border-color: var(--validation-border); background: var(--validation-bg); color: var(--validation-text); }
 :is(.gmi-severity-count, .gmi-transition-count)[data-validation-tone] svg { color: var(--validation-icon); }
-/* S3: compact SJEKK icons and labels in the inspector reuse the rule-count yellow-700 (≥4.6:1 on white, the field-row
-   tints and orange-50 pills). Panels, tooltips and Data Table cells keep the shared orange: selected rows are cyan-soft,
-   where yellow-700 measures 4.39:1. */
+/* S3: compact SJEKK icons and labels reuse the rule-count yellow-700. Panels and tooltips retain orange prose/surfaces. */
 :is(.gmi-edit-finding, .gmi-severity-count, .gmi-transition-count, .gmi-batch-finding-list li, .gmi-edit-legend-item)[data-validation-tone='warning'] { --validation-icon: var(--gmi-validation-compact-warning-text); }
 :is(.gmi-severity-count, .gmi-transition-count, .gmi-batch-finding-list li)[data-validation-tone='warning'] { color: var(--gmi-validation-compact-warning-text); }
+.gmi-edit-legend-item[data-validation-tone='warning'], .gmi-risk-group[data-validation-tone='warning'] .gmi-risk-group-title { color: var(--gmi-validation-compact-warning-text); --validation-icon: var(--gmi-validation-compact-warning-text); }
 .gmi-edit-legend-item { white-space: nowrap; }
 .gmi-edit-legend-item svg, .gmi-batch-finding-list li svg { display: inline; vertical-align: -2px; margin-right: 2px; color: var(--validation-icon); }
 /* S2: transition groups in the dataset list; unchanged existing findings stay available but secondary. */

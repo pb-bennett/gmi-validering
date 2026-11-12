@@ -122,6 +122,24 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         assert.notEqual(await entry(), id);
         assert.deepEqual(await redoButtons(), []);
         assert.equal(await browser.evaluate(`${workspace}.querySelector('.gmi-edit-history [aria-label="Gjør om retting"]').getAttribute('aria-disabled')`), 'true');
+        // 4. Discarding the remaining entry also clears a pending redo and both contextual controls.
+        const remainingLabel = await text(`${workspace}.querySelector('.gmi-edit-change-label')`);
+        await edit('Merknad', 'S6 forkasting');
+        await browser.evaluate(`Array.from(${editor}.querySelectorAll('.gmi-edit-confirm input')).filter(e => !e.checked).forEach(e => e.click())`);
+        await click('Se gjennom (1)', editor);
+        await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`); await click('Legg til retting', editor);
+        await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length === 2`);
+        await click('Angre siste retting', workspace);
+        await browser.waitFor(`${workspace}.querySelector('[data-gmi-context-redo=notice]')`);
+        assert.equal((await redoButtons()).length, 2);
+        await click(`Forkast ${remainingLabel}`, workspace);
+        await browser.waitFor(`!${workspace}.querySelector('[data-change-set]')`);
+        assert.deepEqual(await redoButtons(), [], 'discard clears contextual redo');
+        assert.equal(await browser.evaluate(`${workspace}.querySelector('.gmi-edit-history [aria-label="Gjør om retting"]').getAttribute('aria-disabled')`), 'true');
+        // Leave the same single-object correction for the subsequent navigation/layout checks.
+        await edit('SDR', '11'); await click('Se gjennom (1)', editor);
+        await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`); await click('Legg til retting', editor);
+        await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length === 1`);
       });
 
       await t.test('row navigation still guards drafts; table closure has an accessible reopen path', async () => {

@@ -29,9 +29,12 @@ const severityAppearance = (browser, selector) => browser.evaluate(`(() => {
   const token = (name) => pixel([[getComputedStyle(document.documentElement).getPropertyValue(name).trim(), 1]]).join(',');
   return { yellow: token('--gmi-validation-compact-warning-text'), orangeText: token('--gmi-validation-warning-text'), orangeIcon: token('--gmi-validation-warning-icon'),
     items: Array.from(document.querySelectorAll(${JSON.stringify(selector)})).map(el => {
-      const icon = el.querySelector('svg[data-severity-icon]'), bg = background(el), alpha = opacity(el);
+      const icon = el.querySelector('svg[data-severity-icon]'), label = el.querySelector('.gmi-review-severity, .gmi-risk-group-title') || el;
+      const bg = background(el), alpha = opacity(el);
       return { tone: el.dataset.validationTone || null, icon: icon?.dataset.severityIcon || null,
-        text: ratio(getComputedStyle(el).color, bg, alpha), glyph: icon ? ratio(getComputedStyle(icon).color, bg, alpha) : null,
+        text: ratio(getComputedStyle(el).color, bg, alpha), glyph: icon ? ratio(getComputedStyle(icon).color, background(icon), opacity(icon)) : null,
+        labelContrast: ratio(getComputedStyle(label).color, background(label), opacity(label)),
+        labelColor: pixel([[getComputedStyle(label).color, 1]]).join(','),
         color: pixel([[getComputedStyle(el).color, 1]]).join(','), iconColor: icon ? pixel([[getComputedStyle(icon).color, 1]]).join(',') : null,
         hypothetical: el.classList.contains('gmi-review-hypothetical') };
     }) };
@@ -40,6 +43,7 @@ const assertSeverityContrast = (label, { items }) => {
   assert(items.length > 0, `${label}: no severity elements`);
   for (const item of items) {
     assert(item.text >= 4.5, `${label} ${item.tone} text contrast ${item.text.toFixed(2)}`);
+    assert(item.labelContrast >= 4.5, `${label} ${item.tone} label contrast ${item.labelContrast.toFixed(2)}`);
     if (item.glyph !== null) assert(item.glyph >= 4.5, `${label} ${item.tone} icon contrast ${item.glyph.toFixed(2)}`);
   }
   return items.map((item) => `${item.tone}${item.hypothetical ? '(hyp)' : ''} ${item.text.toFixed(2)}/${item.glyph?.toFixed(2)}`).join(', ');
@@ -169,6 +173,27 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
           const hypothetical = await severityAppearance(browser, '.gmi-review-finding.gmi-review-hypothetical');
           console.log(`S3 hypothetical ${scheme}: ${assertSeverityContrast(`hypothetical ${scheme}`, hypothetical)}`);
           assert(hypothetical.items.every((item) => item.hypothetical && item.icon === item.tone), JSON.stringify(hypothetical.items));
+          // CSS matrix on the real selected-row background: both tones, actual and hypothetical.
+          // The fixture's leading finding is FEIL, so explicitly probe SJEKK as well.
+          await browser.evaluate(`(() => {
+            const original = document.querySelector('.gmi-review-finding.gmi-review-hypothetical');
+            for (const tone of ['error', 'warning']) for (const hypothetical of [false, true]) {
+              const probe = original.cloneNode(true); probe.dataset.gmiSeverityProbe = '';
+              probe.dataset.validationTone = tone; probe.classList.toggle('gmi-review-hypothetical', hypothetical);
+              const icon = document.querySelector('.gmi-severity-count svg[data-severity-icon="' + tone + '"]').cloneNode(true);
+              probe.querySelector('svg').replaceWith(icon);
+              probe.querySelector('strong').textContent = (hypothetical ? 'Hvis inkludert: ' : '') + (tone === 'warning' ? 'SJEKK' : 'FEIL');
+              original.parentElement.append(probe);
+            }
+          })()`);
+          try {
+            const probes = await severityAppearance(browser, '[data-gmi-severity-probe]');
+            assert.equal(probes.items.length, 4);
+            console.log(`S3 selected-row matrix ${scheme}: ${assertSeverityContrast('selected-row matrix', probes)}`);
+            for (const item of probes.items.filter((item) => item.tone === 'warning')) {
+              assert.equal(item.labelColor, probes.yellow); assert.equal(item.iconColor, probes.yellow);
+            }
+          } finally { await browser.evaluate(`document.querySelectorAll('[data-gmi-severity-probe]').forEach(e => e.remove())`); }
         }
         await browser.send('Emulation.setEmulatedMedia', { features: [] });
         assert.equal(await browser.evaluate(`${row(1)}.querySelector('.gmi-manual-toggle')`), null, 'populated values cannot be manually included in fill mode');
@@ -179,7 +204,7 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
         const chips = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.gmi-severity-count')).map(e => ({ text: e.innerText.trim(), tone: e.dataset.validationTone || null, color: getComputedStyle(e).color }))`);
         assert.deepEqual(chips.map(({ text: label, tone }) => [label, tone]), [['1 ny FEIL', 'error'], ['1 ny SJEKK', 'warning']]);
         assert.notEqual(chips[0].color, chips[1].color);
-        // S3: FEIL ⓧ / SJEKK ⚠ symbols; compact SJEKK pills use the yellow-700 alias, table cells keep the shared orange.
+        // S3: FEIL ⓧ / SJEKK ⚠ symbols; compact SJEKK labels/icons share the yellow-700 alias.
         for (const scheme of ['light', 'dark']) {
           await browser.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] });
           const pills = await severityAppearance(browser, '.gmi-severity-count[data-validation-tone]');
@@ -189,7 +214,11 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
           const [error, warning] = ['error', 'warning'].map((tone) => pills.items.find((item) => item.tone === tone));
           assert.equal(warning.color, pills.yellow, 'SJEKK pill text'); assert.equal(warning.iconColor, pills.yellow, 'SJEKK pill icon');
           assert.notEqual(error.color, warning.color);
-          for (const cell of cells.items.filter((item) => item.tone === 'warning')) assert.equal(cell.color, cells.orangeText, 'Data Table SJEKK keeps the shared orange');
+          for (const cell of cells.items.filter((item) => item.tone === 'warning')) {
+            assert.equal(cell.color, cells.orangeText, 'Data Table warning prose keeps orange');
+            assert.equal(cell.labelColor, cells.yellow, 'Data Table SJEKK label');
+            assert.equal(cell.iconColor, cells.yellow, 'Data Table SJEKK icon');
+          }
         }
         await browser.send('Emulation.setEmulatedMedia', { features: [] });
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
@@ -202,7 +231,8 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
         const groups = await severityAppearance(browser, 'dialog[open] .gmi-risk-group');
         console.log(`S3 risk groups: ${assertSeverityContrast('risk groups', groups)}`);
         assert.deepEqual(groups.items.map((item) => [item.tone, item.icon]), [['error', 'error'], ['warning', 'warning']]);
-        assert.equal(groups.items[1].color, groups.orangeText); assert.equal(groups.items[1].iconColor, groups.orangeIcon);
+        assert.equal(groups.items[1].color, groups.orangeText);
+        assert.equal(groups.items[1].labelColor, groups.yellow); assert.equal(groups.items[1].iconColor, groups.yellow);
         const dialog = await browser.evaluate(`(() => {
           const d = ${risk}; const groups = Array.from(d.querySelectorAll('.gmi-risk-group')).map(e => e.dataset.validationTone);
           const approve = Array.from(d.querySelectorAll('button')).find(e => e.innerText.trim() === 'Godkjenn og legg til');
