@@ -5,7 +5,7 @@ import {
   createGmiSourceDocument, createGmiEditSession, createGmiObjectCorrection, stageGmiChangeSet,
   getGmiDocumentDataset, getGmiEditCell, listGmiObjectCells, getGmiProposedState, getGmiSourceBytes,
 } from '../src/lib/gmi-edit/index.mjs';
-import { gmiEditObjectDiagnostics, overlayGmiObjectValues } from '../src/lib/gmiEditValidation.mjs';
+import { gmiEditObjectDiagnostics, gmiEditObjectReviewErrors, overlayGmiObjectValues } from '../src/lib/gmiEditValidation.mjs';
 import { createGmiObjectValidator, runGmiValidationV2 } from '../src/lib/validation-v2/validationRunner.js';
 import { getDatasetRevision } from '../src/lib/validation-v2/datasetRevision.js';
 import { GMIParser } from '../src/lib/parsing/gmiParser.js';
@@ -26,6 +26,24 @@ function inspect(session, sourceIndex = 0, drafts = {}) {
   });
   return gmiEditObjectDiagnostics({ view: { document, session, handle: { layerId: 'm5a' } }, scope: 'line', sourceIndex, rows, drafts });
 }
+
+test('G5 review confirmation uses new Validator FEIL against the working copy, not pre-existing or resolved findings', () => {
+  const session = createGmiEditSession(document, { layerId: 'm5a' });
+  const errors = (current, values) => {
+    const rows = listGmiObjectCells(document, 'line', 0).filter((cell) => cell.field).map((cell) => ({
+      field: cell.field, editable: true, proposed: getGmiEditCell(current, { scope: 'line', sourceIndex: 0, field: cell.field }).proposed,
+    }));
+    return gmiEditObjectReviewErrors({ view: { document, session: current, handle: { layerId: 'm5a' } }, scope: 'line', sourceIndex: 0, rows, values });
+  };
+  assert.deepEqual(errors(session, { Merknad: 'G5 tekst' }), [], 'existing dimension FEIL does not require a new-FEIL confirmation');
+  assert.deepEqual(errors(session, { Dimensjon: '200' }), [], 'resolving a FEIL does not require confirmation');
+  assert.deepEqual(errors(session, { SDR: '11' }).map((finding) => finding.ruleId), [exclusive]);
+  const correction = createGmiObjectCorrection(session, { scope: 'line', sourceIndex: 0, values: { SDR: '11' } });
+  assert.equal(correction.ok, true);
+  const staged = stageGmiChangeSet(session, correction.changeSet).session;
+  assert.deepEqual(errors(staged, { Merknad: 'Neste retting' }), [], 'a FEIL already in the working copy is not new again');
+  assert.deepEqual(getGmiSourceBytes(document), bytes);
+});
 
 test('object evaluation matches full Validator outcomes for all local rules, scopes and lexemes', () => {
   const full = runGmiValidationV2(input);

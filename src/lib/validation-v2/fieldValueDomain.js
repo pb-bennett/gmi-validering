@@ -26,7 +26,8 @@ export function getGmiFieldValueDomain({ canonicalFieldId, geometryScope }) {
     : format === 'Desimaltall' ? 'decimal' : format === 'YYYY' ? 'year'
       : format === 'DD.MM.YYYY' ? 'date' : 'text';
   const domain = Object.freeze({ kind, options,
-    upperCase: options.length > 0 && options.every(({ value }) => value === value.toUpperCase() && /\p{L}/u.test(value)),
+    upperCase: options.length > 0 && options.every(({ value }) => value === value.toUpperCase())
+      && options.some(({ value }) => /\p{L}/u.test(value)),
     ruleId: rule?.ruleId || null, unit: hints.units || null, format,
     comparison: rule?.policy === 'sdr' ? 'numeric' : rule?.valueComparison || null });
   domains.set(key, domain);

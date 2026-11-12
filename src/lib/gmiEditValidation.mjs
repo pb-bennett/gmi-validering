@@ -76,3 +76,15 @@ export function gmiEditObjectDiagnostics({ view, scope, sourceIndex, rows, draft
   return { findings, deferred: result.deferred.length > 0, deferredRuleIds: result.deferred.map((outcome) => outcome.ruleId),
     governingOutcome: result.outcomes.find((outcome) => outcome.ruleId === governingRuleId) || null };
 }
+
+/** Review consequences against the current working copy, including earlier staged corrections.
+ * Reuse the Validator's findings; input domains never decide whether a value is valid.
+ * Call with the checked correction's actual cell values, not skipped form requests.
+ */
+export function gmiEditObjectReviewErrors({ view, scope, sourceIndex, rows, values }) {
+  const context = { view, scope, sourceIndex, rows };
+  const current = gmiEditObjectDiagnostics(context).findings;
+  const existing = new Set(current.filter((finding) => finding.state === 'FAIL' && finding.transition !== 'resolved').map((finding) => finding.key));
+  return gmiEditObjectDiagnostics({ ...context, drafts: values }).findings
+    .filter((finding) => finding.state === 'FAIL' && finding.transition !== 'resolved' && !existing.has(finding.key));
+}

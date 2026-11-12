@@ -33,6 +33,8 @@ test('every enumerated domain offers exactly the governing rule lexemes, labelle
       assert.equal(result.kind, 'enumeration');
       assert.equal(result.ruleId, rule.ruleId);
       assert.deepEqual(result.options.map(({ value }) => value), rule.allowedValues);
+      assert.equal(result.upperCase, rule.allowedValues.every((value) => value === value.toUpperCase())
+        && rule.allowedValues.some((value) => /\p{L}/u.test(value)), `${rule.ruleId}: uppercase is derived, not a per-field list`);
       const table = getAuthoritativeValueTable(rule.canonicalFieldId, scope);
       for (const option of result.options) {
         const row = table?.rows.find((entry) => entry.code === option.value);
@@ -51,6 +53,22 @@ test('every enumerated domain offers exactly the governing rule lexemes, labelle
   assert.equal(domain('insideOutside').upperCase, true);
   assert.equal(domain('sdr', 'point'), null);
   assert.equal(domain('unknown'), null);
+});
+
+test('G5 lone S_FCODE columns resolve through the existing schema to geometry-specific Tema domains', () => {
+  const bytes = fixture({ point: ['S_FCODE', 'InnvendigUtvendig'], line: ['S_FCODE', 'InnvendigUtvendig'] });
+  const document = createGmiSourceDocument(bytes);
+  const view = { document };
+  for (const scope of ['point', 'line']) {
+    const columns = describeGmiEditColumns(view, scope).columns;
+    assert.equal(columns[0].canonicalFieldId, 'tema');
+    assert.strictEqual(columns[0].domain, domain('tema', scope));
+    assert.strictEqual(columns[1].domain, domain('insideOutside', scope));
+    assert.strictEqual(describeGmiEditColumns(view, scope).columns, columns, 'cached per document/scope');
+  }
+  assert.deepEqual(domain('insideOutside').options.map(({ value }) => value), ['ID', 'OD']);
+  assert.notDeepEqual(domain('insideOutside').options, domain('insideOutside', 'line').options);
+  assert.deepEqual(getGmiSourceBytes(document), bytes);
 });
 
 test('new modules contain no duplicate literal code arrays', async () => {

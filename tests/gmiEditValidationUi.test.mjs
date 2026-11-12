@@ -27,9 +27,9 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
       const button = Array.from(${scope}.querySelectorAll('button')).find(e => e.innerText.trim() === ${JSON.stringify(text)} || e.getAttribute('aria-label') === ${JSON.stringify(text)});
       if (!button || button.disabled) throw new Error('Unavailable: ' + ${JSON.stringify(text)}); button.click();
     })()`);
-    const edit = (field, value) => browser.evaluate(`(() => { const input = ${row(field)}.querySelector('input');
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
-      input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    const edit = (field, value) => browser.evaluate(`(() => { const input = ${row(field)}.querySelector('input, select'), select = input.tagName === 'SELECT';
+      Object.getOwnPropertyDescriptor(select ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
+      input.dispatchEvent(new Event(select ? 'change' : 'input', { bubbles: true })); })()`);
     const select = async (key) => {
       await clickGmiTableObject(browser, key);
       await browser.waitFor(`${editor}?.dataset.gmiObject === ${JSON.stringify(key)}`);
@@ -71,6 +71,8 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
       await browser.evaluate(`Array.from(${editor}.querySelectorAll('.gmi-edit-confirm input')).filter(e => !e.checked).forEach(e => e.click())`);
       await click(`Se gjennom (${count})`, editor);
       await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
+      // G5: the explicit review gate is separate from overwrite/replacement confirmation.
+      await browser.evaluate(`${editor}.querySelector('[data-gmi-new-errors] input')?.click()`);
       await click('Legg til retting', editor);
       await browser.waitFor(`!${editor}.querySelector('.gmi-edit-review')`);
       await checked();
@@ -134,7 +136,7 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
           return buttons.every((a, i) => buttons.every((b, j) => i === j || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)); })()`), true, 'multiple indicators do not overlap');
         assert.equal(await browser.evaluate(`${row('SDR')}.children[1].innerText`), 'tom');
         assert.equal(await browser.evaluate(`${row('SDR')}.querySelector('input').value`), '11');
-        assert.equal(await browser.evaluate(`${row('Ringstivhet')}.querySelector('input').value`), 'SN8');
+        assert.equal(await browser.evaluate(`${row('Ringstivhet')}.querySelector('select').value`), 'SN8');
         const spacing = await browser.evaluate(`(() => { const pill = ${row('SDR')}.querySelector('.gmi-edit-state-pill');
           return [getComputedStyle(pill).marginTop, getComputedStyle(pill).marginBottom]; })()`);
         assert.deepEqual(spacing, ['6px', '0px']);

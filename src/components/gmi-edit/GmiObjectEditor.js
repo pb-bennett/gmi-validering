@@ -12,6 +12,9 @@ import {
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import useGmiObjectValidation from './useGmiObjectValidation';
 import GmiSeverityIcon, { GMI_SEVERITY_ICONS, gmiFindingTone } from './GmiSeverityIcon';
+import GmiFieldValueInput from './GmiFieldValueInput';
+import { describeGmiEditColumns } from '@/lib/gmiEditFields.mjs';
+import { gmiEditObjectReviewErrors } from '@/lib/gmiEditValidation.mjs';
 
 function FindingIcon({ finding }) {
   const tone = gmiFindingTone(finding);
@@ -42,6 +45,7 @@ export function Lexeme({ value, empty = 'tom' }) {
 function rowsFor(view, scope, sourceIndex) {
   const cells = view?.document ? listGmiObjectCells(view.document, scope, sourceIndex) : null;
   if (!cells) return null;
+  const columns = describeGmiEditColumns(view, scope).columns;
   return cells.filter((cell) => cell.field !== '' || cell.lexeme).map((cell) => {
     const policy = gmiEditFieldPolicy(cell);
     const current = policy.editable ? gmiEditSessions.cell(view.handle, { scope, sourceIndex, field: cell.field }) : null;
@@ -50,6 +54,7 @@ function rowsFor(view, scope, sourceIndex) {
       field: cell.field,
       label: fieldLabel(cell.field),
       position: cell.position,
+      domain: columns.find((column) => column.position === cell.position && column.sourceKey === cell.field)?.domain || null,
       editable: policy.editable && Boolean(current?.ok),
       reason: policy.editable && !current?.ok ? current?.code : policy.reason,
       original,
@@ -140,10 +145,13 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
       setMessage({ tone: 'error', text: [...new Set(result.rejections.map((rejection) => gmiEditMessage(rejection.code)))].join(' ') });
       return;
     }
-    setReview({ changeSet: result.changeSet, stateKey: session.stateKey });
+    const newErrors = gmiEditObjectReviewErrors({ view, scope, sourceIndex, rows,
+      values: Object.fromEntries(result.changeSet.cells.map((cell) => [cell.field, cell.next])) });
+    setReview({ changeSet: result.changeSet, stateKey: session.stateKey, newErrors, allowNewErrors: false });
   };
 
   const stage = () => {
+    if (!editable || !review || reviewStale || (review.newErrors.length > 0 && !review.allowNewErrors)) return;
     focusMessage.current = true;
     const result = gmiEditSessions.stage(view.handle, review.changeSet);
     if (!result.ok) {
@@ -187,9 +195,16 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
       {review.changeSet.skipped.length > 0 && <div className="gmi-edit-skipped" role="note">
         <WarningIcon size={14} aria-hidden="true" /> Hoppes over: {review.changeSet.skipped.map((cell) => `${cell.field} (${gmiSkipReasonLabel(cell.reason).toLowerCase()})`).join(', ')}
       </div>}
+      {review.newErrors.length > 0 && <div data-gmi-new-errors>
+        <p className="gmi-edit-problem">Forslaget gir {review.newErrors.length} nye FEIL i Validator.</p>
+        <ul className="gmi-edit-review-errors">{review.newErrors.map((finding) => <li key={finding.key}>{finding.reason}</li>)}</ul>
+        <label className="gmi-edit-confirm"><input type="checkbox" checked={review.allowNewErrors}
+          onChange={(event) => setReview({ ...review, allowNewErrors: event.target.checked })} />
+          <span>Legg til selv om Validator gir ny FEIL</span></label>
+      </div>}
       <div className="gmi-edit-actions">
         <button type="button" className={control} onClick={() => setReview(null)}>Tilbake</button>
-        <button type="button" className={primary} disabled={!review.changeSet.cells.length} onClick={stage}>Legg til retting</button>
+        <button type="button" className={primary} disabled={!review.changeSet.cells.length || (review.newErrors.length > 0 && !review.allowNewErrors)} onClick={stage}>Legg til retting</button>
       </div>
     </section> : <form className="gmi-edit-form" onSubmit={(event) => { event.preventDefault(); buildReview(); }} aria-label={`Felt for ${title}`}>
       {reviewStale && <p className="gmi-edit-message" data-tone="warning" role="status">{gmiEditMessage('stale-change-set')}</p>}
@@ -214,10 +229,10 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
                 <td><Lexeme value={row.original} /></td>
                 <td>
                   {row.editable && editable ? <div className="gmi-edit-input-cell">
-                    <input id={inputId} type="text" spellCheck={false} autoComplete="off" value={draft ?? row.proposed}
+                    <GmiFieldValueInput variant="object" domain={row.domain} id={inputId} value={draft ?? row.proposed}
                       aria-invalid={problem ? true : undefined} aria-describedby={problem ? `${inputId}-problem` : undefined}
                       className={`gmi-edit-input${editing ? ' gmi-edit-input-draft' : ''}${row.changed && !editing ? ' gmi-edit-input-proposed' : ''}`}
-                      onChange={(event) => setDraft(row.field, event.target.value)} />
+                      onChange={(value) => setDraft(row.field, value)} />
                     {editing && <PhotoIconButton icon={ArrowCounterClockwiseIcon} size={14} label={`Angre skrivingen i ${row.field}`} tooltip="Angre skrivingen" onClick={() => clearDraft(row.field)} />}
                     {!editing && row.changed && <button type="button" className="gmi-edit-link" onClick={() => setDraft(row.field, row.original)}>Bruk original</button>}
                   </div> : <span className="gmi-edit-readonly" title={row.reason ? gmiEditMessage(row.reason) : undefined}>

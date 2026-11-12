@@ -39,10 +39,10 @@ function ui(browser) {
   const buttonState = (text, scope = 'document') => browser.evaluate(`(() => {
     const button = Array.from(${scope}.querySelectorAll('button')).find((e) => e.innerText.trim().startsWith(${JSON.stringify(text)}) || e.getAttribute('aria-label') === ${JSON.stringify(text)});
     return button ? { disabled: button.disabled || button.getAttribute('aria-disabled') === 'true' } : null; })()`);
-  const setValue = (selector, value) => browser.evaluate(`(() => { const input = ${selector};
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
-    input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  const edit = (field, value) => setValue(`${row(field)}.querySelector('input')`, value);
+  const setValue = (selector, value) => browser.evaluate(`(() => { const input = ${selector}, select = input.tagName === 'SELECT';
+    Object.getOwnPropertyDescriptor(select ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
+    input.dispatchEvent(new Event(select ? 'change' : 'input', { bubbles: true })); })()`);
+  const edit = (field, value) => setValue(`${row(field)}.querySelector('input, select')`, value);
   const selectObject = async (key) => {
     await clickGmiTableObject(browser, key);
   };
@@ -152,6 +152,8 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         const review = await browser.evaluate(`Array.from(${editor}.querySelectorAll('.gmi-edit-review-table tbody tr')).map((tr) => tr.innerText.replace(/\\s+/g, ' ').trim())`);
         assert.deepEqual(review, ['Material PE PE100Overskriver verdi', 'SDR tom 11.0']);
         await u.shot('m4-rettinger-review');
+        // G5: PE100 is outside the authoritative Material list; approve the new Validator FEIL explicitly.
+        await browser.evaluate(`${editor}.querySelector('[data-gmi-new-errors] input')?.click()`);
         await u.clickButton('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText === '1 retting · 2 felt i 1 objekt'`);
         assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-download-state]').dataset.downloadState`), 'unsaved');
@@ -332,6 +334,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await u.waitObject('line:2');
         await u.edit('SDR', '10.0');
         await u.clickButton('Se gjennom (1)', editor);
+        await browser.evaluate(`${editor}.querySelector('[data-gmi-new-errors] input')?.click()`);
         await u.clickButton('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-download-state]')?.dataset.downloadState === 'unsaved'`);
         await u.clickButton('Tilbake til appen', workspace);

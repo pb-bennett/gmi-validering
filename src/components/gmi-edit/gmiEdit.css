@@ -108,6 +108,13 @@
 .gmi-edit-input-draft { border-color: #b7791f; background: #fffdf5; }
 .gmi-edit-input-proposed { border-color: var(--gmi-interactive); }
 .gmi-edit-input[aria-invalid=true] { border-color: #9b2c23; }
+.gmi-field-value-control { display: grid; gap: 3px; flex: 1 1 7rem; min-width: 0; }
+.gmi-field-value-control .gmi-edit-input { min-width: 0; width: 100%; }
+.gmi-field-value-hint { color: var(--gmi-text-muted); font-size: 10px; overflow-wrap: anywhere; }
+.gmi-field-value-options { max-height: 160px; overflow: auto; margin: 0; padding: 2px; border: 1px solid var(--gmi-border-strong); border-radius: 5px; background: var(--gmi-surface); list-style: none; font-size: 11px; }
+.gmi-field-value-options [role=option] { padding: 4px; cursor: pointer; overflow-wrap: anywhere; }
+.gmi-field-value-options [role=option]:hover, .gmi-field-value-options [aria-selected=true] { background: var(--gmi-surface-soft); outline: 1px solid var(--gmi-interactive); outline-offset: -1px; }
+.gmi-edit-review-errors { padding-left: 18px; list-style: disc; font-size: 11px; }
 .gmi-edit-input-cell .photo-icon-button { width: 26px; height: 26px; }
 .gmi-edit-readonly { display: grid; gap: 2px; }
 .gmi-edit-reason { display: inline-flex; align-items: flex-start; gap: 3px; color: var(--gmi-text-subtle); font-size: 11px; }
