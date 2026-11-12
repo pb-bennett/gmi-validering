@@ -23,6 +23,7 @@ import {
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import { normalizeTableSearchQuery, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
 import { deriveLayerTableRows } from '@/lib/layerTableRows.mjs';
+import { classifyLayerTableReveal } from '@/lib/layerTableReveal.mjs';
 import { gmiSelectionBinding, sameGmiSelectionBinding, sameGmiSelectionHost, GMI_RETTINGER_SELECTION_HOST, gmiSelectionKey, gmiSelectionCounts } from '@/lib/gmiEditSelection.mjs';
 import GmiConfirmDialog from './gmi-edit/GmiConfirmDialog';
 import GmiSeverityIcon from './gmi-edit/GmiSeverityIcon';
@@ -231,6 +232,10 @@ export default function LayerDataTable() {
   const tableContainerRef = useRef(null);
   const searchInputRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const revealRequest = useStore((state) => state.layerTableReveal);
+  const clearRevealRequest = useStore((state) => state.clearLayerTableReveal);
+  const [pendingReveal, setPendingReveal] = useState(null);
+  const [revealedRowId, setRevealedRowId] = useState(null);
   const normalizedSearchQuery = normalizeTableSearchQuery(searchQuery);
 
   const isOpen = layerDataTable?.isOpen;
@@ -752,6 +757,48 @@ export default function LayerDataTable() {
   const totalSize = rowVirtualizer.getTotalSize();
 
   useEffect(() => {
+    setPendingReveal(null);
+    setRevealedRowId(null);
+  }, [layerId, activeTab, isOpen, inspection?.id, sourceData]);
+
+  useEffect(() => {
+    if (!revealRequest || !isOpen || revealRequest.layerId !== layerId || isExactInspection) return;
+    if (revealRequest.targets[0]?.scope !== scope) {
+      setLayerDataTableTab(layerId, revealRequest.targets[0]?.scope === 'line' ? 'ledninger' : 'punkter');
+      return;
+    }
+    setPendingReveal(revealRequest);
+    setRevealedRowId(null);
+    clearRevealRequest(revealRequest);
+  }, [revealRequest, isOpen, layerId, isExactInspection, scope, setLayerDataTableTab, clearRevealRequest]);
+
+  const revealResult = pendingReveal && pendingReveal.layerId === layerId
+    ? classifyLayerTableReveal({ targets: pendingReveal.targets, sortedRows: rows,
+      allRows: allItemsWithIndex, filteredRows: items, searchedRows: searchedItems, showOnly: showSelectionOnly }) : null;
+  const revealIndex = revealResult?.kind === 'visible' ? revealResult.index : -1;
+  useEffect(() => {
+    if (revealIndex < 0 || !pendingReveal) return;
+    const row = rows[revealIndex];
+    setNavigationRowId(row.id);
+    setRevealedRowId(row.id);
+    rowVirtualizer.scrollToIndex(revealIndex, { align: 'center' });
+    // The edited field may have been moved back by the user's column-focus preference.
+    const field = pendingReveal.fields?.find((field) => orderedFields.includes(field));
+    if (field && tableContainerRef.current) {
+      const position = orderedFields.indexOf(field);
+      const left = orderedFields.slice(0, position).reduce((sum, key) => sum + (columnWidths[key] || 80), 0);
+      tableContainerRef.current.scrollLeft = Math.max(0, left);
+    }
+    setPendingReveal(null);
+  }, [revealIndex, pendingReveal, rows, rowVirtualizer, orderedFields, columnWidths]);
+
+  useEffect(() => {
+    if (!revealedRowId) return;
+    const timer = setTimeout(() => setRevealedRowId(null), 5000);
+    return () => clearTimeout(timer);
+  }, [revealedRowId]);
+
+  useEffect(() => {
     if (gridHasFocus && navigationRow && document.activeElement === tableContainerRef.current) {
       rowVirtualizer.scrollToIndex(navigationIndex, { align: 'auto' });
     }
@@ -837,6 +884,16 @@ export default function LayerDataTable() {
       data-table-geometry={activeTab}
       className="flex h-full flex-col border-t border-gmi-border-strong bg-gmi-surface text-gmi-text"
     >
+      {revealResult && revealResult.kind !== 'visible' && <div role="status" data-table-reveal-message className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gmi-border bg-gmi-surface-soft px-3 py-1 text-xs">
+        <span>{revealResult.kind === 'absent' ? 'Objektet finnes ikke i denne tabellvisningen.'
+          : `Objektet er skjult av ${revealResult.reasons.map((reason) => ({ filter: 'Tema/Felt-filtre', search: 'søk', 'selected-only': 'Bare valgte' })[reason]).join(' og ')}.`}</span>
+        {revealResult.kind === 'hidden' && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive" onClick={() => {
+          resetLayerFilters(layerId);
+          setSearchQuery('');
+          if (showSelectionOnly) changeSelection(layerId, { type: 'show-only', value: false }, selectionBinding, selectionHost);
+        }}>Nullstill filtre</button>}
+        <button type="button" aria-label="Lukk navigasjonsmelding" className="gmi-compact-button gmi-focus-ring" onClick={() => setPendingReveal(null)}>Lukk</button>
+      </div>}
       <div
         className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gmi-border bg-gmi-surface-soft px-3 py-1.5"
       >
@@ -1167,6 +1224,7 @@ export default function LayerDataTable() {
                   aria-current={isActiveObject ? 'true' : undefined}
                   aria-selected={selectionEnabled ? selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) : undefined}
                   data-table-row={row.original.__index}
+                  data-table-revealed={row.id === revealedRowId || undefined}
                   data-review-outcome={batchReview?.rows[gmiSelectionKey(scope, row.original.__index)]?.outcome}
                   data-keyboard-current={gridHasFocus && row.id === navigationRow?.id ? 'true' : undefined}
                   onClick={() => {
@@ -1182,7 +1240,7 @@ export default function LayerDataTable() {
                   onMouseLeave={handleRowHoverEnd}
                   className={`group flex cursor-pointer border-b border-gmi-border ${isActiveObject || selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) ? 'bg-gmi-cyan-soft' : 'bg-gmi-surface'} hover:bg-gmi-surface-soft`}
                   style={{
-                    outline: gridHasFocus && row.id === navigationRow?.id ? '2px solid var(--gmi-interactive)' : undefined,
+                    outline: row.id === revealedRowId || gridHasFocus && row.id === navigationRow?.id ? '2px solid var(--gmi-interactive)' : undefined,
                     outlineOffset: '-2px',
                     position: 'absolute',
                     top: 0,

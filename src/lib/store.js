@@ -268,6 +268,12 @@ const useStore = create(
         gmiEditWorkspace: null, // { layerId } | null
         gmiEditTableView: {}, // { [layerId]: 'original' | 'proposed' | 'changed' }
         gmiEditTableViewBy: {}, // { [layerId]: 'user' | 'auto' } who set the view (S5); never persisted.
+        layerTableReveal: null, // One-shot navigation only; never an inspector/selection request.
+        requestLayerTableReveal: (layerId, targets, fields = []) => set({
+          layerTableReveal: { layerId, targets, fields, at: Date.now() },
+        }, false, 'table/reveal'),
+        clearLayerTableReveal: (request) => set((state) => state.layerTableReveal === request
+          ? { layerTableReveal: null } : {}, false, 'table/revealHandled'),
         gmiEditObjectRequest: null, // { layerId, scope, sourceIndex, at } | null
         gmiEditWorkspaceGuard: null, // Mounted workspace's established draft guard; never persisted.
         gmiEditHandoffError: null,
@@ -1654,6 +1660,7 @@ const useStore = create(
         openLayerDataTable: (layerId) =>
           set(
             (state) => ({
+              layerTableReveal: null,
               objectTableInspection: null,
               analysis: {
                 ...state.analysis,
@@ -1737,6 +1744,7 @@ const useStore = create(
         closeLayerDataTable: () =>
           set(
             (state) => ({
+              layerTableReveal: null,
               objectTableInspection: null,
               ui: {
                 ...state.ui,
@@ -2181,6 +2189,7 @@ const useStore = create(
                   state.gmiEditWorkspace?.layerId === layerId
                     ? null
                     : state.gmiEditWorkspace,
+                layerTableReveal: state.layerTableReveal?.layerId === layerId ? null : state.layerTableReveal,
                 gmiEditTableView: remainingTableViews,
                 gmiEditTableViewBy: remainingTableViewsBy,
                 gmiValidatorDatasets: remainingValidatorDatasets,
@@ -3144,6 +3153,7 @@ const useStore = create(
                 gmiEditTableViewBy: {},
                 gmiEditObjectRequest: null,
                 // Keep settings as-is
+                layerTableReveal: null,
                 settings: state.settings,
               };
             },

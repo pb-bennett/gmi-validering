@@ -223,6 +223,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     if (!table?.isOpen || table.layerId !== layerId || state.objectTableInspection) openLayerDataTable(layerId);
     if (changeSet.cells[0]) setLayerDataTableTab(layerId, scopeToTableTab(changeSet.cells[0].scope));
     useStore.getState().setGmiEditTableView(layerId, GMI_EDIT_TABLE_VIEWS.PROPOSED);
+    const scope = changeSet.cells[0]?.scope;
+    if (scope) useStore.getState().requestLayerTableReveal(layerId,
+      changeSet.cells.filter((cell) => cell.scope === scope), [...new Set(changeSet.cells.map((cell) => cell.field))]);
   };
   const renderChangeSet = (changeSet, variant) => {
     const index = view.changeSets.findIndex((entry) => entry.id === changeSet.id);
