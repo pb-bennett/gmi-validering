@@ -147,7 +147,9 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await preview();
         await click('Legg til masseendring', inspector); await browser.waitFor(risk); assert.match(await text(risk), /1 utfylte verdier overskrives/);
         // Both lines change and their current Merknad differs (tom vs «old»): still mixed.
-        assert.match(await text(risk), /Blandet blant objektene som endres: Merknad\./);
+        // B2 (deliberate update): the B1 profile column Dimensjon (160 vs 200) is now also named, with its distribution.
+        assert.match(await text(risk), /Blandet blant objektene som endres: Merknad, Dimensjon\./);
+        assert.match(await text(risk), /Dimensjon: 160 \(1\) · 200 \(1\)/);
         await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
         await click('Ny masseendring for utvalget', inspector);
         await choose('Felt for masseendring', 'Merknad'); await input('Ny vurdering');

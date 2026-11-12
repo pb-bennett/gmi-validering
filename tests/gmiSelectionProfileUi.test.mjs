@@ -139,8 +139,10 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
         await ready();
         assert.match(await browser.evaluate(`${inspector}.innerText`), /2 av 2 ledninger endres/);
         await click('Legg til masseendring', inspector);
+        // B2 (deliberate update): the two SP lines still differ in Dimensjon and Stedfestingsårsak, so the
+        // dialog may remain; Tema is no longer part of the mix after narrowing.
         if (await browser.evaluate(`Boolean(${risk})`)) {
-          assert.doesNotMatch(await browser.evaluate(`${risk}.innerText`), /Blandet/);
+          assert.doesNotMatch(await browser.evaluate(`${risk}.innerText`), /Blandet blant objektene som endres:[^.]*Tema/);
           await click('Godkjenn og legg til', risk);
         }
         await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);

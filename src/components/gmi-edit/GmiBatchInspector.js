@@ -10,13 +10,13 @@ import { checkGmiFieldDraft } from '@/lib/gmiEditFields.mjs';
 import { prepareGmiFieldBatch, buildGmiFieldBatch, getGmiFieldBatchApproval } from '@/lib/gmiFieldBatchPlan.mjs';
 import GmiFieldValueInput from './GmiFieldValueInput';
 import useGmiBatchValidation from './useGmiBatchValidation';
-import { gmiSelectionTargets, gmiInspectorFields, gmiFieldInspectorRows, gmiInspectorMixedFields, gmiBatchDatasetTransitions, gmiObjectFindingTransitions, gmiBatchSkipSummary, GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
+import { gmiSelectionTargets, gmiInspectorFields, gmiFieldInspectorRows, gmiInspectorMixedFields, gmiBatchDatasetTransitions, gmiObjectFindingTransitions, gmiBatchSkipSummary, gmiCurrentFindingSplit, gmiBatchRiskReasons, GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
 import { gmiEditMessage, gmiLexemeProblem, describeGmiObject, gmiObjectCountLabel } from '@/lib/gmiEditView.mjs';
 import GmiConfirmDialog from './GmiConfirmDialog';
 import GmiSeverityIcon from './GmiSeverityIcon';
 import { Lexeme } from './GmiObjectEditor';
-import GmiSelectionProfile from './GmiSelectionProfile';
-import { buildGmiSelectionProfile, gmiSelectionNarrowing, gmiSelectionProfileSources } from '@/lib/gmiSelectionProfile.mjs';
+import GmiSelectionProfile, { GmiCurrentFindingSplit } from './GmiSelectionProfile';
+import { buildGmiSelectionProfile, gmiSelectionNarrowing, gmiSelectionProfileSources, gmiProfileMixedColumns, gmiProfileDistributionText } from '@/lib/gmiSelectionProfile.mjs';
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1';
 const primary = 'gmi-primary-control gmi-focus-ring gmi-batch-primary';
@@ -87,6 +87,8 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const profile = useMemo(() => selection && scopeProblem.ok ? buildGmiSelectionProfile({ dataset: currentDataset, scope: selection.scope,
     keys: selection.keys, sources: profileSources, ruleRows: review && !stale ? review.preview.rows : null }) : null,
   [currentDataset, selection, scopeProblem.ok, profileSources, review, stale]);
+  // B2: current findings on the edited field, from the preview's own Validator results; hidden once the preview is stale.
+  const split = useMemo(() => review && !stale ? gmiCurrentFindingSplit(review.preview, selection) : null, [review, stale, selection]);
   useEffect(() => useStore.subscribe((state, previous) => {
     if (!review || state.gmiEditSelection === previous.gmiEditSelection) return;
     const before = new Set(previous.gmiEditSelection?.keys || []);
@@ -175,6 +177,10 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     finally { if (token === generation.current) setBusy(false); }
   };
   const stage = (approval = null) => {
+    // B2: an approval given for another selection is refused first, with the specific reason.
+    if (approval && approval.selection !== useStore.getState().gmiEditSelection) {
+      setRisk(null); setMessage('Utvalget er endret. Se gjennom og godkjenn på nytt.'); return;
+    }
     const live = gmiEditSessions.getSession(view.handle);
     const checked = live.ok && !stale && !scopeExpanded.current && plan?.ok
       ? getGmiFieldBatchApproval(live.session, plan, { referenceDate: useStore.getState().gmiValidatorReferenceDate }) : null;
@@ -190,13 +196,20 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     // Only the objects that actually change in the checked ChangeSet can be mixed.
     const mixed = gmiInspectorMixedFields(review.preview, checked.dryRun.current.dataset, changeSet);
     const unvalidated = review.preview.column.validatorKind !== 'bound' || !review.preview.column.governingRuleId;
-    if (!approval && (manualRows.length || changeSet.counts.populatedOverwrites || changeSet.counts.overwritten
-      || checked.dryRun.diff.newCounts.fail || mixed.length || unvalidated)) {
+    // B2: the profile columns, over exactly the objects that change, on the checked working copy.
+    const changing = [...new Set(changeSet.cells.map((cell) => `${cell.scope}:${cell.sourceIndex}`))];
+    const mixedProfile = changing.length > 1 ? gmiProfileMixedColumns(buildGmiSelectionProfile({ dataset: checked.dryRun.current.dataset,
+      scope: review.preview.scope, keys: changing, sources: profileSources, ruleRows: review.preview.rows })) : [];
+    const reasons = gmiBatchRiskReasons({ manualRows, changeSetCounts: changeSet.counts, newFail: checked.dryRun.diff.newCounts.fail,
+      mixedProfile, mixedFields: mixed, unvalidated });
+    if (!approval && reasons.length) {
       // Presentation only: worsened FEIL are listed (once) under FEIL; the gate above still uses diff.newCounts.
       const transitions = gmiBatchDatasetTransitions(checked.dryRun);
       const findings = [...transitions.added, ...transitions.worsened, ...transitions.improved]
         .map((finding) => ({ ...finding, objects: [objectLabel(checked.dryRun, finding)] }));
-      setRisk({ changeSet, selection, review, plan, findings, manualRows, mixed, unvalidated }); return;
+      // The union keeps G4's Tema/edited-field names; the profile adds its columns with their distributions.
+      const mixedNames = [...new Set([...mixed, ...mixedProfile.map((column) => column.label)])];
+      setRisk({ changeSet, selection, review, plan, findings, manualRows, mixed: mixedNames, mixedProfile, unvalidated }); return;
     }
     const result = gmiEditSessions.stage(view.handle, changeSet);
     if (!result.ok) { setMessage(gmiEditMessage(result.code)); return; }
@@ -300,7 +313,8 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
           {plan?.ok === false && !plan.included?.size && <p className="gmi-edit-muted">Ingen av de valgte objektene kan endres med dette oppsettet.</p>}
         </>}
       </div>}
-      {/* B1: after the proposal, so a live preview stays visible without scrolling. */}
+      {/* B1/B2: after the proposal, so a live preview stays visible without scrolling. */}
+      <GmiCurrentFindingSplit split={split} scope={selection?.scope} disabled={busy} onNarrow={narrowSelection} />
       <GmiSelectionProfile profile={profile} disabled={busy} notice={profileNotice?.selection === selection ? profileNotice.text : null} onNarrow={narrowSelection} />
       {(!review || configOpen) && <div className="gmi-inspector-configuration">{review && <p className="gmi-edit-muted">Endringer i oppsettet krever ny forhåndsvisning.</p>}{configForm}</div>}
 
@@ -366,7 +380,11 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       })}
       <RiskFindings tone="warning" title={`${risk.findings.filter((finding) => finding.transition === 'improved').length} forbedret (FEIL → SJEKK, SJEKK gjenstår)`}
         findings={risk.findings.filter((finding) => finding.transition === 'improved')} />
-      {risk.mixed.length > 0 && <p>Blandet blant objektene som endres: {risk.mixed.join(', ')}. Bekreft at samme verdi skal brukes på disse objektene.</p>}
+      {risk.mixed.length > 0 && <div className="gmi-risk-mixed" data-gmi-risk-mixed>
+        <p>Blandet blant objektene som endres: {risk.mixed.join(', ')}. Bekreft at samme verdi skal brukes på disse objektene.</p>
+        {risk.mixedProfile.length > 0 && <ul>{risk.mixedProfile.map((column) => <li key={column.id} data-mixed-field={column.id}>
+          <strong>{column.label}:</strong> {gmiProfileDistributionText(column)}</li>)}</ul>}
+      </div>}
       {risk.unvalidated && <p>Feltet kontrolleres ikke av Validator. Bekreft at verdien er vurdert manuelt.</p>}
       {risk.manualRows.length > 0 && <div className="gmi-manual-note gmi-risk-manual">
         <HandPointingIcon size={16} weight="regular" aria-hidden="true" />

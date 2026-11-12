@@ -100,7 +100,9 @@ export function buildGmiSelectionProfile({ dataset, scope, keys, sources, ruleRo
         return [key, value ? HYDRAULIC_LABELS[value] || String(value) : ''];
       }), total));
     }
-    const ids = [...new Set(selected.flatMap((key) => (facts.get(key)?.context || []).map((entry) => entry.fieldId)))]
+    // Only context the rule itself explains with (explanationContextFieldIds), not the whole policy context.
+    const ids = [...new Set(selected.flatMap((key) => (facts.get(key)?.context || []).map((entry) => entry.fieldId)
+      .filter((id) => facts.get(key)?.explanationContextFieldIds?.includes(id))))]
       .filter((id) => !FIXED_IDS.has(id) && id !== 'hydraulicClass');
     for (const id of ids) {
       context.push(dimensionOf(`rule:${id}`, CONTEXT_LABELS[id] || id, 'rule', selected.map((key) => {
@@ -125,3 +127,17 @@ export function gmiSelectionNarrowing(selection, keep) {
   if (!remaining.length || !remove.length) return null;
   return Object.freeze({ type: 'remove', scope: selection.scope, keys: Object.freeze(remove), remaining: remaining.length });
 }
+
+/**
+ * B2: profile columns on which the given profile is mixed (more than one value
+ * group, «(tom)» included). Fields that are absent or ambiguous are never mixed.
+ */
+export function gmiProfileMixedColumns(profile) {
+  return [...(profile?.fields || []), ...(profile?.context || [])]
+    .filter((dimension) => dimension.state === 'bound' && dimension.groups.length > 1)
+    .map((dimension) => Object.freeze({ id: dimension.id, label: dimension.label,
+      groups: Object.freeze(dimension.groups.map(({ label, count, missing }) => Object.freeze({ label, count, missing }))) }));
+}
+
+/** «PE (12) · PVC (4) · (tom) (2)» */
+export const gmiProfileDistributionText = (column) => column.groups.map((group) => `${group.label} (${group.count})`).join(' · ');

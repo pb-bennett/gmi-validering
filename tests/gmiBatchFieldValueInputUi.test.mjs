@@ -142,7 +142,11 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
           assert.match(await browser.evaluate(`${inspector}.innerText`), /2 av 2 ledninger endres/);
           if (lexeme !== '11.0') await click('Endre oppsett');
         }
-        await click('Legg til masseendring'); await browser.waitFor(`${inspector}.dataset.batchStep === '3'`);
+        // B2 (deliberate update): the two lines differ in Material and Dimensjon, so staging needs the risk approval.
+        await click('Legg til masseendring'); await browser.waitFor(risk);
+        assert.match(await browser.evaluate(`${risk}.innerText`), /Blandet blant objektene som endres: [^.]*Dimensjon/);
+        await click('Godkjenn og legg til', risk);
+        await browser.waitFor(`${inspector}.dataset.batchStep === '3'`);
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
         await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
         const dialog = `document.querySelector('dialog[open].gmi-edit-export')`;

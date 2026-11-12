@@ -4,6 +4,7 @@ import { sameGmiSelectionBinding } from './gmiEditSelection.mjs';
 import { buildGmiBatchSelection, canManuallySelectGmiBatchRow } from './gmiEditBatchView.mjs';
 import { describeGmiEditColumns } from './gmiEditFields.mjs';
 import { buildFieldDiagnostics, renderValidationV2Diagnostic } from './validation-v2/diagnostics.js';
+import { VALIDATION_RULES } from './validation-v2/registry/rules.js';
 
 const FIELD_REASONS = {
   'field-absent': 'Finnes ikke i filen – kolonnen kan ikke opprettes',
@@ -325,4 +326,47 @@ export function gmiBatchReviewRows({ review, plan, selection, advanced = false, 
       hypothetical: canManual ? { change: { from: row.current, to: lexeme }, ...gmiReviewFindingFields(row) } : null };
   }
   return out;
+}
+
+// ------------------------------------------------- B2 current findings and risk gate
+
+const RULE_FIELDS = new Map(VALIDATION_RULES.map((rule) => [rule.ruleId, rule.canonicalFieldId]));
+export const GMI_CURRENT_FINDING_CATEGORIES = Object.freeze(['FEIL', 'SJEKK', 'none', 'unknown']);
+
+/**
+ * B2, presentation only: one category per selected, previewed object from the
+ * findings the preview already holds (`row.currentFindings`, the Validator on
+ * the current working copy). Only findings of rules owned by the edited
+ * canonical field count. Precedence FEIL > SJEKK > none; an object without
+ * preview findings (source-refused) is «unknown», never «none».
+ */
+export function gmiCurrentFindingSplit(preview, selection) {
+  const canonicalFieldId = preview?.column?.canonicalFieldId || null;
+  if (!preview || !canonicalFieldId) return null;
+  const selected = new Set(selection?.keys || []);
+  const groups = { FEIL: [], SJEKK: [], none: [], unknown: [] };
+  for (const row of preview.rows || []) {
+    if (!selected.has(row.key)) continue;
+    if (!Array.isArray(row.currentFindings)) { groups.unknown.push(row.key); continue; }
+    const own = row.currentFindings.filter((finding) => RULE_FIELDS.get(finding.ruleId) === canonicalFieldId);
+    groups[own.some((finding) => finding.state === 'FAIL') ? 'FEIL' : own.length ? 'SJEKK' : 'none'].push(row.key);
+  }
+  const counts = Object.fromEntries(Object.entries(groups).map(([key, keys]) => [key, keys.length]));
+  return Object.freeze({ field: preview.sourceKey, canonicalFieldId, groups: Object.freeze(groups), counts: Object.freeze(counts),
+    total: counts.FEIL + counts.SJEKK + counts.none + counts.unknown });
+}
+
+/**
+ * B2 risk gate. Staging needs the existing risk approval whenever any reason is
+ * present; an empty list means direct staging. `newFail` is the dry run's
+ * `diff.newCounts.fail` (approval semantics unchanged; worsened counts as new).
+ */
+export function gmiBatchRiskReasons({ manualRows = [], changeSetCounts = {}, newFail = 0, mixedProfile = [], mixedFields = [], unvalidated = false }) {
+  return [
+    manualRows.length > 0 && 'manual',
+    (changeSetCounts.populatedOverwrites > 0 || changeSetCounts.overwritten > 0) && 'overwrite',
+    newFail > 0 && 'new-fail',
+    (mixedProfile.length > 0 || mixedFields.length > 0) && 'mixed',
+    unvalidated && 'unvalidated',
+  ].filter(Boolean);
 }

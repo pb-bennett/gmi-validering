@@ -283,6 +283,12 @@
 .gmi-profile-groups .gmi-edit-link { margin-left: 0; white-space: nowrap; }
 .gmi-profile-groups .gmi-edit-link:disabled { color: var(--gmi-text-subtle); cursor: not-allowed; }
 .gmi-profile-note { margin: 0; font-size: 10.5px; color: var(--gmi-text-subtle); }
+/* B2: current findings on the edited field, one category per object. */
+.gmi-current-split { display: grid; gap: 2px; }
+.gmi-current-split-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 11px; }
+.gmi-current-split-label { font-weight: 600; color: var(--gmi-navy); border-radius: 3px; }
+.gmi-current-split .gmi-edit-link { margin-left: 0; white-space: nowrap; }
+.gmi-risk-mixed ul { margin: 2px 0 0; padding-left: 16px; }
 .gmi-batch-proposal { display: grid; gap: 3px; padding: 8px 10px; border: 1px solid var(--gmi-border-strong); border-left: 3px solid var(--gmi-interactive); border-radius: 6px; background: #f7fcfd; }
 .gmi-batch-proposal[data-state=stale] { border-left-color: var(--gmi-validation-warning-dot); background: var(--gmi-surface-soft); }
 .gmi-batch-proposal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -298,11 +304,11 @@
 .gmi-batch-proposal-count strong { font-size: 15px; color: var(--gmi-navy); font-variant-numeric: tabular-nums; }
 .gmi-batch-breakdown { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; color: var(--gmi-text-muted); }
 .gmi-batch-severity { margin: 2px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.gmi-transition-count, .gmi-severity-count { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border: 1px solid var(--gmi-border); border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--gmi-text-subtle); background: var(--gmi-surface); }
-:is(.gmi-severity-count, .gmi-transition-count)[data-validation-tone] { border-color: var(--validation-border); background: var(--validation-bg); color: var(--validation-text); }
-:is(.gmi-severity-count, .gmi-transition-count)[data-validation-tone] svg { color: var(--validation-icon); }
+.gmi-transition-count, .gmi-severity-count, .gmi-split-count { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border: 1px solid var(--gmi-border); border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--gmi-text-subtle); background: var(--gmi-surface); }
+:is(.gmi-severity-count, .gmi-transition-count, .gmi-split-count)[data-validation-tone] { border-color: var(--validation-border); background: var(--validation-bg); color: var(--validation-text); }
+:is(.gmi-severity-count, .gmi-transition-count, .gmi-split-count)[data-validation-tone] svg { color: var(--validation-icon); }
 /* S3: compact SJEKK icons and labels reuse the rule-count yellow-700. Panels and tooltips retain orange prose/surfaces. */
-:is(.gmi-edit-finding, .gmi-severity-count, .gmi-transition-count, .gmi-batch-finding-list li, .gmi-edit-legend-item)[data-validation-tone='warning'] { --validation-icon: var(--gmi-validation-compact-warning-text); }
+:is(.gmi-edit-finding, .gmi-severity-count, .gmi-split-count, .gmi-transition-count, .gmi-batch-finding-list li, .gmi-edit-legend-item)[data-validation-tone='warning'] { --validation-icon: var(--gmi-validation-compact-warning-text); }
 :is(.gmi-severity-count, .gmi-transition-count, .gmi-batch-finding-list li)[data-validation-tone='warning'] { color: var(--gmi-validation-compact-warning-text); }
 .gmi-edit-legend-item[data-validation-tone='warning'], .gmi-risk-group[data-validation-tone='warning'] .gmi-risk-group-title { color: var(--gmi-validation-compact-warning-text); --validation-icon: var(--gmi-validation-compact-warning-text); }
 .gmi-edit-legend-item { white-space: nowrap; }
