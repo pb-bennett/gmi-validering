@@ -5,7 +5,9 @@ import { CheckCircleIcon, ArrowSquareOutIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { getCanonicalField } from '@/lib/validation-v2/registry/registry';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
-import { buildGmiValidationComparison, isCurrentGmiComparison, validatorCheckCount } from '@/lib/gmiValidatorEditing.mjs';
+import {
+  GMI_VALIDATOR_DATASET_BY, buildGmiValidationComparison, gmiValidatorDefaultDataset, isCurrentGmiComparison, validatorCheckCount,
+} from '@/lib/gmiValidatorEditing.mjs';
 import { getGmiDocumentDataset } from '@/lib/gmi-edit/index.mjs';
 import { describeGmiObject } from '@/lib/gmiEditView.mjs';
 
@@ -20,9 +22,13 @@ export default function GmiFullValidation({ view, layerId, guard }) {
     return describeGmiObject(scope, sourceIndex, object?.id ?? null);
   };
   const current = isCurrentGmiComparison(comparison, view?.session, referenceDate);
-  const inspect = (dataset = null, ruleId = null, geometryScope = null) => guard(() => {
+  // H4: without a dataset, keep the user's explicit choice; otherwise Foreslått when corrections exist.
+  // `by: 'user'` marks the explicit Original/Foreslått column buttons.
+  const inspect = (dataset = null, ruleId = null, geometryScope = null, by = GMI_VALIDATOR_DATASET_BY.AUTO) => guard(() => {
     const state = useStore.getState();
-    state.openGmiValidator(layerId, dataset || state.gmiValidatorDatasets[layerId] || 'original', ruleId, geometryScope);
+    const choice = dataset ? { dataset, by } : gmiValidatorDefaultDataset({ stored: state.gmiValidatorDatasets[layerId],
+      storedBy: state.gmiValidatorDatasetsBy[layerId], changeSetCount: state.gmiEditStatus[layerId]?.changeSetCount || 0 });
+    state.openGmiValidator(layerId, choice.dataset, ruleId, geometryScope, { by: choice.by });
   });
   const run = async () => {
     setBusy(true); setError(null); setComparison(null);
@@ -46,7 +52,7 @@ export default function GmiFullValidation({ view, layerId, guard }) {
     {error && <p role="alert" className="gmi-validation-accent" data-validation-tone="error">{error}</p>}
     {comparison && !current && <p role="status">Kontrollen er utdatert. Kontroller endringer på nytt.</p>}
     {current && <div data-gmi-full-comparison>
-      <table className="w-full text-left"><thead><tr><th>Kontrollresultat</th><th><button type="button" className="gmi-edit-link" onClick={() => inspect('original')}>Original</button></th><th><button type="button" className="gmi-edit-link" onClick={() => inspect('proposed')}>Foreslått</button></th></tr></thead><tbody>
+      <table className="w-full text-left"><thead><tr><th>Kontrollresultat</th><th><button type="button" className="gmi-edit-link" onClick={() => inspect('original', null, null, GMI_VALIDATOR_DATASET_BY.USER)}>Original</button></th><th><button type="button" className="gmi-edit-link" onClick={() => inspect('proposed', null, null, GMI_VALIDATOR_DATASET_BY.USER)}>Foreslått</button></th></tr></thead><tbody>
         <tr data-validation-tone="error" className="gmi-validation-accent"><th>FEIL</th><td>{comparison.validation.original.summary.failFindingCount}</td><td>{comparison.validation.revised.summary.failFindingCount}</td></tr>
         <tr data-validation-tone="warning" className="gmi-validation-accent"><th>SJEKK</th><td>{validatorCheckCount(comparison.validation.original.summary)}</td><td>{validatorCheckCount(comparison.validation.revised.summary)}</td></tr>
       </tbody></table>

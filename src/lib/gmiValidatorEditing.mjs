@@ -74,9 +74,43 @@ export function validatorSelectionHandoff(handoff, view, layer) {
   const keys = [...handoff.keys], focus = keys.length === 1
     ? { scope: handoff.scope, sourceIndex: Number(keys[0].split(':')[1]) } : null;
   return { ok: true, datasetKind: provenance.datasetKind,
-    handoff: { mode: focus ? 'object' : 'batch', focus, provenance },
+    // H4: geometry and handed-off keys stay with the workspace as the Validator return context.
+    handoff: { mode: focus ? 'object' : 'batch', focus, provenance, geometryScope: handoff.scope, keys: [...keys] },
     selection: { binding: { ...binding }, host: { kind: 'rettinger' }, scope: handoff.scope, keys,
       anchor: null, showOnly: keys.length > 1, origin: { kind: 'validator-selection', ...provenance, count: keys.length } } };
+}
+
+/** Who chose a layer's Validator dataset: the user (dataset menu, Original/Foreslått buttons) or a navigation default. */
+export const GMI_VALIDATOR_DATASET_BY = Object.freeze({ USER: 'user', AUTO: 'auto' });
+
+/**
+ * H4 «Åpne Validator»: an explicit dataset choice is kept; otherwise Foreslått
+ * when the layer has corrections, else Original. Navigation only.
+ */
+export function gmiValidatorDefaultDataset({ stored = null, storedBy = null, changeSetCount = 0 } = {}) {
+  if (storedBy === GMI_VALIDATOR_DATASET_BY.USER && ['original', 'proposed'].includes(stored)) return { dataset: stored, by: GMI_VALIDATOR_DATASET_BY.USER };
+  return { dataset: changeSetCount > 0 ? 'proposed' : 'original', by: GMI_VALIDATOR_DATASET_BY.AUTO };
+}
+
+/**
+ * H4: where «Tilbake til Validator» / «Kontroller i Validator (Foreslått)» lead.
+ * Only a Validator selection handoff carries rule context; ordinary workspaces
+ * and ChangeSets that touch none of the handed-off objects get none.
+ * Foreslått when corrections exist (always for a staged ChangeSet), otherwise Original.
+ */
+export function gmiValidatorReturnTarget(layerId, handoff, { changeSetCount = 0, changeSet = null } = {}) {
+  const provenance = handoff?.provenance, geometryScope = handoff?.geometryScope;
+  if (!layerId || typeof provenance?.canonicalFieldId !== 'string' || !provenance.canonicalFieldId
+    || !['point', 'line'].includes(geometryScope)) return null;
+  if (changeSet) {
+    const keys = new Set(Array.isArray(handoff.keys) ? handoff.keys : []);
+    if (!changeSet.cells?.some((cell) => keys.has(`${cell.scope}:${cell.sourceIndex}`))) return null;
+  }
+  return Object.freeze({
+    layerId, dataset: changeSet || changeSetCount > 0 ? 'proposed' : 'original',
+    ruleId: provenance.ruleIds?.[0] || provenance.canonicalFieldId, geometryScope,
+    fieldLabel: String(provenance.fieldLabel || provenance.canonicalFieldId),
+  });
 }
 
 /** Accept prepared targets only against their exact live session and immutable source. */

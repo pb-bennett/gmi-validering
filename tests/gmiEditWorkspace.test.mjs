@@ -821,3 +821,128 @@ test('H3 store revalidates source/session, selection and inspection after the dr
     }
   }
 });
+
+// ------------------------------------------------------------ H4 return navigation
+
+test('H4 return target: rule context only from a Validator handoff; Foreslått only when corrections exist', async () => {
+  const { gmiValidatorReturnTarget, gmiValidatorDefaultDataset } = await import('../src/lib/gmiValidatorEditing.mjs');
+  const handoff = { mode: 'batch', focus: null, geometryScope: 'line', keys: ['line:1', 'line:3'],
+    provenance: { key: 'k', canonicalFieldId: 'sdr', ruleIds: ['innmaling.line.sdr.required', 'innmaling.line.sdr.valid'], fieldLabel: 'SDR', datasetKind: 'original' } };
+  assert.equal(gmiValidatorReturnTarget('layer', null), null, 'ordinary workspace has no rule context');
+  assert.equal(gmiValidatorReturnTarget('layer', { mode: 'object', focus: null }), null);
+  assert.equal(gmiValidatorReturnTarget('layer', { ...handoff, geometryScope: undefined }), null, 'no invented geometry');
+  assert.equal(gmiValidatorReturnTarget(null, handoff), null);
+  assert.deepEqual({ ...gmiValidatorReturnTarget('layer', handoff) },
+    { layerId: 'layer', dataset: 'original', ruleId: 'innmaling.line.sdr.required', geometryScope: 'line', fieldLabel: 'SDR' });
+  assert.equal(gmiValidatorReturnTarget('layer', handoff, { changeSetCount: 2 }).dataset, 'proposed');
+  const touching = { cells: [{ scope: 'line', sourceIndex: 3 }] }, elsewhere = { cells: [{ scope: 'line', sourceIndex: 2 }, { scope: 'point', sourceIndex: 1 }] };
+  assert.equal(gmiValidatorReturnTarget('layer', handoff, { changeSet: touching }).dataset, 'proposed');
+  assert.equal(gmiValidatorReturnTarget('layer', handoff, { changeSet: elsewhere }), null, 'a correction outside the handed-off objects is ordinary');
+  assert.equal(gmiValidatorReturnTarget('layer', { mode: 'object' }, { changeSet: touching }), null);
+  assert.equal(gmiValidatorReturnTarget('layer', { ...handoff, provenance: { ...handoff.provenance, ruleIds: [] } }).ruleId, 'sdr', 'field fallback');
+
+  assert.deepEqual(gmiValidatorDefaultDataset(), { dataset: 'original', by: 'auto' });
+  assert.deepEqual(gmiValidatorDefaultDataset({ changeSetCount: 1 }), { dataset: 'proposed', by: 'auto' });
+  assert.deepEqual(gmiValidatorDefaultDataset({ stored: 'original', storedBy: 'auto', changeSetCount: 1 }), { dataset: 'proposed', by: 'auto' }, 'automatic choice follows corrections');
+  assert.deepEqual(gmiValidatorDefaultDataset({ stored: 'original', storedBy: 'user', changeSetCount: 1 }), { dataset: 'original', by: 'user' }, 'explicit Original kept');
+  assert.deepEqual(gmiValidatorDefaultDataset({ stored: 'proposed', storedBy: 'user', changeSetCount: 0 }), { dataset: 'proposed', by: 'user' }, 'explicit Foreslått kept');
+  assert.deepEqual(gmiValidatorDefaultDataset({ stored: 'bogus', storedBy: 'user' }), { dataset: 'original', by: 'auto' });
+});
+
+test('H4 store dataset intent: navigation is automatic, the dataset menu is explicit, removal and reset clear both', async (t) => {
+  resetStore(); t.after(resetStore);
+  const { id } = await addStoreLayer(CORE), { id: other } = await addStoreLayer(CORE, 'Other H4 layer.gmi'), state = () => useStore.getState();
+  state().openGmiValidator(id, 'proposed', 'innmaling.line.sdr.valid', 'line');
+  assert.equal(state().gmiValidatorDatasetsBy[id], 'auto');
+  state().setGmiValidatorDataset(id, 'original');
+  assert.deepEqual([state().gmiValidatorDatasets[id], state().gmiValidatorDatasetsBy[id]], ['original', 'user']);
+  state().openGmiValidator(other, 'proposed', null, null, { by: 'user' });
+  assert.equal(state().gmiValidatorDatasetsBy[other], 'user');
+  state().removeLayer(id, { discardGmiEdits: true });
+  assert.equal(state().gmiValidatorDatasetsBy[id], undefined); assert.equal(state().gmiValidatorDatasetsBy[other], 'user');
+  resetStore();
+  assert.deepEqual(state().gmiValidatorDatasetsBy, {});
+});
+
+for (const geometryScope of ['point', 'line']) {
+  test(`H4 store ${geometryScope}: Validator return passes the draft guard, cancel preserves everything, accept opens the originating rule`, async (t) => {
+    resetStore(); t.after(() => { useStore.setState({ gmiEditWorkspaceGuard: null }); resetStore(); });
+    const { id, data } = await addStoreLayer(CORE), state = () => useStore.getState();
+    const { handle } = await gmiEditSessions.open(id), { session, document } = gmiEditSessions.resolve(handle);
+    const keys = geometryScope === 'point' ? ['point:1'] : ['line:0', 'line:1'];
+    state().openGmiValidator(id, 'original');
+    assert.equal(state().openObjectTable(storeInspectionRequest(id, data, { geometryScope })), true);
+    const binding = gmiSelectionBinding(id, state().gmiEditStatus[id]);
+    state().changeGmiEditSelection(id, { type: 'add', scope: geometryScope, keys }, binding,
+      { kind: 'inspection', key: state().objectTableInspection.selectionContext.key });
+    assert.equal(state().openGmiValidatorSelection(id).ok, true);
+    const handoff = state().gmiEditWorkspace.handoff;
+    assert.equal(handoff.geometryScope, geometryScope); assert.deepEqual(handoff.keys, keys);
+
+    // Draft open: the guard holds the transition; cancelling it (never resuming) changes nothing.
+    let resume = null;
+    useStore.setState({ gmiEditWorkspaceGuard: (run) => { resume = run; } });
+    const before = state();
+    assert.equal(before.openGmiValidatorFromRettinger(id), true);
+    assert.equal(state(), before, 'a pending/cancelled guard publishes nothing');
+    assert.equal(state().gmiEditWorkspace.handoff, handoff); assert.deepEqual(state().gmiEditSelection.keys, keys);
+    assert.equal(state().ui.fieldValidationOpen, false);
+
+    resume();
+    assert.equal(state().gmiEditWorkspace, null); assert.equal(state().ui.fieldValidationOpen, true);
+    assert.deepEqual(state().gmiValidatorFocus, { layerId: id, ruleId: 'synthetic-rule', geometryScope });
+    assert.deepEqual([state().gmiValidatorDatasets[id], state().gmiValidatorDatasetsBy[id]], ['original', 'auto'], 'no corrections → Original');
+    assert.equal(gmiEditSessions.resolve(handle).session, session, 'navigation never stages or discards');
+    assert.equal(session.changeSets.length, 0); assert.deepEqual(getGmiSourceBytes(document), CORE);
+    assert.equal(state().openGmiValidatorFromRettinger(id), false, 'no workspace, no return');
+  });
+}
+
+test('H4 store: after staging, the return and «Kontroller i Validator» open Foreslått; ordinary corrections get no rule context', async (t) => {
+  resetStore(); t.after(() => { useStore.setState({ gmiEditWorkspaceGuard: null }); resetStore(); });
+  const { id, data } = await addStoreLayer(CORE), state = () => useStore.getState();
+  const { handle } = await gmiEditSessions.open(id);
+  const enter = () => {
+    state().openGmiValidator(id, 'original');
+    assert.equal(state().openObjectTable(storeInspectionRequest(id, data)), true);
+    state().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:1'] }, gmiSelectionBinding(id, state().gmiEditStatus[id]),
+      { kind: 'inspection', key: state().objectTableInspection.selectionContext.key });
+    assert.equal(state().openGmiValidatorSelection(id).ok, true);
+  };
+  enter();
+  const stage = (sourceIndex) => {
+    const { session } = gmiEditSessions.resolve(handle);
+    const result = createGmiObjectCorrection(session, { scope: 'line', sourceIndex, values: { SDR: sourceIndex === 1 ? '11.0' : '17.0' } });
+    assert.equal(gmiEditSessions.stage(handle, result.changeSet).ok, true);
+    return result.changeSet;
+  };
+  const ordinary = stage(2);
+  const before = state();
+  assert.equal(state().openGmiValidatorFromRettinger(id, { changeSet: ordinary }), false, 'ordinary correction: no invented rule context');
+  assert.equal(state(), before);
+  const handedOff = stage(1), staged = gmiEditSessions.resolve(handle).session;
+  assert.equal(state().openGmiValidatorFromRettinger(id, { changeSet: handedOff }), true);
+  assert.equal(state().ui.fieldValidationOpen, true);
+  assert.deepEqual(state().gmiValidatorFocus, { layerId: id, ruleId: 'synthetic-rule', geometryScope: 'line' });
+  assert.equal(state().gmiValidatorDatasets[id], 'proposed');
+  assert.equal(gmiEditSessions.resolve(handle).session, staged, 'no correction changed by navigation');
+  assert.equal(staged.changeSets.length, 2);
+
+  enter();
+  assert.equal(state().openGmiValidatorFromRettinger(id), true);
+  assert.equal(state().gmiValidatorDatasets[id], 'proposed', 'return link opens Foreslått once corrections exist');
+  enter();
+  assert.equal(gmiEditSessions.undo(handle).ok, true);
+  assert.equal(state().openGmiValidatorFromRettinger(id, { changeSet: handedOff }), false, 'an undone ChangeSet no longer offers the check');
+  assert.equal(state().gmiEditWorkspace.layerId, id);
+});
+
+test('H4 source contract: Validator routes reuse openGmiValidator through the workspace guard', async () => {
+  const full = await source('src/components/gmi-edit/GmiFullValidation.js'), table = await source('src/components/LayerDataTable.js');
+  const workspace = await source('src/components/gmi-edit/GmiEditWorkspace.js');
+  assert.match(full, /const inspect = \(dataset = null, ruleId = null, geometryScope = null, by = GMI_VALIDATOR_DATASET_BY\.AUTO\) => guard\(/);
+  assert.match(full, /gmiValidatorDefaultDataset\(\{ stored: state\.gmiValidatorDatasets\[layerId\]/);
+  assert.match(table, /openGmiValidatorFromRettinger\(layerId\)/);
+  assert.match(table, /Tilbake til Validator · \{validatorReturn\.fieldLabel\}/);
+  assert.match(workspace, /openGmiValidatorFromRettinger\(layerId, \{ changeSet \}\)/);
+});

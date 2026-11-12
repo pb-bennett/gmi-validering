@@ -19,6 +19,7 @@ import GmiBatchDialog from './GmiBatchDialog';
 import GmiBatchInspector from './GmiBatchInspector';
 import GmiChangeSetDetail from './GmiChangeSetDetail';
 import { gmiSelectionTargets } from '@/lib/gmiBatchInspectorView.mjs';
+import { gmiValidatorReturnTarget } from '@/lib/gmiValidatorEditing.mjs';
 import GmiFullValidation from './GmiFullValidation';
 import GmiLayerFilters from './GmiLayerFilters';
 import './gmiEdit.css';
@@ -241,6 +242,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     if (scope) useStore.getState().requestLayerTableReveal(layerId,
       changeSet.cells.filter((cell) => cell.scope === scope), [...new Set(changeSet.cells.map((cell) => cell.field))]);
   };
+  // H4: only an active ChangeSet that touches objects handed off from the Validator has rule context.
+  const validatorCheck = (changeSet) => view?.changeSets.includes(changeSet) && gmiValidatorReturnTarget(layerId, handoff, { changeSet })
+    ? () => useStore.getState().openGmiValidatorFromRettinger(layerId, { changeSet }) : null;
   const renderChangeSet = (changeSet, variant) => {
     const index = view.changeSets.findIndex((entry) => entry.id === changeSet.id);
     // A staged batch's «Angre» unmounts with its details: keyboard focus continues on the undo notice («Gjør om»).
@@ -248,6 +252,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       downloadState={gmiEditDownloadState(status) === 'downloaded' ? 'downloaded' : 'unsaved'} editable={editable}
       isLast={index === view.changeSets.length - 1} variant={variant}
       onSelectObject={(target, id) => select(target, id)} onShowProposed={showProposed}
+      onCheckInValidator={variant === 'staged' ? validatorCheck(changeSet) : null}
       onUndo={() => { if (undo({ reveal: false }) && variant === 'staged') focusNotice.current = true; }} onDiscard={discard} onClose={variant === 'history' ? () => setDetailId(null) : undefined} />;
   };
   const redo = () => {
@@ -360,7 +365,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       : detailChangeSet && view ? <div className="gmi-edit-editor">{renderChangeSet(detailChangeSet, 'history')}</div>
       : <GmiObjectEditor key={`${selectedKey}:${view?.handle.sessionId || descriptor?.state}:${formRevision}`} view={view} status={descriptor}
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate} onStaged={showStagedResult}
-      onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}
+      validatorCheck={validatorCheck} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} />, inspectorRoot)}
     {exportOpen && view && <GmiExportDialog layerId={layerId} view={view} status={status} onClose={() => setExportOpen(false)} />}
     {batchOpen && view && <GmiBatchDialog view={view} onClose={() => setBatchOpen(false)} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice({ tone: 'ok', text: `Lagt til: ${changeSet.label}` }); showStagedResult(); }} />}

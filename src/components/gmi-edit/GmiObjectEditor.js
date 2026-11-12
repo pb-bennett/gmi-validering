@@ -77,7 +77,7 @@ function rowsFor(view, scope, sourceIndex) {
  * current session value, reviewed, then staged through the registry. The
  * imported layer data is never written.
  */
-export default function GmiObjectEditor({ view, status, object, scope, sourceIndex, onDirtyChange, onStaged, onLocate, onShowChangeSet }) {
+export default function GmiObjectEditor({ view, status, object, scope, sourceIndex, onDirtyChange, onStaged, onLocate, onShowChangeSet, validatorCheck = null }) {
   // Opted out of the React Compiler: it turns optional chains on nullable session views (`view?.x`)
   // into non-optional memo dependencies and crashes before a session exists. Derived values are
   // memoized explicitly per published editing revision instead.
@@ -162,7 +162,7 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
     const applied = review.changeSet.counts.applied;
     resetForm();
     if (result.staged) {
-      setMessage({ tone: 'ok', text: `Rettingen er lagt til (${applied} felt). Den er ikke lastet ned ennå.` });
+      setMessage({ tone: 'ok', text: `Rettingen er lagt til (${applied} felt). Den er ikke lastet ned ennå.`, changeSet: review.changeSet });
       onStaged?.(review.changeSet);
     } else setMessage({ tone: 'info', text: 'Ingen verdier ble endret, så ingen retting ble lagt til.' });
   };
@@ -277,7 +277,10 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
         <FindingIcon finding={finding} /> {finding.reason}
       </li>)}</ul>
     </details>}
-    {message && <p ref={messageRef} tabIndex={-1} className="gmi-edit-message gmi-focus-ring" data-tone={message.tone} role="status" data-gmi-object-message>{message.text}</p>}
+    {message && <p ref={messageRef} tabIndex={-1} className="gmi-edit-message gmi-focus-ring" data-tone={message.tone} role="status" data-gmi-object-message>{message.text}
+      {/* H4: same rule context as the staged ChangeSet details; absent for ordinary corrections. */}
+      {message.changeSet && validatorCheck?.(message.changeSet) && <>{' '}<button type="button" className="gmi-edit-link gmi-focus-ring" data-gmi-validator-check
+        onClick={validatorCheck(message.changeSet)}>Kontroller i Validator (Foreslått)</button></>}</p>}
     <p className="gmi-edit-hint">Geometri, koordinater, objektnummer, GUID og filhode kan ikke rettes. Nye kolonner kan ikke legges til.</p>
   </div>;
 }

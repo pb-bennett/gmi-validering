@@ -98,7 +98,7 @@ test('H3 production: exact Validator selections enter object/batch editing, pres
             assert.equal(await browser.evaluate(`${batch}.querySelector('[aria-label="Felt for masseendring"]').value`), '');
             assert.equal(await browser.evaluate(`${batch}.querySelector('[aria-label="Ny verdi"]').value`), '');
             assert.equal(await browser.evaluate('document.querySelector(".gmi-edit-table-modes").dataset.gmiTableView'), datasetKind);
-            assert.match(await browser.evaluate('document.querySelector("[data-gmi-validator-provenance]").innerText'), /Valgt i Validator · SDR · 2 objekter/);
+            assert.match(await browser.evaluate('document.querySelector("[data-gmi-validator-provenance]").innerText'), /Tilbake til Validator · SDR · 2 objekter valgt i Validator/, 'H4: provenance is the return action');
             assert.doesNotMatch(await browser.evaluate(`${bar}.innerText`), /bare fjerning|Gjør om til vanlig/);
             assert.equal(await browser.evaluate(`Array.from(${bar}.querySelectorAll('button')).find(e=>e.innerText==='Bare valgte').getAttribute('aria-pressed')`), 'true');
             await browser.waitFor(`${halos}.length === 2`); await noStaging(); await shot(`h3-batch-${datasetKind}-${width}`);

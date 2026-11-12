@@ -145,7 +145,8 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await click('\u00c5pne Validator', workspace);
         await browser.waitFor(`document.querySelector('[data-gmi-confirm="workspace"]')`);
         await click('Forkast skjemaet', `document.querySelector('[data-gmi-confirm="workspace"]')`);
-        await browser.waitFor(`${dataset}?.value === 'original'`);
+        // H4: corrections exist and no dataset was chosen explicitly, so «Åpne Validator» opens Foreslått.
+        await browser.waitFor(`${dataset}?.value === 'proposed'`);
         await choose(dataset, 'proposed'); await browser.waitFor(`${dataset}?.value === 'proposed'`);
         await browser.waitFor('document.querySelector("#validation-v2-geometry-panel")');
         assert.match(await browser.evaluate('document.body.innerText'), /Du kontrollerer den foreslåtte kopien. Originalleveransen er uendret/);

@@ -1,4 +1,6 @@
-import { validatorCorrectionSelection, validatorSelectionHandoff, validatorInspectionLayer, VALIDATOR_CORRECTION_STALE } from './gmiValidatorEditing.mjs';
+import {
+  GMI_VALIDATOR_DATASET_BY, gmiValidatorReturnTarget, validatorCorrectionSelection, validatorSelectionHandoff, validatorInspectionLayer, VALIDATOR_CORRECTION_STALE,
+} from './gmiValidatorEditing.mjs';
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { detectOutliers } from './analysis/outliers';
@@ -256,15 +258,44 @@ const useStore = create(
         // request from the Data Table. View state only; never GMI data, and
         // not persisted (partialize keeps settings, ui and lastActive).
         gmiValidatorFocus: null,
-        openGmiValidator: (layerId, dataset = 'original', ruleId = null, geometryScope = null) => set((state) => ({
+        // `by` records whether the dataset is the user's explicit choice (H4); navigation defaults are automatic.
+        openGmiValidator: (layerId, dataset = 'original', ruleId = null, geometryScope = null, { by = GMI_VALIDATOR_DATASET_BY.AUTO } = {}) => set((state) => ({
           gmiEditWorkspace: null,
           gmiValidatorFocus: { layerId, ruleId, geometryScope },
           gmiValidatorDatasets: { ...state.gmiValidatorDatasets, [layerId]: dataset },
+          gmiValidatorDatasetsBy: { ...state.gmiValidatorDatasetsBy, [layerId]: by },
           ui: { ...state.ui, fieldValidationOpen: true, expandedLayerId: layerId },
         })),
+        /**
+         * H4: Rettinger → the Validator rule a Validator selection came from, through the
+         * workspace draft guard. Navigation only: nothing is staged, discarded or changed.
+         * The target is re-derived after the guard, so a cancelled or stale request is a no-op.
+         */
+        openGmiValidatorFromRettinger: (layerId, { changeSet = null } = {}) => {
+          const target = () => {
+            const state = get();
+            if (state.gmiEditWorkspace?.layerId !== layerId || !state.layers[layerId]) return null;
+            const resolved = gmiEditSessions.resolve(gmiEditSessions.getHandle(layerId));
+            const changeSets = resolved.ok ? resolved.session.changeSets : [];
+            if (changeSet && !changeSets.includes(changeSet)) return null;
+            return gmiValidatorReturnTarget(layerId, state.gmiEditWorkspace.handoff, { changeSetCount: changeSets.length, changeSet });
+          };
+          if (!target()) return false;
+          const run = () => {
+            const next = target();
+            if (next) get().openGmiValidator(layerId, next.dataset, next.ruleId, next.geometryScope);
+          };
+          const guard = get().gmiEditWorkspaceGuard;
+          if (guard) guard(run); else run();
+          return true;
+        },
         gmiValidatorDatasets: {},
+        gmiValidatorDatasetsBy: {}, // { [layerId]: 'user' | 'auto' }; never persisted.
         gmiValidatorReferenceDate: new Date().toISOString().slice(0, 10),
-        setGmiValidatorDataset: (layerId, dataset) => set((state) => ({ gmiValidatorDatasets: { ...state.gmiValidatorDatasets, [layerId]: dataset } })),
+        setGmiValidatorDataset: (layerId, dataset, { by = GMI_VALIDATOR_DATASET_BY.USER } = {}) => set((state) => ({
+          gmiValidatorDatasets: { ...state.gmiValidatorDatasets, [layerId]: dataset },
+          gmiValidatorDatasetsBy: { ...state.gmiValidatorDatasetsBy, [layerId]: by },
+        })),
         setGmiValidatorReferenceDate: (date) => set({ gmiValidatorReferenceDate: date }),
         gmiEditWorkspace: null, // { layerId } | null
         gmiEditTableView: {}, // { [layerId]: 'original' | 'proposed' | 'changed' }
@@ -2217,7 +2248,8 @@ const useStore = create(
               const { [layerId]: removedViewBy, ...remainingTableViewsBy } = state.gmiEditTableViewBy || {};
               void removedViewBy;
               const { [layerId]: removedValidatorDataset, ...remainingValidatorDatasets } = state.gmiValidatorDatasets;
-              void removedValidatorDataset;
+              const { [layerId]: removedValidatorDatasetBy, ...remainingValidatorDatasetsBy } = state.gmiValidatorDatasetsBy || {};
+              void removedValidatorDataset; void removedValidatorDatasetBy;
               void removedView;
               const baseState = {
                 layers: remainingLayers,
@@ -2230,6 +2262,7 @@ const useStore = create(
                 gmiEditTableView: remainingTableViews,
                 gmiEditTableViewBy: remainingTableViewsBy,
                 gmiValidatorDatasets: remainingValidatorDatasets,
+                gmiValidatorDatasetsBy: remainingValidatorDatasetsBy,
                 gmiValidatorFocus: state.gmiValidatorFocus?.layerId === layerId ? null : state.gmiValidatorFocus,
                 gmiEditObjectRequest:
                   state.gmiEditObjectRequest?.layerId === layerId
@@ -3184,6 +3217,7 @@ const useStore = create(
                 },
                 gmiValidatorFocus: null,
                 gmiValidatorDatasets: {},
+                gmiValidatorDatasetsBy: {},
                 gmiEditStatus: {},
                 gmiEditWorkspace: null,
                 gmiEditTableView: {},

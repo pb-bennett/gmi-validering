@@ -17,7 +17,7 @@ import {
 } from '@tanstack/react-table';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import {
-  ArrowCounterClockwiseIcon, ArrowsInLineVerticalIcon, ArrowsOutLineVerticalIcon, ListChecksIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon,
+  ArrowBendUpLeftIcon, ArrowCounterClockwiseIcon, ArrowsInLineVerticalIcon, ArrowsOutLineVerticalIcon, ListChecksIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon,
   MinusCircleIcon, PencilSimpleIcon, PlusCircleIcon, TextColumnsIcon, XIcon,
 } from '@phosphor-icons/react';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
@@ -33,7 +33,7 @@ import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
 import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns, applyColumnFocus } from '@/lib/objectTablePresentation';
 import { BATCH_REVIEW_COLUMNS, createBatchReviewColumnAccessors, getBatchReviewColumnWidths } from '@/lib/gmiTableReviewPresentation.mjs';
 import { GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
-import { validatorInspectionLayer } from '@/lib/gmiValidatorEditing.mjs';
+import { gmiValidatorReturnTarget, validatorInspectionLayer } from '@/lib/gmiValidatorEditing.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { Lexeme } from '@/components/gmi-edit/GmiObjectEditor';
 import { GMI_EDIT_TABLE_VIEWS, gmiEditMessage, describeGmiEditStatus, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope,
@@ -302,8 +302,10 @@ export default function LayerDataTable() {
   // GMI editing display modes. Only for a layer with an open editing session, and never for exact
   // object inspections (their rows are bound to the original dataset revision). The verified proposed
   // view is computed once per published editing revision (status object), not per render.
-  const handoffDataset = useStore((state) => state.gmiEditWorkspace?.layerId === layerId
-    ? state.gmiEditWorkspace.handoff?.provenance.datasetKind : null);
+  const workspaceHandoff = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.handoff ?? null : null);
+  const handoffDataset = workspaceHandoff?.provenance.datasetKind ?? null;
+  // H4: the Validator rule this selection came from; Foreslått once corrections exist.
+  const validatorReturn = gmiValidatorReturnTarget(layerId, workspaceHandoff, { changeSetCount: gmiEditStatus?.changeSetCount || 0 });
   const viewControls = gmiTableViewControls({ status: gmiEditStatus, view: gmiEditTableView, allowIdenticalProposed: handoffDataset === 'proposed',
     inRettinger: Boolean(layerId) && gmiEditWorkspaceLayerId === layerId, isInspection: isExactInspection });
   const gmiEditModesAvailable = viewControls.visible;
@@ -1069,7 +1071,12 @@ export default function LayerDataTable() {
       {selectionEnabled && (selectionCounts.total > 0 || selection?.origin?.kind === 'validator') && <div data-gmi-selection-bar className="gmi-selection-bar">
         <p className="gmi-selection-summary" role="status">
           {selection?.origin?.kind === 'validator' && <span title="Utvalget kan bare reduseres. Gjør om til vanlig utvalg for å legge til objekter.">Fra Validator: {selection.origin.targets.length} objekter · bare fjerning tillatt. </span>}
-          {selection?.origin?.kind === 'validator-selection' && <span data-gmi-validator-provenance>Valgt i Validator · {selection.origin.fieldLabel} · {selection.origin.count} {selection.origin.count === 1 ? 'objekt' : 'objekter'}. </span>}
+          {selection?.origin?.kind === 'validator-selection' && <span data-gmi-validator-provenance>{validatorReturn
+            ? <button type="button" className="gmi-edit-link gmi-focus-ring inline-flex items-center gap-1" data-gmi-validator-return={validatorReturn.dataset}
+              title={`Åpne regelen i Validator på ${validatorReturn.dataset === 'proposed' ? 'Foreslått' : 'Original'}. Rettinger beholdes.`}
+              onClick={() => useStore.getState().openGmiValidatorFromRettinger(layerId)}>
+              <ArrowBendUpLeftIcon size={13} weight="regular" aria-hidden="true" />Tilbake til Validator · {validatorReturn.fieldLabel}</button>
+            : <>Valgt i Validator · {selection.origin.fieldLabel}</>} · {selection.origin.count} {selection.origin.count === 1 ? 'objekt' : 'objekter'} valgt i Validator. </span>}
           <strong>{selectionCounts.total}</strong> valgt<span className="gmi-selection-scope"> · {showSelectionOnly
             ? `${rows.length} vises · ${selectionCounts.visible} treffer filter/søk/visning · ${selectionCounts.hidden} utenfor`
             : `${selectionCounts.visible} synlige · ${selectionCounts.hidden} skjult av ${isSelectableInspection ? 'utvalg/søk' : 'filter/søk/visning'}`}</span>

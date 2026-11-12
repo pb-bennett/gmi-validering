@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { ArrowArcLeftIcon, CheckCircleIcon, HandPointingIcon, TableIcon, TrashIcon, XIcon } from '@phosphor-icons/react';
+import { ArrowArcLeftIcon, ArrowSquareOutIcon, CheckCircleIcon, HandPointingIcon, TableIcon, TrashIcon, XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { describeGmiObject, formatGmiChangeTime, gmiChangeSetCellViews, gmiSkipReasonLabel, summarizeGmiChangeSet } from '@/lib/gmiEditView.mjs';
 import { gmiBatchSkipSummary } from '@/lib/gmiBatchInspectorView.mjs';
@@ -16,7 +16,7 @@ const control = 'gmi-compact-button gmi-focus-ring inline-flex items-center gap-
  * after staging and when a history entry is opened from Endringer.
  */
 export default function GmiChangeSetDetail({ layerId, changeSet, number, effective, downloadState, editable, isLast, variant = 'history',
-  onSelectObject, onShowProposed, onUndo, onDiscard, onClose }) {
+  onSelectObject, onShowProposed, onCheckInValidator = null, onUndo, onDiscard, onClose }) {
   'use no memo';
   const summary = summarizeGmiChangeSet(changeSet);
   const cells = gmiChangeSetCellViews(changeSet, effective);
@@ -73,6 +73,8 @@ export default function GmiChangeSetDetail({ layerId, changeSet, number, effecti
     </details>}
     <div className="gmi-change-detail-actions">
       <button type="button" className={`${control} text-gmi-interactive`} onClick={() => onShowProposed(changeSet)}><TableIcon size={14} weight="regular" aria-hidden="true" /> Vis i Foreslått</button>
+      {onCheckInValidator && <button type="button" className={`${control} text-gmi-interactive`} data-gmi-validator-check onClick={onCheckInValidator}>
+        <ArrowSquareOutIcon size={14} weight="regular" aria-hidden="true" /> Kontroller i Validator (Foreslått)</button>}
       {editable && isLast && <button type="button" className={control} onClick={onUndo}><ArrowArcLeftIcon size={14} weight="regular" aria-hidden="true" /> Angre</button>}
       {editable && <button type="button" className="gmi-edit-icon-text gmi-focus-ring" onClick={() => onDiscard(changeSet.id)}><TrashIcon size={14} weight="regular" aria-hidden="true" /> Forkast</button>}
     </div>

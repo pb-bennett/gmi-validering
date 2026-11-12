@@ -386,8 +386,9 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
 
   useEffect(() => {
     if (!result || focus?.layerId !== selectedLayerId || !focus.ruleId) return;
-    const presentation = getValidationV2PresentationRules(result.ruleResults, 'line', createValidationV2PresentationState())
-      .concat(getValidationV2PresentationRules(result.ruleResults, 'point', createValidationV2PresentationState()))
+    // A requested geometry is searched first: the same field can have rules for points and lines (H4 return).
+    const scopes = focus.geometryScope === 'point' ? ['point', 'line'] : ['line', 'point'];
+    const presentation = scopes.flatMap((scope) => getValidationV2PresentationRules(result.ruleResults, scope, createValidationV2PresentationState()))
       .find((entry) => entry.rules.some((rule) => rule.ruleId === focus.ruleId || rule.canonicalFieldId === focus.ruleId));
     if (presentation) {
       const geometryScope = focus.geometryScope || (presentation.rule.geometryScopes.includes('line') ? 'line' : 'point');
