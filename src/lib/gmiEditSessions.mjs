@@ -76,6 +76,7 @@ export function bindGmiEditSessionStore(store, { unloadTarget = typeof window ==
     const live = store.getState();
     const selection = reconcileGmiEditSelection(live.gmiEditSelection, {
       workspaceLayerId: live.gmiEditWorkspace?.layerId, layers: live.layers, statuses: live.gmiEditStatus || {},
+      inspection: live.ui.layerDataTable?.isOpen && live.ui.layerDataTable.layerId === live.objectTableInspection?.layerId ? live.objectTableInspection : null,
     });
     if (selection !== live.gmiEditSelection) store.setState({ gmiEditSelection: selection }, false, 'gmiEdit/selectionReconcile');
   });

@@ -7,24 +7,39 @@ export function gmiSelectionBinding(layerId, status) {
 export const sameGmiSelectionBinding = (a, b) => Boolean(a && b && a.layerId === b.layerId && a.sessionId === b.sessionId && a.fingerprint === b.fingerprint);
 export const gmiSelectionKey = (scope, index) => `${scope}:${index}`;
 
+// Missing hosts belong to Rettinger, including the existing R5 handoff.
+export const GMI_RETTINGER_SELECTION_HOST = Object.freeze({ kind: 'rettinger' });
+export function sameGmiSelectionHost(a = GMI_RETTINGER_SELECTION_HOST, b = GMI_RETTINGER_SELECTION_HOST) {
+  return Boolean(a && b && a.kind === b.kind && (a.kind === 'rettinger'
+    || (a.kind === 'inspection' && typeof a.key === 'string' && a.key.length > 0 && a.key === b.key)));
+}
+
+export function gmiSelectionHostIsActive(host = GMI_RETTINGER_SELECTION_HOST, layerId, { workspaceLayerId, inspection }) {
+  if (host?.kind === 'rettinger') return workspaceLayerId === layerId;
+  return host?.kind === 'inspection' && inspection?.layerId === layerId
+    && sameGmiSelectionHost(host, { kind: 'inspection', key: inspection.selectionContext?.key });
+}
+
 function validKey(key, scope, counts) {
   const match = /^(line|point):(0|[1-9]\d*)$/.exec(key);
   return Boolean(match && match[1] === scope && Number(match[2]) < (counts[scope] || 0));
 }
 
-export function reconcileGmiEditSelection(selection, { workspaceLayerId, layers, statuses }) {
+export function reconcileGmiEditSelection(selection, { workspaceLayerId, inspection, layers, statuses }) {
   if (!selection) return null;
   const id = selection.binding.layerId;
-  if (workspaceLayerId !== id || !layers[id] || !sameGmiSelectionBinding(selection.binding, gmiSelectionBinding(id, statuses[id]))) return null;
+  if (!gmiSelectionHostIsActive(selection.host, id, { workspaceLayerId, inspection })
+    || !layers[id] || !sameGmiSelectionBinding(selection.binding, gmiSelectionBinding(id, statuses[id]))) return null;
+  if (selection.host?.kind === 'inspection' && selection.scope !== inspection.geometryScope) return null;
   const counts = { line: layers[id].data?.lines?.length, point: layers[id].data?.points?.length };
   const keys = selection.keys.filter((key) => validKey(key, selection.scope, counts));
   return keys.length === selection.keys.length ? selection : keys.length ? { ...selection, keys, anchor: null } : null;
 }
 
 /** Explicit snapshot actions. Filters/search/sorting/focus are not actions here. */
-export function reduceGmiEditSelection(selection, action, { binding, counts }) {
-  if (!binding) return null;
-  const current = sameGmiSelectionBinding(selection?.binding, binding) ? selection : null;
+export function reduceGmiEditSelection(selection, action, { binding, counts, host = GMI_RETTINGER_SELECTION_HOST }) {
+  if (!binding || !sameGmiSelectionHost(host, host)) return null;
+  const current = sameGmiSelectionBinding(selection?.binding, binding) && sameGmiSelectionHost(selection?.host, host) ? selection : null;
   const restricted = current?.origin?.kind === 'validator';
   if (action.type === 'make-ordinary') return current ? { ...current, origin: null } : null;
   if (action.type === 'clear') return restricted ? { ...current, keys: [], anchor: null } : null;
@@ -33,7 +48,7 @@ export function reduceGmiEditSelection(selection, action, { binding, counts }) {
   if (!['point', 'line'].includes(scope)) return current;
   if (restricted && scope !== current.scope) return current;
   if (current?.keys.length && current.scope !== scope && !action.replace) return current;
-  const base = current?.scope === scope ? current : { binding, scope, keys: [], anchor: null, showOnly: false };
+  const base = current?.scope === scope ? current : { binding, host: Object.freeze({ ...host }), scope, keys: [], anchor: null, showOnly: false };
   const clean = (keys) => [...new Set((keys || []).filter((key) => validKey(key, scope, counts)))];
   let keys = new Set(base.keys), anchor = base.anchor;
   if (action.type === 'toggle' && validKey(action.key, scope, counts)) {

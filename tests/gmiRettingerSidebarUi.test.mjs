@@ -26,6 +26,23 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
       await browser.waitFor(`${workspace}?.querySelector('[data-gmi-edit-status]')?.innerText === 'Redigerbar'`);
     };
     const tabs = () => browser.evaluate(`Array.from(${workspace}.querySelectorAll('[role=tab]')).map(e => ({ text: e.innerText, selected: e.getAttribute('aria-selected') }))`);
+    const modes = 'document.querySelector(".gmi-edit-table-modes")';
+    const modeStates = () => browser.evaluate(`Array.from(${modes}.querySelectorAll('button')).map(e => ({ label: e.innerText, disabled: e.disabled, pressed: e.getAttribute('aria-pressed'), title: e.title }))`);
+    const checkEmptyModes = async () => {
+      assert.equal(await browser.evaluate(`${modes}.dataset.gmiTableView`), 'original');
+      const states = await modeStates();
+      assert.deepEqual(states.map(({ label, disabled, pressed }) => [label, disabled, pressed]), [
+        ['Original', false, 'true'], ['Foreslått', true, 'false'], ['Kun endrede', true, 'false'],
+      ]);
+      for (const state of states.slice(1)) assert.match(state.title, /Legg til en retting/);
+      assert.equal(await browser.evaluate(`${table}.querySelectorAll('[data-gmi-changed-cell]').length`), 0);
+    };
+    const capture = async (name) => {
+      if (!process.env.GMI_EDIT_SCREENSHOT_DIR) return;
+      await mkdir(process.env.GMI_EDIT_SCREENSHOT_DIR, { recursive: true });
+      const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+      await writeFile(path.join(process.env.GMI_EDIT_SCREENSHOT_DIR, `${name}.png`), Buffer.from(data, 'base64'));
+    };
     try {
       await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
       await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'localStorage.clear(); window.confirm = () => true;' });
@@ -33,6 +50,29 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
       await browser.waitFor('document.querySelector("button[aria-label=Lukk]")'); await click('Lukk');
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")'); await open();
+
+      await t.test('U4: empty Rettinger keeps disabled modes with explanations; the ordinary table hides them', async () => {
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await checkEmptyModes();
+          const bounds = await browser.evaluate(`(() => { const e = ${modes}; return { rect: e.getBoundingClientRect().toJSON(), page: document.documentElement.scrollWidth }; })()`);
+          assert(bounds.rect.left >= 0 && bounds.rect.right <= width && bounds.rect.bottom <= height);
+          assert(bounds.page <= width);
+          await capture(`u4-empty-${width}x${height}`);
+        }
+        // Disabled native buttons cannot change view; Original stays keyboard accessible.
+        await browser.evaluate(`${modes}.querySelectorAll('button')[1].click()`);
+        await checkEmptyModes();
+        await browser.evaluate(`${modes}.querySelector('button').focus()`);
+        assert.equal(await browser.evaluate(`document.activeElement === ${modes}.querySelector('button')`), true);
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+        assert.equal(await browser.evaluate(`${modes}.contains(document.activeElement)`), false, 'Tab skips both disabled modes');
+        await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+        assert(await browser.evaluate(`Boolean(${table})`));
+        assert.equal(await browser.evaluate(`Boolean(${modes})`), false, 'an open editing session alone does not expose the modes');
+        await open(); await checkEmptyModes();
+      });
 
       await t.test('only Filter and Endringer remain; geometry survives leaving/re-entering', async () => {
         assert.deepEqual(await tabs(), [{ text: 'Filter', selected: 'true' }, { text: 'Endringer', selected: 'false' }]);
@@ -62,6 +102,39 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         await edit('SDR', '11'); await click('Se gjennom (1)', editor);
         await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`); await click('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
+      });
+
+      await t.test('U4: zero after undo shows Original; redo restores automatic and explicit views across workspace exits', async () => {
+        assert.equal(await browser.evaluate(`${modes}.dataset.gmiTableView`), 'proposed', 'existing automatic stage intent');
+        for (const [label, view] of [['Foreslått', 'proposed'], ['Kun endrede', 'changed'], ['Original', 'original']]) {
+          if (view !== 'proposed') await click(label, modes);
+          assert((await modeStates()).every((mode) => !mode.disabled));
+          await click('Angre siste retting', workspace);
+          await browser.waitFor(`!${workspace}.querySelector('[data-gmi-edit-counts]')`);
+          await checkEmptyModes();
+          assert.equal(await browser.evaluate(`${editor}.dataset.gmiObject`), 'line:1');
+          if (view === 'changed') {
+            for (const [width, height] of [[1280, 720], [1366, 768]]) {
+              await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+              await capture(`u4-undo-zero-${width}x${height}`);
+            }
+          }
+          await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+          assert.equal(await browser.evaluate(`Boolean(${modes})`), false);
+          await open(); await checkEmptyModes();
+          await click('Gjør om retting', workspace);
+          await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
+          assert.equal(await browser.evaluate(`${modes}.dataset.gmiTableView`), view, `${label} restored`);
+          assert.equal(await browser.evaluate(`${table}.querySelectorAll('[data-gmi-changed-cell]').length > 0`), view !== 'original');
+          await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+          assert.equal(await browser.evaluate(`${modes}.dataset.gmiTableView`), view, 'ordinary table exposes the corrected views');
+          await open();
+        }
+        await click('Kun endrede', modes); await click('Angre siste retting', workspace);
+        await browser.waitFor(`!${workspace}.querySelector('[data-gmi-edit-counts]')`);
+        await click('Original', modes); await click('Gjør om retting', workspace);
+        await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
+        assert.equal(await browser.evaluate(`${modes}.dataset.gmiTableView`), 'original', 'an explicit choice while empty supersedes the previous one');
       });
 
       await t.test('Endringer still navigates to objects and details; undo/redo and table modes retain identity', async () => {

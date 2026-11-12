@@ -193,6 +193,7 @@
 .gmi-edit-table-modes { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--gmi-border-strong); border-radius: 8px; background: var(--gmi-surface); }
 .gmi-edit-table-modes button { padding: 1px 8px; font-size: 10px; font-weight: 500; color: var(--gmi-text-muted); border-radius: 6px; }
 .gmi-edit-table-modes button[aria-pressed=true] { background: var(--gmi-interactive); color: #fff; }
+.gmi-edit-table-modes button:disabled { opacity: .5; cursor: not-allowed; }
 .gmi-edit-table-banner { font-size: 10px; color: var(--gmi-interactive); font-weight: 600; }
 .gmi-edit-table-cell-changed { display: block; width: 100%; margin: 0 -6px; padding: 0 6px; background: #e6f6f9; box-shadow: inset 2px 0 0 var(--gmi-interactive); }
 

@@ -22,8 +22,9 @@ import { createLoadedGmiSources, isLoadedGmiSurveyLayer } from '../src/lib/photo
 import { createGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
 import { GMIParser } from '../src/lib/parsing/gmiParser.js';
 import { decodeGmiBytes } from '../src/lib/parsing/gmiDecoding.js';
+import { gmiSelectionBinding } from '../src/lib/gmiEditSelection.mjs';
 import {
-  GMI_EDIT_TABLE_VIEW_BY, GMI_EDIT_TABLE_VIEWS, gmiTableViewAfterStage, describeGmiEditStatus, describeGmiObject, gmiChangeSetCellViews, gmiChangeSetDependents, gmiEditDownloadState,
+  GMI_EDIT_TABLE_VIEW_BY, GMI_EDIT_TABLE_VIEWS, gmiTableViewAfterStage, gmiTableViewControls, describeGmiEditStatus, describeGmiObject, gmiChangeSetCellViews, gmiChangeSetDependents, gmiEditDownloadState,
   gmiEditFieldPolicy, gmiEditMessage, gmiLexemeSegments, gmiObjectCorrectionLabel, gmiProposedViewForStatus, gmiSkipReasonLabel,
   indexGmiChangedCells, planGmiObjectForm, summarizeGmiEditCounts,
 } from '../src/lib/gmiEditView.mjs';
@@ -323,6 +324,119 @@ async function addStoreLayer(bytes, name = 'Synthetic edit.gmi') {
   return { id, data };
 }
 const resetStore = () => useStore.getState().resetAll({ discardGmiEdits: true });
+
+// H1 only prepares the host plumbing. H2 will publish selectionContext from Validator requests.
+function publishSelectionInspection(id, key, geometryScope = 'line') {
+  const state = useStore.getState();
+  useStore.setState({ objectTableInspection: Object.freeze({ kind: 'contextual-object-set', layerId: id, geometryScope,
+    selectionContext: Object.freeze({ key }), activeView: 'focus', context: { source: 'validation-v2-field' } }),
+    ui: { ...state.ui, layerDataTable: { ...state.ui.layerDataTable, layerId: id, isOpen: true } } });
+}
+
+test('H1 store host writes use the live inspection and binding; host changes replace membership', async (t) => {
+  resetStore(); t.after(resetStore);
+  const { id } = await addStoreLayer(CORE), store = () => useStore.getState();
+  await gmiEditSessions.open(id);
+  const binding = gmiSelectionBinding(id, gmiEditSessions.describe(id));
+  const host = { kind: 'inspection', key: `${id}|line|sdr` };
+  const add = (key, owner = host, expected = binding, scope = 'line') => store().changeGmiEditSelection(id, { type: 'add', scope, keys: [key] }, expected, owner);
+  add('line:1'); assert.equal(store().gmiEditSelection, null, 'no open host');
+  publishSelectionInspection(id, host.key);
+  add('line:1', { ...host, key: 'other' }); assert.equal(store().gmiEditSelection, null);
+  add('line:1', host, { ...binding, sessionId: 'stale' }); assert.equal(store().gmiEditSelection, null);
+  add('point:0', host, binding, 'point'); assert.equal(store().gmiEditSelection, null, 'inspection geometry must match');
+  add('line:1');
+  const inspected = store().gmiEditSelection;
+  assert.deepEqual(inspected.keys, ['line:1']); assert.deepEqual(inspected.host, host);
+  store().setObjectTableInspectionView('scope');
+  publishSelectionInspection(id, host.key);
+  assert.equal(store().gmiEditSelection, inspected, 'scope and same-field diagnostic replacement retain the snapshot');
+  store().openGmiEditWorkspace(id);
+  store().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:0'] }, binding);
+  assert.deepEqual(store().gmiEditSelection.keys, ['line:0']);
+  assert.equal(store().gmiEditSelection.host.kind, 'rettinger');
+  add('line:1'); assert.deepEqual(store().gmiEditSelection.keys, ['line:1']);
+  publishSelectionInspection(id, `${id}|line|material`);
+  assert.equal(store().gmiEditSelection, null, 'another field invalidates even with Rettinger open');
+  add('line:2'); assert.equal(store().gmiEditSelection, null, 'old-host events cannot recreate it');
+});
+
+test('H1 store invalidates inspection selections on every host/source/session exit', async (t) => {
+  resetStore(); t.after(resetStore);
+  const transitions = {
+    'table close': () => useStore.getState().closeLayerDataTable(),
+    'Validator table close': () => useStore.getState().closeValidatorOwnedObjectTable(),
+    'ordinary table open': (id) => useStore.getState().openLayerDataTable(id),
+    'table hidden with inspection retained': () => useStore.setState((state) => ({ ui: { ...state.ui, layerDataTable: { ...state.ui.layerDataTable, isOpen: false } } })),
+    'table moved to another layer': () => useStore.setState((state) => ({ ui: { ...state.ui, layerDataTable: { ...state.ui.layerDataTable, layerId: 'other' } } })),
+    'inspection layer changed': (id, host) => publishSelectionInspection('other', host.key),
+    'inspection geometry changed': (id, host) => publishSelectionInspection(id, host.key, 'point'),
+    'session replaced': async (id) => { assert.equal(gmiEditSessions.dispose(id).ok, true); await gmiEditSessions.open(id); },
+    'source data replaced': (id) => useStore.setState((state) => ({ layers: { ...state.layers, [id]: { ...state.layers[id], data: parse(CORE).data } } })),
+    'layer removed': (id) => useStore.getState().removeLayer(id),
+    'reset': () => resetStore(),
+  };
+  for (const [name, transition] of Object.entries(transitions)) {
+    resetStore();
+    const { id } = await addStoreLayer(CORE);
+    await gmiEditSessions.open(id);
+    const binding = gmiSelectionBinding(id, gmiEditSessions.describe(id)), host = { kind: 'inspection', key: `${id}|line|sdr` };
+    publishSelectionInspection(id, host.key);
+    useStore.getState().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:1'] }, binding, host);
+    assert(useStore.getState().gmiEditSelection, name);
+    await transition(id, host);
+    assert.equal(useStore.getState().gmiEditSelection, null, name);
+    useStore.getState().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:2'] }, binding, host);
+    assert.equal(useStore.getState().gmiEditSelection, null, `${name}: stale events refused`);
+  }
+});
+
+test('U4 view controls hide ordinary empty sessions, disable proposed modes in Rettinger and respect inspections', () => {
+  const status = { state: 'editable', changeSetCount: 0 };
+  const ordinary = gmiTableViewControls({ status, view: 'changed' });
+  assert.equal(ordinary.visible, false); assert.equal(ordinary.effectiveView, 'original');
+  const workspace = gmiTableViewControls({ status, view: 'proposed', inRettinger: true });
+  assert.equal(workspace.visible, true); assert.equal(workspace.effectiveView, 'original');
+  assert.deepEqual(workspace.modes.map(({ key, disabled }) => [key, disabled]), [['original', false], ['proposed', true], ['changed', true]]);
+  for (const mode of workspace.modes.slice(1)) assert.match(mode.description, /Legg til en retting/);
+  for (const state of ['editable', 'read-only']) {
+    for (const view of Object.values(GMI_EDIT_TABLE_VIEWS)) {
+      const controls = gmiTableViewControls({ status: { state, changeSetCount: 2 }, view });
+      assert.equal(controls.visible, true); assert.equal(controls.effectiveView, view);
+      assert(controls.modes.every((mode) => !mode.disabled));
+    }
+  }
+  for (const state of [undefined, 'loading', 'unavailable', 'invalidated', 'error', 'unsupported']) {
+    const controls = gmiTableViewControls({ status: { state, changeSetCount: 2 }, view: 'changed', inRettinger: true });
+    assert.equal(controls.visible, false); assert.equal(controls.effectiveView, 'original');
+  }
+  assert.equal(gmiTableViewControls({ status: { ...status, changeSetCount: 1 }, view: 'proposed', inRettinger: true, isInspection: true }).visible, false);
+});
+
+test('U4 history derives Original at zero without changing stored view or intent; redo restores every choice', async (t) => {
+  resetStore(); t.after(resetStore);
+  const { id } = await addStoreLayer(CORE), store = () => useStore.getState();
+  const { handle } = await gmiEditSessions.open(id), { session } = gmiEditSessions.getSession(handle);
+  const built = createGmiObjectCorrection(session, { scope: 'line', sourceIndex: 1, values: { SDR: '11.0' } });
+  assert.equal(gmiEditSessions.stage(handle, built.changeSet).ok, true);
+  const controls = () => gmiTableViewControls({ status: store().gmiEditStatus[id], view: store().gmiEditTableView[id], inRettinger: true });
+  for (const by of ['auto', 'user']) for (const view of ['original', 'proposed', 'changed']) {
+    store().setGmiEditTableView(id, view, { by });
+    const preference = store().gmiEditTableView, intent = store().gmiEditTableViewBy;
+    assert.equal(controls().effectiveView, view);
+    assert.equal(gmiEditSessions.undo(handle).ok, true);
+    assert.equal(controls().effectiveView, 'original');
+    assert.equal(store().gmiEditTableView, preference); assert.equal(store().gmiEditTableViewBy, intent);
+    assert.equal(gmiEditSessions.redo(handle).ok, true);
+    assert.equal(controls().effectiveView, view);
+    assert.equal(store().gmiEditTableView, preference); assert.equal(store().gmiEditTableViewBy, intent);
+  }
+  store().setGmiEditTableView(id, 'changed');
+  assert.equal(gmiEditSessions.undo(handle).ok, true);
+  store().setGmiEditTableView(id, 'original');
+  assert.equal(gmiEditSessions.redo(handle).ok, true);
+  assert.equal(controls().effectiveView, 'original', 'explicit Original during the empty state supersedes the earlier preference');
+});
 
 test('store: Rettinger view state is not persisted, follows layer removal and reset, and a refused reset changes nothing', async (t) => {
   resetStore(); t.after(resetStore);

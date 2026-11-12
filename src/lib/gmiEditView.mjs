@@ -19,6 +19,22 @@ export const GMI_EDIT_TABLE_VIEW_LABELS = Object.freeze([
   Object.freeze({ key: GMI_EDIT_TABLE_VIEWS.CHANGED, label: 'Kun endrede', description: 'Bare objekter og felt som har rettinger' }),
 ]);
 
+/** U4: presentation only; never rewrite the stored preference or its user/auto intent. */
+export function gmiTableViewControls({ status, view, inRettinger = false, isInspection = false }) {
+  const available = !isInspection && ['editable', 'read-only'].includes(status?.state);
+  const hasCorrections = available && status.changeSetCount > 0;
+  const effectiveView = hasCorrections && Object.values(GMI_EDIT_TABLE_VIEWS).includes(view) ? view : GMI_EDIT_TABLE_VIEWS.ORIGINAL;
+  return {
+    visible: available && (inRettinger || hasCorrections),
+    effectiveView,
+    modes: GMI_EDIT_TABLE_VIEW_LABELS.map((mode) => {
+      const disabled = !available || (mode.key !== GMI_EDIT_TABLE_VIEWS.ORIGINAL && !hasCorrections);
+      return { ...mode, disabled, description: disabled && available
+        ? 'Legg til en retting for å vise Foreslått eller Kun endrede.' : mode.description };
+    }),
+  };
+}
+
 /** Who set a layer's Data Table view: the user (toolbar, «Vis i Foreslått») or the workspace (handoff, staging). */
 export const GMI_EDIT_TABLE_VIEW_BY = Object.freeze({ USER: 'user', AUTO: 'auto' });
 

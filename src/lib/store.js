@@ -9,7 +9,7 @@ import { moveLayerInOrder } from './map/layerOrder.mjs';
 import { photoSession } from './photos/photoSession.mjs';
 import { bindLoadedGmiSurveyStore, loadedGmiSources } from './photos/loadedGmiSource.mjs';
 import { bindGmiEditSessionStore, gmiEditRemovalBlock, gmiEditSessions } from './gmiEditSessions.mjs';
-import { gmiSelectionBinding, sameGmiSelectionBinding, reduceGmiEditSelection } from './gmiEditSelection.mjs';
+import { gmiSelectionBinding, sameGmiSelectionBinding, gmiSelectionHostIsActive, GMI_RETTINGER_SELECTION_HOST, reduceGmiEditSelection } from './gmiEditSelection.mjs';
 import { GMI_EDIT_TABLE_VIEW_BY, gmiTableViewAfterStage } from './gmiEditView.mjs';
 import { bindGeminiSurveyStore, geminiSession } from './gemini-wfs/geminiSession.mjs';
 import {
@@ -225,19 +225,23 @@ const useStore = create(
         // Lightweight GMI editing status per opened layer (gmiEditSessions.mjs).
         // Never bytes, documents or datasets; not persisted.
         gmiEditStatus: {},
-        gmiEditSelection: null, // In-memory, bound to the active workspace/session/document.
+        gmiEditSelection: null, // In-memory, bound to its host and editing session/document.
         gmiBatchInspectorRequest: null,
         gmiBatchTableReview: null, // Small transient presentation records only, never engine previews.
         gmiEditTableExpanded: false,
         gmiBatchInspectorLayerId: null, // Layer whose right inspector is in batch mode (presentation only).
         gmiEditColumnFocus: null, // { layerId, key, fields } temporary Data Table column focus; never persisted.
-        changeGmiEditSelection: (layerId, action, expectedBinding) => {
+        changeGmiEditSelection: (layerId, action, expectedBinding, host = GMI_RETTINGER_SELECTION_HOST) => {
           const binding = gmiSelectionBinding(layerId, gmiEditSessions.describe(layerId));
           if (!binding || !sameGmiSelectionBinding(binding, expectedBinding)) return;
-          set((state) => state.gmiEditWorkspace?.layerId !== layerId ? {} : ({
-            gmiEditSelection: reduceGmiEditSelection(state.gmiEditSelection, action, { binding,
-              counts: { line: state.layers[layerId]?.data?.lines?.length, point: state.layers[layerId]?.data?.points?.length } }),
-          }), false, 'gmiEdit/selection');
+          set((state) => {
+            const inspection = state.ui.layerDataTable?.isOpen && state.ui.layerDataTable.layerId === layerId ? state.objectTableInspection : null;
+            if (!state.layers[layerId] || !gmiSelectionHostIsActive(host, layerId, {
+              workspaceLayerId: state.gmiEditWorkspace?.layerId, inspection,
+            }) || (host.kind === 'inspection' && action.scope && action.scope !== inspection.geometryScope)) return {};
+            return { gmiEditSelection: reduceGmiEditSelection(state.gmiEditSelection, action, { binding, host,
+              counts: { line: state.layers[layerId].data?.lines?.length, point: state.layers[layerId].data?.points?.length } }) };
+          }, false, 'gmiEdit/selection');
         },
         // Rettinger workspace view state (M4): the layer being corrected, the
         // Data Table display mode per layer and a one-shot object selection

@@ -69,10 +69,17 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         assert.match(await browser.evaluate(`${dialog}.querySelector('[type=radio]:checked').closest('label').innerText`), /Fyll manglende verdier/);
         assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring').disabled`), true);
         assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText || ''`), '');
-        for (const mode of ['Foreslått', 'Original']) {
-          await click(mode, 'document.querySelector("[data-table-geometry]")');
+        // U4: before staging, proposed modes stay visible but disabled. They cannot alter the R5 source selection.
+        for (const mode of ['Foreslått', 'Kun endrede']) {
+          const button = `Array.from(document.querySelector('.gmi-edit-table-modes').querySelectorAll('button')).find(e => e.innerText === ${JSON.stringify(mode)})`;
+          assert.equal(await browser.evaluate(`${button}.disabled`), true);
+          assert.match(await browser.evaluate(`${button}.title`), /Legg til en retting/);
+          await browser.evaluate(`${button}.click()`);
+          assert.equal(await browser.evaluate(`document.querySelector('.gmi-edit-table-modes').dataset.gmiTableView`), 'original');
           assert.deepEqual(await browser.evaluate(`Array.from(document.querySelectorAll('[role=row][aria-selected=true]')).map(e => Number(e.dataset.tableRow))`), [0, 6, 7]);
         }
+        await click('Original', 'document.querySelector("[data-table-geometry]")');
+        assert.deepEqual(await browser.evaluate(`Array.from(document.querySelectorAll('[role=row][aria-selected=true]')).map(e => Number(e.dataset.tableRow))`), [0, 6, 7]);
       });
       await t.test('exact scope preserved through review, exclusion and M5B staging; no automatic value', async () => {
         await choose(`${dialog}.querySelector('[aria-label="Felt for masseendring"]')`, 'SDR');

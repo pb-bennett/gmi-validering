@@ -35,8 +35,8 @@ import { GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
 import { validatorInspectionLayer } from '@/lib/gmiValidatorEditing.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { Lexeme } from '@/components/gmi-edit/GmiObjectEditor';
-import { GMI_EDIT_TABLE_VIEWS, GMI_EDIT_TABLE_VIEW_LABELS, gmiEditMessage, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope,
-  gmiObjectNumber, gmiObjectMatchesQuery, gmiObjectCountLabel } from '@/lib/gmiEditView.mjs';
+import { GMI_EDIT_TABLE_VIEWS, gmiEditMessage, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope,
+  gmiObjectNumber, gmiObjectMatchesQuery, gmiObjectCountLabel, gmiTableViewControls } from '@/lib/gmiEditView.mjs';
 
 const ROW_HEIGHT = 28;
 const OBJECT_NUMBER_WIDTH = 40;
@@ -292,12 +292,14 @@ export default function LayerDataTable() {
   // GMI editing display modes. Only for a layer with an open editing session, and never for exact
   // object inspections (their rows are bound to the original dataset revision). The verified proposed
   // view is computed once per published editing revision (status object), not per render.
-  const gmiEditModesAvailable = !isExactInspection && (gmiEditStatus?.state === 'editable' || gmiEditStatus?.state === 'read-only');
+  const viewControls = gmiTableViewControls({ status: gmiEditStatus, view: gmiEditTableView,
+    inRettinger: Boolean(layerId) && gmiEditWorkspaceLayerId === layerId, isInspection: isExactInspection });
+  const gmiEditModesAvailable = viewControls.visible;
   const proposedView = useMemo(
-    () => gmiEditModesAvailable && gmiEditTableView !== GMI_EDIT_TABLE_VIEWS.ORIGINAL ? gmiProposedViewForStatus(gmiEditSessions, gmiEditStatus) : null,
-    [gmiEditModesAvailable, gmiEditTableView, gmiEditStatus],
+    () => gmiEditModesAvailable && viewControls.effectiveView !== GMI_EDIT_TABLE_VIEWS.ORIGINAL ? gmiProposedViewForStatus(gmiEditSessions, gmiEditStatus) : null,
+    [gmiEditModesAvailable, viewControls.effectiveView, gmiEditStatus],
   );
-  const tableView = gmiEditModesAvailable && proposedView?.ok ? gmiEditTableView : GMI_EDIT_TABLE_VIEWS.ORIGINAL;
+  const tableView = gmiEditModesAvailable && proposedView?.ok ? viewControls.effectiveView : GMI_EDIT_TABLE_VIEWS.ORIGINAL;
   const proposedData = tableView === GMI_EDIT_TABLE_VIEWS.ORIGINAL ? null : proposedView.dataset;
   const changedByObject = tableView === GMI_EDIT_TABLE_VIEWS.ORIGINAL ? null : proposedView.changed.byObject;
 
@@ -867,8 +869,8 @@ export default function LayerDataTable() {
 
         {gmiEditModesAvailable && (
           <div className="gmi-edit-table-modes" role="group" aria-label="Visning av GMI-rettinger" data-gmi-table-view={tableView}>
-            {GMI_EDIT_TABLE_VIEW_LABELS.map((mode) => (
-              <button key={mode.key} type="button" aria-pressed={tableView === mode.key} title={mode.description}
+            {viewControls.modes.map((mode) => (
+              <button key={mode.key} type="button" aria-pressed={tableView === mode.key} title={mode.description} disabled={mode.disabled}
                 className="gmi-focus-ring" onClick={() => setGmiEditTableView(layerId, mode.key)}>
                 {mode.label}
               </button>
