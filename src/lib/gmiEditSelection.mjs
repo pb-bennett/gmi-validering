@@ -7,6 +7,14 @@ export function gmiSelectionBinding(layerId, status) {
 export const sameGmiSelectionBinding = (a, b) => Boolean(a && b && a.layerId === b.layerId && a.sessionId === b.sessionId && a.fingerprint === b.fingerprint);
 export const gmiSelectionKey = (scope, index) => `${scope}:${index}`;
 
+/** A row check can request focus only after membership was actually accepted. */
+export function gmiCheckboxSoftFocus(before, after, target, binding) {
+  const key = gmiSelectionKey(target.scope, target.sourceIndex);
+  return sameGmiSelectionBinding(after?.binding, binding) && (after.host?.kind ?? 'rettinger') === 'rettinger'
+    && after.keys.includes(key) && !(sameGmiSelectionBinding(before?.binding, binding)
+      && sameGmiSelectionHost(before?.host, after.host) && before.keys.includes(key));
+}
+
 // Missing hosts belong to Rettinger, including the existing R5 handoff.
 export const GMI_RETTINGER_SELECTION_HOST = Object.freeze({ kind: 'rettinger' });
 export function sameGmiSelectionHost(a = GMI_RETTINGER_SELECTION_HOST, b = GMI_RETTINGER_SELECTION_HOST) {

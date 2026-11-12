@@ -24,7 +24,7 @@ import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import { normalizeTableSearchQuery, segmentTableSearchText, tableSearchScalarText } from '@/lib/tableSearch';
 import { deriveLayerTableRows } from '@/lib/layerTableRows.mjs';
 import { classifyLayerTableReveal } from '@/lib/layerTableReveal.mjs';
-import { gmiSelectionBinding, sameGmiSelectionBinding, sameGmiSelectionHost, GMI_RETTINGER_SELECTION_HOST, gmiSelectionKey, gmiSelectionCounts } from '@/lib/gmiEditSelection.mjs';
+import { gmiSelectionBinding, sameGmiSelectionBinding, sameGmiSelectionHost, GMI_RETTINGER_SELECTION_HOST, gmiSelectionKey, gmiSelectionCounts, gmiCheckboxSoftFocus } from '@/lib/gmiEditSelection.mjs';
 import GmiConfirmDialog from './gmi-edit/GmiConfirmDialog';
 import GmiSeverityIcon from './gmi-edit/GmiSeverityIcon';
 import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
@@ -579,9 +579,9 @@ export default function LayerDataTable() {
   const handleRowClick = useCallback(
     (index, objectType) => {
       const featureId = `${objectType}-${layerId}-${index}`;
-      setHighlightedFeature(featureId);
       // In Rettinger the table is the object browser: a row click asks the workspace to open that object.
       if (!isExactInspection && gmiEditWorkspaceLayerId === layerId) requestGmiEditObject(layerId, tableTabToScope(objectType), index);
+      else setHighlightedFeature(featureId);
     },
     [layerId, setHighlightedFeature, isExactInspection, gmiEditWorkspaceLayerId, requestGmiEditObject],
   );
@@ -716,20 +716,27 @@ export default function LayerDataTable() {
   const visibleKeys = rows.map((row) => gmiSelectionKey(scope, row.original.__index));
   const selectionCounts = gmiSelectionCounts(selection, scope, searchedItems.map((row) => gmiSelectionKey(scope, row.__index)));
   const headerSelection = gmiSelectionCounts(selection, scope, visibleKeys);
-  const selectAction = (action) => {
+  const applySelection = (action, binding, focusTarget) => {
+    const before = useStore.getState().gmiEditSelection;
+    changeSelection(layerId, action, binding, selectionHost);
+    if (focusTarget && gmiCheckboxSoftFocus(before, useStore.getState().gmiEditSelection, focusTarget, binding)) {
+      requestGmiEditObject(layerId, focusTarget.scope, focusTarget.sourceIndex, { soft: true });
+    }
+  };
+  const selectAction = (action, focusTarget) => {
     if (!selectionEnabled) return;
     if (selection?.origin?.kind === 'validator' && action.scope && action.scope !== selection.scope) return;
     if (selection?.keys.length && action.scope && action.scope !== selection.scope) {
       // A cross-geometry range has no anchor in the new geometry, so it selects one object.
-      setReplaceSelection({ action, binding: selectionBinding, from: { scope: selection.scope, count: selection.keys.length },
+      setReplaceSelection({ action, focusTarget, binding: selectionBinding, from: { scope: selection.scope, count: selection.keys.length },
         to: { scope: action.scope, count: action.type === 'add' ? new Set(action.keys).size : 1 } }); return;
     }
-    changeSelection(layerId, action, selectionBinding, selectionHost);
+    applySelection(action, selectionBinding, focusTarget);
   };
   const toggleSelectionRow = (row, range = false) => {
     const key = gmiSelectionKey(scope, row.__index);
     selectAction(range ? { type: 'range', key, scope, orderedKeys: visibleKeys, checked: !selectedKeys.has(key) }
-      : { type: 'toggle', key, scope });
+      : { type: 'toggle', key, scope }, { scope, sourceIndex: row.__index });
   };
 
   // DOM focus stays on the grid; its active descendant uses stable source identity.
@@ -1113,7 +1120,7 @@ export default function LayerDataTable() {
         const removed = from.count === 1 ? (from.scope === 'line' ? 'den valgte ledningen' : 'det valgte punktet') : `de ${from.count} valgte ${plural[from.scope][2]}`;
         return <GmiConfirmDialog title={`Erstatt ${from.count} valgte ${plural[from.scope][from.count === 1 ? 0 : 1]} med ${target}?`}
           confirmLabel="Erstatt utvalget" testId="selection" onCancel={() => setReplaceSelection(null)}
-          onConfirm={() => { changeSelection(layerId, { ...replaceSelection.action, replace: true }, replaceSelection.binding, selectionHost); setReplaceSelection(null); }}>
+          onConfirm={() => { applySelection({ ...replaceSelection.action, replace: true }, replaceSelection.binding, replaceSelection.focusTarget); setReplaceSelection(null); }}>
           <p>Et utvalg kan bare inneholde én geometritype. Fortsetter du, fjernes {removed} fra utvalget, og utvalget består av {target}.</p>
           <p className="gmi-edit-muted">Ingen objekter eller rettinger endres.{batchInspectorLayerId === layerId ? ' Masseendringen må forhåndsvises på nytt.' : ''}</p>
         </GmiConfirmDialog>;

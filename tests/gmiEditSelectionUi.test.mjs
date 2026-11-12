@@ -55,10 +55,10 @@ test('R3 production: source-bound snapshot selection, full filtered model, teal 
       await browser.waitFor(header);
       await browser.waitFor(`${grid}.getAttribute('aria-rowcount') === '41'`);
 
-      await t.test('individual checkboxes do not open objects; rendered checked/indeterminate controls are teal and centred', async () => {
+      await t.test('individual checks softly open the last checked object; rendered checked/indeterminate controls are teal and centred', async () => {
         for (const index of [0, 2, 12]) await browser.evaluate(`${box(index)}.click()`);
         await waitTotal(3);
-        assert.equal(await browser.evaluate(`${editor}?.dataset.gmiObject || null`), null);
+        await browser.waitFor(`${editor}?.dataset.gmiObject === 'line:12'`);
         await browser.waitFor(`${header}.indeterminate`);
         const appearance = await browser.evaluate(`(() => {
           const elements = [${header}, ${box(0)}];

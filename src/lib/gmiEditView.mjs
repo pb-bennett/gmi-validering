@@ -41,6 +41,14 @@ export function gmiTableViewControls({ status, view, inRettinger = false, isInsp
 /** Who set a layer's Data Table view: the user (toolbar, «Vis i Foreslått») or the workspace (handoff, staging). */
 export const GMI_EDIT_TABLE_VIEW_BY = Object.freeze({ USER: 'user', AUTO: 'auto' });
 
+/** Focus intent is independent of checkbox membership; soft requests never discard a draft. */
+export function gmiObjectFocusIntent({ soft = false, batchInspector = false, dirty = false, sameObject = false }) {
+  if (batchInspector) return 'inspect';
+  if (sameObject) return 'focus';
+  if (soft) return dirty ? 'retain' : 'focus';
+  return 'guard';
+}
+
 /**
  * S5/T2: the Data Table view after a successful stage. Original (also the
  * unset default) becomes Foreslått unless the user explicitly chose Original;

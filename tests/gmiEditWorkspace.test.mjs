@@ -533,8 +533,16 @@ test('store: Rettinger view state is not persisted, follows layer removal and re
   assert.deepEqual(Object.keys(useStore.getState().gmiEditTableView), [id], 'removed layer view state dropped');
   useStore.getState().requestGmiEditObject(id, 'line', 1);
   const request = useStore.getState().gmiEditObjectRequest;
+  assert.equal(request.soft, false, 'ordinary navigation retains its guarded intent');
   useStore.getState().clearGmiEditObjectRequest({ ...request });
   assert.strictEqual(useStore.getState().gmiEditObjectRequest, request, 'only the handled request is cleared');
+  useStore.getState().requestGmiEditObject(id, 'line', 2, { soft: true });
+  const softRequest = useStore.getState().gmiEditObjectRequest;
+  assert.equal(softRequest.soft, true);
+  useStore.getState().clearGmiEditObjectRequest(request);
+  assert.strictEqual(useStore.getState().gmiEditObjectRequest, softRequest, 'consuming an old request preserves a newer soft request');
+  useStore.getState().clearGmiEditObjectRequest(softRequest);
+  assert.equal(useStore.getState().gmiEditObjectRequest, null);
   assert.equal(useStore.getState().removeLayer(id, { discardGmiEdits: true }).ok, true);
   assert.equal(useStore.getState().gmiEditWorkspace, null);
   assert.equal(useStore.getState().gmiEditObjectRequest, null);

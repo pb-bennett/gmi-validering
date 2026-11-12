@@ -7,7 +7,7 @@ import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
   describeGmiEditStatus, gmiChangeSetDependents, gmiEditDownloadState, gmiEditMessage,
-  gmiObjectKey, scopeToTableTab, summarizeGmiEditCounts, GMI_EDIT_TABLE_VIEWS,
+  gmiObjectKey, gmiObjectFocusIntent, scopeToTableTab, summarizeGmiEditCounts, GMI_EDIT_TABLE_VIEWS,
 } from '@/lib/gmiEditView.mjs';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import useGmiEditLayer from './useGmiEditLayer';
@@ -50,6 +50,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const [pending, setPending] = useState(null);   // { title, body, confirmLabel, run }
   const [exportOpen, setExportOpen] = useState(false);
   const [notice, setNotice] = useState(null);   // { tone, text, redoId? }
+  const [softFocusNotice, setSoftFocusNotice] = useState(null);
   const noticeRef = useRef(null), focusNotice = useRef(false);
   const [formRevision, setFormRevision] = useState(0);
   const correction = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.correction : null);
@@ -67,7 +68,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const closeBatchInspector = useCallback(() => { setBatchInspector(false); setBatchInspected(null); }, []);
   const objectDirtyRef = useRef(false), batchDirtyRef = useRef(false), batchResetRef = useRef(null);
   const dirtyRef = useRef(false);
-  const onDirtyChange = useCallback((dirty) => { objectDirtyRef.current = dirty; dirtyRef.current = dirty || batchDirtyRef.current; onDraftChange?.(dirtyRef.current); }, [onDraftChange]);
+  const onDirtyChange = useCallback((dirty) => { objectDirtyRef.current = dirty; dirtyRef.current = dirty || batchDirtyRef.current; if (!dirty) setSoftFocusNotice(null); onDraftChange?.(dirtyRef.current); }, [onDraftChange]);
   const onBatchDirtyChange = useCallback((dirty) => { batchDirtyRef.current = dirty; dirtyRef.current = dirty || objectDirtyRef.current; onDraftChange?.(dirtyRef.current); }, [onDraftChange]);
   const registerBatchReset = useCallback((reset) => { batchResetRef.current = reset; }, []);
 
@@ -151,17 +152,25 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     setLayerDataTableTab(layerId, scopeToTableTab(target.scope));
   }, [layerId, openLayerDataTable, setLayerDataTableTab]);
 
-  const select = useCallback((target, changeSetId = null, { individual = false } = {}) => {
-    if (batchInspector && !individual) {
+  const select = useCallback((target, changeSetId = null, { individual = false, soft = false } = {}) => {
+    const sameObject = selected && target.scope === selected.scope && target.sourceIndex === selected.sourceIndex;
+    const intent = gmiObjectFocusIntent({ soft, batchInspector: batchInspector && !individual, dirty: dirtyRef.current, sameObject: sameObject && !individual });
+    if (intent === 'retain') {
+      setSoftFocusNotice('Objektet er valgt, men ikke åpnet. Legg til eller forkast rettingen du arbeider med først.');
+      return;
+    }
+    setSoftFocusNotice(null);
+    if (intent === 'inspect') {
       const object = (target.scope === 'line' ? layer?.data?.lines : layer?.data?.points)?.[target.sourceIndex];
-      if (object) setBatchInspected({ ...target, object });
+      if (!object) return;
+      setBatchInspected({ ...target, object });
       highlight(target); syncObjectTable(target); return;
     }
     // Choosing an object always returns the inspector from ChangeSet details to the editor.
     if (!individual && selected && target.scope === selected.scope && target.sourceIndex === selected.sourceIndex) {
-      setActiveChangeSetId(changeSetId); setDetailId(null); syncObjectTable(target); return;
+      setActiveChangeSetId(changeSetId); setDetailId(null); highlight(target); syncObjectTable(target); return;
     }
-    guard(() => {
+    const accept = () => {
       if (individual) {
         const current = useStore.getState().gmiEditSelection;
         const itinerary = gmiIndividualSelection(view, current, target);
@@ -170,7 +179,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       }
       setSelected(target); setActiveChangeSetId(changeSetId); setDetailId(null); highlight(target);
       syncObjectTable(target);
-    });
+    };
+    if (intent === 'focus') accept(); else guard(accept);
   }, [guard, highlight, selected, syncObjectTable, batchInspector, layer, view, closeBatchInspector]);
 
   const editIndividually = () => {
@@ -208,7 +218,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const onObjectRequest = useEffectEvent((request) => {
     if (!request || request.layerId !== layerId) return;
     useStore.getState().clearGmiEditObjectRequest(request);
-    select({ scope: request.scope, sourceIndex: request.sourceIndex });
+    select({ scope: request.scope, sourceIndex: request.sourceIndex }, null, { soft: request.soft === true });
   });
   useEffect(() => useStore.subscribe((state, previous) => {
     if (state.gmiEditObjectRequest !== previous.gmiEditObjectRequest) onObjectRequest(state.gmiEditObjectRequest);
@@ -351,6 +361,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
         {(descriptor?.state === 'error' || descriptor?.state === 'invalidated') && <button type="button" className="gmi-edit-link" onClick={retry}>Åpne filen på nytt</button>}
       </div>}
       {problem && <p className="gmi-edit-message" data-tone="error" role="alert">{problem}</p>}
+      {softFocusNotice && <p className="gmi-edit-message" data-gmi-soft-focus-notice role="status">{softFocusNotice}</p>}
       {notice && <p ref={noticeRef} tabIndex={-1} className="gmi-edit-message gmi-edit-notice" data-tone={notice.tone} role="status">{notice.text}
         {noticeRedo && <>{' '}<button type="button" className="gmi-edit-link gmi-focus-ring" data-gmi-context-redo="notice" onClick={redoInContext}>Gjør om</button></>}</p>}
     </header>

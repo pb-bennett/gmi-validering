@@ -306,7 +306,7 @@ const useStore = create(
         }, false, 'table/reveal'),
         clearLayerTableReveal: (request) => set((state) => state.layerTableReveal === request
           ? { layerTableReveal: null } : {}, false, 'table/revealHandled'),
-        gmiEditObjectRequest: null, // { layerId, scope, sourceIndex, at } | null
+        gmiEditObjectRequest: null, // { layerId, scope, sourceIndex, soft, at } | null
         gmiEditWorkspaceGuard: null, // Mounted workspace's established draft guard; never persisted.
         gmiEditHandoffError: null,
         openGmiValidatorSelection: (layerId) => {
@@ -388,9 +388,9 @@ const useStore = create(
           const current = state.gmiEditTableView[layerId], next = gmiTableViewAfterStage(current, state.gmiEditTableViewBy[layerId]);
           if (next !== (current || 'original')) state.setGmiEditTableView(layerId, next, { by: GMI_EDIT_TABLE_VIEW_BY.AUTO });
         },
-        requestGmiEditObject: (layerId, scope, sourceIndex) =>
+        requestGmiEditObject: (layerId, scope, sourceIndex, { soft = false } = {}) =>
           set(
-            { gmiEditObjectRequest: { layerId, scope, sourceIndex, at: Date.now() } },
+            { gmiEditObjectRequest: { layerId, scope, sourceIndex, soft: soft === true, at: Date.now() } },
             false,
             'gmiEdit/objectRequest',
           ),
