@@ -2,7 +2,7 @@ import proj4 from 'proj4';
 import '../../map/coordinateProjection.js';
 import { isPhotoPosition } from '../photoSpatial.mjs';
 import { fullCaptureTime, freezeExportData } from './exportContract.mjs';
-import { compareExportKeys, digestHex, exportGuid, planAttachmentNames } from './attachmentNames.mjs';
+import { compareExportKeys, digestHex, exportGuid, foldAttachmentPath, isSafeAttachmentFilename, planAttachmentNames } from './attachmentNames.mjs';
 import { evaluatePhotoExportRules, normalizeExportContext } from './photoExportRules.mjs';
 import { photoExportNames } from './photoExportNaming.mjs';
 
@@ -45,7 +45,7 @@ export function formatExportCoordinate(value) {
   return text === '-0.000' ? '0.000' : text;
 }
 
-export async function buildPhotoExportPlan(snapshot, configuration, { transform = proj4, now = () => new Date() } = {}) {
+export async function buildPhotoExportPlan(snapshot, configuration, { transform = proj4, now = () => new Date(), occurrenceIds = null, attachments: plannedAttachments = null } = {}) {
   const profile = configuration.profile, gemini = profile === 'gemini-legacy2019';
   const crs = gemini ? 'EPSG:5972' : configuration.crs;
   const horizontalCrs = gemini ? 'EPSG:25832' : crs;
@@ -65,18 +65,29 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   // Shared with readiness. Each owner's diagnostics are placed where the plan reaches that owner, which keeps
   // the established order around the checks only the plan can make. Keys carry the kind of owner, because an
   // unrepeated photo's occurrence ID is the same as its asset ID.
-  const rules = evaluatePhotoExportRules({ profile, crs, context, assets: snapshot.assets, occurrences: snapshot.occurrences });
+  const selected = occurrenceIds === null ? snapshot.occurrences : snapshot.occurrences.filter((row) => occurrenceIds.includes(row.occurrenceId));
+  const rules = evaluatePhotoExportRules({ profile, crs, context, assets: snapshot.assets, occurrences: selected });
   const owner = (item) => item.occurrenceId ? `occurrence:${item.occurrenceId}` : item.assetId ? `asset:${item.assetId}` : 'layer';
   const ruleErrors = Map.groupBy(rules.errors, owner), ruleWarnings = Map.groupBy(rules.warnings, owner);
   const applyRules = (key) => { errors.push(...(ruleErrors.get(key) || [])); warnings.push(...(ruleWarnings.get(key) || [])); };
-  const all = [...snapshot.occurrences].sort((a, b) => compareExportKeys(a.occurrenceId, b.occurrenceId));
+  const all = [...selected].sort((a, b) => compareExportKeys(a.occurrenceId, b.occurrenceId));
   const excluded = all.filter((row) => !row.current).map((row) => ({ occurrenceId: row.occurrenceId, reason: 'unplaced' }));
   const placed = all.filter((row) => row.current);
   applyRules('layer');
   const selectedAssets = new Set(placed.map((row) => row.assetId));
   const assets = [...snapshot.assets].filter((asset) => selectedAssets.has(asset.assetId)).map((asset) => ({ ...asset })).sort((a, b) => compareExportKeys(a.assetId, b.assetId));
   let attachments = [];
-  try { attachments = await planAttachmentNames(assets); }
+  try {
+    attachments = plannedAttachments === null ? await planAttachmentNames(assets)
+      : plannedAttachments.filter((item) => selectedAssets.has(item.assetId)).map((item) => ({ ...item }));
+    if (attachments.length !== assets.length || assets.some((asset) => attachments.filter((item) => item.assetId === asset.assetId).length !== 1)) {
+      throw new Error('Vedleggsplanen samsvarer ikke med de valgte bildene.');
+    }
+    if (attachments.some((item) => !isSafeAttachmentFilename(item.filename) || item.path !== `Attachments/${item.filename}`)
+      || new Set(attachments.map((item) => foldAttachmentPath(item.path))).size !== attachments.length) {
+      throw new Error('Vedleggsplanen har utrygge eller dupliserte filnavn.');
+    }
+  }
   catch (e) { error('attachment-naming', e.message); }
   for (const asset of assets) {
     asset.exportFilename = attachments.find((item) => item.assetId === asset.assetId)?.filename || null;

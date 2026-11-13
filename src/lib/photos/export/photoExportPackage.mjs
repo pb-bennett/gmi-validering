@@ -1,27 +1,14 @@
-import { Zip, ZipPassThrough, strToU8 } from 'fflate';
+import { strToU8 } from 'fflate';
+import { createExportZip } from './exportZip.mjs';
 import { assertExportablePlan } from './photoExportPlan.mjs';
 import { serializePhotoExport } from './photoExportXml.mjs';
 import { digestHex } from './attachmentNames.mjs';
 
 export async function buildPhotoExportPackage(plan) {
   assertExportablePlan(plan);
-  const chunks = [];
-  let zipError = null, finished = false;
-  const zip = new Zip((error, chunk, final) => {
-    if (error) zipError = error;
-    if (chunk) chunks.push(chunk);
-    if (final) finished = true;
-  });
-  // Fixed local DOS time gives the same archive bytes in a given runtime;
-  // no timestamp is inferred from capture, modification or import time.
-  const add = (path, bytes) => {
-    const member = new ZipPassThrough(path);
-    member.mtime = new Date(2000, 0, 1, 0, 0, 0);
-    member.os = 0; member.attrs = 0;
-    zip.add(member); member.push(bytes, true);
-  };
+  const zip = createExportZip();
   try {
-    add(plan.naming.gmlFilename, strToU8(serializePhotoExport(plan)));
+    zip.add(plan.naming.gmlFilename, strToU8(serializePhotoExport(plan)));
     const assets = new Map(plan.assets.map((asset) => [asset.assetId, asset]));
     for (const attachment of plan.attachments) {
       assertExportablePlan(plan);
@@ -29,12 +16,10 @@ export async function buildPhotoExportPackage(plan) {
       const bytes = new Uint8Array(await asset.file.arrayBuffer());
       if (await digestHex(bytes) !== asset.checksum) throw new Error('Originalfilen er endret etter forhåndsvisning.');
       assertExportablePlan(plan);
-      add(attachment.path, bytes);
+      zip.add(attachment.path, bytes);
     }
-    zip.end();
-    if (zipError) throw zipError;
-    if (!finished) throw new Error('ZIP-pakken ble ikke ferdigstilt.');
+    const blob = zip.finish();
     assertExportablePlan(plan);
-    return new Blob(chunks, { type: 'application/zip' });
+    return blob;
   } catch (error) { zip.terminate(); throw error; }
 }

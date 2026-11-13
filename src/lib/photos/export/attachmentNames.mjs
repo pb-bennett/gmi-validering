@@ -18,7 +18,8 @@ export async function exportGuid(key) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 export const compareExportKeys = (a, b) => a < b ? -1 : a > b ? 1 : 0;
-const fold = (name) => name.normalize('NFC').toUpperCase().toLowerCase();
+export const foldAttachmentPath = (name) => name.normalize('NFC').toUpperCase().toLowerCase();
+const fold = foldAttachmentPath;
 function safeParts(original) {
   let name = [...original.normalize('NFC')].map((char) => {
     const n = char.codePointAt(0);
@@ -35,7 +36,14 @@ function fitName({ stem, extension }, suffix) {
   while (encode(chars.join('') + suffix + extension).length > 180) chars.pop();
   return `${chars.join('') || 'photo'}${suffix}${extension}`;
 }
-export async function planAttachmentNames(assets) {
+export function isSafeAttachmentFilename(name) {
+  if (typeof name !== 'string' || !name) return false;
+  try { return fitName(safeParts(name), '') === name.normalize('NFC') && encode(name).length <= 180; }
+  catch { return false; }
+}
+
+export async function planAttachmentNames(assets, { reserved = [] } = {}) {
+  const reservedKeys = new Set([...reserved].map(fold));
   const rows = await Promise.all(assets.map(async (asset) => ({ ...asset, parts: safeParts(asset.originalFilename), hash: await digestHex(asset.assetId), suffixLength: 0 })));
   for (;;) {
     const buckets = new Map();
@@ -45,7 +53,7 @@ export async function planAttachmentNames(assets) {
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key).push(row);
     }
-    const collisions = [...buckets.values()].filter((bucket) => bucket.length > 1);
+    const collisions = [...buckets.entries()].filter(([key, bucket]) => bucket.length > 1 || reservedKeys.has(key)).map(([, bucket]) => bucket);
     if (!collisions.length) return rows.map((row) => ({ assetId: row.assetId, filename: row.name, path: `Attachments/${row.name}`, renamed: row.name !== row.originalFilename }));
     for (const bucket of collisions) for (const row of bucket) {
       if (row.suffixLength === 64) throw new Error('Kan ikke lage entydige vedleggsnavn.');
