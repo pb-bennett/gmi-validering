@@ -150,7 +150,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
   const close = () => { work.current.active = false; work.current.token++; onClose(); };
 
   return <dialog ref={ref} className="photo-collection-dialog photo-export-wizard delivery-wizard" aria-labelledby={`${id}-title`}
-    data-export-phase={status} onCancel={(event) => { event.preventDefault(); close(); }}
+    data-export-phase={status} data-delivery-step={state.step} onCancel={(event) => { event.preventDefault(); close(); }}
     onClose={(event) => { if (work.current.active && !event.currentTarget.open) close(); }}>
     <div className="photo-collection-frame">
       <header className="photo-collection-header border-b border-gmi-border">

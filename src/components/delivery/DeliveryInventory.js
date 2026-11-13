@@ -47,7 +47,8 @@ export default function DeliveryInventory({ plan }) {
       const next = new Set(previous); if (next.has(node.path)) next.delete(node.path); else next.add(node.path); return next;
     })}><span aria-hidden="true">{closed.has(node.path) ? '▸' : '▾'}</span><FolderIcon weight="regular" aria-hidden="true" />{node.name}/ <small>({node.count} {node.count === 1 ? 'fil' : 'filer'})</small></button>
       {!closed.has(node.path) && render(node.children)}</>
-      : <div className="delivery-file"><FileIcon aria-hidden="true" />{thumbnails && node.attachment && <Preview plan={plan} attachment={node.attachment} />}<span>{node.name}</span></div>}
+      : <div className="delivery-file"><FileIcon aria-hidden="true" />{thumbnails && node.attachment && <Preview plan={plan} attachment={node.attachment} />}<span className="delivery-file-name">{node.name}</span>
+        {node.destination && <span className="delivery-destination" data-destination={node.destination} aria-label={`Referert fra ${node.destination}`}>{node.destination}</span>}</div>}
   </li>)}</ul>;
   return <div data-package-contents className="delivery-tree">
     <div className="delivery-tree-controls"><button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => setClosed(new Set())}>Utvid alle</button>

@@ -1,4 +1,23 @@
 import assert from 'node:assert/strict';
+
+test('colour defaults and remembered popup tab are presentation only and never change occurrence selection', () => {
+  let state = photoWorkspaceReducer(emptyPhotoWorkspace, { type: 'enter', layerId: 'layer', photoIds: ['a', 'b'], photoId: 'a' });
+  assert.equal(state.colourMode, 'provenance');
+  state = photoWorkspaceReducer(state, { type: 'mode', mode: 'delivery' });
+  assert.equal(state.colourMode, 'delivery');
+  state = photoWorkspaceReducer(state, { type: 'toggle-delivery', photoId: 'a' });
+  state = photoWorkspaceReducer(state, { type: 'map-colour', value: 'provenance' });
+  state = photoWorkspaceReducer(state, { type: 'delivery-popup-tab', value: 'decisions' });
+  state = photoWorkspaceReducer(state, { type: 'active', photoId: 'b' });
+  assert.deepEqual(state.deliveryIds, ['a']);
+  assert.equal(state.deliveryPopupTab, 'decisions');
+  assert.equal(state.colourMode, 'provenance');
+  assert.strictEqual(photoWorkspaceReducer(state, { type: 'delivery-popup-tab', value: 'invalid' }), state);
+  state = photoWorkspaceReducer(state, { type: 'mode', mode: 'browse' });
+  assert.equal(state.colourMode, 'provenance');
+  assert.equal(state.deliveryPopupTab, 'decisions');
+  assert.deepEqual(state.deliveryIds, []);
+});
 import test from 'node:test';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { emptyPhotoWorkspace, photoWorkspaceReducer } from '../src/lib/photos/photoWorkspaceState.mjs';

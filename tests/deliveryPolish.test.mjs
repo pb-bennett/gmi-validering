@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deliveryInventory } from '../src/lib/delivery/deliveryInventory.mjs';
+import { deliveryInventory, deliveryAttachmentDestinations } from '../src/lib/delivery/deliveryInventory.mjs';
 import { DELIVERY_CHOICES, deliveryContents } from '../src/lib/delivery/deliveryWizard.mjs';
-import { photoMarkerOptions, photoMarkerIconKey, PHOTO_POSITION_SOURCES, PHOTO_DELIVERY_BADGES } from '../src/lib/photos/photoMarkerPresentation.mjs';
+import { photoMarkerOptions, photoMarkerIconKey, PHOTO_POSITION_SOURCES, PHOTO_DELIVERY_LABELS, PHOTO_DELIVERY_COLOURS, photoDeliveryColourState, photoStackDeliveryState } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { deliveryFixture } from './helpers/deliveryFixtures.mjs';
 import { readDeliveryAttachment } from '../src/lib/delivery/deliveryPlan.mjs';
 
@@ -32,12 +32,15 @@ test('nested and outside-attachment paths, complete filenames and large folders 
   assert.deepEqual(leaves(root), deliveryContents(plan));
   assert.equal(root.children.find((entry) => entry.path === 'Other').children[0].children[0].attachment.assetId, 'outside');
 });
-test('delivery badges and batch checks never replace provenance or change one another', () => {
-  for (const source of PHOTO_POSITION_SOURCES) for (const status of Object.keys(PHOTO_DELIVERY_BADGES)) for (const mode of ['markers', 'thumbnails']) {
+test('colour modes and independent batch checks preserve provenance and never add delivery overlays', () => {
+  for (const source of PHOTO_POSITION_SOURCES) for (const status of Object.keys(PHOTO_DELIVERY_LABELS)) for (const mode of ['markers', 'thumbnails']) {
     const options = { sourceKind: source.kind, deliveryStatus: status };
     const ordinary = photoMarkerOptions(mode, options), selected = photoMarkerOptions(mode, { ...options, batchSelected: true });
     assert(ordinary.html.includes(source.color)); assert(selected.html.includes(source.color));
-    assert(ordinary.html.includes(`data-delivery-status="${status}"`));
+    assert(!ordinary.html.includes('photo-marker-delivery'));
+    const delivery = photoMarkerOptions(mode, { ...options, colourMode: 'delivery' });
+    assert(delivery.html.includes(PHOTO_DELIVERY_COLOURS[photoDeliveryColourState(status)].color));
+    assert.notEqual(photoMarkerIconKey(mode, options), photoMarkerIconKey(mode, { ...options, colourMode: 'delivery' }));
     assert(!ordinary.html.includes('photo-marker-batch')); assert(selected.html.includes('photo-marker-batch'));
     assert.notEqual(photoMarkerIconKey(mode, options), photoMarkerIconKey(mode, { ...options, batchSelected: true }));
   }
@@ -55,5 +58,39 @@ test('preview attachment access shares M9 stale-plan and membership checks', asy
     await assert.rejects(readDeliveryAttachment(plan, 'excluded-asset'));
     f.session.clear();
     await assert.rejects(readDeliveryAttachment(plan, plan.attachments[0].assetId), { code: 'stale-plan' });
+  } finally { f.session.clear(); }
+});
+
+
+test('stack colours compare occurrence destinations, including included/unlinked and unresolved states', () => {
+  const members = [{ id: 'a' }, { id: 'b' }];
+  assert.equal(photoStackDeliveryState(members, { a: { status: 'transfer' }, b: { status: 'include' } }), 'gml');
+  assert.equal(photoStackDeliveryState(members, { a: { status: 'transfer' }, b: { status: 'keep-link' } }), 'mixed');
+  assert.equal(photoStackDeliveryState(members, { a: { status: 'not-selected' }, b: { status: 'not-selected' } }), 'excluded');
+  assert.equal(photoStackDeliveryState(members, {}), 'review');
+  const html = photoMarkerOptions('markers', { colourMode: 'delivery', deliveryColourState: 'mixed' }).html;
+  assert(html.includes('stroke-dasharray'));
+});
+
+test('destination badges follow actual M9 retained paths and GML paths across modes and shared occurrences', async () => {
+  const f = await deliveryFixture();
+  try {
+    const retained = await f.plan('combined');
+    assert.deepEqual([...deliveryAttachmentDestinations(retained).values()], ['GMI']);
+    f.transfer();
+    for (const mode of ['split', 'combined']) {
+      const shared = await f.plan(mode);
+      assert.equal(shared.attachments.length, 1);
+      assert.deepEqual([...deliveryAttachmentDestinations(shared).values()], ['GMI + GML']);
+    }
+    const gml = await f.plan('photos-only');
+    assert([...deliveryAttachmentDestinations(gml).values()].every((value) => value === 'GML'));
+    f.transfer(1);
+    const transferred = await f.plan('combined');
+    assert.deepEqual([...deliveryAttachmentDestinations(transferred).values()], ['GML']);
+    // One physical asset may also have another retained alias. Only the exact GML path is shared.
+    const alias = { ...transferred.attachments[0], retained: true, path: 'Other/nested/photo.jpg' };
+    const presentation = { ...transferred, attachments: [...transferred.attachments, alias] };
+    assert.equal(deliveryAttachmentDestinations(presentation).get(alias.path), 'GMI');
   } finally { f.session.clear(); }
 });

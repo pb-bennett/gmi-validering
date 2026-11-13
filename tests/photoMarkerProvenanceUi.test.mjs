@@ -99,21 +99,26 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await move(true); assert.equal(await sourceOfSelected(), 'manual');
         assert.deepEqual(await browser.evaluate(`${markers}.filter(e=>e.title.includes('shared.png')).map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['gmi', 'manual']);
       });
-      await t.test('delivery overlays preserve all provenance fills and explain planned choices separately', async () => {
+      await t.test('delivery colour mode preserves source identity and normal provenance mode', async () => {
         await select(repeated[0].id);
         await browser.evaluate('document.querySelectorAll(".photo-delivery-section input[type=radio]")[1].click()');
         await select(exif.id);
         await browser.evaluate('document.querySelector(".photo-delivery-include input").click()');
         for (const source of PHOTO_POSITION_SOURCES) {
-          assert(await browser.evaluate(`${markers}.some(marker => marker.querySelector('.photo-camera-glyph').dataset.positionSource === ${JSON.stringify(source.kind)} && marker.querySelector('.photo-marker-delivery'))`));
+          assert(await browser.evaluate(`${markers}.some(marker => marker.querySelector('.photo-camera-glyph').dataset.positionSource === ${JSON.stringify(source.kind)} && !marker.querySelector('.photo-marker-delivery'))`));
         }
         assert(await browser.evaluate(`${legend}.innerText.includes('Plasseringskilde') && ${legend}.innerText.includes('Leveringsvalg')`));
-        await browser.evaluate(`${legend}.querySelector('details').open = true`);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await screenshot(`final-provenance-mode-${width}x${height}`);
+        }
+        await browser.evaluate(`${legend}.querySelector('select').value='delivery';${legend}.querySelector('select').dispatchEvent(new Event('change',{bubbles:true}))`);
+        assert(await browser.evaluate(`${markers}.every(marker => ['#2463b5','#19785b','#64748b'].includes(marker.querySelector('.photo-camera-glyph path').getAttribute('fill')))`));
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           await screenshot(`polish-provenance-delivery-${width}x${height}`);
         }
-        await browser.evaluate(`${legend}.querySelector('details').open = false`);
+        await browser.evaluate(`${legend}.querySelector('select').value='provenance';${legend}.querySelector('select').dispatchEvent(new Event('change',{bubbles:true}))`);
         await browser.evaluate('document.querySelector(".photo-delivery-include input").click()');
         await select(repeated[0].id);
         await browser.evaluate('document.querySelectorAll(".photo-delivery-section input[type=radio]")[0].click()');
@@ -149,7 +154,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
               controls:legend.querySelectorAll('button,input,select,a').length,radios:legend.querySelectorAll('[role=radio]').length,entries:Array.from(legend.querySelectorAll('li[data-legend-source]')).map(e=>({kind:e.querySelector('svg').dataset.positionSource,label:e.innerText,fill:e.querySelector('path').getAttribute('fill')}))};})()`);
           assert(layout.inside && !layout.overlaps, JSON.stringify(layout));
           assert(layout.width <= 200 && layout.height < 280, JSON.stringify(layout));
-          assert.equal(layout.controls, 2, 'only the Markører/Miniatyrer display toggle');
+          assert.equal(layout.controls, 3, 'colour mode selector plus the Markører/Miniatyrer display toggle');
           assert.equal(layout.radios, 2);
           assert.deepEqual(layout.entries, PHOTO_POSITION_SOURCES.map(({ kind, label, color }) => ({ kind, label, fill: color })));
           assert.deepEqual(await browser.evaluate(`${markers}.map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['exif', 'gmi', 'gml', 'manual']);

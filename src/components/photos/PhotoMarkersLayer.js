@@ -3,8 +3,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Marker, Pane, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import PhotoDeliveryControls from './PhotoDeliveryControls';
-import { PHOTO_DELIVERY_BADGES } from '@/lib/photos/photoMarkerPresentation.mjs';
+import PhotoDeliveryMapPopup from './PhotoDeliveryMapPopup';
+import { PHOTO_DELIVERY_LABELS, photoStackDeliveryState } from '@/lib/photos/photoMarkerPresentation.mjs';
 import PhotoMapPopup from './PhotoMapPopup';
 import { photoPositionSourceDescription, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
@@ -80,6 +80,8 @@ function markerModels(items, workspace, thumbnails) {
     const selected = inWorkspace && photo.id === workspace.photoId;
     const options = {
       sourceKind: photoPositionSourceKind(photo), selected,
+      colourMode: inWorkspace ? workspace.colourMode : 'provenance',
+      deliveryColourState: inWorkspace && members ? photoStackDeliveryState(members, workspace.delivery?.byPhotoId) : null,
       deliveryStatus: inWorkspace ? workspace.delivery?.byPhotoId[photo.id]?.status : null,
       batchSelected: inWorkspace && workspace.deliveryMode && workspace.deliveryIds?.includes(photo.id),
       staged: Boolean(photo.staged),
@@ -95,7 +97,7 @@ function markerModels(items, workspace, thumbnails) {
     return [{ markerKey: feature.id, layerId, photoId: photo.id, lat, lng, mode, icon: photoMarkerIcon(mode, options), directionIcon,
       zIndexOffset: selected ? 1000 : photo.staged ? 500 : top === photo ? 100 : 0,
       label: photoMarkerLabel(photo, top === photo ? members.length : 1).replace(/^Vis bilde:/, inWorkspace && workspace.deliveryMode ? 'Velg plassering:' : 'Vis bilde:')
-        + (options.deliveryStatus ? ` · Planlagt: ${PHOTO_DELIVERY_BADGES[options.deliveryStatus]?.[1]}` : '') + (options.batchSelected ? ' · Valgt for samlet levering' : ''), inWorkspace,
+        + (options.deliveryStatus ? ` · Planlagt: ${PHOTO_DELIVERY_LABELS[options.deliveryStatus]}` : '') + (options.deliveryColourState === 'mixed' ? ' \u00b7 Ulike leveringsvalg p\u00e5 samme sted; velg en plassering for detaljer' : '') + (options.batchSelected ? ' · Valgt for samlet levering' : ''), inWorkspace,
       deliveryWorkspace: inWorkspace && workspace.deliveryMode ? workspace : null,
       deliveryMembers: inWorkspace && workspace.deliveryMode ? (top === photo ? members : [photo]) : null,
       // Edit mode: other FOTO layers are context only, so no popup can switch layers by accident.
@@ -180,12 +182,7 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
   return <Marker ref={ref} key={markerKey} position={position} pane={PHOTO_MARKER_PANE} icon={icon} zIndexOffset={zIndexOffset}
     interactive={interactive} keyboard={interactive} eventHandlers={eventHandlers}>
     {deliveryWorkspace && <Popup className="photo-delivery-map-popup" maxWidth={320} maxHeight={280}>
-      <p>{deliveryMembers.length} plasseringer. Velg hver plassering enkeltvis.</p>
-      {deliveryMembers.map((member) => <div key={member.id}>
-        <label><input type="checkbox" checked={deliveryWorkspace.deliveryIds?.includes(member.id) || false}
-          onChange={() => deliveryWorkspace.onToggleDelivery(member.id)} />{member.originalFilename} {member.occurrence ? gmiObjectLabel(member.occurrence.object) : ''}</label>
-        <PhotoDeliveryControls photo={member} layerId={layerId} entry={deliveryWorkspace.delivery?.byPhotoId[member.id]} />
-      </div>)}
+      <PhotoDeliveryMapPopup members={deliveryMembers} workspace={deliveryWorkspace} layerId={layerId} onLayout={() => ref.current?.getPopup()?.update()} />
     </Popup>}
     {popupPhoto && <Popup ref={popupRef} pane="popupPane" className="photo-map-viewer-popup" maxWidth={popupWidth} minWidth={popupWidth}
       maxHeight={popupHeight} closeButton={false} autoPanPadding={[24, 24]}>

@@ -128,6 +128,13 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         const marker = 'document.querySelector(".photo-camera-marker.photo-marker-selected")';
         await browser.waitFor(marker);
         assert.equal(await browser.evaluate(`${marker}.querySelector('.photo-camera-glyph').dataset.positionSource`), 'gmi');
+        const colourSelect = 'document.querySelector(".photo-map-display-card select")';
+        assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
+        assert.equal(await browser.evaluate(`${marker}.querySelector('.photo-camera-glyph path').getAttribute('fill')`), '#64748b', 'mixed stack has no single destination colour');
+        await browser.evaluate(`${colourSelect}.value='provenance';${colourSelect}.dispatchEvent(new Event('change',{bubbles:true}))`);
+        assert.equal(await browser.evaluate(`${marker}.querySelector('.photo-camera-glyph path').getAttribute('fill')`), '#2463b5');
+        await screenshot(browser, 'final-marker-provenance');
+        await browser.evaluate(`${colourSelect}.value='delivery';${colourSelect}.dispatchEvent(new Event('change',{bubbles:true}))`);
         await browser.evaluate(`${marker}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
         await browser.waitFor(popup);
         assert.equal(await browser.evaluate(`${popup}.querySelectorAll('input[type=checkbox]').length`), 2);
@@ -137,10 +144,27 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-pill").length'), 1, 'selection does not change decisions');
         await browser.evaluate(`${popup}.querySelectorAll('input[type=checkbox]')[0].click()`);
         await browser.waitFor('document.querySelectorAll(".photo-workspace-list input[type=checkbox]:checked").length === 0');
+        assert.equal(await browser.evaluate(`${popup}.querySelectorAll('input[type=radio]').length`), 0);
+        await browser.evaluate(`${popup}.querySelector('[role=tab][data-tab=batch]').focus()`);
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+        await browser.waitFor(`${popup}.querySelector('[role=tab][data-tab=decisions]').getAttribute('aria-selected') === 'true'`);
+        assert.equal(await browser.evaluate(`${popup}.querySelectorAll('input[type=checkbox]').length`), 0);
+        assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-pill").length'), 1, 'switching tabs never changes decisions');
+        await screenshot(browser, 'final-popup-decisions');
         await browser.evaluate(`${popup}.querySelectorAll('.photo-delivery-section')[1].querySelectorAll('input[type=radio]')[1].click()`);
         await browser.waitFor('document.querySelectorAll(".photo-delivery-pill").length === 2');
         await browser.evaluate(`${popup}.querySelectorAll('.photo-delivery-section')[1].querySelectorAll('input[type=radio]')[0].click()`);
         await browser.waitFor('document.querySelectorAll(".photo-delivery-pill").length === 1');
+        await browser.evaluate(`${popup}.querySelector('.leaflet-popup-close-button').click()`);
+        await browser.waitFor(`!${popup}`);
+        await browser.evaluate(`document.querySelector('.photo-camera-marker[data-photo-id="${rows[1]}"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
+        await browser.waitFor(`${popup}.querySelector('[data-tab=decisions]').getAttribute('aria-selected') === 'true'`);
+        assert.equal(await browser.evaluate(`${popup}.querySelectorAll('[data-occurrence-id]').length`), 1, 'the other marker retains the active tab');
+        await browser.evaluate(`document.querySelector('.photo-camera-marker[data-photo-id="${rows[1]}"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
+        await browser.evaluate(`${marker}.dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
+        await browser.waitFor(`${popup}.querySelectorAll('[data-occurrence-id]').length === 2`);
+        await browser.evaluate(`${popup}.querySelector('[data-tab=batch]').click()`);
         await browser.evaluate(`${popup}.querySelectorAll('input[type=checkbox]')[1].click()`);
         await browser.waitFor('document.querySelectorAll(".photo-marker-batch").length === 1');
         await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] input[type=checkbox]').click()`);
@@ -150,6 +174,9 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           await delay(300);
           await screenshot(browser, `polish-map-overlap-selection-${width}x${height}`);
+          await browser.evaluate(`${popup}.querySelector('[data-tab=decisions]').click()`);
+          await screenshot(browser, `final-popup-decisions-${width}x${height}`);
+          await browser.evaluate(`${popup}.querySelector('[data-tab=batch]').click()`);
         }
         await browser.evaluate('document.querySelector(".photo-delivery-map-popup .leaflet-popup-close-button").click()');
         const exactMarker = `document.querySelector('.photo-camera-marker[data-photo-id="${rows[1]}"]')`;
@@ -174,6 +201,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await browser.evaluate('document.querySelector(".photo-delivery-map-popup .leaflet-popup-close-button")?.click()');
         await click(browser, 'Ferdig', 'document.querySelector(".photo-delivery-bar")');
         await browser.waitFor('!document.querySelector(".photo-delivery-bar")');
+        assert.equal(await browser.evaluate('document.querySelector(".photo-map-display-card select").value'), 'provenance');
         await browser.evaluate(`${exactMarker}.dispatchEvent(new MouseEvent('click', {bubbles:true}))`);
         await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] button').getAttribute('aria-pressed') === 'true'`);
         await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[0]}"] button').click()`);
@@ -190,9 +218,12 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await screenshot(browser, 'polish-tree-collapsed');
         await click(browser, 'Utvid alle');
         await browser.waitFor(`${dialog}.querySelector('[data-package-path="Attachments/shared.jpg"]')`);
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').textContent`), 'GML');
         await screenshot(browser, 'polish-tree-expanded');
         await browser.evaluate(`${dialog}.querySelector('.delivery-tree input[type=checkbox]').click()`);
         await browser.waitFor(`${dialog}.querySelector('.delivery-thumbnail img')?.naturalWidth > 0`);
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').textContent`), 'GML');
+        assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('.delivery-tree input').length`), 1, 'the reviewed tree only has the preview toggle, no delivery editors');
         await screenshot(browser, 'polish-tree-thumbnails');
         const previewUrl = await browser.evaluate(`${dialog}.querySelector('.delivery-thumbnail img').src`);
         await browser.evaluate(`window.__polishRevoked=[];window.__polishRevoke=URL.revokeObjectURL;URL.revokeObjectURL=function(url){window.__polishRevoked.push(url);window.__polishRevoke.call(URL,url);}`);
@@ -246,12 +277,19 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
       await t.test('combined preview, separate report, exact package and download failure/retry state', async () => {
         await choose(browser, 'combined'); await pack(browser);
         const facts = await summary(browser); assert.match(facts.Rettinger, /^1 /); assert.match(facts.GML, /^1 /);
-        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+        for (const [width, height] of [[1280, 720], [1366, 768], [390, 844]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           const bounds = await browser.evaluate(`(() => {const d=${dialog}, f=d.querySelector('footer');return {dialog:d.getBoundingClientRect().toJSON(),footer:f.getBoundingClientRect().toJSON(),overflow:d.scrollWidth>d.clientWidth+1};})()`);
           assert(!bounds.overflow); assert(bounds.footer.bottom <= height); assert(bounds.dialog.top >= 0);
+          assert(bounds.dialog.height >= height * .94, 'package uses the available viewport height');
+          const rows = await browser.evaluate(`Array.from(${dialog}.querySelectorAll('.delivery-summary > div')).map(row=>row.getBoundingClientRect().toJSON())`);
+          if (width > 700) { assert(Math.abs(rows[0].top - rows[3].top) < 2); assert(rows[3].left > rows[0].left); }
+          else { assert(rows[3].top > rows[0].top); assert(Math.abs(rows[3].left - rows[0].left) < 2); }
+          await click(browser, 'Utvid alle');
+          assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').textContent`), 'GMI + GML');
           await screenshot(browser, `m10-combined-package-${width}x${height}`);
         }
+        await browser.send('Emulation.setDeviceMetricsOverride', { width:1366, height:768,deviceScaleFactor:1,mobile:false });
         // Native modal focus containment, trusted Tab and Escape controls.
         await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
         await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
@@ -306,6 +344,9 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await click(browser, 'Tilbake og kontroller på nytt');
         assert.equal(await currentStep(browser), '1. Innhold');
         await pack(browser); assert.equal((await summary(browser)).GML, '0 poster i GML');
+        await click(browser, 'Utvid alle');
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').textContent`), 'GMI');
+        await screenshot(browser, 'final-package-retained-gmi');
         await click(browser, 'Lukk eksport');
       });
       await t.test('changed attachment bytes invalidate review rather than allowing retry of an obsolete package', async () => {

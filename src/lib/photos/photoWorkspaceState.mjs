@@ -2,7 +2,7 @@ export const PHOTO_WORKSPACE_MODES = Object.freeze(['browse', 'edit', 'remove', 
 export const DEFAULT_PHOTO_FILTER = Object.freeze({ placement: 'all', missingDirection: false, missingCaptureTime: false, repeated: false, changed: false, delivery: 'all' });
 export const DEFAULT_PHOTO_SORT = 'filename-asc';
 export const emptyPhotoWorkspace = Object.freeze({ layerId: null, activePhotoId: null, photoIds: Object.freeze([]),
-  mode: 'browse', removalIds: Object.freeze([]), deliveryIds: Object.freeze([]), filter: DEFAULT_PHOTO_FILTER, sort: DEFAULT_PHOTO_SORT });
+  mode: 'browse', colourMode: 'provenance', deliveryPopupTab: 'batch', removalIds: Object.freeze([]), deliveryIds: Object.freeze([]), filter: DEFAULT_PHOTO_FILTER, sort: DEFAULT_PHOTO_SORT });
 
 const FILTER_PLACEMENTS = ['all', 'placed', 'unplaced', 'exif', 'gmi', 'gml', 'manual', 'unknown'];
 const FILTER_FLAGS = ['missingDirection', 'missingCaptureTime', 'repeated', 'changed'];
@@ -42,9 +42,11 @@ export function photoWorkspaceReducer(state, action) {
   if (action.type === 'mode' && PHOTO_WORKSPACE_MODES.includes(action.mode) && state.layerId) {
     if (state.mode === action.mode) return state;
     // The "changed" filter only exists inside Edit mode; removal and delivery selections only inside their modes.
-    return { ...state, mode: action.mode, removalIds: [], deliveryIds: [],
+    return { ...state, mode: action.mode, colourMode: action.mode === 'delivery' ? 'delivery' : 'provenance', removalIds: [], deliveryIds: [],
       filter: action.mode !== 'edit' && state.filter.changed ? normalizeFilter(state.filter, { changed: false }) : state.filter };
   }
+  if (action.type === 'map-colour' && ['provenance', 'delivery'].includes(action.value)) return { ...state, colourMode: action.value };
+  if (action.type === 'delivery-popup-tab' && ['batch', 'decisions'].includes(action.value)) return { ...state, deliveryPopupTab: action.value };
   if (action.type === 'filter') {
     const patch = action.filter?.changed && state.mode !== 'edit' ? { ...action.filter, changed: false } : action.filter || {};
     return { ...state, filter: normalizeFilter(state.filter, patch) };

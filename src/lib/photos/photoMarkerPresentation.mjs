@@ -35,11 +35,12 @@ const escapeHtml = (value) => String(value).replace(/&/g, '&amp;').replace(/"/g,
 // Map icons only ever reuse session-owned derived thumbnails, never another URL scheme.
 const safeThumbnailUrl = (url) => typeof url === 'string' && /^(blob:|data:image\/)/.test(url) ? url : null;
 
-export function photoCameraGlyph({ sourceKind = 'unknown', size = 16, selected = false, sibling = false } = {}) {
+export function photoCameraGlyph({ sourceKind = 'unknown', size = 16, selected = false, sibling = false, markerColor = null, mixedDelivery = false } = {}) {
   const source = photoPositionSourcePresentation(sourceKind);
+  const color = markerColor || source.color;
   const ring = selected ? '<circle cx="12" cy="12" r="14" fill="none" stroke="white" stroke-width="4"/><circle cx="12" cy="12" r="14" fill="none" stroke="#172b3a" stroke-width="2"/>'
     : sibling ? `<circle class="photo-sibling-ring" cx="12" cy="12" r="14" fill="none" stroke="white" stroke-width="3"/><circle cx="12" cy="12" r="14" fill="none" stroke="${PHOTO_SIBLING_COLOR}" stroke-width="1.5" stroke-dasharray="3 2.5"/>` : '';
-  return `<svg class="photo-camera-glyph" data-position-source="${source.kind}" aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-linejoin="round">${ring}<path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${source.color}" stroke="white" stroke-width="4"/><path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${source.color}" stroke="#172b3a" stroke-width="1.5"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="white" stroke-width="2"/></svg>`;
+  return `<svg class="photo-camera-glyph" data-position-source="${source.kind}" aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-linejoin="round">${ring}<path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${color}" stroke="white" stroke-width="4"/><path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${color}" stroke="#172b3a" stroke-width="1.5"${mixedDelivery ? ' stroke-dasharray="2 2"' : ''}/><circle cx="12" cy="13" r="3.5" fill="none" stroke="white" stroke-width="2"/></svg>`;
 }
 
 // How far the drawn marker reaches from its anchor, in px, at a heading. The arrow starts behind the marker and its tip clears
@@ -109,12 +110,21 @@ export function photoSourceGlyph(kind, size = 13) {
 }
 
 const stagedDot = (staged) => staged ? '<span class="photo-marker-staged-dot" aria-hidden="true"></span>' : '';
-export const PHOTO_DELIVERY_BADGES = Object.freeze({ 'keep-link': ['↔', 'Behold lenke i GMI'], transfer: ['↗', 'Overfør til GML'],
-  include: ['+', 'Ta med i GML uten GMI-lenke'], 'not-selected': ['−', 'Ikke med uten GMI-lenke'], review: ['!', 'Krever gjennomgang'] });
-export function photoDeliveryBadge(status, batchSelected = false) {
-  const badge = PHOTO_DELIVERY_BADGES[status];
-  return (badge ? `<span class="photo-marker-delivery" data-delivery-status="${status}" aria-hidden="true">${badge[0]}</span>` : '')
-    + (batchSelected ? '<span class="photo-marker-batch" aria-hidden="true">✓</span>' : '');
+export const PHOTO_DELIVERY_COLOURS = Object.freeze({
+  gmi: { color: '#2463b5', label: 'Behold lenke i GMI' },
+  gml: { color: '#19785b', label: 'Til GML' },
+  excluded: { color: '#64748b', label: 'Ikke med i GML' },
+  review: { color: '#b06a08', label: 'Krever gjennomgang' },
+  mixed: { color: '#64748b', label: 'Ulike leveringsvalg' },
+});
+export const PHOTO_DELIVERY_LABELS = Object.freeze({ 'keep-link': 'Behold lenke i GMI', transfer: 'Overf\u00f8r til GML',
+  include: 'Ta med i GML uten GMI-lenke', 'not-selected': 'Ikke med uten GMI-lenke', review: 'Krever gjennomgang' });
+export function photoDeliveryColourState(status) {
+  return ({ 'keep-link': 'gmi', transfer: 'gml', include: 'gml', 'not-selected': 'excluded', review: 'review' })[status] || 'review';
+}
+export function photoStackDeliveryState(members, entries) {
+  const states = new Set(members.map((member) => photoDeliveryColourState(entries?.[member.id]?.status)));
+  return states.size === 1 ? [...states][0] : 'mixed';
 }
 const stackBadge = (count) => count > 1 ? `<span class="photo-marker-stack" aria-hidden="true">${Math.min(count, 99)}</span>` : '';
 const modifierClasses = ({ selected, sibling, staged, editing }) => [selected && 'photo-marker-selected', sibling && 'photo-marker-sibling',
@@ -122,39 +132,42 @@ const modifierClasses = ({ selected, sibling, staged, editing }) => [selected &&
 
 // Photo icons carry no arrow: direction is drawn by photoDirectionMarkerOptions in the lower pane, so a direction
 // change never replaces a photo icon.
-export function cameraMarkerOptions({ sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false } = {}) {
+export function cameraMarkerOptions({ sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false, markerColor = null, mixedDelivery = false } = {}) {
   const modifiers = modifierClasses({ selected, sibling: sibling && !selected, staged, editing });
   return { className: `photo-camera-marker${selected ? ' photo-camera-marker-selected' : ''}${modifiers ? ` ${modifiers}` : ''}`,
     iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -9],
-    html: photoCameraGlyph({ sourceKind, size: selected ? 22 : 16, selected, sibling: sibling && !selected }) + stagedDot(staged) + stackBadge(stackCount) };
+    html: photoCameraGlyph({ sourceKind, size: selected ? 22 : 16, selected, sibling: sibling && !selected, markerColor, mixedDelivery }) + stagedDot(staged) + stackBadge(stackCount) };
 }
 
 const thumbnailFallback = '<svg class="photo-thumb-fallback" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="#e2e8f0" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="#475569" stroke-width="1.5"/></svg>';
 
 export function thumbnailMarkerOptions({ sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false,
-  thumbnailUrl = null } = {}) {
+  thumbnailUrl = null, markerColor = null, markerLabel = null, mixedDelivery = false } = {}) {
   const source = photoPositionSourcePresentation(sourceKind);
   const url = safeThumbnailUrl(thumbnailUrl);
   const image = url ? `<img src="${escapeHtml(url)}" alt="" decoding="async" draggable="false">` : thumbnailFallback;
   const modifiers = modifierClasses({ selected, sibling: sibling && !selected, staged, editing });
-  return { className: `photo-thumb-marker${modifiers ? ` ${modifiers}` : ''}`,
+  return { className: `photo-thumb-marker${mixedDelivery ? ' photo-delivery-mixed' : ''}${modifiers ? ` ${modifiers}` : ''}`,
     iconSize: [PHOTO_THUMBNAIL_SIZE, PHOTO_THUMBNAIL_SIZE], iconAnchor: [PHOTO_THUMBNAIL_SIZE / 2, PHOTO_THUMBNAIL_SIZE / 2], popupAnchor: [0, -24],
-    html: `<div class="photo-thumb" data-position-source="${source.kind}" data-thumbnail="${url ? 'ready' : 'fallback'}" style="--photo-source:${source.color}">${image}</div>`
-      + `<span class="photo-source-dot photo-thumb-source" role="img" aria-label="${photoPositionSourceDescription(source.kind)}" style="--photo-source:${source.color}"></span>`
+    html: `<div class="photo-thumb" data-position-source="${source.kind}" data-thumbnail="${url ? 'ready' : 'fallback'}" style="--photo-source:${markerColor || source.color}">${image}</div>`
+      + `<span class="photo-source-dot photo-thumb-source" role="img" aria-label="${escapeHtml(markerLabel || photoPositionSourceDescription(source.kind))}" style="--photo-source:${markerColor || source.color}"></span>`
       + (editing && selected ? '<span class="photo-thumb-anchor" aria-hidden="true"></span>' : '') + stagedDot(staged) + stackBadge(stackCount) };
 }
 
 export function photoMarkerOptions(mode, options = {}) {
-  const result = mode === 'thumbnails' ? thumbnailMarkerOptions(options) : cameraMarkerOptions(options);
-  return { ...result, html: result.html + photoDeliveryBadge(options.deliveryStatus, options.batchSelected) };
+  const delivery = options.colourMode === 'delivery' ? options.deliveryColourState || photoDeliveryColourState(options.deliveryStatus) : null;
+  const presentation = { ...options, markerColor: delivery ? PHOTO_DELIVERY_COLOURS[delivery].color : null,
+    markerLabel: delivery ? `Planlagt: ${PHOTO_DELIVERY_COLOURS[delivery].label}` : null, mixedDelivery: delivery === 'mixed' };
+  const result = mode === 'thumbnails' ? thumbnailMarkerOptions(presentation) : cameraMarkerOptions(presentation);
+  return { ...result, html: result.html + (options.batchSelected ? '<span class="photo-marker-batch" aria-hidden="true">\u2713</span>' : '') };
 }
 
 // Stable cache key: identical presentation reuses one L.divIcon instance (and DOM-free comparisons).
 export function photoMarkerIconKey(mode, { sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false,
-  thumbnailUrl = null, deliveryStatus = null, batchSelected = false } = {}) {
+  thumbnailUrl = null, deliveryStatus = null, batchSelected = false, colourMode = 'provenance', deliveryColourState = null } = {}) {
   return JSON.stringify([mode === 'thumbnails' ? 't' : 'm', photoPositionSourcePresentation(sourceKind).kind, Boolean(selected),
     Boolean(staged), Boolean(sibling && !selected), stackCount > 1 ? Math.min(stackCount, 99) : 1, Boolean(editing),
-    mode === 'thumbnails' ? safeThumbnailUrl(thumbnailUrl) : null, deliveryStatus, Boolean(batchSelected)]);
+    mode === 'thumbnails' ? safeThumbnailUrl(thumbnailUrl) : null, deliveryStatus, Boolean(batchSelected), colourMode, deliveryColourState]);
 }
 
 // One non-interactive arrow per placed occurrence, in the direction pane at the photo's own lat/lng. The icon has no

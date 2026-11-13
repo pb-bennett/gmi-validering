@@ -2,7 +2,7 @@
 
 import { CameraIcon, ImageSquareIcon } from '@phosphor-icons/react';
 import './photoTheme.css';
-import { PHOTO_POSITION_SOURCES, PHOTO_THUMBNAIL_MIN_ZOOM, photoCameraGlyph, photoLegendArrow, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { PHOTO_DELIVERY_COLOURS, PHOTO_POSITION_SOURCES, PHOTO_THUMBNAIL_MIN_ZOOM, photoCameraGlyph, photoLegendArrow, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 
 const MODES = [['markers', 'Markører', CameraIcon], ['thumbnails', 'Miniatyrer', ImageSquareIcon]];
 
@@ -29,34 +29,33 @@ export function PhotoMapDisplayModes({ mode, onModeChange, zoom }) {
 }
 
 // Map-local display control and legend for the workspace FOTO layer.
-export default function PhotoMapDisplayCard({ mode, onModeChange, zoom, editing = false, deliveryMode = false }) {
+export default function PhotoMapDisplayCard({ mode, onModeChange, zoom, editing = false, colourMode = 'provenance', onColourModeChange }) {
   return (
     <section aria-label="Bilder på kartet" className="photo-map-display-card gmi-elevated-surface absolute bottom-20 right-4 z-1000 rounded-lg px-3 py-2 text-gmi-text">
       <h2 className="mb-1.5 text-xs font-semibold">Bilder på kartet</h2>
       <PhotoMapDisplayModes mode={mode} onModeChange={onModeChange} zoom={zoom} />
-      <h3 className="text-xs font-semibold">Plasseringskilde</h3>
+      <label className="photo-map-colour-switch">Farge etter
+        <select className="gmi-focus-ring" aria-label="Farge etter" value={colourMode} onChange={(event) => onColourModeChange?.(event.target.value)}>
+          <option value="provenance">Plasseringskilde</option><option value="delivery">Leveringsvalg</option>
+        </select>
+      </label>
       <ul className="photo-map-display-legend">
-        {PHOTO_POSITION_SOURCES.map(({ kind, label, color }) => (
+        {colourMode === 'provenance' ? PHOTO_POSITION_SOURCES.map(({ kind, label, color }) => (
           <li key={kind} data-legend-source={kind}>
             {photoThumbnailsVisible(mode, zoom)
               ? <span className="photo-map-display-swatch"><span className="photo-source-dot" style={{ '--photo-source': color }} /></span>
               : <span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ sourceKind: kind, size: 16 }) }} />}
             <span>{label}</span>
           </li>
-        ))}
+        )) : Object.entries(PHOTO_DELIVERY_COLOURS).map(([key, value]) => <li key={key} data-legend-delivery={key}>
+          <span className="photo-source-dot" style={{ '--photo-source': value.color, borderStyle: key === 'mixed' ? 'dashed' : 'solid' }} />
+          <span>{value.label}</span></li>)}
         <li data-legend="direction"><span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoLegendArrow() }} /><span>Retning</span></li>
         <li data-legend="selected"><span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ sourceKind: 'unknown', size: 14, selected: true }) }} /><span>Valgt</span></li>
         <li data-legend="sibling"><span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ sourceKind: 'unknown', size: 14, sibling: true }) }} /><span>Samme bilde</span></li>
         {editing && <li data-legend="staged"><span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoLegendArrow({ staged: true }) }} /><span>Endret</span></li>}
       </ul>
-      <details open={deliveryMode || undefined} className="photo-delivery-legend-details">
-      <summary className="gmi-focus-ring text-xs font-semibold">Leveringsvalg · planlagt</summary>
-      <ul className="photo-map-display-legend photo-delivery-legend">
-        <li><span>↔</span>Behold lenke i GMI</li><li><span>↗</span>Overfør til GML</li>
-        <li><span>+</span>Med i GML uten GMI-lenke</li><li><span>−</span>Ikke med uten GMI-lenke</li>
-        <li><span>!</span>Krever gjennomgang</li><li><span>✓</span>Valgt for samlet levering</li>
-      </ul>
-      </details>
+
     </section>
   );
 }

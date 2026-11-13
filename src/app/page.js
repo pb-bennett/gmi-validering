@@ -959,6 +959,8 @@ export default function Home() {
                   <MapView onZoomChange={setZoomLevel} onOpenPhoto={(layerId, photoId, opener) => openPhotoLayer(layerId, opener, photoId)}
                     photoWorkspace={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId, activeAssetId: activeWorkspacePhoto?.assetId || null,
                       photos: effectiveWorkspacePhotos, visibleIds: workspaceView.visibleIds, displayMode: photoMapDisplay, onDisplayModeChange: setPhotoMapDisplay,
+                      colourMode: photoWorkspace.colourMode, onColourModeChange: (value) => dispatchPhotoWorkspace({ type: 'map-colour', value }),
+                      deliveryPopupTab: photoWorkspace.deliveryPopupTab, onDeliveryPopupTabChange: (value) => dispatchPhotoWorkspace({ type: 'delivery-popup-tab', value }),
                       delivery: workspaceDelivery, deliveryMode: photoWorkspace.mode === 'delivery', deliveryIds: photoWorkspace.deliveryIds,
                       onToggleDelivery: (photoId) => dispatchPhotoWorkspace({ type: 'toggle-delivery', photoId }),
                       zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null } : null}
