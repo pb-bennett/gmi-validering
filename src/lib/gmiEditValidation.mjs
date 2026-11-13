@@ -82,9 +82,30 @@ export function gmiEditObjectDiagnostics({ view, scope, sourceIndex, rows, draft
  * Call with the checked correction's actual cell values, not skipped form requests.
  */
 export function gmiEditObjectReviewErrors({ view, scope, sourceIndex, rows, values }) {
+  return gmiEditObjectReviewConsequences({ view, scope, sourceIndex, rows, values }).newErrors;
+}
+
+/** G8: the same comparison, also reporting new SJEKK and current findings the correction resolves.
+ * Cross-object (deferred) rules are never reported as resolved locally.
+ */
+export function gmiEditObjectReviewConsequences({ view, scope, sourceIndex, rows, values }) {
   const context = { view, scope, sourceIndex, rows };
-  const current = gmiEditObjectDiagnostics(context).findings;
-  const existing = new Set(current.filter((finding) => finding.state === 'FAIL' && finding.transition !== 'resolved').map((finding) => finding.key));
-  return gmiEditObjectDiagnostics({ ...context, drafts: values }).findings
-    .filter((finding) => finding.state === 'FAIL' && finding.transition !== 'resolved' && !existing.has(finding.key));
+  const current = gmiEditObjectDiagnostics(context).findings.filter((finding) => finding.transition !== 'resolved');
+  const after = gmiEditObjectDiagnostics({ ...context, drafts: values });
+  const proposed = after.findings.filter((finding) => finding.transition !== 'resolved');
+  const proposedKeys = new Set(proposed.map((finding) => finding.key));
+  // Per-severity comparison, as before: a finding that escalates from SJEKK to FEIL counts as a new FEIL.
+  const introduced = (state) => {
+    const before = new Set(current.filter((finding) => finding.state === state).map((finding) => finding.key));
+    return proposed.filter((finding) => finding.state === state && !before.has(finding.key));
+  };
+  const gone = current.filter((finding) => !proposedKeys.has(finding.key) && !(after.deferredRuleIds || []).includes(finding.ruleId));
+  const dependency = (finding) => finding.key.startsWith(`${finding.ruleId}|dependency|`);
+  return {
+    newErrors: introduced('FAIL'),
+    newChecks: introduced('CHECK'),
+    // Rule findings that disappear; «cannot be assessed» dependency notes are counted separately.
+    resolved: gone.filter((finding) => !dependency(finding)),
+    unblocked: gone.filter(dependency).length,
+  };
 }

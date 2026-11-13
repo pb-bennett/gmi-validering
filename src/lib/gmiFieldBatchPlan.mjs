@@ -3,7 +3,8 @@ import { createGmiBatchCorrection, createGmiFieldChangeSet, getGmiEditCell, gmiS
   dryRunGmiChangeSet, isCurrentGmiDryRun, gmiCellKey, listGmiObjectCells, resolveGmiCell } from './gmi-edit/index.mjs';
 import { isGmiMissingLexeme as missing } from './gmi-edit/changeSet.mjs';
 import { gmiSessionEffectiveCells } from './gmi-edit/session.mjs';
-import { checkGmiFieldDraft, describeGmiEditColumns, gmiEditColumnPolicy } from './gmiEditFields.mjs';
+import { checkGmiFieldDraft, describeGmiEditColumns, gmiEditColumnPolicy, gmiLinkedTemaChangeSetComplete,
+  gmiLinkedTemaPair } from './gmiEditFields.mjs';
 import { gmiEditObjectDiagnostics } from './gmiEditValidation.mjs';
 import { buildGmiBatchSelection, canManuallySelectGmiBatchRow, prepareGmiBatchReview } from './gmiEditBatchView.mjs';
 import { gmiSelectionTargets } from './gmiBatchInspectorView.mjs';
@@ -108,10 +109,8 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
   if (columns.length !== 1 || column.bindingState === 'AMBIGUOUS') return reject('field-binding-unresolved');
   const linked = column.linkedSourceKeys.length > 0;
   const sourceKeys = linked ? column.linkedSourceKeys : [sourceKey];
-  if (linked && (sourceKeys.length !== 2 || sourceKeys.some(key => {
-    const matches = describeGmiEditColumns(view, scope).columns.filter(entry => entry.sourceKey === key);
-    return matches.length !== 1 || !matches[0].editable || matches[0].operationKind !== 'linked-tema';
-  }))) return reject('field-binding-unresolved');
+  if (linked && (!gmiLinkedTemaPair(view, scope)?.ok
+    || gmiLinkedTemaPair(view, scope).keys.some((key, index) => key !== sourceKeys[index]))) return reject('field-binding-unresolved');
   let targets = options.targets;
   if (targets !== undefined && !Array.isArray(targets)) return reject('invalid-targets');
   if (selection) {
@@ -249,7 +248,7 @@ export function buildGmiFieldBatch(session, preview, { included, replace = false
     }))), mode: preview.mode, conflictPolicy: replace ? 'replace' : 'skip', createdAt, intent,
       label: `${labelPrefix || `${preview.operation === 'set' ? 'Sett' : 'Fyll'} Tema ${preview.lexeme}`} · ${gmiObjectCountLabel(allowed.length, preview.scope)}` });
     // Fail closed if the lower-level builder cannot account for every approved cell.
-    if (result.ok && (result.changeSet.skipped.length || result.changeSet.cells.length + result.changeSet.unchanged.length !== allowed.length * 2))
+    if (result.ok && (result.changeSet.skipped.length || !gmiLinkedTemaChangeSetComplete(result.changeSet, preview.sourceKeys, allowed.length)))
       return reject('linked-tema-incomplete');
   } else {
     // This branch is reachable only for G1's generic operationKind. Hydraulic

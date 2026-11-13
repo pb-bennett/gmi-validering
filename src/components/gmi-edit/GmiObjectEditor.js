@@ -7,14 +7,16 @@ import { createGmiObjectCorrection, listGmiObjectCells } from '@/lib/gmi-edit/in
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
   describeGmiObject, gmiEditFieldPolicy, gmiEditMessage, gmiLexemeSegments, gmiObjectContext,
-  gmiObjectCorrectionLabel, gmiSkipReasonLabel, planGmiObjectForm,
+  gmiLinkedTemaGroup, gmiObjectCorrectionLabel, gmiSkipReasonLabel, planGmiObjectForm,
 } from '@/lib/gmiEditView.mjs';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import useGmiObjectValidation from './useGmiObjectValidation';
 import GmiSeverityIcon, { GMI_SEVERITY_ICONS, gmiFindingTone } from './GmiSeverityIcon';
 import GmiFieldValueInput from './GmiFieldValueInput';
-import { describeGmiEditColumns } from '@/lib/gmiEditFields.mjs';
-import { gmiEditObjectReviewErrors } from '@/lib/gmiEditValidation.mjs';
+import { describeGmiEditColumns, gmiLinkedTemaChangeSetComplete, gmiLinkedTemaPair } from '@/lib/gmiEditFields.mjs';
+import { gmiEditObjectReviewConsequences } from '@/lib/gmiEditValidation.mjs';
+
+const PHOTO_TEMA_WARNING = 'FOTO bruker Tema fra originalfilen. Endringen påvirker ikke automatisk bildegrupperingen.';
 
 function FindingIcon({ finding }) {
   const tone = gmiFindingTone(finding);
@@ -101,7 +103,9 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
   const editableRows = useMemo(() => (rows ? rows.filter((row) => row.editable) : []), [rows]);
   // No optional chains inside memo bodies (React Compiler dependency inference).
   const encodingClass = view && view.document ? view.document.encoding.encodingClass : null;
-  const plan = useMemo(() => planGmiObjectForm(editableRows, drafts, encodingClass), [editableRows, drafts, encodingClass]);
+  // G8: an accepted Tema/S_FCODE pair is one logical field; neither physical column is editable alone.
+  const linked = useMemo(() => (rows && view && view.document ? gmiLinkedTemaGroup(rows, gmiLinkedTemaPair(view, scope)) : null), [rows, view, scope]);
+  const plan = useMemo(() => planGmiObjectForm(editableRows, drafts, encodingClass, linked), [editableRows, drafts, encodingClass, linked]);
   const dirty = plan.edited.length > 0;
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
@@ -126,6 +130,9 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
 
   const setDraft = (field, value) => { setMessage(null); setDrafts((current) => ({ ...current, [field]: value })); };
   const clearDraft = (field) => setDrafts((current) => { const next = { ...current }; delete next[field]; return next; });
+  // Both physical drafts always change together, so the planner and object check see the pair.
+  const setLinkedDraft = (value) => { setMessage(null); setDrafts((current) => ({ ...current, ...Object.fromEntries(linked.keys.map((key) => [key, value])) })); };
+  const clearLinkedDraft = () => setDrafts((current) => { const next = { ...current }; linked.keys.forEach((key) => delete next[key]); return next; });
   const resetForm = () => { setDrafts({}); setAllowOverwrite(false); setAllowReplace(false); setReview(null); setMessage(null); };
 
   const buildReview = () => {
@@ -145,13 +152,23 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
       setMessage({ tone: 'error', text: [...new Set(result.rejections.map((rejection) => gmiEditMessage(rejection.code)))].join(' ') });
       return;
     }
-    const newErrors = gmiEditObjectReviewErrors({ view, scope, sourceIndex, rows,
+    // G8: a linked request is complete (both cells changed or unchanged, same value) or nothing is reviewed.
+    const linkedRequested = Boolean(linked) && linked.keys.some((key) => Object.hasOwn(plan.values, key));
+    if (linkedRequested && (!linked.editable || !linked.keys.every((key) => Object.hasOwn(plan.values, key))
+      || !gmiLinkedTemaChangeSetComplete(result.changeSet, linked.keys, 1))) {
+      setMessage({ tone: 'error', text: gmiEditMessage('linked-tema-incomplete') });
+      return;
+    }
+    const consequences = gmiEditObjectReviewConsequences({ view, scope, sourceIndex, rows,
       values: Object.fromEntries(result.changeSet.cells.map((cell) => [cell.field, cell.next])) });
-    setReview({ changeSet: result.changeSet, stateKey: session.stateKey, newErrors, allowNewErrors: false });
+    const linkedChanged = linkedRequested && result.changeSet.cells.some((cell) => linked.keys.includes(cell.field));
+    setReview({ changeSet: result.changeSet, stateKey: session.stateKey, ...consequences, allowNewErrors: false,
+      linked: linkedChanged ? { keys: linked.keys, value: plan.values[linked.primary] } : null, allowLinked: false });
   };
 
+  const reviewBlocked = (candidate) => (candidate.newErrors.length > 0 && !candidate.allowNewErrors) || (candidate.linked && !candidate.allowLinked);
   const stage = () => {
-    if (!editable || !review || reviewStale || (review.newErrors.length > 0 && !review.allowNewErrors)) return;
+    if (!editable || !review || reviewStale || reviewBlocked(review)) return;
     focusMessage.current = true;
     const result = gmiEditSessions.stage(view.handle, review.changeSet);
     if (!result.ok) {
@@ -165,6 +182,54 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
       setMessage({ tone: 'ok', text: `Rettingen er lagt til (${applied} felt). Den er ikke lastet ned ennå.`, changeSet: review.changeSet });
       onStaged?.(review.changeSet);
     } else setMessage({ tone: 'info', text: 'Ingen verdier ble endret, så ingen retting ble lagt til.' });
+  };
+
+  // G8: one logical Tema row. Both physical values are shown; one control edits both drafts.
+  const linkedRow = (row) => {
+    const draft = Object.hasOwn(drafts, linked.primary) ? drafts[linked.primary] : undefined;
+    const editing = draft !== undefined && linked.members.some((member) => member.proposed !== draft);
+    const problem = plan.problems[linked.primary];
+    const inputId = `gmi-edit-${scope}-${sourceIndex}-${row.position ?? row.field}`;
+    const findings = validation.findings.filter((finding) => finding.fields.some((field) => linked.keys.includes(field)));
+    const restorable = !editing && linked.changed && !linked.originalDisagreement;
+    return <tr key={`linked:${linked.label}`} data-field={linked.primary} data-gmi-linked-tema-row={linked.label}
+      data-state={editing ? 'draft' : linked.changed ? 'proposed' : undefined}>
+      <th scope="row">
+        <span className="gmi-edit-field-heading">
+          <label htmlFor={linked.editable && editable ? inputId : undefined} className="gmi-edit-field-name">Tema</label>
+          {findings.map((finding) => <FindingIcon key={`${finding.key}:${finding.transition}`} finding={finding} />)}
+        </span>
+        <span className="gmi-edit-muted">{linked.label}</span>
+      </th>
+      <td><span className="gmi-edit-linked-values" data-gmi-linked-original>
+        {linked.members.map((member) => <span key={member.field} data-gmi-linked-physical={member.field}>
+          <span className="gmi-edit-muted">{member.field}</span> <Lexeme value={member.original} /></span>)}
+      </span></td>
+      <td>
+        {linked.editable && editable ? <div className="gmi-edit-input-cell">
+          <GmiFieldValueInput variant="object" domain={linked.domain} id={inputId} value={draft ?? linked.proposed ?? ''}
+            strictListed emptyLabel="Velg Tema…" aria-invalid={problem ? true : undefined}
+            aria-describedby={[`${inputId}-linked`, problem ? `${inputId}-problem` : null].filter(Boolean).join(' ')}
+            className={`gmi-edit-input${editing ? ' gmi-edit-input-draft' : ''}${linked.changed && !editing ? ' gmi-edit-input-proposed' : ''}`}
+            onChange={setLinkedDraft} />
+          {editing && <PhotoIconButton icon={ArrowCounterClockwiseIcon} size={14} label="Angre skrivingen i Tema" tooltip="Angre skrivingen" onClick={clearLinkedDraft} />}
+          {restorable && <button type="button" className="gmi-edit-link" onClick={() => setLinkedDraft(linked.original)}>Bruk original</button>}
+        </div> : <span className="gmi-edit-readonly" title={linked.reason ? gmiEditMessage(linked.reason) : undefined}>
+          {linked.reason && linked.reason !== 'document-not-editable' && <span className="gmi-edit-reason"><LockSimpleIcon size={12} aria-hidden="true" /> {gmiEditMessage(linked.reason)}</span>}
+        </span>}
+        {(linked.changed || linked.disagreement) && <span className="gmi-edit-linked-values" data-gmi-linked-effective>
+          {linked.members.map((member) => <span key={member.field} data-gmi-linked-current={member.field}>
+            <span className="gmi-edit-muted">{member.field} nå</span> <Lexeme value={member.proposed} /></span>)}
+        </span>}
+        {linked.disagreement && !editing && <span className="gmi-edit-badge gmi-edit-badge-warning" data-gmi-linked-disagreement>Ulike verdier</span>}
+        {editing && <span className="gmi-edit-state-pill">Ikke lagt til</span>}
+        {!editing && linked.changed && <span className="gmi-edit-state-pill gmi-edit-state-pill-proposed">Foreslått{linked.history.length ? ` · ${linked.history.at(-1).changeSetId}` : ''}</span>}
+        {!editing && linked.changed && linked.history.length > 0 && <button type="button" className="gmi-edit-link" onClick={() => onShowChangeSet?.(linked.history.at(-1).changeSetId)}>Vis retting</button>}
+        <span id={`${inputId}-linked`} className="gmi-edit-muted gmi-edit-linked-note" data-gmi-linked-note>Tema og S_FCODE oppdateres sammen med samme kode.</span>
+        {editing && <span className="gmi-edit-muted gmi-edit-linked-note" role="note" data-gmi-photo-tema-warning>{PHOTO_TEMA_WARNING}</span>}
+        {problem && <span id={`${inputId}-problem`} className="gmi-edit-problem" role="alert">{problem}</span>}
+      </td>
+    </tr>;
   };
 
   return <div className="gmi-edit-editor" data-gmi-object={`${scope}:${sourceIndex}`}>
@@ -190,8 +255,30 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
           <td><Lexeme value={cell.next} />
             {cell.overwritesPopulated && <span className="gmi-edit-badge gmi-edit-badge-warning">Overskriver verdi</span>}
             {cell.overwrote && <span className="gmi-edit-badge">Erstatter {cell.overwrote.changeSetId}</span>}</td>
+        </tr>)}
+        {review.linked && review.changeSet.unchanged.filter((cell) => review.linked.keys.includes(cell.field)).map((cell) => <tr key={cell.key} data-gmi-linked-unchanged={cell.field}>
+          <th scope="row">{cell.field}</th>
+          <td><Lexeme value={cell.current} /></td>
+          <td><Lexeme value={cell.current} /> <span className="gmi-edit-badge">Allerede riktig</span></td>
         </tr>)}</tbody>
       </table> : <p className="gmi-edit-note">Ingen verdier ville blitt endret.</p>}
+      {review.linked && <div className="gmi-edit-linked-review" data-gmi-linked-review>
+        <p>Tema og S_FCODE får samme verdi i én retting. Angre og Gjør om gjelder begge feltene.</p>
+        <p className="gmi-edit-muted" role="note" data-gmi-photo-tema-warning>{PHOTO_TEMA_WARNING}</p>
+        {review.resolved.length > 0 && <div data-gmi-resolved-findings>
+          <p>Løser {review.resolved.length} funn i Validator:</p>
+          <ul className="gmi-edit-review-errors">{review.resolved.map((finding) => <li key={finding.key}>{finding.state === 'FAIL' ? 'FEIL' : 'SJEKK'}: {finding.reason}</li>)}</ul>
+        </div>}
+        {review.newChecks.length > 0 && <div data-gmi-new-checks>
+          <p className="gmi-edit-problem">Forslaget gir {review.newChecks.length} nye SJEKK i Validator.</p>
+          <ul className="gmi-edit-review-errors">{review.newChecks.map((finding) => <li key={finding.key}>{finding.reason}</li>)}</ul>
+        </div>}
+        {review.unblocked > 0 && <p className="gmi-edit-muted" data-gmi-unblocked-checks>{review.unblocked} kontroller som var avhengige av Tema, kan nå vurderes.</p>}
+        {!review.resolved.length && !review.newChecks.length && !review.newErrors.length && <p className="gmi-edit-muted">Validator finner ingen nye eller løste funn for objektet.</p>}
+        <label className="gmi-edit-confirm"><input type="checkbox" data-gmi-linked-confirm checked={review.allowLinked}
+          onChange={(event) => setReview({ ...review, allowLinked: event.target.checked })} />
+          <span>Sett både Tema og S_FCODE til «{review.linked.value}»</span></label>
+      </div>}
       {review.changeSet.skipped.length > 0 && <div className="gmi-edit-skipped" role="note">
         <WarningIcon size={14} aria-hidden="true" /> Hoppes over: {review.changeSet.skipped.map((cell) => `${cell.field} (${gmiSkipReasonLabel(cell.reason).toLowerCase()})`).join(', ')}
       </div>}
@@ -204,7 +291,7 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
       </div>}
       <div className="gmi-edit-actions">
         <button type="button" className={control} onClick={() => setReview(null)}>Tilbake</button>
-        <button type="button" className={primary} disabled={!review.changeSet.cells.length || (review.newErrors.length > 0 && !review.allowNewErrors)} onClick={stage}>Legg til retting</button>
+        <button type="button" className={primary} disabled={!review.changeSet.cells.length || reviewBlocked(review)} onClick={stage}>Legg til retting</button>
       </div>
     </section> : <form className="gmi-edit-form" onSubmit={(event) => { event.preventDefault(); buildReview(); }} aria-label={`Felt for ${title}`}>
       {reviewStale && <p className="gmi-edit-message" data-tone="warning" role="status">{gmiEditMessage('stale-change-set')}</p>}
@@ -213,6 +300,7 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
         <tbody>
           {(rows || Object.entries(object.attributes || {}).filter(([field]) => field !== '').map(([field, value]) => ({ field, label: fieldLabel(field), editable: false, reason: null, original: value === null ? '' : String(value), proposed: null, parsed: true })))
             .map((row) => {
+              if (linked && linked.keys.includes(row.field)) return row === rows.find((entry) => linked.keys.includes(entry.field)) ? linkedRow(row) : null;
               const draft = Object.hasOwn(drafts, row.field) ? drafts[row.field] : undefined;
               const editing = draft !== undefined && draft !== row.proposed;
               const problem = plan.problems[row.field];

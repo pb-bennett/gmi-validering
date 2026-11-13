@@ -145,6 +145,11 @@
 .gmi-edit-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .gmi-edit-review { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--gmi-interactive); border-radius: 8px; background: #f7fcfd; }
 .gmi-edit-review h3 { font-size: 13px; font-weight: 600; color: var(--gmi-navy); }
+/* G8: linked Tema/S_FCODE in the object form. */
+.gmi-edit-linked-values { display: grid; gap: 1px; font-size: 11px; }
+.gmi-edit-linked-note { display: block; margin-top: 2px; font-size: 11px; }
+.gmi-edit-linked-review { display: grid; gap: 6px; }
+.gmi-edit-linked-review p { margin: 0; }
 
 /* Dialogs. */
 .gmi-edit-dialog { margin: auto; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 20px; border: 1px solid #c4ced8; border-radius: 8px; background: white; color: #24364b; font-size: 13px; }

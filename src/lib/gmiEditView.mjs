@@ -117,6 +117,11 @@ const MESSAGES = Object.freeze({
   'object-identity-mismatch': 'Objektets nummer eller GUID stemmer ikke med filen.',
   'duplicate-target': 'Samme felt er oppgitt flere ganger.',
   'stale-change-set': 'Rettingene ble endret i mellomtiden. Se gjennom endringen på nytt.',
+  // G8 linked Tema/S_FCODE in the object editor.
+  'linked-tema-split': 'Tema og S_FCODE må rettes sammen og få samme verdi.',
+  'linked-tema-incomplete': 'Tema og S_FCODE kan ikke rettes sammen sikkert for dette objektet. Ingen av feltene ble endret.',
+  'field-binding-unresolved': 'Det er ikke entydig hvilke kolonner som er Tema. Feltet kan ikke rettes sikkert.',
+  'value-out-of-domain': 'Velg en verdi fra kodelisten for objekttypen.',
   'foreign-change-set': 'Endringen hører til en annen rettingsøkt.',
   'document-mismatch': 'Endringen hører til en annen fil.',
   'already-staged': 'Endringen er allerede lagt til.',
@@ -287,9 +292,11 @@ export function gmiLexemeSegments(lexeme) {
  *   'overwrite' mode required). `needsReplace`: fields already changed by an
  *   earlier ChangeSet (M2 'replace' conflict policy required).
  */
-export function planGmiObjectForm(rows, drafts, encodingClass) {
+export function planGmiObjectForm(rows, drafts, encodingClass, linked = null) {
   const values = {}, problems = {}, edited = [], needsOverwrite = [], needsReplace = [];
+  const linkedKeys = linked ? linked.keys : [];
   for (const row of rows) {
+    if (linkedKeys.includes(row.field)) continue;
     if (!Object.hasOwn(drafts, row.field)) continue;
     const draft = drafts[row.field];
     if (draft === row.proposed) continue;
@@ -300,6 +307,30 @@ export function planGmiObjectForm(rows, drafts, encodingClass) {
     if (!gmiLexemeMissing(row.original)) needsOverwrite.push(row.field);
     if (row.touched) needsReplace.push(row.field);
   }
+  // G8: one logical Tema value is always requested for both physical columns.
+  // A no-op partner stays in `values` so the ChangeSet accounts for it as unchanged.
+  if (linked && linkedKeys.some((key) => Object.hasOwn(drafts, key))) {
+    const { primary, members } = linked;
+    const draft = drafts[primary];
+    if (linkedKeys.some((key) => !Object.hasOwn(drafts, key) || drafts[key] !== draft)) {
+      edited.push(primary); problems[primary] = gmiEditMessage('linked-tema-split');
+    } else if (!linked.editable) {
+      edited.push(primary); problems[primary] = gmiEditMessage(linked.reason);
+    } else if (members.some((member) => member.proposed !== draft)) {
+      edited.push(primary);
+      const check = checkGmiFieldDraft({ domain: linked.domain }, draft, encodingClass,
+        { restrictEnumeration: true, normalizeCase: false, currentLexeme: linked.originalDisagreement ? undefined : linked.original });
+      if (!check.ok) problems[primary] = gmiLexemeProblem(check.problem, draft);
+      else {
+        for (const member of members) {
+          values[member.field] = draft;
+          if (member.proposed !== draft && !gmiLexemeMissing(member.original)) needsOverwrite.push(member.field);
+          // Any earlier correction of either cell is a conflict for the whole logical field (G8 policy).
+          if (member.touched) needsReplace.push(member.field);
+        }
+      }
+    }
+  }
   return Object.freeze({
     values: Object.freeze(values),
     edited: Object.freeze(edited),
@@ -307,6 +338,39 @@ export function planGmiObjectForm(rows, drafts, encodingClass) {
     needsOverwrite: Object.freeze(needsOverwrite),
     needsReplace: Object.freeze(needsReplace),
     valid: edited.length > 0 && Object.keys(problems).length === 0,
+  });
+}
+
+/**
+ * G8: one logical Tema field over the object's physical Tema/S_FCODE rows.
+ * @param {Array} rows all cell views of the object (editable or not)
+ * @param {object|null} pair result of `gmiLinkedTemaPair` for the object's scope
+ * @returns {null|object} null when the schema has no pair; otherwise the group,
+ *   `editable: false` with a reason when either cell is missing, unsafe or ambiguous.
+ */
+export function gmiLinkedTemaGroup(rows, pair) {
+  if (!pair) return null;
+  const keys = pair.keys;
+  const members = keys.map((key) => (rows || []).filter((row) => row.field === key));
+  const unique = members.every((matches) => matches.length === 1);
+  const resolved = unique ? members.map(([row]) => row) : [];
+  const blocked = !pair.ok ? pair.code : !unique ? 'linked-tema-incomplete'
+    : resolved.find((row) => !row.editable)?.reason || (resolved.some((row) => !row.editable) ? 'linked-tema-incomplete' : null);
+  const proposedValues = new Set(resolved.map((row) => row.proposed));
+  const originalValues = new Set(resolved.map((row) => row.original));
+  // One entry per ChangeSet, oldest first (ids are the session's sequential `cs-N`).
+  const sequence = (entry) => Number(String(entry.changeSetId).replace(/\D/g, '')) || 0;
+  const history = [...new Map(resolved.flatMap((row) => row.history || []).map((entry) => [entry.changeSetId, entry])).values()]
+    .sort((a, b) => sequence(a) - sequence(b));
+  return Object.freeze({
+    keys, primary: keys[0], label: keys.join(' + '), members: Object.freeze(resolved),
+    editable: !blocked, reason: blocked,
+    domain: resolved[0]?.domain || pair.columns?.[0]?.domain || null,
+    proposed: proposedValues.size === 1 ? resolved[0].proposed : null,
+    original: originalValues.size === 1 ? resolved[0].original : null,
+    disagreement: proposedValues.size > 1, originalDisagreement: originalValues.size > 1,
+    changed: resolved.some((row) => row.changed), touched: resolved.some((row) => row.touched),
+    history: Object.freeze(history),
   });
 }
 

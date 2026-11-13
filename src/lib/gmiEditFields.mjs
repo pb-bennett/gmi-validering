@@ -67,6 +67,44 @@ export function describeGmiEditColumns(view, scope) {
   return result;
 }
 
+/**
+ * G8: the accepted Tema/S_FCODE pair of one geometry scope, shared by the batch
+ * planner and the individual object editor. `null` when the schema has no pair;
+ * fails closed unless exactly two unique, editable, linked columns are bound.
+ */
+export function gmiLinkedTemaPair(view, scope) {
+  const { columns } = describeGmiEditColumns(view, scope);
+  const claimed = columns.find((column) => column.linkedSourceKeys.length > 0);
+  if (!claimed) return null;
+  const keys = claimed.linkedSourceKeys;
+  const bound = keys.map((key) => columns.filter((column) => column.sourceKey === key));
+  if (keys.length !== 2 || new Set(keys).size !== 2 || bound.some((matches) => matches.length !== 1
+    || !matches[0].editable || matches[0].operationKind !== 'linked-tema' || matches[0].bindingState === 'AMBIGUOUS')) {
+    return Object.freeze({ ok: false, code: 'field-binding-unresolved', keys });
+  }
+  return Object.freeze({ ok: true, keys, columns: Object.freeze(bound.map(([column]) => column)) });
+}
+
+/**
+ * Fail-closed check of a built ChangeSet: every linked physical cell of the
+ * `objectCount` objects is accounted for as changed or unchanged (never
+ * skipped), and both cells of each object end with the same lexeme.
+ */
+export function gmiLinkedTemaChangeSetComplete(changeSet, keys, objectCount) {
+  const linked = (cell) => keys.includes(cell.field);
+  if (!changeSet || changeSet.skipped.some(linked)) return false;
+  const results = [...changeSet.cells.filter(linked).map((cell) => [cell, cell.next]),
+    ...changeSet.unchanged.filter(linked).map((cell) => [cell, cell.current])];
+  if (results.length !== keys.length * objectCount) return false;
+  const byObject = new Map();
+  for (const [cell, lexeme] of results) {
+    const key = `${cell.scope}:${cell.sourceIndex}`;
+    byObject.set(key, [...(byObject.get(key) || []), [cell.field, lexeme]]);
+  }
+  return byObject.size === objectCount && [...byObject.values()].every((entries) => entries.length === keys.length
+    && new Set(entries.map(([field]) => field)).size === keys.length && new Set(entries.map(([, lexeme]) => lexeme)).size === 1);
+}
+
 /** Strict listed lexemes; comparison metadata never admits alternative spellings.
  * currentLexeme explicitly permits keeping an unchanged delivered value.
  * Format hints do not restrict dates, numbers, years or free text.
