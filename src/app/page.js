@@ -15,6 +15,8 @@ import { canRedoPhotoEdit, canUndoPhotoEdit, changedPhotoIds, effectivePhoto, em
   photoEditReducer } from '@/lib/photos/photoEditSession.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { photoStackMembers } from '@/lib/photos/photoStacks.mjs';
+import { photoDeliveryStatusText, togglePhotoDelivery } from '@/lib/photos/photoDeliveryChoice.mjs';
+import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
 import { photoExportConfigFor, reconcilePhotoExportConfig, updatePhotoExportConfig } from '@/lib/photos/photoExportConfig.mjs';
 import { createPhotoExportFlow, photoExportFlowFilter, photoExportFlowIsLive, photoExportFlowProgress } from '@/lib/photos/photoExportFlow.mjs';
 import { ignoreFollowUpClick } from '@/components/photos/photoFollowUpClick';
@@ -185,6 +187,7 @@ export default function Home() {
   // Non-drag move for crowded places: the next map click moves the selected placed photo. Bound to one occurrence.
   const [photoClickMoveId, setPhotoClickMoveId] = useState(null);
   const [photoAnnouncement, setPhotoAnnouncement] = useState('');
+  const [photoDeliveryAnnouncement, setPhotoDeliveryAnnouncement] = useState('');
   const [photoPanRequest, setPhotoPanRequest] = useState(null);
   const notifyPhoto = (text, tone = 'success', action = null) => setPhotoNotice({ id: `${Date.now()}-${Math.random()}`, text, tone, action });
   const dismissPhotoNotice = (id) => setPhotoNotice((notice) => notice?.id === id ? null : notice);
@@ -210,6 +213,18 @@ export default function Home() {
     [effectiveWorkspacePhotos, photoWorkspace, changedIds, workspaceDelivery]);
   const activeWorkspacePhoto = effectiveWorkspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
   const activeSiblings = activeWorkspacePhoto ? effectiveWorkspacePhotos.filter((photo) => photo.assetId === activeWorkspacePhoto.assetId) : [];
+  // Delivery planning («Fordel bilder til GMI/GML») and the inspector toggle: every change is one occurrence's M8 decision,
+  // written at once through the session. Nothing is exported or changed in the GMI or photographs here.
+  const reportDeliveryChange = (photoId, result) => {
+    if (!result?.ok) { notifyPhoto(result?.reason || 'Valget kunne ikke lagres fordi utvalget er endret. Prøv igjen.', 'error'); return; }
+    const photo = workspacePhotos.find((item) => item.id === photoId);
+    const name = photo ? `${photo.originalFilename}${photo.occurrence?.object ? ` · ${gmiObjectContext(photo.occurrence.object)}` : ''}` : 'Plasseringen';
+    const entry = workspaceLayer ? photoSession.getLayerDelivery(workspaceLayer.id)?.byPhotoId[photoId] : null;
+    setPhotoDeliveryAnnouncement(`${name}: ${photoDeliveryStatusText(entry) || 'endret'}`);
+  };
+  const toggleWorkspaceDelivery = (photoId) => {
+    if (workspaceLayer) reportDeliveryChange(photoId, togglePhotoDelivery(photoSession, workspaceLayer.id, photoId));
+  };
   const [photoSourceWorkflow, setPhotoSourceWorkflow] = useState(null);
   const sourceWorkflowLayer = photoLayers.find((layer) => layer.id === photoSourceWorkflow?.layerId);
   const [photoLocateRequest, setPhotoLocateRequest] = useState(null);
@@ -412,7 +427,7 @@ export default function Home() {
     else if (tool === 'complete') { if (photoExportFlow) leavePhotoEditMode(); else openCompletePhotoDetails(opener); }
     else if (tool === 'export') requestWorkspaceAction(() => { photoToolOpenerRef.current = opener; setPhotoExportReturn(null); setPhotoExportResumed(false); setPhotoDialog('export'); });
     else if (tool === 'remove') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'remove' }));
-    else if (tool === 'delivery') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'delivery' }));
+    else if (tool === 'delivery') requestWorkspaceAction(() => { setPhotoDeliveryAnnouncement(''); dispatchPhotoWorkspace({ type: 'mode', mode: 'delivery' }); });
   };
   const closePhotos = () => {
     photoSession.cancelImport();
@@ -907,7 +922,8 @@ export default function Home() {
             appInfoTriggerRef={appInfoTriggerRef}
             sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={effectiveWorkspacePhotos}
               view={workspaceView} workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace} editing={photoEditing} changedIds={changedIds}
-              delivery={workspaceDelivery} onNotify={notifyPhoto} onExit={exitPhotoWorkspace} onTool={runWorkspaceTool} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} />
+              delivery={workspaceDelivery} deliveryAnnouncement={photoDeliveryAnnouncement} onToggleDelivery={toggleWorkspaceDelivery}
+              onExit={exitPhotoWorkspace} onTool={runWorkspaceTool} onSelect={(photoId, options = { pan: true }) => selectWorkspacePhoto(photoId, options)} />
               : gmiEditActive ? <GmiEditWorkspace key={gmiEditLayerId} layerId={gmiEditLayerId} inspectorRoot={gmiEditInspector}
                 onGuardChange={registerGmiEditGuard} onDraftChange={setGmiEditDraft} /> : fieldValidationOpen ? (
               <FieldValidationSidebar
@@ -960,9 +976,8 @@ export default function Home() {
                     photoWorkspace={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId, activeAssetId: activeWorkspacePhoto?.assetId || null,
                       photos: effectiveWorkspacePhotos, visibleIds: workspaceView.visibleIds, displayMode: photoMapDisplay, onDisplayModeChange: setPhotoMapDisplay,
                       colourMode: photoWorkspace.colourMode, onColourModeChange: (value) => dispatchPhotoWorkspace({ type: 'map-colour', value }),
-                      deliveryPopupTab: photoWorkspace.deliveryPopupTab, onDeliveryPopupTabChange: (value) => dispatchPhotoWorkspace({ type: 'delivery-popup-tab', value }),
-                      delivery: workspaceDelivery, deliveryMode: photoWorkspace.mode === 'delivery', deliveryIds: photoWorkspace.deliveryIds,
-                      onToggleDelivery: (photoId) => dispatchPhotoWorkspace({ type: 'toggle-delivery', photoId }),
+                      delivery: workspaceDelivery, deliveryMode: photoWorkspace.mode === 'delivery',
+                      onToggleDelivery: toggleWorkspaceDelivery, onDeliveryResult: reportDeliveryChange,
                       zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null } : null}
                     onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
                     photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,
@@ -1065,7 +1080,8 @@ export default function Home() {
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
             {!photoImport && <PhotoWorkspaceInspector key={activeWorkspacePhoto?.assetId || 'empty'} photo={activeWorkspacePhoto} layer={workspaceLayer}
-              siblings={activeSiblings} editing={photoEditing} delivery={workspaceDelivery} onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} onLocate={locatePhoto}
+              siblings={activeSiblings} editing={photoEditing} delivery={workspaceDelivery} onDeliveryResult={reportDeliveryChange}
+              onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} onLocate={locatePhoto}
               onEditMetadata={() => requestWorkspaceAction(() => setPhotoDialog('metadata'))} onOpenViewer={() => setPhotoViewerOpen(true)} />}
           </aside> : gmiEditActive ? <aside id={GMI_EDIT_INSPECTOR_ROOT_ID} key={gmiEditLayerId} ref={setGmiEditInspector} className="gmi-edit-inspector" aria-label="Objektinspektør" />
             : <div id="validation-v2-field-inspector-root" className="contents" />}

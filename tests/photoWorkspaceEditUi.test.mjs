@@ -8,6 +8,7 @@ import { createWorkspaceFixtures, openWorkspace } from './helpers/photoWorkspace
 import { KEYS, arrowOf, clickText, commandBar, discardEdits, dragSelectedMarker, editArrow, editKnob, editTarget, elementCentre, enterEditMode, mouseDrag, openTool,
   pressKey, rotateSelected, saveEdits, selectPhotoRow } from './helpers/photoWorkspace.mjs';
 import { PHOTO_POSITION_SOURCES } from '../src/lib/photos/photoMarkerPresentation.mjs';
+import { setPhotoColourMode } from './helpers/photoSourceWorkflow.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 const CTRL = 2, SHIFT = 8;
@@ -86,7 +87,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
             focused: document.activeElement?.dataset.tool }; })()`);
         assert.deepEqual(menu.groups, ['Bilder', 'Posisjoner og kilder', 'Eksport', 'Fjerning']);
         assert.equal(menu.separators, 3);
-        assert.deepEqual(menu.items.map((item) => item.label), ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Velg samlet levering', 'Fjern bilder fra laget…']);
+        assert.deepEqual(menu.items.map((item) => item.label), ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Fordel bilder til GMI/GML', 'Fjern bilder fra laget…']);
         assert(menu.items.every((item) => item.svg && item.disabled === null && item.tip === null), 'every item: icon, enabled, no tooltip');
         assert.equal(new Set(menu.items.map((item) => item.className)).size, 1, 'Fullfør opplysninger… is styled exactly like every other item');
         assert(!menu.items.some((item) => /opptaksdata/i.test(item.label)));
@@ -191,25 +192,47 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert.equal(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).some((b) => /Lagre|Nullstill|Flytt|Plasser|Juster|Bruk /.test(b.innerText))`), false);
         assert.equal(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('input, select, textarea')).filter((e) => !e.closest('${delivery}')).length`), 0);
         assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('${delivery} input, ${delivery} select, ${delivery} textarea')).every((e) => ['radio', 'checkbox'].includes(e.type))`));
+        // Photo first, then the compact delivery toggle, capture data, and two expandable groups with nested details.
         const sections = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.photo-inspector-section h3')).map((h) => h.firstChild.textContent)`);
-        assert.deepEqual(sections, ['Plassering', 'Opptak', 'Samlet levering', 'Koblinger', 'Fil']);
+        assert.deepEqual(sections, ['Samlet levering', 'Opptak', 'Plassering og koblinger', 'Filinformasjon']);
+        assert.deepEqual(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.photo-inspector-subsection')).map((e) => e.getAttribute('aria-label'))`), ['Plassering', 'Koblinger']);
+        assert(await browser.evaluate(`${inspector}.querySelector('.photo-inspector-status-row').compareDocumentPosition(${inspector}.querySelector('section[aria-label="Samlet levering"]')) & Node.DOCUMENT_POSITION_FOLLOWING`),
+          'the delivery toggle follows the key status information');
         const locate = `${inspector}.querySelector('.photo-inspector-locate')`;
         assert.deepEqual(await browser.evaluate(`({ label: ${locate}.getAttribute('aria-label'), tip: ${locate}.dataset.iconTooltip })`), { label: 'Zoom til IMG_10.png på kartet', tip: 'Zoom til bildet' });
         assert(await browser.evaluate(`${inspector}.querySelector('.photo-collection-original').getBoundingClientRect().height >= 300`), 'large preview');
         await selectPhotoRow(browser, ids.unplaced);
         assert.deepEqual(await browser.evaluate(`({ disabled: ${locate}.getAttribute('aria-disabled'), tip: ${locate}.dataset.iconTooltip })`), { disabled: 'true', tip: 'Zoom til bildet – bildet er ikke plassert' });
         await selectPhotoRow(browser, ids.shared1);
-        const switcher = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.photo-occurrence-switcher button')).map((b) => [b.innerText, b.getAttribute('aria-pressed')])`);
-        assert.deepEqual(switcher, [['1 · KUM · AnleggsID K0', 'true'], ['2 · KUM · AnleggsID K1', 'false']]);
+        // Each placement of the shared photo shows its own destination pill; no asset-level state.
+        const switcher = await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.photo-occurrence-switcher button')).map((b) => [Array.from(b.childNodes).filter((n) => !n.classList?.contains('photo-delivery-pill')).map((n) => n.textContent).join(''), b.getAttribute('aria-pressed'), b.querySelector('.photo-delivery-pill')?.textContent])`);
+        assert.deepEqual(switcher, [['1 · KUM · AnleggsID K0', 'true', 'GMI'], ['2 · KUM · AnleggsID K1', 'false', 'GMI']]);
         // Progressive disclosure: detailed groups start collapsed, and their summaries still say what is inside.
-        assert.deepEqual(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('details[data-disclosure]')).map((e) => [e.dataset.disclosure, e.open])`),
-          [['placement-provenance', false], ['placement-alternatives', false], ['placement-technical', false], ['links', false], ['file', false]]);
+        const disclosures = `Array.from(${inspector}.querySelectorAll('details[data-disclosure]')).map((e) => [e.dataset.disclosure, e.open, e.parentElement.closest('details[data-disclosure]')?.dataset.disclosure || null])`;
+        assert.deepEqual(await browser.evaluate(disclosures),
+          [['placement', true, null], ['placement-provenance', false, 'placement'], ['placement-technical', false, 'placement-provenance'],
+            ['placement-alternatives', false, 'placement'], ['links', false, 'placement'], ['file', false, null]]);
+        assert.match(await browser.evaluate(`${inspector}.querySelector('section[aria-label="Plassering og koblinger"] > details > summary').innerText`), /Plassering og koblinger/);
+        assert(await browser.evaluate(`${inspector}.querySelector('section[aria-label=Plassering]').innerText.includes('Koordinater')`), 'coordinates stay visible by default');
         assert.match(await browser.evaluate(`${inspector}.querySelector('section[aria-label=Koblinger] summary').innerText`), /Koblinger\s*2\s*denne plasseringen: KUM · AnleggsID K0/);
         assert.equal(await browser.evaluate(`${inspector}.innerText.includes('Denne plasseringen')`), false, 'association cards are collapsed by default');
         assert(await browser.evaluate(`${inspector}.textContent.includes('Denne plasseringen')`), 'collapsed information is retained');
         await browser.evaluate(`${inspector}.querySelector('section[aria-label=Koblinger] summary').click()`);
         assert(await browser.evaluate(`${inspector}.innerText.includes('Denne plasseringen')`));
-        await browser.evaluate(`${inspector}.querySelector('section[aria-label=Koblinger] summary').click()`);
+        // Expansion preferences survive switching photographs (the inspector remounts per asset).
+        await browser.evaluate(`${inspector}.querySelector('details[data-disclosure=placement-provenance] > summary').click()`);
+        await browser.evaluate(`${inspector}.querySelector('details[data-disclosure=placement-technical] > summary').click()`);
+        await browser.evaluate(`${inspector}.querySelector('details[data-disclosure=file] > summary').click()`);
+        await browser.evaluate(`${inspector}.querySelector('details[data-disclosure=placement] > summary').click()`);
+        await selectPhotoRow(browser, ids.IMG_2);
+        const remembered = await browser.evaluate(`Object.fromEntries(Array.from(${inspector}.querySelectorAll('details[data-disclosure]')).map((e) => [e.dataset.disclosure, e.open]))`);
+        assert.deepEqual(['placement', 'placement-provenance', 'placement-technical', 'links', 'file'].map((id) => [id, remembered[id]]),
+          [['placement', false], ['placement-provenance', true], ['placement-technical', true], ['links', true], ['file', true]]);
+        await browser.evaluate(`${inspector}.querySelector('details[data-disclosure=placement] > summary').click()`);
+        assert(await browser.evaluate(`${inspector}.innerText.includes('Tekniske kildedata') && ${inspector}.innerText.includes('MIME/type')`));
+        await screenshot('03-inspector-nested-details');
+        for (const id of ['placement-provenance', 'placement-technical', 'links', 'file']) await browser.evaluate(`${inspector}.querySelector('details[data-disclosure=${id}] > summary').click()`);
+        await selectPhotoRow(browser, ids.shared1);
         await browser.evaluate(`${inspector}.querySelectorAll('.photo-occurrence-switcher button')[1].click()`);
         await browser.waitFor(`${row(ids.shared2)}.querySelector('button').getAttribute('aria-pressed') === 'true'`);
         await screenshot('03-inspector-repeated');
@@ -470,6 +493,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
       });
 
       await t.test('map display: thumbnails at zoom ≥ 16 with provenance border, arrows, selected ring, hover preview and fallback', async () => {
+        await setPhotoColourMode(browser, 'provenance'); // provenance borders: Plasseringskilde chosen explicitly (default is Leveringsvalg)
         await browser.evaluate('document.querySelector(".photo-map-display-modes [data-mode=thumbnails]").click()');
         assert.equal(await browser.evaluate('localStorage.getItem("gmi-photo-map-display")'), 'thumbnails');
         await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length === 2');

@@ -1,4 +1,4 @@
-// M8 browser test: per-occurrence combined-delivery choices in the FOTO workspace.
+// M8 browser test: per-occurrence combined-delivery choices in the FOTO workspace (direct-click «Fordel bilder til GMI/GML»).
 // Synthetic files only. Needs PHOTO_UI_URL (a running production build); saves screenshots with PHOTO_SCREENSHOT_DIR.
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -22,7 +22,7 @@ const screenshot = async (browser, name) => {
   await writeFile(path.join(process.env.PHOTO_SCREENSHOT_DIR, `${name}.png`), Buffer.from(data, 'base64'));
 };
 
-test('FOTO delivery intent: independent occurrence choices, bulk scope, filter, review-free navigation and laptop widths',
+test('FOTO delivery intent: compact inspector toggle, direct-click planning, independent occurrences, filter and laptop/mobile widths',
   { skip: !chromePath || !app, timeout: 240000 }, async () => {
     const directory = await mkdtemp(path.join(path.resolve(tmpdir()), 'photo-delivery-ui-'));
     const browser = await openTestChrome();
@@ -39,7 +39,12 @@ test('FOTO delivery intent: independent occurrence choices, bulk scope, filter, 
       await browser.evaluate(`${rowOf(text)}.querySelector('button.photo-workspace-row').click()`);
       await browser.waitFor(`${rowOf(text)}.querySelector('button.photo-workspace-row').getAttribute('aria-pressed')==='true' && ${section}`);
     };
-    const radio = (label) => `Array.from(${section}.querySelectorAll('label')).find((item) => item.innerText.trim()===${JSON.stringify(label)}).querySelector('input')`;
+    // The compact GMI/GML toggle: rounded pill buttons in a radiogroup.
+    const option = (key) => `${section}.querySelector('[role=radio][data-destination="${key}"]')`;
+    const pressKey = async (key, keyCode, code = key) => {
+      await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: keyCode, ...(key === ' ' ? { text: ' ' } : {}) });
+      await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode });
+    };
     const pill = (text) => browser.evaluate(`${rowOf(text)}.querySelector('.photo-delivery-pill')?.innerText || null`);
     const noOverflow = () => browser.evaluate(`['.photo-workspace-collection', '.photo-workspace-inspector'].every((selector) => {
       const element = document.querySelector(selector); return element && element.scrollWidth <= element.clientWidth + 1; })`);
@@ -57,64 +62,95 @@ test('FOTO delivery intent: independent occurrence choices, bulk scope, filter, 
       await closePhotoSources(browser);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 5');
 
-      // Defaults: linked occurrences keep their link; no row indicators; no summary line.
+      // Defaults: linked occurrences keep their link; every row shows its destination; no summary line.
       await select('Kum 1');
-      assert.equal(await browser.evaluate(`${radio('Behold lenke i GMI')}.checked`), true);
-      assert.equal(await browser.evaluate(`${radio('Overfør til GML')}.checked`), false);
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-pill").length'), 0);
+      assert.equal(await browser.evaluate(`${option('gmi')}.getAttribute('aria-checked')`), 'true');
+      assert.equal(await browser.evaluate(`${option('gml')}.getAttribute('aria-checked')`), 'false');
+      assert.match(await browser.evaluate(`${section}.querySelector('[role=radiogroup]').getAttribute('aria-label')`), /^Leveringsvalg for a.png · .*Kum 1/);
+      assert.deepEqual(await Promise.all(['Kum 1', 'Kum 2', 'Kum 3', 'c.png', 'd.png'].map(pill)), ['GMI', 'GMI', 'GMI', 'GMI', 'Ikke med']);
       assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-delivery-summary"))'), false);
-      assert(await browser.evaluate(`${section}.innerText.includes('Andre plasseringer av samme bilde') && ${section}.innerText.includes('Kum 2')`));
+      assert.equal(await browser.evaluate(`${section}.querySelectorAll('input').length`), 0, 'compact pills, no permanent radio list');
+      const switcher = `${inspector}.querySelector('.photo-occurrence-switcher')`;
+      assert.match(await browser.evaluate(`Array.from(${switcher}.querySelectorAll('button')).map((b) => b.getAttribute('aria-label')).join('|')`), /Kum 2 · levering: beholdes i gmi/);
 
-      // Explicit single-occurrence transfer of a shared photo: Kum 2 keeps its link.
-      await browser.evaluate(`${radio('Overfør til GML')}.click()`);
-      await browser.waitFor(`${radio('Overfør til GML')}.checked`);
-      assert.equal(await pill('Kum 1'), 'Til GML');
-      assert.equal(await pill('Kum 2'), null);
+      // One click on GML in the inspector: Kum 1 only, at once; Kum 2 (same photograph) keeps its link.
+      await browser.evaluate(`${option('gml')}.click()`);
+      await browser.waitFor(`${option('gml')}.getAttribute('aria-checked') === 'true'`);
+      assert.equal(await pill('Kum 1'), 'GML');
+      assert.equal(await pill('Kum 2'), 'GMI');
       const text = await browser.evaluate(`${section}.innerText`);
-      assert(text.includes('fjernes først når en samlet leveranse lages senere'), 'explains that nothing is removed now');
-      assert(text.includes('GMI-filen er ikke endret'));
-      assert(text.includes('Mangler foreløpig godkjent plassering'), 'readiness is shown, the choice is kept');
-      assert(/Kum 2\s*Beholdes i GMI/.test(text), 'sibling occurrence shows its own state');
+      assert(!text.includes('fjernes først når en samlet leveranse lages senere'), 'the link-removal explanation lives in the export wizard');
+      assert(text.includes('Mangler for GML: godkjent plassering'), 'readiness is shown once, the choice is kept');
       assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary").innerText'), 'Samlet levering: 1 overføres til GML');
+      assert.match(await browser.evaluate(`Array.from(${switcher}.querySelectorAll('button')).find((b) => b.innerText.includes('Kum 2')).innerText`), /GMI$/);
       await browser.evaluate(`${section}.scrollIntoView({ block: 'center' }); window.scrollTo(0, 0); document.scrollingElement.scrollTop = 0;`);
       await screenshot(browser, 'm8-inspector-transfer');
 
-      // Navigation: to Kum 2 through the sibling link, to another photo and back.
-      await browser.evaluate(`Array.from(${section}.querySelectorAll('.photo-delivery-siblings button')).find((item) => item.innerText.includes('Kum 2')).click()`);
+      // Keyboard: arrows move and choose within the two-position control.
+      await browser.evaluate(`${option('gml')}.focus()`);
+      await pressKey('ArrowLeft', 37);
+      await browser.waitFor(`${option('gmi')}.getAttribute('aria-checked') === 'true' && document.activeElement === ${option('gmi')}`);
+      await pressKey('ArrowRight', 39);
+      await browser.waitFor(`${option('gml')}.getAttribute('aria-checked') === 'true'`);
+      assert.equal(await pill('Kum 2'), 'GMI');
+
+      // Navigation: to Kum 2 through the occurrence switcher, to another photo and back.
+      await browser.evaluate(`Array.from(${switcher}.querySelectorAll('button')).find((item) => item.innerText.includes('Kum 2')).click()`);
       await browser.waitFor(`${rowOf('Kum 2')}.querySelector('button.photo-workspace-row').getAttribute('aria-pressed')==='true'`);
-      assert.equal(await browser.evaluate(`${radio('Behold lenke i GMI')}.checked`), true);
+      assert.equal(await browser.evaluate(`${option('gmi')}.getAttribute('aria-checked')`), 'true');
       await select('d.png');
       await select('Kum 1');
-      assert.equal(await browser.evaluate(`${radio('Overfør til GML')}.checked`), true, 'the decision survives inspector navigation');
+      assert.equal(await browser.evaluate(`${option('gml')}.getAttribute('aria-checked')`), 'true', 'the decision survives inspector navigation');
 
-      // Unlinked photo: explicit inclusion. Line-only link: no choice, stays in GMI.
+      // Unlinked photo: «Ikke med» / GML, never an invalid GMI destination. Line-only link: fixed GMI.
       await select('d.png');
-      assert(await browser.evaluate(`${section}.innerText.includes('Bildet har ingen GMI-lenke')`));
-      await browser.evaluate(`${section}.querySelector('.photo-delivery-include input').click()`);
-      await browser.waitFor(`${section}.querySelector('.photo-delivery-include input').checked`);
-      assert.equal(await pill('d.png'), 'Tas med');
+      assert.deepEqual(await browser.evaluate(`Array.from(${section}.querySelectorAll('[role=radio]')).map((b) => b.innerText.trim())`), ['Ikke med', 'GML']);
+      await browser.evaluate(`${option('gml')}.click()`);
+      await browser.waitFor(`${option('gml')}.getAttribute('aria-checked') === 'true'`);
+      assert.equal(await pill('d.png'), 'GML');
       await select('c.png');
-      assert(await browser.evaluate(`${section}.innerText.includes('Lenken beholdes i GMI') && !${section}.querySelector('input')`));
+      assert(await browser.evaluate(`${section}.innerText.includes('Lenken beholdes i GMI') && ${section}.querySelectorAll('[role=radio]').length === 1
+        && ${option('gmi')}.getAttribute('aria-disabled') === 'true' && ${option('gmi')}.getAttribute('aria-checked') === 'true'`));
 
-      // Bulk: Kum 2, Kum 3 and d.png selected; each action applies only to its own kind, with exact counts.
-      await click(browser, 'Velg samlet levering', 'document');
+      // Fordel bilder til GMI/GML: one click per row toggles that occurrence; no checkboxes, selection or Apply step.
+      await click(browser, 'Fordel bilder til GMI/GML', 'document');
       await browser.waitFor('document.querySelector(".photo-delivery-bar")');
-      for (const name of ['Kum 2', 'Kum 3', 'd.png']) await browser.evaluate(`${rowOf(name)}.querySelector('input[type=checkbox]').click()`);
-      const buttons = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-delivery-actions button')).map((button) => [button.innerText.trim(), button.disabled])`);
-      // Only actions that change something are offered, each with its exact count.
-      assert.deepEqual(buttons, [['Overfør 2 plasseringer til GML', false], ['Ikke ta med 1 plassering', false]]);
-      assert(await browser.evaluate('document.querySelector(".photo-delivery-actions").innerText.includes("Valgt: 3 plasseringer · 2 med GMI-lenke, 1 uten")'));
-      assert(await browser.evaluate('document.querySelector(".photo-delivery-actions").innerText.includes("Hver handling gjelder bare plasseringer av riktig type")'));
-      await screenshot(browser, 'm8-bulk-selection');
-      await click(browser, 'Overfør 2 plasseringer til GML', 'document.querySelector(".photo-delivery-actions")');
-      await browser.waitFor('document.querySelector(".photo-workspace-toast-anchor")?.innerText.includes("2 plasseringer merket «Overføres til GML»")');
-      assert.deepEqual(await Promise.all(['Kum 1', 'Kum 2', 'Kum 3', 'd.png'].map(pill)), ['Til GML', 'Til GML', 'Til GML', 'Tas med'], 'd.png keeps its inclusion');
-      await browser.evaluate(`${rowOf('Kum 2')}.querySelector('input[type=checkbox]').click()`);
-      await click(browser, 'Behold lenker for 1 plassering', 'document.querySelector(".photo-delivery-actions")');
-      await browser.waitFor(`!${rowOf('Kum 2')}.querySelector('.photo-delivery-pill')`);
-      assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary").innerText'), 'Samlet levering: 2 overføres til GML · 1 tas med uten GMI-lenke');
+      const bar = 'document.querySelector(".photo-delivery-bar")';
+      assert(await browser.evaluate(`${bar}.innerText.includes('Klikk på et bilde for å endre leveringsvalg.')`));
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input, .photo-delivery-actions").length'), 0);
+      assert.equal(await browser.evaluate(`${bar}.innerText.includes('Velg alle viste')`), false);
+      assert.equal(await browser.evaluate('document.querySelector(".photo-map-display-card select").value'), 'delivery');
+      const counts = () => browser.evaluate(`Array.from(${bar}.querySelectorAll('.photo-delivery-counts li')).map((li) => li.innerText.replace(/\\s+/g, ' ').trim()).join(' | ')`);
+      assert.equal(await counts(), 'GMI 3 | GML 2');
+      const planRow = async (name, expected) => {
+        await browser.evaluate(`${rowOf(name)}.querySelector('button.photo-workspace-row').click()`);
+        await browser.waitFor(`${rowOf(name)}.querySelector('.photo-delivery-pill')?.innerText === ${JSON.stringify(expected)}`);
+      };
+      await planRow('Kum 2', 'GML');
+      assert.equal(await pill('Kum 1'), 'GML', 'sibling occurrence unchanged');
+      assert.match(await browser.evaluate(`${bar}.querySelector('[role=status]').innerText`), /^a\.png · .*Kum 2: Overføres til GML$/);
+      assert.equal(await browser.evaluate(`${rowOf('Kum 2')}.querySelector('button.photo-workspace-row').getAttribute('aria-current')`), 'true', 'clicked row is shown in the inspector');
+      await planRow('Kum 3', 'GML');
+      await planRow('d.png', 'Ikke med');
+      assert.equal(await counts(), 'GMI 1 | GML 3 | Ikke med 1');
+      assert.match(await browser.evaluate(`${rowOf('Kum 2')}.querySelector('button.photo-workspace-row').getAttribute('aria-label')`), /levering: overføres til gml\. Klikk for GMI$/);
+      // Keyboard activation of a row: Space toggles it back.
+      await browser.evaluate(`${rowOf('Kum 2')}.querySelector('button.photo-workspace-row').focus()`);
+      await pressKey(' ', 32, 'Space');
+      await browser.waitFor(`${rowOf('Kum 2')}.querySelector('.photo-delivery-pill')?.innerText === 'GMI'`);
+      await planRow('d.png', 'GML');
+      // A line-only link cannot change: explained, nothing written.
+      await browser.evaluate(`${rowOf('c.png')}.querySelector('button.photo-workspace-row').click()`);
+      await browser.waitFor('document.querySelector(".photo-workspace-toast-anchor")?.innerText.includes("Lenken beholdes i GMI")');
+      assert.equal(await pill('c.png'), 'GMI');
+      assert.deepEqual(await Promise.all(['Kum 1', 'Kum 2', 'Kum 3', 'd.png'].map(pill)), ['GML', 'GMI', 'GML', 'GML']);
+      await screenshot(browser, 'direct-planning-list');
       await browser.evaluate('document.querySelector(".photo-workspace-collection").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
       await browser.waitFor('!document.querySelector(".photo-delivery-bar")');
+      assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary").innerText'), 'Samlet levering: 2 overføres til GML · 1 tas med uten GMI-lenke');
+      // Outside planning, a row click opens the photo again and changes nothing.
+      await select('Kum 3');
+      assert.equal(await pill('Kum 3'), 'GML');
 
       // Filter by delivery status. Select a matching photo first: a filtered-out active photo stays pinned in the list.
       await select('Kum 1');
@@ -128,9 +164,9 @@ test('FOTO delivery intent: independent occurrence choices, bulk scope, filter, 
       await browser.evaluate(`document.querySelector('.photo-filter-panel input[value="all"][name$="-delivery"]').click()`);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 5');
 
-      // Laptop widths: nothing overflows horizontally.
-      for (const [width, height] of [[1366, 768], [1280, 720], [1024, 640]]) {
-        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      // Laptop and narrow widths: nothing overflows horizontally.
+      for (const [width, height] of [[1366, 768], [1280, 720], [1024, 640], [390, 844]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 500 });
         await select('Kum 1');
         assert(await noOverflow(), `no horizontal overflow at ${width}×${height}`);
         await browser.evaluate(`${section}.scrollIntoView({ block: 'center' }); window.scrollTo(0, 0); document.scrollingElement.scrollTop = 0;`);

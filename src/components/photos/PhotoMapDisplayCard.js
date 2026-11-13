@@ -28,8 +28,10 @@ export function PhotoMapDisplayModes({ mode, onModeChange, zoom }) {
   </>;
 }
 
-// Map-local display control and legend for the workspace FOTO layer.
-export default function PhotoMapDisplayCard({ mode, onModeChange, zoom, editing = false, colourMode = 'provenance', onColourModeChange }) {
+// Map-local display control and legend for the workspace FOTO layer. Colours default to delivery destination
+// (Leveringsvalg); Plasseringskilde restores the provenance palette. The swatches are drawn like the markers themselves.
+export default function PhotoMapDisplayCard({ mode, onModeChange, zoom, editing = false, colourMode = 'delivery', onColourModeChange }) {
+  const thumbnails = photoThumbnailsVisible(mode, zoom);
   return (
     <section aria-label="Bilder på kartet" className="photo-map-display-card gmi-elevated-surface absolute bottom-20 right-4 z-1000 rounded-lg px-3 py-2 text-gmi-text">
       <h2 className="mb-1.5 text-xs font-semibold">Bilder på kartet</h2>
@@ -42,13 +44,15 @@ export default function PhotoMapDisplayCard({ mode, onModeChange, zoom, editing 
       <ul className="photo-map-display-legend">
         {colourMode === 'provenance' ? PHOTO_POSITION_SOURCES.map(({ kind, label, color }) => (
           <li key={kind} data-legend-source={kind}>
-            {photoThumbnailsVisible(mode, zoom)
+            {thumbnails
               ? <span className="photo-map-display-swatch"><span className="photo-source-dot" style={{ '--photo-source': color }} /></span>
               : <span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ sourceKind: kind, size: 16 }) }} />}
             <span>{label}</span>
           </li>
         )) : Object.entries(PHOTO_DELIVERY_COLOURS).map(([key, value]) => <li key={key} data-legend-delivery={key}>
-          <span className="photo-source-dot" style={{ '--photo-source': value.color, borderStyle: key === 'mixed' ? 'dashed' : 'solid' }} />
+          {thumbnails
+            ? <span className="photo-map-display-swatch"><span className="photo-source-dot" style={{ '--photo-source': value.color, borderStyle: key === 'mixed' ? 'dashed' : 'solid' }} /></span>
+            : <span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ size: 16, markerColor: value.color, mixedDelivery: key === 'mixed' }) }} />}
           <span>{value.label}</span></li>)}
         <li data-legend="direction"><span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoLegendArrow() }} /><span>Retning</span></li>
         <li data-legend="selected"><span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ sourceKind: 'unknown', size: 14, selected: true }) }} /><span>Valgt</span></li>

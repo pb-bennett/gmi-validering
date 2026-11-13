@@ -83,7 +83,9 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     assert(await browser.evaluate(`document.querySelector('.photo-collection-inspector').innerText.includes(${JSON.stringify(markerTitle)})`));
     assert.equal(await browser.evaluate(placementSource), 'GML');
     // Raw GML/EXIF evidence stays available read-only under Tekniske kildedata.
-    await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-inspector summary')).find(e => e.innerText === 'Tekniske kildedata').click()`);
+    await browser.evaluate(`(() => { const summary = Array.from(document.querySelectorAll('.photo-workspace-inspector summary')).find(e => e.textContent === 'Tekniske kildedata');
+      for (let parent = summary.parentElement.parentElement.closest('details'); parent; parent = parent.parentElement.closest('details')) parent.open = true;
+      summary.click(); })()`);
     assert(await browser.evaluate('document.querySelector(".photo-workspace-inspector").innerText.includes("EPSG:5972") && document.querySelector(".photo-workspace-inspector").innerText.includes("GPSLatitude")'));
     await browser.evaluate('document.querySelector(".photo-workspace-inspector section[aria-label=Plassering]").scrollIntoView({block:"start"})');
     await screenshot('photo-spatial-inspector');

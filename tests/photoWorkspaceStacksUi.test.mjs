@@ -131,7 +131,7 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         assert.doesNotMatch(text, /Status\s+Plassert/, 'status is not repeated next to the chip');
         assert.doesNotMatch(text, /MIME\/type/);
         assert(await browser.evaluate(`${inspector}.textContent.includes('MIME/type') && ${inspector}.textContent.includes('GUID')`), 'file details and identifiers are kept');
-        assert.match(await browser.evaluate(`${inspector}.querySelector('section[aria-label=Fil] summary').innerText`), /900 × 600 px/);
+        assert.match(await browser.evaluate(`${inspector}.querySelector('section[aria-label=Filinformasjon] summary').innerText`), /900 × 600 px/);
       });
 
       await t.test('Pass 1C: disclosure scrollbars never change preview geometry, portrait or landscape', async () => {

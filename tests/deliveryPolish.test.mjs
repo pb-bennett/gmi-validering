@@ -32,17 +32,19 @@ test('nested and outside-attachment paths, complete filenames and large folders 
   assert.deepEqual(leaves(root), deliveryContents(plan));
   assert.equal(root.children.find((entry) => entry.path === 'Other').children[0].children[0].attachment.assetId, 'outside');
 });
-test('colour modes and independent batch checks preserve provenance and never add delivery overlays', () => {
+test('colour modes preserve provenance data, never add delivery overlays or batch checks, and key their icons', () => {
   for (const source of PHOTO_POSITION_SOURCES) for (const status of Object.keys(PHOTO_DELIVERY_LABELS)) for (const mode of ['markers', 'thumbnails']) {
     const options = { sourceKind: source.kind, deliveryStatus: status };
-    const ordinary = photoMarkerOptions(mode, options), selected = photoMarkerOptions(mode, { ...options, batchSelected: true });
-    assert(ordinary.html.includes(source.color)); assert(selected.html.includes(source.color));
-    assert(!ordinary.html.includes('photo-marker-delivery'));
+    const ordinary = photoMarkerOptions(mode, options);
+    assert(ordinary.html.includes(source.color));
+    assert(!ordinary.html.includes('photo-marker-delivery') && !ordinary.html.includes('photo-marker-batch'));
     const delivery = photoMarkerOptions(mode, { ...options, colourMode: 'delivery' });
-    assert(delivery.html.includes(PHOTO_DELIVERY_COLOURS[photoDeliveryColourState(status)].color));
+    const state = photoDeliveryColourState(status);
+    assert(delivery.html.includes(PHOTO_DELIVERY_COLOURS[state].color));
+    assert(delivery.html.includes(`data-position-source="${source.kind}"`), 'provenance identity stays on the marker');
+    assert(delivery.className.split(' ').includes(`photo-delivery-${state}`));
+    assert(!delivery.html.includes('photo-marker-delivery') && !delivery.html.includes('photo-marker-batch'), 'no rejected badge overlays');
     assert.notEqual(photoMarkerIconKey(mode, options), photoMarkerIconKey(mode, { ...options, colourMode: 'delivery' }));
-    assert(!ordinary.html.includes('photo-marker-batch')); assert(selected.html.includes('photo-marker-batch'));
-    assert.notEqual(photoMarkerIconKey(mode, options), photoMarkerIconKey(mode, { ...options, batchSelected: true }));
   }
 });
 test('mode labels describe GMI/GML files and preserve mode identifiers', () => {

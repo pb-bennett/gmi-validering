@@ -194,6 +194,16 @@
   --gmi-brand-cyan: #53EAFD;
   --gmi-cyan-soft: #CEFAFE;
   --gmi-interactive: #007595;
+  /* FOTO delivery destinations: one palette for map markers, photo list, inspector and package tree. Deep blue and bright
+     green differ in lightness as well as hue, so GMI and GML stay apart on small markers and for colour-vision deficiencies.
+     Mirrored in PHOTO_DELIVERY_COLOURS (photoMarkerPresentation.mjs) for SVG markers; a test keeps them equal. */
+  --gmi-delivery-gmi: #1e40af;
+  --gmi-delivery-gmi-ink: #ffffff;
+  --gmi-delivery-gmi-soft: #dbeafe;
+  --gmi-delivery-gml: #22c55e;
+  --gmi-delivery-gml-ink: #052e16;
+  --gmi-delivery-gml-soft: #dcfce7;
+  --gmi-delivery-neutral: #64748b;
 }
 
 @layer components {

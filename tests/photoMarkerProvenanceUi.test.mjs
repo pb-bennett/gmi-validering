@@ -7,7 +7,7 @@ import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
-import { applyPhotoSourcePositions, clickSourceControl, setPhotoFiles, stagePhotoSource, savePhotoSource, closePhotoSources } from './helpers/photoSourceWorkflow.mjs';
+import { applyPhotoSourcePositions, clickSourceControl, setPhotoColourMode, setPhotoFiles, stagePhotoSource, savePhotoSource, closePhotoSources } from './helpers/photoSourceWorkflow.mjs';
 import { PHOTO_POSITION_SOURCES } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { KEYS, arrowOf, commandBar, discardEdits, dragSelectedMarker, editArrow, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
 
@@ -73,6 +73,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert.equal(await browser.evaluate(`${markers}.length`), 0);
          await browser.waitFor(legend);
         assert.equal(await browser.evaluate('document.body.innerText.includes("Tegnforklaring")'), false);
+        assert.equal(await browser.evaluate(`${legend}.querySelector('select').value`), 'delivery', 'Leveringsvalg is the workspace default');
       });
       await stagePhotoSource(browser, gmi, 'gmi'); await savePhotoSource(browser, 'gmi'); await closePhotoSources(browser);
       const rows = await browser.evaluate('Array.from(document.querySelectorAll(".photo-workspace-list li[data-photo-id]")).map(e=>({id:e.dataset.photoId,name:e.querySelector(".photo-workspace-filename").innerText}))');
@@ -99,33 +100,75 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await move(true); assert.equal(await sourceOfSelected(), 'manual');
         assert.deepEqual(await browser.evaluate(`${markers}.filter(e=>e.title.includes('shared.png')).map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['gmi', 'manual']);
       });
-      await t.test('delivery colour mode preserves source identity and normal provenance mode', async () => {
-        await select(repeated[0].id);
-        await browser.evaluate('document.querySelectorAll(".photo-delivery-section input[type=radio]")[1].click()');
-        await select(exif.id);
-        await browser.evaluate('document.querySelector(".photo-delivery-include input").click()');
+      await t.test('delivery colours are the default; planning toggles isolated markers in one click; provenance identity and mode remain', async () => {
+        const colourSelect = `${legend}.querySelector('select')`;
+        const markerOf = (id) => `document.querySelector('.photo-camera-marker[data-photo-id="${id}"]')`;
+        const fillOf = (id) => browser.evaluate(`${markerOf(id)}.querySelector('.photo-camera-glyph path').getAttribute('fill')`);
+        const pillOf = (id) => browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] .photo-delivery-pill').innerText`);
+        const [GMI, GML, NEUTRAL] = ['#1e40af', '#22c55e', '#64748b'];
+        await setPhotoColourMode(browser, 'delivery');
+        assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
+        // Destination colours on every marker; provenance stays on the marker as data and in the tooltip.
+        assert(await browser.evaluate(`${markers}.every(marker => ${JSON.stringify([GMI, GML, NEUTRAL])}.includes(marker.querySelector('.photo-camera-glyph path').getAttribute('fill')))`));
         for (const source of PHOTO_POSITION_SOURCES) {
-          assert(await browser.evaluate(`${markers}.some(marker => marker.querySelector('.photo-camera-glyph').dataset.positionSource === ${JSON.stringify(source.kind)} && !marker.querySelector('.photo-marker-delivery'))`));
+          assert(await browser.evaluate(`${markers}.some(marker => marker.querySelector('.photo-camera-glyph').dataset.positionSource === ${JSON.stringify(source.kind)} && !marker.querySelector('.photo-marker-delivery, .photo-marker-batch'))`));
         }
-        assert(await browser.evaluate(`${legend}.innerText.includes('Plasseringskilde') && ${legend}.innerText.includes('Leveringsvalg')`));
+        assert.equal(await fillOf(repeated[0].id), GMI, 'GMI-linked placement: deep blue');
+        assert.equal(await fillOf(exif.id), NEUTRAL, 'placed photo without a GMI reference, not included: neutral');
+        assert.deepEqual(await browser.evaluate(`Array.from(${legend}.querySelectorAll('li[data-legend-delivery]')).map(e => [e.dataset.legendDelivery, e.querySelector('.photo-camera-glyph path').getAttribute('fill'), e.innerText.trim()])`),
+          [['gmi', GMI, 'Beholdes i GMI'], ['gml', GML, 'Til GML'], ['excluded', NEUTRAL, 'Ikke med i GML'], ['review', '#b06a08', 'Krever gjennomgang'], ['mixed', NEUTRAL, 'Ulike leveringsvalg']]);
+
+        await click('Fordel bilder til GMI/GML');
+        await browser.waitFor('document.querySelector(".photo-delivery-bar")');
+        assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
+        // An isolated GMI-linked marker: GMI -> GML -> GMI, at once; its sibling placement of the same photograph is untouched.
+        for (const [expectedFill, expectedPill] of [[GML, 'GML'], [GMI, 'GMI'], [GML, 'GML']]) {
+          await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+          await browser.waitFor(`${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(expectedFill)}`);
+          assert.equal(await pillOf(repeated[0].id), expectedPill);
+          assert.equal(await fillOf(repeated[1].id), GMI);
+          assert.equal(await browser.evaluate(`Boolean(document.querySelector('.photo-delivery-map-popup'))`), false, 'no chooser for a single occurrence');
+        }
+        // An isolated photo without a GMI reference: «Ikke med» <-> GML, never GMI.
+        await browser.evaluate(`${markerOf(exif.id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+        await browser.waitFor(`${markerOf(exif.id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GML)}`);
+        assert.equal(await pillOf(exif.id), 'GML');
+        assert.match(await browser.evaluate(`${markerOf(exif.id)}.getAttribute('aria-label')`), /^Endre leveringsvalg: exif\.png.*plassering: EXIF.*Planlagt: Tas med i GML uten GMI-lenke$/);
+        for (const dark of [false, true]) {
+          await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile(dark))})`);
+          await browser.waitFor('Array.from(document.querySelectorAll(".leaflet-tile")).every(e=>e.complete && e.naturalWidth>0)');
+          for (const [width, height] of [[1280, 720], [1366, 768]]) {
+            await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+            await browser.evaluate('new Promise(resolve=>setTimeout(resolve,300))');
+            await screenshot(`refine-planning-map${dark ? '-dark' : ''}-${width}x${height}`);
+          }
+        }
+        await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile())})`);
+        // Restore the defaults through the same one-click path, then leave planning.
+        await browser.evaluate(`${markerOf(exif.id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+        await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+        await browser.waitFor(`${markerOf(exif.id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(NEUTRAL)}
+          && ${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GMI)}`);
+        await click('Ferdig', 'document.querySelector(".photo-delivery-bar")');
+        await browser.waitFor('!document.querySelector(".photo-delivery-bar")');
+        assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery', 'leaving planning keeps the delivery colours');
+        await screenshot('refine-delivery-normal-navigation');
+
+        // Plasseringskilde restores the accepted provenance palette.
+        await setPhotoColourMode(browser, 'provenance');
+        assert(await browser.evaluate(`${legend}.innerText.includes('Plasseringskilde') || ${colourSelect}.selectedOptions[0].text === 'Plasseringskilde'`));
+        for (const source of PHOTO_POSITION_SOURCES) {
+          assert(await browser.evaluate(`${markers}.some(marker => marker.querySelector('.photo-camera-glyph').dataset.positionSource === ${JSON.stringify(source.kind)} && marker.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(source.color)})`), source.kind);
+        }
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           await screenshot(`final-provenance-mode-${width}x${height}`);
         }
-        await browser.evaluate(`${legend}.querySelector('select').value='delivery';${legend}.querySelector('select').dispatchEvent(new Event('change',{bubbles:true}))`);
-        assert(await browser.evaluate(`${markers}.every(marker => ['#2463b5','#19785b','#64748b'].includes(marker.querySelector('.photo-camera-glyph path').getAttribute('fill')))`));
-        for (const [width, height] of [[1280, 720], [1366, 768]]) {
-          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-          await screenshot(`polish-provenance-delivery-${width}x${height}`);
-        }
-        await browser.evaluate(`${legend}.querySelector('select').value='provenance';${legend}.querySelector('select').dispatchEvent(new Event('change',{bubbles:true}))`);
-        await browser.evaluate('document.querySelector(".photo-delivery-include input").click()');
-        await select(repeated[0].id);
-        await browser.evaluate('document.querySelectorAll(".photo-delivery-section input[type=radio]")[0].click()');
         await select(repeated[1].id);
         await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
       });
       await t.test('selection, hover and accepted direction keep all four source fills', async () => {
+        await setPhotoColourMode(browser, 'provenance'); // provenance palette checks choose Plasseringskilde explicitly
         for (const source of PHOTO_POSITION_SOURCES) {
           const id = source.kind === 'exif' ? exif.id : source.kind === 'gml' ? gmlPhoto.id : repeated[source.kind === 'gmi' ? 0 : 1].id;
           await select(id); assert.equal(await sourceOfSelected(), source.kind);
@@ -145,6 +188,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert.equal(await sourceOfSelected(), 'manual');
       });
       await t.test('both viewport layouts keep the shared-palette display card clear of map controls', async () => {
+        await setPhotoColourMode(browser, 'provenance'); // provenance palette checks choose Plasseringskilde explicitly
         for (const [width, height] of [[1920, 1080], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           await browser.evaluate('new Promise(resolve=>setTimeout(resolve,800))');
@@ -180,6 +224,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         }
       });
       await t.test('Pass 1D: all source dots render in workspace/main-map thumbnails, with selected ring and direction intact', async () => {
+        await setPhotoColourMode(browser, 'provenance'); // provenance palette checks choose Plasseringskilde explicitly
         await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
         await browser.evaluate(`${legend}.querySelector('[data-mode=thumbnails]').click()`);
         for (let i = 0; i < 8 && !await browser.evaluate('Boolean(document.querySelector(".photo-thumb-marker"))'); i++) {

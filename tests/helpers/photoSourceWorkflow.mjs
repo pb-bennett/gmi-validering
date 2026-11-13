@@ -5,8 +5,12 @@ export const sourceWizard = 'document.querySelector(".photo-positioning-wizard")
 export const PHOTO_TOOL_LABELS = Object.freeze({
   'Legg til bilder': 'Legg til bilder…', 'Koble og posisjoner bilder': 'Koble og posisjoner bilder…', Eksporter: 'Eksporter…',
   'Juster plassering og retning': 'Juster plassering og retning', 'Kilder og koblinger': 'Kilder og koblinger', 'Fjern bilder fra laget': 'Fjern bilder fra laget…',
-  'Fullfør opplysninger': 'Fullfør opplysninger…', 'Velg samlet levering': 'Velg samlet levering',
+  'Fullfør opplysninger': 'Fullfør opplysninger…', 'Fordel bilder til GMI/GML': 'Fordel bilder til GMI/GML',
 });
+// Delivery colouring is the workspace default; provenance-specific checks choose «Plasseringskilde» explicitly.
+export const setPhotoColourMode = (browser, value) => browser.evaluate(`(() => { const select = document.querySelector('.photo-map-display-card select');
+  if (!select) throw new Error('No colour selector'); if (select.value === ${JSON.stringify(value)}) return;
+  select.value = ${JSON.stringify(value)}; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 // Visible text first, then the accessible name of icon-only controls; workspace tools open through Verktøy.
 export const clickSourceControl = (browser, label, scope = sourceWizard) => browser.evaluate(`(async () => {
   const label=${JSON.stringify(label)}, root=${scope}, tools=${JSON.stringify(PHOTO_TOOL_LABELS)};

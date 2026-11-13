@@ -18,8 +18,8 @@ export const PHOTO_WORKSPACE_TOOLS = Object.freeze([
   { group: 'Eksport', items: [
     { key: 'complete', label: 'Fullfør opplysninger…', icon: ListChecksIcon, needsPhotos: true },
     { key: 'export', label: 'Eksporter…', icon: ExportIcon, needsPhotos: true },
-    // Changes mode only: the choices are used by a later combined GMI + FOTO delivery; nothing is exported here.
-    { key: 'delivery', label: 'Velg samlet levering', icon: ArrowsLeftRightIcon, needsPhotos: true },
+    // Changes mode only: each click plans one placement's GMI/GML destination for a later delivery; nothing is exported here.
+    { key: 'delivery', label: 'Fordel bilder til GMI/GML', icon: ArrowsLeftRightIcon, needsPhotos: true },
   ] },
   { group: 'Fjerning', destructive: true, items: [
     { key: 'remove', label: 'Fjern bilder fra laget…', icon: TrashIcon, needsPhotos: true },

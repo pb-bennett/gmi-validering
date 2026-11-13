@@ -189,7 +189,9 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert.equal(await browser.evaluate("document.querySelector('.photo-camera-marker:not(.photo-camera-marker-selected) svg:not(.photo-direction-indicator)').getBoundingClientRect().width"), 16);
       assert.equal(await browser.evaluate("document.querySelector('.photo-camera-marker-selected svg:not(.photo-direction-indicator)').getBoundingClientRect().width"), 22);
       assert(await browser.evaluate("Number(document.querySelector('.photo-camera-marker-selected').style.zIndex) > Math.max(...Array.from(document.querySelectorAll('.photo-camera-marker:not(.photo-camera-marker-selected)')).map(e => Number(e.style.zIndex)))"));
-      await browser.evaluate(`Array.from(${inspector}.querySelectorAll('summary')).find(e => e.innerText === 'Tekniske kildedata').click()`);
+      await browser.evaluate(`(() => { const summary = Array.from(${inspector}.querySelectorAll('summary')).find(e => e.textContent === 'Tekniske kildedata');
+      for (let parent = summary.parentElement.parentElement.closest('details'); parent; parent = parent.parentElement.closest('details')) parent.open = true;
+      summary.click(); })()`);
       assert(await browser.evaluate(`${inspector}.innerText.includes('EPSG:5972') && ${inspector}.innerText.includes('GPSLatitude')`));
       await click('Avbryt', 'document.querySelector(".photo-removal-bar")'); await assertWorkspaceLayout(1680, 900);
       assert(!await browser.evaluate("Boolean(document.querySelector('.photo-removal-bar, .photo-workspace-list input'))"));

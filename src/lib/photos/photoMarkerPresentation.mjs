@@ -110,15 +110,18 @@ export function photoSourceGlyph(kind, size = 13) {
 }
 
 const stagedDot = (staged) => staged ? '<span class="photo-marker-staged-dot" aria-hidden="true"></span>' : '';
+// Delivery destinations, the default FOTO workspace colouring. GMI deep blue and GML bright green differ strongly in
+// lightness, not only hue. Mirrors the --gmi-delivery-* tokens in globals.css (kept equal by a test).
 export const PHOTO_DELIVERY_COLOURS = Object.freeze({
-  gmi: { color: '#2463b5', label: 'Behold lenke i GMI' },
-  gml: { color: '#19785b', label: 'Til GML' },
-  excluded: { color: '#64748b', label: 'Ikke med i GML' },
-  review: { color: '#b06a08', label: 'Krever gjennomgang' },
-  mixed: { color: '#64748b', label: 'Ulike leveringsvalg' },
+  gmi: Object.freeze({ color: '#1e40af', label: 'Beholdes i GMI', short: 'GMI' }),
+  gml: Object.freeze({ color: '#22c55e', label: 'Til GML', short: 'GML' }),
+  excluded: Object.freeze({ color: '#64748b', label: 'Ikke med i GML', short: 'Ikke med' }),
+  review: Object.freeze({ color: '#b06a08', label: 'Krever gjennomgang', short: 'Gjennomg\u00e5' }),
+  mixed: Object.freeze({ color: '#64748b', label: 'Ulike leveringsvalg', short: 'Ulike' }),
 });
-export const PHOTO_DELIVERY_LABELS = Object.freeze({ 'keep-link': 'Behold lenke i GMI', transfer: 'Overf\u00f8r til GML',
-  include: 'Ta med i GML uten GMI-lenke', 'not-selected': 'Ikke med uten GMI-lenke', review: 'Krever gjennomgang' });
+// Planned state of one occurrence (a plan, never a claim that anything is exported yet).
+export const PHOTO_DELIVERY_LABELS = Object.freeze({ 'keep-link': 'Beholdes i GMI', transfer: 'Til GML',
+  include: 'Tas med i GML uten GMI-lenke', 'not-selected': 'Ikke med i GML', review: 'Krever gjennomgang' });
 export function photoDeliveryColourState(status) {
   return ({ 'keep-link': 'gmi', transfer: 'gml', include: 'gml', 'not-selected': 'excluded', review: 'review' })[status] || 'review';
 }
@@ -159,15 +162,16 @@ export function photoMarkerOptions(mode, options = {}) {
   const presentation = { ...options, markerColor: delivery ? PHOTO_DELIVERY_COLOURS[delivery].color : null,
     markerLabel: delivery ? `Planlagt: ${PHOTO_DELIVERY_COLOURS[delivery].label}` : null, mixedDelivery: delivery === 'mixed' };
   const result = mode === 'thumbnails' ? thumbnailMarkerOptions(presentation) : cameraMarkerOptions(presentation);
-  return { ...result, html: result.html + (options.batchSelected ? '<span class="photo-marker-batch" aria-hidden="true">\u2713</span>' : '') };
+  const deliveryClass = delivery && `photo-delivery-${delivery}`;
+  return deliveryClass && !result.className.split(' ').includes(deliveryClass) ? { ...result, className: `${result.className} ${deliveryClass}` } : result;
 }
 
 // Stable cache key: identical presentation reuses one L.divIcon instance (and DOM-free comparisons).
 export function photoMarkerIconKey(mode, { sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false,
-  thumbnailUrl = null, deliveryStatus = null, batchSelected = false, colourMode = 'provenance', deliveryColourState = null } = {}) {
+  thumbnailUrl = null, deliveryStatus = null, colourMode = 'provenance', deliveryColourState = null } = {}) {
   return JSON.stringify([mode === 'thumbnails' ? 't' : 'm', photoPositionSourcePresentation(sourceKind).kind, Boolean(selected),
     Boolean(staged), Boolean(sibling && !selected), stackCount > 1 ? Math.min(stackCount, 99) : 1, Boolean(editing),
-    mode === 'thumbnails' ? safeThumbnailUrl(thumbnailUrl) : null, deliveryStatus, Boolean(batchSelected), colourMode, deliveryColourState]);
+    mode === 'thumbnails' ? safeThumbnailUrl(thumbnailUrl) : null, deliveryStatus, colourMode, deliveryColourState]);
 }
 
 // One non-interactive arrow per placed occurrence, in the direction pane at the photo's own lat/lng. The icon has no
