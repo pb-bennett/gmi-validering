@@ -7,7 +7,7 @@ import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { getGmiProposedState } from '@/lib/gmi-edit/index.mjs';
 import { GMI_SOURCE_LEXEMES } from '@/lib/parsing/gmiLexicalEvidence.js';
 import { checkGmiFieldDraft } from '@/lib/gmiEditFields.mjs';
-import { prepareGmiFieldBatch, buildGmiFieldBatch, getGmiFieldBatchApproval } from '@/lib/gmiFieldBatchPlan.mjs';
+import { prepareGmiFieldBatch, buildGmiFieldBatch, getGmiFieldBatchApproval, gmiFieldBatchValues } from '@/lib/gmiFieldBatchPlan.mjs';
 import GmiFieldValueInput from './GmiFieldValueInput';
 import useGmiBatchValidation from './useGmiBatchValidation';
 import { gmiSelectionTargets, gmiInspectorFields, gmiFieldInspectorRows, gmiInspectorMixedFields, gmiBatchDatasetTransitions, gmiObjectFindingTransitions, gmiBatchSkipSummary, gmiCurrentFindingSplit, gmiBatchRiskReasons, GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
@@ -20,7 +20,7 @@ import { buildGmiSelectionProfile, gmiSelectionNarrowing, gmiSelectionProfileSou
 
 const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1';
 const primary = 'gmi-primary-control gmi-focus-ring gmi-batch-primary';
-const MODES = Object.freeze([['fill-missing', 'Fyll manglende verdier'], ['set', 'Sett verdi']]);
+const MODES = Object.freeze([['fill-missing', 'Fyll manglende verdier'], ['set', 'Sett verdi'], ['replace', 'Erstatt verdi'], ['clear', 'Tøm verdi']]);
 const modeLabel = (mode) => MODES.find(([value]) => value === mode)?.[1] || mode;
 const STEPS = ['Velg objekter', 'Oppsett', 'Forhåndsvis', 'Lagt til'];
 const newCount = (count, label) => `${count} ${count === 1 ? 'ny' : 'nye'} ${label}`;
@@ -56,6 +56,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   'use no memo';
   const selection = useStore((state) => state.gmiEditSelection);
   const [field, setField] = useState(''), [lexeme, setLexeme] = useState(''), [mode, setMode] = useState('fill-missing');
+  const [match, setMatch] = useState(null);
   const [review, setReview] = useState(null), [manual, setManual] = useState(new Set()), [advanced, setAdvanced] = useState(false);
   const [replace, setReplace] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState(null), [risk, setRisk] = useState(null);
   const [expanded, setExpanded] = useState(false);
@@ -69,6 +70,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const generation = useRef(0);
   const scopeExpanded = useRef(false);
   const dirty = Boolean(lexeme || review || mode !== 'fill-missing');
+  const proposedLexeme = mode === 'clear' ? '' : lexeme;
   const referenceDate = useStore((state) => state.gmiValidatorReferenceDate);
   const fields = useMemo(() => gmiInspectorFields(view, selection?.scope), [view, selection?.scope]);
   const column = fields.find((entry) => entry.sourceKey === field);
@@ -79,6 +81,8 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     return total + Number(String(value ?? '').trim() === '');
   }, 0);
   const scopeProblem = gmiSelectionTargets(view, selection);
+  const matchValues = useMemo(() => field ? gmiFieldBatchValues(view, selection, field) : null, [view, selection, field]);
+  const matchAvailable = match !== null && matchValues?.values?.some((entry) => entry.lexeme === match);
   const stale = review ? review.preview.session !== view.session || !scopeProblem.ok || selection.scope !== review.preview.scope
     ? 'stale-session' : expanded || selection.keys.some((key) => !review.keys.includes(key)) ? 'expanded' : null : null;
   useEffect(() => { if (stale === 'expanded') setExpanded(true); }, [stale]);
@@ -160,7 +164,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     scopeExpanded.current = false;
     setBusy(true); setMessage(null); setReview(null); setRisk(null); setManual(new Set()); setAdvanced(false); setReplace(false); setExpanded(false); setStaged(null);
     try {
-      const result = await prepareGmiFieldBatch(view, { scope: currentSelection.scope, sourceKey: field, operation: mode, value: lexeme, targets: targets.targets }, {
+      const result = await prepareGmiFieldBatch(view, { scope: currentSelection.scope, sourceKey: field, operation: mode, value: proposedLexeme, match, targets: targets.targets }, {
         isLive: () => token === generation.current && gmiEditSessions.getSession(view.handle).session === view.session
           && !scopeExpanded.current && useStore.getState().gmiEditSelection?.scope === currentSelection.scope
           && useStore.getState().gmiEditSelection?.keys.every((key) => currentSelection.keys.includes(key)),
@@ -214,19 +218,22 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     const result = gmiEditSessions.stage(view.handle, changeSet);
     if (!result.ok) { setMessage(gmiEditMessage(result.code)); return; }
     if (!result.staged) { setMessage('Ingen verdier ble endret, så ingen retting ble lagt til.'); return; }
-    invalidate(); setLexeme(''); setField(''); onDirtyChange(false); setRisk(null); setStaged(changeSet.id); onStaged(changeSet);
+    invalidate(); setLexeme(''); setMatch(null); setField('');
+    if (mode === 'replace' || mode === 'clear') setMode('fill-missing');
+    onDirtyChange(false); setRisk(null); setStaged(changeSet.id); onStaged(changeSet);
   };
   // Domains offer values; the existing Validator/dry-run owns verdicts, including numeric equivalence.
-  const draft = checkGmiFieldDraft(column, lexeme, view.document.encoding.encodingClass, { restrictEnumeration: false });
-  const problem = lexeme ? gmiLexemeProblem(draft.problem, lexeme) : null;
-  const conflicts = plan?.rows?.filter((row) => selection.keys.includes(row.key) && row.changedBy?.length && row.current !== lexeme).length || 0;
+  const draft = checkGmiFieldDraft(column, proposedLexeme, view.document.encoding.encodingClass, { restrictEnumeration: false });
+  const problem = proposedLexeme ? gmiLexemeProblem(draft.problem, proposedLexeme) : null;
+  const conflicts = plan?.rows?.filter((row) => selection.keys.includes(row.key) && row.changedBy?.length && row.current !== proposedLexeme
+    && (!['replace', 'clear'].includes(mode) || (row.canInclude && row.operationMatches))).length || 0;
   const detail = inspected ? getGmiProposedState(view.session).dataset?.[inspected.scope === 'line' ? 'lines' : 'points']?.[inspected.sourceIndex] : null;
   const inspectedReview = inspected && review ? review.preview.rows.find((row) => row.scope === inspected.scope && row.sourceIndex === inspected.sourceIndex) : null;
   const inspectedOutcome = inspected ? tableRows?.[`${inspected.scope}:${inspected.sourceIndex}`] : null;
   const inspectedTransitions = inspectedReview ? gmiObjectFindingTransitions(inspectedReview) : null;
   const count = selection?.keys.length || 0;
   const countLabel = gmiObjectCountLabel(count, selection?.scope);
-  const canPreview = Boolean(field && column && !column.disabled) && !busy && scopeProblem.ok && !problem && Boolean(lexeme.trim());
+  const canPreview = Boolean(field && column && !column.disabled) && !busy && scopeProblem.ok && !problem && (mode === 'clear' || Boolean(lexeme.trim())) && (mode !== 'replace' || matchAvailable);
   const step = stagedChangeSet ? 3 : review && !stale ? 2 : 1;
   // S2: dataset findings with severity changes shown once (presentation only; approval keeps diff.newCounts).
   const datasetTransitions = plan?.dryRun ? gmiBatchDatasetTransitions(plan.dryRun) : null;
@@ -235,7 +242,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     skipped: review.preview.rows.filter((row) => selection.keys.includes(row.key) && tableRows[row.key]?.outcome === 'skipped').length,
     excluded: review.keys.length - selection.keys.length, manual: plan.rows.filter((row) => tableRows[row.key]?.outcome === 'manual').length,
     newErrors: datasetTransitions?.counts.newFail ?? plan.counts.newErrors, newChecks: datasetTransitions?.counts.newCheck ?? plan.counts.newChecks } : null;
-  const breakdown = counts ? [['Hoppes over', counts.skipped], ['Utelatt av deg', counts.excluded], ['Manuelt inkludert', counts.manual],
+  const breakdown = counts ? [['Allerede tomme', review.preview.rows.filter((row) => selection.keys.includes(row.key) && row.reason === 'already-empty').length], ['Hoppes over', counts.skipped], ['Utelatt av deg', counts.excluded], ['Manuelt inkludert', counts.manual],
     ['Uendret', counts.unchanged], ['Overskriver utfylte', plan.ok ? plan.changeSet.counts.populatedOverwrites : 0]].filter(([, value]) => value > 0) : [];
   const stageBlocked = busy || Boolean(stale) || !plan?.ok || !plan.changeSet.cells.length || (conflicts > 0 && !replace) || validation.state?.status !== 'ready';
   // «Behold bare disse»: one shrink-only reducer action. A shrink keeps the preview valid; approval is never carried over.
@@ -254,17 +261,31 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   };
   const newBatch = () => { focusFieldSelect.current = true; setStaged(null); setConfigOpen(true); setMessage(null); };
   const configForm = <form onSubmit={(event) => { event.preventDefault(); if (canPreview) calculate(); }} className="gmi-inspector-config" data-gmi-batch-config>
-    <label>Felt<select ref={fieldSelectRef} aria-label="Felt for masseendring" value={field} disabled={busy} onChange={(event) => { invalidate(); setField(event.target.value); setFocusChoice(event.target.value); setLexeme(''); }}>
+    <label>Felt<select ref={fieldSelectRef} aria-label="Felt for masseendring" value={field} disabled={busy} onChange={(event) => { invalidate(); setField(event.target.value); setFocusChoice(event.target.value); setLexeme(''); setMatch(null); }}>
       <option value="">Velg felt…</option>
       {fields.map((entry, index) => <option key={index} value={entry.sourceKey ?? `absent:${entry.canonicalFieldId}`} disabled={entry.disabled}>
         {entry.sourceKey || entry.label || '(uten navn)'}{entry.explanation ? ` – ${entry.explanation}` : ''}
       </option>)}
     </select></label>
     {field && <p className="gmi-edit-muted">{field}: tom i {emptyCount} av {count}.</p>}
-    <GmiFieldValueInput key={`${selection?.scope}:${field}`} column={column} value={lexeme} problem={problem} disabled={busy || !field} onChange={(value) => { invalidate(); setLexeme(value); }} />
+    {mode !== 'clear' && <GmiFieldValueInput key={`${selection?.scope}:${field}`} column={column} value={lexeme} problem={problem} disabled={busy || !field} onChange={(value) => { invalidate(); setLexeme(value); }} />}
     <fieldset className="gmi-batch-modes"><legend>Hvordan skal verdien brukes?</legend>
-      {MODES.map(([value, label]) => <label key={value}><input type="radio" name="inspector-batch-mode" checked={mode === value} onChange={() => { invalidate(); setMode(value); }} /> {label}</label>)}
+      {MODES.map(([value, label]) => <label key={value}><input type="radio" name="inspector-batch-mode" checked={mode === value} onChange={() => { invalidate(); setMode(value); setMatch(null); }} /> {label}</label>)}
     </fieldset>
+    {mode === 'replace' && <div className="gmi-batch-match">
+      <label>Eksisterende verdi<select aria-label="Eksisterende verdi som skal erstattes" disabled={busy || !field}
+        value={matchAvailable ? String(matchValues.values.findIndex((entry) => entry.lexeme === match)) : ''}
+        onChange={(event) => { invalidate(); setMatch(event.target.value === '' ? null : matchValues.values[Number(event.target.value)].lexeme); }}>
+        <option value="">Velg eksisterende verdi…</option>
+        {matchValues?.values?.map((entry, index) => <option key={index} value={index}>
+          {entry.lexeme === '' ? '(tom streng)' : JSON.stringify(entry.lexeme).replace(/ /g, '·')} · {gmiObjectCountLabel(entry.count, selection.scope)}
+          {entry.lexeme.trim() !== entry.lexeme ? ` · ${entry.lexeme.length} tegn, med mellomrom` : ''}
+        </option>)}
+      </select></label>
+      <p className="gmi-edit-muted">Bare helt like verdier erstattes. Mellomrom og store/små bokstaver teller med. · viser mellomrom.</p>
+      {matchValues?.blocked > 0 && <p className="gmi-edit-muted">{matchValues.blocked} objekter kan ikke leses som sikre kildeceller.</p>}
+    </div>}
+    {mode === 'clear' && <p className="gmi-edit-muted">Verdien fjernes bare fra objektene som kan endres. Allerede tomme verdier hoppes over.</p>}
     {problem && <p role="alert" className="gmi-edit-problem">{problem}</p>}
     {!stale && <button className={primary} disabled={!canPreview}>{busy ? 'Lager forhåndsvisning…' : review ? 'Oppdater forhåndsvisning' : 'Forhåndsvis endringer'}</button>}
   </form>;
@@ -295,8 +316,9 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
           <button type="button" className="gmi-edit-link gmi-focus-ring" aria-expanded={configOpen} onClick={() => setConfigOpen((open) => !open)}>{configOpen ? 'Skjul oppsett' : 'Endre oppsett'}</button>
         </div>
         <p className="gmi-batch-proposal-change"><span className="gmi-batch-proposal-field">{review.preview.sourceKey}</span>
+          {review.preview.operation === 'replace' && <><Lexeme value={review.preview.match} /><span aria-hidden="true"> → </span></>}
           {review.preview.mode === 'fill-missing' && <><span className="gmi-batch-proposal-from">tom</span><span aria-hidden="true"> → </span><span className="sr-only"> til </span></>}
-          {review.preview.mode !== 'fill-missing' && <span aria-hidden="true"> → </span>}
+          {review.preview.mode !== 'fill-missing' && review.preview.operation !== 'replace' && <span aria-hidden="true"> → </span>}
           <strong className="gmi-batch-proposal-value"><Lexeme value={review.preview.lexeme} /></strong></p>
         <p className="gmi-batch-proposal-mode">{modeLabel(review.preview.operation)}</p>
         {stale ? <div className="gmi-batch-stale" role="alert">
@@ -375,7 +397,10 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     {risk && <GmiConfirmDialog testId="batch-risk" tone="risk" confirmIcon={SealWarningIcon}
       title={risk.manualRows.length ? 'Bekreft manuelt overstyrt masseendring' : 'Bekreft masseendring'}
       confirmLabel="Godkjenn og legg til" cancelLabel="Tilbake til utvalget" destructive={false} onCancel={() => setRisk(null)} onConfirm={() => stage(risk)}>
-      <p className="gmi-risk-operation"><strong>{risk.review.preview.sourceKey} → «{risk.review.preview.lexeme}»</strong> · {gmiObjectCountLabel(risk.changeSet.cells.length, review.preview.scope)} endres</p>
+      <p className="gmi-risk-operation"><strong>{['replace', 'clear'].includes(risk.review.preview.operation) ? <>
+        {modeLabel(risk.review.preview.operation)}: {risk.review.preview.sourceKey}
+        {risk.review.preview.operation === 'replace' && <> <Lexeme value={risk.review.preview.match} /></>} → <Lexeme value={risk.review.preview.lexeme} />
+      </> : <>{risk.review.preview.sourceKey} → «{risk.review.preview.lexeme}»</>}</strong> · {gmiObjectCountLabel(risk.changeSet.cells.length, review.preview.scope)} endres</p>
       {[['error', 'FEIL'], ['warning', 'SJEKK']].map(([tone, label]) => {
         // FEIL lists new and worsened (SJEKK → FEIL) findings once each; improved findings are listed separately.
         const findings = risk.findings.filter((finding) => finding.tone === tone && finding.introduced && finding.transition !== 'improved');

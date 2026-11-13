@@ -40,7 +40,9 @@ export function gmiFieldInspectorRows(preview, batch, selection, advanced, stale
     const canManual = advanced && row.canInclude && ['not-applicable', 'unresolved'].includes(row.reason);
     const { findings, existingCount, resolvedCount } = gmiObjectFindingTransitions(row);
     const unchanged = (!row.reason && row.current === preview.lexeme) || reason === 'unchanged';
-    const detail = reason === 'operation-mismatch' ? `Har allerede verdi «${row.current}»`
+    const detail = reason === 'already-empty' ? 'Allerede tom – kan ikke tømmes'
+      : reason === 'operation-mismatch' && preview.operation === 'replace' ? 'Samsvarer ikke nøyaktig med valgt verdi'
+      : reason === 'operation-mismatch' ? `Har allerede verdi «${row.current}»`
       : reason === 'not-applicable' && !preview.hydraulicReview ? 'Gjelder ikke ifølge Validator'
         : reason === 'unchanged' ? `Har allerede «${row.current}»` : gmiBatchSkipSummary(row, preview.sourceKey, reason);
     result[row.key] = { outcome: changed ? manual ? 'manual' : 'change' : unchanged ? 'unchanged' : 'skipped',

@@ -70,7 +70,7 @@ export async function prepareGmiBatchReview(view, options, { yieldWork = () => n
 export const initialGmiBatchSelection = (preview) => new Set(preview.rows.filter((row) => !row.changedBy.length && row.current !== preview.lexeme).map((row) => row.key));
 
 /** Recheck the selected subset through M2, retaining a genuine eligibility token. */
-export function buildGmiBatchSelection(session, preview, selected, replace = false, createdAt = new Date().toISOString(), allowOverride = false, intent = null) {
+export function buildGmiBatchSelection(session, preview, selected, replace = false, createdAt = new Date().toISOString(), allowOverride = false, intent = null, labelPrefix = null) {
   // Identity also rejects undo/redo back to the same stateKey while the preview was open.
   if (session !== preview.session) return { ok: false, code: 'stale-eligibility' };
   const manualTargets = (preview.skippedRows || []).filter((row) => selected.has(row.key));
@@ -86,5 +86,5 @@ export function buildGmiBatchSelection(session, preview, selected, replace = fal
   // Rebuild with the real applied count so the history label describes actual changes.
   return createGmiBatchCorrection(session, { eligibility, ...manual, lexeme: preview.lexeme, mode: preview.mode,
     conflictPolicy: replace ? 'replace' : 'skip', createdAt, intent,
-    label: `${preview.mode === 'overwrite' ? 'Sett' : 'Fyll'} ${eligibility.field} ${preview.lexeme} · ${result.changeSet.cells.length} ledninger${manualTargets.length ? ' · Manuelt overstyrt' : ''}` });
+    label: `${labelPrefix || `${preview.mode === 'overwrite' ? 'Sett' : 'Fyll'} ${eligibility.field} ${preview.lexeme}`} · ${result.changeSet.cells.length} ledninger${manualTargets.length ? ' · Manuelt overstyrt' : ''}` });
 }

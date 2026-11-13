@@ -379,7 +379,9 @@ export function summarizeGmiChangeSet(changeSet) {
   const values = [...new Set(cells.map((cell) => cell.next))];
   const uniform = fields.length === 1 && values.length === 1;
   const title = changeSet?.origin === 'batch' && uniform
-    ? `${changeSet.mode === 'overwrite' ? 'Sett' : 'Fyll'} ${fields[0]} · ${values[0]}` : (changeSet?.label || changeSet?.id || '');
+    ? changeSet.intent?.operation === 'clear' ? `Tøm ${fields[0]}`
+      : changeSet.intent?.operation === 'replace' ? `Erstatt ${fields[0]} · ${JSON.stringify(changeSet.intent.match)} → ${JSON.stringify(values[0])}`
+        : `${changeSet.mode === 'overwrite' ? 'Sett' : 'Fyll'} ${fields[0]} · ${values[0]}` : (changeSet?.label || changeSet?.id || '');
   return Object.freeze({ title, fields: Object.freeze(fields), objects, scope: scopes.size === 1 ? [...scopes][0] : null,
     objectsLabel: gmiObjectCountLabel(objects, scopes.size === 1 ? [...scopes][0] : null), uniform, value: uniform ? values[0] : null });
 }

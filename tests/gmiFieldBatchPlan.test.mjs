@@ -163,8 +163,8 @@ test('conflicts default-excluded, explicit skip/replace reuse M2, fill protects 
 test('setup refusals, invalid targets and selection identity fail closed', async () => {
   const view = await setup();
   const base = { scope: 'point', sourceKey: 'Merknad', operation: 'set', value: 'new', targets: targets(view, 'point', [0]) };
-  for (const [patch, code] of [[{ sourceKey: 'absent' }, 'field-absent'], [{ operation: 'clear' }, 'unsupported-operation'],
-    [{ operation: 'replace' }, 'unsupported-operation'], [{ targets: [] }, 'invalid-targets'],
+  for (const [patch, code] of [[{ sourceKey: 'absent' }, 'field-absent'], [{ operation: 'clear' }, 'invalid-clear-value'],
+    [{ operation: 'replace' }, 'invalid-match'], [{ operation: 'insert-column' }, 'unsupported-operation'], [{ targets: [] }, 'invalid-targets'],
     [{ targets: 'invalid' }, 'invalid-targets'], [{ targets: null }, 'invalid-targets'],
     [{ targets: [base.targets[0], base.targets[0]] }, 'invalid-targets'], [{ targets: [{ scope: 'line', sourceIndex: 0 }] }, 'invalid-targets'],
     [{ value: 'a;b' }, 'lexeme-semicolon']]) {

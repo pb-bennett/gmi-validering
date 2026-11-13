@@ -149,8 +149,10 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
         await browser.waitFor(`${inspector}.dataset.batchStep === '3'`);
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
         await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
-        const dialog = `document.querySelector('dialog[open].gmi-edit-export')`;
-        await browser.waitFor(dialog); await click('Last ned', dialog);
+        const dialog = `document.querySelector('dialog[open].delivery-wizard')`;
+        await browser.waitFor(dialog);
+        await click('Kontroller leveransen', dialog); await browser.waitFor(`${dialog}.dataset.exportPhase==='ready'`);
+        await click('Til pakke', dialog); await click('Last ned GMI', dialog);
         await browser.waitFor(`${dialog}?.dataset.exportPhase === 'done'`);
         const filename = await browser.evaluate(`${dialog}.querySelector('[data-downloaded-filename]').innerText`);
         let output;

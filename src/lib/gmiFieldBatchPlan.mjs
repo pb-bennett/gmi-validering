@@ -42,16 +42,35 @@ function findingsBetween(before, after) {
     deferred: before.deferred || after.deferred };
 }
 
-function classify(row, operation, lexeme) {
+function classify(row, operation, lexeme, match = null) {
   const unchanged = row.current === lexeme;
-  const matches = operation === 'set' || (missing(row.current) && missing(row.original));
-  const applicabilityReason = row.applicability === 'NOT_APPLICABLE' ? 'not-applicable'
+  const alreadyEmpty = operation === 'clear' && missing(row.current);
+  const matches = operation === 'replace' ? row.current === match
+    : operation === 'clear' ? !alreadyEmpty : operation === 'set' || (missing(row.current) && missing(row.original));
+  const applicabilityReason = ['not-applicable', 'unresolved'].includes(row.reason) ? row.reason : row.applicability === 'NOT_APPLICABLE' ? 'not-applicable'
     : row.applicability === 'UNRESOLVED' ? 'unresolved' : null;
-  const reason = unchanged ? 'unchanged' : !matches ? 'operation-mismatch'
+  const reason = alreadyEmpty ? 'already-empty' : operation === 'replace' && !matches ? 'operation-mismatch'
+    : unchanged ? 'unchanged' : !matches ? 'operation-mismatch'
     : applicabilityReason || (row.changedBy.length ? 'conflict' : null);
-  return { ...row, reason, operationMatches: matches, canInclude: !unchanged && matches,
+  return { ...row, reason, operationMatches: matches, canInclude: !alreadyEmpty && !unchanged && matches,
     defaultIncluded: !reason,
     status: reason || (missing(row.current) ? 'fill' : 'overwrite') };
+}
+
+/** Exact effective values for the selected source cells, including whitespace variants and counts. */
+export function gmiFieldBatchValues(view, selection, sourceKey) {
+  if (!liveView(view)) return reject('stale-session');
+  const selected = gmiSelectionTargets(view, selection);
+  if (!selected.ok) return selected;
+  const values = new Map();
+  let blocked = 0;
+  for (const target of selected.targets) {
+    const resolved = resolveGmiCell(view.document, { ...target, field: sourceKey });
+    if (!resolved.ok) { blocked++; continue; }
+    const current = getGmiEditCell(view.session, resolved.cell).proposed;
+    values.set(current, (values.get(current) || 0) + 1);
+  }
+  return freeze({ ok: true, values: [...values].map(([lexeme, count]) => ({ lexeme, count })), blocked });
 }
 
 /**
@@ -69,9 +88,12 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
   let selectionValid = () => true;
   const isCurrent = () => isLive() && view.session === session
     && sameGmiSelectionBinding(sourceBinding, view.handle) && selectionValid();
-  const { scope, sourceKey, operation, value, selection } = options;
+  const { scope, sourceKey, operation, value, match = null, selection } = options;
   if (!['point', 'line'].includes(scope)) return reject('unknown-scope');
-  if (!['fill-missing', 'set'].includes(operation)) return reject('unsupported-operation');
+  if (!['fill-missing', 'set', 'replace', 'clear'].includes(operation)) return reject('unsupported-operation');
+  if (operation === 'replace' && typeof match !== 'string') return reject('invalid-match');
+  if (operation === 'clear' && value !== undefined && value !== '') return reject('invalid-clear-value');
+  const proposedValue = operation === 'clear' ? '' : value;
   const columns = describeGmiEditColumns(view, scope).columns.filter((column) => column.sourceKey === sourceKey);
   if (!columns.length) return reject('field-absent');
   const [column] = columns;
@@ -96,7 +118,7 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
     || !Number.isInteger(target.sourceIndex) || target.sourceIndex < 0)
     || new Set(targets.map(keyOf)).size !== targets.length) return reject('invalid-targets');
   targets = targets.map((target) => ({ ...target })).sort((a, b) => a.sourceIndex - b.sourceIndex);
-  const mode = operation === 'set' ? 'overwrite' : 'fill-missing';
+  const mode = operation === 'fill-missing' ? 'fill-missing' : 'overwrite';
   let lexeme, hydraulicReview = null;
   if (column.operationKind === 'hydraulic') {
     // Preserve M2's numeric spellings, eligibility and manual override behavior.
@@ -107,7 +129,7 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
       const resolved = resolveGmiCell(view.document, { ...target, field: sourceKey });
       if (!resolved.ok && resolved.code !== 'object-not-editable') return reject(resolved.code);
     }
-    const draft = checkGmiFieldDraft(column, value, view.document.encoding.encodingClass,
+    const draft = checkGmiFieldDraft(column, proposedValue, view.document.encoding.encodingClass,
       { restrictEnumeration: false, normalizeCase: false });
     if (!draft.ok) return reject(draft.problem.code);
     lexeme = draft.lexeme;
@@ -116,18 +138,19 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
     if (hydraulicReview.eligibility.field !== sourceKey) return reject('field-binding-unresolved');
   } else {
     // Custom codes are reviewed by the Validator, just as in the individual editor.
-    const draft = checkGmiFieldDraft(column, value, view.document.encoding.encodingClass, { restrictEnumeration: false });
+    const draft = checkGmiFieldDraft(column, proposedValue, view.document.encoding.encodingClass, { restrictEnumeration: false });
     if (!draft.ok) return reject(draft.problem.code);
     lexeme = draft.lexeme;
   }
   const rows = [];
   if (hydraulicReview) {
     for (const entry of [...hydraulicReview.rows, ...hydraulicReview.skippedRows].sort((a, b) => a.sourceIndex - b.sourceIndex)) {
-      rows.push({ ...entry, key: keyOf(entry), cellKey: entry.key,
+      const row = { ...entry, key: keyOf(entry), cellKey: entry.key,
         status: entry.reason || (entry.current === lexeme ? 'unchanged' : entry.missing ? 'fill' : 'overwrite'),
         defaultIncluded: !entry.reason && !entry.changedBy.length && entry.current !== lexeme,
         canInclude: Boolean(entry.key) && (!entry.reason || canManuallySelectGmiBatchRow(entry, mode)),
-        operationMatches: operation === 'set' || (missing(entry.current) && missing(entry.original)) });
+        operationMatches: operation === 'set' || (missing(entry.current) && missing(entry.original)) };
+      rows.push(['replace', 'clear'].includes(operation) && entry.key ? classify(row, operation, lexeme, match) : row);
     }
   } else {
     const effective = gmiSessionEffectiveCells(view.session);
@@ -149,7 +172,7 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
           changedBy: current.history.map((entry) => entry.changeSetId), missing: missing(current.proposed),
           applicability: column.governingRuleId ? before.governingOutcome?.diagnosticFacts?.coverageApplicability || 'UNRESOLVED' : null,
           governingOutcome: before.governingOutcome, proposedOutcome: after.governingOutcome,
-          validatorKind: column.validatorKind, ...findingsBetween(before, after) }, operation, lexeme));
+          validatorKind: column.validatorKind, ...findingsBetween(before, after) }, operation, lexeme, match));
       }
       if (rows.length % 20 === 0) {
         await yieldWork();
@@ -158,7 +181,8 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
     }
   }
   if (!isCurrent() || !liveView(view)) return reject('stale-session');
-  const preview = freeze({ session, scope, sourceKey, operation, lexeme, mode, column, rows, hydraulicReview });
+  if (operation === 'replace' && !rows.some((row) => row.current === match)) return reject('match-not-found');
+  const preview = freeze({ session, scope, sourceKey, operation, lexeme, match: operation === 'replace' ? match : null, mode, column, rows, hydraulicReview });
   previews.set(preview, { view, isLive: isCurrent, selection });
   return { ok: true, preview };
 }
@@ -183,16 +207,18 @@ export function buildGmiFieldBatch(session, preview, { included, replace = false
   if (selected.some((row) => !row.canInclude)) return reject('target-not-allowed');
   if (selected.some((row) => ['not-applicable', 'unresolved'].includes(row.reason))
     && approvals?.allowApplicabilityOverride !== true) return reject('manual-override-not-approved');
-  const intent = { operation: preview.operation, sourceKey: preview.sourceKey, value: preview.lexeme, match: null, scope: preview.scope,
+  const intent = { operation: preview.operation, sourceKey: preview.sourceKey, value: preview.lexeme, match: preview.match, scope: preview.scope,
     excluded: {
-      notApplicable: preview.rows.filter((row) => !included.has(row.key) && ['not-applicable', 'unresolved'].includes(row.reason)).length,
+      notApplicable: preview.rows.filter((row) => !included.has(row.key) && ['not-applicable', 'unresolved', 'already-empty'].includes(row.reason)).length,
       mismatch: preview.rows.filter((row) => !included.has(row.key) && row.reason === 'operation-mismatch').length,
       user: preview.rows.filter((row) => row.canInclude && !included.has(row.key) && !['not-applicable', 'unresolved', 'operation-mismatch'].includes(row.reason)).length,
     } };
+  const labelPrefix = preview.operation === 'clear' ? `Tøm ${preview.sourceKey}`
+    : preview.operation === 'replace' ? `Erstatt ${preview.sourceKey} «${preview.match}» med «${preview.lexeme}»` : null;
   let result;
   if (preview.hydraulicReview) {
     result = buildGmiBatchSelection(session, preview.hydraulicReview, new Set(selected.map((row) => row.cellKey)),
-      replace, createdAt, approvals?.allowApplicabilityOverride === true, intent);
+      replace, createdAt, approvals?.allowApplicabilityOverride === true, intent, labelPrefix);
   } else {
     // This branch is reachable only for G1's generic operationKind. Hydraulic
     // fields always use the eligibility-token path above, never explicit targets.
@@ -201,7 +227,7 @@ export function buildGmiFieldBatch(session, preview, { included, replace = false
       mode: preview.mode, conflictPolicy: replace ? 'replace' : 'skip', createdAt, intent };
     result = createGmiBatchCorrection(session, options);
     if (result.ok) result = createGmiBatchCorrection(session, { ...options,
-      label: `${preview.operation === 'set' ? 'Sett' : 'Fyll'} ${preview.sourceKey} ${preview.lexeme} · ${gmiObjectCountLabel(result.changeSet.cells.length, preview.scope)}` });
+      label: `${labelPrefix || `${preview.operation === 'set' ? 'Sett' : 'Fyll'} ${preview.sourceKey} ${preview.lexeme}`} · ${gmiObjectCountLabel(result.changeSet.cells.length, preview.scope)}` });
   }
   if (!result.ok) return result;
   const changed = new Set(result.changeSet.cells.map((cell) => cell.key));

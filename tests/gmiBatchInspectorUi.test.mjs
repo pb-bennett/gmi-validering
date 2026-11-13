@@ -113,8 +113,10 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         assert.deepEqual(await contextRedo(), [], 'the footer redo removes the contextual actions');
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
         await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
-        const exportDialog = `document.querySelector('dialog[open].gmi-edit-export')`;
-        await browser.waitFor(exportDialog); await click('Last ned', exportDialog);
+        const exportDialog = `document.querySelector('dialog[open].delivery-wizard')`;
+        await browser.waitFor(exportDialog);
+        await click('Kontroller leveransen', exportDialog); await browser.waitFor(`${exportDialog}.dataset.exportPhase==='ready'`);
+        await click('Til pakke', exportDialog); await click('Last ned GMI', exportDialog);
         await browser.waitFor(`${exportDialog}?.dataset.exportPhase==='done'`);
         const filename = await text(`${exportDialog}.querySelector('[data-downloaded-filename]')`);
         let output;

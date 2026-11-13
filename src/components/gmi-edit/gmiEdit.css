@@ -398,3 +398,7 @@
 .gmi-individual-selection p { margin: 0; font-size: 12px; }
 .gmi-individual-selection > button { justify-self: start; }
 .gmi-individual-alternative { display: grid; gap: 4px; margin-block: 8px; }
+
+/* G6: keep exact-value choices readable within the existing inspector grid. */
+.gmi-batch-match { grid-column: 1 / -1; min-width: 0; }
+.gmi-batch-match select { width: 100%; max-width: 100%; }
