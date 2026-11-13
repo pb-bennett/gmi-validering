@@ -55,7 +55,7 @@
 .photo-removal-actions { flex-shrink: 0; display: grid; gap: 6px; padding: 8px 10px; border-top: 1px solid #ecc8c3; background: #fdf3f2; }
 .photo-removal-primary:not(:disabled) { border-color: #9b2c23 !important; color: #9b2c23; font-weight: 600; }
 .photo-removal-actions button:disabled { opacity: .45; }
-/* Delivery planning (Fordel bilder til GMI/GML) and the shared destination palette: GMI deep blue, GML bright green,
+/* Delivery planning (Fordel bilder til GMI/GML) and the shared destination palette: GMI deep blue, GML dark green (map markers retain bright green),
    neutral «Ikke med», warning for review. Same tokens on rows, inspector toggle, popup chooser and package tree. */
 .photo-delivery-bar { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 4px 6px; flex-wrap: wrap; padding: 6px 10px; background: #eef7f9; border-bottom: 1px solid #a9d4de; }
 .photo-delivery-bar p { margin: 0; font-weight: 600; color: var(--gmi-navy); }
@@ -68,15 +68,18 @@
 .photo-delivery-bar .photo-delivery-announcement { width: 100%; min-height: 16px; font-weight: 400; font-size: 11px; color: var(--gmi-text-muted); overflow-wrap: anywhere; }
 .photo-delivery-bar .photo-delivery-announcement:empty { display: none; }
 .photo-delivery-summary { margin: 2px 0 0; font-size: 11px; color: var(--gmi-interactive); }
-.photo-workspace-row[data-planning] { cursor: pointer; }
-.photo-workspace-row[data-planning]:hover { background: var(--gmi-surface-soft); }
+.photo-workspace-row:hover { background: var(--gmi-surface-soft); }
 
 /* Destination pill: fully rounded, compact; one look everywhere. */
 .photo-delivery-pill { display: inline-block; flex-shrink: 0; margin-left: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--gmi-delivery-neutral); background: var(--gmi-surface);
   color: var(--gmi-text-muted); font-size: 10px; font-weight: 600; line-height: 15px; white-space: nowrap; }
 .photo-delivery-pill[data-destination=gmi] { border-color: var(--gmi-delivery-gmi); background: var(--gmi-delivery-gmi); color: var(--gmi-delivery-gmi-ink); }
-.photo-delivery-pill[data-destination=gml] { border-color: #15803d; background: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml-ink); }
+.photo-delivery-pill[data-destination=gml] { border-color: var(--gmi-delivery-gml); background: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml-ink); }
 .photo-delivery-pill[data-destination=review] { border-color: var(--gmi-validation-warning-border); color: var(--gmi-validation-warning-text); background: var(--gmi-validation-warning-bg); }
+
+.photo-delivery-row-button { min-height: 26px; padding: 0 8px; margin: 0 3px 0 0; font-size: 11px; cursor: pointer; }
+.photo-delivery-row-button:hover:not([aria-disabled]), .photo-delivery-option[aria-checked=true]:hover:not([aria-disabled]) { filter: brightness(.88); }
+.photo-delivery-row-button[aria-disabled] { cursor: not-allowed; border-style: dashed; }
 
 /* Inspector and popup toggle: two rounded pills; the chosen one is filled in its destination colour and checked. */
 .photo-delivery-section .photo-delivery-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; flex-wrap: wrap; }
@@ -86,9 +89,9 @@
   border-radius: 999px; background: transparent; color: var(--gmi-text); font-size: 12px; font-weight: 600; cursor: pointer; transition: background-color 120ms, border-color 120ms, color 120ms; }
 .photo-delivery-option:hover:not([aria-disabled]):not([aria-checked=true]) { background: var(--gmi-surface); border-color: var(--gmi-border-strong); }
 .photo-delivery-option[data-destination=gmi]:hover:not([aria-disabled]):not([aria-checked=true]) { border-color: var(--gmi-delivery-gmi); color: var(--gmi-delivery-gmi); }
-.photo-delivery-option[data-destination=gml]:hover:not([aria-disabled]):not([aria-checked=true]) { border-color: #15803d; color: #15803d; }
+.photo-delivery-option[data-destination=gml]:hover:not([aria-disabled]):not([aria-checked=true]) { border-color: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml); }
 .photo-delivery-option[aria-checked=true][data-destination=gmi] { background: var(--gmi-delivery-gmi); border-color: var(--gmi-delivery-gmi); color: var(--gmi-delivery-gmi-ink); }
-.photo-delivery-option[aria-checked=true][data-destination=gml] { background: var(--gmi-delivery-gml); border-color: #15803d; color: var(--gmi-delivery-gml-ink); }
+.photo-delivery-option[aria-checked=true][data-destination=gml] { background: var(--gmi-delivery-gml); border-color: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml-ink); }
 .photo-delivery-option[aria-checked=true][data-destination=excluded] { background: var(--gmi-delivery-neutral); border-color: var(--gmi-delivery-neutral); color: #fff; }
 .photo-delivery-option[aria-disabled] { color: var(--gmi-text-subtle); cursor: not-allowed; }
 .photo-delivery-option[aria-disabled][aria-checked=true] { cursor: default; }

@@ -121,6 +121,15 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await click('Fordel bilder til GMI/GML');
         await browser.waitFor('document.querySelector(".photo-delivery-bar")');
         assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
+        // Sidebar navigation still locates/highlights the placement during planning and never edits it.
+        await select(repeated[0].id);
+        await browser.waitFor(`${markerOf(repeated[0].id)}.classList.contains('photo-camera-marker-selected')`);
+        assert.equal(await fillOf(repeated[0].id), GMI);
+        assert.equal(await pillOf(repeated[0].id), 'GMI');
+        await select(exif.id);
+        await browser.waitFor(`${markerOf(exif.id)}.classList.contains('photo-camera-marker-selected')`);
+        assert.equal(await pillOf(exif.id), 'Ikke med');
+        assert.equal(await pillOf(repeated[0].id), 'GMI');
         // An isolated GMI-linked marker: GMI -> GML -> GMI, at once; its sibling placement of the same photograph is untouched.
         for (const [expectedFill, expectedPill] of [[GML, 'GML'], [GMI, 'GMI'], [GML, 'GML']]) {
           await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);

@@ -173,6 +173,9 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         assert.equal(await browser.evaluate(`${popup}.querySelector('.photo-delivery-popup-summary').innerText`), '2 plasseringer · 1 GMI · 1 GML');
         assert.match(await browser.evaluate(`${occurrence(rows[1])}.innerText`), /shared\.jpg/);
         assert.deepEqual([await checked(rows[0]), await checked(rows[1])], ['gml', 'gmi']);
+        assert.deepEqual(await browser.evaluate(`Array.from(${popup}.querySelectorAll('[role=radio][aria-checked=true]')).map(e => {
+          const s=getComputedStyle(e); return [s.backgroundColor,s.color]; })`),
+        [['rgb(22, 101, 52)', 'rgb(255, 255, 255)'], ['rgb(30, 64, 175)', 'rgb(255, 255, 255)']]);
         assert.deepEqual(await pills(), ['GML', 'GMI'], 'opening the chooser changes nothing');
         await screenshot(browser, 'refine-overlap-chooser');
         // Each occurrence changes alone; the stack colour follows all of its members at once.
@@ -246,6 +249,8 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await click(browser, 'Utvid alle');
         await browser.waitFor(`${dialog}.querySelector('[data-package-path="Attachments/shared.jpg"]')`);
         assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').textContent`), 'GML');
+        assert.deepEqual(await browser.evaluate(`(() => { const s=getComputedStyle(${dialog}.querySelector('.delivery-destination')); return [s.backgroundColor,s.color]; })()`),
+          ['rgb(22, 101, 52)', 'rgb(255, 255, 255)']);
         await assertPillFollowsName(browser);
         await screenshot(browser, 'polish-tree-expanded');
         await browser.evaluate(`${dialog}.querySelector('.delivery-tree input[type=checkbox]').click()`);

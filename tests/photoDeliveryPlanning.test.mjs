@@ -152,7 +152,10 @@ test('the destination palette is shared, clearly distinguishable and readable', 
   const css = await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8');
   const token = (name) => css.match(new RegExp(`--gmi-delivery-${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1]?.toLowerCase();
   assert.equal(token('gmi'), PHOTO_DELIVERY_COLOURS.gmi.color, 'CSS token and marker colour are one palette');
-  assert.equal(token('gml'), PHOTO_DELIVERY_COLOURS.gml.color);
+  assert.equal(token('gml-marker'), PHOTO_DELIVERY_COLOURS.gml.color);
+  assert.equal(token('gml'), '#166534');
+  assert.equal(token('gmi-ink'), '#ffffff');
+  assert.equal(token('gml-ink'), '#ffffff');
   assert.equal(token('neutral'), PHOTO_DELIVERY_COLOURS.excluded.color);
   const { gmi, gml, excluded } = PHOTO_DELIVERY_COLOURS;
   // Not a subtle hue difference: GMI and GML differ strongly in lightness too (the rejected pair was ~1.3:1).
@@ -161,7 +164,7 @@ test('the destination palette is shared, clearly distinguishable and readable', 
   assert(contrast(gml.color, excluded.color) >= 2 && contrast(gmi.color, excluded.color) >= 1.5);
   // Pill text on the filled destination colours (AA for small text).
   assert(contrast(gmi.color, token('gmi-ink')) >= 4.5);
-  assert(contrast(gml.color, token('gml-ink')) >= 4.5);
+  assert(contrast(token('gml'), token('gml-ink')) >= 4.5);
   // Markers keep a white casing and dark outline, so both fills stay visible on light and dark map backgrounds.
   for (const background of ['#ffffff', '#f2efe9', '#1f2937']) assert(Math.max(contrast(gmi.color, background), contrast(gml.color, background)) >= 3);
   // Provenance mode keeps its accepted palette.
@@ -175,7 +178,10 @@ test('UI source contract: direct-click planning replaced the batch workflow; the
     'components/photos/PhotoDeliveryToggle.js', 'components/delivery/DeliveryInventory.js', 'components/photos/PhotoWorkspaceInspector.js', 'lib/photos/photoWorkspaceState.mjs'].map(read));
   assert.match(tools, /label: 'Fordel bilder til GMI\/GML'/);
   assert.doesNotMatch(tools, /Velg samlet levering/);
-  assert.match(collection, /Klikk på et bilde for å endre leveringsvalg\./);
+  assert.match(collection, /onClick=\{\(\) => onSelect\(photo.id\)\}/);
+  assert.match(collection, /event.stopPropagation\(\); if \(target\) onPlan\(photo.id\)/);
+  assert.doesNotMatch(collection, /pan: false|const planPhoto/);
+  assert.match(collection, /Bruk leveringsknappen for å endre GMI\/GML\./);
   for (const removed of [/for samlet levering`\}/, /photo-delivery-actions/, /Overfør \{unit/, /Behold lenker for/, /select-delivery/, /toggle-delivery/])
     assert.doesNotMatch(collection, removed);
   const planningBar = collection.slice(collection.indexOf('{deliveryMode && <div className="photo-delivery-bar"'), collection.indexOf('<ul ref={listRef}'));
@@ -200,4 +206,23 @@ test('UI source contract: direct-click planning replaced the batch workflow; the
   assert.deepEqual([...positions].sort((a, b) => a - b), positions);
   const controls = await read('components/photos/PhotoDeliveryControls.js');
   assert.doesNotMatch(controls, /fjernes først når en samlet leveranse lages|Bildet har ingen GMI-lenke. Er det valgt/, 'no repeated link-removal explanation');
+});
+
+
+test('pills and selected destination controls share dark fills; marker green stays separate', async () => {
+  const css = await readFile(new URL('../src/components/photos/photoWorkspace.css', import.meta.url), 'utf8');
+  const tree = await readFile(new URL('../src/components/delivery/deliveryWizard.css', import.meta.url), 'utf8');
+  for (const [key, label] of [['gmi', 'GMI'], ['gml', 'GML']]) {
+    for (const [source, selector] of [[css, `.photo-delivery-pill[data-destination=${key}]`],
+      [css, `.photo-delivery-option[aria-checked=true][data-destination=${key}]`],
+      [tree, `.delivery-destination[data-destination=${label}]`]]) {
+      const rule = source.slice(source.indexOf(selector)).split('}')[0];
+      assert(rule.includes(`background: var(--gmi-delivery-${key})`), selector);
+      assert(rule.includes(`color: var(--gmi-delivery-${key}-ink)`), selector);
+    }
+  }
+  assert.match(css, /photo-delivery-row-button:hover:not\(\[aria-disabled\]\)/);
+  assert.match(css, /photo-delivery-row-button\[aria-disabled\][^}]*border-style: dashed/);
+  assert.match(tree, /linear-gradient\(90deg, var\(--gmi-delivery-gmi\) 0 50%, var\(--gmi-delivery-gml\) 50% 100%\)/);
+  assert(!css.includes('#22c55e') && !tree.includes('#22c55e'), 'bright green belongs to map presentation only');
 });
