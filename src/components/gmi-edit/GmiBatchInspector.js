@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowsClockwiseIcon, CheckIcon, HandPointingIcon, SealWarningIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
@@ -23,6 +23,7 @@ const primary = 'gmi-primary-control gmi-focus-ring gmi-batch-primary';
 const MODES = Object.freeze([['fill-missing', 'Fyll manglende verdier'], ['set', 'Sett verdi'], ['replace', 'Erstatt verdi'], ['clear', 'Tøm verdi']]);
 const modeLabel = (mode) => MODES.find(([value]) => value === mode)?.[1] || mode;
 const STEPS = ['Velg objekter', 'Oppsett', 'Forhåndsvis', 'Lagt til'];
+const INDIVIDUAL_HINT = 'Rett objektene i utvalget ett om gangen, med ulike verdier eller andre felt. Utvalget beholdes.';
 const newCount = (count, label) => `${count} ${count === 1 ? 'ny' : 'nye'} ${label}`;
 
 /** "1 ny FEIL" / "0 nye SJEKK": always visible, coloured only when non-zero. */
@@ -61,6 +62,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const [replace, setReplace] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState(null), [risk, setRisk] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const individualHintId = useId();
   const [staged, setStaged] = useState(null); // id of the ChangeSet just staged from this inspector
   // S5: the field the user last chose. It leads the Data Table from the choice on, through staging and
   // «Ny masseendring», until another field is chosen. Presentation only: it never makes the form dirty.
@@ -271,6 +273,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       </option>)}
     </select></label>
     {field && <p className="gmi-edit-muted">{field}: tom i {emptyCount} av {count}.</p>}
+    <p className="gmi-edit-muted gmi-batch-field-policy" data-gmi-field-policy>Ulike verdier eller andre felt per objekt: bruk «Rett én og én». SDR, Trykklasse og Ringstivhet kan bare masseendres på ledninger. Felt merket «Kan bare rettes enkeltvis» rettes i objektskjemaet; låste eller manglende felt kan ikke rettes der heller.</p>
     {mode !== 'clear' && <GmiFieldValueInput key={`${selection?.scope}:${field}`} column={column} value={lexeme} problem={problem} disabled={busy || !field} onChange={(value) => { invalidate(); setLexeme(value); }} />}
     <fieldset className="gmi-batch-modes"><legend>Hvordan skal verdien brukes?</legend>
       {MODES.map(([value, label]) => <label key={value}><input type="radio" name="inspector-batch-mode" checked={mode === value} onChange={() => { invalidate(); setMode(value); setMatch(null); }} /> {label}</label>)}
@@ -296,12 +299,14 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   return <section className="gmi-edit-editor gmi-batch-inspector" data-gmi-batch-inspector data-batch-step={step} aria-label="Masseendring av valgte objekter" aria-busy={busy || Boolean(candidate?.ok && candidate.changeSet.cells.length && (!validation.state || validation.state.status === 'running'))}>
     <header className="gmi-batch-head">
       <div className="min-w-0"><p className="gmi-edit-kicker">Masseendring</p><h2>{countLabel} valgt</h2></div>
-      <button type="button" className={control} onClick={onRequestClose}>Avslutt</button>
+      {/* B3 alternative stays a compact secondary action, so the proposal remains visible at laptop sizes. */}
+      <div className="gmi-batch-head-actions">
+        <button type="button" className={control} disabled={!scopeProblem.ok || busy} onClick={onEditIndividually}
+          title={INDIVIDUAL_HINT} aria-describedby={individualHintId} data-gmi-individual-entry>Rett én og én</button>
+        <span id={individualHintId} className="sr-only">{INDIVIDUAL_HINT}</span>
+        <button type="button" className={control} onClick={onRequestClose}>Avslutt</button>
+      </div>
     </header>
-    <div className="gmi-individual-alternative">
-      <button type="button" className={control} disabled={!scopeProblem.ok || busy} onClick={onEditIndividually}>Rett én og én</button>
-      <p className="gmi-edit-muted">Bruk ulike verdier eller rett andre felt på hvert objekt. Utvalget beholdes. SDR, Trykklasse og Ringstivhet kan bare masseendres på ledninger. Felt merket «Kan bare rettes enkeltvis» rettes i objektskjemaet; låste eller manglende felt kan ikke rettes der heller.</p>
-    </div>
     <ol className="gmi-batch-steps" aria-label="Fremgang">
       {STEPS.map((label, index) => <li key={label} data-done={index < step || step === 3 || undefined} aria-current={index === step ? 'step' : undefined}>
         {index < step || step === 3 ? <CheckIcon size={11} weight="regular" aria-hidden="true" /> : <span aria-hidden="true">{index + 1}</span>}{label}

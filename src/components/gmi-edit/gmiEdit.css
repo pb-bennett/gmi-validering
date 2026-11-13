@@ -100,6 +100,7 @@
 .gmi-inspector-config .gmi-batch-value-input { display: grid; gap: 3px; grid-column: 1 / -1; }
 .gmi-inspector-config input:not([type=radio]), .gmi-inspector-config select { width: 100%; min-width: 0; padding: 3px 5px; border: 1px solid var(--gmi-border-strong); border-radius: 4px; }
 .gmi-inspector-config fieldset { grid-column: 1 / -1; }
+.gmi-inspector-config .gmi-batch-field-policy { grid-column: 1 / -1; margin: 0; }
 .gmi-batch-inspector input { accent-color: var(--gmi-interactive); }
 .gmi-batch-inspector input:focus-visible, .gmi-batch-inspector select:focus-visible { outline: 2px solid var(--gmi-interactive); outline-offset: 2px; }
 .gmi-batch-object-detail dl > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; overflow-wrap: anywhere; }
@@ -397,7 +398,8 @@
 }
 .gmi-individual-selection p { margin: 0; font-size: 12px; }
 .gmi-individual-selection > button { justify-self: start; }
-.gmi-individual-alternative { display: grid; gap: 4px; margin-block: 8px; }
+/* B3: «Rett én og én» sits beside «Avslutt» in the batch header (compact secondary action). */
+.gmi-batch-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex-shrink: 0; }
 
 /* G6: keep exact-value choices readable within the existing inspector grid. */
 .gmi-batch-match { grid-column: 1 / -1; min-width: 0; }
