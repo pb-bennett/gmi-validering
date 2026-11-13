@@ -50,7 +50,7 @@ export default function MapView(props) {
     <div className="relative h-full w-full">
       <MapInner {...props} />
       {props.photoWorkspace ? <PhotoMapDisplayCard mode={props.photoWorkspace.displayMode} onModeChange={props.photoWorkspace.onDisplayModeChange}
-        zoom={props.photoWorkspace.zoom} editing={props.photoWorkspace.editing} /> : <MapLegend photoDisplay={props.photoDisplay} />}
+        zoom={props.photoWorkspace.zoom} editing={props.photoWorkspace.editing} deliveryMode={props.photoWorkspace.deliveryMode} /> : <MapLegend photoDisplay={props.photoDisplay} />}
       <LayerHighlightPanel />
 
       {outlierPromptOpen &&

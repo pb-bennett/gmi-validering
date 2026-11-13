@@ -119,7 +119,7 @@ test('shared photo review counts retained and transferred references independent
     f.transfer(); const plan = await f.plan();
     const summary = Object.fromEntries(deliverySummary({ plan, snapshot: f.capture() }));
     assert.equal(summary.Bildelenker, '1 beholdes i GMI · 1 overføres');
-    assert.equal(summary.FOTO, '1 post i GML'); assert.equal(summary.Vedlegg, '1 fil');
+    assert.equal(summary.GML, '1 post i GML'); assert.equal(summary.Vedlegg, '1 fil');
     assert(deliveryDiagnostics(plan).warnings.some((item) => item.code === 'photo-linked-elsewhere'));
     assert.match(deliveryMessage('retained-photo-unresolved'), /Last inn riktig bilde/);
     assert.match(deliveryMessage('invalid-gml'), /Ingen bildelenker fjernes/);

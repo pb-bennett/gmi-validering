@@ -18,3 +18,13 @@
 @media (max-width: 700px) {
   .delivery-wizard .delivery-content { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 }
+.delivery-tree ul { list-style: none; padding-left: 16px; margin: 4px 0; font-family: inherit; }
+.delivery-tree > ul { padding-left: 0; }
+.delivery-tree-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.delivery-tree-controls button { border: 1px solid var(--gmi-border-strong); border-radius: 4px; padding: 3px 8px; }
+.delivery-tree-controls label { display: flex; gap: 6px; align-items: center; }
+.delivery-folder, .delivery-file { display: flex; gap: 6px; align-items: center; text-align: left; overflow-wrap: anywhere; min-width: 0; padding: 4px; }
+.delivery-file svg, .delivery-folder svg { flex-shrink: 0; width: 16px; height: 16px; }
+.delivery-folder { cursor: pointer; border-radius: 4px; flex-wrap: wrap; }
+.delivery-thumbnail { width: 56px; min-width: 56px; height: 44px; display: grid; place-items: center; font-size: 9px; }
+.delivery-thumbnail img { max-width: 56px; max-height: 44px; object-fit: contain; }

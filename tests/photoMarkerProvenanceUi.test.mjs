@@ -99,6 +99,27 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await move(true); assert.equal(await sourceOfSelected(), 'manual');
         assert.deepEqual(await browser.evaluate(`${markers}.filter(e=>e.title.includes('shared.png')).map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['gmi', 'manual']);
       });
+      await t.test('delivery overlays preserve all provenance fills and explain planned choices separately', async () => {
+        await select(repeated[0].id);
+        await browser.evaluate('document.querySelectorAll(".photo-delivery-section input[type=radio]")[1].click()');
+        await select(exif.id);
+        await browser.evaluate('document.querySelector(".photo-delivery-include input").click()');
+        for (const source of PHOTO_POSITION_SOURCES) {
+          assert(await browser.evaluate(`${markers}.some(marker => marker.querySelector('.photo-camera-glyph').dataset.positionSource === ${JSON.stringify(source.kind)} && marker.querySelector('.photo-marker-delivery'))`));
+        }
+        assert(await browser.evaluate(`${legend}.innerText.includes('Plasseringskilde') && ${legend}.innerText.includes('Leveringsvalg')`));
+        await browser.evaluate(`${legend}.querySelector('details').open = true`);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await screenshot(`polish-provenance-delivery-${width}x${height}`);
+        }
+        await browser.evaluate(`${legend}.querySelector('details').open = false`);
+        await browser.evaluate('document.querySelector(".photo-delivery-include input").click()');
+        await select(repeated[0].id);
+        await browser.evaluate('document.querySelectorAll(".photo-delivery-section input[type=radio]")[0].click()');
+        await select(repeated[1].id);
+        await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
+      });
       await t.test('selection, hover and accepted direction keep all four source fills', async () => {
         for (const source of PHOTO_POSITION_SOURCES) {
           const id = source.kind === 'exif' ? exif.id : source.kind === 'gml' ? gmlPhoto.id : repeated[source.kind === 'gmi' ? 0 : 1].id;

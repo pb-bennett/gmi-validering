@@ -109,6 +109,13 @@ export function photoSourceGlyph(kind, size = 13) {
 }
 
 const stagedDot = (staged) => staged ? '<span class="photo-marker-staged-dot" aria-hidden="true"></span>' : '';
+export const PHOTO_DELIVERY_BADGES = Object.freeze({ 'keep-link': ['↔', 'Behold lenke i GMI'], transfer: ['↗', 'Overfør til GML'],
+  include: ['+', 'Ta med i GML uten GMI-lenke'], 'not-selected': ['−', 'Ikke med uten GMI-lenke'], review: ['!', 'Krever gjennomgang'] });
+export function photoDeliveryBadge(status, batchSelected = false) {
+  const badge = PHOTO_DELIVERY_BADGES[status];
+  return (badge ? `<span class="photo-marker-delivery" data-delivery-status="${status}" aria-hidden="true">${badge[0]}</span>` : '')
+    + (batchSelected ? '<span class="photo-marker-batch" aria-hidden="true">✓</span>' : '');
+}
 const stackBadge = (count) => count > 1 ? `<span class="photo-marker-stack" aria-hidden="true">${Math.min(count, 99)}</span>` : '';
 const modifierClasses = ({ selected, sibling, staged, editing }) => [selected && 'photo-marker-selected', sibling && 'photo-marker-sibling',
   staged && 'photo-marker-staged', editing && 'photo-marker-editing'].filter(Boolean).join(' ');
@@ -137,16 +144,17 @@ export function thumbnailMarkerOptions({ sourceKind = 'unknown', selected = fals
       + (editing && selected ? '<span class="photo-thumb-anchor" aria-hidden="true"></span>' : '') + stagedDot(staged) + stackBadge(stackCount) };
 }
 
-export function photoMarkerOptions(mode, options) {
-  return mode === 'thumbnails' ? thumbnailMarkerOptions(options) : cameraMarkerOptions(options);
+export function photoMarkerOptions(mode, options = {}) {
+  const result = mode === 'thumbnails' ? thumbnailMarkerOptions(options) : cameraMarkerOptions(options);
+  return { ...result, html: result.html + photoDeliveryBadge(options.deliveryStatus, options.batchSelected) };
 }
 
 // Stable cache key: identical presentation reuses one L.divIcon instance (and DOM-free comparisons).
 export function photoMarkerIconKey(mode, { sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false,
-  thumbnailUrl = null } = {}) {
+  thumbnailUrl = null, deliveryStatus = null, batchSelected = false } = {}) {
   return JSON.stringify([mode === 'thumbnails' ? 't' : 'm', photoPositionSourcePresentation(sourceKind).kind, Boolean(selected),
     Boolean(staged), Boolean(sibling && !selected), stackCount > 1 ? Math.min(stackCount, 99) : 1, Boolean(editing),
-    mode === 'thumbnails' ? safeThumbnailUrl(thumbnailUrl) : null]);
+    mode === 'thumbnails' ? safeThumbnailUrl(thumbnailUrl) : null, deliveryStatus, Boolean(batchSelected)]);
 }
 
 // One non-interactive arrow per placed occurrence, in the direction pane at the photo's own lat/lng. The icon has no

@@ -3,6 +3,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Marker, Pane, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import PhotoDeliveryControls from './PhotoDeliveryControls';
+import { PHOTO_DELIVERY_BADGES } from '@/lib/photos/photoMarkerPresentation.mjs';
 import PhotoMapPopup from './PhotoMapPopup';
 import { photoPositionSourceDescription, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
@@ -78,6 +80,8 @@ function markerModels(items, workspace, thumbnails) {
     const selected = inWorkspace && photo.id === workspace.photoId;
     const options = {
       sourceKind: photoPositionSourceKind(photo), selected,
+      deliveryStatus: inWorkspace ? workspace.delivery?.byPhotoId[photo.id]?.status : null,
+      batchSelected: inWorkspace && workspace.deliveryMode && workspace.deliveryIds?.includes(photo.id),
       staged: Boolean(photo.staged),
       sibling: inWorkspace && !selected && Boolean(workspace.activeAssetId) && photo.assetId === workspace.activeAssetId,
       stackCount: top === photo ? members.length : 1, editing: false,
@@ -90,7 +94,10 @@ function markerModels(items, workspace, thumbnails) {
       selected, sibling: options.sibling });
     return [{ markerKey: feature.id, layerId, photoId: photo.id, lat, lng, mode, icon: photoMarkerIcon(mode, options), directionIcon,
       zIndexOffset: selected ? 1000 : photo.staged ? 500 : top === photo ? 100 : 0,
-      label: photoMarkerLabel(photo, top === photo ? members.length : 1), inWorkspace,
+      label: photoMarkerLabel(photo, top === photo ? members.length : 1).replace(/^Vis bilde:/, inWorkspace && workspace.deliveryMode ? 'Velg plassering:' : 'Vis bilde:')
+        + (options.deliveryStatus ? ` · Planlagt: ${PHOTO_DELIVERY_BADGES[options.deliveryStatus]?.[1]}` : '') + (options.batchSelected ? ' · Valgt for samlet levering' : ''), inWorkspace,
+      deliveryWorkspace: inWorkspace && workspace.deliveryMode ? workspace : null,
+      deliveryMembers: inWorkspace && workspace.deliveryMode ? (top === photo ? members : [photo]) : null,
       // Edit mode: other FOTO layers are context only, so no popup can switch layers by accident.
       interactive: !(workspace?.editing && !inWorkspace),
       stackIds: top === photo ? members.map((member) => member.id).join('\n') : '',
@@ -121,7 +128,7 @@ export const PhotoDirectionMarker = memo(function PhotoDirectionMarker({ layerId
 });
 
 const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat, lng, mode, icon, zIndexOffset, label, inWorkspace,
-  interactive, stackIds, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, popupPhoto, popupStack, popupWidth, popupHeight, actions }) {
+  interactive, stackIds, deliveryWorkspace, deliveryMembers, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, popupPhoto, popupStack, popupWidth, popupHeight, actions }) {
   const ref = useRef(null);
   const popupRef = useRef(null);
   useEffect(() => {
@@ -133,16 +140,17 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
   }, [popupWidth, popupHeight]);
   const position = useMemo(() => [lat, lng], [lat, lng]);
   const eventHandlers = useMemo(() => ({
-    click: () => { if (inWorkspace) actions.current.select(photoId, stackIds); },
+    click: () => { if (deliveryWorkspace) { if (deliveryMembers.length === 1) deliveryWorkspace.onToggleDelivery(photoId); } else if (inWorkspace) actions.current.select(photoId, stackIds); },
     popupopen: () => actions.current.clearPreview(),
     keydown: (event) => {
       if (!['Enter', ' '].includes(event.originalEvent?.key)) return;
       event.originalEvent.preventDefault();
       event.originalEvent.stopPropagation();
-      if (inWorkspace) actions.current.select(photoId, stackIds);
+      if (deliveryWorkspace) { if (deliveryMembers.length === 1) deliveryWorkspace.onToggleDelivery(photoId); event.target.openPopup(); }
+      else if (inWorkspace) actions.current.select(photoId, stackIds);
       else event.target.openPopup();
     },
-  }), [actions, inWorkspace, photoId, stackIds]);
+  }), [actions, inWorkspace, photoId, stackIds, deliveryWorkspace, deliveryMembers]);
   // Leaflet keeps one icon element per marker; accessible name and preview listeners follow the current icon.
   useEffect(() => {
     const element = ref.current?.getElement();
@@ -150,6 +158,8 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
     element.dataset.photoId = photoId; element.dataset.layerId = layerId; element.dataset.displayMode = mode;
     element.dataset.lat = String(lat); element.dataset.lng = String(lng);
     element.setAttribute('aria-label', label);
+    if (deliveryWorkspace) element.setAttribute('aria-pressed', String(deliveryWorkspace.deliveryIds?.includes(photoId) || false));
+    else element.removeAttribute('aria-pressed');
     // Thumbnail mode shows its own preview; a native title would duplicate it.
     if (mode === 'thumbnails') element.removeAttribute('title'); else element.title = label;
     if (mode !== 'thumbnails' || !interactive) return undefined;
@@ -166,9 +176,17 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
       element.removeEventListener('focus', focus); element.removeEventListener('blur', leave);
       leave();
     };
-  }, [actions, icon, label, mode, interactive, layerId, photoId, lat, lng, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, zIndexOffset]);
+  }, [actions, icon, label, mode, interactive, layerId, photoId, lat, lng, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, zIndexOffset, deliveryWorkspace]);
   return <Marker ref={ref} key={markerKey} position={position} pane={PHOTO_MARKER_PANE} icon={icon} zIndexOffset={zIndexOffset}
     interactive={interactive} keyboard={interactive} eventHandlers={eventHandlers}>
+    {deliveryWorkspace && <Popup className="photo-delivery-map-popup" maxWidth={320} maxHeight={280}>
+      <p>{deliveryMembers.length} plasseringer. Velg hver plassering enkeltvis.</p>
+      {deliveryMembers.map((member) => <div key={member.id}>
+        <label><input type="checkbox" checked={deliveryWorkspace.deliveryIds?.includes(member.id) || false}
+          onChange={() => deliveryWorkspace.onToggleDelivery(member.id)} />{member.originalFilename} {member.occurrence ? gmiObjectLabel(member.occurrence.object) : ''}</label>
+        <PhotoDeliveryControls photo={member} layerId={layerId} entry={deliveryWorkspace.delivery?.byPhotoId[member.id]} />
+      </div>)}
+    </Popup>}
     {popupPhoto && <Popup ref={popupRef} pane="popupPane" className="photo-map-viewer-popup" maxWidth={popupWidth} minWidth={popupWidth}
       maxHeight={popupHeight} closeButton={false} autoPanPadding={[24, 24]}>
       <PhotoMapPopup photo={popupPhoto} stack={popupStack} onClose={() => ref.current?.closePopup()}

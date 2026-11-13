@@ -286,3 +286,13 @@
 .photo-repeat-warning { color: #854d0e; background: #fffbeb; padding: .25rem .4rem; border-radius: .25rem; font-size: .75rem; overflow-wrap: anywhere; }
 .photo-occurrence-context details { overflow-wrap: anywhere; }
 .photo-metadata-missing { margin: 4px 0 6px; padding: 6px 10px; border-left: 3px solid var(--gmi-interactive); border-radius: 4px; background: var(--gmi-surface-soft); color: var(--gmi-text); font-size: 12.5px; }
+.photo-marker-delivery, .photo-marker-batch { position: absolute; bottom: -4px; right: -4px; background: var(--gmi-surface, white); color: var(--gmi-text, #172b3a); border: 1px solid currentColor; border-radius: 3px; width: 15px; height: 15px; display: grid; place-items: center; font-size: 12px; line-height: 1; font-weight: 600; }
+.photo-marker-batch { right: auto; left: -4px; background: var(--gmi-interactive, #007595); color: white; border-radius: 50%; }
+.photo-delivery-legend { max-width: 220px; }
+.photo-delivery-legend li > span { width: 16px; text-align: center; border: 1px solid currentColor; border-radius: 3px; }
+.photo-map-display-card { max-height: calc(100% - 100px); overflow-y: auto; }
+.photo-delivery-map-popup label { display: flex; gap: 6px; align-items: center; overflow-wrap: anywhere; }
+.photo-delivery-map-popup .leaflet-popup-content-wrapper { background: var(--gmi-surface); color: var(--gmi-text); border: 1px solid var(--gmi-border-strong); }
+.photo-delivery-map-popup input:focus-visible { outline: 2px solid var(--gmi-interactive); outline-offset: 2px; }
+.photo-delivery-legend-details { margin-top: 4px; }
+.photo-delivery-legend-details summary { cursor: pointer; }

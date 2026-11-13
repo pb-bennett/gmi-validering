@@ -4,10 +4,10 @@ import { photoExportDiagnosticLabel } from '../photos/export/photoExportDiagnost
 import { gmiEditMessage } from '../gmiEditView.mjs';
 
 export const DELIVERY_CHOICES = Object.freeze([
-  { mode: 'gmi-only', title: 'Kun GMI', text: 'Revidert GMI med rettinger fra Rettinger. Alle bildelenker beholdes.' },
-  { mode: 'photos-only', title: 'Kun FOTO', text: 'GML og originalbilder for alle godkjente plasseringer. GMI og valgene om overføring endres ikke.' },
-  { mode: 'split', title: 'Delt levering', text: 'GMI, valgt FOTO-leveranse og vedlegg. Bare uttrykkelig overførte bildelenker fjernes. Feltrettinger utelates.' },
-  { mode: 'combined', title: 'Samlet levering', text: 'GMI med feltrettinger, valgt FOTO-leveranse og vedlegg. Bare uttrykkelig overførte bildelenker fjernes.' },
+  { mode: 'gmi-only', title: 'Kun GMI', text: 'Revidert GMI med feltrettinger fra Rettinger. Eksisterende bildelenker beholdes.' },
+  { mode: 'photos-only', title: 'Kun GML med bilder', text: 'GML med bildeplasseringer, retning og metadata, sammen med originalbildene i en ZIP-fil. GMI endres ikke.' },
+  { mode: 'split', title: 'Delt levering (GMI + GML)', text: 'GMI + GML + bilder. Uttrykkelig overførte bildelenker fjernes fra eksportert GMI. Feltrettinger fra Rettinger utelates.' },
+  { mode: 'combined', title: 'Samlet levering (GMI + GML)', text: 'GMI med feltrettinger + GML + bilder. Uttrykkelig overførte bildelenker fjernes fra eksportert GMI.' },
 ]);
 export const DELIVERY_STEPS = Object.freeze([{ key: 'content', label: 'Innhold' }, { key: 'review', label: 'Kontroll' }, { key: 'package', label: 'Pakke / Last ned' }]);
 export const DELIVERY_WIZARD_START = Object.freeze({ step: 'content', run: 0, phase: 'idle', review: null, error: null, recorded: true });
@@ -42,7 +42,7 @@ export function deliveryWizardStatus(state) {
 }
 
 const messages = {
-  'loaded-gmi-binding-required': 'Koble fotolaget til den samme GMI-filen lastet inn som kartlag. Velg et tilknyttet fotolag, eller bruk Kun GMI / Kun FOTO.',
+  'loaded-gmi-binding-required': 'Koble fotolaget til den samme GMI-filen lastet inn som kartlag. Velg et tilknyttet fotolag, eller bruk Kun GMI / Kun GML med bilder.',
   'field-exclusion-required': 'Bekreft i Innhold at feltrettingene skal utelates, eller velg Samlet levering.',
   'retained-photo-unresolved': 'En bildelenke som beholdes i GMI mangler en entydig originalfil. Last inn riktig bilde og kontroller koblingen i FOTO.',
   'missing-attachment': 'En nødvendig originalfil mangler eller er tom. Last inn bildet på nytt i FOTO.',
@@ -97,7 +97,7 @@ export function deliverySummary({ plan, snapshot, fieldCount = 0 }) {
     ['Leveranse', DELIVERY_CHOICES.find((item) => item.mode === plan.mode).title], ['Rettinger', corrections],
     ['Bildelenker', plan.mode === 'photos-only' ? 'GMI endres ikke' : kept === undefined ? 'Alle beholdes i GMI'
       : `${kept - removed} beholdes i GMI · ${removed} overføres`],
-    ['FOTO', `${count(plan.counts.features, 'post', 'poster')} i GML`], ['Vedlegg', count(plan.counts.attachments, 'fil', 'filer')],
+    ['GML', `${count(plan.counts.features, 'post', 'poster')} i GML`], ['Vedlegg', count(plan.counts.attachments, 'fil', 'filer')],
     ['Filnavn', plan.filename],
   ];
 }
@@ -105,9 +105,9 @@ export function deliveryReport(review) {
   const { plan } = review, groups = deliveryDiagnostics(plan);
   const changes = plan.gmiSummary?.diff?.changes ?? plan.gmiSummary?.changes ?? [];
   return ['Leveranserapport', ...deliverySummary(review).map(([label, value]) => `${label}: ${value}`),
-    `Eksportkontroll: ${plan.status === 'ready' ? 'Godkjent for pakking' : 'Blokkert'}`,
-    'Eksportkontroll er ikke en ny Validator-kjøring eller Gemini-akseptanse. Originalfilen endres ikke.',
-    '', 'Innhold:', ...deliveryContents(plan), '',
+    `Eksportkontroll: ${plan.status === 'ready' ? 'Eksportkontroll fullført – kan genereres' : 'Blokkert'}`,
+    'Eksportkontroll er ikke en ny Validator-kjøring, full XSD-sertifisering eller Gemini-akseptanse. Originalfilen endres ikke.',
+    'Leveranserapporten lastes ned separat og er ikke med i ZIP-filen.', '', 'Innhold:', ...deliveryContents(plan), '',
     ...Object.entries(groups).flatMap(([key, items]) => [({ errors: 'Feil', warnings: 'Advarsler', info: 'Informasjon' })[key], ...items.map((item) => `- ${item.text}`), '']),
     'Feltendringer:', ...changes.map((item) => `${item.scope === 'line' ? 'Ledning' : 'Punkt'} ${item.sourceIndex + 1} · ${item.field}: ${item.original} → ${item.proposed}`),
   ].join('\r\n');

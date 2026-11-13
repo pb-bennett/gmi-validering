@@ -12,7 +12,8 @@ import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRu
 import { photoExportDeliveryReadiness, photoExportDeliveryModel } from '@/lib/photos/photoExportWizard.mjs';
 import { captureDeliverySnapshot, buildDeliveryPlan } from '@/lib/delivery/index.mjs';
 import { DELIVERY_CHOICES, DELIVERY_STEPS, DELIVERY_WIZARD_START, deliveryWizardReducer, deliveryWizardStatus,
-  deliveryContents, deliveryDiagnostics, deliveryMessage, deliveryReport, deliverySummary, initiateDeliveryDownload } from '@/lib/delivery/deliveryWizard.mjs';
+  deliveryDiagnostics, deliveryMessage, deliveryReport, deliverySummary, initiateDeliveryDownload } from '@/lib/delivery/deliveryWizard.mjs';
+import DeliveryInventory from './DeliveryInventory';
 import usePhotoSession from '@/components/photos/usePhotoSession';
 import useGmiEditLayer from '@/components/gmi-edit/useGmiEditLayer';
 import PhotoWizardSteps from '@/components/photos/PhotoWizardSteps';
@@ -26,7 +27,7 @@ import './deliveryWizard.css';
 
 const primary = 'gmi-primary-control gmi-focus-ring min-h-10 px-4';
 const HEADINGS = { building: 'Kontrollerer leveransen …', packaging: 'Lager leveransen …', blocked: 'Leveransen er blokkert',
-  failed: 'Kontrollen kunne ikke fullføres', stale: 'Kontrollen er utdatert', ready: 'Leveransen er kontrollert',
+  failed: 'Kontrollen kunne ikke fullføres', stale: 'Kontrollen er utdatert', ready: 'Eksportkontroll fullført',
   done: 'Nedlastingen er startet', 'download-failed': 'Nedlastingen kunne ikke startes' };
 function initialSurvey(photoId) {
   const ids = [...new Set(photoSession.getLayer(photoId)?.spatialSources.filter((source) => source.kind === 'gmi' && source.loadedBinding?.live !== false)
@@ -184,7 +185,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
               {photoModel.blockers.length > 0 && !waiting && <PhotoExportDiagnostics groups={photoModel.blockers} />}
               {photoModel.checks.length > 0 && !waiting && <ul className="photo-completion-notes">{photoModel.checks.map((item) => <li key={item.code}>{item.text}</li>)}</ul>}
               {photoModel.excludedText && <p data-export-excluded>{photoModel.excludedText}</p>}
-              {decision?.active && <p>Kun FOTO tar med alle plasserte forekomster, uavhengig av valgene om samlet levering.</p>}</>
+              {decision?.active && <p>Kun GML med bilder tar med alle plasserte forekomster, uavhengig av valgene om samlet levering.</p>}</>
               : <p>{decision?.occurrences.transfer ?? 0} plasseringer er valgt for overføring til GML. {decision?.occurrences.include ?? 0} er valgt uten GMI-lenke. Endre valgene under Samlet levering i FOTO.</p>}
             {onOpenCompletion && photoId === initialPhotoLayerId && <button type="button" className={mode === 'photos-only' && photoModel.completionPrimary ? primary : photoSourceButton} data-export-completion onClick={onOpenCompletion}>Fullfør opplysninger…</button>}
           </>}
@@ -199,10 +200,10 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
           <dl className="photo-export-summary delivery-summary">{deliverySummary(state.review).map(([label, value]) => <div key={label}><dt>{label}</dt><dd data-export-filename={label === 'Filnavn' ? '' : undefined}>{value}</dd></div>)}</dl>
           {state.review.plan.mode !== 'gmi-only' && <p data-export-zip={state.review.plan.naming.zipFilename} data-export-gml={state.review.plan.photoPlan ? state.review.plan.naming.gmlFilename : ''} />}
           {state.step === 'package' && <section className="delivery-inventory" aria-label="Innhold i leveransen"><h4>Innhold i leveransen</h4>
-            <ul data-package-contents>{deliveryContents(state.review.plan).map((path) => <li key={path}>{path}</li>)}</ul>
+            <DeliveryInventory plan={state.review.plan} />
             <p>Leveranserapporten lastes ned separat. Den legges ikke i ZIP-filen.</p>
           </section>}
-          {state.review.plan.status === 'ready' && <p className="delivery-verification">Kilde, eksportdata og vedleggsplan er kontrollert. Originalfilen endres ikke. Filene kontrolleres på nytt før nedlasting.</p>}
+          {state.review.plan.status === 'ready' && <p className="delivery-verification">Kan genereres.{state.review.plan.warnings.length > 0 ? ' Har merknader – se advarsler og informasjon nedenfor.' : ''} Kilde, eksportdata og vedleggsplan er kontrollert. Originalfilen endres ikke. Filene kontrolleres på nytt før nedlasting.</p>}
           {hasGmi && <p className="photo-completion-warning"><strong>Eksperimentell.</strong> Revidert GMI er ikke akseptansetestet i Gemini VA.</p>}
           {state.review.plan.photoPlan && <PhotoExportStatus readiness={photoReadiness} />}
           {state.review.plan.photoPlan && <p data-export-counts>{photoCount(state.review.plan.photoPlan.counts.attachments)} · {placementCount(state.review.plan.counts.features)} i GML-filen
@@ -210,7 +211,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
           {state.review.plan.photoPlan && <p data-export-format={state.review.plan.photoPlan.profile}>{PHOTO_EXPORT_PROFILE_METADATA[state.review.plan.photoPlan.profile].title}
             <small className="block text-gmi-text-muted">{PHOTO_EXPORT_PROFILE_METADATA[state.review.plan.photoPlan.profile].compatibility}</small></p>}
           <Diagnostics plan={state.review.plan} snapshot={state.review.snapshot} />
-          {state.review.plan.photoPlan?.excluded.length > 0 && <p data-export-excluded>{state.review.plan.photoPlan.excluded.length} plasseringer uten godkjent posisjon er utelatt fra Kun FOTO. GMI endres ikke.</p>}
+          {state.review.plan.photoPlan?.excluded.length > 0 && <p data-export-excluded>{state.review.plan.photoPlan.excluded.length} plasseringer uten godkjent posisjon er utelatt fra Kun GML med bilder. GMI endres ikke.</p>}
           {state.review.plan.counts.excludedAssets > 0 && mode !== 'photos-only' && <p>{state.review.plan.counts.excludedAssets} bilder er verken valgt for GML eller påkrevd av beholdte GMI-lenker og er ikke med.</p>}
           {state.review.plan.photoPlan && <details className="photo-export-disclosure"><summary>Tekniske detaljer</summary>
             <p>{state.review.plan.photoPlan.counts.uniqueImages} unike bilder i laget · {state.review.plan.photoPlan.counts.totalOccurrences} forekomster</p>
@@ -218,7 +219,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
           {status === 'done' && <p role="status">Nedlastingen er startet: <strong data-downloaded-filename>{state.review.plan.filename}</strong>. Nettleseren håndterer lagringen.</p>}
           {status === 'done' && state.review.plan.gmiFingerprint && <p className="photo-export-hint">SHA-256 for revidert GMI: <code data-downloaded-fingerprint>{state.review.plan.gmiFingerprint.replace(/^sha256:/, '')}</code></p>}
           {status === 'done' && !state.recorded && <p role="status">Rettingene er endret eller ikke lenger tilgjengelige. De er fortsatt merket som ikke lastet ned.</p>}
-          <p className="photo-export-hint">Dette er eksportkontroll, ikke en ny Validator-kjøring eller Gemini-akseptanse.</p>
+          <p className="photo-export-hint">Dette er eksportkontroll, ikke en ny Validator-kjøring eller full XSD-sertifisering eller Gemini-akseptanse.</p>
         </>}
         {reportError && <p role="alert">{reportError}</p>}
       </div>}
