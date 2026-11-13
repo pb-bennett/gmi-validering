@@ -77,8 +77,11 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const currentDataset = useMemo(() => getGmiProposedState(view.session).dataset, [view.session]);
   const emptyCount = field && selection?.keys.reduce((total, key) => {
     const object = currentDataset?.[selection.scope === 'point' ? 'points' : 'lines']?.[Number(key.split(':')[1])];
-    const value = object?.attributes?.[GMI_SOURCE_LEXEMES]?.[field] ?? object?.attributes?.[field];
-    return total + Number(String(value ?? '').trim() === '');
+    const keys = column?.linkedSourceKeys.length ? column.linkedSourceKeys : [field];
+    return total + Number(keys.every(sourceKey => {
+      const value = object?.attributes?.[GMI_SOURCE_LEXEMES]?.[sourceKey] ?? object?.attributes?.[sourceKey];
+      return String(value ?? '').trim() === '';
+    }));
   }, 0);
   const scopeProblem = gmiSelectionTargets(view, selection);
   const matchValues = useMemo(() => field ? gmiFieldBatchValues(view, selection, field) : null, [view, selection, field]);
@@ -205,7 +208,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     const mixedProfile = changing.length > 1 ? gmiProfileMixedColumns(buildGmiSelectionProfile({ dataset: checked.dryRun.current.dataset,
       scope: review.preview.scope, keys: changing, sources: profileSources, ruleRows: review.preview.rows })) : [];
     const reasons = gmiBatchRiskReasons({ manualRows, changeSetCounts: changeSet.counts, newFail: checked.dryRun.diff.newCounts.fail,
-      mixedProfile, mixedFields: mixed, unvalidated });
+      mixedProfile, mixedFields: mixed, unvalidated, linkedTema: review.preview.linked });
     if (!approval && reasons.length) {
       // Presentation only: worsened FEIL are listed (once) under FEIL; the gate above still uses diff.newCounts.
       const transitions = gmiBatchDatasetTransitions(checked.dryRun);
@@ -223,9 +226,9 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     onDirtyChange(false); setRisk(null); setStaged(changeSet.id); onStaged(changeSet);
   };
   // Domains offer values; the existing Validator/dry-run owns verdicts, including numeric equivalence.
-  const draft = checkGmiFieldDraft(column, proposedLexeme, view.document.encoding.encodingClass, { restrictEnumeration: false });
+  const draft = checkGmiFieldDraft(column, proposedLexeme, view.document.encoding.encodingClass, { restrictEnumeration: Boolean(column?.linkedSourceKeys.length) && mode !== 'clear' });
   const problem = proposedLexeme ? gmiLexemeProblem(draft.problem, proposedLexeme) : null;
-  const conflicts = plan?.rows?.filter((row) => selection.keys.includes(row.key) && row.changedBy?.length && row.current !== proposedLexeme
+  const conflicts = plan?.rows?.filter((row) => selection.keys.includes(row.key) && row.changedBy?.length && (row.physical ? row.physical.some(cell => cell.current !== proposedLexeme) : row.current !== proposedLexeme)
     && (!['replace', 'clear'].includes(mode) || (row.canInclude && row.operationMatches))).length || 0;
   const detail = inspected ? getGmiProposedState(view.session).dataset?.[inspected.scope === 'line' ? 'lines' : 'points']?.[inspected.sourceIndex] : null;
   const inspectedReview = inspected && review ? review.preview.rows.find((row) => row.scope === inspected.scope && row.sourceIndex === inspected.sourceIndex) : null;
@@ -264,7 +267,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     <label>Felt<select ref={fieldSelectRef} aria-label="Felt for masseendring" value={field} disabled={busy} onChange={(event) => { invalidate(); setField(event.target.value); setFocusChoice(event.target.value); setLexeme(''); setMatch(null); }}>
       <option value="">Velg felt…</option>
       {fields.map((entry, index) => <option key={index} value={entry.sourceKey ?? `absent:${entry.canonicalFieldId}`} disabled={entry.disabled}>
-        {entry.sourceKey || entry.label || '(uten navn)'}{entry.explanation ? ` – ${entry.explanation}` : ''}
+        {entry.label || entry.sourceKey || '(uten navn)'}{entry.explanation ? ` – ${entry.explanation}` : ''}
       </option>)}
     </select></label>
     {field && <p className="gmi-edit-muted">{field}: tom i {emptyCount} av {count}.</p>}
@@ -284,6 +287,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       </select></label>
       <p className="gmi-edit-muted">Bare helt like verdier erstattes. Mellomrom og store/små bokstaver teller med. · viser mellomrom.</p>
       {matchValues?.blocked > 0 && <p className="gmi-edit-muted">{matchValues.blocked} objekter kan ikke leses som sikre kildeceller.</p>}
+      {matchValues?.ambiguous > 0 && <p className="gmi-edit-muted">{matchValues.ambiguous} objekter har ulike Tema-verdier og kan bare rettes med «Sett verdi».</p>}
     </div>}
     {mode === 'clear' && <p className="gmi-edit-muted">Verdien fjernes bare fra objektene som kan endres. Allerede tomme verdier hoppes over.</p>}
     {problem && <p role="alert" className="gmi-edit-problem">{problem}</p>}
@@ -340,9 +344,18 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
           {plan?.ok === false && !plan.included?.size && <p className="gmi-edit-muted">Ingen av de valgte objektene kan endres med dette oppsettet.</p>}
         </>}
       </div>}
+      {review?.preview.linked && <details className="gmi-edit-muted" data-gmi-linked-values><summary>Tema og S_FCODE: original og foreslått nå</summary>
+        {review.preview.rows.map(row => <div key={row.key}><strong>{describeGmiObject(row.scope, row.sourceIndex, row.objectId)}</strong>
+          {row.physical?.map(cell => <p key={cell.field}>{cell.field}: Original <Lexeme value={cell.original} /> · Foreslått nå <Lexeme value={cell.current} /></p>)}
+          {row.disagreement && <p>Ulike verdier i Tema og S_FCODE.</p>}{!row.physical && <p>Begge kildeceller kunne ikke verifiseres. Objektet endres ikke.</p>}</div>)}
+      </details>}
       {/* B1/B2: after the proposal, so a live preview stays visible without scrolling. */}
       <GmiCurrentFindingSplit split={split} scope={selection?.scope} disabled={busy} onNarrow={narrowSelection} />
       <GmiSelectionProfile profile={profile} disabled={busy} notice={profileNotice?.selection === selection ? profileNotice.text : null} onNarrow={narrowSelection} />
+      {(review?.preview.linked || column?.linkedSourceKeys.length > 0) && <div className="gmi-edit-muted" data-gmi-linked-tema>
+        <p>Tema og S_FCODE endres sammen. Ved ulike verdier må du bruke «Sett verdi». Andre operasjoner krever helt like verdier i begge kolonner.</p>
+        <p role="note">FOTO bruker Tema fra originalfilen. Endringen påvirker ikke automatisk bildegrupperingen.</p>
+      </div>}
       {(!review || configOpen) && <div className="gmi-inspector-configuration">{review && <p className="gmi-edit-muted">Endringer i oppsettet krever ny forhåndsvisning.</p>}{configForm}</div>}
 
       {plan?.counts && !stale && <div className="gmi-batch-options">
@@ -400,7 +413,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       <p className="gmi-risk-operation"><strong>{['replace', 'clear'].includes(risk.review.preview.operation) ? <>
         {modeLabel(risk.review.preview.operation)}: {risk.review.preview.sourceKey}
         {risk.review.preview.operation === 'replace' && <> <Lexeme value={risk.review.preview.match} /></>} → <Lexeme value={risk.review.preview.lexeme} />
-      </> : <>{risk.review.preview.sourceKey} → «{risk.review.preview.lexeme}»</>}</strong> · {gmiObjectCountLabel(risk.changeSet.cells.length, review.preview.scope)} endres</p>
+      </> : <>{risk.review.preview.sourceKey} → «{risk.review.preview.lexeme}»</>}</strong> · {gmiObjectCountLabel(risk.changeSet.objectCount, review.preview.scope)} endres</p>
       {[['error', 'FEIL'], ['warning', 'SJEKK']].map(([tone, label]) => {
         // FEIL lists new and worsened (SJEKK → FEIL) findings once each; improved findings are listed separately.
         const findings = risk.findings.filter((finding) => finding.tone === tone && finding.introduced && finding.transition !== 'improved');
@@ -415,6 +428,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
         {risk.mixedProfile.length > 0 && <ul>{risk.mixedProfile.map((column) => <li key={column.id} data-mixed-field={column.id}>
           <strong>{column.label}:</strong> {gmiProfileDistributionText(column)}</li>)}</ul>}
       </div>}
+      {risk.review.preview.linked && <p>Tema og S_FCODE oppdateres samlet. Bekreft verdien for begge kolonner.</p>}
       {risk.unvalidated && <p>Feltet kontrolleres ikke av Validator. Bekreft at verdien er vurdert manuelt.</p>}
       {risk.manualRows.length > 0 && <div className="gmi-manual-note gmi-risk-manual">
         <HandPointingIcon size={16} weight="regular" aria-hidden="true" />

@@ -49,8 +49,10 @@ test('G5 D1/D2 production: authoritative controls, exact lexemes, keyboard searc
     };
     const exportBytes = async () => {
       await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
-      const dialog = `document.querySelector('dialog[open].gmi-edit-export')`;
-      await browser.waitFor(dialog); await click('Last ned', dialog);
+      const dialog = `document.querySelector('dialog[open].delivery-wizard')`;
+      await browser.waitFor(dialog); await click('Kontroller leveransen', dialog);
+      await browser.waitFor(`${dialog}.dataset.exportPhase === 'ready'`);
+      await click('Til pakke', dialog); await click('Last ned GMI', dialog);
       await browser.waitFor(`${dialog}?.dataset.exportPhase === 'done'`);
       const filename = await browser.evaluate(`${dialog}.querySelector('[data-downloaded-filename]').innerText`);
       for (let attempt = 0; attempt < 100; attempt++) {

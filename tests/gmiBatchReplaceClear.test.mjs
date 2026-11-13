@@ -198,7 +198,7 @@ test('hydraulic non-applicable/unresolved populated targets never become automat
   }
 });
 
-test('structurally blocked cells, reserved identifiers and linked Tema remain unavailable to G6', async () => {
+test('structurally blocked cells, reserved identifiers remain unavailable; linked Tema uses coordinated G6', async () => {
   const view = await setup(gmiFieldBatchFixture({ pointFields: ['Tema', 'Merknad', 'GUID'],
     points: [['KUM', 'old', 'synthetic-1'], ['KUM']] }));
   const selection = selected(view, 'point', [0, 1]);
@@ -214,6 +214,11 @@ test('structurally blocked cells, reserved identifiers and linked Tema remain un
     const options = { scope: 'point', targets: [{ scope: 'point', sourceIndex: 0 }], operation,
       value: operation === 'clear' ? '' : 'LOK', match: 'KUM' };
     assert.equal((await prepareGmiFieldBatch(view, { ...options, sourceKey: 'GUID' }, immediate)).code, 'identifier-column');
-    assert.equal((await prepareGmiFieldBatch(linked, { ...options, sourceKey: 'Tema' }, immediate)).code, 'linked-tema-not-supported');
+    const result = await prepareGmiFieldBatch(linked, { ...options, sourceKey: 'Tema' }, immediate);
+    assert(result.ok);
+    const batch = buildGmiFieldBatch(linked.session, result.preview);
+    assert(batch.ok);
+    assert.deepEqual(new Set(batch.changeSet.cells.map(cell => cell.field)), new Set(['Tema', 'S_FCODE']));
+    stageAndVerify(linked, batch);
   }
 });

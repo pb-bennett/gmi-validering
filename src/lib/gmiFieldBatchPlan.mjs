@@ -1,5 +1,5 @@
 // G2/G3: inspection, explicit ChangeSets and hypothetical validation. No live staging.
-import { createGmiBatchCorrection, getGmiEditCell, gmiSourceIntact, isGmiEditSession,
+import { createGmiBatchCorrection, createGmiFieldChangeSet, getGmiEditCell, gmiSourceIntact, isGmiEditSession,
   dryRunGmiChangeSet, isCurrentGmiDryRun, gmiCellKey, listGmiObjectCells, resolveGmiCell } from './gmi-edit/index.mjs';
 import { isGmiMissingLexeme as missing } from './gmi-edit/changeSet.mjs';
 import { gmiSessionEffectiveCells } from './gmi-edit/session.mjs';
@@ -43,16 +43,18 @@ function findingsBetween(before, after) {
 }
 
 function classify(row, operation, lexeme, match = null) {
-  const unchanged = row.current === lexeme;
+  const unchanged = row.physical ? row.physical.every(cell => cell.current === lexeme) : row.current === lexeme;
   const alreadyEmpty = operation === 'clear' && missing(row.current);
   const matches = operation === 'replace' ? row.current === match
     : operation === 'clear' ? !alreadyEmpty : operation === 'set' || (missing(row.current) && missing(row.original));
   const applicabilityReason = ['not-applicable', 'unresolved'].includes(row.reason) ? row.reason : row.applicability === 'NOT_APPLICABLE' ? 'not-applicable'
     : row.applicability === 'UNRESOLVED' ? 'unresolved' : null;
-  const reason = alreadyEmpty ? 'already-empty' : operation === 'replace' && !matches ? 'operation-mismatch'
+  const ambiguous = (row.disagreement || (operation === 'fill-missing' && row.physical
+    && new Set(row.physical.map(cell => cell.original)).size > 1)) && operation !== 'set';
+  const reason = ambiguous ? 'linked-tema-disagreement' : alreadyEmpty ? 'already-empty' : operation === 'replace' && !matches ? 'operation-mismatch'
     : unchanged ? 'unchanged' : !matches ? 'operation-mismatch'
     : applicabilityReason || (row.changedBy.length ? 'conflict' : null);
-  return { ...row, reason, operationMatches: matches, canInclude: !alreadyEmpty && !unchanged && matches,
+  return { ...row, reason, operationMatches: matches, canInclude: !ambiguous && !alreadyEmpty && !unchanged && matches,
     defaultIncluded: !reason,
     status: reason || (missing(row.current) ? 'fill' : 'overwrite') };
 }
@@ -63,14 +65,19 @@ export function gmiFieldBatchValues(view, selection, sourceKey) {
   const selected = gmiSelectionTargets(view, selection);
   if (!selected.ok) return selected;
   const values = new Map();
+  const column = describeGmiEditColumns(view, selection.scope).columns.find(entry => entry.sourceKey === sourceKey);
+  const sourceKeys = column?.linkedSourceKeys.length ? column.linkedSourceKeys : [sourceKey];
   let blocked = 0;
+  let ambiguous = 0;
   for (const target of selected.targets) {
-    const resolved = resolveGmiCell(view.document, { ...target, field: sourceKey });
-    if (!resolved.ok) { blocked++; continue; }
-    const current = getGmiEditCell(view.session, resolved.cell).proposed;
+    const cells = sourceKeys.map(field => resolveGmiCell(view.document, { ...target, field }));
+    if (cells.some(cell => !cell.ok)) { blocked++; continue; }
+    const lexemes = cells.map(({ cell }) => getGmiEditCell(view.session, cell).proposed);
+    if (new Set(lexemes).size > 1) { ambiguous++; continue; }
+    const current = lexemes[0];
     values.set(current, (values.get(current) || 0) + 1);
   }
-  return freeze({ ok: true, values: [...values].map(([lexeme, count]) => ({ lexeme, count })), blocked });
+  return freeze({ ok: true, values: [...values].map(([lexeme, count]) => ({ lexeme, count })), blocked, ambiguous });
 }
 
 /**
@@ -99,7 +106,12 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
   const [column] = columns;
   if (!column.editable) return reject(column.reason);
   if (columns.length !== 1 || column.bindingState === 'AMBIGUOUS') return reject('field-binding-unresolved');
-  if (column.operationKind === 'linked-tema') return reject('linked-tema-not-supported');
+  const linked = column.linkedSourceKeys.length > 0;
+  const sourceKeys = linked ? column.linkedSourceKeys : [sourceKey];
+  if (linked && (sourceKeys.length !== 2 || sourceKeys.some(key => {
+    const matches = describeGmiEditColumns(view, scope).columns.filter(entry => entry.sourceKey === key);
+    return matches.length !== 1 || !matches[0].editable || matches[0].operationKind !== 'linked-tema';
+  }))) return reject('field-binding-unresolved');
   let targets = options.targets;
   if (targets !== undefined && !Array.isArray(targets)) return reject('invalid-targets');
   if (selection) {
@@ -137,8 +149,9 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
     if (!hydraulicReview.ok) return hydraulicReview;
     if (hydraulicReview.eligibility.field !== sourceKey) return reject('field-binding-unresolved');
   } else {
-    // Custom codes are reviewed by the Validator, just as in the individual editor.
-    const draft = checkGmiFieldDraft(column, proposedValue, view.document.encoding.encodingClass, { restrictEnumeration: false });
+    // Ordinary custom codes remain Validator-reviewed. Linked Tema requires an
+    // authoritative geometry code; intentional clearing is reviewed separately.
+    const draft = checkGmiFieldDraft(column, proposedValue, view.document.encoding.encodingClass, { restrictEnumeration: linked && operation !== 'clear' });
     if (!draft.ok) return reject(draft.problem.code);
     lexeme = draft.lexeme;
   }
@@ -155,21 +168,29 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
   } else {
     const effective = gmiSessionEffectiveCells(view.session);
     for (const target of targets) {
-      const resolved = resolveGmiCell(view.document, { ...target, field: sourceKey });
+      const resolvedCells = sourceKeys.map(field => resolveGmiCell(view.document, { ...target, field }));
+      const resolved = resolvedCells.find(cell => !cell.ok) || resolvedCells[0];
       if (!resolved.ok) {
         rows.push({ ...target, key: keyOf(target), cellKey: null, field: sourceKey, reason: resolved.code,
           status: 'source-refused', canInclude: false, defaultIncluded: false, findings: [], resolvedFindings: [], deferred: false });
       } else {
+        const physical = resolvedCells.map(({ cell }) => {
+          const state = getGmiEditCell(view.session, cell);
+          return { field: cell.field, cellKey: cell.key, original: state.original, current: state.proposed,
+            changedBy: state.history.map(entry => entry.changeSetId) };
+        });
         const current = getGmiEditCell(view.session, resolved.cell);
         const values = listGmiObjectCells(view.document, scope, target.sourceIndex).map((cell) => ({ ...cell,
           editable: gmiEditColumnPolicy(cell).editable,
           proposed: effective.get(gmiCellKey({ scope, sourceIndex: target.sourceIndex, field: cell.field }))?.proposed ?? cell.lexeme }));
         const input = { view, scope, sourceIndex: target.sourceIndex, rows: values, governingRuleId: column.governingRuleId };
         const before = gmiEditObjectDiagnostics(input);
-        const after = gmiEditObjectDiagnostics({ ...input, drafts: { [sourceKey]: lexeme } });
+        const after = gmiEditObjectDiagnostics({ ...input, drafts: Object.fromEntries(sourceKeys.map(key => [key, lexeme])) });
         rows.push(classify({ scope, sourceIndex: target.sourceIndex, objectId: resolved.cell.objectId, guid: resolved.cell.guid,
           key: keyOf(target), cellKey: resolved.cell.key, field: sourceKey, original: current.original, current: current.proposed,
-          changedBy: current.history.map((entry) => entry.changeSetId), missing: missing(current.proposed),
+          ...(linked ? { physical, cellKeys: physical.map(cell => cell.cellKey),
+            disagreement: new Set(physical.map(cell => cell.current)).size > 1 } : {}),
+          changedBy: [...new Set(physical.flatMap(cell => cell.changedBy))], missing: physical.every(cell => missing(cell.current)),
           applicability: column.governingRuleId ? before.governingOutcome?.diagnosticFacts?.coverageApplicability || 'UNRESOLVED' : null,
           governingOutcome: before.governingOutcome, proposedOutcome: after.governingOutcome,
           validatorKind: column.validatorKind, ...findingsBetween(before, after) }, operation, lexeme, match));
@@ -182,7 +203,7 @@ export async function prepareGmiFieldBatch(view, options = {}, { yieldWork = yie
   }
   if (!isCurrent() || !liveView(view)) return reject('stale-session');
   if (operation === 'replace' && !rows.some((row) => row.current === match)) return reject('match-not-found');
-  const preview = freeze({ session, scope, sourceKey, operation, lexeme, match: operation === 'replace' ? match : null, mode, column, rows, hydraulicReview });
+  const preview = freeze({ session, scope, sourceKey, operation, lexeme, match: operation === 'replace' ? match : null, mode, column, linked, sourceKeys, rows, hydraulicReview });
   previews.set(preview, { view, isLive: isCurrent, selection });
   return { ok: true, preview };
 }
@@ -219,6 +240,17 @@ export function buildGmiFieldBatch(session, preview, { included, replace = false
   if (preview.hydraulicReview) {
     result = buildGmiBatchSelection(session, preview.hydraulicReview, new Set(selected.map((row) => row.cellKey)),
       replace, createdAt, approvals?.allowApplicabilityOverride === true, intent, labelPrefix);
+  } else if (preview.linked) {
+    // Conflict decisions apply to the whole object, never to one physical cell.
+    const allowed = selected.filter(row => replace || !row.changedBy.length);
+    if (!allowed.length) return reject('no-requests');
+    result = createGmiFieldChangeSet(session, { requests: allowed.flatMap(row => preview.sourceKeys.map(field => ({
+      scope: row.scope, sourceIndex: row.sourceIndex, objectId: row.objectId, guid: row.guid, field, lexeme: preview.lexeme,
+    }))), mode: preview.mode, conflictPolicy: replace ? 'replace' : 'skip', createdAt, intent,
+      label: `${labelPrefix || `${preview.operation === 'set' ? 'Sett' : 'Fyll'} Tema ${preview.lexeme}`} · ${gmiObjectCountLabel(allowed.length, preview.scope)}` });
+    // Fail closed if the lower-level builder cannot account for every approved cell.
+    if (result.ok && (result.changeSet.skipped.length || result.changeSet.cells.length + result.changeSet.unchanged.length !== allowed.length * 2))
+      return reject('linked-tema-incomplete');
   } else {
     // This branch is reachable only for G1's generic operationKind. Hydraulic
     // fields always use the eligibility-token path above, never explicit targets.
@@ -234,14 +266,14 @@ export function buildGmiFieldBatch(session, preview, { included, replace = false
   const unchanged = new Set(result.changeSet.unchanged.map((cell) => cell.key));
   const skipped = new Map(result.changeSet.skipped.map((cell) => [cell.key, cell.reason]));
   const rows = preview.rows.map((row) => ({ ...row, included: included.has(row.key),
-    outcome: changed.has(row.cellKey) ? 'changed' : unchanged.has(row.cellKey) ? 'unchanged'
+    outcome: (row.cellKeys || [row.cellKey]).some(key => changed.has(key)) ? 'changed' : (row.cellKeys || [row.cellKey]).every(key => unchanged.has(key)) ? 'unchanged'
       : included.has(row.key) ? 'skipped' : 'excluded', skipReason: skipped.get(row.cellKey) || row.reason }));
   const batch = freeze({ ...result, rows, dryRun: null, approvalReady: false,
-    counts: { selected: rows.length, included: selected.length, changed: changed.size,
-    unchanged: unchanged.size, skipped: rows.filter((row) => row.outcome === 'skipped').length,
+    counts: { selected: rows.length, included: selected.length, changed: rows.filter(row => row.outcome === 'changed').length,
+    unchanged: rows.filter(row => row.outcome === 'unchanged').length, skipped: rows.filter((row) => row.outcome === 'skipped').length,
     excluded: rows.length - selected.length,
-    newErrors: rows.filter((row) => changed.has(row.cellKey) && row.findings.some((finding) => finding.batchIntroduced && finding.state === 'FAIL')).length,
-    newChecks: rows.filter((row) => changed.has(row.cellKey) && row.findings.some((finding) => finding.batchIntroduced && finding.state === 'CHECK')).length } });
+    newErrors: rows.filter((row) => (row.cellKeys || [row.cellKey]).some(key => changed.has(key)) && row.findings.some((finding) => finding.batchIntroduced && finding.state === 'FAIL')).length,
+    newChecks: rows.filter((row) => (row.cellKeys || [row.cellKey]).some(key => changed.has(key)) && row.findings.some((finding) => finding.batchIntroduced && finding.state === 'CHECK')).length } });
   basis.latestBatch = batch;
   batches.set(batch, { batch, preview, included: [...included], changeSet: batch.changeSet, generation: 0 });
   return batch;

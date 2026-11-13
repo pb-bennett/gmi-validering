@@ -8,6 +8,7 @@ function BatchFieldValueInput({ column, value, onChange, problem, disabled }) {
   return <div className="gmi-batch-value-input">
     <label htmlFor={id}>Ny verdi</label>
     <ObjectFieldValueInput id={id} domain={column?.domain} value={value} disabled={disabled} onChange={onChange}
+      strictListed={Boolean(column?.linkedSourceKeys.length)}
       aria-label="Ny verdi" aria-invalid={Boolean(problem)} className="gmi-edit-input" emptyLabel="Velg verdi…"
       unlistedHint={column?.domain?.comparison === 'numeric' ? null : undefined} />
   </div>;
@@ -19,7 +20,7 @@ const optionLabel = (option) => [option.value, option.label !== option.value ? o
  * Only typed drafts are uppercased. Mounting, list selection and external value resets preserve exact lexemes.
  */
 function ObjectFieldValueInput({ domain, value, onChange, id, emptyLabel = 'Tom verdi',
-  unlistedHint = 'Verdien er ikke i kodelisten. Validator vurderer verdien.', ...props }) {
+  strictListed = false, unlistedHint = strictListed ? 'Velg en verdi fra kodelisten.' : 'Verdien er ikke i kodelisten. Validator vurderer verdien.', ...props }) {
   const [custom, setCustom] = useState(false);
   const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [active, setActive] = useState(-1);
   const customOption = `custom-${useId()}`;
@@ -47,7 +48,7 @@ function ObjectFieldValueInput({ domain, value, onChange, id, emptyLabel = 'Tom 
       <option value="">{emptyLabel}</option>
       {value && !current && <option value={value}>{value} – ikke i kodelisten</option>}
       {options.map((option) => <option key={option.value} value={option.value}>{optionLabel(option)}</option>)}
-      <option value={customOption}>Annen verdi…</option>
+      {!strictListed && <option value={customOption}>Annen verdi…</option>}
     </select> : <>
       <input {...controlProps} ref={input} type="text" autoComplete="off" spellCheck={false}
         inputMode={['integer', 'year'].includes(domain?.kind) ? 'numeric' : domain?.kind === 'decimal' || domain?.comparison === 'numeric' ? 'decimal' : 'text'}
@@ -79,7 +80,7 @@ function ObjectFieldValueInput({ domain, value, onChange, id, emptyLabel = 'Tom 
           {optionLabel(option)}
         </li>)}
       </ul>
-      {!matches.length && <span className="gmi-edit-muted" role="status">Ingen treff. Egen verdi kan brukes og vurderes av Validator.</span>}
+      {!matches.length && <span className="gmi-edit-muted" role="status">{strictListed ? 'Ingen treff. Velg en verdi fra kodelisten.' : 'Ingen treff. Egen verdi kan brukes og vurderes av Validator.'}</span>}
     </>}
     {hint && <span id={hintId} className="gmi-field-value-hint" title={current?.longLabel || undefined}>{hint}</span>}
   </div>;

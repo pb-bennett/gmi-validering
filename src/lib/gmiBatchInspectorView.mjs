@@ -8,7 +8,7 @@ import { VALIDATION_RULES } from './validation-v2/registry/rules.js';
 
 const FIELD_REASONS = {
   'field-absent': 'Finnes ikke i filen – kolonnen kan ikke opprettes',
-  'linked-tema': 'Tema og S_FCODE må rettes sammen – støttes ikke ennå',
+  'linked-tema-disagreement': 'Tema og S_FCODE er ulike – bruk Sett verdi for å rette begge',
   'identifier-column': 'Identifikator – kan ikke masseendres',
   'individual-only': 'Kan bare rettes enkeltvis',
   'field-owned-by-photo-delivery': 'Forvaltes av fotoleveransen',
@@ -21,10 +21,9 @@ const datasetFindingCache = new WeakMap();
 export function gmiInspectorFields(view, scope) {
   if (!['point', 'line'].includes(scope)) return [];
   const { columns, absent } = describeGmiEditColumns(view, scope);
-  return [...columns.map((column) => {
-    const reason = !column.editable ? column.reason : column.operationKind === 'linked-tema' ? 'linked-tema'
-      : column.bindingState === 'AMBIGUOUS' ? 'field-binding-unresolved' : null;
-    return { ...column, disabled: Boolean(reason), explanation: reason ? FIELD_REASONS[reason] || 'Kan ikke rettes sikkert' : null };
+  return [...columns.filter(column => !column.linkedSourceKeys.length || column.sourceKey === column.linkedSourceKeys[0]).map((column) => {
+    const reason = !column.editable ? column.reason : column.bindingState === 'AMBIGUOUS' ? 'field-binding-unresolved' : null;
+    return { ...column, label: column.linkedSourceKeys.length ? 'Tema (Tema + S_FCODE)' : column.sourceKey, disabled: Boolean(reason), explanation: reason ? FIELD_REASONS[reason] || 'Kan ikke rettes sikkert' : null };
   }), ...absent.map((column) => ({ ...column, sourceKey: null, disabled: true, explanation: FIELD_REASONS[column.reason] }))];
 }
 
@@ -39,8 +38,8 @@ export function gmiFieldInspectorRows(preview, batch, selection, advanced, stale
     const reason = current?.skipReason || row.reason;
     const canManual = advanced && row.canInclude && ['not-applicable', 'unresolved'].includes(row.reason);
     const { findings, existingCount, resolvedCount } = gmiObjectFindingTransitions(row);
-    const unchanged = (!row.reason && row.current === preview.lexeme) || reason === 'unchanged';
-    const detail = reason === 'already-empty' ? 'Allerede tom – kan ikke tømmes'
+    const unchanged = (!row.reason && (row.physical ? row.physical.every(cell => cell.current === preview.lexeme) : row.current === preview.lexeme)) || reason === 'unchanged';
+    const detail = reason === 'linked-tema-disagreement' ? FIELD_REASONS[reason] : reason === 'already-empty' ? 'Allerede tom – kan ikke tømmes'
       : reason === 'operation-mismatch' && preview.operation === 'replace' ? 'Samsvarer ikke nøyaktig med valgt verdi'
       : reason === 'operation-mismatch' ? `Har allerede verdi «${row.current}»`
       : reason === 'not-applicable' && !preview.hydraulicReview ? 'Gjelder ikke ifølge Validator'
@@ -48,7 +47,8 @@ export function gmiFieldInspectorRows(preview, batch, selection, advanced, stale
     result[row.key] = { outcome: changed ? manual ? 'manual' : 'change' : unchanged ? 'unchanged' : 'skipped',
       detail: changed && !manual ? '' : detail, findings: changed ? findings : [],
       ...(changed ? { existingCount, resolvedCount } : {}),
-      change: changed ? { from: row.current, to: preview.lexeme, overwrites: !row.missing } : undefined,
+      change: changed ? { from: row.disagreement ? row.physical.map(cell => `${cell.field}: «${cell.current}»`).join(' · ') : row.current,
+        to: preview.lexeme, overwrites: !row.missing } : undefined,
       canManual, manualOn: manual, cellKey: row.key, explanation: row.explanation,
       hypothetical: !changed && canManual ? { change: { from: row.current, to: preview.lexeme }, findings, existingCount, resolvedCount } : null };
   }
@@ -65,7 +65,7 @@ export function gmiFieldInspectorRows(preview, batch, selection, advanced, stale
 export function gmiInspectorMixedFields(preview, dataset, changeSet) {
   if (!preview || !dataset || !changeSet) return [];
   const objects = dataset[preview.scope === 'point' ? 'points' : 'lines'];
-  const changing = [...new Map(changeSet.cells.filter((cell) => cell.scope === preview.scope && cell.field === preview.sourceKey)
+  const changing = [...new Map(changeSet.cells.filter((cell) => cell.scope === preview.scope && (preview.sourceKeys || [preview.sourceKey]).includes(cell.field))
     .map((cell) => [cell.sourceIndex, cell])).values()];
   if (changing.length < 2) return [];
   const tema = (cell) => {
@@ -373,12 +373,13 @@ export function gmiCurrentFindingSplit(preview, selection) {
  * present; an empty list means direct staging. `newFail` is the dry run's
  * `diff.newCounts.fail` (approval semantics unchanged; worsened counts as new).
  */
-export function gmiBatchRiskReasons({ manualRows = [], changeSetCounts = {}, newFail = 0, mixedProfile = [], mixedFields = [], unvalidated = false }) {
+export function gmiBatchRiskReasons({ manualRows = [], changeSetCounts = {}, newFail = 0, mixedProfile = [], mixedFields = [], unvalidated = false, linkedTema = false }) {
   return [
     manualRows.length > 0 && 'manual',
     (changeSetCounts.populatedOverwrites > 0 || changeSetCounts.overwritten > 0) && 'overwrite',
     newFail > 0 && 'new-fail',
     (mixedProfile.length > 0 || mixedFields.length > 0) && 'mixed',
     unvalidated && 'unvalidated',
+    linkedTema && 'linked-tema',
   ].filter(Boolean);
 }

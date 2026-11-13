@@ -187,11 +187,10 @@ test('setup refusals, invalid targets and selection identity fail closed', async
   assert.equal(buildGmiFieldBatch(view.session, invalid.preview, { included: new Set(['point:0']) }).code, 'target-not-allowed');
 });
 
-test('reserved, identifier, linked Tema, duplicate and unnamed columns cannot enter planning', async () => {
+test('reserved, identifier, duplicate and unnamed columns cannot enter planning', async () => {
   const view = await setup(gmiFieldBatchFixture({ pointFields: ['Tema', 'S_FCODE', 'GUID', 'AnleggsID', 'S_HYPERLINK', 'Merknad', 'Merknad'],
     points: [['LOK', 'LOK', 'synthetic-guid', '', '', '', '']] }));
-  for (const [sourceKey, code] of [['Tema', 'linked-tema-not-supported'], ['S_FCODE', 'linked-tema-not-supported'],
-    ['GUID', 'identifier-column'], ['AnleggsID', 'individual-only'], ['S_HYPERLINK', 'field-owned-by-photo-delivery'],
+  for (const [sourceKey, code] of [['GUID', 'identifier-column'], ['AnleggsID', 'individual-only'], ['S_HYPERLINK', 'field-owned-by-photo-delivery'],
     ['Merknad', 'duplicate-field-name'], ['', 'unnamed-field']]) {
     const result = await prepareGmiFieldBatch(view, { scope: 'point', sourceKey, operation: 'set', value: 'LOK', targets: targets(view, 'point', [0]) }, immediate);
     assert.equal(result.code, code);
