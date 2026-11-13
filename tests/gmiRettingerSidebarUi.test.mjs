@@ -164,6 +164,20 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         await browser.waitFor(`!${workspace}.querySelector('[data-gmi-edit-counts]')`);
         assert((await text(`${workspace}.querySelector('.gmi-edit-notice')`)).startsWith(`Angret: ${label}`));
         assert.deepEqual(await redoButtons(), [['notice', 'Gjør om', 0, false], ['changes', `Gjør om: ${label}`, 0, false]]);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          for (const location of ['notice', 'changes']) {
+            const selector = `${workspace}.querySelector('[data-gmi-context-redo=${location}]')`;
+            const rect = await browser.evaluate(`(() => { const r=${selector}.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+            await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...rect });
+            assert.equal(await browser.evaluate(`getComputedStyle(${selector}).cursor`), 'pointer');
+            assert.notEqual(await browser.evaluate(`getComputedStyle(${selector}).boxShadow`), 'none', 'hover is visible');
+            await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+            await browser.evaluate(`${selector}.focus()`);
+            assert.notEqual(await browser.evaluate(`getComputedStyle(${selector}).outlineStyle`), 'none', 'keyboard focus is visible');
+          }
+          await capture(`context-redo-${width}x${height}`);
+        }
         await browser.evaluate(`${workspace}.querySelector('[data-gmi-context-redo=notice]').focus()`);
         await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' });
         await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
@@ -178,7 +192,9 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         await browser.waitFor(`!${workspace}.querySelector('[data-gmi-edit-counts]')`);
         assert.equal((await redoButtons()).length, 2);
         await focus('line:0'); await edit('Merknad', 'S6-utkast');
-        await click(`Gjør om: ${label}`, workspace);
+        await browser.evaluate(`${workspace}.querySelector('[data-gmi-context-redo=changes]').focus()`);
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
         const confirm = 'document.querySelector("dialog[open][data-gmi-confirm=workspace]")';
         await browser.waitFor(confirm); await click('Avbryt', confirm);
         assert.equal(await entry(), id, 'redo applied before the guard, exactly as the footer redo');

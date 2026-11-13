@@ -160,3 +160,21 @@ test('column focus is a display-only order that keeps fixed identity first and n
   assert.deepEqual(applyColumnFocus(['Tema', 'SDR'], ['Absent', 'SDR'], ['S_FCODE']), ['SDR', 'Tema']);
   assert.deepEqual([...saved], ['S_FCODE', 'Tema', 'Material', 'Merknad', 'SDR', 'Ringstivhet']);
 });
+
+
+test('Validator bound-field focus is temporary, alias-aware and independent of dataset view', async () => {
+  const { resolveBoundColumn } = await import('../src/lib/validation-v2/tableInspection.js');
+  const { getCanonicalField } = await import('../src/lib/validation-v2/registry/registry.js');
+  const saved = ['S_FCODE', 'Type', 'Merknad', 'InnvendigUtvendig'];
+  const copy = [...saved];
+  const field = getCanonicalField('insideOutside');
+  assert(field);
+  for (const value of ['', 'ID']) {
+    const bound = resolveBoundColumn(field, [{ attributes: { InnvendigUtvendig: value } }]);
+    assert.deepEqual(applyColumnFocus(saved, [bound], ['S_FCODE']), ['S_FCODE', 'InnvendigUtvendig', 'Type', 'Merknad']);
+  }
+  const fallback = resolveBoundColumn({ directGmiSourceKey: 'Canonical', acceptedFallbackKeys: ['Alias'] }, [{ attributes: { Alias: '' } }]);
+  assert.equal(fallback, 'Alias');
+  assert.equal(applyColumnFocus(saved, [], ['S_FCODE']), saved);
+  assert.deepEqual(saved, copy);
+});

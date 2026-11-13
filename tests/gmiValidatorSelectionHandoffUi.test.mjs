@@ -87,6 +87,10 @@ test('H3 production: exact Validator selections enter object/batch editing, pres
             assert.equal(await browser.evaluate(`Array.from(${bar}.querySelectorAll('button')).find(e=>e.innerText==='Filtrert visning').getAttribute('aria-pressed')`), 'true');
             const bounds = await browser.evaluate(`(() => {const r=${grid}.querySelector('[data-table-row="149"]').getBoundingClientRect(), g=${grid}.getBoundingClientRect();return {visible:r.top>=g.top && r.bottom<=g.bottom,page:document.documentElement.scrollWidth};})()`);
             assert(bounds.visible); assert(bounds.page <= width);
+            const order = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[role=columnheader] button')).map(e => e.getAttribute('aria-label'))`);
+            const focused = await order();
+            const fieldIndex = focused.indexOf('Sorter etter InnvendigUtvendig');
+            assert(fieldIndex > 0 && fieldIndex <= 4, JSON.stringify(focused));
             await noStaging(); await shot(`h3-point-${datasetKind}-${width}`);
           });
           await t.test(`several lines → empty exact batch, provenance and later widening; ${datasetKind}, ${width}×${height}`, async () => {
@@ -152,6 +156,26 @@ test('H3 production: exact Validator selections enter object/batch editing, pres
           assert.equal(await browser.evaluate('Boolean(document.querySelector("[data-gmi-batch-counts]"))'), false);
           assert.equal(await browser.evaluate(`Boolean(${grid}.querySelector('[data-table-row="0"] [data-gmi-changed-cell]'))`), datasetKind === 'proposed');
         }
+      });
+      await t.test('context field remains first after point staging and ordinary order returns on exit', async () => {
+        await openInspection('Punkter', 'Innvendig/utvendig', 'original');
+        await browser.waitFor(box(149)); await browser.evaluate(`${box(149)}.click()`); await entry(1);
+        await browser.waitFor(`${editor}?.dataset.gmiObject === 'point:149'`);
+        await browser.evaluate(`(() => { const e=${editor}.querySelector('tr[data-field=InnvendigUtvendig] input, tr[data-field=InnvendigUtvendig] select'); Object.getOwnPropertyDescriptor(e.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(e,'ID'); e.dispatchEvent(new Event(e.tagName==='SELECT'?'change':'input',{bubbles:true})); })()`);
+        await click('Se gjennom (1)', editor); await click('Legg til retting', editor);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          for (const mode of ['Foresl\u00e5tt', 'Original', 'Foresl\u00e5tt']) {
+            await click(mode, table);
+            assert.equal(await browser.evaluate(`${grid}.querySelector('[data-focus-column=true] button').getAttribute('aria-label')`), 'Sorter etter InnvendigUtvendig');
+          }
+          await shot(`context-staged-${width}`);
+        }
+        await click('Tilbake til appen', 'document.querySelector(".gmi-edit-workspace")');
+        await browser.waitFor('!document.querySelector(".gmi-edit-workspace")');
+        assert.equal(await browser.evaluate(`Boolean(${grid}.querySelector('[data-focus-column=true]'))`), false);
+        const labels = await browser.evaluate(`Array.from(${grid}.querySelectorAll('[role=columnheader] button')).map(e=>e.getAttribute('aria-label'))`);
+        assert(labels.indexOf('Sorter etter InnvendigUtvendig') > labels.indexOf('Sorter etter Type'), 'ordinary saved order restored');
       });
       assert.deepEqual(new Uint8Array(await readFile(file)), bytes);
       assert.equal(browser.events.filter(e => e.method === 'Runtime.exceptionThrown').length, 0);

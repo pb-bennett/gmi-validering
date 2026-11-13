@@ -36,6 +36,19 @@
 .gmi-edit-hint { margin: 8px 0 0; color: var(--gmi-text-subtle); font-size: 11px; }
 .gmi-edit-pad { padding: 6px 10px; }
 .gmi-edit-link { color: var(--gmi-interactive); text-decoration: underline; text-underline-offset: 2px; font-size: 11px; margin-left: 6px; }
+/* Contextual redo stays inline while reading as an action in both hosts. */
+[data-gmi-context-redo].gmi-edit-link {
+  cursor: pointer; font-weight: 600; border-radius: 3px;
+  text-decoration-thickness: 1.5px;
+}
+[data-gmi-context-redo].gmi-edit-link:hover,
+[data-gmi-context-redo].gmi-edit-link:focus-visible {
+  color: var(--gmi-navy); background: var(--gmi-surface-soft);
+  box-shadow: 0 0 0 2px var(--gmi-border-strong);
+}
+[data-gmi-context-redo].gmi-edit-link:focus-visible {
+  outline: 2px solid var(--gmi-interactive); outline-offset: 2px;
+}
 .gmi-edit-link:first-child { margin-left: 0; }
 
 .gmi-edit-tabs { flex-shrink: 0; display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; border-bottom: 1px solid #dce3ea; }

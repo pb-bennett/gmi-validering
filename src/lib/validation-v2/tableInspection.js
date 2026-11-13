@@ -10,7 +10,7 @@ function outcomeResult(outcome) {
   return null; // NOT_EVALUATED is deliberately outside the evaluated field population.
 }
 
-function resolveBoundColumn(field, objects) {
+export function resolveBoundColumn(field, objects) {
   const keys = [field.directGmiSourceKey, ...(field.acceptedFallbackKeys || [])];
   return keys.find((key) => objects.some((object) => Object.hasOwn(object?.attributes || {}, key)))
     || field.directGmiSourceKey;

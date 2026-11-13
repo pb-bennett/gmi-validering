@@ -30,6 +30,8 @@ import GmiSeverityIcon from './gmi-edit/GmiSeverityIcon';
 import { extractHyperlinkFilenames } from '@/lib/hyperlinkFilenames.mjs';
 import FilenameCopyButton from '@/components/FilenameCopyButton';
 import { resolveExactObjectInspectionRows } from '@/lib/objectTableInspection';
+import { getCanonicalField } from '@/lib/validation-v2/registry/registry';
+import { resolveBoundColumn } from '@/lib/validation-v2/tableInspection';
 import { getContextualColumnWidth, getContextualOrdinaryColumnWidth, getOrdinaryColumnWidth, getDiagnosticColumnOrder, createLayerDataTableColumns, applyColumnFocus } from '@/lib/objectTablePresentation';
 import { BATCH_REVIEW_COLUMNS, createBatchReviewColumnAccessors, getBatchReviewColumnWidths } from '@/lib/gmiTableReviewPresentation.mjs';
 import { GMI_BATCH_OUTCOME_LABELS } from '@/lib/gmiBatchInspectorView.mjs';
@@ -351,7 +353,15 @@ export default function LayerDataTable() {
     // Preserve source-GUID lookup from the retired list; numeric queries keep Nr. semantics.
     ? (item, query) => gmiObjectMatchesQuery(query, scope, item.__index, objectIdOf(scope, item.__index))
       || (!/^\d+$/.test(query) && typeof item.guid === 'string' && item.guid.toLowerCase().includes(query)) : null, [showObjectNumber, scope, objectIdOf]);
-  const columnFocus = showObjectNumber && !isContextualInspection && columnFocusRequest?.layerId === layerId ? columnFocusRequest : null;
+  const validatorColumnFocus = useMemo(() => {
+    if (!workspaceHandoff || workspaceHandoff.geometryScope !== scope) return null;
+    const field = getCanonicalField(workspaceHandoff.provenance?.canonicalFieldId);
+    if (!field) return null;
+    const objects = (scope === 'line' ? sourceData?.lines : sourceData?.points) || [];
+    return { layerId, fields: [resolveBoundColumn(field, objects)] };
+  }, [workspaceHandoff, scope, sourceData, layerId]);
+  const effectiveColumnFocus = validatorColumnFocus || columnFocusRequest;
+  const columnFocus = showObjectNumber && !isContextualInspection && effectiveColumnFocus?.layerId === layerId ? effectiveColumnFocus : null;
   const columnFocusSignature = columnFocus ? [columnFocus.layerId, ...columnFocus.fields].join('\u0000') : null;
   // A focus on other fields ends the earlier «off» choice; a gap without focus (handover) does not.
   if (columnFocusSignature && columnFocusSignature !== lastColumnFocus) {
