@@ -35,7 +35,7 @@ async function picture(browser, name) {
 // a phone by design, so only its panel is measured.
 const measure = (root) => `(() => {
   const dialog = ${root}, box = dialog.getBoundingClientRect(), frame = dialog.querySelector('.photo-collection-frame');
-  const areas = Array.from(dialog.querySelectorAll('.photo-export-body, .photo-export-choices, .photo-export-state, .photo-export-package, .photo-completion-panel'));
+  const areas = Array.from(dialog.querySelectorAll('.delivery-body, .photo-export-body, .photo-export-choices, .photo-export-state, .photo-export-package, .photo-completion-panel'));
   const footer = Array.from(dialog.querySelectorAll('.photo-import-footer button')).map((button) => {
     const rect = button.getBoundingClientRect(), hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
     return { label: button.innerText.trim(), left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, reachable: button === hit || button.contains(hit) };
@@ -70,11 +70,11 @@ async function assertFits(browser, label, root = exportDialog) {
 // By key at the smallest laptop size: each stop is on screen, inside the area that scrolls it, and shows that it has focus.
 async function assertKeyboard(browser, label, expected) {
   const stops = [];
-  for (let press = 0; press < 14; press++) {
+  for (let press = 0; press < 30; press++) {
     await pressKey(browser, 'Tab', KEYS.Tab);
     const stop = await browser.evaluate(`(() => {
       const item = document.activeElement, dialog = ${exportDialog}, rect = item.getBoundingClientRect(), style = getComputedStyle(item);
-      const area = item.closest('.photo-export-choices, .photo-export-state, .photo-export-package')?.getBoundingClientRect() || { top: 0, bottom: innerHeight };
+      const area = item.closest('.delivery-body, .photo-export-choices, .photo-export-state, .photo-export-package')?.getBoundingClientRect() || { top: 0, bottom: innerHeight };
       return { name: item.getAttribute('aria-label') || item.value || item.innerText?.trim(), tag: item.tagName, inside: dialog.contains(item), visible: rect.top >= area.top - 1 && rect.bottom <= area.bottom + 1 && rect.bottom <= innerHeight,
         marked: style.outlineStyle !== 'none' || style.boxShadow !== 'none' };
     })()`);
@@ -156,7 +156,7 @@ layoutTest('missing times and blocked formats: Leveranse and the hub fit every s
   await picture(browser, '7a-leveranse-laptop-1366x625');
   await size(browser, 1093, 510, 1.25);
   await picture(browser, '7c-leveranse-small-laptop-125');
-  await assertKeyboard(browser, 'Leveranse', ['Lukk eksport', 'gemini-legacy2019', 'Eksportetikett', 'Fullfør opplysninger…', 'Avbryt', 'Fortsett uten opptakstid']);
+  await assertKeyboard(browser, 'Innhold', ['Lukk eksport', 'gemini-legacy2019', 'Eksportetikett', 'Fullfør opplysninger…', 'Avbryt', 'Kontroller leveransen']);
   await pressKey(browser, 'Escape', KEYS.Escape);
   await browser.waitFor(`!${exportDialog}`);
   assert.equal(await browser.evaluate(`document.activeElement === document.querySelector('.photo-tools-trigger')`), true, 'Escape at this size, and focus comes back');

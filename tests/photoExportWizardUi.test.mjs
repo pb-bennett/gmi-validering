@@ -68,6 +68,7 @@ const layerTest = (name, run, { timeout = 240000, hold = false } = {}) => test(n
 });
 
 const realClick = async (browser, expression) => {
+  await browser.evaluate(`(${expression}).scrollIntoView({ block: 'center' })`);
   const { x, y } = await elementCentre(browser, expression);
   await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 });
   await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
@@ -94,23 +95,22 @@ const fileReads = (browser) => browser.evaluate('window.__fileReads');
 layerTest('normal path: Gemini is chosen, the screens agree, and the same package can be downloaded again', async (browser, directory) => {
   await watchDownloads(browser);
   await openExport(browser);
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('h2').innerText`), 'Eksporter bilder');
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('h2').innerText`), 'Eksporter leveranse');
   assert.equal(await selectedFormat(browser), 'gemini-legacy2019', 'selected by default');
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('.photo-export-more').open`), false, 'other formats stay folded');
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-current="step"]').innerText`), '1. Leveranse');
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-current="step"]').innerText`), '1. Innhold');
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksport-CRS"]')`), null, 'Gemini is fixed at EPSG:5972');
 
   // The schema gap is stated and does not block.
   assert.equal(await deliveryState(browser), 'schema-gap');
   assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /^1 bilde mangler full opptakstid,/);
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="generation"] dd').innerText`), 'Kan lages');
-  assert.equal(await browser.evaluate(`${advance}.innerText`), 'Fortsett uten opptakstid');
+  assert.equal(await browser.evaluate(`${advance}.innerText`), 'Kontroller leveransen');
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-excluded]').innerText`), '1 plassering mangler posisjon og blir ikke med.', 'not behind a disclosure');
   assert.equal(await browser.evaluate(`document.activeElement === ${exportDialog}.querySelector('[data-export-heading]')`), true, 'the answer gets focus');
 
-  await browser.evaluate(`${advance}.click()`);
-  await browser.waitFor(`${exportDialog}.querySelector('[data-package-state="ready"]')`);
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-current="step"]').innerText`), '2. Pakke');
+  await buildPreview(browser);
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-current="step"]').innerText`), '3. Pakke / Last ned');
   const names = await previewNames(browser);
   assert.match(names.zip, /^\d{8}-\d{6}\.zip$/);
   assert.equal(names.gml, names.zip.replace(/\.zip$/, '.gml'));
@@ -123,11 +123,11 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   const first = await downloadZip(browser, directory);
   assert.deepEqual(Object.keys(first.entries).sort(), [first.gml, 'Attachments/blank.jpg', 'Attachments/timed.jpg'].sort());
   const done = await dialogText(browser);
-  assert.match(done, /ZIP-pakken er klar/);
+  assert.match(done, /Nedlastingen er startet/);
   assert(done.includes(first.zip), 'the downloaded name');
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), '1 bilde mangler opptakstid. Pakken følger derfor ikke Skråfoto 2019-skjemaet.');
-  assert.doesNotMatch(done, /Importer |Pakk ut ZIP-filen|nye ID-er|Kontroller resultatet i Gemini VA/, 'no import steps and no explanation of repeated downloads');
-  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Last ned på nytt', 'Lukk']);
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /1 bilde mangler full opptakstid/);
+  assert(done.includes('Attachments/'), 'the reviewed inventory remains visible after initiation');
+  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake til Innhold', 'Last ned leveranserapport', 'Last ned på nytt']);
   assert.deepEqual(await previewNames(browser), { zip: first.zip, gml: first.gml });
 
   // Again: same plan, so the same name and the same bytes, identifiers included.
@@ -180,16 +180,17 @@ layerTest('format, CRS and label stay for the session, a choice is never folded 
 
 layerTest('Fullfør opplysninger replaces the wizard and stays open, and a double-click goes no further than one step', async (browser) => {
   await openExport(browser);
-  // A double-click on Neste: the plan is ready within it, so the second click lands on Last ned ZIP in the same place.
+  // A double-click on control must not skip the explicit Kontroll step.
   await watchDownloads(browser);
   const { x, y } = await realClick(browser, advance);
   await browser.waitFor(`${exportDialog}.querySelector('[data-package-state="ready"]')`);
-  const { x: downloadX, y: downloadY } = await elementCentre(browser, button('Last ned ZIP'));
+  const { x: downloadX, y: downloadY } = await elementCentre(browser, button('Til pakke'));
   assert(Math.abs(downloadX - x) < 60 && Math.abs(downloadY - y) < 10, 'the two buttons share a place, which is the risk');
   await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: downloadX, y: downloadY, button: 'left', buttons: 1, clickCount: 2 });
   await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: downloadX, y: downloadY, button: 'left', buttons: 0, clickCount: 2 });
   await delay(200);
   assert.equal(await packageState(browser), 'ready', 'the second click of a double-click is ignored');
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-current="step"]').innerText`), '2. Kontroll');
   assert.deepEqual(await downloads(browser), []);
   await backToDelivery(browser);
 
@@ -297,7 +298,7 @@ layerTest('closing during ZIP generation: the finished ZIP reaches no download, 
     await clickSourceControl(browser, 'Last ned ZIP', exportDialog);
     await browser.waitFor(`${exportDialog}.querySelector('[data-package-state="packaging"]')`);
     await browser.waitFor(`window.__heldFiles.length === 1`);
-    assert.equal(await browser.evaluate(`${button('Last ned ZIP')}.disabled && ${button('Tilbake')}.disabled`), true, name);
+    assert.equal(await browser.evaluate(`${button('Lager leveransen …')}.disabled && ${button('Tilbake til Innhold')}.disabled`), true, name);
     await close();
     await browser.waitFor(`!${exportDialog}`);
     await releaseFiles(browser);
@@ -327,6 +328,7 @@ layerTest('repeated clicks in one tick give one plan and one download', async (b
   await delay(200);
   assert.equal(await fileReads(browser), 2, 'two originals hashed once: a second plan would read them again');
   assert.equal(await packageState(browser), 'ready');
+  await clickSourceControl(browser, 'Til pakke', exportDialog);
   const { zip } = await previewNames(browser);
   await browser.evaluate(`(() => { const download = ${button('Last ned ZIP')}; download.click(); download.click(); download.click(); })()`);
   await browser.waitFor(`${exportDialog}.querySelector('[data-package-state="done"]')`);
@@ -350,14 +352,14 @@ layerTest('a change during Pakke removes the download, says so, and only an expl
   await clickSourceControl(browser, 'Fjern fra lag', 'document.querySelector(".photo-remove-confirmation")');
 
   await browser.waitFor(`${exportDialog}.querySelector('[data-package-state="stale"]')`);
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[role=alert]').innerText`), /Bildene er endret etter at forhåndsvisningen ble laget\./);
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[role=alert]').innerText`), /Data eller valg er endret etter kontrollen/);
   assert.equal(await canDownload(browser), false);
   assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-zip]'))`), false, 'no name from a plan that no longer applies');
   await delay(1100);
   assert.equal(await packageState(browser), 'stale', 'not rebuilt silently');
 
-  await clickSourceControl(browser, 'Oppdater forhåndsvisning', exportDialog);
-  await browser.waitFor(`${exportDialog}.querySelector('[data-package-state="ready"]')`);
+  await clickSourceControl(browser, 'Tilbake og kontroller på nytt', exportDialog);
+  await buildPreview(browser);
   assert.notEqual((await previewNames(browser)).zip, zip, 'a new plan is a new package');
   assert(await canDownload(browser));
 });

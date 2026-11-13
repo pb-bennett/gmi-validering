@@ -32,7 +32,7 @@ const footerStatus = (browser) => browser.evaluate(`${exportDialog}.querySelecto
 const label = (browser) => browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksportetikett"]').value`);
 const excluded = (browser) => browser.evaluate(`${exportDialog}.querySelector('[data-export-excluded]')?.innerText ?? null`);
 const onDelivery = async (browser, context) => {
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-current="step"]').innerText`), '1. Leveranse', context);
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-current="step"]').innerText`), '1. Innhold', context);
   assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-step="package"], [data-export-zip]'))`), false, context);
 };
 const hubFooter = (browser) => browser.evaluate(`Array.from(${hub}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`);

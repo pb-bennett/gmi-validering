@@ -422,11 +422,16 @@ test('boundaries: the wizard components write no metadata, compose no final name
   for (const text of [shell, ...steps]) {
     for (const name of ['adoptSourceEvidence', 'setCaptureMetadata', 'fillMissingPhotoValues', 'photoExportNames', 'localStorage', 'sessionStorage', 'indexedDB']) assert(!text.includes(name), name);
   }
-  // The session is read for the snapshot alone, and only the shell needs it.
+  // M10 keeps this FOTO entry point as an adapter. The shared wizard delegates
+  // capture/build/download to M9, instead of maintaining a second exporter.
   assert.doesNotMatch(shell, /photoSession\.(?!mjs)/, 'no session method is called here');
-  assert(shell.includes('capturePhotoExportSnapshot(photoSession, layer.id)'));
+  assert(shell.includes('DeliveryWizard'));
   for (const text of steps) assert(!text.includes('photoSession'));
-  assert(shell.includes('link.download = filename') && shell.includes('saveFile(blob, plan.naming.zipFilename'), 'the browser gets the name the plan fixed');
+  const shared = await readFile(new URL('../src/components/delivery/DeliveryWizard.js', import.meta.url), 'utf8');
+  const service = await readFile(new URL('../src/lib/delivery/deliveryWizard.mjs', import.meta.url), 'utf8');
+  assert(shared.includes('captureDeliverySnapshot(') && shared.includes('buildDeliveryPlan(snapshot, config)'));
+  assert(shared.includes('link.download = filename') && service.includes('save(blob, plan.filename)'), 'the browser gets the name the M9 plan fixed');
+  for (const name of ['adoptSourceEvidence', 'setCaptureMetadata', 'fillMissingPhotoValues', 'localStorage', 'sessionStorage', 'indexedDB']) assert(!shared.includes(name), name);
 });
 
 // M6e: what the hub says during a read, counts, and the failed commit

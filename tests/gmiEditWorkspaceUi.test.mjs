@@ -25,7 +25,7 @@ const workspace = 'document.querySelector(".gmi-edit-workspace")';
 const editor = 'document.querySelector(".gmi-edit-inspector .gmi-edit-editor")';
 const table = 'document.querySelector(".gmi-edit-table-modes")?.closest(".flex.h-full.flex-col")';
 const confirmDialog = (id) => `document.querySelector('dialog[open][data-gmi-confirm="${id}"]')`;
-const exportDialog = 'document.querySelector("dialog[open].gmi-edit-export")';
+const exportDialog = 'document.querySelector("dialog[open].delivery-wizard")';
 const row = (field) => `${editor}.querySelector('tr[data-field="${field}"]')`;
 
 function ui(browser) {
@@ -258,12 +258,14 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
         await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
         await browser.waitFor(exportDialog);
-        assert.match(await u.text(exportDialog), /Eksperimentell\./);
-        assert.match(await u.text(exportDialog), /Syntetisk leveranse\.gmi \(endres ikke\)/);
         await u.setValue(`${exportDialog}.querySelector('input[type=text]')`, 'Rettet');
+        await u.clickButton('Kontroller leveransen', exportDialog);
+        await browser.waitFor(`${exportDialog}.dataset.exportPhase === 'ready'`);
+        assert.match(await u.text(exportDialog), /Eksperimentell\./);
+        await u.clickButton('Til pakke', exportDialog);
         await browser.waitFor(`/^\\d{8}-\\d{6}-Rettet\\.gmi$/.test(${exportDialog}.querySelector('[data-export-filename]').innerText)`);
         await u.shot('m4-rettinger-export');
-        await u.clickButton('Last ned', exportDialog);
+        await u.clickButton('Last ned GMI', exportDialog);
         await browser.waitFor(`${exportDialog}?.dataset.exportPhase === 'done'`, 30000);
         const filename = await u.text(`${exportDialog}.querySelector('[data-downloaded-filename]')`);
         const fingerprint = await u.text(`${exportDialog}.querySelector('[data-downloaded-fingerprint]')`);

@@ -6,7 +6,7 @@ import { clickSourceControl } from './photoSourceWorkflow.mjs';
 // The one place browser suites touch the export interface, so that the suites show behaviour and not the wizard's markup.
 export const exportDialog = 'document.querySelector(".photo-export-wizard")';
 const deliveryStep = `${exportDialog}.querySelector('[data-export-step="delivery"]')`;
-const packageStep = `${exportDialog}?.querySelector('[data-export-step="package"]')`;
+const packageStep = `${exportDialog}?.querySelector('[data-package-state]')`;
 const advance = `${exportDialog}.querySelector('[data-export-advance]')`;
 const completionDialog = 'document.querySelector(".photo-completion-dialog[open]")';
 // Failure limit only: a passing wait returns at once. The 148-photo corpus needs most of it.
@@ -28,7 +28,7 @@ export async function openExport(browser) {
 // Settings live on Leveranse, so reaching one from Pakke means going back, which discards the plan.
 export async function backToDelivery(browser) {
   if (!await browser.evaluate(`Boolean(${packageStep})`)) return;
-  await clickSourceControl(browser, 'Gå tilbake til Leveranse', exportDialog);
+  await clickSourceControl(browser, 'Gå tilbake til Innhold', exportDialog);
   await browser.waitFor(deliveryStep);
 }
 
@@ -55,6 +55,9 @@ export async function buildPreview(browser) {
   await backToDelivery(browser);
   if (!await canAdvance(browser)) throw new Error(`Export cannot advance from ${await deliveryState(browser)}`);
   await browser.evaluate(`${advance}.click()`);
+  await browser.waitFor(`${exportDialog}.dataset.exportPhase !== 'building'`, SLOW);
+  if (await browser.evaluate(`${exportDialog}.dataset.exportPhase !== 'ready'`)) throw new Error(`Delivery review blocked: ${await browser.evaluate(`${exportDialog}.innerText`)}`);
+  await clickSourceControl(browser, 'Til pakke', exportDialog);
   await browser.waitFor(`${packageStep} && ${packageStep}.dataset.packageState !== 'building'`, SLOW);
 }
 

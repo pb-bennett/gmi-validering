@@ -40,7 +40,8 @@ export function captureDeliverySnapshot({ mode = 'combined', registry, handle, p
   };
   const snapshot = Object.freeze({ kind: 'delivery-snapshot', mode, photo, intent, source,
     sourceFingerprint: gmi?.document.fingerprint ?? null, includeFieldChanges: mode !== 'split', isLive });
-  snapshots.set(snapshot, { registry, handle, gmi, explicitExclusion: includeFieldChanges === false });
+  snapshots.set(snapshot, { registry, handle, gmi, effectiveKey: gmi ? registry.effectiveKey(handle).effectiveKey : null,
+    explicitExclusion: includeFieldChanges === false });
   return snapshot;
 }
 
@@ -50,7 +51,7 @@ export async function buildDeliveryPlan(snapshot, configuration = {}, { now = ()
   if (!basis) throw new DeliveryError('invalid-snapshot');
   const errors = [], warnings = [], date = now();
   const error = (code, detail = {}) => errors.push({ code, ...detail });
-  let gmiBytes = null, gmiSummary = null, removal = null, photoPlan = null, xml = null, attachments = [], assets = [];
+  let gmiBytes = null, gmiFingerprint = null, gmiSummary = null, removal = null, photoPlan = null, xml = null, attachments = [], assets = [];
   const naming = { ...photoExportNames({ date, label: configuration.label }), gmiFilename: null };
   naming.gmiFilename = `${naming.basename}.gmi`;
   try {
@@ -130,6 +131,7 @@ export async function buildDeliveryPlan(snapshot, configuration = {}, { now = ()
       xml = serializePhotoExport(photoPlan);
       if (!validateDeliveryGml(xml, photoPlan) || await validateGml(xml, photoPlan) !== true) error('invalid-gml');
     }
+    if (!errors.length && gmiBytes) gmiFingerprint = `sha256:${await digestHex(gmiBytes)}`;
     if (!snapshot.isLive()) error('stale-plan');
   } catch (failure) {
     // Diagnostics never copy file contents or raw parser/provider messages.
@@ -138,7 +140,7 @@ export async function buildDeliveryPlan(snapshot, configuration = {}, { now = ()
   const plan = freezeExportData({ kind: 'delivery-plan', mode: snapshot.mode, status: errors.length ? 'blocked' : 'ready', naming,
     filename: snapshot.mode === 'gmi-only' ? naming.gmiFilename : naming.zipFilename,
     mimeType: snapshot.mode === 'gmi-only' ? 'application/octet-stream' : 'application/zip',
-    errors, warnings, attachments, photoPlan, gmiSummary: errors.length ? null : gmiSummary,
+    errors, warnings, attachments, photoPlan, gmiSummary: errors.length ? null : gmiSummary, gmiFingerprint: errors.length ? null : gmiFingerprint,
     counts: { features: photoPlan?.occurrences.length ?? 0, attachments: attachments.length,
       transferredOccurrences: snapshot.intent?.transfers.length ?? 0,
       excludedAssets: snapshot.photo ? snapshot.photo.assets.filter((asset) => !attachments.some((item) => item.assetId === asset.assetId)).length : 0 },
@@ -161,6 +163,16 @@ export function getDeliveryGmiBytes(plan) {
 }
 
 export function getDeliveryGml(plan) { assertDeliveryPlan(plan); return plans.get(plan).xml; }
+
+/** Caller attests that the actual browser download has started. Planning and
+ * packaging never call this. Split/FOTO deliveries cannot clear field guards.
+ */
+export function recordDeliveryDownload(plan) {
+  assertDeliveryPlan(plan);
+  const { basis } = plans.get(plan);
+  if (!['gmi-only', 'combined'].includes(plan.mode)) return Object.freeze({ ok: true, recorded: false });
+  return basis.registry.markDownloaded(basis.handle, basis.effectiveKey);
+}
 
 // Package service access remains internal; callers get copies through the API above.
 export async function verifyDeliverySources(plan) {

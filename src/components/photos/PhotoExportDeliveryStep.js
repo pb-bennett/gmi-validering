@@ -27,12 +27,11 @@ function FilenameHint({ label }) {
 }
 
 // Everything that shapes the package is chosen here, before a plan exists. Status follows each choice at once.
-export default function PhotoExportDeliveryStep({ config, model, readiness, onConfigChange, onOpenCompletion }) {
+export function PhotoExportSettings({ config, onConfigChange }) {
   const [moreOpen, setMoreOpen] = useState(false);
   // A chosen format is never hidden, whether it was chosen here or in Fullfør opplysninger.
   const advanced = PHOTO_EXPORT_PROFILE_METADATA[config.profile]?.tier !== 'primary';
-  return <div className="photo-export-body" data-export-step="delivery">
-    <div className="photo-export-choices">
+  return <>
       <p className="photo-export-section-title">Format</p>
       {formats('primary').map(([profile, card]) => <FormatCard key={profile} profile={profile} card={card} config={config} onConfigChange={onConfigChange} />)}
       <details className="photo-export-more" open={moreOpen || advanced} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
@@ -43,7 +42,12 @@ export default function PhotoExportDeliveryStep({ config, model, readiness, onCo
         <input className="gmi-focus-ring" type="text" autoComplete="off" aria-label="Eksportetikett" value={config.label} onChange={(event) => onConfigChange({ label: event.target.value })} />
       </label>
       <FilenameHint label={config.label} />
-    </div>
+  </>;
+}
+
+export default function PhotoExportDeliveryStep({ config, model, readiness, onConfigChange, onOpenCompletion }) {
+  return <div className="photo-export-body" data-export-step="delivery">
+    <div className="photo-export-choices"><PhotoExportSettings config={config} onConfigChange={onConfigChange} /></div>
     <div className="photo-export-state">
       <h3 tabIndex={-1} data-export-heading data-delivery-state={model.state}><PhotoExportTone tone={TONES[model.state]} />{model.heading}</h3>
       <PhotoExportStatus readiness={readiness} reading={model.state === 'reading'} />
