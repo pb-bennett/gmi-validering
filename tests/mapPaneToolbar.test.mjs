@@ -287,3 +287,19 @@ test('Resultat and Regel share a readable width while source tables may scroll h
   assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_MODAL_MAX_WIDTH/);
   assert.match(content, /compactType=\{field\.canonicalFieldId === 'type'\}/);
 });
+
+
+test('U3 workspace entry restores prior legend choice across host switches and pane measurements', () => {
+  for (const collapsed of [false, true]) {
+    let state = { ...createMapPanePresentationState(), legendCollapsed: collapsed };
+    state = reduceMapPanePresentation(state, { type: 'workspace-changed', active: true });
+    assert.equal(state.legendCollapsed, true);
+    state = reduceMapPanePresentation(state, { type: 'legend-toggled' });
+    const inside = state;
+    assert.equal(state.legendCollapsed, false);
+    assert.equal(reduceMapPanePresentation(state, { type: 'workspace-changed', active: true }), inside);
+    state = reduceMapPanePresentation(state, { type: 'pane-measured', mode: 'narrow', legendCompact: true });
+    state = reduceMapPanePresentation(state, { type: 'workspace-changed', active: false });
+    assert.equal(state.legendCollapsed, collapsed);
+  }
+});

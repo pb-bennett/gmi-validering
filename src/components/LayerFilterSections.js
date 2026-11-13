@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { CaretDownIcon } from '@phosphor-icons/react';
+import { useLayerFilterDisclosure } from '@/lib/useLayerFilterDisclosure';
 import useStore from '@/lib/store';
 import fieldsData from '@/data/fields.json';
 import { formatStatusChoice } from '@/lib/statusDomain.mjs';
@@ -354,7 +355,7 @@ function LayerFeltValueSection({
   toggleLayerFeltHiddenValue,
   setHighlightedFelt,
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useLayerFilterDisclosure(layerId, `group:${objectType}:${fieldName}`, false);
   const sortedValues = useMemo(() => {
     return Object.entries(valueCounts).sort(([, a], [, b]) => b - a);
   }, [valueCounts]);
@@ -547,7 +548,7 @@ export function LayerFeltSection({
   geometryTab,
   onGeometryTabChange,
 }) {
-  const [localTab, setLocalTab] = useState(() => useStore.getState().ui.layerDataTable?.activeTabByLayer?.[layerId] || 'punkter');
+  const [localTab, setLocalTab] = useLayerFilterDisclosure(layerId, 'geometry', useStore.getState().ui.layerDataTable?.activeTabByLayer?.[layerId] || 'punkter');
   const tab = geometryTab ?? localTab;
   const setTab = onGeometryTabChange ?? setLocalTab;
   const toggleLayerFeltHiddenValue = useStore(

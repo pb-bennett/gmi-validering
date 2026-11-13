@@ -422,7 +422,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
             <XIcon aria-hidden="true" size={18} weight="regular" />
           </button>
         </div>
-        <div className="mt-2 flex items-center gap-1.5">
+        <div className="mt-2 grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-1.5">
           <label className="text-[11px] font-medium text-gmi-text" htmlFor="validation-v2-layer">Lag</label>
           <select
             id="validation-v2-layer"
@@ -438,10 +438,10 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
           </select>
         </div>
         {isGmi && <div className="mt-2 text-[11px]" data-validator-dataset={datasetKind}>
-          <label>Datasett <select aria-label="Datasett i Validator" className="gmi-compact-field" value={datasetKind} onChange={changeDataset}>
+          <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-1.5"><label htmlFor="validation-v2-dataset" className="text-[11px] font-medium text-gmi-text">Datasett</label><select id="validation-v2-dataset" aria-label="Datasett i Validator" className="gmi-compact-field min-w-0 w-full px-1.5 py-1 text-xs" value={datasetKind} onChange={changeDataset}>
             <option value="original">Original</option><option value="proposed" disabled={!proposed?.ok}>Foreslått</option>
-          </select></label>
-          <label className="ml-2">Dato <input type="date" aria-label="Referansedato" value={referenceDate} onChange={(event) => { if (event.target.value) useStore.getState().setGmiValidatorReferenceDate(event.target.value); }} className="gmi-compact-field max-w-32" /></label>
+          </select></div>
+          <div className="mt-2 grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-1.5"><label htmlFor="validation-v2-date" className="text-[11px] font-medium text-gmi-text" title="Datoen kontrollen regnes mot, for eksempel alder på datafangst og fremtidige datoer. Ikke filens opprettelses- eller innmålingsdato.">Kontrolldato</label><input id="validation-v2-date" type="date" aria-label="Kontrolldato" value={referenceDate} onChange={(event) => { if (event.target.value) useStore.getState().setGmiValidatorReferenceDate(event.target.value); }} className="gmi-compact-field min-w-0 w-full px-1.5 py-1 text-xs" /></div>
           {datasetKind === 'proposed' ? <p role="status" className="mt-1 rounded border border-gmi-border p-1">Du kontrollerer den foreslåtte kopien. Originalleveransen er uendret.</p>
             : !proposed?.ok && <p className="mt-1 text-gmi-text-subtle">Foreslått er utilgjengelig: {editView ? 'den foreslåtte kopien kunne ikke verifiseres.' : descriptor?.state === 'unloaded' ? 'Åpne laget i Rettinger for å opprette en økt.' : 'ingen gyldig Rettinger-økt for dette laget.'}</p>}
           {correctionError && <p role="alert">{correctionError}</p>}

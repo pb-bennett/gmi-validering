@@ -48,7 +48,7 @@ export default function GmiFullValidation({ view, layerId, guard }) {
       <button type="button" className="gmi-compact-button gmi-focus-ring inline-flex items-center gap-1 border border-gmi-border-strong px-2 py-1 text-gmi-interactive" disabled={!view || busy} onClick={run}><CheckCircleIcon size={16} /> {busy ? 'Kontrollerer…' : 'Kontroller endringer'}</button>
       <button type="button" className="gmi-edit-link" onClick={() => inspect()}>Åpne Validator</button>
     </div>
-    <p className="gmi-edit-muted">Full kontroll av hele datasettet · {referenceDate}. Skjemautkast er ikke med. Rådgivende; blokkerer ikke eksport.</p>
+    <p className="gmi-edit-muted">Full kontroll av hele datasettet · <span title="Datoen kontrollen regnes mot, for eksempel alder på datafangst og fremtidige datoer. Ikke filens opprettelses- eller innmålingsdato.">Kontrolldato: {referenceDate}</span>. Skjemautkast er ikke med. Rådgivende; blokkerer ikke eksport.</p>
     {error && <p role="alert" className="gmi-validation-accent" data-validation-tone="error">{error}</p>}
     {comparison && !current && <p role="status">Kontrollen er utdatert. Kontroller endringer på nytt.</p>}
     {current && <div data-gmi-full-comparison>

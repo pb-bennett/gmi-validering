@@ -224,6 +224,12 @@ const useStore = create(
         // ============================================
         // LAYERS SLICE — multi-file layer management
         // ============================================
+        layerFilterDisclosure: {},
+        setLayerFilterDisclosure: (layerId, key, value) => set((state) => {
+          if (!state.layers[layerId]) return state;
+          const current = state.layerFilterDisclosure[layerId] || {};
+          return { layerFilterDisclosure: { ...state.layerFilterDisclosure, [layerId]: { ...current, [key]: value } } };
+        }),
         layers: {}, // { [layerId]: LayerState }
         layerOrder: [], // Front-to-back layer IDs, shared by lists and map
         // Lightweight GMI editing status per opened layer (gmiEditSessions.mjs).
@@ -2252,6 +2258,7 @@ const useStore = create(
               void removedValidatorDataset; void removedValidatorDatasetBy;
               void removedView;
               const baseState = {
+                layerFilterDisclosure: Object.fromEntries(Object.entries(state.layerFilterDisclosure).filter(([id]) => id !== layerId)),
                 layers: remainingLayers,
                 layerOrder: nextLayerOrder,
                 gmiEditWorkspace:
@@ -3203,6 +3210,7 @@ const useStore = create(
               return {
                 file: null,
                 data: null,
+                layerFilterDisclosure: {},
                 layers: {},
                 layerOrder: [],
                 parsing: { ...initial.parsing },

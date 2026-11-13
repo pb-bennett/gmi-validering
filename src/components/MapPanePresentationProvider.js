@@ -20,7 +20,7 @@ import {
 
 const MapPanePresentationContext = createContext(null);
 
-export function MapPanePresentationProvider({ children, className, analysisOpen = false }) {
+export function MapPanePresentationProvider({ children, className, analysisOpen = false, workspaceActive = false }) {
   const paneRef = useRef(null);
   const wasAnalysisOpen = useRef(false);
   const [presentation, dispatch] = useReducer(
@@ -54,6 +54,10 @@ export function MapPanePresentationProvider({ children, className, analysisOpen 
     }
     wasAnalysisOpen.current = analysisOpen;
   }, [analysisOpen]);
+
+  useLayoutEffect(() => {
+    dispatch({ type: 'workspace-changed', active: workspaceActive });
+  }, [workspaceActive]);
 
   const toggleLegend = useCallback(() => {
     dispatch({ type: 'legend-toggled' });

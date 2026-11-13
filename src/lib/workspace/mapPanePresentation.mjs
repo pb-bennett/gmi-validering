@@ -35,6 +35,12 @@ export function didProfileAnalysisOpen(wasOpen, isOpen) {
 }
 
 export function reduceMapPanePresentation(state, action) {
+  if (action.type === 'workspace-changed') {
+    if (Boolean(state.workspaceActive) === action.active) return state;
+    return action.active
+      ? { ...state, workspaceActive: true, previousLegendCollapsed: state.legendCollapsed, legendCollapsed: true }
+      : { ...state, workspaceActive: false, legendCollapsed: state.previousLegendCollapsed };
+  }
   if (action.type === 'profile-opened') {
     return state.legendCollapsed ? state : { ...state, legendCollapsed: true };
   }
@@ -50,6 +56,7 @@ export function reduceMapPanePresentation(state, action) {
 
   const enteringLegendCompact = action.legendCompact && state.legendCompact !== true;
   return {
+    ...state,
     mode: action.mode,
     legendCompact: action.legendCompact,
     legendCollapsed: enteringLegendCompact ? true : state.legendCollapsed,

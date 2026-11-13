@@ -57,6 +57,9 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
       if (!await browser.evaluate(`Boolean(${tema})`)) await browser.evaluate(`document.querySelector('[title="R6A filters.gmi"]').click()`);
       await click('Åpne datatabell'); await browser.waitFor(table); await click('Ledninger', table); await count(3);
 
+      const legend = `Array.from(document.querySelectorAll('button')).find(e => e.textContent.trim() === 'Tegnforklaring')`;
+      await browser.waitFor(legend);
+      await browser.evaluate(`if (${legend}.getAttribute('aria-expanded') !== 'true') ${legend}.click()`);
       await t.test('ordinary Tema and Felt filters are retained on entering the Filter tab', async () => {
         await open(tema);
         await browser.evaluate(`Array.from(${tema}.querySelectorAll('div.cursor-pointer')).find(e => e.querySelector('span.font-mono')?.textContent === 'SP').click()`);
@@ -65,6 +68,16 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
         assert.equal(await browser.evaluate(`${table}.dataset.tableGeometry`), 'ledninger');
         await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
         await browser.waitFor(workspace); await click('Filter', workspace); await browser.waitFor(panel);
+        assert.equal(await browser.evaluate(`${legend}.getAttribute('aria-expanded')`), 'false', 'U3 entering Rettinger collapses legend');
+        await browser.evaluate(`${legend}.click()`);
+        assert.equal(await browser.evaluate(`${legend}.getAttribute('aria-expanded')`), 'true', 'U3 manual reopen works');
+        await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+        assert.equal(await browser.evaluate(`${legend}.getAttribute('aria-expanded')`), 'true', 'U3 ordinary state restored');
+        await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
+        await browser.waitFor(workspace); await click('Filter', workspace); await browser.waitFor(panel);
+
+        assert.equal(await browser.evaluate(`${felt}.querySelector('button').getAttribute('aria-expanded')`), 'true', 'U6 Felt remains open across hosts');
+        assert.equal(await browser.evaluate(`${field('Material')}.querySelector('button').getAttribute('aria-expanded')`), 'true', 'U6 value group remains open');
         assert.match(await browser.evaluate(`${panel}.innerText`), /Filtrert på: Original/);
         await open(tema);
         assert.equal(await browser.evaluate(`Array.from(${tema}.querySelectorAll('div.cursor-pointer')).find(e => e.querySelector('span.font-mono')?.textContent === 'SP').querySelector('input').checked`), false);

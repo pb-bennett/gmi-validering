@@ -50,6 +50,21 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
       await browser.waitFor(`document.querySelector('button[title="Feltvalidering"]')`);
       await browser.evaluate(`document.querySelector('button[title="Feltvalidering"]').click()`);
       await browser.waitFor(dataset);
+      await t.test('U1 accessible header controls align at laptop sizes and date remains editable', async () => {
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          const controls = await browser.evaluate(`['validation-v2-layer','validation-v2-dataset','validation-v2-date'].map(id => { const e=document.getElementById(id), r=e.getBoundingClientRect(); return { x:r.x, height:r.height, label:document.querySelector('label[for="'+id+'"]').textContent }; })`);
+          assert.equal(controls[2].label, 'Kontrolldato');
+          assert(controls.every(c => Math.abs(c.x-controls[0].x)<2));
+          assert(controls.every(c => Math.abs(c.height-controls[0].height)<2));
+          await shot(`u1-header-${width}x${height}`);
+        }
+
+        const date = await browser.evaluate(`document.getElementById('validation-v2-date').value`);
+        await value(`document.getElementById('validation-v2-date')`, '2025-01-02');
+        assert.equal(await browser.evaluate(`document.getElementById('validation-v2-date').value`), '2025-01-02');
+        await value(`document.getElementById('validation-v2-date')`, date);
+      });
       const original = await browser.evaluate('document.querySelector("#validation-v2-geometry-panel")?.innerText');
       await t.test('defaults to Original; proposed unavailable without matching session; allow-list action only', async () => {
         assert.equal(await browser.evaluate(`${dataset}.value`), 'original');
@@ -214,6 +229,7 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await choose(selectLayer, first);
         await browser.waitFor(`${dataset}.value === 'proposed'`);
       });
+
       assert.deepEqual(await readFile(file), Buffer.from(bytes));
       assert.equal(browser.events.filter((event) => event.method === 'Runtime.exceptionThrown').length, 0);
     } catch (error) { console.log(await browser.evaluate("document.body.innerText")); throw error; } finally {

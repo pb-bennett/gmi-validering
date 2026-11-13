@@ -935,7 +935,7 @@ export default function Home() {
             expandedTable={gmiEditActive && gmiEditTableExpanded}
             primary={(
               <div className={`flex h-full min-h-0 min-w-0 flex-1${workspaceLayer ? ' photo-workspace-primary' : ''}`}>
-                <MapPanePresentationProvider analysisOpen={analysisOpen} className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                <MapPanePresentationProvider analysisOpen={analysisOpen} workspaceActive={Boolean(gmiEditLayerId || fieldValidationOpen)} className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 {hasPhotoLayers && parsingStatus === 'error' && parsingError && (
                   <div role="alert" className="absolute inset-x-3 top-16 z-[1300] rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Feil ved lasting av fil: {parsingError}. Bruk «Legg til fil» for å prøve igjen.</div>
                 )}

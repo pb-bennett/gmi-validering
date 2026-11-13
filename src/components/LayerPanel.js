@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useLayerFilterDisclosure } from '@/lib/useLayerFilterDisclosure';
 import { LayerTemaSection, LayerFeltSection } from './LayerFilterSections';
 import useStore from '@/lib/store';
 import LayerTypeBadge from './LayerTypeBadge';
@@ -459,7 +460,7 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   // Inner section state: 'tema' | 'felt' | null
-  const [innerOpen, setInnerOpen] = useState(() => {
+  const [innerOpen, setInnerOpen] = useLayerFilterDisclosure(layerId, 'section', (() => {
     if (feltFilterActive || layer?.feltHiddenValues?.length > 0)
       return 'felt';
     if (
@@ -468,7 +469,7 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
     )
       return 'tema';
     return null;
-  });
+  })());
 
   if (!layer) return null;
 

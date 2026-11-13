@@ -80,3 +80,24 @@ test('R6A layer filters persist across hosts, never change geometry/selection, a
   assert.deepEqual(changed.items, []);
   assert.equal(data.lines[0].attributes.Material, 'PE');
 });
+
+
+test('U6 disclosures are layer/geometry specific, transient and cleaned on removal/reset', async () => {
+  useStore.getState().resetAll({ discardGmiEdits: true });
+  const a = useStore.getState().addLayer({ file: { name: 'Synthetic.gmi', format: 'GMI' }, data: { points: [], lines: [] } });
+  const b = useStore.getState().addLayer({ file: { name: 'Other.gmi', format: 'GMI' }, data: { points: [], lines: [] } });
+  const layer = useStore.getState().layers[a];
+  for (const [key, value] of [['section', 'felt'], ['group:points:Type', true], ['group:lines:Material', true]]) {
+    useStore.getState().setLayerFilterDisclosure(a, key, value);
+  }
+  useStore.getState().setLayerFilterDisclosure(b, 'section', 'tema');
+  assert.deepEqual(useStore.getState().layerFilterDisclosure[a], { section: 'felt', 'group:points:Type': true, 'group:lines:Material': true });
+  assert.equal(useStore.getState().layers[a], layer, 'disclosure does not alter filter values');
+  const storeSource = await readFile(new URL('../src/lib/store.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(storeSource.slice(storeSource.indexOf('partialize:')), /layerFilterDisclosure/);
+  useStore.getState().removeLayer(a);
+  assert.equal(useStore.getState().layerFilterDisclosure[a], undefined);
+  assert.equal(useStore.getState().layerFilterDisclosure[b].section, 'tema');
+  useStore.getState().resetAll({ discardGmiEdits: true });
+  assert.deepEqual(useStore.getState().layerFilterDisclosure, {});
+});

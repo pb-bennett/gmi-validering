@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useLayerFilterDisclosure } from '@/lib/useLayerFilterDisclosure';
 import useStore from '@/lib/store';
 import { LayerTemaSection, LayerFeltSection } from '@/components/LayerFilterSections';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
@@ -9,7 +10,7 @@ import { gmiProposedViewForStatus, GMI_EDIT_TABLE_VIEWS } from '@/lib/gmiEditVie
 /** Display context only: shared layer actions own the filters in both workspaces. */
 export default function GmiLayerFilters({ layerId, layer, status }) {
   'use no memo';
-  const [section, setSection] = useState('tema');
+  const [section, setSection] = useLayerFilterDisclosure(layerId, 'section', null);
   const geometry = useStore((state) => state.ui.layerDataTable?.activeTabByLayer?.[layerId] || 'punkter');
   const requestedView = useStore((state) => state.gmiEditTableView[layerId] || GMI_EDIT_TABLE_VIEWS.ORIGINAL);
   const setGeometry = useStore((state) => state.setLayerDataTableTab);
@@ -20,7 +21,7 @@ export default function GmiLayerFilters({ layerId, layer, status }) {
     ? gmiProposedViewForStatus(gmiEditSessions, status) : null, [requestedView, status]);
   const proposedBasis = requestedView !== GMI_EDIT_TABLE_VIEWS.ORIGINAL && proposed?.ok;
   const dataset = proposedBasis ? proposed.dataset : layer.data;
-  const toggle = (name) => setSection((current) => current === name ? null : name);
+  const toggle = (name) => setSection(section === name ? null : name);
   const filtered = Boolean(layer.hiddenCodes?.length || layer.hiddenTypes?.length || layer.feltHiddenValues?.length);
 
   return <div className="gmi-layer-filters" data-gmi-layer-filters>
