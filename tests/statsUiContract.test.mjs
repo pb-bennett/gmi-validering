@@ -68,11 +68,11 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(page, /const analysisOpen = useStore\(\(state\) => state\.analysis\.isOpen\)/);
   assert.match(
     page,
-    /\{!\(layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen\) && \(\s*<button[\s\S]*?aria-label="Vis bruksstatistikk"/,
+    /\{!workspaceLayer && !\(layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen\) && \(\s*<button[\s\S]*?aria-label="Vis bruksstatistikk"/,
   );
   const statsTriggerStart = page.indexOf('aria-label="Vis bruksstatistikk"');
   const statsTriggerCondition = page.match(
-    /\{!\((layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen)\)\s*&&/,
+    /\{(!workspaceLayer && !\(layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen\))\s*&&/,
   );
   const statsTriggerConditionStart = page.lastIndexOf('{!', statsTriggerStart);
   const statsTriggerEnd = page.indexOf('</button>', statsTriggerStart) + '</button>'.length;
@@ -91,7 +91,7 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(statsTrigger, /gap: parsingStatus === 'done' \? '6px' : '8px'/);
   assert.match(statsTrigger, /h-\[15px\] w-\[15px\]/);
   assert.doesNotMatch(read('src/app/globals.css'), /statistics-button--cue|statistics-button-entrance|statistics-button-ripple/);
-  assert.ok(statsTriggerStart < page.indexOf("{parsingStatus === 'done' &&"));
+  assert.ok(statsTriggerStart < page.indexOf("{(parsingStatus === 'done' || hasPhotoLayers) &&"));
   assert.equal((page.match(/aria-label="Vis bruksstatistikk"/g) || []).length, 1);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);
   assert.match(validationSidebar, /<FieldDetailModal[\s\S]*?isOpen=\{!!selectedField\}/);
@@ -126,23 +126,26 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(statsRoute, /analyticsStartDate: ANALYTICS_START_DATE/);
 });
 
-test('Stats trigger visibility follows table, docked inspector, and profile ownership only', async () => {
+test('Stats trigger hides in FOTO and follows table, docked inspector, and profile ownership elsewhere', async () => {
   const page = await read('src/app/page.js');
   const predicate = page.match(
-    /\{!\((layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen)\)\s*&&/,
+    /\{(!workspaceLayer && !\(layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen\))\s*&&/,
   );
   assert.ok(predicate, 'trigger excludes all three suppressing workspace surfaces');
 
   const shouldShowStatsTrigger = new Function(
+    'workspaceLayer',
     'layerDataTableOpen',
     'dockedInspectorOpen',
     'analysisOpen',
-    `return !(${predicate[1]});`,
+    `return ${predicate[1]};`,
   );
 
-  assert.equal(shouldShowStatsTrigger(false, false, false), true, 'visible on initial/upload and normal workspace');
-  assert.equal(shouldShowStatsTrigger(true, false, false), false, 'table suppresses Stats');
-  assert.equal(shouldShowStatsTrigger(false, true, false), false, 'docked inspector suppresses Stats');
-  assert.equal(shouldShowStatsTrigger(false, false, true), false, 'profile analysis suppresses Stats');
-  assert.equal(shouldShowStatsTrigger(false, false, false), true, 'Stats returns after the suppressing surface closes');
+  for (const workspaceLayer of [null, { id: 'synthetic-photo-layer' }]) {
+    for (const table of [false, true]) for (const inspector of [false, true]) for (const profile of [false, true]) {
+      assert.equal(shouldShowStatsTrigger(workspaceLayer, table, inspector, profile),
+        !workspaceLayer && !table && !inspector && !profile,
+        `FOTO=${Boolean(workspaceLayer)}, table=${table}, inspector=${inspector}, profile=${profile}`);
+    }
+  }
 });

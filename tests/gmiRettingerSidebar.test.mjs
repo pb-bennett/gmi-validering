@@ -16,8 +16,13 @@ test('R6B has only Filter/Endringer, with one geometry owner and the existing gu
     assert(workspace.includes(`<${component}`), `${component} is preserved`);
   }
   assert.match(workspace, /clearGmiEditObjectRequest\(request\)/);
-  assert.match(workspace, /select\(\{ scope: request.scope, sourceIndex: request.sourceIndex \}\)/);
-  assert.match(workspace, /guard\(\(\) => \{\s*setSelected\(target\)/);
+  assert.match(workspace, /select\(\{ scope: request.scope, sourceIndex: request.sourceIndex \}, null, \{ soft: request.soft === true \}\)/);
+  // Checkbox soft focus may retain/inspect without discarding a draft; hard selection still uses the guard.
+  const select = workspace.slice(workspace.indexOf('const select = useCallback'), workspace.indexOf('const editIndividually'));
+  assert.match(select, /const intent = gmiObjectFocusIntent/);
+  assert.match(select, /intent === 'retain'[\s\S]*?return;/);
+  assert.match(select, /const accept = \(\) => \{[\s\S]*?setSelected\(target\)/);
+  assert.match(select, /if \(intent === 'focus'\) accept\(\); else guard\(accept\)/);
   assert.match(workspace, /onSelectObject=\{\(target, id\) => select\(target, id\)\}/);
   assert.match(editor, /Velg en rad i datatabellen/);
   assert.doesNotMatch(editor, /Velg et objekt i listen/);

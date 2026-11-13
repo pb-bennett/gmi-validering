@@ -16,7 +16,8 @@ test('normal sidebar width is preserved and shared by the Validator and docked i
   assert.match(sidebar, /width: `\$\{width\}px`/);
   assert.match(page, /const \[sidebarWidth, setSidebarWidth\] = useState\(380\)/);
   assert.match(page, /width=\{sidebarWidth\}[\s\S]*?onWidthChange=\{setSidebarWidth\}/);
-  assert.match(page, /sidebar=\{fieldValidationOpen \? \([\s\S]*?<FieldValidationSidebar[\s\S]*?canDockInspector=\{canDockInspector\}/);
+  assert.match(page, /: fieldValidationOpen \? \([\s\S]*?<FieldValidationSidebar[\s\S]*?canDockInspector=\{canDockInspector\}/);
+  assert.match(page, /sidebarWidth=\{workspaceLayer \? 316 : gmiEditActive \? 330 : sidebarWidth\}/);
   assert.match(shell, /style=\{\{ width: `\$\{sidebarWidth\}px` \}\}/);
   assert.match(inspector, /style=\{\{ width: VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH \}\}/);
   assert.match(validatorSidebar, /ValidationV2Workspace[\s\S]*sidebarWidth=\{sidebarWidth\}/);
@@ -37,10 +38,10 @@ test('workspace shell places a full-height left list beside a shared upper row a
   assert.match(shell, /<main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">/);
   assert.match(shell, /height: '62%', flex: '0 0 62%'/);
   assert.match(shell, /height: '38%'/);
-  assert.match(page, /bottomDockOpen=\{layerDataTableOpen\}/);
+  assert.match(page, /bottomDockOpen=\{!workspaceLayer && layerDataTableOpen\}/);
   assert.match(page, /bottomDock=\{<LayerDataTable \/>\}/);
   assert.match(page, /id="validation-v2-field-inspector-root" className="contents"/);
-  assert.match(page, /<MapView onZoomChange=\{setZoomLevel\} \/>/);
+  assert.match(page, /<MapView onZoomChange=\{setZoomLevel\}[\s\S]*?\/>/);
   assert.match(page, /<Viewer3D \/>/);
   assert.doesNotMatch(page, /layerDataTableOpen\s*\?\s*<ValidationV2FieldInspector/);
 });
@@ -109,5 +110,5 @@ test('2D map resize invalidation and parent-sized 3D canvas remain in place', as
   assert.match(mapInner, /new ResizeObserver/);
   assert.match(mapInner, /map\.invalidateSize\(\{ animate: false \}\)/);
   assert.match(viewer, /<Canvas[\s\S]*?style=\{\{ width: '100%', height: '100%' \}\}/);
-  assert.match(page, /<MapView onZoomChange=\{setZoomLevel\} \/>[\s\S]*?<Viewer3D \/>/);
+  assert.match(page, /<MapView onZoomChange=\{setZoomLevel\}[\s\S]*?\/>[\s\S]*?<Viewer3D \/>/);
 });

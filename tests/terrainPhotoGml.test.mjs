@@ -29,7 +29,7 @@ test('actual browser XML parser, File/EXIF and session integration (optional ext
       } else if (route.startsWith('/synthetic/')) response.end(synthetic[route.split('/').at(-1)]);
       else {
         const resolved = path.resolve(root, `.${route}`);
-        if (!resolved.startsWith(root) || !['/src/lib/', '/tests/browser/', '/node_modules/'].some((prefix) => route.startsWith(prefix))) throw new Error('Invalid test module path');
+        if (!resolved.startsWith(root) || !['/src/lib/', '/src/data/validation-v2/', '/tests/browser/', '/node_modules/'].some((prefix) => route.startsWith(prefix))) throw new Error('Invalid test module path');
         response.setHeader('Content-Type', 'text/javascript'); response.end(await readFile(resolved));
       }
     } catch { response.statusCode = 404; response.end('Not found'); }
@@ -39,6 +39,7 @@ test('actual browser XML parser, File/EXIF and session integration (optional ext
   try {
     await browser.send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}` });
     await browser.waitFor('Boolean(globalThis.proj4)');
+    // The photoSession import graph also reaches the authoritative validation value tables.
     const results = await browser.evaluate("import('/tests/browser/photoSpatialChecks.mjs').then(module => module.runPhotoSpatialChecks())");
     assert(results.length >= 6 && results.every((result) => result.passed));
     console.log(JSON.stringify({ browserChecks: results }));

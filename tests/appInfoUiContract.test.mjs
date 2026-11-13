@@ -90,7 +90,7 @@ test('shared working header and both Kontakt actions use the one page-owned moda
 test('working header stays above one conditional feature branch with full-height normal resize reach', () => {
   assert.match(shellSource, /flex h-full flex-none flex-col overflow-hidden/);
   assert.match(shellSource, /<ProductHeader[\s\S]*?<div className="min-h-0 flex-1">[\s\S]*?\{sidebar\}/);
-  assert.match(pageSource, /sidebar=\{fieldValidationOpen \? \([\s\S]*?<FieldValidationSidebar[\s\S]*?\) : \([\s\S]*?<Sidebar/);
+  assert.match(pageSource, /sidebar=\{workspaceLayer \? <PhotoWorkspaceCollection[\s\S]*?: gmiEditActive \? <GmiEditWorkspace[\s\S]*?: fieldValidationOpen \? \([\s\S]*?<FieldValidationSidebar[\s\S]*?\) : \([\s\S]*?<Sidebar/);
   assert.match(sidebarSource, /-top-\[76px\] bottom-0 w-1 cursor-col-resize/);
   assert.match(sidebarSource, /newWidth > 200 && newWidth < 800/);
   assert.match(sidebarSource, /<div className="min-h-0 flex-1">\s*<LayerManager/);

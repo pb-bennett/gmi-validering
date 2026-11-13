@@ -54,11 +54,15 @@ const screenshot = async (browser, name) => {
   }
 };
 async function downloaded(browser, directory, label) {
+  // Two reviewed plans can have the same second-resolution filename. A done state means browser initiation,
+  // so an existing path could still contain the previous download. Give each handoff its own empty directory.
+  const downloadDirectory = await mkdtemp(path.join(directory, 'download-'));
+  await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloadDirectory });
   await click(browser, label);
   await browser.waitFor(`${dialog}.dataset.exportPhase === 'done'`);
   const name = await browser.evaluate(`${dialog}.querySelector('[data-downloaded-filename]').textContent`);
   for (let count = 0; count < 100; count++) {
-    try { return { name, bytes: new Uint8Array(await readFile(path.join(directory, name))) }; }
+    try { return { name, bytes: new Uint8Array(await readFile(path.join(downloadDirectory, name))) }; }
     catch { await delay(50); }
   }
   throw new Error('Download did not arrive');

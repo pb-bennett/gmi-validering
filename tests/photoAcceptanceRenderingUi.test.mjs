@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { completionGmlText } from './helpers/photoCompletionFixtures.mjs';
-import { buildPreview, downloadZip, exportDialog, openCompletionFromExport, openExport } from './helpers/photoExportWizard.mjs';
+import { buildPreview, canAdvance, canDownload, downloadZip, exportDialog, openCompletionFromExport, openExport } from './helpers/photoExportWizard.mjs';
 import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, savePhotoSource, sourceWizard, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
@@ -89,14 +89,14 @@ browserTest('rendered hub: the missing-time explanation follows Mål, and Standa
   await screenshot(browser, 'hub-standard-missing-time');
   // The hub on its own renders the same panel.
   await clickSourceControl(browser, 'Tilbake til eksport', hub);
-  // Leveranse blocked for Standard: an outlined Phosphor Regular warning circle in the error red, not a filled octagon.
+  // M10 blocks at Innhold, before export control: keep the missing-time explanation and a route to completion.
   await browser.waitFor(`${exportDialog}?.querySelector('[data-delivery-state="blocked"]')`);
-  const tone = await browser.evaluate(`(() => { const icon = ${exportDialog}.querySelector('[data-export-heading] .photo-export-tone');
-    const probe = document.createElement('span'); probe.className = 'text-red-700'; document.body.append(probe); const red = getComputedStyle(probe).color; probe.remove();
-    return { tone: icon.dataset.tone, color: getComputedStyle(icon).color, red }; })()`);
-  assert.equal(tone.tone, 'stop');
-  assert.equal(tone.color, tone.red, 'red-700, the Validator error red (text-red-700)');
-  await screenshot(browser, 'leveranse-blocked-icon');
+  assert.equal(await canAdvance(browser), false, 'Standard cannot proceed with missing capture time');
+  assert.equal(await canDownload(browser), false, 'no download before a valid control');
+  await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="capture-time-required"] summary').click()`);
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="capture-time-required"]').innerText`), /blank\.jpg/);
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-completion]').disabled`), false, 'completion remains available');
+  await screenshot(browser, 'content-blocked-missing-time');
   await clickSourceControl(browser, 'Lukk eksport', exportDialog);
   await browser.waitFor(`!${exportDialog}`);
   await openTool(browser, 'Fullfør opplysninger…');
@@ -105,24 +105,24 @@ browserTest('rendered hub: the missing-time explanation follows Mål, and Standa
   assert.equal(await missingHint(browser), expected.legacy2019, 'standalone hub, Standard kept');
 });
 
-browserTest('rendered done screen: ZIP-pakken er klar, the filename, the schema warning and two buttons; repeat download is unchanged', async (browser, directory) => {
+browserTest('rendered M10 done screen: download initiation, filename, schema warning and package actions; repeat download is unchanged', async (browser, directory) => {
   await timeLayer(browser, directory);
   await browser.evaluate(`(() => { window.__downloads = []; const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) window.__downloads.push(this.download); click.call(this); }; })()`);
   await openExport(browser);
   await buildPreview(browser);
   const first = await downloadZip(browser, directory);
   const done = `${exportDialog}.querySelector('[data-package-state="done"]')`;
-  assert.equal(await browser.evaluate(`${done}.querySelector('[data-export-heading]').innerText.trim()`), 'ZIP-pakken er klar');
-  assert.equal(await browser.evaluate(`${done}.querySelector('[data-export-zip]').innerText`), first.zip);
-  assert.equal(await browser.evaluate(`${done}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), '1 bilde mangler opptakstid. Pakken følger derfor ikke Skråfoto 2019-skjemaet.');
-  assert.equal(await browser.evaluate(`${done}.querySelectorAll('ol, li').length`), 0, 'no numbered import steps');
+  assert.equal(await browser.evaluate(`${done}.querySelector('[data-export-heading]').innerText.trim()`), 'Nedlastingen er startet');
+  assert.equal(await browser.evaluate(`${done}.querySelector('[data-downloaded-filename]').innerText`), first.zip);
+  assert.equal(await browser.evaluate(`${done}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), '1 bilde mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.');
+  assert.equal(await browser.evaluate(`${done}.querySelectorAll('ol, [data-export-guidance]').length`), 0, 'no numbered import steps');
   assert.doesNotMatch(await browser.evaluate(`${exportDialog}.innerText`), OLD_COPY);
-  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Last ned på nytt', 'Lukk']);
+  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake til Innhold', 'Last ned leveranserapport', 'Last ned på nytt']);
   await screenshot(browser, 'export-done');
   await clickSourceControl(browser, 'Last ned på nytt', exportDialog);
   await browser.waitFor(`window.__downloads.length === 2 && ${done}`);
   assert.deepEqual(await browser.evaluate('window.__downloads'), [first.zip, first.zip], 'the same package again');
-  assert.equal(await browser.evaluate(`${done}.querySelector('[data-export-heading]').innerText.trim()`), 'ZIP-pakken er klar');
+  assert.equal(await browser.evaluate(`${done}.querySelector('[data-export-heading]').innerText.trim()`), 'Nedlastingen er startet');
 });
 
 // far.jpg: GML 45 m from its own EXIF GPS. near.jpg: 5 m, ordinary spread. none.jpg: no source at all.
