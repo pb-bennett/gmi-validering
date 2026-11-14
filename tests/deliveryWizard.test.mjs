@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { unzipSync } from 'fflate';
 import { deliveryFixture } from './helpers/deliveryFixtures.mjs';
-import { recordDeliveryDownload } from '../src/lib/delivery/index.mjs';
+import { recordDeliveryDownload, getDeliveryGmiBytes } from '../src/lib/delivery/index.mjs';
+import { createGmiObjectCorrection } from '../src/lib/gmi-edit/index.mjs';
+import { GMIParser } from '../src/lib/parsing/gmiParser.js';
+import { decodeGmiBytes } from '../src/lib/parsing/gmiDecoding.js';
 import { DELIVERY_WIZARD_START, deliveryWizardReducer as reduce, deliveryWizardStatus, deliverySummary,
-  deliveryContents, deliveryReport, deliveryMessage, deliveryDiagnostics, initiateDeliveryDownload } from '../src/lib/delivery/deliveryWizard.mjs';
+  deliveryContents, deliveryReport, deliveryReportChanges, deliveryReviewSummary, deliveryPackageFacts, deliveryReviewStatus, deliveryMessage, deliveryDiagnostics, initiateDeliveryDownload } from '../src/lib/delivery/deliveryWizard.mjs';
 
 test('all four mode reviews describe the actual M9 artifact, correction choice and original-source safety', async () => {
   const f = await deliveryFixture();
@@ -138,4 +141,107 @@ test('both entry points use the one wizard and contextual redo changes only typo
   const rule = css.match(/\[data-gmi-context-redo\]\.gmi-edit-link \{([^}]+)\}/)[1];
   assert.match(rule, /font-weight: 400/); assert.match(rule, /font-size: 12px/); assert.match(rule, /cursor: pointer/);
   assert(css.includes('[data-gmi-context-redo].gmi-edit-link:focus-visible'));
+});
+
+// A3: report identities are the parser's object numbers and GUIDs, never array
+// positions. Object numbers deliberately differ from 1-based positions.
+const SHARED_LINK = 'h:1(link:"Attachments\\shared.png") ';
+const NUMBERED = {
+  points: [{ number: 101, hyperlink: SHARED_LINK }, { number: 7, hyperlink: SHARED_LINK }, { number: 267, hyperlink: '' }],
+  lines: [{ number: 38, hyperlink: '' }, { number: 43, hyperlink: '' }],
+};
+const stageNumbered = (f) => {
+  for (const [scope, sourceIndex] of [['point', 2], ['line', 0], ['line', 1]]) {
+    const session = f.registry.getSession(f.handle).session;
+    const result = createGmiObjectCorrection(session, { scope, sourceIndex, values: { Merknad: `Rettet ${scope} ${sourceIndex}` },
+      mode: 'overwrite', label: 'Synthetic numbered correction' });
+    assert(result.ok, JSON.stringify(result)); assert(f.registry.stage(f.handle, result.changeSet).ok);
+  }
+};
+const exportedObjects = (plan) => {
+  const data = new GMIParser(decodeGmiBytes(getDeliveryGmiBytes(plan))).toObject();
+  return { point: data.points, line: data.lines };
+};
+const assertIdentitiesMatchExport = (plan, lines) => {
+  const objects = exportedObjects(plan);
+  for (const item of plan.gmiSummary.diff?.changes ?? plan.gmiSummary.changes) {
+    const object = objects[item.scope][item.sourceIndex];
+    assert.equal(item.objectId, object.id); assert.equal(item.guid, object.guid);
+    assert(lines.some((text) => text.startsWith(`${item.scope === 'line' ? 'Ledning' : 'Punkt'} ${object.id} (GUID ${object.guid}) · ${item.field}:`)),
+      `${item.scope} ${object.id} missing from report`);
+  }
+};
+
+test('A3: Kun GMI report names objects by GMI object number and GUID, checked against the exported GMI', async () => {
+  const f = await deliveryFixture(NUMBERED);
+  try {
+    stageNumbered(f);
+    const plan = await f.plan('gmi-only');
+    assert.equal(plan.status, 'ready', JSON.stringify(plan.errors));
+    const report = deliveryReport({ plan, snapshot: f.capture('gmi-only') }).split('\r\n');
+    const { fields, hyperlinks } = deliveryReportChanges(plan);
+    assert.equal(fields.length, 3); assert.deepEqual(hyperlinks, []);
+    assert(fields.some((text) => /^Punkt 267 \(GUID [0-9a-f-]+\) · Merknad: Punkt 3 → Rettet point 2$/.test(text)), fields.join('\n'));
+    assert(fields.some((text) => text.startsWith('Ledning 38 (GUID ')));
+    assert(fields.some((text) => text.startsWith('Ledning 43 (GUID ')));
+    // Positions (Punkt 3, Ledning 1/2) must never be used as identities.
+    assert(!report.some((text) => /^(Punkt 3|Ledning 1|Ledning 2)\b/.test(text)), report.join('\n'));
+    assert(!report.includes('Bildelenker endret:'));
+    assertIdentitiesMatchExport(plan, fields);
+  } finally { f.session.clear(); }
+});
+
+test('A3: Samlet levering lists field corrections and S_HYPERLINK changes separately, with exported identities', async () => {
+  const f = await deliveryFixture(NUMBERED);
+  try {
+    f.transfer(); stageNumbered(f);
+    const plan = await f.plan('combined');
+    assert.equal(plan.status, 'ready', JSON.stringify(plan.errors));
+    const report = deliveryReport({ plan, snapshot: f.capture('combined') }).split('\r\n');
+    const { fields, hyperlinks } = deliveryReportChanges(plan);
+    assert.equal(fields.length, 3);
+    assert(fields.every((text) => !text.includes('S_HYPERLINK')));
+    assert.equal(hyperlinks.length, 1); assert.match(hyperlinks[0], /^Punkt (101|7) \(GUID [0-9a-f-]+\) · S_HYPERLINK: /);
+    const fieldsAt = report.indexOf('Feltendringer:'), linksAt = report.indexOf('Bildelenker endret:');
+    assert(fieldsAt >= 0 && linksAt > fieldsAt);
+    assert.deepEqual(report.slice(fieldsAt + 1, fieldsAt + 1 + fields.length), fields);
+    assert.deepEqual(report.slice(linksAt + 1), hyperlinks);
+    assertIdentitiesMatchExport(plan, [...fields, ...hyperlinks]);
+  } finally { f.session.clear(); }
+});
+
+test('A3: objects without a GMI number fall back to their file position, and a missing GUID is omitted', () => {
+  const plan = { gmiSummary: { changes: [
+    { scope: 'point', sourceIndex: 4, objectId: null, guid: null, field: 'Merknad', original: 'a', proposed: 'b' },
+    { scope: 'line', sourceIndex: 0, objectId: Number.NaN, guid: 'g-1', field: 'S_HYPERLINK', original: 'h:1(x)', proposed: '' },
+  ] } };
+  assert.deepEqual(deliveryReportChanges(plan), {
+    fields: ['Punkt nr. 5 i filen · Merknad: a → b'],
+    hyperlinks: ['Ledning nr. 1 i filen (GUID g-1) · S_HYPERLINK: h:1(x) → '],
+  });
+});
+
+test('A4: Kontroll summary omits the filename; Pakke gets one compact package line and one Kontroll status line', async () => {
+  const f = await deliveryFixture();
+  try {
+    f.transfer(); f.stage();
+    for (const mode of ['gmi-only', 'photos-only', 'combined']) {
+      const plan = await f.plan(mode);
+      assert.equal(plan.status, 'ready', JSON.stringify(plan.errors));
+      const review = { plan, snapshot: f.capture(mode), fieldCount: 1 };
+      const labels = deliveryReviewSummary(review).map(([label]) => label);
+      assert.deepEqual(labels, ['Leveranse', 'Rettinger', 'Bildelenker', 'GML', 'Vedlegg']);
+      assert(deliverySummary(review).some(([label]) => label === 'Filnavn'), 'the report keeps the filename');
+      const facts = deliveryPackageFacts(plan);
+      assert.equal(facts[0], `${deliveryContents(plan).length} ${deliveryContents(plan).length === 1 ? 'fil' : 'filer'}`);
+      assert.equal(facts.some((text) => / i GML$/.test(text)), Boolean(plan.photoPlan), mode);
+      assert.match(deliveryReviewStatus(plan), /^Kontroll fullført · /);
+    }
+  } finally { f.session.clear(); }
+  // Informational items are folded in Kontroll and are not counted as notes.
+  const info = { code: 'shared-attachments' }, warning = { code: 'photo-linked-elsewhere' };
+  assert.equal(deliveryReviewStatus({ errors: [], warnings: [] }), 'Kontroll fullført · ingen merknader');
+  assert.equal(deliveryReviewStatus({ errors: [], warnings: [info] }), 'Kontroll fullført · ingen merknader');
+  assert.equal(deliveryReviewStatus({ errors: [], warnings: [warning, info] }), 'Kontroll fullført · 1 merknad');
+  assert.equal(deliveryReviewStatus({ errors: [], warnings: [warning] }, 1), 'Kontroll fullført · 2 merknader');
 });

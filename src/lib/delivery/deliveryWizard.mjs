@@ -1,7 +1,8 @@
 import { assertDeliveryPlan, recordDeliveryDownload } from './deliveryPlan.mjs';
 import { buildDeliveryPackage } from './deliveryPackage.mjs';
 import { photoExportDiagnosticLabel } from '../photos/export/photoExportDiagnostics.mjs';
-import { gmiEditMessage } from '../gmiEditView.mjs';
+import { describeGmiObject, gmiEditMessage } from '../gmiEditView.mjs';
+import { isGmiFieldEditReservedColumn } from '../gmi-edit/changeSet.mjs';
 
 export const DELIVERY_CHOICES = Object.freeze([
   { mode: 'gmi-only', title: 'Kun GMI', text: 'Revidert GMI med feltrettinger fra Rettinger. Eksisterende bildelenker beholdes.' },
@@ -101,15 +102,46 @@ export function deliverySummary({ plan, snapshot, fieldCount = 0 }) {
     ['Filnavn', plan.filename],
   ];
 }
-export function deliveryReport(review) {
-  const { plan } = review, groups = deliveryDiagnostics(plan);
+/** Kontroll summary: the report summary without the filename, which Pakke shows. */
+export const deliveryReviewSummary = (review) => deliverySummary(review).filter(([label]) => label !== 'Filnavn');
+/** Pakke: one compact line about the package (files, photos, GML records). */
+export function deliveryPackageFacts(plan) {
+  const count = (value, one, many) => `${value} ${value === 1 ? one : many}`;
+  return [count(deliveryContents(plan).length, 'fil', 'filer'),
+    ...(plan.counts.attachments > 0 ? [count(plan.counts.attachments, 'bilde', 'bilder')] : []),
+    ...(plan.photoPlan ? [`${count(plan.counts.features, 'post', 'poster')} i GML`] : [])];
+}
+/**
+ * Pakke: one status line pointing back to Kontroll. Notes are the «Bør
+ * kontrolleres» items plus any photo readiness warning shown there;
+ * informational items are not counted.
+ */
+export function deliveryReviewStatus(plan, extraNotes = 0) {
+  const notes = deliveryDiagnostics(plan).warnings.length + extraNotes;
+  return `Kontroll fullført · ${notes === 0 ? 'ingen merknader' : `${notes} ${notes === 1 ? 'merknad' : 'merknader'}`}`;
+}
+
+/**
+ * Report lines for the exported GMI changes, named by the parser's object
+ * number (never the array position) plus GUID. S_HYPERLINK changes come from
+ * photo-link transfer (M7), not from field corrections, and are listed apart.
+ */
+export function deliveryReportChanges(plan) {
   const changes = plan.gmiSummary?.diff?.changes ?? plan.gmiSummary?.changes ?? [];
+  const line = (item) => `${describeGmiObject(item.scope, item.sourceIndex, item.objectId)}${item.guid ? ` (GUID ${item.guid})` : ''}`
+    + ` · ${item.field}: ${item.original} → ${item.proposed}`;
+  return { fields: changes.filter((item) => !isGmiFieldEditReservedColumn(item.field)).map(line),
+    hyperlinks: changes.filter((item) => isGmiFieldEditReservedColumn(item.field)).map(line) };
+}
+export function deliveryReport(review) {
+  const { plan } = review, groups = deliveryDiagnostics(plan), changes = deliveryReportChanges(plan);
   return ['Leveranserapport', ...deliverySummary(review).map(([label, value]) => `${label}: ${value}`),
     `Eksportkontroll: ${plan.status === 'ready' ? 'Eksportkontroll fullført – kan genereres' : 'Blokkert'}`,
     'Eksportkontroll er ikke en ny Validator-kjøring, full XSD-sertifisering eller Gemini-akseptanse. Originalfilen endres ikke.',
     'Leveranserapporten lastes ned separat og er ikke med i ZIP-filen.', '', 'Innhold:', ...deliveryContents(plan), '',
     ...Object.entries(groups).flatMap(([key, items]) => [({ errors: 'Feil', warnings: 'Advarsler', info: 'Informasjon' })[key], ...items.map((item) => `- ${item.text}`), '']),
-    'Feltendringer:', ...changes.map((item) => `${item.scope === 'line' ? 'Ledning' : 'Punkt'} ${item.sourceIndex + 1} · ${item.field}: ${item.original} → ${item.proposed}`),
+    'Feltendringer:', ...changes.fields,
+    ...(changes.hyperlinks.length ? ['', 'Bildelenker endret:', ...changes.hyperlinks] : []),
   ].join('\r\n');
 }
 

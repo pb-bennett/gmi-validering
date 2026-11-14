@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { completionGmlText } from './helpers/photoCompletionFixtures.mjs';
-import { backToDelivery, buildPreview, canAdvance, canDownload, chooseFormat, closeExport, deliveryState, downloadZip, exportDialog, openCompletionFromExport, openExport, packageState, previewNames, returnToExport, selectedFormat, setLabel } from './helpers/photoExportWizard.mjs';
+import { backToDelivery, buildPreview, canAdvance, canDownload, chooseFormat, closeExport, deliveryState, downloadZip, exportDialog, openCompletionFromExport, openExport, packageState, previewNames, returnToExport, reviewText, selectedFormat, setLabel, showReview, toPackage } from './helpers/photoExportWizard.mjs';
 import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, clickImport, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
@@ -114,20 +114,28 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   const names = await previewNames(browser);
   assert.match(names.zip, /^\d{8}-\d{6}\.zip$/);
   assert.equal(names.gml, names.zip.replace(/\.zip$/, '.gml'));
-  const text = await dialogText(browser);
-  for (const expected of [names.zip, names.gml, 'Gemini-kompatibel Skråfoto 2019', '2 bilder · 2 plasseringer i GML-filen', '1 plassering uten posisjon utelatt']) assert(text.includes(expected), expected);
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-format]').innerText`), /Importert i Gemini VA\/GeoFoto i testet oppsett/, 'a past import in a tested setup');
+  const packageText = await dialogText(browser);
+  for (const expected of [names.zip, names.gml]) assert(packageText.includes(expected), expected);
+  // A4: Pakke points back to Kontroll and counts the schema warning instead of repeating it.
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-review-status]').innerText`), /^Kontroll fullført · [1-9]\d* merknad(er)? · Se kontrollen$/);
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-export-warning], [data-export-format], [data-export-counts], .delivery-diagnostics').length`), 0, 'Pakke does not repeat Kontroll');
+  await showReview(browser);
+  const text = await reviewText(browser);
+  for (const expected of ['Gemini-kompatibel Skråfoto 2019', '2 bilder · 2 plasseringer i GML-filen', '1 plassering uten posisjon utelatt']) assert(text.includes(expected), expected);
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-format]').textContent`), /Importert i Gemini VA\/GeoFoto i testet oppsett/, 'a past import in a tested setup, under Tekniske detaljer');
   assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="import"] dd').innerText`), /Ikke verifisert for denne pakken/, 'which says nothing about this package');
-  assert(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]'))`), 'the warning follows to the second screen');
+  assert(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]'))`), 'the warning is on Kontroll');
+  await toPackage(browser);
+  assert.deepEqual(await previewNames(browser), names, 'the same reviewed plan');
 
   const first = await downloadZip(browser, directory);
   assert.deepEqual(Object.keys(first.entries).sort(), [first.gml, 'Attachments/blank.jpg', 'Attachments/timed.jpg'].sort());
   const done = await dialogText(browser);
   assert.match(done, /Nedlastingen er startet/);
   assert(done.includes(first.zip), 'the downloaded name');
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /1 bilde mangler full opptakstid/);
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-review-status]').innerText`), /^Kontroll fullført · [1-9]\d* merknad(er)?/, 'the warning stays counted after initiation');
   assert(done.includes('Attachments/'), 'the reviewed inventory remains visible after initiation');
-  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake til Innhold', 'Last ned leveranserapport', 'Last ned på nytt']);
+  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake til Innhold', 'Last ned rapport', 'Last ned på nytt']);
   assert.deepEqual(await previewNames(browser), { zip: first.zip, gml: first.gml });
 
   // Again: same plan, so the same name and the same bytes, identifiers included.

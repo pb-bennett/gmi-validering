@@ -17,7 +17,8 @@ export const wrappers = (members, trailing = true) =>
 const guid = (kind, n) => `5ec0e000-0000-4000-8000-${(kind === 'L' ? 0x7000 : 0x8000 + n).toString(16).padStart(8, '0')}${n.toString(16).padStart(4, '0')}`;
 
 /**
- * Build GMI text. `points` / `lines`: arrays of { hyperlink, merknad?, guid? (false = none) }.
+ * Build GMI text. `points` / `lines`: arrays of { hyperlink, merknad?, guid? (false = none),
+ * number? (the `:P` / `:L` object number; defaults to the 1-based array position) }.
  */
 export function buildGmiText({ points = [], lines = [], eol = '\r\n' } = {}) {
   const extent = '_EXTENT 581900 6565900 582100 6566100 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!';
@@ -29,7 +30,7 @@ export function buildGmiText({ points = [], lines = [], eol = '\r\n' } = {}) {
     out.push('[+L_]');
     lines.forEach((line, index) => {
       const n = index + 1;
-      out.push(`:L ${n}`, '_EXTENT 581900 6565900 582100 6566100 ',
+      out.push(`:L ${line.number ?? n}`, '_EXTENT 581900 6565900 582100 6566100 ',
         `_FIELDVALUES VL;VL;PE;110;;PN10;${line.hyperlink};${line.merknad ?? `Linje ${n}`};2026-08-01;`);
       if (line.guid !== false) out.push(`GUID ${line.guid ?? guid('L', n)}`);
       out.push('/XYZ', `${581940 + n}.000 6566007.000 101.000`, `${581945 + n}.000 6566010.000 101.250`);
@@ -39,7 +40,7 @@ export function buildGmiText({ points = [], lines = [], eol = '\r\n' } = {}) {
     out.push('[+P_]');
     points.forEach((point, index) => {
       const n = index + 1;
-      out.push(`:P ${n}`, `_FIELDVALUES KUM;Kum;SYNT-R${n};${point.hyperlink};${point.merknad ?? `Punkt ${n}`};S;`);
+      out.push(`:P ${point.number ?? n}`, `_FIELDVALUES KUM;Kum;SYNT-R${n};${point.hyperlink};${point.merknad ?? `Punkt ${n}`};S;`);
       if (point.guid !== false) out.push(`GUID ${point.guid ?? guid('P', n)}`);
       out.push('/XYZ', `${581940 + n * 7}.000 ${6566000 + n * 7}.000 ${100 + n}.000`);
     });

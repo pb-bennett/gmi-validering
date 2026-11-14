@@ -9,8 +9,16 @@
 .delivery-summary.photo-export-summary > div { grid-template-columns: 7rem minmax(0, 1fr); }
 .delivery-diagnostics { padding: 10px 12px; border: 1px solid var(--gmi-border); border-radius: 6px; overflow-wrap: anywhere; }
 .delivery-diagnostics h4, .delivery-inventory h4 { font-weight: 600; }
-.delivery-diagnostics[data-tone=errors] { border-color: #ecc8c3; background: #fdf3f2; color: #7f1d1d; }
-.delivery-diagnostics[data-tone=warnings] { border-color: #e5c07b; background: #fff8e6; color: #7a4f00; }
+.delivery-diagnostics[data-tone=errors] { border-color: var(--gmi-validation-error-border); background: var(--gmi-validation-error-bg); color: var(--gmi-validation-error-text); }
+.delivery-diagnostics[data-tone=warnings] { border-color: var(--gmi-validation-warning-border); background: var(--gmi-validation-warning-bg); color: var(--gmi-validation-warning-text); }
+.delivery-diagnostics[data-tone=info] { color: var(--gmi-text); }
+.delivery-diagnostics[data-tone=info] > summary { cursor: pointer; font-weight: 600; color: var(--gmi-navy); }
+.delivery-diagnostics[data-tone=info][open] > summary { margin-bottom: 4px; }
+/* Pakke: one compact package line and one status line back to Kontroll. */
+.delivery-package-line { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.delivery-review-status { color: var(--gmi-text-muted); }
+.delivery-wizard .delivery-review-link { color: var(--gmi-interactive); text-decoration: underline; text-underline-offset: 2px; border-radius: 4px; cursor: pointer; }
+.delivery-wizard .delivery-review-link:hover { color: color-mix(in srgb, var(--gmi-interactive) 75%, var(--gmi-ink)); text-decoration-thickness: 2px; }
 .delivery-diagnostics ul, .delivery-inventory ul { list-style: disc; padding-left: 20px; display: grid; gap: 4px; }
 .delivery-inventory { padding: 12px; border: 1px solid var(--gmi-border); background: var(--gmi-surface-soft); overflow-wrap: anywhere; }
 .delivery-inventory ul { font-family: monospace; margin: 8px 0; }

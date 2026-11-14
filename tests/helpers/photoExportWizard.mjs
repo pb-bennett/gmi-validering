@@ -61,6 +61,19 @@ export async function buildPreview(browser) {
   await browser.waitFor(`${packageStep} && ${packageStep}.dataset.packageState !== 'building'`, SLOW);
 }
 
+// A4: findings, photo readiness and format detail live on Kontroll; Pakke links back with «Se kontrollen».
+const reviewStep = `${exportDialog}?.querySelector('[data-export-step="review"]')`;
+export async function showReview(browser) {
+  await clickSourceControl(browser, 'Se kontrollen', exportDialog);
+  await browser.waitFor(reviewStep);
+}
+export async function toPackage(browser) {
+  await clickSourceControl(browser, 'Til pakke', exportDialog);
+  await browser.waitFor(`${exportDialog}.querySelector('[data-export-step="package"]')`);
+}
+// Folded text (Tekniske detaljer, Informasjon) has no innerText, so read its textContent.
+export const reviewText = (browser) => browser.evaluate(`${reviewStep}.textContent`);
+
 export const previewNames = (browser) => browser.evaluate(`(() => {
   const { exportZip, exportGml } = ${exportDialog}.querySelector('[data-export-zip]').dataset;
   return { zip: exportZip, gml: exportGml };
@@ -79,6 +92,7 @@ export async function readZip(directory, name) {
 
 // Saves the ZIP into `directory` and returns the previewed names with the unpacked entries.
 export async function downloadZip(browser, directory) {
+  if (await browser.evaluate(`Boolean(${reviewStep})`)) await toPackage(browser);
   const names = await previewNames(browser);
   await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: directory });
   await clickSourceControl(browser, 'Last ned ZIP', exportDialog);

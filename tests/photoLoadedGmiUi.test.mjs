@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
-import { buildPreview, canAdvance, canDownload, chooseFormat, closeExport, deliveryState, downloadZip, exportDialog, fillContextInHub, openCompletionFromExport, openExport, previewNames, returnToExport, selectedFormat, setLabel } from './helpers/photoExportWizard.mjs';
+import { buildPreview, canAdvance, canDownload, chooseFormat, closeExport, deliveryState, downloadZip, exportDialog, fillContextInHub, openCompletionFromExport, openExport, previewNames, returnToExport, selectedFormat, showReview, setLabel } from './helpers/photoExportWizard.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { setPhotoFiles, clickSourceControl, sourceWizard } from './helpers/photoSourceWorkflow.mjs';
 import { TEST_CONNECTION } from './fixtures/gemini-wfs/connection.mjs';
@@ -178,6 +178,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await count('capture-time-required'),0); assert.equal(await count('direction-required'),0);
         await buildPreview(browser);
         assert(await canDownload(browser));
+        await showReview(browser);
         assert(await browser.evaluate(`${exportDialog}.textContent.includes('7 unike bilder i laget · 8 forekomster')`));
         await closeExport(browser);
         await selectRow(rows[0]);
@@ -231,15 +232,15 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await selectedFormat(browser), 'legacy2019', 'the format chosen earlier is kept for the session');
         await chooseFormat(browser, 'gemini-legacy2019');
         assert(await canAdvance(browser), 'Gemini needs no explicit choice');
-        await chooseFormat(browser, 'legacy2019'); await buildPreview(browser);
+        await chooseFormat(browser, 'legacy2019'); await buildPreview(browser); await showReview(browser);
         assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-diagnostic-code="capture-time-required"], [data-diagnostic-code="direction-required"]').length`),0);
         const summary = await browser.evaluate(`Object.fromEntries(Array.from(${exportDialog}.querySelectorAll('.delivery-summary > div')).map(row => [row.querySelector('dt').innerText, row.querySelector('dd').innerText]))`);
         assert.equal(summary.GML, '4 poster i GML');
         assert.equal(summary.Vedlegg, '3 filer');
-        assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="shared-attachments"]').innerText`), /^1 originalbilder deles av flere separate forekomst-features\./);
+        assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="shared-attachments"]').textContent`), /^1 originalbilder deles av flere separate forekomst-features\./);
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('3 bilder · 4 plasseringer i GML-filen')`));
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('4 plasseringer uten posisjon utelatt')`));
-        assert(await browser.evaluate(`${exportDialog}.innerText.includes('Ikke testet med import i Gemini VA.')`));
+        assert(await browser.evaluate(`${exportDialog}.textContent.includes('Ikke testet med import i Gemini VA.')`));
         const unlabelled = await previewNames(browser);
         assert.match(unlabelled.zip, /^\d{8}-\d{6}\.zip$/);
         assert.equal(unlabelled.gml, unlabelled.zip.replace(/\.zip$/, '.gml'));
@@ -257,8 +258,8 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-zip]'))`), false, 'a new label needs a new plan: going back to change it discarded the one with the old name');
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-name-format]').innerText.includes('-Groeft-nord.zip')`));
         assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksportetikett"]').value`), '  Grøft / nord  ');
-        await chooseFormat(browser, 'gemini-legacy2019'); await buildPreview(browser);
-        assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-z"]').innerText`), /^4 XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde\./);
+        await chooseFormat(browser, 'gemini-legacy2019'); await buildPreview(browser); await showReview(browser);
+        assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-z"]').textContent`), /^4 XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde\./);
         assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-diagnostic-code="capture-time-required"]').length`), 0);
         const labelled = await previewNames(browser);
         assert.match(labelled.zip, /^\d{8}-\d{6}-Groeft-nord\.zip$/);
@@ -281,7 +282,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await selectedFormat(browser), 'asbuilt52');
         assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="invalid-context"]'))`), false, 'the wizard uses what the hub accepted');
         await setLabel(browser, 'AsBuilt');
-        await buildPreview(browser);
+        await buildPreview(browser); await showReview(browser);
         assert(await browser.evaluate(`${exportDialog}.textContent.includes('fotograf utelates i AsBuilt 5.2')`));
         assert(await browser.evaluate(`${exportDialog}.textContent.includes('Eksperimentell 2D')`));
         for (const [width, height] of [[1920, 1080], [1280, 720]]) {
