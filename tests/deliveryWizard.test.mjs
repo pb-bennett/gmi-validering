@@ -121,7 +121,7 @@ test('shared photo review counts retained and transferred references independent
   try {
     f.transfer(); const plan = await f.plan();
     const summary = Object.fromEntries(deliverySummary({ plan, snapshot: f.capture() }));
-    assert.equal(summary.Bildelenker, '1 beholdes i GMI · 1 overføres');
+    assert.equal(summary.Bildelenker, '1 beholdes i GMI · 1 overføres til GML · 0 fjernet (ikke med)');
     assert.equal(summary.GML, '1 post i GML'); assert.equal(summary.Vedlegg, '1 fil');
     assert(deliveryDiagnostics(plan).warnings.some((item) => item.code === 'photo-linked-elsewhere'));
     assert.match(deliveryMessage('retained-photo-unresolved'), /Last inn riktig bilde/);
@@ -230,7 +230,7 @@ test('A4: Kontroll summary omits the filename; Pakke gets one compact package li
       assert.equal(plan.status, 'ready', JSON.stringify(plan.errors));
       const review = { plan, snapshot: f.capture(mode), fieldCount: 1 };
       const labels = deliveryReviewSummary(review).map(([label]) => label);
-      assert.deepEqual(labels, ['Leveranse', 'Rettinger', 'Bildelenker', 'GML', 'Vedlegg']);
+      assert.deepEqual(labels, ['Leveranse', 'Rettinger', 'Bildelenker', 'Bilder', ...(mode === 'combined' ? ['Plasseringer'] : []), 'GML', 'Vedlegg', ...(mode === 'combined' ? ['Ikke valgt'] : [])]);
       assert(deliverySummary(review).some(([label]) => label === 'Filnavn'), 'the report keeps the filename');
       const facts = deliveryPackageFacts(plan);
       assert.equal(facts[0], `${deliveryContents(plan).length} ${deliveryContents(plan).length === 1 ? 'fil' : 'filer'}`);

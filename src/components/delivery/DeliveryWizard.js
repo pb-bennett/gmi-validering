@@ -13,6 +13,7 @@ import { photoExportDeliveryReadiness, photoExportDeliveryModel } from '@/lib/ph
 import { captureDeliverySnapshot, buildDeliveryPlan } from '@/lib/delivery/index.mjs';
 import { DELIVERY_CHOICES, DELIVERY_STEPS, DELIVERY_WIZARD_START, deliveryWizardReducer, deliveryWizardStatus,
   deliveryDiagnostics, deliveryMessage, deliveryPackageFacts, deliveryReport, deliveryReviewStatus, deliveryReviewSummary,
+  deliveryExclusionNote, deliveryExclusionLines,
   initiateDeliveryDownload } from '@/lib/delivery/deliveryWizard.mjs';
 import DeliveryInventory from './DeliveryInventory';
 import usePhotoSession from '@/components/photos/usePhotoSession';
@@ -47,8 +48,9 @@ function Diagnostics({ plan, snapshot }) {
       const ref = snapshot.source?.references.find((entry) => entry.id === item.referenceId);
       const occurrence = snapshot.photo?.occurrences.find((entry) => entry.occurrenceId === (item.occurrenceId ?? item.photoId));
       const asset = snapshot.photo?.assets.find((entry) => entry.assetId === (item.assetId ?? occurrence?.assetId));
-      const name = ref?.filename ?? asset?.originalFilename;
-      return <li key={`${item.code}:${index}`} data-diagnostic-code={item.code}>{name && <strong>{name}: </strong>}{item.text}</li>;
+      const name = item.filename ?? ref?.filename ?? asset?.originalFilename;
+      return <li key={`${item.code}:${index}`} data-diagnostic-code={item.code}>{name && <strong>{name}: </strong>}
+        {item.objectLabel && <span>{item.objectLabel} · </span>}{item.text}</li>;
     })}</ul>;
     const label = ({ errors: 'Feil', warnings: 'Advarsler', info: 'Informasjon' })[key];
     return key === 'info'
@@ -60,20 +62,27 @@ function Diagnostics({ plan, snapshot }) {
 /** Kontroll: the one place for findings, photo readiness and technical detail. */
 function ReviewDetails({ review, hasGmi, photoReadiness }) {
   const { plan } = review, photoPlan = plan.photoPlan, profile = photoPlan && PHOTO_EXPORT_PROFILE_METADATA[photoPlan.profile];
-  const excludedAssets = plan.mode !== 'photos-only' ? plan.counts.excludedAssets : 0;
+  const notNeededAssets = plan.counts.notNeededAssets;
+  const note = deliveryExclusionNote(plan.mode, plan.photoDelivery.ignoredExclusions);
+  const exclusions = deliveryExclusionLines(plan);
   return <>
     <dl className="photo-export-summary delivery-summary">{deliveryReviewSummary(review).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {plan.status === 'ready' && <p className="delivery-verification">Kan genereres. Kilde, eksportdata og vedleggsplan er kontrollert. Filene kontrolleres på nytt før nedlasting.</p>}
     <Diagnostics plan={plan} snapshot={review.snapshot} />
+    {note && <p className="photo-export-hint" data-delivery-exclusion-note>{note}</p>}
+    {exclusions.length > 0 && <details className="photo-export-disclosure" data-delivery-exclusions>
+      <summary>Ikke med i leveransen ({placementCount(exclusions.length)})</summary>
+      <ul>{exclusions.map((line, index) => <li key={index}>{line}</li>)}</ul>
+    </details>}
     {hasGmi && !plan.warnings.some((item) => item.code === 'gemini-g4-unverified') && <p className="photo-completion-warning" data-export-experimental><strong>Eksperimentell.</strong> Revidert GMI er ikke akseptansetestet i Gemini VA.</p>}
     {photoPlan && <PhotoExportStatus readiness={photoReadiness} />}
-    {photoPlan && <p data-export-counts>{photoCount(photoPlan.counts.attachments)} · {placementCount(plan.counts.features)} i GML-filen
+    {photoPlan && <p data-export-counts>{photoCount(new Set(photoPlan.attachments.map((item) => item.assetId)).size)} · {placementCount(plan.counts.features)} i GML-filen
       {photoPlan.excluded.length > 0 && ` · ${placementCount(photoPlan.excluded.length)} uten posisjon utelatt`}</p>}
     {photoPlan?.excluded.length > 0 && <p data-export-excluded>{photoPlan.excluded.length} plasseringer uten godkjent posisjon er utelatt fra Kun GML med bilder. GMI endres ikke.</p>}
-    {(photoPlan || excludedAssets > 0) && <details className="photo-export-disclosure" data-export-technical><summary>Tekniske detaljer</summary>
+    {(photoPlan || notNeededAssets > 0) && <details className="photo-export-disclosure" data-export-technical><summary>Tekniske detaljer</summary>
       {photoPlan && <p data-export-format={photoPlan.profile}>{profile.title}<small className="block text-gmi-text-muted">{profile.compatibility}</small></p>}
       {photoPlan && <p>{photoPlan.counts.uniqueImages} unike bilder i laget · {photoPlan.counts.totalOccurrences} forekomster</p>}
-      {excludedAssets > 0 && <p>{excludedAssets} bilder er verken valgt for GML eller påkrevd av beholdte GMI-lenker og er ikke med.</p>}
+      {notNeededAssets > 0 && <p>{notNeededAssets} bilder er ikke valgt og er ikke påkrevd av beholdte GMI-lenker. Disse er forskjellige fra plasseringene du har valgt Ikke med for.</p>}
     </details>}
     <p className="photo-export-hint">Dette er eksportkontroll, ikke en ny Validator-kjøring eller full XSD-sertifisering eller Gemini-akseptanse. Originalfilen endres ikke.</p>
   </>;
@@ -134,7 +143,12 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
   const photoModel = photoReadiness ? photoExportDeliveryModel({ photos: layerPhotos, readiness: photoReadiness }) : null;
   const canBuild = (!hasGmi || gmi.descriptor?.state === 'editable') && (!hasPhoto || photoLayer)
     && (!needsExclusion || excluded === exclusionKey) && !waiting && (mode !== 'photos-only' || photoModel?.advance.enabled);
-  const decision = photoLayer ? photoSession.getLayerDelivery(photoId)?.summary : null;
+  const delivery = photoLayer ? photoSession.getLayerDelivery(photoId) : null;
+  const decision = delivery?.summary;
+  const deliveryChoices = photoLayer ? photoSession.getPhotoDeliverySnapshot(photoId) : null;
+  const excludedDecisions = (deliveryChoices?.exclusions.length ?? 0)
+    + (deliveryChoices?.unresolved.filter((entry) => entry.decision === 'exclude').length ?? 0);
+  const exclusionNote = deliveryExclusionNote(mode, excludedDecisions);
 
   useEffect(() => {
     const dialog = ref.current, opener = openerRef?.current || document.activeElement, current = work.current, activeUrls = urls.current;
@@ -227,13 +241,15 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
             onChange={(event) => setExcluded(event.target.checked ? exclusionKey : null)} /> Jeg bekrefter at {fieldCount} {fieldCount === 1 ? 'feltretting utelates' : 'feltrettinger utelates'} fra denne leveransen. Rettingene beholdes i Rettinger.</label>}
           {hasPhoto ? <PhotoExportSettings config={config} onConfigChange={changeConfig} /> : <label className="photo-export-label">Etikett i filnavnet (valgfritt)
             <input type="text" aria-label="Eksportetikett" className="gmi-focus-ring" value={config.label} maxLength={60} onChange={(event) => changeConfig({ label: event.target.value })} /></label>}
+          {exclusionNote && <p className="photo-export-hint" data-delivery-exclusion-note>{exclusionNote}</p>}
           {hasPhoto && photoLayer && <>
             {mode === 'photos-only' ? <><p data-delivery-state={photoModel.state}>{photoModel.heading}</p><PhotoExportStatus readiness={photoReadiness} reading={waiting} />
               {photoModel.blockers.length > 0 && !waiting && <PhotoExportDiagnostics groups={photoModel.blockers} />}
               {photoModel.checks.length > 0 && !waiting && <ul className="photo-completion-notes">{photoModel.checks.map((item) => <li key={item.code}>{item.text}</li>)}</ul>}
               {photoModel.excludedText && <p data-export-excluded>{photoModel.excludedText}</p>}
               {decision?.active && <p>Kun GML med bilder tar med alle plasserte forekomster, uavhengig av valgene om samlet levering.</p>}</>
-              : <p>{decision?.occurrences.transfer ?? 0} plasseringer er valgt for overføring til GML. {decision?.occurrences.include ?? 0} er valgt uten GMI-lenke. Endre valgene under Samlet levering i FOTO.</p>}
+              : <p>{decision?.occurrences.transfer ?? 0} plasseringer er valgt for overføring til GML. {decision?.occurrences.include ?? 0} er valgt uten GMI-lenke.
+                {' '}{decision?.occurrences.exclude ?? 0} er valgt Ikke med i leveransen. Endre valgene under Samlet levering i FOTO.</p>}
             {onOpenCompletion && photoId === initialPhotoLayerId && <button type="button" className={mode === 'photos-only' && photoModel.completionPrimary ? primary : photoSourceButton} data-export-completion onClick={onOpenCompletion}>Fullfør opplysninger…</button>}
           </>}
           {hasPhoto && !photoLayer && <p>Last inn bilder i FOTO før du velger en bildeleveranse.</p>}

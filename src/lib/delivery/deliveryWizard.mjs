@@ -7,8 +7,8 @@ import { isGmiFieldEditReservedColumn } from '../gmi-edit/changeSet.mjs';
 export const DELIVERY_CHOICES = Object.freeze([
   { mode: 'gmi-only', title: 'Kun GMI', text: 'Revidert GMI med feltrettinger fra Rettinger. Eksisterende bildelenker beholdes.' },
   { mode: 'photos-only', title: 'Kun GML med bilder', text: 'GML med bildeplasseringer, retning og metadata, sammen med originalbildene i en ZIP-fil. GMI endres ikke.' },
-  { mode: 'split', title: 'Delt levering (GMI + GML)', text: 'GMI + GML + bilder. Uttrykkelig overførte bildelenker fjernes fra eksportert GMI. Feltrettinger fra Rettinger utelates.' },
-  { mode: 'combined', title: 'Samlet levering (GMI + GML)', text: 'GMI med feltrettinger + GML + bilder. Uttrykkelig overførte bildelenker fjernes fra eksportert GMI.' },
+  { mode: 'split', title: 'Delt levering (GMI + GML)', text: 'GMI + GML + bilder. Bildelenker som er overført til GML eller valgt Ikke med, fjernes fra eksportert GMI. Feltrettinger fra Rettinger utelates.' },
+  { mode: 'combined', title: 'Samlet levering (GMI + GML)', text: 'GMI med feltrettinger + GML + bilder. Bildelenker som er overført til GML eller valgt Ikke med, fjernes fra eksportert GMI.' },
 ]);
 export const DELIVERY_STEPS = Object.freeze([{ key: 'content', label: 'Innhold' }, { key: 'review', label: 'Kontroll' }, { key: 'package', label: 'Pakke / Last ned' }]);
 export const DELIVERY_WIZARD_START = Object.freeze({ step: 'content', run: 0, phase: 'idle', review: null, error: null, recorded: true });
@@ -52,10 +52,12 @@ const messages = {
   'attachment-changed': 'En originalfil er endret etter kontrollen. Gå tilbake og kontroller leveransen på nytt.',
   'stale-plan': 'Data eller valg er endret etter kontrollen. Gå tilbake til Innhold og kontroller leveransen på nytt.',
   'blocked-plan': 'Leveransen har blokkerende feil. Rett feilene og kontroller på nytt.',
-  'exclusions-not-supported-yet': 'Samlet og delt levering støtter ikke Ikke med for GMI-plasseringer ennå. Velg GMI eller GML for disse plasseringene før eksport.',
+  'foreign-exclusion-source': 'En utelatt plassering gjelder en annen GMI-kilde. Avklar leveringsvalget i FOTO eller lag en egen leveranse for kilden.',
+  'multi-link-wrapper': 'Bildelenken kan ikke fjernes sikkert: samme omslag inneholder flere lenker. Behold plasseringen i GMI eller avklar kildefilen.',
+  'unsupported-wrapper-separator': 'Bildelenken kan ikke fjernes sikkert: skilletegnet mellom lenkene støttes ikke. Behold plasseringen i GMI eller avklar kildefilen.',
   'unresolved-decisions': 'Et leveransevalg krever gjennomgang. Kontroller Samlet levering for den aktuelle plasseringen i FOTO.',
   'foreign-transfer-source': 'En overføring gjelder en annen GMI-kilde. Behold den lenken eller lag en egen leveranse for kilden.',
-  'multiple-gmi-sources': 'Overføringene gjelder flere GMI-kilder. Én leveranse kan bare inneholde én GMI-kilde.',
+  'multiple-gmi-sources': 'Leveringsvalgene gjelder flere GMI-kilder. Én leveranse kan bare inneholde én GMI-kilde.',
   'gmi-source-not-live': 'GMI-kilden er ikke lenger tilgjengelig. Last inn og koble riktig kartlag på nytt.',
   'included-photo-ambiguously-referenced': 'Et valgt bilde har en uavklart GMI-kobling. Avklar koblingen før samlet levering.',
   'selected-photo-not-exported': 'En valgt plassering kunne ikke tas med i GML. Godkjenn plassering og opplysninger i FOTO, eller endre leveransevalget.',
@@ -87,29 +89,50 @@ export function deliveryDiagnostics(plan) {
 export function deliveryContents(plan) {
   return [...(plan.mode !== 'photos-only' ? [plan.naming.gmiFilename] : []), ...(plan.photoPlan ? [plan.naming.gmlFilename] : []), ...plan.attachments.map((item) => item.path)];
 }
-export function deliverySummary({ plan, snapshot, fieldCount = 0 }) {
+export function deliverySummary({ plan, fieldCount = 0 }) {
   const count = (value, one, many) => `${value} ${value === 1 ? one : many}`;
   const fields = plan.gmiSummary?.fieldEditCount ?? plan.gmiSummary?.changedCells ?? 0;
   const corrections = plan.mode === 'split' ? `${count(fieldCount, 'feltretting', 'feltrettinger')} utelates (uttrykkelig valgt)`
     : plan.mode === 'photos-only' ? 'Ingen GMI-eksport; rettingene beholdes i Rettinger'
       : `${count(fields, 'feltretting', 'feltrettinger')} tas med`;
-  const removed = plan.gmiSummary?.removalCounts?.removedReferences ?? 0;
-  const kept = snapshot.source?.references.filter((item) => item.targetValid).length;
+  const counts = plan.counts, coordinated = ['combined', 'split'].includes(plan.mode);
+  const kept = counts.retainedReferences;
   return [
     ['Leveranse', DELIVERY_CHOICES.find((item) => item.mode === plan.mode).title], ['Rettinger', corrections],
-    ['Bildelenker', plan.mode === 'photos-only' ? 'GMI endres ikke' : kept === undefined ? 'Alle beholdes i GMI'
-      : `${kept - removed} beholdes i GMI · ${removed} overføres`],
+    ['Bildelenker', plan.mode === 'photos-only' ? 'GMI endres ikke' : plan.status !== 'ready' ? 'Ingen endringer kan leveres før feilene er rettet'
+      : !coordinated ? `${kept ?? 'Alle'} beholdes i GMI`
+        : `${kept} beholdes i GMI · ${counts.transferredReferences} overføres til GML · ${counts.excludedReferences} fjernet (ikke med)`],
+    ['Bilder', plan.mode === 'gmi-only' ? 'Ingen bildefiler legges ved; eksisterende bildelenker beholdes' : count(counts.includedAssets, 'bilde i leveransen', 'bilder i leveransen')],
+    ...(coordinated ? [['Plasseringer', `${counts.gmiPlacements ?? 0} i GMI · ${counts.gmlPlacements} i GML`]] : []),
     ['GML', `${count(plan.counts.features, 'post', 'poster')} i GML`], ['Vedlegg', count(plan.counts.attachments, 'fil', 'filer')],
+    ...(counts.excludedOccurrences ? [['Ikke med', `${count(counts.excludedOccurrences, 'plassering', 'plasseringer')} valgt · ${count(counts.excludedEntirelyAssets, 'bilde', 'bilder')} helt ute · ${count(counts.partialAssets, 'bilde', 'bilder')} delvis med`]] : []),
+    ...(counts.notNeededAssets ? [['Ikke valgt', `${count(counts.notNeededAssets, 'bilde', 'bilder')} ikke valgt og ikke påkrevd av GMI`]] : []),
+    ...(counts.unresolvedOccurrences || counts.blockedOccurrences ? [['Krever gjennomgang', `${counts.unresolvedOccurrences} uavklarte · ${counts.blockedOccurrences} blokkerte plasseringer`]] : []),
     ['Filnavn', plan.filename],
   ];
 }
 /** Kontroll summary: the report summary without the filename, which Pakke shows. */
 export const deliveryReviewSummary = (review) => deliverySummary(review).filter(([label]) => label !== 'Filnavn');
+
+export function deliveryExclusionNote(mode, count) {
+  if (!count || !['gmi-only', 'photos-only'].includes(mode)) return null;
+  return `${count} ${count === 1 ? 'plassering har' : 'plasseringer har'} leveringsvalget Ikke med. ${mode === 'gmi-only'
+    ? 'Kun GMI bruker ikke disse valgene; alle eksisterende bildelenker beholdes, og ingen bildefiler legges ved.'
+    : 'Kun GML med bilder bruker ikke disse valgene; alle godkjente, plasserte forekomster vurderes etter den uavhengige fotoeksporten. GMI endres ikke.'}`;
+}
+
+/** The UI and TXT share exactly the same artifact facts. Never claim a blocked removal happened. */
+export function deliveryExclusionLines(plan) {
+  return (plan.photoDelivery?.exclusions || []).map((row) => `${row.filename} · ${row.objectLabel}: ${plan.photoDelivery.applied
+    ? `bildelenke fjernet (${row.removedReferences}) · ${row.deliveredElsewhere
+      ? `bildefilen er fortsatt med via ${row.remaining.join('; ')}` : 'bildefilen er ikke med i leveransen'}`
+    : 'bildelenke ikke fjernet; leveransen er blokkert'}`);
+}
 /** Pakke: one compact line about the package (files, photos, GML records). */
 export function deliveryPackageFacts(plan) {
   const count = (value, one, many) => `${value} ${value === 1 ? one : many}`;
   return [count(deliveryContents(plan).length, 'fil', 'filer'),
-    ...(plan.counts.attachments > 0 ? [count(plan.counts.attachments, 'bilde', 'bilder')] : []),
+    ...(plan.counts.includedAssets > 0 ? [count(plan.counts.includedAssets, 'bilde', 'bilder')] : []),
     ...(plan.photoPlan ? [`${count(plan.counts.features, 'post', 'poster')} i GML`] : [])];
 }
 /**
@@ -125,7 +148,7 @@ export function deliveryReviewStatus(plan, extraNotes = 0) {
 /**
  * Report lines for the exported GMI changes, named by the parser's object
  * number (never the array position) plus GUID. S_HYPERLINK changes come from
- * photo-link transfer (M7), not from field corrections, and are listed apart.
+ * photo-link transfer or exclusion (M7), and are listed apart from field corrections.
  */
 export function deliveryReportChanges(plan) {
   const changes = plan.gmiSummary?.diff?.changes ?? plan.gmiSummary?.changes ?? [];
@@ -136,11 +159,18 @@ export function deliveryReportChanges(plan) {
 }
 export function deliveryReport(review) {
   const { plan } = review, groups = deliveryDiagnostics(plan), changes = deliveryReportChanges(plan);
+  const note = deliveryExclusionNote(plan.mode, plan.photoDelivery?.ignoredExclusions);
+  const exclusions = deliveryExclusionLines(plan);
   return ['Leveranserapport', ...deliverySummary(review).map(([label, value]) => `${label}: ${value}`),
     `Eksportkontroll: ${plan.status === 'ready' ? 'Eksportkontroll fullført – kan genereres' : 'Blokkert'}`,
     'Eksportkontroll er ikke en ny Validator-kjøring, full XSD-sertifisering eller Gemini-akseptanse. Originalfilen endres ikke.',
     'Leveranserapporten lastes ned separat og er ikke med i ZIP-filen.', '', 'Innhold:', ...deliveryContents(plan), '',
-    ...Object.entries(groups).flatMap(([key, items]) => [({ errors: 'Feil', warnings: 'Advarsler', info: 'Informasjon' })[key], ...items.map((item) => `- ${item.text}`), '']),
+    ...(note ? [note, ''] : []),
+    ...Object.entries(groups).flatMap(([key, items]) => [({ errors: 'Feil', warnings: 'Advarsler', info: 'Informasjon' })[key],
+      ...items.map((item) => `- ${[item.filename, item.objectLabel].filter(Boolean).join(' · ')}${item.filename || item.objectLabel ? ': ' : ''}${item.text}`), '']),
+    ...(plan.photoDelivery?.transfers.length ? ['Overført til GML:', ...plan.photoDelivery.transfers.map((row) =>
+      `${row.filename} · ${row.objectLabel}: ${plan.photoDelivery.applied ? `bildelenke fjernet for overføring til GML (${row.removedReferences})` : 'overføring blokkert; bildelenke ikke fjernet'}`), ''] : []),
+    ...(exclusions.length ? ['Ikke med i leveransen:', ...exclusions, ''] : []),
     'Feltendringer:', ...changes.fields,
     ...(changes.hyperlinks.length ? ['', 'Bildelenker endret:', ...changes.hyperlinks] : []),
   ].join('\r\n');

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { unzipSync, strFromU8 } from 'fflate';
@@ -448,6 +448,74 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await click(browser, 'Utvid alle');
         assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').textContent`), 'GMI');
         await screenshot(browser, 'final-package-retained-gmi');
+        await click(browser, 'Lukk eksport');
+      });
+      await t.test('Slice 3: exclusions in Kontroll, exact inventory/report/download, standalone notes and restoration at both laptop sizes', async () => {
+        // The previous staleness check restored the first occurrence to GMI.
+        // Set an explicit exclusion through the inspector, never through a normal row click.
+        await browser.evaluate(`${section}.querySelector('[role=radio][data-destination=excluded]').click()`);
+        await browser.waitFor(`${section}.querySelector('[data-destination=excluded]').getAttribute('aria-checked') === 'true'`);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await click(browser, 'Eksporter…', 'document'); await browser.waitFor(dialog);
+          await choose(browser, 'combined'); await review(browser);
+          assert.equal(await status(browser), 'ready', await browser.evaluate(`${dialog}.innerText`));
+          const facts = await summary(browser);
+          assert.match(facts.Bilder, /^1 bilde /); assert.match(facts.Plasseringer, /^1 i GMI · 0 i GML$/);
+          assert.match(facts.Bildelenker, /^1 beholdes.*0 overføres.*1 fjernet/);
+          assert.match(facts['Ikke med'], /^1 plassering valgt · 0 bilder helt ute · 1 bilde delvis med$/);
+          await browser.evaluate(`${dialog}.querySelector('[data-delivery-exclusions]').open=true`);
+          assert.match(await browser.evaluate(`${dialog}.querySelector('[data-delivery-exclusions]').innerText`), /shared.jpg.*Punkt 1.*bildelenke fjernet.*fortsatt med via.*Punkt 2/);
+          assert(await browser.evaluate(`${dialog}.querySelector('footer').getBoundingClientRect().bottom <= ${height}`));
+          await screenshot(browser, `slice3-kontroll-partial-${width}x${height}`);
+          await click(browser, 'Til pakke'); await click(browser, 'Utvid alle');
+          assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').innerText`), 'GMI');
+          await screenshot(browser, `slice3-inventory-partial-${width}x${height}`);
+          const reportDirectory = await mkdtemp(path.join(directory, 'report-'));
+          await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: reportDirectory });
+          await click(browser, 'Last ned rapport');
+          let report;
+          for (let attempt = 0; attempt < 100; attempt++) {
+            const name = (await readdir(reportDirectory)).find((name) => name.endsWith('.txt'));
+            if (name) { report = await readFile(path.join(reportDirectory, name), 'utf8'); break; }
+            await delay(50);
+          }
+          assert.match(report, /Ikke med i leveransen:/);
+          assert.match(report, /shared.jpg.*Punkt 1.*bildelenke fjernet.*fortsatt med via.*Punkt 2/);
+          const output = await downloaded(browser, directory, 'Last ned ZIP'), entries = unzipSync(output.bytes);
+          assert.equal(Object.keys(entries).length, 2); assert(!Object.keys(entries).some((name) => /\.gml$|\.txt$/.test(name)));
+          const gmi = Object.keys(entries).find((name) => name.endsWith('.gmi'));
+          assert.equal(strFromU8(entries[gmi]), strFromU8(original).replace('h:1(link:"Attachments\\shared.jpg") ', '').replace('Punkt 1', 'M10 corrected'));
+          assert.deepEqual(entries['Attachments/shared.jpg'], new Uint8Array(photograph));
+          await back(browser);
+          for (const mode of ['gmi-only', 'photos-only']) {
+            await choose(browser, mode);
+            assert.match(await browser.evaluate(`${dialog}.querySelector('[data-delivery-exclusion-note]').innerText`), /bruker ikke disse valgene/);
+            await review(browser); assert.equal(await status(browser), 'ready');
+            assert.match(await browser.evaluate(`${dialog}.querySelector('[data-delivery-exclusion-note]').innerText`), /bruker ikke disse valgene/);
+            await back(browser);
+          }
+          await click(browser, 'Lukk eksport');
+        }
+        // Exclude the second occurrence too: no photo file remains, and no GML is created.
+        await browser.evaluate(`document.querySelector('[data-photo-id="${rows[1]}"] button.photo-workspace-row').click()`);
+        await browser.evaluate(`${section}.querySelector('[role=radio][data-destination=excluded]').click()`);
+        await click(browser, 'Eksporter…', 'document'); await browser.waitFor(dialog); await choose(browser, 'combined');
+        const facts = await pack(browser); assert.match(facts.Bilder, /^0 bilder/); assert.match(facts.Vedlegg, /^0 filer/);
+        assert.match(facts['Ikke med'], /^2 plasseringer valgt · 1 bilde helt ute · 0 bilder delvis med$/);
+        const output = await downloaded(browser, directory, 'Last ned ZIP'), entries = unzipSync(output.bytes);
+        assert.equal(Object.keys(entries).length, 1);
+        assert.equal(strFromU8(Object.values(entries)[0]), strFromU8(original).replaceAll('h:1(link:"Attachments\\shared.jpg") ', '').replace('Punkt 1', 'M10 corrected'));
+        await click(browser, 'Lukk eksport');
+        for (const id of rows) {
+          await browser.evaluate(`document.querySelector('[data-photo-id="${id}"] button.photo-workspace-row').click()`);
+          await browser.evaluate(`${section}.querySelector('[role=radio][data-destination=gmi]').click()`);
+        }
+        await click(browser, 'Eksporter…', 'document'); await browser.waitFor(dialog); await choose(browser, 'combined');
+        await pack(browser);
+        const restored = unzipSync((await downloaded(browser, directory, 'Last ned ZIP')).bytes);
+        assert.equal(strFromU8(restored[Object.keys(restored).find((name) => name.endsWith('.gmi'))]), strFromU8(original).replace('Punkt 1', 'M10 corrected'));
+        assert.deepEqual(await readFile(imageFile), photograph);
         await click(browser, 'Lukk eksport');
       });
       await t.test('changed attachment bytes invalidate review rather than allowing retry of an obsolete package', async () => {

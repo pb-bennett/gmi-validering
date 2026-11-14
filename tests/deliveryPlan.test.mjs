@@ -325,14 +325,22 @@ test('reset during attachment read refuses late package; forged plans and stale 
 });
 
 
-test('slice 1 exclusions block combined/split packages; restore is byte-identical and standalone modes keep their scope', async () => {
+test('exclusions remove their references in combined/split packages; restore is byte-identical and standalone modes keep their scope', async () => {
   const f = await deliveryFixture();
   try {
     const before = await f.plan(); ready(before);
     const photo = f.photos().find((item) => item.occurrence);
     const photoBytes = await f.session.getAssetFile(photo.assetId).arrayBuffer();
     assert(f.session.setDeliveryIntent(f.layerId, [photo.id], 'exclude').ok);
-    for (const mode of ['combined', 'split']) await blocked(await f.plan(mode), 'exclusions-not-supported-yet');
+    for (const mode of ['combined', 'split']) {
+      const excluded = await f.plan(mode); ready(excluded);
+      assert.equal(excluded.counts.excludedReferences, 1);
+      assert.equal(excluded.counts.partialAssets, 1);
+      assert.equal(strFromU8(getDeliveryGmiBytes(excluded)).match(/shared.png/g).length, 1);
+      assert.equal(excluded.counts.features, 0);
+      assert.equal(excluded.attachments.length, 1);
+      assert(await buildDeliveryPackage(excluded));
+    }
     ready(await f.plan('gmi-only')); ready(await f.plan('photos-only'));
     assert.deepEqual(new Uint8Array(await f.file.arrayBuffer()), f.bytes);
     assert.deepEqual(await f.session.getAssetFile(photo.assetId).arrayBuffer(), photoBytes);

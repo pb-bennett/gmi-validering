@@ -8,6 +8,7 @@ import { serializePhotoExport } from '../photos/export/photoExportXml.mjs';
 import { photoExportNames } from '../photos/export/photoExportNaming.mjs';
 import { digestHex, compareExportKeys } from '../photos/export/attachmentNames.mjs';
 import { freezeExportData } from '../photos/export/exportContract.mjs';
+import { describeGmiObject } from '../gmiEditView.mjs';
 import { planDeliveryAttachments } from './deliveryAttachments.mjs';
 import { validateDeliveryGml } from './deliveryGml.mjs';
 
@@ -18,6 +19,73 @@ export class DeliveryError extends Error {
 }
 const requireOk = (result) => { if (!result.ok) throw new DeliveryError(result.code || 'verification-failed'); return result; };
 
+const deliveryObjectLabel = (source, key) => {
+  const object = source?.objectsByKey[key];
+  return object ? `${describeGmiObject(object.geometryScope, object.sourceIndex, object.parserId)}${object.guid ? ` (GUID ${object.guid})` : ''}` : null;
+};
+
+/** Add occurrence context outside M7; never change its diagnostic or authorization contract. */
+function deliveryDiagnosticContext(snapshot, item) {
+  const intent = snapshot.intent;
+  const candidates = intent ? [...intent.transfers, ...intent.exclusions, ...intent.retained, ...intent.included, ...intent.unresolved, ...intent.linksWithoutOccurrence] : [];
+  const reference = snapshot.source?.references.find((ref) => ref.id === item.referenceId);
+  const entry = candidates.find((row) => (item.selectionKey && row.occurrenceKey === item.selectionKey)
+    || (item.photoId && row.photoId === item.photoId) || (item.referenceId && row.referenceIds?.includes(item.referenceId)));
+  const assetId = item.assetId ?? entry?.assetId;
+  const asset = snapshot.photo?.assets.find((row) => row.assetId === assetId);
+  const objectKey = item.objectKey ?? entry?.objectKey ?? reference?.objectKey;
+  return { ...item, ...(entry?.photoId ? { photoId: entry.photoId } : {}), ...(assetId ? { assetId } : {}),
+    ...(asset ? { filename: asset.originalFilename } : reference?.filename ? { filename: reference.filename } : {}),
+    ...(objectKey ? { objectKey, objectLabel: deliveryObjectLabel(snapshot.source, objectKey) } : {}) };
+}
+
+/** Derived facts about the reviewed artifact, not a second decision owner. Removal purposes
+ * are counted from M7's reference-level result only after the entire plan has verified. */
+function deliveryPhotoAccounting(snapshot, removal, attachments, photoPlan, errors) {
+  const coordinated = ['combined', 'split'].includes(snapshot.mode), ready = errors.length === 0;
+  const intent = snapshot.intent, source = snapshot.source;
+  const removed = ready && coordinated ? removal?.cells.flatMap((cell) => cell.removedReferences) || [] : [];
+  const removedIds = new Set(removed.map((ref) => ref.referenceId));
+  const used = new Set(attachments.map((entry) => entry.assetId));
+  const edges = Object.values(source?.associationLedger?.associationsById || {});
+  const retainedEdges = edges.filter((edge) => edge.referenceIds.some((id) => !removedIds.has(id)));
+  const filename = (id) => snapshot.photo?.assets.find((asset) => asset.assetId === id)?.originalFilename ?? '';
+  const rows = (items) => (items || []).map((item) => ({ photoId: item.photoId, assetId: item.assetId,
+    filename: filename(item.assetId), objectKey: item.objectKey, objectLabel: deliveryObjectLabel(source, item.objectKey) ?? item.objectLabel,
+    referenceCount: item.referenceIds.length,
+    removedReferences: removed.filter((ref) => ref.selectionKey === item.occurrenceKey).length,
+    deliveredElsewhere: ready && used.has(item.assetId),
+    remaining: ready ? [...new Set([
+      ...retainedEdges.filter((edge) => edge.photoId === item.assetId).map((edge) => `${deliveryObjectLabel(source, edge.objectKey)} (GMI)`),
+      ...[...(intent?.transfers || []), ...(intent?.included || [])].filter((row) => row.assetId === item.assetId)
+        .map((row) => `${deliveryObjectLabel(source, row.objectKey) || 'Plassering uten GMI-objekt'} (GML)`),
+    ])] : [],
+  }));
+  const transfers = rows(intent?.transfers), exclusions = rows(intent?.exclusions);
+  const excludedIds = new Set(exclusions.map((row) => row.assetId));
+  const blocked = new Set(errors.map((item) => deliveryDiagnosticContext(snapshot, item)).map((item) =>
+    item.photoId ?? item.selectionKey ?? item.objectKey ?? item.referenceId).filter(Boolean));
+  const ignored = (snapshot.deliveryChoices?.exclusions.length || 0)
+    + (snapshot.deliveryChoices?.unresolved.filter((item) => item.decision === 'exclude').length || 0);
+  return {
+    details: { applied: coordinated && ready, transfers, exclusions, ignoredExclusions: coordinated ? 0 : ignored },
+    counts: {
+      includedAssets: used.size,
+      gmiPlacements: snapshot.mode === 'photos-only' ? 0 : source && ready ? retainedEdges.length : null,
+      gmlPlacements: photoPlan?.occurrences.length ?? 0,
+      retainedReferences: snapshot.mode === 'photos-only' ? 0 : source && ready ? source.references.filter((ref) => ref.targetValid && !removedIds.has(ref.id)).length : null,
+      transferredReferences: transfers.reduce((sum, row) => sum + row.removedReferences, 0),
+      excludedReferences: exclusions.reduce((sum, row) => sum + row.removedReferences, 0),
+      excludedOccurrences: exclusions.length,
+      excludedEntirelyAssets: ready ? [...excludedIds].filter((id) => !used.has(id)).length : 0,
+      partialAssets: ready ? [...excludedIds].filter((id) => used.has(id)).length : 0,
+      notNeededAssets: ready && coordinated ? snapshot.photo.assets.filter((asset) => !used.has(asset.assetId) && !excludedIds.has(asset.assetId)).length : 0,
+      unresolvedOccurrences: intent?.unresolved.length ?? 0,
+      blockedOccurrences: blocked.size,
+    },
+  };
+}
+
 /** Capture canonical owners, without staging edits or changing FOTO intent.
  * registry/handle are the existing M3 service and its opaque handle. Split with
  * pending corrections requires includeFieldChanges:false as an explicit choice.
@@ -27,18 +95,19 @@ export function captureDeliverySnapshot({ mode = 'combined', registry, handle, p
   const hasGmi = mode !== 'photos-only', hasPhotos = mode !== 'gmi-only';
   const gmi = hasGmi ? requireOk(registry.resolve(handle)) : null;
   const photo = hasPhotos ? capturePhotoExportSnapshot(photoSession, photoLayerId) : null;
-  const intent = hasPhotos && hasGmi ? photoSession.getPhotoDeliverySnapshot(photoLayerId) : null;
-  const layer = hasPhotos ? photoSession.getLayer(photoLayerId) : null;
-  const source = intent ? layer.spatialSources.find((item) => item.kind === 'gmi' && item.fingerprint === gmi.document.fingerprint
+  const deliveryChoices = photoLayerId ? photoSession?.getPhotoDeliverySnapshot(photoLayerId) ?? null : null;
+  const intent = hasPhotos && hasGmi ? deliveryChoices : null;
+  const layer = deliveryChoices ? photoSession.getLayer(photoLayerId) : null;
+  const source = hasGmi && deliveryChoices ? layer.spatialSources.find((item) => item.kind === 'gmi' && item.fingerprint === gmi.document.fingerprint
     && item.loadedBinding?.layerId === handle.layerId && item.loadedBinding?.inputId === handle.inputId && item.loadedBinding.live !== false) : null;
   const isLive = () => {
     if (gmi) {
       const current = registry.resolve(handle);
       if (!current.ok || current.session !== gmi.session || current.document !== gmi.document || !gmiSourceIntact(gmi.document)) return false;
     }
-    return (!photo || photo.isLive()) && (!intent || photoSession.isPhotoDeliverySnapshotCurrent(intent));
+    return (!photo || photo.isLive()) && (!deliveryChoices || photoSession.isPhotoDeliverySnapshotCurrent(deliveryChoices));
   };
-  const snapshot = Object.freeze({ kind: 'delivery-snapshot', mode, photo, intent, source,
+  const snapshot = Object.freeze({ kind: 'delivery-snapshot', mode, photo, intent, source, deliveryChoices,
     sourceFingerprint: gmi?.document.fingerprint ?? null, includeFieldChanges: mode !== 'split', isLive });
   snapshots.set(snapshot, { registry, handle, gmi, effectiveKey: gmi ? registry.effectiveKey(handle).effectiveKey : null,
     explicitExclusion: includeFieldChanges === false });
@@ -67,11 +136,14 @@ export async function buildDeliveryPlan(snapshot, configuration = {}, { now = ()
       errors.push(...photoPlan.errors); warnings.push(...photoPlan.warnings);
       assets = photoPlan.assets; attachments = photoPlan.attachments;
     } else {
-      if (snapshot.intent.exclusions.length) throw new DeliveryError('exclusions-not-supported-yet');
       if (!snapshot.source) throw new DeliveryError('loaded-gmi-binding-required');
       if (snapshot.mode === 'split' && gmi.session.changeSets.length && !basis.explicitExclusion) throw new DeliveryError('field-exclusion-required');
-      for (const code of snapshot.intent.readiness.issues) error(code);
+      for (const code of snapshot.intent.readiness.issues) {
+        if (code === 'unresolved-decisions') for (const item of snapshot.intent.unresolved) error(code, item);
+        else error(code);
+      }
       if (snapshot.intent.transfers.some((item) => item.sourceId !== snapshot.source.id || item.sourceFingerprint !== snapshot.source.fingerprint)) error('foreign-transfer-source');
+      for (const item of snapshot.intent.exclusions) if (item.sourceId !== snapshot.source.id || item.sourceFingerprint !== snapshot.source.fingerprint) error('foreign-exclusion-source', item);
       const session = snapshot.includeFieldChanges ? gmi.session : undefined;
       removal = planGmiHyperlinkRemoval(gmi.document, { photoSource: snapshot.source, selections: snapshot.intent.removalSelections,
         session, acceptedAssetIds: snapshot.photo.assets.map((asset) => asset.assetId) });
@@ -117,7 +189,7 @@ export async function buildDeliveryPlan(snapshot, configuration = {}, { now = ()
           requireOk(await registry.verifySource(handle));
           if (!snapshot.isLive()) throw new DeliveryError('stale-plan');
           const result = applyGmiHyperlinkRemoval(removal, { session,
-            authorization: { selectionKeys: removal.selections.map((item) => item.selectionKey) } });
+            authorization: { selectionKeys: snapshot.intent.removalSelections.map((item) => item.key) } });
           if (!result.ok) errors.push(...result.rejections);
           else {
             gmiBytes = result.bytes;
@@ -138,13 +210,15 @@ export async function buildDeliveryPlan(snapshot, configuration = {}, { now = ()
     // Diagnostics never copy file contents or raw parser/provider messages.
     error(failure instanceof DeliveryError ? failure.code : 'delivery-generation-failed');
   }
+  const accounting = deliveryPhotoAccounting(snapshot, removal, attachments, photoPlan, errors);
   const plan = freezeExportData({ kind: 'delivery-plan', mode: snapshot.mode, status: errors.length ? 'blocked' : 'ready', naming,
     filename: snapshot.mode === 'gmi-only' ? naming.gmiFilename : naming.zipFilename,
     mimeType: snapshot.mode === 'gmi-only' ? 'application/octet-stream' : 'application/zip',
-    errors, warnings, attachments, photoPlan, gmiSummary: errors.length ? null : gmiSummary, gmiFingerprint: errors.length ? null : gmiFingerprint,
+    errors: errors.map((item) => deliveryDiagnosticContext(snapshot, item)), warnings: warnings.map((item) => deliveryDiagnosticContext(snapshot, item)), attachments, photoPlan,
+    photoDelivery: accounting.details, gmiSummary: errors.length ? null : gmiSummary, gmiFingerprint: errors.length ? null : gmiFingerprint,
     counts: { features: photoPlan?.occurrences.length ?? 0, attachments: attachments.length,
       transferredOccurrences: snapshot.intent?.transfers.length ?? 0,
-      excludedAssets: snapshot.photo ? snapshot.photo.assets.filter((asset) => !attachments.some((item) => item.assetId === asset.assetId)).length : 0 },
+      ...accounting.counts },
     isLive: snapshot.isLive });
   plans.set(plan, { snapshot, basis, gmiBytes: errors.length || !gmiBytes ? null : Uint8Array.from(gmiBytes), xml: errors.length ? null : xml, assets });
   return plan;

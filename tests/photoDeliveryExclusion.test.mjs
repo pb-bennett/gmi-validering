@@ -18,11 +18,12 @@ test('whole asset: all GMI occurrences, hidden confirmation, one publish, exact 
     const result = f.session.setPhotoDeliveryExclusion(f.layerId, [a.id], { expectedStateKey: plan.stateKey });
     assert(result.ok); assert.deepEqual(result.changedIds, linked.map((photo) => photo.id)); assert.equal(publishes, 1);
     assert.equal(f.session.getLayerDelivery(f.layerId).assets[a.assetId].status, 'excluded');
-    assert.deepEqual(f.session.getPhotoDeliverySnapshot(f.layerId).removalSelections, []);
+    assert.equal(f.session.getPhotoDeliverySnapshot(f.layerId).removalSelections.length, 2);
     for (const mode of ['combined', 'split']) {
-      const delivery = await f.plan(mode); assert.equal(delivery.status, 'blocked');
-      assert(delivery.errors.some((error) => error.code === 'exclusions-not-supported-yet'));
-      await assert.rejects(buildDeliveryPackage(delivery), { code: 'blocked-plan' });
+      const delivery = await f.plan(mode); assert.equal(delivery.status, 'ready', JSON.stringify(delivery.errors));
+      assert.equal(delivery.counts.excludedReferences, 2);
+      assert.equal(delivery.attachments.length, 0);
+      assert(await buildDeliveryPackage(delivery));
     }
     assert(f.session.setPhotoDeliveryExclusion(f.layerId, [a.id], { include: true }).ok);
     assert.equal(publishes, 2);

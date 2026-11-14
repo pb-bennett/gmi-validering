@@ -10,12 +10,12 @@
 //
 // The two concepts are never interchangeable. A decision whose kind no
 // longer matches the occurrence (an unlinked inclusion on an occurrence that
-// has since become GMI-linked), or a transfer whose GMI association is no
+// has since become GMI-linked), or a removal whose GMI association is no
 // longer confident, is reported as 'review'. It is never silently turned
 // into a valid selection of the other kind.
 //
 // Nothing here modifies a GMI file, a hyperlink or the standalone FOTO
-// export. M9 reads `buildPhotoDeliverySnapshot` and hands the transfer
+// export. M9 reads `buildPhotoDeliverySnapshot` and hands transfer and exclusion
 // selections to M7, which keeps the authoritative removal eligibility.
 import { gmiObjectLabel } from './gmiPhotoSource.mjs';
 
@@ -224,7 +224,7 @@ const occurrenceView = (record, entry, edge) => Object.freeze({
  * snapshot (session.isPhotoDeliverySnapshotCurrent) to reject a stale plan.
  */
 export function buildPhotoDeliverySnapshot(layer, records, decisions, { generation = 0 } = {}) {
-  const transfers = [], exclusions = [], retained = [], included = [], unresolved = [];
+  const transfers = [], exclusions = [], retained = [], included = [], notSelected = [], unresolved = [];
   const order = (a, b) => compare(a.assetId, b.assetId) || compare(a.occurrenceKey ?? '', b.occurrenceKey ?? '') || compare(a.photoId, b.photoId);
   const occurrenceKeys = new Set();
   for (const id of layer.photoIds) {
@@ -237,6 +237,7 @@ export function buildPhotoDeliverySnapshot(layer, records, decisions, { generati
     else if (entry.status === PHOTO_DELIVERY_STATUS.KEEP_LINK) { if (record.occurrence) retained.push(occurrenceView(record, entry, edge)); }
     else if (entry.status === PHOTO_DELIVERY_STATUS.INCLUDE) included.push(Object.freeze({ photoId: record.id, assetId: record.assetId,
       ambiguousGmiReference: entry.ambiguousGmiReference }));
+    else if (entry.status === PHOTO_DELIVERY_STATUS.NOT_SELECTED) notSelected.push(Object.freeze({ photoId: record.id, assetId: record.assetId }));
     else if (entry.status === PHOTO_DELIVERY_STATUS.REVIEW) {
       unresolved.push(Object.freeze({ photoId: record.id, assetId: record.assetId, linked: entry.linked, reason: entry.reason,
         decision: decisions.get(id)?.kind === 'unlinked' ? 'include' : decisions.get(id)?.intent,
@@ -244,7 +245,7 @@ export function buildPhotoDeliverySnapshot(layer, records, decisions, { generati
         sourceFingerprint: entry.association.sourceFingerprint, objectKey: entry.association.objectKey }));
     }
   }
-  for (const list of [transfers, exclusions, retained, included, unresolved]) list.sort(order);
+  for (const list of [transfers, exclusions, retained, included, notSelected, unresolved]) list.sort(order);
 
   // Confident links that have no FOTO occurrence (line objects, removed placements):
   // they always stay in the GMI and cannot be transferred from FOTO.
@@ -273,17 +274,17 @@ export function buildPhotoDeliverySnapshot(layer, records, decisions, { generati
   }).sort((a, b) => compare(a.sourceId, b.sourceId));
   linksWithoutOccurrence.sort((a, b) => compare(a.occurrenceKey, b.occurrenceKey));
 
-  const removalSelections = transfers.map((item) => Object.freeze({
+  const removalSelections = [...transfers, ...exclusions].sort(order).map((item) => Object.freeze({
     key: item.occurrenceKey, sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint,
     objectKey: item.objectKey, assetId: item.assetId, referenceIds: item.referenceIds,
   }));
   const distinct = (list) => Object.freeze(sorted(new Set(list.map((item) => item.assetId))));
   const transferredAssets = distinct(transfers), retainedAssets = distinct([...retained, ...linksWithoutOccurrence]);
-  const transferFingerprints = sorted(new Set(transfers.map((item) => item.sourceFingerprint)));
+  const transferFingerprints = sorted(new Set([...transfers, ...exclusions].map((item) => item.sourceFingerprint)));
   const issues = [];
   if (unresolved.length) issues.push('unresolved-decisions');
   if (transferFingerprints.length > 1) issues.push('multiple-gmi-sources');
-  if (sources.some((source) => !source.live && transfers.some((item) => item.sourceId === source.sourceId))) issues.push('gmi-source-not-live');
+  if (sources.some((source) => !source.live && [...transfers, ...exclusions].some((item) => item.sourceId === source.sourceId))) issues.push('gmi-source-not-live');
   if (included.some((item) => item.ambiguousGmiReference)) issues.push('included-photo-ambiguously-referenced');
   const assetStates = derivePhotoAssetDelivery(layer.photoIds.map((id) => photoDeliveryEntry(layer, records.get(id), decisions.get(id))), linksWithoutOccurrence);
   const assetsWithStatus = (status) => Object.freeze(Object.values(assetStates).filter((asset) => asset.status === status).map((asset) => asset.assetId));
@@ -295,6 +296,7 @@ export function buildPhotoDeliverySnapshot(layer, records, decisions, { generati
     assetStates,
     retained,
     included,
+    notSelected,
     unresolved,
     linksWithoutOccurrence,
     removalSelections,
@@ -309,6 +311,7 @@ export function buildPhotoDeliverySnapshot(layer, records, decisions, { generati
     exclusions: Object.freeze(exclusions),
     retained: Object.freeze(retained),
     included: Object.freeze(included),
+    notSelected: Object.freeze(notSelected),
     unresolved: Object.freeze(unresolved),
     linksWithoutOccurrence: Object.freeze(linksWithoutOccurrence),
     removalSelections: Object.freeze(removalSelections),
