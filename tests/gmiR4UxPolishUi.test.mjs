@@ -64,7 +64,8 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
     const input = (element, value) => browser.evaluate(`(() => { const i = ${element}; Object.getOwnPropertyDescriptor(i.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(value)}); i.dispatchEvent(new Event(i.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); })()`);
     const search = (value) => input(`document.querySelector('[aria-label="Søk i data"]')`, value);
     const text = (expression) => browser.evaluate(`${expression}.innerText`);
-    const stageDisabled = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring').disabled`);
+    // A1 (deliberate update): Oppsett and a stale Forhåndsvis render no staging action; absent counts as blocked.
+    const stageDisabled = () => browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring'); return !b || b.disabled; })()`);
     const headers = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[role=columnheader]')).map(e => e.innerText.trim())`);
     const shot = async (name) => { const { data } = await browser.send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(tmpdir(), `gmi-r4-ux-${name}.png`), Buffer.from(data, 'base64')); };
     // Every rendered object number must equal the source :L number of that row's source index.
@@ -239,6 +240,12 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
           return { groups, text: d.innerText, approveBg: getComputedStyle(approve).backgroundColor, focused: document.activeElement.innerText.trim(), tone: d.dataset.tone };
         })()`);
         assert.deepEqual(dialog.groups, ['error', 'warning'], 'FEIL before SJEKK');
+        // A2 (deliberate update): FEIL stays expanded (approval material); nonblocking SJEKK collapses to its count.
+        assert.equal(await browser.evaluate(`${risk}.querySelector('.gmi-risk-group[data-validation-tone=warning]').open`), false);
+        assert.match(dialog.text, /1 ny SJEKK/);
+        assert.doesNotMatch(await browser.evaluate(`${risk}.querySelector('.gmi-risk-group[data-validation-tone=warning]').innerText`), /SDR anbefales ikke/);
+        await browser.evaluate(`${risk}.querySelector('.gmi-risk-group[data-validation-tone=warning] summary').click()`);
+        dialog.text = await browser.evaluate(`${risk}.innerText`);
         assert.match(dialog.text, /Ledning 101: Både SDR og Ringstivhet er utfylt/);
         assert.match(dialog.text, /Ledning 101: SDR anbefales ikke for selvfallsledninger \(Tema SP\)/, 'actual applicability reason');
         assert.notEqual(dialog.approveBg, 'rgb(0, 117, 149)', 'risk approval differs from ordinary confirmation');

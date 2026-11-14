@@ -10,10 +10,12 @@ const control = 'gmi-compact-button gmi-focus-ring border border-gmi-border-stro
  */
 export default function GmiConfirmDialog({ title, children, confirmLabel, cancelLabel = 'Avbryt', destructive = true, onCancel, onConfirm, testId,
   tone = null, confirmIcon: ConfirmIcon = null }) {
-  const ref = useRef(null), headingId = useId();
+  const ref = useRef(null), cancelRef = useRef(null), headingId = useId();
   useEffect(() => {
     const dialog = ref.current, opener = document.activeElement;
     dialog.showModal();
+    // showModal() focuses the first focusable descendant (for example a <summary> in the body); Cancel stays the default.
+    cancelRef.current?.focus();
     return () => { dialog.close(); if (opener?.isConnected) opener.focus(); };
   }, []);
   // tone="risk": an explicit risk approval, visually distinct from an ordinary confirmation.
@@ -22,7 +24,7 @@ export default function GmiConfirmDialog({ title, children, confirmLabel, cancel
     <h2 id={headingId}>{title}</h2>
     <div className="gmi-edit-confirm-body">{children}</div>
     <div className="gmi-edit-actions">
-      <button type="button" className={control} onClick={onCancel} autoFocus>{cancelLabel}</button>
+      <button ref={cancelRef} type="button" className={control} onClick={onCancel} autoFocus>{cancelLabel}</button>
       <button type="button" className={`${control}${destructive ? ' gmi-edit-destructive' : ''}${tone === 'risk' ? ' gmi-edit-risk-approve' : ''}`} onClick={onConfirm}>
         {ConfirmIcon && <ConfirmIcon size={16} weight="regular" aria-hidden="true" />}{confirmLabel}
       </button>

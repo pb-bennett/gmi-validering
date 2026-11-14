@@ -47,7 +47,9 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
     const ready = () => browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK') && ${inspector}.getAttribute('aria-busy')==='false'`);
     const preview = async () => { await click('Forhåndsvis endringer', inspector); await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]')`); await ready(); };
     const counts = () => browser.evaluate(`(() => { const s=${split}; return s && { FEIL: Number(s.dataset.feil), SJEKK: Number(s.dataset.sjekk), none: Number(s.dataset.none) }; })()`);
-    const mixedRows = () => browser.evaluate(`Array.from(${risk}.querySelectorAll('[data-mixed-field]')).map(li=>li.innerText.replace(/\\s+/g,' ').trim())`);
+    // A2 (deliberate update): distributions are collapsed supplementary detail; the helper opens them before reading.
+    const mixedRows = () => browser.evaluate(`(() => { const d=${risk}.querySelector('[data-gmi-risk-mixed-details]'); if (d) d.open=true;
+      return Array.from(${risk}.querySelectorAll('[data-mixed-field]')).map(li=>li.innerText.replace(/\\s+/g,' ').trim()); })()`);
     const changeSets = () => browser.evaluate(`${workspace}.querySelectorAll('[data-change-set]').length`);
     const selectedCount = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row] input[type=checkbox]')).filter(e=>e.checked).length`);
     const selectLines = async (indices) => {
@@ -77,7 +79,8 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
         await sdrPreview();
         assert.deepEqual(await counts(), { FEIL: 2, SJEKK: 0, none: 0 });
         assert.match(await browser.evaluate(`${split}.innerText`), /Nå på SDR:/);
-        assert.match(await browser.evaluate(`${split}.innerText`), /kan Validator gi SJEKK i stedet for FEIL\. Slike objekter må ikke nødvendigvis rettes\./);
+        // A2 (deliberate update): the SJEKK explanation is offered only when a SJEKK exists (see the mixed case below).
+        assert.equal(await browser.evaluate(`${split}.querySelector('[data-gmi-split-why]')`), null);
         assert.equal(await browser.evaluate(`${split}.querySelector('[data-gmi-split-keep]')`), null, 'no narrowing when every object has FEIL');
         await click('Legg til masseendring', inspector);
         await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
@@ -89,7 +92,14 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
         await selectLines([2, 3, 5, 6]);
         await sdrPreview();
         assert.deepEqual(await counts(), { FEIL: 3, SJEKK: 1, none: 0 });
+        // A2 (deliberate update): the explanation moved into «Hvorfor SJEKK?», collapsed by default.
+        assert.equal(await browser.evaluate(`${split}.querySelector('[data-gmi-split-why]').open`), false);
+        assert.doesNotMatch(await browser.evaluate(`${split}.innerText`), /kan Validator gi SJEKK/);
+        await browser.evaluate(`${split}.querySelector('[data-gmi-split-why] summary').click()`);
+        assert.match(await browser.evaluate(`${split}.innerText`), /kan Validator gi SJEKK i stedet for FEIL\. Slike objekter må ikke nødvendigvis rettes\./);
         await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        assert.equal(await browser.evaluate(`${risk}.querySelector('[data-gmi-risk-mixed-details]').open`), false, 'distributions collapsed by default');
+        assert.match(await browser.evaluate(`${risk}.querySelector('[data-risk-reason=mixed]').innerText`), /Blandet blant objektene som endres/, 'the mixed reason itself stays visible');
         assert.deepEqual(await mixedRows(), ['Material: PE (3) · PVC (1)', 'Dimensjon: 110 (3) · 160 (1)', 'Stedfestingsårsak: NYTT (3) · UENDR (1)']);
         assert.match(await browser.evaluate(`${risk}.innerText`), /Blandet blant objektene som endres: Material, Dimensjon, Stedfestingsårsak\./);
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
@@ -142,7 +152,8 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
         await click('Angre siste retting', workspace);
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]')?.dataset.state==='stale'`);
         assert.equal(await browser.evaluate(`Boolean(${split})`), false);
-        assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText.trim()==='Legg til masseendring').disabled`));
+        // A1 (deliberate update): a stale preview renders no staging action (absent counts as blocked).
+        assert(await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText.trim()==='Legg til masseendring'); return !b || b.disabled; })()`));
         await click('Gjør om retting', workspace);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===2`);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'stale', 'redo does not revive an old preview');

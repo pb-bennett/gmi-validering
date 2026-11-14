@@ -82,7 +82,9 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         assert.equal(await browser.evaluate(`document.querySelectorAll('[role=row][aria-selected=true]').length`), 3);
         assert.deepEqual(await browser.evaluate(`Array.from(document.querySelectorAll('[role=row][aria-selected=true]')).map(e => Number(e.dataset.tableRow))`), [0, 6, 7]);
         assert.match(await browser.evaluate(`${dialog}.querySelector('[type=radio]:checked').closest('label').innerText`), /Fyll manglende verdier/);
-        assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring').disabled`), true);
+        // A1 (deliberate update): Oppsett renders no staging action at all (previously a disabled button).
+        assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(e => e.innerText === 'Legg til masseendring')`), false);
+        assert.equal(await browser.evaluate(`${dialog}.dataset.batchStage`), 'setup');
         assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText || ''`), '');
         // U4: before staging, proposed modes stay visible but disabled. They cannot alter the R5 source selection.
         for (const mode of ['Foreslått', 'Kun endrede']) {

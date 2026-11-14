@@ -140,7 +140,7 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
           await preview();
           assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), lexeme);
           assert.match(await browser.evaluate(`${inspector}.innerText`), /2 av 2 ledninger endres/);
-          if (lexeme !== '11.0') await click('Endre oppsett');
+          if (lexeme !== '11.0') await click('Tilbake til oppsett');
         }
         // B2 (deliberate update): the two lines differ in Material and Dimensjon, so staging needs the risk approval.
         await click('Legg til masseendring'); await browser.waitFor(risk);

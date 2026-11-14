@@ -67,7 +67,7 @@ test('G8 production: linked Tema review, ambiguity, explicit/stale consent, poin
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-changed]').dataset.gmiBatchChanged`), '1');
         assert.match(await browser.evaluate(`document.querySelector('[role=grid] [data-table-row="0"]').innerText`), /Sett verdi/);
         await click('Legg til masseendring'); await browser.waitFor(risk);
-        await click('Tilbake til utvalget', risk); await click('Endre oppsett'); await mode('Sett verdi');
+        await click('Tilbake til utvalget', risk); await click('Tilbake til oppsett'); await mode('Sett verdi');
         assert.equal(await count(), 0);
         assert.equal(await browser.evaluate(`Boolean(${inspector}.querySelector('[data-gmi-batch-changed]'))`), false);
       });
@@ -85,13 +85,16 @@ test('G8 production: linked Tema review, ambiguity, explicit/stale consent, poin
           await browser.evaluate(`${field}.scrollIntoView({block:'center'});${value}.focus()`);
           await screenshot(`g8-editor-${width}x${height}.png`);
         }
+        // A2 (deliberate update): the full linked-field guidance belongs to Oppsett; Forhåndsvis states it in one line.
+        assert.match(await browser.evaluate(`${inspector}.querySelector('[data-gmi-linked-tema]').innerText`), /FOTO bruker Tema fra originalfilen\. Endringen påvirker ikke automatisk bildegrupperingen\./);
         await preview();
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-changed]').dataset.gmiBatchChanged`), '2');
         await browser.evaluate(`${inspector}.querySelector('[data-gmi-linked-values]').open=true`);
         const details = await browser.evaluate(`${inspector}.querySelector('[data-gmi-linked-values]').innerText`);
         assert.match(details, /Tema: Original/); assert.match(details, /S_FCODE: Original/);
         assert.match(details, /Ulike verdier/); assert.match(details, /Foreslått nå/);
-        assert.match(await browser.evaluate(`${inspector}.querySelector('[data-gmi-linked-tema]').innerText`), /FOTO bruker Tema fra originalfilen\. Endringen påvirker ikke automatisk bildegrupperingen\./);
+        assert.equal(await browser.evaluate(`Boolean(${inspector}.querySelector('[data-gmi-linked-tema]'))`), false, 'no repeated guidance in Forhåndsvis');
+        assert.match(await browser.evaluate(`${inspector}.querySelector('[data-gmi-linked-proposal]').innerText`), /Tema og S_FCODE endres sammen\. FOTO bruker fortsatt Tema fra originalfilen\./);
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           await browser.evaluate(`${inspector}.querySelector('[data-gmi-linked-values]').scrollIntoView({block:'start'})`);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ArrowsClockwiseIcon, CheckIcon, HandPointingIcon, SealWarningIcon } from '@phosphor-icons/react';
+import { ArrowLeftIcon, ArrowsClockwiseIcon, CaretDownIcon, CheckIcon, HandPointingIcon, SealWarningIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { getGmiProposedState } from '@/lib/gmi-edit/index.mjs';
@@ -44,12 +44,17 @@ function TransitionCount({ count, tone, text, title, always = false }) {
 const objectLabel = (dryRun, finding) => finding.objectRef ? describeGmiObject(finding.objectRef.geometryScope, finding.objectRef.sourceIndex,
   dryRun.current.dataset[finding.objectRef.geometryScope === 'line' ? 'lines' : 'points'][finding.objectRef.sourceIndex]?.id) : 'Datasettet';
 
-/** Finding list for the risk dialog: most severe group first, with objects. */
-function RiskFindings({ tone, title, findings }) {
+/** Finding list for the risk dialog: most severe group first, with objects. A2: nonblocking groups collapse to their count. */
+function RiskFindings({ tone, title, findings, collapsible = false }) {
   if (!findings.length) return null;
+  const list = <ul>{findings.map((finding) => <li key={finding.key} data-transition={finding.transition}><strong>{finding.objects.join(', ')}</strong>: {finding.transition && finding.transition !== 'new' ? `${finding.label} (${finding.note}) – ` : ''}{finding.reason}</li>)}</ul>;
+  if (collapsible) return <details className="gmi-risk-group gmi-risk-group-details" data-validation-tone={tone}>
+    <summary className="gmi-risk-group-title gmi-focus-ring"><GmiSeverityIcon tone={tone} size={16} />{title}<CaretDownIcon className="gmi-risk-caret" size={12} weight="regular" aria-hidden="true" /></summary>
+    {list}
+  </details>;
   return <div className="gmi-risk-group" data-validation-tone={tone}>
     <p className="gmi-risk-group-title"><GmiSeverityIcon tone={tone} size={16} />{title}</p>
-    <ul>{findings.map((finding) => <li key={finding.key} data-transition={finding.transition}><strong>{finding.objects.join(', ')}</strong>: {finding.transition && finding.transition !== 'new' ? `${finding.label} (${finding.note}) – ` : ''}{finding.reason}</li>)}</ul>
+    {list}
   </div>;
 }
 
@@ -61,7 +66,8 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const [review, setReview] = useState(null), [manual, setManual] = useState(new Set()), [advanced, setAdvanced] = useState(false);
   const [replace, setReplace] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState(null), [risk, setRisk] = useState(null);
   const [expanded, setExpanded] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
+  // A1: «Tilbake til oppsett» keeps the review (unchanged setup may return to it); any setup input invalidates it.
+  const [editingSetup, setEditingSetup] = useState(false);
   const individualHintId = useId();
   const [staged, setStaged] = useState(null); // id of the ChangeSet just staged from this inspector
   // S5: the field the user last chose. It leads the Data Table from the choice on, through staging and
@@ -69,9 +75,11 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const [focusChoice, setFocusChoice] = useState('');
   const [profileNotice, setProfileNotice] = useState(null); // { selection, text }: shown only for the narrowed selection
   const fieldSelectRef = useRef(null), focusFieldSelect = useRef(false);
+  const sectionRef = useRef(null), proposalFocusRef = useRef(null), focusProposal = useRef(false);
   const generation = useRef(0);
   const scopeExpanded = useRef(false);
-  const dirty = Boolean(lexeme || review || mode !== 'fill-missing');
+  // A1: a field or mode choice alone is no draft. A typed value, a chosen existing value or any preview is.
+  const dirty = Boolean(lexeme || match !== null || review);
   const proposedLexeme = mode === 'clear' ? '' : lexeme;
   const referenceDate = useStore((state) => state.gmiValidatorReferenceDate);
   const fields = useMemo(() => gmiInspectorFields(view, selection?.scope), [view, selection?.scope]);
@@ -152,6 +160,14 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     if (!focusFieldSelect.current || stagedChangeSet) return;
     focusFieldSelect.current = false; fieldSelectRef.current?.focus();
   });
+  // A1: entering Forhåndsvis unmounts the setup form; focus continues at the proposal, unless the user has
+  // meanwhile moved focus outside the inspector (for example into the Data Table).
+  useEffect(() => {
+    if (!focusProposal.current || !proposalFocusRef.current) return;
+    focusProposal.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body || sectionRef.current?.contains(active)) proposalFocusRef.current.focus();
+  });
   useEffect(() => { onDirtyChange(dirty); return () => onDirtyChange(false); }, [dirty, onDirtyChange]);
   useEffect(() => { registerReset(onClose); return () => registerReset(null); }, [registerReset, onClose]);
   useEffect(() => () => { generation.current++; }, []);
@@ -160,7 +176,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     const listener = (event) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', listener); return () => window.removeEventListener('beforeunload', listener);
   }, [dirty]);
-  const invalidate = () => { generation.current++; scopeExpanded.current = false; setBusy(false); setReview(null); setRisk(null); setManual(new Set()); setAdvanced(false); setReplace(false); setExpanded(false); setMessage(null); };
+  const invalidate = () => { generation.current++; scopeExpanded.current = false; setBusy(false); setReview(null); setRisk(null); setManual(new Set()); setAdvanced(false); setReplace(false); setExpanded(false); setMessage(null); setEditingSetup(false); };
   const calculate = async () => {
     const state = useStore.getState(), currentSelection = state.gmiEditSelection;
     const targets = gmiSelectionTargets(view, currentSelection);
@@ -181,7 +197,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
         setMessage('Utvalget eller økten er endret – oppdater forhåndsvisningen.'); return;
       }
       setReview({ preview: result.preview, binding: currentSelection.binding, keys: [...currentSelection.keys] });
-      setConfigOpen(false);
+      setEditingSetup(false); focusProposal.current = true;
     } catch { setMessage('Forhåndsvisningen kunne ikke lages. Prøv igjen.'); }
     finally { if (token === generation.current) setBusy(false); }
   };
@@ -218,7 +234,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
         .map((finding) => ({ ...finding, objects: [objectLabel(checked.dryRun, finding)] }));
       // The union keeps G4's Tema/edited-field names; the profile adds its columns with their distributions.
       const mixedNames = [...new Set([...mixed, ...mixedProfile.map((column) => column.label)])];
-      setRisk({ changeSet, selection, review, plan, findings, manualRows, mixed: mixedNames, mixedProfile, unvalidated }); return;
+      setRisk({ changeSet, selection, review, plan, findings, manualRows, mixed: mixedNames, mixedProfile, unvalidated, reasons }); return;
     }
     const result = gmiEditSessions.stage(view.handle, changeSet);
     if (!result.ok) { setMessage(gmiEditMessage(result.code)); return; }
@@ -239,7 +255,9 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
   const count = selection?.keys.length || 0;
   const countLabel = gmiObjectCountLabel(count, selection?.scope);
   const canPreview = Boolean(field && column && !column.disabled) && !busy && scopeProblem.ok && !problem && (mode === 'clear' || Boolean(lexeme.trim())) && (mode !== 'replace' || matchAvailable);
-  const step = stagedChangeSet ? 3 : review && !stale ? 2 : 1;
+  // A1: exactly one visible stage. A stale preview stays in Forhåndsvis (with its own cue) and cannot be staged.
+  const batchStage = stagedChangeSet ? 'staged' : review && !editingSetup ? 'preview' : 'setup';
+  const step = batchStage === 'staged' ? 3 : batchStage === 'preview' ? 2 : 1;
   // S2: dataset findings with severity changes shown once (presentation only; approval keeps diff.newCounts).
   const datasetTransitions = plan?.dryRun ? gmiBatchDatasetTransitions(plan.dryRun) : null;
   const counts = plan?.counts ? { ...plan.counts, selected: selection.keys.length,
@@ -264,7 +282,11 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     setProfileNotice({ selection: next, text: `Utvalget er innsnevret til ${gmiObjectCountLabel(next.keys.length, next.scope)} (${dimension.label}: ${group.label}).` });
     return true;
   };
-  const newBatch = () => { focusFieldSelect.current = true; setStaged(null); setConfigOpen(true); setMessage(null); };
+  const newBatch = () => { focusFieldSelect.current = true; setStaged(null); setEditingSetup(false); setMessage(null); };
+  // A1: back to Oppsett keeps field, value, mode and match; the review survives until a setup input invalidates it.
+  const backToSetup = () => { focusFieldSelect.current = true; setRisk(null); setEditingSetup(true); };
+  const backToPreview = () => { focusProposal.current = true; setEditingSetup(false); };
+  const linkedSetup = column?.linkedSourceKeys.length > 0;
   const configForm = <form onSubmit={(event) => { event.preventDefault(); if (canPreview) calculate(); }} className="gmi-inspector-config" data-gmi-batch-config>
     <label>Felt<select ref={fieldSelectRef} aria-label="Felt for masseendring" value={field} disabled={busy} onChange={(event) => { invalidate(); setField(event.target.value); setFocusChoice(event.target.value); setLexeme(''); setMatch(null); }}>
       <option value="">Velg felt…</option>
@@ -294,9 +316,20 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
     </div>}
     {mode === 'clear' && <p className="gmi-edit-muted">Verdien fjernes bare fra objektene som kan endres. Allerede tomme verdier hoppes over.</p>}
     {problem && <p role="alert" className="gmi-edit-problem">{problem}</p>}
-    {!stale && <button className={primary} disabled={!canPreview}>{busy ? 'Lager forhåndsvisning…' : review ? 'Oppdater forhåndsvisning' : 'Forhåndsvis endringer'}</button>}
+    <div className="gmi-batch-setup-actions">
+      <button className={primary} disabled={!canPreview} data-gmi-batch-preview>{busy ? 'Lager forhåndsvisning…' : 'Forhåndsvis endringer'}</button>
+      {review && !busy && <button type="button" className={control} onClick={backToPreview} data-gmi-batch-back-preview>Tilbake til forhåndsvisningen</button>}
+    </div>
   </form>;
-  return <section className="gmi-edit-editor gmi-batch-inspector" data-gmi-batch-inspector data-batch-step={step} aria-label="Masseendring av valgte objekter" aria-busy={busy || Boolean(candidate?.ok && candidate.changeSet.cells.length && (!validation.state || validation.state.status === 'running'))}>
+  const riskOperation = risk?.review.preview.operation;
+  const riskObjects = risk?.changeSet.objectCount || 0;
+  const riskTarget = riskObjects === 1 ? 'dette objektet' : 'disse objektene';
+  const riskConfirmText = riskOperation === 'clear' ? `Bekreft at verdien skal tømmes for ${riskTarget}.`
+    : riskOperation === 'replace' ? `Bekreft at verdien skal erstattes for ${riskTarget}.`
+      : riskObjects === 1 ? 'Bekreft at verdien skal brukes på dette objektet.' : 'Bekreft at samme verdi skal brukes på disse objektene.';
+  const riskCounts = risk?.changeSet.counts;
+  const riskNewFail = risk ? risk.findings.filter((finding) => finding.tone === 'error' && finding.introduced && finding.transition !== 'improved') : [];
+  return <section ref={sectionRef} className="gmi-edit-editor gmi-batch-inspector" data-gmi-batch-inspector data-batch-step={step} data-batch-stage={batchStage} aria-label="Masseendring av valgte objekter" aria-busy={busy || Boolean(candidate?.ok && candidate.changeSet.cells.length && (!validation.state || validation.state.status === 'running'))}>
     <header className="gmi-batch-head">
       <div className="min-w-0"><p className="gmi-edit-kicker">Masseendring</p><h2>{countLabel} valgt</h2></div>
       {/* B3 alternative stays a compact secondary action, so the proposal remains visible at laptop sizes. */}
@@ -308,21 +341,36 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       </div>
     </header>
     <ol className="gmi-batch-steps" aria-label="Fremgang">
-      {STEPS.map((label, index) => <li key={label} data-done={index < step || step === 3 || undefined} aria-current={index === step ? 'step' : undefined}>
+      {STEPS.map((label, index) => <li key={label} data-done={index < step || step === 3 || undefined} aria-current={index === step ? 'step' : undefined}
+        data-step-stale={index === 2 && step === 2 && stale ? true : undefined}>
         {index < step || step === 3 ? <CheckIcon size={11} weight="regular" aria-hidden="true" /> : <span aria-hidden="true">{index + 1}</span>}{label}
+        {index === 2 && step === 2 && stale && <small className="gmi-batch-step-flag">(ugyldig)</small>}
       </li>)}
     </ol>
     {!scopeProblem.ok && <p role="alert" className="gmi-edit-message" data-tone="warning">{scopeProblem.code === 'line-only' ? 'SDR, Trykklasse og Ringstivhet støttes bare for ledninger. Velg ledninger for å fortsette.' : 'Velg objekter fra den aktive kilden for å fortsette.'}</p>}
 
-    {stagedChangeSet ? <>
+    {batchStage === 'staged' && <>
       {renderChangeSet(stagedChangeSet)}
       <div className="gmi-batch-stage"><button type="button" className={primary} onClick={newBatch}>Ny masseendring for utvalget</button>
         <p className="gmi-edit-muted">Utvalget er beholdt ({countLabel}).</p></div>
-    </> : <>
-      {review && <div className="gmi-batch-proposal" data-gmi-batch-counts data-state={stale ? 'stale' : 'valid'} aria-live="polite">
+    </>}
+
+    {batchStage === 'setup' && <div className="gmi-inspector-configuration" data-gmi-batch-setup>
+      <GmiSelectionProfile profile={profile} disabled={busy} notice={profileNotice?.selection === selection ? profileNotice.text : null} onNarrow={narrowSelection} />
+      {review && <p className="gmi-edit-muted" data-gmi-batch-setup-retained>Forhåndsvisningen er beholdt. Endringer i oppsettet krever ny forhåndsvisning.</p>}
+      {configForm}
+      {linkedSetup && <div className="gmi-edit-muted" data-gmi-linked-tema>
+        <p>Tema og S_FCODE endres sammen. Ved ulike verdier må du bruke «Sett verdi». Andre operasjoner krever helt like verdier i begge kolonner.</p>
+        <p role="note">FOTO bruker Tema fra originalfilen. Endringen påvirker ikke automatisk bildegrupperingen.</p>
+      </div>}
+    </div>}
+
+    {batchStage === 'preview' && <>
+      <div className="gmi-batch-proposal" data-gmi-batch-counts data-state={stale ? 'stale' : 'valid'} aria-live="polite">
         <div className="gmi-batch-proposal-head">
-          <span className="gmi-batch-proposal-kicker">{stale ? 'Forhåndsvisningen er ugyldig' : 'Foreslått retting'}</span>
-          <button type="button" className="gmi-edit-link gmi-focus-ring" aria-expanded={configOpen} onClick={() => setConfigOpen((open) => !open)}>{configOpen ? 'Skjul oppsett' : 'Endre oppsett'}</button>
+          <span ref={proposalFocusRef} tabIndex={-1} className="gmi-batch-proposal-kicker gmi-focus-ring">{stale ? 'Forhåndsvisningen er ugyldig' : 'Foreslått retting'}</span>
+          <button type="button" className={`${control} gmi-batch-back`} disabled={busy} onClick={backToSetup} data-gmi-batch-back-setup>
+            <ArrowLeftIcon size={13} weight="regular" aria-hidden="true" />Tilbake til oppsett</button>
         </div>
         <p className="gmi-batch-proposal-change"><span className="gmi-batch-proposal-field">{review.preview.sourceKey}</span>
           {review.preview.operation === 'replace' && <><Lexeme value={review.preview.match} /><span aria-hidden="true"> → </span></>}
@@ -330,6 +378,7 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
           {review.preview.mode !== 'fill-missing' && review.preview.operation !== 'replace' && <span aria-hidden="true"> → </span>}
           <strong className="gmi-batch-proposal-value"><Lexeme value={review.preview.lexeme} /></strong></p>
         <p className="gmi-batch-proposal-mode">{modeLabel(review.preview.operation)}</p>
+        {review.preview.linked && <p className="gmi-batch-proposal-mode" data-gmi-linked-proposal>Tema og S_FCODE endres sammen. FOTO bruker fortsatt Tema fra originalfilen.</p>}
         {stale ? <div className="gmi-batch-stale" role="alert">
           <p><ArrowsClockwiseIcon size={14} weight="regular" aria-hidden="true" />{stale === 'expanded'
             ? 'Utvalget er utvidet etter forhåndsvisningen. Oppdater forhåndsvisningen før endringen kan legges til.'
@@ -348,8 +397,8 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
           {plan && !plan.ok && plan.included?.size > 0 && <p className="gmi-edit-problem">{gmiEditMessage(plan.code, 'Forhåndsvisningen kunne ikke kontrolleres. Oppdater den.')}</p>}
           {plan?.ok === false && !plan.included?.size && <p className="gmi-edit-muted">Ingen av de valgte objektene kan endres med dette oppsettet.</p>}
         </>}
-      </div>}
-      {review?.preview.linked && <details className="gmi-edit-muted" data-gmi-linked-values><summary>Tema og S_FCODE: original og foreslått nå</summary>
+      </div>
+      {review.preview.linked && <details className="gmi-edit-muted" data-gmi-linked-values><summary>Tema og S_FCODE: original og foreslått nå</summary>
         {review.preview.rows.map(row => <div key={row.key}><strong>{describeGmiObject(row.scope, row.sourceIndex, row.objectId)}</strong>
           {row.physical?.map(cell => <p key={cell.field}>{cell.field}: Original <Lexeme value={cell.original} /> · Foreslått nå <Lexeme value={cell.current} /></p>)}
           {row.disagreement && <p>Ulike verdier i Tema og S_FCODE.</p>}{!row.physical && <p>Begge kildeceller kunne ikke verifiseres. Objektet endres ikke.</p>}</div>)}
@@ -357,18 +406,13 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
       {/* B1/B2: after the proposal, so a live preview stays visible without scrolling. */}
       <GmiCurrentFindingSplit split={split} scope={selection?.scope} disabled={busy} onNarrow={narrowSelection} />
       <GmiSelectionProfile profile={profile} disabled={busy} notice={profileNotice?.selection === selection ? profileNotice.text : null} onNarrow={narrowSelection} />
-      {(review?.preview.linked || column?.linkedSourceKeys.length > 0) && <div className="gmi-edit-muted" data-gmi-linked-tema>
-        <p>Tema og S_FCODE endres sammen. Ved ulike verdier må du bruke «Sett verdi». Andre operasjoner krever helt like verdier i begge kolonner.</p>
-        <p role="note">FOTO bruker Tema fra originalfilen. Endringen påvirker ikke automatisk bildegrupperingen.</p>
-      </div>}
-      {(!review || configOpen) && <div className="gmi-inspector-configuration">{review && <p className="gmi-edit-muted">Endringer i oppsettet krever ny forhåndsvisning.</p>}{configForm}</div>}
 
       {plan?.counts && !stale && <div className="gmi-batch-options">
-        <details className="gmi-edit-muted"><summary>Slik leser du tabellen</summary>Status og «Endring» i datatabellen viser det som faktisk legges til. Utelatte og hoppede objekter får ingen endring. Klikk en rad for detaljer. Nye funn er rådgivende; NYTT-år på tvers av objekter kontrolleres separat.</details>
         <label className="gmi-edit-check gmi-batch-advanced"><input type="checkbox" checked={advanced} onChange={(event) => { setRisk(null); setReplace(false); setAdvanced(event.target.checked); setManual(new Set()); }} />Tillat manuelt utvalg utenfor Validatorens anbefaling</label>
         {advanced && <p className="gmi-manual-note"><HandPointingIcon size={14} weight="regular" aria-hidden="true" /><span>Bruk «Inkluder manuelt» per objekt i tabellen. Manuelle tillegg kan gi FEIL og krever egen godkjenning.</span></p>}
         {conflicts > 0 && <label className="gmi-edit-check"><input type="checkbox" checked={replace} onChange={(event) => { setRisk(null); setReplace(event.target.checked); }} />Erstatt tidligere rettinger for {conflicts} valgte objekter</label>}
       </div>}
+      {/* The full-control status gates approval and is never collapsed. */}
       {candidate?.ok && candidate.changeSet.cells.length > 0 && !stale && <div className="gmi-edit-muted" data-gmi-batch-dry-run role="status">
         Full kontroll av forslaget: {validation.state?.status === 'ready' && datasetTransitions ? `OK · ${datasetTransitions.counts.resolvedFail} FEIL og ${datasetTransitions.counts.resolvedCheck} SJEKK løst`
           : validation.state?.status === 'running' ? `trinn ${Math.min(validation.state.phase, 4)} av 4…`
@@ -377,6 +421,16 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
           : validation.state?.status !== 'ready' && <button type="button" className={control} onClick={validation.retry}>Kjør full kontroll</button>}
         {validation.state?.status === 'failed' && <p role="alert">{gmiEditMessage(validation.state.batch?.code, 'Forslaget kunne ikke verifiseres og kontrolleres. Kjør full kontroll på nytt.')}</p>}
         {plan.crossObject?.introduced.length > 0 && <p>{plan.crossObject.introduced.length} nye funn utenfor objektene som endres.</p>}
+      </div>}
+      {!stale && <div className="gmi-batch-stage" data-gmi-batch-stage-action>
+        <button type="button" className={primary} disabled={stageBlocked} onClick={() => stage()}>Legg til masseendring</button>
+        <p className="gmi-edit-muted">{conflicts > 0 && !replace ? 'Velg om tidligere rettinger skal erstattes før endringen kan legges til.'
+          : !plan?.ok || !plan.changeSet.cells.length ? 'Ingen verdier endres med dette oppsettet.'
+            : 'Legges til som én retting i arbeidskopien. Originalfilen endres ikke.'}</p>
+      </div>}
+      {/* A2: supplementary reading aids and whole-dataset findings, one click away, after the primary action. */}
+      {plan?.counts && !stale && <details className="gmi-edit-muted gmi-batch-details" data-gmi-batch-details><summary>Detaljer</summary>
+        <p data-gmi-table-guide><strong>Slik leser du tabellen:</strong> Status og «Endring» i datatabellen viser det som faktisk legges til. Utelatte og hoppede objekter får ingen endring. Klikk en rad for detaljer. Nye funn er rådgivende; NYTT-år på tvers av objekter kontrolleres separat.</p>
         {datasetTransitions && <details className="gmi-batch-dataset-findings"><summary>Se nye og løste funn i hele datasettet</summary>
           {[['Nye', datasetTransitions.added], ['Forverret', datasetTransitions.worsened], ['Forbedret', datasetTransitions.improved], ['Løst', datasetTransitions.resolved]]
             .filter(([, findings]) => findings.length).map(([group, findings]) => <div key={group} data-finding-group={group}>
@@ -386,20 +440,14 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
                 {finding.note ? ` (${finding.note})` : ''} · {objectLabel(plan.dryRun, finding)}: {finding.reason}</li>)}</ul>
             </div>)}
         </details>}
-      </div>}
-      {busy && <button type="button" className={control} onClick={() => { generation.current++; setBusy(false); setMessage('Forhåndsvisningen er avbrutt.'); }}>Avbryt forhåndsvisning</button>}
-      <div className="gmi-batch-stage">
-        <button type="button" className={primary} disabled={stageBlocked} onClick={() => stage()}>Legg til masseendring</button>
-        <p className="gmi-edit-muted">{!review ? 'Forhåndsvis endringene først.' : stale ? 'Oppdater forhåndsvisningen først.'
-          : conflicts > 0 && !replace ? 'Velg om tidligere rettinger skal erstattes før endringen kan legges til.'
-            : !plan?.ok || !plan.changeSet.cells.length ? 'Ingen verdier endres med dette oppsettet.'
-              : 'Legges til som én retting i arbeidskopien. Originalfilen endres ikke.'}</p>
-      </div>
+      </details>}
     </>}
+    {busy && <button type="button" className={control} onClick={() => { generation.current++; setBusy(false); setMessage('Forhåndsvisningen er avbrutt.'); }}>Avbryt forhåndsvisning</button>}
     {message && <p role="status" className="gmi-edit-message">{message}</p>}
-    {inspected && detail && <details open className="gmi-batch-object-detail"><summary>{describeGmiObject(inspected.scope, inspected.sourceIndex, detail.id)} · Foreslått nå · skrivebeskyttet</summary>
-      <button type="button" className={control} onClick={onInspectClose}>Tilbake til masseendringen</button>
-      {inspectedReview && <><p>{inspectedReview.explanation}</p><p>Forhåndsvisning: {review.preview.sourceKey} → «{review.preview.lexeme}»{inspectedOutcome ? ` · ${GMI_BATCH_OUTCOME_LABELS[inspectedOutcome.outcome]}` : ''}</p>
+    {/* A2: the Data Table owns the object's attributes; the inspector shows only the edited field and its findings. */}
+    {inspected && detail && <details open className="gmi-batch-object-detail" data-gmi-object-detail><summary>{describeGmiObject(inspected.scope, inspected.sourceIndex, detail.id)} · Foreslått nå · skrivebeskyttet</summary>
+      <button type="button" className={`${control} gmi-batch-back`} onClick={onInspectClose}><ArrowLeftIcon size={13} weight="regular" aria-hidden="true" />Tilbake til masseendringen</button>
+      {inspectedReview ? <><p>{inspectedReview.explanation}</p><p data-gmi-object-outcome>Forhåndsvisning: {review.preview.sourceKey} → «{review.preview.lexeme}»{inspectedOutcome ? ` · ${GMI_BATCH_OUTCOME_LABELS[inspectedOutcome.outcome]}` : ''}</p>
         <p>Original: <Lexeme value={inspectedReview.original} /> · Foreslått nå: <Lexeme value={inspectedReview.current} /></p>
         {['change', 'manual'].includes(inspectedOutcome?.outcome) ? null : <p className="gmi-edit-muted">Funnene under gjelder bare hvis objektet faktisk endres.</p>}
         {inspectedTransitions.findings.length ? <ul className="gmi-batch-finding-list" data-gmi-object-findings="changed">{inspectedTransitions.findings.map((finding) => <li key={finding.key} data-validation-tone={finding.tone} data-transition={finding.transition}>
@@ -409,38 +457,45 @@ export default function GmiBatchInspector({ view, onDirtyChange, registerReset, 
           <GmiSeverityIcon tone="success" size={13} /><strong>Løses</strong> ({finding.severity}): {finding.reason}</li>)}</ul>}
         {inspectedTransitions.existing.length > 0 && <details className="gmi-batch-existing-findings" data-gmi-object-findings="existing"><summary>Eksisterende funn, uendret ({inspectedTransitions.existing.length})</summary>
           <ul className="gmi-batch-finding-list">{inspectedTransitions.existing.map((finding) => <li key={finding.key} data-validation-tone={finding.tone} data-transition="existing">
-            <GmiSeverityIcon tone={finding.tone} size={13} /><strong>{finding.severity}</strong>: {finding.reason}</li>)}</ul></details>}</>}
-      <dl>{Object.entries(detail.attributes).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{detail.attributes[GMI_SOURCE_LEXEMES]?.[key] ?? String(value ?? '')}</dd></div>)}</dl>
+            <GmiSeverityIcon tone={finding.tone} size={13} /><strong>{finding.severity}</strong>: {finding.reason}</li>)}</ul></details>}</>
+        : <p className="gmi-edit-muted" data-gmi-object-detail-empty>Objektets verdier vises i datatabellen. Forhåndsvis en masseendring for å se hva som endres for objektet.</p>}
     </details>}
     {risk && <GmiConfirmDialog testId="batch-risk" tone="risk" confirmIcon={SealWarningIcon}
       title={risk.manualRows.length ? 'Bekreft manuelt overstyrt masseendring' : 'Bekreft masseendring'}
       confirmLabel="Godkjenn og legg til" cancelLabel="Tilbake til utvalget" destructive={false} onCancel={() => setRisk(null)} onConfirm={() => stage(risk)}>
-      <p className="gmi-risk-operation"><strong>{['replace', 'clear'].includes(risk.review.preview.operation) ? <>
-        {modeLabel(risk.review.preview.operation)}: {risk.review.preview.sourceKey}
-        {risk.review.preview.operation === 'replace' && <> <Lexeme value={risk.review.preview.match} /></>} → <Lexeme value={risk.review.preview.lexeme} />
-      </> : <>{risk.review.preview.sourceKey} → «{risk.review.preview.lexeme}»</>}</strong> · {gmiObjectCountLabel(risk.changeSet.objectCount, review.preview.scope)} endres</p>
-      {[['error', 'FEIL'], ['warning', 'SJEKK']].map(([tone, label]) => {
-        // FEIL lists new and worsened (SJEKK → FEIL) findings once each; improved findings are listed separately.
-        const findings = risk.findings.filter((finding) => finding.tone === tone && finding.introduced && finding.transition !== 'improved');
-        const worsened = findings.filter((finding) => finding.transition === 'worsened').length;
-        return <RiskFindings key={tone} tone={tone} findings={findings}
-          title={worsened ? `${findings.length} ${findings.length === 1 ? 'ny eller forverret' : 'nye eller forverrede'} ${label}` : newCount(findings.length, label)} />;
-      })}
-      <RiskFindings tone="warning" title={`${risk.findings.filter((finding) => finding.transition === 'improved').length} forbedret (FEIL → SJEKK, SJEKK gjenstår)`}
-        findings={risk.findings.filter((finding) => finding.transition === 'improved')} />
-      {risk.mixed.length > 0 && <div className="gmi-risk-mixed" data-gmi-risk-mixed>
-        <p>Blandet blant objektene som endres: {risk.mixed.join(', ')}. Bekreft at samme verdi skal brukes på disse objektene.</p>
-        {risk.mixedProfile.length > 0 && <ul>{risk.mixedProfile.map((column) => <li key={column.id} data-mixed-field={column.id}>
-          <strong>{column.label}:</strong> {gmiProfileDistributionText(column)}</li>)}</ul>}
-      </div>}
-      {risk.review.preview.linked && <p>Tema og S_FCODE oppdateres samlet. Bekreft verdien for begge kolonner.</p>}
-      {risk.unvalidated && <p>Feltet kontrolleres ikke av Validator. Bekreft at verdien er vurdert manuelt.</p>}
+      {/* A2: operation and count first, then one short line per triggering reason; approval-relevant FEIL stay listed. */}
+      <p className="gmi-risk-operation" data-gmi-risk-operation={riskOperation}><strong>{modeLabel(riskOperation)}: {risk.review.preview.sourceKey}
+        {riskOperation === 'replace' && <> <Lexeme value={risk.review.preview.match} /></>}
+        {riskOperation !== 'clear' && <> → <Lexeme value={risk.review.preview.lexeme} /></>}
+      </strong> · {gmiObjectCountLabel(riskObjects, review.preview.scope)} endres</p>
+      <p data-gmi-risk-confirm>{riskConfirmText}</p>
+      <ul className="gmi-risk-reasons" data-gmi-risk-reasons aria-label="Hvorfor godkjenning kreves">
+        {risk.reasons.includes('overwrite') && <li data-risk-reason="overwrite">{[riskCounts.populatedOverwrites > 0 && `${riskCounts.populatedOverwrites} utfylte verdier overskrives.`,
+          riskCounts.overwritten > 0 && `${riskCounts.overwritten} tidligere rettinger erstattes.`].filter(Boolean).join(' ')}</li>}
+        {risk.mixed.length > 0 && <li data-risk-reason="mixed" data-gmi-risk-mixed>Blandet blant objektene som endres: {risk.mixed.join(', ')}.</li>}
+        {risk.review.preview.linked && <li data-risk-reason="linked-tema">Tema og S_FCODE oppdateres samlet. Bekreft verdien for begge kolonner.</li>}
+        {risk.unvalidated && <li data-risk-reason="unvalidated">Feltet kontrolleres ikke av Validator. Bekreft at verdien er vurdert manuelt.</li>}
+      </ul>
+      {/* FEIL lists new and worsened (SJEKK → FEIL) findings once each and stays expanded: it is approval material. */}
+      <RiskFindings tone="error" findings={riskNewFail} title={riskNewFail.some((finding) => finding.transition === 'worsened')
+        ? `${riskNewFail.length} ${riskNewFail.length === 1 ? 'ny eller forverret' : 'nye eller forverrede'} FEIL` : newCount(riskNewFail.length, 'FEIL')} />
       {risk.manualRows.length > 0 && <div className="gmi-manual-note gmi-risk-manual">
         <HandPointingIcon size={16} weight="regular" aria-hidden="true" />
         <div><p><strong>{risk.manualRows.length} manuelt inkludert</strong> utenfor Validatorens anbefaling; dette kan gi FEIL.</p>
           <ul>{risk.manualRows.map((row) => <li key={row.key} title={row.explanation}><strong>{row.label}</strong>: {row.reason}</li>)}</ul></div>
       </div>}
-      {(risk.changeSet.counts.populatedOverwrites > 0 || risk.changeSet.counts.overwritten > 0) && <p>{risk.changeSet.counts.populatedOverwrites} utfylte verdier overskrives. {risk.changeSet.counts.overwritten} tidligere rettinger erstattes.</p>}
+      {(() => {
+        const checks = risk.findings.filter((finding) => finding.tone === 'warning' && finding.introduced && finding.transition !== 'improved');
+        const improved = risk.findings.filter((finding) => finding.transition === 'improved');
+        return <>
+          <RiskFindings tone="warning" collapsible findings={checks} title={newCount(checks.length, 'SJEKK')} />
+          <RiskFindings tone="warning" collapsible findings={improved} title={`${improved.length} forbedret (FEIL → SJEKK, SJEKK gjenstår)`} />
+        </>;
+      })()}
+      {risk.mixedProfile.length > 0 && <details className="gmi-edit-muted gmi-risk-mixed" data-gmi-risk-mixed-details><summary>Fordeling av blandede verdier</summary>
+        <ul>{risk.mixedProfile.map((column) => <li key={column.id} data-mixed-field={column.id}>
+          <strong>{column.label}:</strong> {gmiProfileDistributionText(column)}</li>)}</ul>
+      </details>}
       {risk.findings.some((finding) => !finding.introduced) && <details className="gmi-edit-muted"><summary>Eksisterende funn på feltet ({risk.findings.filter((finding) => !finding.introduced).length})</summary>
         <ul>{risk.findings.filter((finding) => !finding.introduced).map((finding) => <li key={finding.key}>{finding.severity}: {finding.reason} ({finding.objects.join(', ')})</li>)}</ul></details>}
       {!risk.findings.some((finding) => finding.introduced && finding.transition !== 'improved') && <p className="gmi-severity-none"><GmiSeverityIcon tone="success" size={14} /> Ingen nye FEIL eller SJEKK for objektene som endres.</p>}

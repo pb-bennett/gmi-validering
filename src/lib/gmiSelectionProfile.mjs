@@ -141,3 +141,17 @@ export function gmiProfileMixedColumns(profile) {
 
 /** «PE (12) · PVC (4) · (tom) (2)» */
 export const gmiProfileDistributionText = (column) => column.groups.map((group) => `${group.label} (${group.count})`).join(' · ');
+
+const joinLabels = (labels) => labels.length < 2 ? labels.join('') : `${labels.slice(0, -1).join(', ')} og ${labels[labels.length - 1]}`;
+
+/**
+ * A2: one-line summary of the collapsed profile, after the object count:
+ * «ulike verdier i Dimensjon og Stedfestingsårsak», or «ingen ulike verdier».
+ * Absent/ambiguous fields are not named. Returns '' when no field is bound.
+ */
+export function gmiProfileSummaryText(profile) {
+  const bound = [...(profile?.fields || []), ...(profile?.context || [])].filter((dimension) => dimension.state === 'bound');
+  if (!bound.length) return '';
+  const mixed = gmiProfileMixedColumns(profile).map((column) => column.label);
+  return mixed.length ? `ulike verdier i ${joinLabels(mixed)}` : 'ingen ulike verdier';
+}

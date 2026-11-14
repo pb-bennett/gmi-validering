@@ -699,7 +699,8 @@ test('S5 wiring: object and batch staging switch the view; column focus starts a
   }
   const inspector = await source('src/components/gmi-edit/GmiBatchInspector.js');
   // Choosing a field alone never makes the inspector dirty.
-  assert.match(inspector, /const dirty = Boolean\(lexeme \|\| review \|\| mode !== 'fill-missing'\);/);
+  // A1 (deliberate update): neither a field nor a mode choice alone makes the inspector dirty.
+  assert.match(inspector, /const dirty = Boolean\(lexeme \|\| match !== null \|\| review\);/);
   assert.match(inspector, /setField\(event\.target\.value\); setFocusChoice\(event\.target\.value\);/);
   assert.match(inspector, /if \(!focusField \|\| stagedFocusOwner\) return undefined;/);
   const detail = await source('src/components/gmi-edit/GmiChangeSetDetail.js');

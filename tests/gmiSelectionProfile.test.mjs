@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { loadGmiSourceDocument, createGmiEditSession, stageGmiChangeSet, undoGmiEdit, redoGmiEdit, getGmiProposedState, getGmiDocumentDataset, getGmiSourceBytes } from '../src/lib/gmi-edit/index.mjs';
-import { buildGmiSelectionProfile, gmiSelectionNarrowing, gmiSelectionProfileSources, GMI_PROFILE_MISSING_LABEL } from '../src/lib/gmiSelectionProfile.mjs';
+import { buildGmiSelectionProfile, gmiSelectionNarrowing, gmiSelectionProfileSources, gmiProfileSummaryText, GMI_PROFILE_MISSING_LABEL } from '../src/lib/gmiSelectionProfile.mjs';
 import { reduceGmiEditSelection } from '../src/lib/gmiEditSelection.mjs';
 import { gmiSelectionTargets, gmiBatchScopeState, planGmiInspectorBatch } from '../src/lib/gmiBatchInspectorView.mjs';
 import { prepareGmiBatchReview } from '../src/lib/gmiEditBatchView.mjs';
@@ -170,4 +170,17 @@ test('B1 inspector wiring reuses the selection reducer and never bypasses previe
   assert.match(component, /approval\.plan !== plan \|\| approval\.selection !== selection/);
   const profile = await readFile(new URL('../src/lib/gmiSelectionProfile.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(profile, /type: 'add'|stageGmiChangeSet|createGmiBatchCorrection/);
+});
+
+test('A2 collapsed profile summary names only bound mixed columns, in profile order', () => {
+  const dimension = (id, label, values, state = 'bound') => ({ id, label, state, groups: values.map((value) => ({ value, label: value, count: 1 })) });
+  const profile = (fields, context = []) => ({ total: 3, scope: 'line', fields, context });
+  assert.equal(gmiProfileSummaryText(profile([dimension('tema', 'Tema', ['VL']), dimension('dimension', 'Dimensjon', ['110', '160']),
+    dimension('positioningCause', 'Stedfestingsårsak', ['NYTT', '(tom)'])])), 'ulike verdier i Dimensjon og Stedfestingsårsak');
+  assert.equal(gmiProfileSummaryText(profile([dimension('tema', 'Tema', ['VL', 'SP']), dimension('material', 'Material', ['PE', 'PVC'])],
+    [dimension('hydraulicClass', 'Hydraulisk klasse', ['A', 'B'])])), 'ulike verdier i Tema, Material og Hydraulisk klasse');
+  assert.equal(gmiProfileSummaryText(profile([dimension('tema', 'Tema', ['VL']), dimension('material', 'Material', [], 'absent')])), 'ingen ulike verdier');
+  // Absent or ambiguous columns are never named as mixed, and an unbound profile has no summary.
+  assert.equal(gmiProfileSummaryText(profile([dimension('material', 'Material', ['PE', 'PVC'], 'ambiguous')])), '');
+  assert.equal(gmiProfileSummaryText(null), '');
 });

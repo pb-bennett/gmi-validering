@@ -97,6 +97,11 @@ test('G6 production: exact replacement, clearing, required-field consent, select
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-changed]').dataset.gmiBatchChanged`), '5');
         await click('Legg til masseendring'); await browser.waitFor(risk);
         assert.match(await browser.evaluate(`${risk}.innerText`), /5 nye FEIL/);
+        // A2: clear-specific wording; never «samme verdi» for a clear.
+        assert.match(await browser.evaluate(`${risk}.querySelector('[data-gmi-risk-confirm]').innerText`), /^Bekreft at verdien skal tømmes for disse objektene\.$/);
+        assert.doesNotMatch(await browser.evaluate(`${risk}.innerText`), /samme verdi/);
+        assert.match(await browser.evaluate(`${risk}.querySelector('[data-gmi-risk-operation]').innerText`), /^Tøm verdi: InnvendigUtvendig · 5 punkter endres$/);
+        assert(await browser.evaluate(`${risk}.querySelector('[data-validation-tone=error] li') !== null`), 'new FEIL listed without expanding');
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           const bounds = await browser.evaluate(`(() => {const e=${risk},r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,overflow:e.scrollWidth>e.clientWidth};})()`);

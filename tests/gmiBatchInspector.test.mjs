@@ -29,7 +29,9 @@ test('G4 field choices use capabilities for both scopes, explain unavailable col
   assert.match(input, /options\.map/);
   assert.match(input, /<select/);
   assert.match(component, /Boolean\(field && column && !column\.disabled\)/);
-  assert.match(component, /const dirty = Boolean\(lexeme \|\| review \|\| mode !== 'fill-missing'\)/);
+  // A1 (deliberate update): a field or mode choice alone is no draft; a typed value, a chosen match or a preview is.
+  assert.match(component, /const dirty = Boolean\(lexeme \|\| match !== null \|\| review\);/);
+  assert.doesNotMatch(component, /mode !== 'fill-missing'\)/);
 });
 
 test('G4 point presentation preserves exclusions, manual applicability, exact values and dataset consequences', async () => {

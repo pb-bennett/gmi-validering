@@ -1,8 +1,9 @@
 'use client';
 
 import { useRef } from 'react';
-import { FunnelSimpleIcon } from '@phosphor-icons/react';
+import { CaretDownIcon, FunnelSimpleIcon } from '@phosphor-icons/react';
 import { gmiObjectCountLabel } from '@/lib/gmiEditView.mjs';
+import { gmiProfileSummaryText } from '@/lib/gmiSelectionProfile.mjs';
 import GmiSeverityIcon from './GmiSeverityIcon';
 
 const UNAVAILABLE = { absent: 'Finnes ikke i filen', ambiguous: 'Feltkoblingen er tvetydig' };
@@ -39,20 +40,28 @@ function ProfileRow({ dimension, scope, disabled, onNarrow }) {
   </div>;
 }
 
-/** B1: compact value profile of the selected objects on the proposed dataset, with shrink-only narrowing. */
+/**
+ * B1: compact value profile of the selected objects on the proposed dataset, with shrink-only narrowing.
+ * A2: collapsed by default to one summary line; distributions and «Behold bare disse» live in the disclosure.
+ */
 export default function GmiSelectionProfile({ profile, disabled = false, notice = null, onNarrow }) {
   const headingRef = useRef(null);
   if (!profile?.total) return null;
   const narrow = (dimension, group) => { if (onNarrow(dimension, group)) headingRef.current?.focus(); };
   const rows = [...profile.fields, ...profile.context];
+  const summary = gmiProfileSummaryText(profile);
   return <section className="gmi-selection-profile" data-gmi-selection-profile data-total={profile.total} aria-labelledby="gmi-selection-profile-heading">
-    <p id="gmi-selection-profile-heading" ref={headingRef} tabIndex={-1} className="gmi-profile-heading gmi-focus-ring">
-      <FunnelSimpleIcon size={13} weight="regular" aria-hidden="true" />Utvalget: {gmiObjectCountLabel(profile.total, profile.scope)} · Foreslått nå
-    </p>
-    <dl className="gmi-profile-list">
-      {rows.map((dimension) => <ProfileRow key={dimension.id} dimension={dimension} scope={profile.scope} disabled={disabled} onNarrow={narrow} />)}
-    </dl>
-    {profile.context.length > 0 && <p className="gmi-profile-note">Hydraulisk klasse og øvrig regelgrunnlag er fra forhåndsvisningen.</p>}
+    <details className="gmi-profile-disclosure" data-gmi-profile-disclosure>
+      <summary id="gmi-selection-profile-heading" ref={headingRef} className="gmi-profile-heading gmi-focus-ring">
+        <FunnelSimpleIcon size={13} weight="regular" aria-hidden="true" />
+        <span className="gmi-profile-summary">Utvalget: {gmiObjectCountLabel(profile.total, profile.scope)}{summary ? ` · ${summary}` : ''}</span>
+        <CaretDownIcon className="gmi-profile-caret" size={12} weight="regular" aria-hidden="true" />
+      </summary>
+      <dl className="gmi-profile-list">
+        {rows.map((dimension) => <ProfileRow key={dimension.id} dimension={dimension} scope={profile.scope} disabled={disabled} onNarrow={narrow} />)}
+      </dl>
+      <p className="gmi-profile-note">Verdier i arbeidskopien (Foreslått nå).{profile.context.length > 0 ? ' Hydraulisk klasse og øvrig regelgrunnlag er fra forhåndsvisningen.' : ''}</p>
+    </details>
     <p className="sr-only" role="status" aria-live="polite">{notice || ''}</p>
     {notice && <p className="gmi-profile-note" aria-hidden="true" data-gmi-profile-notice>{notice}</p>}
   </section>;
@@ -75,6 +84,8 @@ export function GmiCurrentFindingSplit({ split, scope, disabled = false, onNarro
         aria-label={`Behold bare objekter med FEIL på ${split.field}: ${gmiObjectCountLabel(counts.FEIL, scope)}`}
         onClick={() => { if (onNarrow({ label: `Funn nå på ${split.field}` }, { label: 'FEIL', keys: split.groups.FEIL })) labelRef.current?.focus(); }}>Behold bare FEIL ({counts.FEIL})</button>}
     </p>
-    <p className="gmi-profile-note">Mangler en verdi på eksisterende ledningsnett, kan Validator gi SJEKK i stedet for FEIL. Slike objekter må ikke nødvendigvis rettes.</p>
+    {counts.SJEKK > 0 && <details className="gmi-current-split-why" data-gmi-split-why><summary className="gmi-focus-ring">Hvorfor SJEKK?</summary>
+      <p className="gmi-profile-note">Mangler en verdi på eksisterende ledningsnett, kan Validator gi SJEKK i stedet for FEIL. Slike objekter må ikke nødvendigvis rettes.</p>
+    </details>}
   </section>;
 }

@@ -39,7 +39,9 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
       Object.getOwnPropertyDescriptor(select?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(s,${JSON.stringify(value)}); s.dispatchEvent(new Event(select?'change':'input',{bubbles:true})); })()`);
     const ready = () => browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK') && ${inspector}.getAttribute('aria-busy')==='false'`);
     const preview = async () => { await click('Forhåndsvis endringer', inspector); await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]')`); };
-    const rowText = (id) => browser.evaluate(`${profile}?.querySelector('[data-profile-field="${id}"]')?.innerText.replace(/\\s+/g,' ').trim()`);
+    // A2 (deliberate update): the profile is collapsed to one summary line; helpers open it before reading rows.
+    const openProfile = `${profile}?.querySelector('[data-gmi-profile-disclosure]')?.setAttribute('open', '')`;
+    const rowText = (id) => browser.evaluate(`(() => { ${openProfile}; return ${profile}?.querySelector('[data-profile-field="${id}"]')?.innerText.replace(/\\s+/g,' ').trim(); })()`);
     const groups = (id) => browser.evaluate(`Array.from(${profile}.querySelectorAll('[data-profile-field="${id}"] li')).map(li=>[li.querySelector('.gmi-profile-value').textContent, Number(li.dataset.count)])`);
     const total = () => browser.evaluate(`Number(${profile}?.dataset.total)`);
     const selectedCount = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row] input[type=checkbox]')).filter(e=>e.checked).length`);
@@ -67,6 +69,8 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
       await t.test('profile distributions, missing values, keyboard narrowing keeps the preview valid; widening invalidates', async () => {
         await selectLines([0, 1, 2, 3, 4]);
         assert.equal(await total(), 5);
+        assert.equal(await browser.evaluate(`${profile}.querySelector('[data-gmi-profile-disclosure]').open`), false, 'collapsed by default');
+        assert.equal(await browser.evaluate(`${profile}.innerText.trim()`), 'Utvalget: 5 ledninger · ulike verdier i Tema, Material, Dimensjon og Stedfestingsårsak');
         assert.match(await browser.evaluate(`${profile}.innerText`), /Utvalget: 5 ledninger/);
         assert.match(await rowText('tema'), /VL \(4\) · SP \(1\)/);
         assert.match(await rowText('material'), /PE \(2\) · \(tom\) \(2\) · PVC \(1\)|PE \(2\) · PVC \(1\) · \(tom\) \(2\)/);
@@ -117,7 +121,8 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]')?.dataset.state==='stale'`);
         assert.equal(await total(), 3);
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Utvalget er utvidet etter forhåndsvisningen/);
-        assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText.trim()==='Legg til masseendring').disabled`));
+        // A1 (deliberate update): a stale preview renders no staging action (absent counts as blocked).
+        assert(await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText.trim()==='Legg til masseendring'); return !b || b.disabled; })()`));
         assert.equal(await browser.evaluate(`${profile}.querySelector('[data-profile-field="hydraulicClass"]')`), null, 'no rule context from a stale preview');
       });
 
@@ -131,7 +136,7 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
         await browser.waitFor(risk);
         assert.match(await browser.evaluate(`${risk}.innerText`), /Blandet blant objektene som endres: Tema/);
         await click('Tilbake til utvalget', risk); await browser.waitFor(`!${risk}`);
-        await browser.evaluate(`(${profile}).querySelector('[data-profile-field=tema] details').open=true`);
+        await browser.evaluate(`${openProfile}; (${profile}).querySelector('[data-profile-field=tema] details').open=true`);
         await click('Behold bare Tema SP: 2 ledninger', profile);
         await browser.waitFor(`${profile}?.dataset.total==='2'`);
         assert.equal(await selectedCount(), 2);
@@ -152,11 +157,11 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
         assert.match(await rowText('material'), /PE \(alle\)/, 'proposed value after staging');
         await click('Angre siste retting', workspace);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===0`);
-        await browser.waitFor(`/\\(tom\\) \\(alle\\)/.test(${profile}?.querySelector('[data-profile-field=material]')?.innerText || '')`);
+        await browser.waitFor(`(${openProfile}, /\\(tom\\) \\(alle\\)/.test(${profile}?.querySelector('[data-profile-field=material]')?.innerText || ''))`);
         assert.equal(await total(), 2);
         await click('Gjør om retting', workspace);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===1`);
-        await browser.waitFor(`/PE \\(alle\\)/.test(${profile}?.querySelector('[data-profile-field=material]')?.innerText || '')`);
+        await browser.waitFor(`(${openProfile}, /PE \\(alle\\)/.test(${profile}?.querySelector('[data-profile-field=material]')?.innerText || ''))`);
         assert.equal(await selectedCount(), 2);
       });
 

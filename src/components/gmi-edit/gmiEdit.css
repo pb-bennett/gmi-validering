@@ -103,7 +103,6 @@
 .gmi-inspector-config .gmi-batch-field-policy { grid-column: 1 / -1; margin: 0; }
 .gmi-batch-inspector input { accent-color: var(--gmi-interactive); }
 .gmi-batch-inspector input:focus-visible, .gmi-batch-inspector select:focus-visible { outline: 2px solid var(--gmi-interactive); outline-offset: 2px; }
-.gmi-batch-object-detail dl > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; overflow-wrap: anywhere; }
 .gmi-batch-inspector .gmi-primary-control, [data-gmi-selection-bar] .gmi-primary-control { background: var(--gmi-interactive); border-color: var(--gmi-interactive); color: white; }
 .gmi-inspector-configuration > summary { cursor: pointer; color: var(--gmi-interactive); font-size: 11px; margin-bottom: 4px; }
 .gmi-batch-inspector .gmi-edit-muted { font-size: 11px; }
@@ -409,3 +408,27 @@
 /* G6: keep exact-value choices readable within the existing inspector grid. */
 .gmi-batch-match { grid-column: 1 / -1; min-width: 0; }
 .gmi-batch-match select { width: 100%; max-width: 100%; }
+/* A1: one active stage. Setup actions share one row; back controls lead with their arrow. */
+.gmi-batch-setup-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gmi-batch-back { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.gmi-batch-object-detail > .gmi-batch-back { margin: 2px 0 4px; }
+.gmi-batch-proposal-kicker { border-radius: 3px; }
+.gmi-batch-step-flag { margin-left: 2px; font-size: 10px; font-weight: 600; color: var(--gmi-validation-compact-warning-text); }
+/* A2: collapsed profile, split explanation, preview details and risk-dialog detail disclosures. */
+.gmi-profile-disclosure > summary { display: flex; align-items: center; gap: 4px; cursor: pointer; list-style: none; }
+.gmi-profile-disclosure > summary::-webkit-details-marker { display: none; }
+.gmi-profile-disclosure > summary:hover .gmi-profile-summary { text-decoration: underline; text-underline-offset: 2px; }
+.gmi-profile-disclosure[open] > summary { margin-bottom: 3px; }
+.gmi-profile-summary { min-width: 0; overflow-wrap: anywhere; }
+.gmi-profile-caret, .gmi-risk-caret { flex-shrink: 0; margin-left: auto; transition: transform .15s ease; }
+.gmi-profile-disclosure:not([open]) .gmi-profile-caret, .gmi-risk-group-details:not([open]) .gmi-risk-caret { transform: rotate(-90deg); }
+.gmi-profile-disclosure .gmi-profile-list + .gmi-profile-note { margin-top: 3px; }
+:is(.gmi-batch-details, .gmi-current-split-why, .gmi-risk-mixed) > summary { width: fit-content; border-radius: 3px; cursor: pointer; color: var(--gmi-interactive); font-size: 11px; }
+:is(.gmi-batch-details, .gmi-current-split-why, .gmi-risk-mixed) > summary:hover { text-decoration: underline; text-underline-offset: 2px; }
+.gmi-batch-details { display: grid; gap: 4px; }
+.gmi-batch-details > p { margin: 2px 0 0; }
+.gmi-risk-reasons { margin: 0; padding-left: 18px; list-style: disc; display: grid; gap: 2px; font-size: 12.5px; }
+.gmi-risk-group-details > summary { cursor: pointer; list-style: none; }
+.gmi-risk-group-details > summary::-webkit-details-marker { display: none; }
+.gmi-risk-group-details > summary:hover { text-decoration: underline; text-underline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .gmi-profile-caret, .gmi-risk-caret { transition: none; } }
