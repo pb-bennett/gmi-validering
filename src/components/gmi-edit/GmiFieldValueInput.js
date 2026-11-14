@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { gmiFieldValueOptionLabel as optionLabel, rankGmiFieldValueOptions } from '@/lib/gmiEditFields.mjs';
 
 /** Batch adapter: retain its public interface and label, using the same domain control as individual editing. */
 function BatchFieldValueInput({ column, value, onChange, problem, disabled }) {
@@ -14,7 +15,9 @@ function BatchFieldValueInput({ column, value, onChange, problem, disabled }) {
   </div>;
 }
 
-const optionLabel = (option) => [option.value, option.label !== option.value ? option.label : null, option.longLabel].filter(Boolean).join(' – ');
+/** Lists above this size, and every strictListed list, use the searchable combobox. Shorter lists fit an open
+ * native select, whose type-ahead already jumps by the leading code. */
+const NATIVE_SELECT_MAX = 8;
 
 /** Offered values and format hints only: all verdicts still come from the Validator.
  * Only typed drafts are uppercased. Mounting, list selection and external value resets preserve exact lexemes.
@@ -27,9 +30,9 @@ function ObjectFieldValueInput({ domain, value, onChange, id, emptyLabel = 'Tom 
   const input = useRef(null), list = useRef(null);
   const options = domain?.options || [];
   const enumerated = domain?.kind === 'enumeration';
-  const searchable = enumerated && options.length > 12;
+  const searchable = enumerated && (strictListed || options.length > NATIVE_SELECT_MAX);
   const current = options.find((option) => option.value === value);
-  const matches = options.filter((option) => optionLabel(option).toLocaleLowerCase('nb').includes(query.toLocaleLowerCase('nb')));
+  const matches = rankGmiFieldValueOptions(options, query);
   const hint = [current ? current.label !== current.value ? current.label : null : enumerated && value ? unlistedHint : null,
     domain?.format, domain?.unit].filter(Boolean).join(' · ');
   const hintId = `${id}-domain`, listId = `${id}-options`;

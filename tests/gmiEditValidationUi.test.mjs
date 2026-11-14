@@ -69,7 +69,7 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
     const tableType = () => browser.evaluate(`Array.from(document.querySelector('.gmi-edit-table-modes').parentElement.querySelectorAll('button.gmi-selected-control')).map(e => e.innerText.trim())[0]`);
     const stage = async (count) => {
       await browser.evaluate(`Array.from(${editor}.querySelectorAll('.gmi-edit-confirm input')).filter(e => !e.checked).forEach(e => e.click())`);
-      await click(`Se gjennom (${count})`, editor);
+      await click(`Forhåndsvis endringer (${count})`, editor);
       await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
       // G5: the explicit review gate is separate from overwrite/replacement confirmation.
       await browser.evaluate(`${editor}.querySelector('[data-gmi-new-errors] input')?.click()`);

@@ -118,7 +118,7 @@ test('R3 production: source-bound snapshot selection, full filtered model, teal 
         await click('Sorter etter Merknad'); await click('Sorter etter Merknad');
         await waitTotal(40);
         await input(`${editor}.querySelector('tr[data-field="SDR"] input')`, '11.0');
-        await click('Se gjennom (1)', editor); await click('Legg til retting', editor);
+        await click('Forhåndsvis endringer (1)', editor); await click('Legg til retting', editor);
         await click('Foreslått', `document.querySelector('.gmi-edit-table-modes')`); await waitTotal(40);
         await click('Angre siste retting', workspace); await waitTotal(40);
         await click('Gjør om retting', workspace); await waitTotal(40);

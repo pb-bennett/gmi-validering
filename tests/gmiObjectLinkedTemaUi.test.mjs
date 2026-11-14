@@ -52,7 +52,7 @@ test('G8 object editor production: one linked Tema control, explicit consent, B3
     };
     const select = async (object) => { await clickGmiTableObject(browser, object); await browser.waitFor(`${editor}?.dataset.gmiObject === ${JSON.stringify(object)}`); };
     const confirmForm = () => browser.evaluate(`Array.from(${editor}.querySelectorAll('.gmi-edit-form .gmi-edit-confirm input')).filter(e => !e.checked).forEach(e => e.click())`);
-    const openReview = async () => { await confirmForm(); await click('Se gjennom (1)'); await browser.waitFor(review); };
+    const openReview = async () => { await confirmForm(); await click('Forhåndsvis endringer (1)'); await browser.waitFor(review); };
     const corrections = () => browser.evaluate(`Number((document.querySelector('[data-gmi-edit-counts]')?.innerText.match(/(\\d+) retting/) || [0, 0])[1])`);
     const stageButton = `Array.from(${review}.querySelectorAll('button')).find(e => e.innerText.trim() === 'Legg til retting')`;
     const physical = (where, field) => browser.evaluate(`${linkedRow}.querySelector('[data-gmi-linked-${where}="${field}"], [data-gmi-linked-${where}] [data-gmi-linked-physical="${field}"]')?.innerText || null`);

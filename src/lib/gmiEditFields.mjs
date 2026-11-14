@@ -120,3 +120,30 @@ export function checkGmiFieldDraft(column, input, encodingClass,
     ? Object.freeze({ ok: false, code: 'value-out-of-domain' }) : null;
   return Object.freeze({ lexeme, normalized: lexeme !== input, ok: !problem, problem, outOfDomain: Boolean(outOfDomain) });
 }
+
+/** Display text of one offered value: code, meaning (when it differs) and long meaning. */
+export const gmiFieldValueOptionLabel = (option) => [option.value, option.label !== option.value ? option.label : null, option.longLabel]
+  .filter(Boolean).join(' – ');
+
+const foldOptionText = (text) => String(text ?? '').toLocaleLowerCase('nb');
+const startsWord = (text, query) => text.startsWith(query) || text.split(/[^\p{L}\p{N}]+/u).some((word) => word.startsWith(query));
+
+/**
+ * A6: offered-value search for the value combobox. The matching set is unchanged (substring over code, meaning
+ * and long meaning); the order puts an exact code, then code prefixes, before description matches, so that for
+ * example «VL» is not buried under every «avløp» entry. Ranking only orders offered options; it never adds,
+ * rewrites or validates values. Ties keep the authoritative list order.
+ */
+export function rankGmiFieldValueOptions(options, query) {
+  const q = foldOptionText(query);
+  if (!q) return options;
+  const ranked = [];
+  options.forEach((option, index) => {
+    if (!foldOptionText(gmiFieldValueOptionLabel(option)).includes(q)) return;
+    const code = foldOptionText(option.value), label = foldOptionText(option.label), long = foldOptionText(option.longLabel);
+    const tier = code === q ? 0 : code.startsWith(q) ? 1 : startsWord(label, q) ? 2 : code.includes(q) ? 3
+      : startsWord(long, q) ? 4 : 5;
+    ranked.push({ option, tier, index });
+  });
+  return ranked.sort((a, b) => a.tier - b.tier || a.index - b.index).map(({ option }) => option);
+}

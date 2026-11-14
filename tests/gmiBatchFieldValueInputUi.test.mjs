@@ -8,6 +8,7 @@ import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
 import { gmiFieldBatchFixture } from './helpers/gmiFieldBatchFixture.mjs';
 import { loadGmiDocument, verifyCellChanges } from './helpers/gmiEditHarness.mjs';
 import { getGmiFieldValueDomain } from '../src/lib/validation-v2/fieldValueDomain.js';
+import { rankGmiFieldValueOptions } from '../src/lib/gmiEditFields.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 const inspector = `document.querySelector('[data-gmi-batch-inspector]')`;
@@ -127,6 +128,26 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
           await writeFile(path.join(tmpdir(), `gmi-g5-d3-${width}x${height}.png`), Buffer.from(data, 'base64'));
         }
         await key('Escape', 27);
+      });
+
+      await t.test('A6: batch Tema search filters live by code prefix; keyboard choose and Escape keep working', async () => {
+        await change(field, 'Tema'); await browser.evaluate(`${value}.focus()`);
+        assert.equal(await browser.evaluate(`${value}.getAttribute('role')`), 'combobox');
+        const tema = getGmiFieldValueDomain({ canonicalFieldId: 'tema', geometryScope: 'line' }).options;
+        const codes = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('[role=option]')).map(e => e.innerText.split(' – ')[0])`);
+        await change(value, 'v'); assert.equal(await browser.evaluate(`${value}.value`), 'V');
+        assert.deepEqual(await codes(), rankGmiFieldValueOptions(tema, 'V').map(o => o.value));
+        await change(value, 'VL'); const offered = await codes();
+        assert.equal(offered[0], 'VL'); assert(offered.length < tema.length);
+        assert.deepEqual(offered, rankGmiFieldValueOptions(tema, 'VL').map(o => o.value));
+        await key('ArrowDown', 40); await key('Enter', 13);
+        assert.equal(await browser.evaluate(`${value}.value`), 'VL');
+        assert.equal(await browser.evaluate(`${value}.getAttribute('aria-expanded')`), 'false');
+        await change(value, 'VLP'); assert.equal(await browser.evaluate(`${value}.getAttribute('aria-expanded')`), 'true');
+        await key('Escape', 27);
+        assert.equal(await browser.evaluate(`${value}.getAttribute('aria-expanded')`), 'false');
+        assert.equal(await browser.evaluate(`Boolean(${inspector})`), true, 'Escape closes only the list');
+        await change(field, 'InnvendigUtvendig');
       });
 
       await t.test('SDR 11, 11,0 and 11.0 preview without list warnings; staging/export retain exact chosen bytes', async () => {

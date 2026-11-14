@@ -90,7 +90,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         await browser.evaluate(`${grid}.scrollLeft = 100`);
         const scrollBefore = await browser.evaluate(`${grid}.scrollTop`);
         await typeInto(`${editor}.querySelector('tr[data-field="Merknad"] input')`, 'Kontrollert');
-        await click('Se gjennom (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
+        await click('Forhåndsvis endringer (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
         const beforeIndividualStage = await continuity();
         await click('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
@@ -108,7 +108,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         await click('Punkter', table);
         await clickGmiTableObject(browser, 'point:0'); await browser.waitFor(`${editor}?.dataset.gmiObject === 'point:0'`);
         await typeInto(`${editor}.querySelector('tr[data-field="Merknad"] input')`, 'Kontrollert igjen');
-        await click('Se gjennom (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
+        await click('Forhåndsvis endringer (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
         assert.equal(await view(), 'proposed', 'preview preserves the current view');
         await click('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('2 rettinger')`);
@@ -119,7 +119,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         await click('Original', modes); await browser.waitFor(`${modes}.dataset.gmiTableView === 'original'`);
         await clickGmiTableObject(browser, 'line:2'); await browser.waitFor(`${editor}?.dataset.gmiObject === 'line:2'`);
         await typeInto(`${editor}.querySelector('tr[data-field="Merknad"] input')`, 'Sjekket');
-        await click('Se gjennom (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
+        await click('Forhåndsvis endringer (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
         await click('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('3 rettinger')`);
         assert.equal(await view(), 'original', 'explicit Original kept');

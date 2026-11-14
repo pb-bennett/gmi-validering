@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
 import { getGmiFieldValueDomain } from '../src/lib/validation-v2/fieldValueDomain.js';
 import { getValidationRules } from '../src/lib/validation-v2/registry/rules.js';
 import { getAuthoritativeValueTable } from '../src/lib/validation-v2/registry/fieldInformation.js';
-import { checkGmiFieldDraft, describeGmiEditColumns } from '../src/lib/gmiEditFields.mjs';
+import { checkGmiFieldDraft, describeGmiEditColumns, gmiFieldValueOptionLabel, rankGmiFieldValueOptions } from '../src/lib/gmiEditFields.mjs';
 import { gmiEditFieldPolicy, planGmiObjectForm } from '../src/lib/gmiEditView.mjs';
 import { createGmiSourceDocument, getGmiSourceBytes, isGmiFieldEditReservedColumn, listGmiObjectCells } from '../src/lib/gmi-edit/index.mjs';
 import { encodeSingleByte, GMI_EDIT_FIXTURE_DIR } from './helpers/gmiEditFixtures.mjs';
@@ -244,4 +244,33 @@ test('capability binding is cached once per document on a large synthetic datase
   const line = describeGmiEditColumns({ document }, 'line');
   assert.strictEqual(describeGmiEditColumns({ document }, 'line'), line);
   t.diagnostic(`20,000 synthetic objects: first discovery ${firstMs.toFixed(2)} ms; 1,000 cached reads + line discovery ${(performance.now() - cachedStart).toFixed(2)} ms`);
+});
+
+test('A6: value search keeps the substring match set and ranks exact code, then code prefix, before descriptions', () => {
+  const line = domain('tema', 'line').options, point = domain('tema', 'point').options;
+  const codes = (options, query) => rankGmiFieldValueOptions(options, query).map(({ value }) => value);
+  const substring = (options, query) => options.filter((option) => gmiFieldValueOptionLabel(option).toLocaleLowerCase('nb').includes(query.toLocaleLowerCase('nb')));
+  for (const options of [line, point]) for (const query of ['V', 'v', 'VL', 'vl', 'avløp', 'kum', 'Vann', 'zzz']) {
+    const ranked = rankGmiFieldValueOptions(options, query);
+    assert.deepEqual(new Set(ranked), new Set(substring(options, query)), `same match set for ${query}`);
+    assert.equal(ranked.length, new Set(ranked).size);
+    for (const option of ranked) assert(options.includes(option), 'only authoritative option objects are offered');
+  }
+  // Acceptance domain: line Tema/S_FCODE. «avløp» contains «vl», so substring order alone buried VL at position 16.
+  assert.equal(substring(line, 'VL').findIndex(({ value }) => value === 'VL') > 0, true, 'reproduces the old unranked order');
+  for (const query of ['V', 'VL', 'vl']) {
+    const ranked = codes(line, query);
+    assert.equal(ranked[0], 'VL', `${query}: exact or shortest code prefix first`);
+    const prefixed = ranked.findIndex((code) => !code.toLowerCase().startsWith(query.toLowerCase()));
+    assert(prefixed > 0 && ranked.slice(prefixed).every((code) => !code.toLowerCase().startsWith(query.toLowerCase())), `${query}: all code-prefix matches lead`);
+  }
+  assert.deepEqual(codes(line, 'VLP'), ['VLP']);
+  assert.equal(codes(line, 'avløp')[0], 'AF', 'description search: meaning word prefix matches in list order');
+  assert(codes(point, 'kum').slice(0, 2).join() === 'KUM,KUMI', 'exact code, then code prefix, before meaning matches');
+  assert(codes(point, 'VL').every((code) => code.includes('VL') || /vl/i.test(point.find((o) => o.value === code).label)));
+  assert.strictEqual(rankGmiFieldValueOptions(line, ''), line, 'empty query keeps the authoritative order');
+  assert.deepEqual(codes(line, 'zzz'), []);
+  // Long meanings are searched too (Tema long meaning is the tema group).
+  const long = line.find((option) => option.longLabel && !option.label.toLowerCase().includes(option.longLabel.toLowerCase().split(/\s+/)[0]));
+  if (long) assert(codes(line, long.longLabel).includes(long.value));
 });

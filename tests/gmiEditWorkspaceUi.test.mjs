@@ -133,7 +133,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await u.edit('Merknad', 'a;b');
         await browser.waitFor(`${row('Merknad')}.querySelector('[role=alert]')`);
         assert.match(await u.text(`${row('Merknad')}.querySelector('[role=alert]')`), /Semikolon/);
-        assert.equal((await u.buttonState('Se gjennom', editor)).disabled, true);
+        assert.equal((await u.buttonState('Forhåndsvis endringer', editor)).disabled, true);
         await u.clickButton('Angre skrivingen i Merknad', editor);
         await browser.waitFor(`!${row('Merknad')}.querySelector('[role=alert]')`);
       });
@@ -143,11 +143,11 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await u.edit('Material', 'PE100');
         await browser.waitFor(`${editor}.querySelector('.gmi-edit-confirm')`);
         assert.match(await u.text(`${editor}.querySelector('.gmi-edit-confirm')`), /Overskriv utfylte verdier fra leveransen: Material/);
-        assert.equal((await u.buttonState('Se gjennom', editor)).disabled, true, 'blocked until overwrite is confirmed');
+        assert.equal((await u.buttonState('Forhåndsvis endringer', editor)).disabled, true, 'blocked until overwrite is confirmed');
         assert.equal(await browser.evaluate(`${row('SDR')}.querySelector('.gmi-edit-state-pill').innerText`), 'Ikke lagt til');
         assert.equal(await u.unloadBlocked(), true, 'an unsubmitted form blocks unload');
         await browser.evaluate(`${editor}.querySelector('.gmi-edit-confirm input').click()`);
-        await u.clickButton('Se gjennom (2)', editor);
+        await u.clickButton('Forhåndsvis endringer (2)', editor);
         await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
         const review = await browser.evaluate(`Array.from(${editor}.querySelectorAll('.gmi-edit-review-table tbody tr')).map((tr) => tr.innerText.replace(/\\s+/g, ' ').trim())`);
         assert.deepEqual(review, ['Material PE PE100Overskriver verdi', 'SDR tom 11.0']);
@@ -214,7 +214,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         // A second correction on the same object (Merknad is populated, so it needs the explicit overwrite).
         await u.edit('Merknad', 'Kontrollert');
         await browser.evaluate(`${editor}.querySelector('.gmi-edit-confirm input').click()`);
-        await u.clickButton('Se gjennom (1)', editor);
+        await u.clickButton('Forhåndsvis endringer (1)', editor);
         await u.clickButton('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText === '2 rettinger · 3 felt i 1 objekt'`);
         await browser.evaluate(`Array.from(${workspace}.querySelectorAll('[role=tab]')).find((e) => e.innerText.startsWith('Endringer')).click()`);
@@ -296,7 +296,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await u.selectObject('point:1');
         await u.waitObject('point:1');
         await u.edit('Kumform', 'R');
-        await u.clickButton('Se gjennom (1)', editor);
+        await u.clickButton('Forhåndsvis endringer (1)', editor);
         await u.clickButton('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-download-state]')?.dataset.downloadState === 'unsaved'`);
         await browser.evaluate(`document.querySelector('button[aria-label="Nullstill og åpne ny fil"]').click()`);
@@ -335,7 +335,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await u.selectObject('line:2');
         await u.waitObject('line:2');
         await u.edit('SDR', '10.0');
-        await u.clickButton('Se gjennom (1)', editor);
+        await u.clickButton('Forhåndsvis endringer (1)', editor);
         await browser.evaluate(`${editor}.querySelector('[data-gmi-new-errors] input')?.click()`);
         await u.clickButton('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-download-state]')?.dataset.downloadState === 'unsaved'`);

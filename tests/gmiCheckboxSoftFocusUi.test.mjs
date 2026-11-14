@@ -108,7 +108,7 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`T3 production ${
         await click('Avslutt', batch); await browser.waitFor(guard); await click('Forkast skjemaet', guard); await browser.waitFor(`!${batch}`);
         await browser.evaluate(`${row(1)}.click()`); await current(1);
         await input(`${editor}.querySelector('[data-field="Merknad"] input')`, 'Staged value');
-        await click('Se gjennom (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
+        await click('Forhåndsvis endringer (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
         await click('Legg til retting', editor); await browser.waitFor(`${editor}.querySelector('[data-gmi-object-message]')`);
         await click('Endringer (1)');
         await browser.evaluate(`Array.from(document.querySelectorAll('.gmi-edit-change-list button')).find(e=>e.innerText.startsWith('Vis detaljer')).click()`);

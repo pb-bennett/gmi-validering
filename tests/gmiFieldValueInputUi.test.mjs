@@ -41,7 +41,7 @@ test('G5 D1/D2 production: authoritative controls, exact lexemes, keyboard searc
     };
     const select = async (object) => { await clickGmiTableObject(browser, object); await browser.waitFor(`${editor}?.dataset.gmiObject === ${JSON.stringify(object)}`); };
     const confirmForm = () => browser.evaluate(`Array.from(${editor}.querySelectorAll('.gmi-edit-form .gmi-edit-confirm input')).filter(e => !e.checked).forEach(e => e.click())`);
-    const openReview = async (count = 1) => { await confirmForm(); await click(`Se gjennom (${count})`); await browser.waitFor(review); };
+    const openReview = async (count = 1) => { await confirmForm(); await click(`Forhåndsvis endringer (${count})`); await browser.waitFor(review); };
     const stage = async () => { await click('Legg til retting'); await browser.waitFor(`!${review}`); };
     const custom = async (field) => {
       const option = await browser.evaluate(`Array.from(${value(field)}.options).find(o => o.textContent === 'Annen verdi…').value`);

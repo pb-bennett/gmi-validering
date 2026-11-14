@@ -120,7 +120,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await click(browser, 'Avbryt', confirm);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('tr[data-field="Merknad"] input').value`), 'M10 corrected');
       });
-      await click(browser, 'Se gjennom (1)', inspector);
+      await click(browser, 'Forhåndsvis endringer (1)', inspector);
       await click(browser, 'Legg til retting', inspector);
       await browser.waitFor(`${workspace}.querySelector('[data-download-state="unsaved"]')`);
 

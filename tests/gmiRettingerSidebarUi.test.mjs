@@ -99,7 +99,7 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         await input(search, '4000');
         await browser.waitFor(`${table}.querySelectorAll('[data-table-row]').length === 0`);
         await input(search, '');
-        await edit('SDR', '11'); await click('Se gjennom (1)', editor);
+        await edit('SDR', '11'); await click('Forhåndsvis endringer (1)', editor);
         await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`); await click('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
       });
@@ -205,7 +205,7 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         await click('Angre siste retting', workspace);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-context-redo=notice]')`);
         await focus('line:1');
-        await edit('SDR', '11'); await click('Se gjennom (1)', editor);
+        await edit('SDR', '11'); await click('Forhåndsvis endringer (1)', editor);
         await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`); await click('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
         assert.notEqual(await entry(), id);
@@ -215,7 +215,7 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         const remainingLabel = await text(`${workspace}.querySelector('.gmi-edit-change-label')`);
         await edit('Merknad', 'S6 forkasting');
         await browser.evaluate(`Array.from(${editor}.querySelectorAll('.gmi-edit-confirm input')).filter(e => !e.checked).forEach(e => e.click())`);
-        await click('Se gjennom (1)', editor);
+        await click('Forhåndsvis endringer (1)', editor);
         await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`); await click('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length === 2`);
         await click('Angre siste retting', workspace);
@@ -226,7 +226,7 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         assert.deepEqual(await redoButtons(), [], 'discard clears contextual redo');
         assert.equal(await browser.evaluate(`${workspace}.querySelector('.gmi-edit-history [aria-label="Gjør om retting"]').getAttribute('aria-disabled')`), 'true');
         // Leave the same single-object correction for the subsequent navigation/layout checks.
-        await edit('SDR', '11'); await click('Se gjennom (1)', editor);
+        await edit('SDR', '11'); await click('Forhåndsvis endringer (1)', editor);
         await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`); await click('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length === 1`);
       });

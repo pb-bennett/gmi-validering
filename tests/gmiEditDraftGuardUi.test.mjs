@@ -177,7 +177,7 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
         await u.openRettinger();
         await u.select('line:1');
         await u.edit('SDR', '11.0');
-        await u.clickButton('Se gjennom (1)', editor);
+        await u.clickButton('Forhåndsvis endringer (1)', editor);
         await u.clickButton('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-download-state]')?.dataset.downloadState === 'unsaved'`);
         const staged = await u.snapshot();
@@ -228,7 +228,7 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
         await u.openRettinger();
         await u.select('line:1');
         await u.edit('SDR', '11.0');
-        await u.clickButton('Se gjennom (1)', editor);
+        await u.clickButton('Forhåndsvis endringer (1)', editor);
         await u.clickButton('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-download-state]')?.dataset.downloadState === 'unsaved'`);
         await draftOnLine1();

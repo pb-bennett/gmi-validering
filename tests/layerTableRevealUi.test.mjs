@@ -44,7 +44,7 @@ test('T1 production: late sorted row reveal, explicit search/filter reset and in
       await browser.evaluate(`${grid}.querySelector('[data-table-row="279"]').click()`);
       await browser.waitFor(`${editor}?.dataset.gmiObject === 'line:279'`);
       await input(`${editor}.querySelector('tr[data-field=SDR] input')`, '11');
-      await click('Se gjennom (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
+      await click('Forhåndsvis endringer (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
       await click('Legg til retting', editor);
       await browser.waitFor('document.querySelector("[data-gmi-edit-counts]")');
       await input(search, 'Row 001');

@@ -244,8 +244,8 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
     {!rows && <p className="gmi-edit-note" role="note">Originalfilen er ikke åpnet for retting. Verdiene under er tolket fra laget og kan avvike fra filens eksakte tekst.</p>}
     {rows && !editable && <p className="gmi-edit-note" role="note"><LockSimpleIcon size={14} aria-hidden="true" /> Verdiene vises nøyaktig slik de står i filen, men kan ikke rettes.</p>}
 
-    {review && !reviewStale ? <section className="gmi-edit-review" aria-label="Se gjennom retting">
-      <h3>Se gjennom før du legger til</h3>
+    {review && !reviewStale ? <section className="gmi-edit-review" aria-label="Forhåndsvisning av retting" data-gmi-object-review>
+      <h3>Forhåndsvis før du legger til</h3>
       <p className="gmi-edit-muted">Endringen legges i listen over rettinger. Den importerte filen og laget endres ikke.</p>
       {review.changeSet.cells.length ? <table className="gmi-edit-review-table">
         <thead><tr><th scope="col">Felt</th><th scope="col">Nå</th><th scope="col">Ny verdi</th></tr></thead>
@@ -275,7 +275,7 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
         </div>}
         {review.unblocked > 0 && <p className="gmi-edit-muted" data-gmi-unblocked-checks>{review.unblocked} kontroller som var avhengige av Tema, kan nå vurderes.</p>}
         {!review.resolved.length && !review.newChecks.length && !review.newErrors.length && <p className="gmi-edit-muted">Validator finner ingen nye eller løste funn for objektet.</p>}
-        <label className="gmi-edit-confirm"><input type="checkbox" data-gmi-linked-confirm checked={review.allowLinked}
+        <label className="gmi-edit-confirm"><input type="checkbox" className="accent-gmi-interactive" data-gmi-linked-confirm checked={review.allowLinked}
           onChange={(event) => setReview({ ...review, allowLinked: event.target.checked })} />
           <span>Sett både Tema og S_FCODE til «{review.linked.value}»</span></label>
       </div>}
@@ -285,7 +285,7 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
       {review.newErrors.length > 0 && <div data-gmi-new-errors>
         <p className="gmi-edit-problem">Forslaget gir {review.newErrors.length} nye FEIL i Validator.</p>
         <ul className="gmi-edit-review-errors">{review.newErrors.map((finding) => <li key={finding.key}>{finding.reason}</li>)}</ul>
-        <label className="gmi-edit-confirm"><input type="checkbox" checked={review.allowNewErrors}
+        <label className="gmi-edit-confirm"><input type="checkbox" className="accent-gmi-interactive" checked={review.allowNewErrors}
           onChange={(event) => setReview({ ...review, allowNewErrors: event.target.checked })} />
           <span>Legg til selv om Validator gir ny FEIL</span></label>
       </div>}
@@ -338,18 +338,18 @@ export default function GmiObjectEditor({ view, status, object, scope, sourceInd
       </table>
       {editable && <div className="gmi-edit-form-footer">
         {plan.needsOverwrite.length > 0 && <label className="gmi-edit-confirm">
-          <input type="checkbox" checked={allowOverwrite} onChange={(event) => setAllowOverwrite(event.target.checked)} />
+          <input type="checkbox" className="accent-gmi-interactive" checked={allowOverwrite} onChange={(event) => setAllowOverwrite(event.target.checked)} />
           <span>Overskriv utfylte verdier fra leveransen: <strong>{plan.needsOverwrite.join(', ')}</strong></span>
         </label>}
         {plan.needsReplace.length > 0 && <label className="gmi-edit-confirm">
-          <input type="checkbox" checked={allowReplace} onChange={(event) => setAllowReplace(event.target.checked)} />
+          <input type="checkbox" className="accent-gmi-interactive" checked={allowReplace} onChange={(event) => setAllowReplace(event.target.checked)} />
           <span>Erstatt tidligere rettinger i: <strong>{plan.needsReplace.join(', ')}</strong></span>
         </label>}
         {(blockedOverwrite || blockedReplace) && <p className="gmi-edit-muted">Bekreft overskrivingen over, eller angre skrivingen i feltet.</p>}
         <div className="gmi-edit-actions">
           <button type="button" className={control} disabled={!dirty} onClick={resetForm}>Forkast skjema</button>
-          <button type="submit" className={primary} disabled={!plan.valid || blockedOverwrite || blockedReplace}>
-            Se gjennom {plan.edited.length ? `(${plan.edited.length})` : ''}
+          <button type="submit" className={primary} data-gmi-object-preview disabled={!plan.valid || blockedOverwrite || blockedReplace}>
+            Forhåndsvis endringer{plan.edited.length ? ` (${plan.edited.length})` : ''}
           </button>
         </div>
       </div>}

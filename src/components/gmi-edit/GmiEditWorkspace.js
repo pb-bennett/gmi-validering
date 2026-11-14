@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, DownloadSimpleIcon, TableIcon, StackIcon } from '@phosphor-icons/react';
+import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, CaretLeftIcon, CaretRightIcon, DownloadSimpleIcon, TableIcon, StackIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
@@ -402,14 +402,14 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice(null); showStagedResult(); }} />
       : detailChangeSet && view ? <div className="gmi-edit-editor">{renderChangeSet(detailChangeSet, 'history')}</div>
       : <>{individualBinding && <nav className="gmi-individual-selection" aria-label="Rett én og én" data-gmi-individual-selection>
-        <button type="button" className="gmi-edit-link gmi-focus-ring" onClick={returnToSelection}>Tilbake til utvalget</button>
+        <button type="button" className="gmi-edit-link gmi-focus-ring" data-gmi-individual-back onClick={returnToSelection}><ArrowLeftIcon size={14} weight="regular" aria-hidden="true" /> Tilbake til utvalget</button>
         <p ref={individualStatus} tabIndex={-1} className="gmi-focus-ring" role="status">{individual.ok && individual.index >= 0 ? `Objekt ${individual.index + 1} av ${individual.targets.length} i utvalget`
           : 'Objektet er ikke lenger i et gyldig utvalg. Gå tilbake til utvalget.'}</p>
         <div className="gmi-edit-history">
           <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1" disabled={!individual.ok || individual.index <= 0}
-            onClick={() => stepSelection(-1)}>Forrige</button>
+            data-gmi-individual-step="previous" onClick={() => stepSelection(-1)}><CaretLeftIcon size={14} weight="regular" aria-hidden="true" /> Forrige</button>
           <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1" disabled={!individual.ok || individual.index < 0 || individual.index >= individual.targets.length - 1}
-            onClick={() => stepSelection(1)}>Neste</button>
+            data-gmi-individual-step="next" onClick={() => stepSelection(1)}>Neste <CaretRightIcon size={14} weight="regular" aria-hidden="true" /></button>
         </div>
       </nav>}<GmiObjectEditor key={`${selectedKey}:${view?.handle.sessionId || descriptor?.state}:${formRevision}`} view={view} status={descriptor}
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate} onStaged={showStagedResult}

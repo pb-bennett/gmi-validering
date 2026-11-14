@@ -139,7 +139,7 @@ test('H3 production: exact Validator selections enter object/batch editing, pres
         const value = `${editor}.querySelector('tr[data-field="SDR"] input')`;
         await browser.waitFor(value);
         await browser.evaluate(`(() => { const e=${value}; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'11.0'); e.dispatchEvent(new Event('input',{bubbles:true})); })()`);
-        await click('Se gjennom (1)', editor); await browser.waitFor('document.querySelector(".gmi-edit-review")');
+        await click('Forhåndsvis endringer (1)', editor); await browser.waitFor('document.querySelector(".gmi-edit-review")');
         await click('Legg til retting', editor);
         await browser.waitFor('document.querySelector("[data-gmi-edit-counts]")');
         const counts = await browser.evaluate('document.querySelector("[data-gmi-edit-counts]").innerText');
@@ -162,7 +162,7 @@ test('H3 production: exact Validator selections enter object/batch editing, pres
         await browser.waitFor(box(149)); await browser.evaluate(`${box(149)}.click()`); await entry(1);
         await browser.waitFor(`${editor}?.dataset.gmiObject === 'point:149'`);
         await browser.evaluate(`(() => { const e=${editor}.querySelector('tr[data-field=InnvendigUtvendig] input, tr[data-field=InnvendigUtvendig] select'); Object.getOwnPropertyDescriptor(e.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(e,'ID'); e.dispatchEvent(new Event(e.tagName==='SELECT'?'change':'input',{bubbles:true})); })()`);
-        await click('Se gjennom (1)', editor); await click('Legg til retting', editor);
+        await click('Forhåndsvis endringer (1)', editor); await click('Legg til retting', editor);
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           for (const mode of ['Foresl\u00e5tt', 'Original', 'Foresl\u00e5tt']) {

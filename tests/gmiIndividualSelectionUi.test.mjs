@@ -36,7 +36,7 @@ test('B3 production: Validator five points, source order, draft cancellation, in
     };
     const edit = (value) => browser.evaluate(`(() => { const e=${editor}.querySelector('[data-field="Merknad"] input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
     const stage = async () => {
-      await click('Se gjennom (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
+      await click('Forhåndsvis endringer (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);
       await click('Legg til retting', editor); await browser.waitFor(`${editor}.querySelector('[data-gmi-object-message]')`);
     };
     try {

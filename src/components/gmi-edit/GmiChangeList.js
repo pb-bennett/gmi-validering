@@ -34,7 +34,7 @@ export default function GmiChangeList({ changeSets, redoCount, redoLabel, onRedo
   if (!changeSets.length) {
     return <div className="gmi-edit-empty">
       <p>Ingen rettinger er lagt til.</p>
-      <p className="gmi-edit-muted">Velg et objekt, endre verdier og velg «Se gjennom» for å legge til en retting.</p>
+      <p className="gmi-edit-muted">Velg et objekt, endre verdier og velg «Forhåndsvis endringer» for å legge til en retting.</p>
       <RedoHint redoCount={redoCount} redoLabel={redoLabel} onRedo={onRedo} className="gmi-edit-muted" />
     </div>;
   }

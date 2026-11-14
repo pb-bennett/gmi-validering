@@ -402,6 +402,11 @@
 }
 .gmi-individual-selection p { margin: 0; font-size: 12px; }
 .gmi-individual-selection > button { justify-self: start; }
+/* A6: icon + label navigation; visible hover and disabled states for the B3 controls. */
+.gmi-individual-selection button { display: inline-flex; align-items: center; gap: 4px; }
+.gmi-individual-selection > button.gmi-edit-link:hover { color: var(--gmi-navy); text-decoration-thickness: 2px; }
+.gmi-individual-selection .gmi-compact-button:hover:not(:disabled) { border-color: var(--gmi-interactive); }
+.gmi-individual-selection .gmi-compact-button:disabled { opacity: .5; cursor: not-allowed; }
 /* B3: «Rett én og én» sits beside «Avslutt» in the batch header (compact secondary action). */
 .gmi-batch-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex-shrink: 0; }
 

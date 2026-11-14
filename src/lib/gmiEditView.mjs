@@ -116,7 +116,7 @@ const MESSAGES = Object.freeze({
   'object-not-found': 'Objektet finnes ikke i filen.',
   'object-identity-mismatch': 'Objektets nummer eller GUID stemmer ikke med filen.',
   'duplicate-target': 'Samme felt er oppgitt flere ganger.',
-  'stale-change-set': 'Rettingene ble endret i mellomtiden. Se gjennom endringen på nytt.',
+  'stale-change-set': 'Rettingene ble endret i mellomtiden. Forhåndsvis endringen på nytt.',
   // G8 linked Tema/S_FCODE in the object editor.
   'linked-tema-split': 'Tema og S_FCODE må rettes sammen og få samme verdi.',
   'linked-tema-incomplete': 'Tema og S_FCODE kan ikke rettes sammen sikkert for dette objektet. Ingen av feltene ble endret.',
