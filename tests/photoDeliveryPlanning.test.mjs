@@ -101,7 +101,7 @@ test('transfer unavailable or needing review: clicks never write an invalid deci
   assert.equal(review.status, 'review'); assert.equal(review.reason, 'source-not-live');
   // A stale transfer resolves to its safe default (GMI); GML stays unavailable while the source is not live.
   assert.equal(photoDeliveryToggleTarget(review).key, 'gmi');
-  assert.deepEqual(photoDeliveryOptions(review).map(({ key, active, disabled }) => [key, active, disabled]), [['gmi', false, false], ['gml', false, true]]);
+  assert.deepEqual(photoDeliveryOptions(review).map(({ key, active, disabled }) => [key, active, disabled]), [['gmi', false, false], ['gml', false, true], ['excluded', false, true]]);
   assert.equal(f.toggle(kum3).entry.status, 'keep-link');
   const blocked = f.toggle(kum3);
   assert.equal(blocked.error, 'not-changeable');
@@ -115,7 +115,7 @@ test('transfer unavailable or needing review: clicks never write an invalid deci
   assert.equal(photoDeliveryToggleTarget(linked('keep-link', false)), null);
   assert.match(photoDeliveryUnavailableReason(linked('keep-link', false)), /sikre GMI-koblingen/);
   const staleUnlinked = { photoId: 'p', linked: false, status: 'review', reason: 'link-removed', canInclude: true };
-  assert.equal(photoDeliveryToggleTarget(staleUnlinked).key, 'gml', 'a link-removed review can only be replaced by an inclusion');
+  assert.equal(photoDeliveryToggleTarget(staleUnlinked).key, 'excluded', 'a link-removed review can be explicitly cleared to not selected');
   const lineReview = { photoId: 'p', linked: false, linkedWithoutOccurrence: true, status: 'review', reason: 'decision-type-changed' };
   assert.deepEqual(photoDeliveryToggleTarget(lineReview).apply, { kind: 'inclusion', include: false });
   assert.deepEqual(applyPhotoDeliveryChoice({}, 'l', 'p', { disabled: true, apply: { kind: 'intent', intent: 'transfer' } }), { ok: false, error: 'unavailable', changedIds: [] });
@@ -225,4 +225,30 @@ test('pills and selected destination controls share dark fills; marker green sta
   assert.match(css, /photo-delivery-row-button\[aria-disabled\][^}]*border-style: dashed/);
   assert.match(tree, /linear-gradient\(90deg, var\(--gmi-delivery-gmi\) 0 50%, var\(--gmi-delivery-gml\) 50% 100%\)/);
   assert(!css.includes('#22c55e') && !tree.includes('#22c55e'), 'bright green belongs to map presentation only');
+});
+
+
+test('explicit inspector exclusion restores to GMI on pill/marker click; included clicks never exclude', async () => {
+  const f = await setup(), a = f.byObject(KUM1), sibling = f.byObject(KUM2);
+  const choices = () => photoDeliveryOptions(f.entry(a));
+  assert.deepEqual(choices().map((item) => item.key), ['gmi', 'gml', 'excluded']);
+  const excluded = choices().find((item) => item.key === 'excluded');
+  assert.deepEqual(excluded.apply, { kind: 'intent', intent: 'exclude' });
+  assert(applyPhotoDeliveryChoice(f.session, f.layer.id, a.id, excluded).ok);
+  assert.equal(f.entry(a).status, 'exclude'); assert.equal(f.entry(sibling).status, 'keep-link');
+  assert.equal(f.session.getLayerDelivery(f.layer.id).assets[a.assetId].status, 'partial');
+  assert.equal(choices().find((item) => item.active).key, 'excluded');
+  assert.equal(photoDeliveryShortLabel(f.entry(a)), 'Ikke med');
+  const marker = photoMarkerOptions('markers', { colourMode: 'delivery', deliveryStatus: 'exclude' });
+  assert(marker.className.includes('photo-delivery-excluded'));
+  assert(marker.html.includes(PHOTO_DELIVERY_COLOURS.excluded.color));
+  const siblings = [a, sibling];
+  f.session.setDeliveryIntent(f.layer.id, siblings.map((photo) => photo.id), 'exclude');
+  assert.equal(f.session.getLayerDelivery(f.layer.id).assets[a.assetId].status, 'excluded');
+  assert.equal(f.toggle(a).entry.status, 'keep-link');
+  assert.equal(f.entry(sibling).status, 'exclude');
+  for (let i = 0; i < 6; i++) assert.equal(f.toggle(a).entry.status, i % 2 ? 'keep-link' : 'transfer');
+  const review = { linked: false, status: 'review', reason: 'link-removed', canInclude: true };
+  assert.equal(photoDeliveryOptions(review)[0].disabled, false);
+  assert.deepEqual(photoDeliveryOptions(review)[0].apply, { kind: 'inclusion', include: false });
 });

@@ -115,15 +115,15 @@ const stagedDot = (staged) => staged ? '<span class="photo-marker-staged-dot" ar
 export const PHOTO_DELIVERY_COLOURS = Object.freeze({
   gmi: Object.freeze({ color: '#1e40af', label: 'Beholdes i GMI', short: 'GMI' }),
   gml: Object.freeze({ color: '#22c55e', label: 'Til GML', short: 'GML' }),
-  excluded: Object.freeze({ color: '#64748b', label: 'Ikke med i GML', short: 'Ikke med' }),
+  excluded: Object.freeze({ color: '#64748b', label: 'Ikke med i leveransen', short: 'Ikke med' }),
   review: Object.freeze({ color: '#b06a08', label: 'Krever gjennomgang', short: 'Gjennomg\u00e5' }),
   mixed: Object.freeze({ color: '#64748b', label: 'Ulike leveringsvalg', short: 'Ulike' }),
 });
 // Planned state of one occurrence (a plan, never a claim that anything is exported yet).
 export const PHOTO_DELIVERY_LABELS = Object.freeze({ 'keep-link': 'Beholdes i GMI', transfer: 'Til GML',
-  include: 'Tas med i GML uten GMI-lenke', 'not-selected': 'Ikke med i GML', review: 'Krever gjennomgang' });
+  exclude: 'Ikke med i leveransen', include: 'Tas med i GML uten GMI-lenke', 'not-selected': 'Ikke med i leveransen', review: 'Krever gjennomgang' });
 export function photoDeliveryColourState(status) {
-  return ({ 'keep-link': 'gmi', transfer: 'gml', include: 'gml', 'not-selected': 'excluded', review: 'review' })[status] || 'review';
+  return ({ 'keep-link': 'gmi', transfer: 'gml', include: 'gml', 'not-selected': 'excluded', exclude: 'excluded', review: 'review' })[status] || 'review';
 }
 export function photoStackDeliveryState(members, entries) {
   const states = new Set(members.map((member) => photoDeliveryColourState(entries?.[member.id]?.status)));

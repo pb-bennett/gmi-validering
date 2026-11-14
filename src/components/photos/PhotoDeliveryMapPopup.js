@@ -19,7 +19,7 @@ export default function PhotoDeliveryMapPopup({ members, workspace, layerId, onL
       const reason = photoDeliveryUnavailableReason(entry);
       return <li key={member.id} className="photo-delivery-popup-occurrence" data-occurrence-id={member.id}>
         <p className="photo-delivery-popup-name"><span>{member.originalFilename}</span><small>{object}</small></p>
-        {entry && <PhotoDeliveryToggle compact entry={entry} layerId={layerId} label={`Leveringsvalg for ${member.originalFilename} · ${object}`}
+        {entry && <PhotoDeliveryToggle compact allowExclusion={false} entry={entry} layerId={layerId} label={`Leveringsvalg for ${member.originalFilename} · ${object}`}
           onResult={(result) => workspace.onDeliveryResult?.(member.id, result)} />}
         {reason && <small className="photo-delivery-popup-reason">{reason}</small>}
       </li>;

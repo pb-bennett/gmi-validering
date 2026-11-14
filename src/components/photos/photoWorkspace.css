@@ -81,7 +81,7 @@
 .photo-delivery-row-button:hover:not([aria-disabled]), .photo-delivery-option[aria-checked=true]:hover:not([aria-disabled]) { filter: brightness(.88); }
 .photo-delivery-row-button[aria-disabled] { cursor: not-allowed; border-style: dashed; }
 
-/* Inspector and popup toggle: two rounded pills; the chosen one is filled in its destination colour and checked. */
+/* Inspector and popup toggle: rounded destination pills; the chosen one is filled in its destination colour and checked. */
 .photo-delivery-section .photo-delivery-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; flex-wrap: wrap; }
 .photo-delivery-section .photo-delivery-row h3 { margin: 0; }
 .photo-delivery-toggle { display: inline-flex; gap: 4px; padding: 2px; border: 1px solid var(--gmi-border-strong); border-radius: 999px; background: var(--gmi-surface-soft); }
@@ -92,8 +92,8 @@
 .photo-delivery-option[data-destination=gml]:hover:not([aria-disabled]):not([aria-checked=true]) { border-color: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml); }
 .photo-delivery-option[aria-checked=true][data-destination=gmi] { background: var(--gmi-delivery-gmi); border-color: var(--gmi-delivery-gmi); color: var(--gmi-delivery-gmi-ink); }
 .photo-delivery-option[aria-checked=true][data-destination=gml] { background: var(--gmi-delivery-gml); border-color: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml-ink); }
-.photo-delivery-option[aria-checked=true][data-destination=excluded] { background: var(--gmi-delivery-neutral); border-color: var(--gmi-delivery-neutral); color: #fff; }
-.photo-delivery-option[aria-disabled] { color: var(--gmi-text-subtle); cursor: not-allowed; }
+.photo-delivery-option[aria-checked=true][data-destination=excluded] { background: var(--gmi-delivery-neutral); border-color: var(--gmi-delivery-neutral); color: var(--gmi-delivery-gmi-ink); }
+.photo-delivery-option[aria-disabled] { opacity: .55; color: var(--gmi-text-subtle); cursor: not-allowed; }
 .photo-delivery-option[aria-disabled][aria-checked=true] { cursor: default; }
 .photo-delivery-toggle[data-delivery-status=review] { border-color: var(--gmi-validation-warning-border); background: var(--gmi-validation-warning-bg); }
 .photo-delivery-toggle-compact .photo-delivery-option { min-width: 46px; min-height: 24px; padding: 0 8px; font-size: 11px; }

@@ -5,7 +5,7 @@ import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { parseGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
 import { photoWorkspaceView } from '../src/lib/photos/photoWorkspaceView.mjs';
 import { DEFAULT_PHOTO_FILTER } from '../src/lib/photos/photoWorkspaceState.mjs';
-import { photoDeliveryOccurrenceKey } from '../src/lib/photos/photoDeliveryIntent.mjs';
+import { photoDeliveryOccurrenceKey, photoDeliveryEntry, buildPhotoDeliverySnapshot } from '../src/lib/photos/photoDeliveryIntent.mjs';
 import { buildPhotoExportPlan, capturePhotoExportSnapshot } from '../src/lib/photos/export/photoExportPlan.mjs';
 import { serializePhotoExport } from '../src/lib/photos/export/photoExportXml.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
@@ -65,8 +65,8 @@ test('defaults: GMI-linked occurrences keep their link, unlinked occurrences are
   assert.equal(entry.canInclude, false);
   assert.equal(entry.canTransfer, false);
   const { summary } = delivery();
-  assert.deepEqual(summary.occurrences, { 'keep-link': 4, transfer: 0, include: 0, 'not-selected': 1, review: 0 });
-  assert.deepEqual(summary.assets, { 'keep-link': 3, transfer: 0, include: 0, 'not-selected': 1, review: 0 });
+  assert.deepEqual(summary.occurrences, { 'keep-link': 4, transfer: 0, exclude: 0, include: 0, 'not-selected': 1, review: 0 });
+  assert.deepEqual(summary.assets, { 'keep-link': 3, transfer: 0, exclude: 0, include: 0, 'not-selected': 1, review: 0 });
   assert.equal(summary.active, false);
 });
 
@@ -241,7 +241,7 @@ test('M9 snapshot: deterministic, stale-detectable, and its removal selections a
   const source = session.getLayer(layer.id).spatialSources.find((item) => item.kind === 'gmi');
   assert.deepEqual(snapshot.sources.map((item) => [item.sourceId, item.fingerprint, item.live, item.transferCount, item.retainedCount]),
     [[source.id, source.fingerprint, true, 2, 1]]);
-  assert.deepEqual(snapshot.counts, { transferOccurrences: 2, retainedOccurrences: 1, includedOccurrences: 1, unresolvedOccurrences: 0,
+  assert.deepEqual(snapshot.counts, { excludedOccurrences: 0, excludedEntirelyAssets: 0, partialAssets: 0, transferOccurrences: 2, retainedOccurrences: 1, includedOccurrences: 1, unresolvedOccurrences: 0,
     linksWithoutOccurrence: 2, transferredAssets: 2, includedAssets: 1 });
   assert.deepEqual(snapshot.linksWithoutOccurrence.map((item) => item.reason), ['line-object', 'line-object']);
   for (const selection of snapshot.removalSelections) {
@@ -273,7 +273,7 @@ test('workspace filter and counts by delivery status; occurrences and assets cou
   session.setDeliveryIntent(layer.id, [byObject(KUM1).id], 'transfer');
   session.setCombinedDeliveryInclusion(layer.id, [byName('d.jpg')[0].id], true);
   const view = (deliveryFilter) => photoWorkspaceView(photos(), { filter: { ...DEFAULT_PHOTO_FILTER, delivery: deliveryFilter } }, { delivery: delivery() });
-  assert.deepEqual(view('all').counts.delivery, { all: 5, 'keep-link': 3, transfer: 1, include: 1, 'not-selected': 0, review: 0 });
+  assert.deepEqual(view('all').counts.delivery, { all: 5, 'keep-link': 3, transfer: 1, exclude: 0, include: 1, 'not-selected': 0, review: 0 });
   assert.deepEqual(view('transfer').rows.map((photo) => photo.id), [byObject(KUM1).id]);
   assert.deepEqual(view('include').rows.map((photo) => photo.originalFilename), ['d.jpg']);
   assert.equal(view('keep-link').rows.length, 3);
@@ -330,4 +330,73 @@ test('clearing the session and deleting the layer drop every decision', async ()
   assert.equal(session.getLayerDelivery(layer.id), null);
   assert.equal(session.getPhotoDeliverySnapshot(layer.id), null);
   session.clear();
+});
+
+
+test('exclusion is occurrence-scoped, reversible, counted and source preserving; asset states include retained line links', async () => {
+  const f = await setup();
+  const a = f.byObject(KUM1), sibling = f.byObject(KUM2), b = f.byObject(KUM3);
+  const original = JSON.stringify(f.photos()), bytes = Buffer.from(f.bytes);
+  const file = f.session.getAssetFile(a.assetId), photoBytes = await file.arrayBuffer();
+  const before = f.session.getPhotoDeliverySnapshot(f.layer.id);
+  assert.equal(before.assetStates[a.assetId].status, 'included');
+  let publishes = 0; f.session.subscribe(() => publishes++);
+  assert(f.session.setDeliveryIntent(f.layer.id, [a.id], 'exclude').ok);
+  assert.equal(publishes, 1);
+  assert.deepEqual(f.session.setDeliveryIntent(f.layer.id, [a.id], 'exclude').changedIds, []);
+  assert.equal(publishes, 1);
+  assert.equal(f.status(sibling), 'keep-link');
+  let snap = f.session.getPhotoDeliverySnapshot(f.layer.id);
+  assert.notEqual(snap.stateKey, before.stateKey);
+  assert(!f.session.isPhotoDeliverySnapshotCurrent(before));
+  assert.deepEqual(snap.exclusions.map((row) => row.photoId), [a.id]);
+  assert.deepEqual(snap.removalSelections, [], 'exclusions do not enter M7 in slice 1');
+  assert.equal(snap.assetStates[a.assetId].status, 'partial');
+  assert.deepEqual(snap.assets.excludedButDelivered, [a.assetId]);
+  assert.equal(f.delivery().summary.occurrences.exclude, 1);
+  const view = photoWorkspaceView(f.photos(), { filter: { ...DEFAULT_PHOTO_FILTER, delivery: 'exclude' } }, { delivery: f.delivery() });
+  assert.deepEqual(view.rows.map((photo) => photo.id), [a.id]);
+  assert.equal(view.counts.delivery.exclude, 1);
+  f.session.setDeliveryIntent(f.layer.id, [sibling.id, b.id], 'exclude');
+  snap = f.session.getPhotoDeliverySnapshot(f.layer.id);
+  assert.equal(snap.assetStates[a.assetId].status, 'partial', 'a line link still delivers the file');
+  assert.equal(snap.assetStates[b.assetId].status, 'excluded');
+  assert(snap.assets.excludedEntirely.includes(b.assetId));
+  assert.equal(snap.assetStates[f.byName('d.jpg')[0].assetId].status, 'excluded', 'unlinked default stays not selected');
+  f.session.setDeliveryIntent(f.layer.id, [a.id], 'keep-link');
+  assert.equal(f.status(a), 'keep-link');
+  assert.equal(f.status(sibling), 'exclude');
+  assert.equal(JSON.stringify(f.photos()), original);
+  assert.deepEqual(Buffer.from(f.bytes), bytes);
+  assert.deepEqual(await file.arrayBuffer(), photoBytes);
+});
+
+test('exclusions retain their intent under every stale reason and unsafe writes fail atomically', async () => {
+  const f = await setup({ loaded: true });
+  const a = f.byObject(KUM1), b = f.byObject(KUM3);
+  f.session.setDeliveryIntent(f.layer.id, [a.id], 'exclude');
+  const layer = f.session.getLayer(f.layer.id), source = layer.spatialSources.find((s) => s.kind === 'gmi');
+  const decision = { kind: 'gmi', occurrenceKey: a.occurrence.key, intent: 'exclude' };
+  const cases = [
+    [{ ...layer, spatialSources: [] }, a, decision, 'source-missing'],
+    [{ ...layer, spatialSources: [{ ...source, fingerprint: 'changed' }] }, a, decision, 'fingerprint-mismatch'],
+    [{ ...layer, spatialSources: [{ ...source, loadedBinding: { live: false } }] }, a, decision, 'source-not-live'],
+    [{ ...layer, spatialSources: [{ ...source, associationLedger: {} }] }, a, decision, 'association-lost'],
+    [layer, { ...a, occurrence: { ...a.occurrence, referenceIds: [] } }, decision, 'association-changed'],
+    [layer, a, { ...decision, occurrenceKey: 'old' }, 'occurrence-changed'],
+    [{ ...layer, spatialSources: [] }, { ...a, occurrence: null }, decision, 'link-removed'],
+  ];
+  for (const [basis, record, choice, reason] of cases) {
+    const entry = photoDeliveryEntry(basis, record, choice);
+    assert.equal(entry.status, 'review', reason); assert.equal(entry.reason, reason);
+    const snapshot = buildPhotoDeliverySnapshot({ ...basis, photoIds: [record.id] }, new Map([[record.id, record]]), new Map([[record.id, choice]]));
+    assert.equal(snapshot.unresolved[0].decision, 'exclude');
+    assert(snapshot.readiness.issues.includes('unresolved-decisions'));
+    assert.deepEqual(snapshot.exclusions, []); assert.deepEqual(snapshot.removalSelections, []);
+  }
+  f.setLive(false); f.session.reconcileLoadedGmiBindings(() => false);
+  let publishes = 0; f.session.subscribe(() => publishes++);
+  assert.equal(f.session.setDeliveryIntent(f.layer.id, [a.id, b.id], 'exclude').error, 'association-unavailable');
+  assert.equal(publishes, 0); assert.equal(f.status(b), 'keep-link'); assert.equal(f.status(a), 'review');
+  assert.equal(f.session.setDeliveryIntent(f.layer.id, [a.id, 'missing'], 'exclude').error, 'stale-occurrence');
 });

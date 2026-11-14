@@ -94,6 +94,27 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       await browser.waitFor(`${option('gml')}.getAttribute('aria-checked') === 'true'`);
       assert.equal(await pill('Kum 2'), 'GMI');
 
+      // Third choice is explicit; arrows include it and restoring a pill returns to GMI.
+      await pressKey('ArrowRight', 39);
+      await browser.waitFor(`${option('excluded')}.getAttribute('aria-checked') === 'true' && document.activeElement === ${option('excluded')}`);
+      assert.equal(await pill('Kum 1'), 'Ikke med');
+      assert.equal(await pill('Kum 2'), 'GMI');
+      assert.match(await browser.evaluate(`${section}.innerText`), /Bildefilen er fortsatt med via andre/);
+      assert.match(await browser.evaluate(`${option('excluded')}.title`), /Behold bildet i FOTO/);
+      assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary").innerText'), 'Samlet levering: 1 ikke med i leveransen');
+      for (const [width, height] of [[1280, 720], [1366, 768]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        assert(await noOverflow());
+        await browser.evaluate('new Promise(resolve => setTimeout(resolve, 200))');
+        assert.deepEqual(await browser.evaluate(`(() => { const s=getComputedStyle(${option('excluded')}); return [s.backgroundColor,s.color]; })()`), ['rgb(100, 116, 139)', 'rgb(255, 255, 255)']);
+        await screenshot(browser, `slice1-partial-exclusion-${width}x${height}`);
+      }
+      await browser.evaluate(`${option('excluded')}.focus()`);
+      await pressKey('ArrowRight', 39);
+      await browser.waitFor(`${option('gmi')}.getAttribute('aria-checked') === 'true'`);
+      await browser.evaluate(`${option('gml')}.click()`);
+      await browser.waitFor(`${option('gml')}.getAttribute('aria-checked') === 'true'`);
+
       // Navigation: to Kum 2 through the occurrence switcher, to another photo and back.
       await browser.evaluate(`Array.from(${switcher}.querySelectorAll('button')).find((item) => item.innerText.includes('Kum 2')).click()`);
       await browser.waitFor(`${rowOf('Kum 2')}.querySelector('button.photo-workspace-row').getAttribute('aria-pressed')==='true'`);
@@ -126,6 +147,14 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
         await browser.evaluate(`${rowOf(name)}.querySelector('button.photo-delivery-row-button').click()`);
         await browser.waitFor(`${rowOf(name)}.querySelector('.photo-delivery-pill')?.innerText === ${JSON.stringify(expected)}`);
       };
+      await select('Kum 1');
+      await browser.evaluate(`${option('excluded')}.click()`);
+      await browser.waitFor(`${option('excluded')}.getAttribute('aria-checked') === 'true'`);
+      assert.equal(await counts(), 'GMI 3 | GML 1 | Ikke med 1');
+      await browser.evaluate(`${rowOf('Kum 1')}.querySelector('button.photo-delivery-row-button').click()`);
+      await browser.waitFor(`${option('gmi')}.getAttribute('aria-checked') === 'true'`);
+      await browser.evaluate(`${rowOf('Kum 1')}.querySelector('button.photo-delivery-row-button').click()`);
+      await browser.waitFor(`${option('gml')}.getAttribute('aria-checked') === 'true'`);
       // Row, filename and thumbnail navigate in planning without changing decisions.
       await select('Kum 2');
       assert.equal(await pill('Kum 2'), 'GMI');
@@ -184,7 +213,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       await browser.evaluate('document.querySelector("button[aria-label^=\'Filtrer bilder\']").click()');
       await browser.waitFor('document.querySelector(".photo-filter-panel")');
       const options = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-filter-panel fieldset')).find((item) => item.querySelector('legend').innerText==='Samlet levering').innerText`);
-      for (const label of ['Beholdes i GMI (2)', 'Overføres til GML (2)', 'Tas med uten GMI-lenke (1)', 'Ikke valgt (0)', 'Krever gjennomgang (0)']) assert(options.includes(label), label);
+      for (const label of ['Beholdes i GMI (2)', 'Overføres til GML (2)', 'Tas med uten GMI-lenke (1)', 'Ikke med i leveransen (0)', 'Ikke valgt (0)', 'Krever gjennomgang (0)']) assert(options.includes(label), label);
       await browser.evaluate(`document.querySelector('.photo-filter-panel input[value="transfer"]').click()`);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 2');
       await screenshot(browser, 'm8-filter-transfer');

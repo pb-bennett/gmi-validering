@@ -152,7 +152,7 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
         unavailable={!placed} className="photo-inspector-locate" onClick={() => onLocate?.({ layerId: layer.id, photoId: photo.id, ...(staged?.position ? { position: current.position } : {}) })} />
     </div>
 
-    <PhotoDeliveryControls photo={photo} layerId={layer.id} entry={delivery?.byPhotoId[photo.id]} onResult={(result) => onDeliveryResult?.(photo.id, result)} />
+    <PhotoDeliveryControls photo={photo} layerId={layer.id} entry={delivery?.byPhotoId[photo.id]} assetDelivery={delivery?.assets[photo.assetId]} onResult={(result) => onDeliveryResult?.(photo.id, result)} />
 
     <Section title="Opptak" scope="gjelder bildet (alle plasseringer)" className="photo-inspector-capture">
       <dl className="photo-inspector-facts">

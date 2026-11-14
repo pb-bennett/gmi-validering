@@ -11,7 +11,6 @@ const option = (key, apply, { active = false, disabled = false, reason = null } 
   Object.freeze({ key, label: PHOTO_DELIVERY_COLOURS[key].short, apply, active, disabled, reason });
 
 const LINE_LINK = PHOTO_DELIVERY_REASON_TEXT['linked-without-occurrence'];
-const STALE_TRANSFER = 'Plasseringen var valgt for GML med en GMI-lenke som ikke finnes lenger. Velg GML for å ta den med, eller koble kilden på nytt.';
 
 /**
  * The valid destinations of one occurrence, in display order. A GMI-linked occurrence offers GMI and GML; one without
@@ -23,15 +22,16 @@ export function photoDeliveryOptions(entry) {
   if (entry.linked) {
     return [option('gmi', { kind: 'intent', intent: 'keep-link' }, { active: entry.status === 'keep-link' }),
       option('gml', { kind: 'intent', intent: 'transfer' }, { active: entry.status === 'transfer', disabled: !entry.canTransfer,
-        reason: entry.canTransfer ? null : `Kan ikke overføres nå: ${PHOTO_DELIVERY_REASON_TEXT[entry.association.state] || 'GMI-koblingen er ikke sikker.'}` })];
+        reason: entry.canTransfer ? null : `Kan ikke overføres nå: ${PHOTO_DELIVERY_REASON_TEXT[entry.association.state] || 'GMI-koblingen er ikke sikker.'}` }),
+      option('excluded', { kind: 'intent', intent: 'exclude' }, { active: entry.status === 'exclude', disabled: !entry.canTransfer,
+        reason: entry.canTransfer ? null : `Kan ikke tas ut nå: ${PHOTO_DELIVERY_REASON_TEXT[entry.association.state] || 'GMI-koblingen er ikke sikker.'}` })];
   }
   if (entry.linkedWithoutOccurrence) {
     // Only an inclusion made before the GMI link appeared can be cleared here; otherwise the link simply stays in GMI.
     const review = entry.status === 'review';
     return [option('gmi', review ? { kind: 'inclusion', include: false } : null, { active: !review, disabled: !review, reason: review ? null : LINE_LINK })];
   }
-  const staleTransfer = entry.status === 'review' && entry.reason === 'link-removed';
-  return [option('excluded', { kind: 'inclusion', include: false }, { active: entry.status === 'not-selected', disabled: staleTransfer, reason: staleTransfer ? STALE_TRANSFER : null }),
+  return [option('excluded', { kind: 'inclusion', include: false }, { active: entry.status === 'not-selected' }),
     option('gml', { kind: 'inclusion', include: true }, { active: entry.status === 'include', disabled: !entry.canInclude })];
 }
 
@@ -42,6 +42,7 @@ export function photoDeliveryOptions(entry) {
 export function photoDeliveryToggleTarget(entry) {
   const available = photoDeliveryOptions(entry).filter((item) => !item.disabled && item.apply);
   if (entry?.status === 'review') return available[0] || null;
+  if (entry?.linked) return available.find((item) => item.key === (entry.status === 'keep-link' ? 'gml' : 'gmi')) || null;
   return available.find((item) => !item.active) || null;
 }
 

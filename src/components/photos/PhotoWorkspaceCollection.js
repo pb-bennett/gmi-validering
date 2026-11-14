@@ -77,6 +77,7 @@ export function photoDeliverySummaryText(summary) {
   const { occurrences, assets } = summary;
   const parts = [];
   if (occurrences.transfer) parts.push(`${occurrences.transfer} overføres til GML${assets.transfer !== occurrences.transfer ? ` (${plural(assets.transfer, 'bilde', 'bilder')})` : ''}`);
+  if (occurrences.exclude) parts.push(`${occurrences.exclude} ikke med i leveransen`);
   if (occurrences.include) parts.push(`${occurrences.include} tas med uten GMI-lenke`);
   if (occurrences.review) parts.push(`${occurrences.review} krever gjennomgang`);
   return parts.length ? `Samlet levering: ${parts.join(' · ')}` : null;

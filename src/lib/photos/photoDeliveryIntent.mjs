@@ -3,7 +3,7 @@
 // Pure derivation. The photo session stores one explicit decision per
 // occurrence (record id) in its own map, outside the records, so no
 // positioning, metadata or edit action can touch it:
-//   { kind: 'gmi', occurrenceKey, intent: 'transfer' }   GMI-linked occurrence
+//   { kind: 'gmi', occurrenceKey, intent: 'transfer' | 'exclude' }   GMI-linked occurrence
 //   { kind: 'unlinked', include: true }                   occurrence without a GMI link
 // The absence of a decision is the default: 'keep-link' for a GMI-linked
 // occurrence, not included for an unlinked one.
@@ -19,11 +19,12 @@
 // selections to M7, which keeps the authoritative removal eligibility.
 import { gmiObjectLabel } from './gmiPhotoSource.mjs';
 
-export const PHOTO_DELIVERY_INTENTS = Object.freeze({ KEEP_LINK: 'keep-link', TRANSFER: 'transfer' });
+export const PHOTO_DELIVERY_INTENTS = Object.freeze({ KEEP_LINK: 'keep-link', TRANSFER: 'transfer', EXCLUDE: 'exclude' });
 
 export const PHOTO_DELIVERY_STATUS = Object.freeze({
   KEEP_LINK: 'keep-link',
   TRANSFER: 'transfer',
+  EXCLUDE: 'exclude',
   INCLUDE: 'include',
   NOT_SELECTED: 'not-selected',
   REVIEW: 'review',
@@ -34,6 +35,7 @@ export const PHOTO_DELIVERY_FILTERS = Object.freeze([
   Object.freeze({ key: 'keep-link', label: 'Beholdes i GMI' }),
   Object.freeze({ key: 'transfer', label: 'Overføres til GML' }),
   Object.freeze({ key: 'include', label: 'Tas med uten GMI-lenke' }),
+  Object.freeze({ key: 'exclude', label: 'Ikke med i leveransen' }),
   Object.freeze({ key: 'not-selected', label: 'Ikke valgt' }),
   Object.freeze({ key: 'review', label: 'Krever gjennomgang' }),
 ]);
@@ -41,6 +43,7 @@ export const PHOTO_DELIVERY_FILTERS = Object.freeze([
 export const PHOTO_DELIVERY_STATUS_LABELS = Object.freeze({
   'keep-link': 'Beholdes i GMI',
   transfer: 'Overføres til GML',
+  exclude: 'Ikke med i leveransen',
   include: 'Tas med uten GMI-lenke',
   'not-selected': 'Ikke valgt',
   review: 'Krever gjennomgang',
@@ -55,7 +58,7 @@ export const PHOTO_DELIVERY_REASON_TEXT = Object.freeze({
   'association-changed': 'GMI-koblingen er endret etter at plasseringen ble laget.',
   'occurrence-changed': 'Plasseringen er koblet til et annet GMI-objekt enn da valget ble gjort.',
   'decision-type-changed': 'Bildet ble valgt uten GMI-lenke, men plasseringen er nå koblet til GMI.',
-  'link-removed': 'Plasseringen var valgt for overføring, men har ikke lenger en GMI-kobling.',
+  'link-removed': 'Plasseringen hadde et leveringsvalg for en GMI-lenke som ikke finnes lenger. Velg Ikke med eller GML for å avklare.',
   'linked-without-occurrence': 'Bildet er koblet til et GMI-objekt uten egen plassering i FOTO (for eksempel en ledning). Lenken beholdes i GMI.',
 });
 
@@ -117,9 +120,9 @@ export function photoDeliveryEntry(layer, record, decision = null) {
     intent = decision?.kind === 'gmi' ? decision.intent : PHOTO_DELIVERY_INTENTS.KEEP_LINK;
     if (decision && decision.kind !== 'gmi') { status = PHOTO_DELIVERY_STATUS.REVIEW; reason = 'decision-type-changed'; intent = null; }
     else if (decision?.kind === 'gmi' && decision.occurrenceKey !== occurrence.key) { status = PHOTO_DELIVERY_STATUS.REVIEW; reason = 'occurrence-changed'; }
-    else if (intent === PHOTO_DELIVERY_INTENTS.TRANSFER && association.state !== 'confident') { status = PHOTO_DELIVERY_STATUS.REVIEW; reason = association.state; }
+    else if ([PHOTO_DELIVERY_INTENTS.TRANSFER, PHOTO_DELIVERY_INTENTS.EXCLUDE].includes(intent) && association.state !== 'confident') { status = PHOTO_DELIVERY_STATUS.REVIEW; reason = association.state; }
     else status = intent;
-  } else if (decision?.kind === 'gmi' && decision.intent === PHOTO_DELIVERY_INTENTS.TRANSFER) {
+  } else if (decision?.kind === 'gmi' && [PHOTO_DELIVERY_INTENTS.TRANSFER, PHOTO_DELIVERY_INTENTS.EXCLUDE].includes(decision.intent)) {
     status = PHOTO_DELIVERY_STATUS.REVIEW; reason = 'link-removed';
   } else if (evidence.confident) {
     // Linked from a GMI object that has no FOTO occurrence: the link stays in the GMI. An inclusion made
@@ -169,14 +172,30 @@ export function summarizePhotoDelivery(entries) {
     linked,
     unlinked: entries.length - linked,
     // Any explicit choice the user made (or one that needs attention).
-    active: occurrences.transfer + occurrences.include + occurrences.review > 0,
+    active: occurrences.transfer + occurrences.exclude + occurrences.include + occurrences.review > 0,
   });
+}
+
+/** Asset status is derived across placements and retained links, never stored on photo records. */
+export function derivePhotoAssetDelivery(entries, linksWithoutOccurrence = []) {
+  const ids = sorted(new Set([...entries, ...linksWithoutOccurrence].map((item) => item.assetId)));
+  return Object.freeze(Object.fromEntries(ids.map((assetId) => {
+    const placements = entries.filter((entry) => entry.assetId === assetId);
+    const omitted = placements.filter((entry) => ['exclude', 'not-selected'].includes(entry.status)).length;
+    const delivered = placements.filter((entry) => ['keep-link', 'transfer', 'include'].includes(entry.status)).length
+      + linksWithoutOccurrence.filter((link) => link.assetId === assetId).length;
+    const status = placements.some((entry) => entry.status === 'review') ? 'review'
+      : omitted ? delivered ? 'partial' : 'excluded' : 'included';
+    return [assetId, Object.freeze({ assetId, status, excludedOccurrences: omitted, deliveredPlacements: delivered })];
+  })));
 }
 
 /** Delivery entries for every occurrence of a layer, keyed by photo id. */
 export function photoLayerDelivery(layer, records, decisions) {
   const entries = layer.photoIds.map((id) => photoDeliveryEntry(layer, records.get(id), decisions.get(id) || null));
+  const assetStates = buildPhotoDeliverySnapshot(layer, records, decisions).assetStates;
   return Object.freeze({
+    assets: assetStates,
     byPhotoId: Object.freeze(Object.fromEntries(entries.map((entry) => [entry.photoId, entry]))),
     summary: summarizePhotoDelivery(entries),
   });
@@ -201,7 +220,7 @@ const occurrenceView = (record, entry, edge) => Object.freeze({
  * snapshot (session.isPhotoDeliverySnapshotCurrent) to reject a stale plan.
  */
 export function buildPhotoDeliverySnapshot(layer, records, decisions, { generation = 0 } = {}) {
-  const transfers = [], retained = [], included = [], unresolved = [];
+  const transfers = [], exclusions = [], retained = [], included = [], unresolved = [];
   const order = (a, b) => compare(a.assetId, b.assetId) || compare(a.occurrenceKey ?? '', b.occurrenceKey ?? '') || compare(a.photoId, b.photoId);
   const occurrenceKeys = new Set();
   for (const id of layer.photoIds) {
@@ -210,17 +229,18 @@ export function buildPhotoDeliverySnapshot(layer, records, decisions, { generati
     if (record.occurrence) occurrenceKeys.add(record.occurrence.key);
     const { edge } = record.occurrence ? photoOccurrenceAssociation(layer, record) : { edge: null };
     if (entry.status === PHOTO_DELIVERY_STATUS.TRANSFER) transfers.push(occurrenceView(record, entry, edge));
+    else if (entry.status === PHOTO_DELIVERY_STATUS.EXCLUDE) exclusions.push(occurrenceView(record, entry, edge));
     else if (entry.status === PHOTO_DELIVERY_STATUS.KEEP_LINK) { if (record.occurrence) retained.push(occurrenceView(record, entry, edge)); }
     else if (entry.status === PHOTO_DELIVERY_STATUS.INCLUDE) included.push(Object.freeze({ photoId: record.id, assetId: record.assetId,
       ambiguousGmiReference: entry.ambiguousGmiReference }));
     else if (entry.status === PHOTO_DELIVERY_STATUS.REVIEW) {
       unresolved.push(Object.freeze({ photoId: record.id, assetId: record.assetId, linked: entry.linked, reason: entry.reason,
-        decision: decisions.get(id)?.kind === 'unlinked' ? 'include' : 'transfer',
+        decision: decisions.get(id)?.kind === 'unlinked' ? 'include' : decisions.get(id)?.intent,
         occurrenceKey: entry.association.occurrenceKey, sourceId: entry.association.sourceId,
         sourceFingerprint: entry.association.sourceFingerprint, objectKey: entry.association.objectKey }));
     }
   }
-  for (const list of [transfers, retained, included, unresolved]) list.sort(order);
+  for (const list of [transfers, exclusions, retained, included, unresolved]) list.sort(order);
 
   // Confident links that have no FOTO occurrence (line objects, removed placements):
   // they always stay in the GMI and cannot be transferred from FOTO.
@@ -261,10 +281,14 @@ export function buildPhotoDeliverySnapshot(layer, records, decisions, { generati
   if (transferFingerprints.length > 1) issues.push('multiple-gmi-sources');
   if (sources.some((source) => !source.live && transfers.some((item) => item.sourceId === source.sourceId))) issues.push('gmi-source-not-live');
   if (included.some((item) => item.ambiguousGmiReference)) issues.push('included-photo-ambiguously-referenced');
+  const assetStates = derivePhotoAssetDelivery(layer.photoIds.map((id) => photoDeliveryEntry(layer, records.get(id), decisions.get(id))), linksWithoutOccurrence);
+  const assetsWithStatus = (status) => Object.freeze(Object.values(assetStates).filter((asset) => asset.status === status).map((asset) => asset.assetId));
   const body = {
     layerId: layer.id,
     sources,
     transfers,
+    exclusions,
+    assetStates,
     retained,
     included,
     unresolved,
@@ -278,20 +302,25 @@ export function buildPhotoDeliverySnapshot(layer, records, decisions, { generati
     ...body,
     sources: Object.freeze(sources),
     transfers: Object.freeze(transfers),
+    exclusions: Object.freeze(exclusions),
     retained: Object.freeze(retained),
     included: Object.freeze(included),
     unresolved: Object.freeze(unresolved),
     linksWithoutOccurrence: Object.freeze(linksWithoutOccurrence),
     removalSelections: Object.freeze(removalSelections),
     assets: Object.freeze({
+      excluded: distinct(exclusions),
+      excludedEntirely: assetsWithStatus('excluded'),
+      excludedButDelivered: assetsWithStatus('partial'),
       transferred: transferredAssets,
       included: distinct(included),
       retainedLinked: retainedAssets,
       // Shared photographs: transferred from one object, still linked from another.
       transferredAndRetained: Object.freeze(transferredAssets.filter((id) => retainedAssets.includes(id))),
-      all: distinct([...transfers, ...retained, ...included, ...unresolved, ...linksWithoutOccurrence]),
+      all: Object.freeze(Object.keys(assetStates)),
     }),
     counts: Object.freeze({
+      excludedOccurrences: exclusions.length, excludedEntirelyAssets: assetsWithStatus('excluded').length, partialAssets: assetsWithStatus('partial').length,
       transferOccurrences: transfers.length, retainedOccurrences: retained.length, includedOccurrences: included.length,
       unresolvedOccurrences: unresolved.length, linksWithoutOccurrence: linksWithoutOccurrence.length,
       transferredAssets: transferredAssets.length, includedAssets: distinct(included).length,

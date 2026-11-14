@@ -52,6 +52,7 @@ const messages = {
   'attachment-changed': 'En originalfil er endret etter kontrollen. Gå tilbake og kontroller leveransen på nytt.',
   'stale-plan': 'Data eller valg er endret etter kontrollen. Gå tilbake til Innhold og kontroller leveransen på nytt.',
   'blocked-plan': 'Leveransen har blokkerende feil. Rett feilene og kontroller på nytt.',
+  'exclusions-not-supported-yet': 'Samlet og delt levering støtter ikke Ikke med for GMI-plasseringer ennå. Velg GMI eller GML for disse plasseringene før eksport.',
   'unresolved-decisions': 'Et leveransevalg krever gjennomgang. Kontroller Samlet levering for den aktuelle plasseringen i FOTO.',
   'foreign-transfer-source': 'En overføring gjelder en annen GMI-kilde. Behold den lenken eller lag en egen leveranse for kilden.',
   'multiple-gmi-sources': 'Overføringene gjelder flere GMI-kilder. Én leveranse kan bare inneholde én GMI-kilde.',

@@ -835,7 +835,7 @@ export function createPhotoSession({
       const unlinked = photoIds.filter((id) => !records.get(id).occurrence);
       if (unlinked.length) return fail('not-gmi-linked', unlinked);
       const entries = photoIds.map((id) => photoDeliveryEntry(layer, records.get(id), deliveryDecisions.get(id) || null));
-      if (intent === PHOTO_DELIVERY_INTENTS.TRANSFER) {
+      if ([PHOTO_DELIVERY_INTENTS.TRANSFER, PHOTO_DELIVERY_INTENTS.EXCLUDE].includes(intent)) {
         const unavailable = entries.filter((entry) => !entry.canTransfer).map((entry) => entry.photoId);
         if (unavailable.length) return fail('association-unavailable', unavailable);
       }
@@ -864,7 +864,7 @@ export function createPhotoSession({
       if (include && withoutOccurrence.length) return fail('linked-without-occurrence', withoutOccurrence);
       const target = include ? 'include' : 'not-selected';
       const changed = entries.filter((entry) => (include ? entry.status !== target
-        : entry.status === 'include' || (entry.status === 'review' && deliveryDecisions.get(entry.photoId)?.kind === 'unlinked'))).map((entry) => entry.photoId);
+        : entry.status === 'include' || (entry.status === 'review' && (deliveryDecisions.get(entry.photoId)?.kind === 'unlinked' || entry.reason === 'link-removed')))).map((entry) => entry.photoId);
       for (const id of changed) {
         if (include) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true }));
         else deliveryDecisions.delete(id);

@@ -20,12 +20,15 @@ export const photoPlacementName = (photo) => photo.occurrence?.object ? gmiObjec
 // Per-occurrence delivery choice in the inspector: one compact GMI/GML toggle for the selected placement. Siblings of a
 // shared photo show their own state in the occurrence switcher above, so no asset-level state is implied. How links are
 // removed is explained in the export wizard; only genuine warnings are repeated here.
-export default function PhotoDeliveryControls({ photo, layerId, entry, onResult }) {
+export default function PhotoDeliveryControls({ photo, layerId, entry, assetDelivery, onResult }) {
   const notesId = useId();
   if (!entry) return null;
   const missing = ['transfer', 'include'].includes(entry.status) ? photoDeliveryReadiness(photo) : [];
   const reason = photoDeliveryOptions(entry).find((item) => item.reason)?.reason;
-  const notes = entry.status === 'review' || reason || entry.ambiguousGmiReference || missing.length > 0;
+  const exclusionNote = ['exclude', 'not-selected'].includes(entry.status)
+    ? assetDelivery?.status === 'partial' ? 'Bare denne plasseringen er ikke med. Bildefilen er fortsatt med via andre plasseringer eller GMI-lenker.'
+      : 'Plasseringen er ikke med i leveransen. Bildet beholdes i FOTO-arbeidsområdet.' : null;
+  const notes = exclusionNote || entry.status === 'review' || reason || entry.ambiguousGmiReference || missing.length > 0;
   const target = `${photo.originalFilename}${entry.linked ? ` · ${photoPlacementName(photo)}` : ''}`;
   return <section className="photo-inspector-section photo-delivery-section" aria-label="Samlet levering" data-delivery-status={entry.status}>
     <div className="photo-delivery-row">
@@ -33,6 +36,7 @@ export default function PhotoDeliveryControls({ photo, layerId, entry, onResult 
       <PhotoDeliveryToggle entry={entry} layerId={layerId} label={`Leveringsvalg for ${target}`} describedBy={notes ? notesId : undefined} onResult={onResult} />
     </div>
     {notes && <div id={notesId} className="photo-delivery-notes">
+      {exclusionNote && <p className="photo-inspector-note">{exclusionNote}</p>}
       {entry.status === 'review' && <p className="photo-delivery-review" role="note"><WarningIcon size={14} weight="regular" aria-hidden="true" />
         <span><strong>Krever gjennomgang.</strong> {PHOTO_DELIVERY_REASON_TEXT[entry.reason] || 'Valget kan ikke brukes slik det er.'}</span></p>}
       {reason && entry.status !== 'review' && <p className="photo-inspector-note">{reason}</p>}

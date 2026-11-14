@@ -116,7 +116,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert.equal(await fillOf(repeated[0].id), GMI, 'GMI-linked placement: deep blue');
         assert.equal(await fillOf(exif.id), NEUTRAL, 'placed photo without a GMI reference, not included: neutral');
         assert.deepEqual(await browser.evaluate(`Array.from(${legend}.querySelectorAll('li[data-legend-delivery]')).map(e => [e.dataset.legendDelivery, e.querySelector('.photo-camera-glyph path').getAttribute('fill'), e.innerText.trim()])`),
-          [['gmi', GMI, 'Beholdes i GMI'], ['gml', GML, 'Til GML'], ['excluded', NEUTRAL, 'Ikke med i GML'], ['review', '#b06a08', 'Krever gjennomgang'], ['mixed', NEUTRAL, 'Ulike leveringsvalg']]);
+          [['gmi', GMI, 'Beholdes i GMI'], ['gml', GML, 'Til GML'], ['excluded', NEUTRAL, 'Ikke med i leveransen'], ['review', '#b06a08', 'Krever gjennomgang'], ['mixed', NEUTRAL, 'Ulike leveringsvalg']]);
 
         await click('Fordel bilder til GMI/GML');
         await browser.waitFor('document.querySelector(".photo-delivery-bar")');
@@ -130,6 +130,16 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await browser.waitFor(`${markerOf(exif.id)}.classList.contains('photo-camera-marker-selected')`);
         assert.equal(await pillOf(exif.id), 'Ikke med');
         assert.equal(await pillOf(repeated[0].id), 'GMI');
+        await select(repeated[0].id);
+        await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=excluded]').click()`);
+        await browser.waitFor(`${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(NEUTRAL)}`);
+        assert.equal(await pillOf(repeated[0].id), 'Ikke med');
+        assert.match(await browser.evaluate(`${markerOf(repeated[0].id)}.getAttribute('aria-label')`), /Ikke med i leveransen/);
+        await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+        await browser.waitFor(`${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GMI)}`);
+        assert.equal(await pillOf(repeated[0].id), 'GMI');
+        assert.equal(await pillOf(repeated[1].id), 'GMI');
+        await select(exif.id);
         // An isolated GMI-linked marker: GMI -> GML -> GMI, at once; its sibling placement of the same photograph is untouched.
         for (const [expectedFill, expectedPill] of [[GML, 'GML'], [GMI, 'GMI'], [GML, 'GML']]) {
           await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);

@@ -67,6 +67,7 @@ export async function buildDeliveryPlan(snapshot, configuration = {}, { now = ()
       errors.push(...photoPlan.errors); warnings.push(...photoPlan.warnings);
       assets = photoPlan.assets; attachments = photoPlan.attachments;
     } else {
+      if (snapshot.intent.exclusions.length) throw new DeliveryError('exclusions-not-supported-yet');
       if (!snapshot.source) throw new DeliveryError('loaded-gmi-binding-required');
       if (snapshot.mode === 'split' && gmi.session.changeSets.length && !basis.explicitExclusion) throw new DeliveryError('field-exclusion-required');
       for (const code of snapshot.intent.readiness.issues) error(code);

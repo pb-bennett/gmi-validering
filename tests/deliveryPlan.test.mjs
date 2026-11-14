@@ -323,3 +323,22 @@ test('reset during attachment read refuses late package; forged plans and stale 
     await assert.rejects(promise, { code: 'stale-plan' });
   } finally { f.session.clear(); }
 });
+
+
+test('slice 1 exclusions block combined/split packages; restore is byte-identical and standalone modes keep their scope', async () => {
+  const f = await deliveryFixture();
+  try {
+    const before = await f.plan(); ready(before);
+    const photo = f.photos().find((item) => item.occurrence);
+    const photoBytes = await f.session.getAssetFile(photo.assetId).arrayBuffer();
+    assert(f.session.setDeliveryIntent(f.layerId, [photo.id], 'exclude').ok);
+    for (const mode of ['combined', 'split']) await blocked(await f.plan(mode), 'exclusions-not-supported-yet');
+    ready(await f.plan('gmi-only')); ready(await f.plan('photos-only'));
+    assert.deepEqual(new Uint8Array(await f.file.arrayBuffer()), f.bytes);
+    assert.deepEqual(await f.session.getAssetFile(photo.assetId).arrayBuffer(), photoBytes);
+    f.session.setDeliveryIntent(f.layerId, [photo.id], 'keep-link');
+    const restored = await f.plan(); ready(restored);
+    assert.deepEqual(getDeliveryGmiBytes(restored), f.bytes);
+    assert.deepEqual(getDeliveryGmiBytes(restored), getDeliveryGmiBytes(await f.plan()));
+  } finally { f.session.clear(); }
+});
