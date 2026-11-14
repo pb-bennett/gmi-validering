@@ -4,12 +4,14 @@ import { forwardRef, useEffect, useRef, useState } from 'react';
 import {
   ArrowClockwiseIcon,
   DotsThreeIcon,
+  ImagesIcon,
   ShareNetworkIcon,
 } from '@phosphor-icons/react';
 import { isTestModeEnabled } from '@/lib/telemetry/uploadTelemetry.mjs';
 import { MapToolbarMode } from '@/lib/workspace/mapPanePresentation.mjs';
 import useStore from '@/lib/store';
 import { useMapPanePresentation } from './MapPanePresentationProvider';
+import PhotoIconButton from './photos/PhotoIconButton';
 import TabSwitcher from './TabSwitcher';
 import TestModeControl from './TestModeControl';
 
@@ -26,7 +28,8 @@ const ToolbarButton = forwardRef(function ToolbarButton({ children, className = 
   );
 });
 
-export default function MapPaneToolbar({ onReset, onShare, showShare }) {
+// photoToggle: Rettinger's temporary «Vis bilder» override ({ shown, onToggle }), or null when not offered.
+export default function MapPaneToolbar({ onReset, onShare, showShare, photoToggle = null }) {
   const toolbarRef = useRef(null);
   const overflowTriggerRef = useRef(null);
   const resetButtonRef = useRef(null);
@@ -82,6 +85,16 @@ export default function MapPaneToolbar({ onReset, onShare, showShare }) {
       aria-label="Kartverktøy"
     >
       <div className="relative min-h-9">
+        {photoToggle && (
+          // Left of the centred switcher, just right of Leaflet's zoom control (10px + 34px): the right cluster is already
+          // full at laptop widths in Rettinger, so this map-display control sits with the other map controls instead.
+          <div className="pointer-events-auto absolute left-11 top-0">
+            <PhotoIconButton icon={ImagesIcon} label="Vis bilder" pressed={photoToggle.shown}
+              tooltip={photoToggle.shown ? 'Skjul bilder' : 'Vis bilder'} onClick={photoToggle.onToggle}
+              data-rettinger-photo-toggle={photoToggle.shown ? 'shown' : 'hidden'}
+              className="gmi-map-toolbar-icon-button gmi-elevated-surface" />
+          </div>
+        )}
         <div className="pointer-events-auto absolute left-1/2 top-0 min-w-0 -translate-x-1/2">
           <TabSwitcher compact={compact} />
         </div>

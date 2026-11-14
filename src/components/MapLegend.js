@@ -21,7 +21,8 @@ import { PhotoMapDisplayModes } from './photos/PhotoMapDisplayCard';
 export default function MapLegend({ photoDisplay = null }) {
   const { photoLayers } = usePhotoSession();
   // Photo display modes belong with the other map display controls, not in another floating panel.
-  const showPhotoModes = Boolean(photoDisplay) && photoLayers.some((layer) => layer.visible && layer.placedCount > 0);
+  // They follow effective visibility: hidden while Rettinger suppresses the markers.
+  const showPhotoModes = Boolean(photoDisplay) && !photoDisplay.suppressed && photoLayers.some((layer) => layer.visible && layer.placedCount > 0);
   const { legendCollapsed: isCollapsed, toggleLegend } = useMapPanePresentation();
   const data = useStore((state) => state.data);
   const layers = useStore((state) => state.layers);

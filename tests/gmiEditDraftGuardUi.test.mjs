@@ -97,6 +97,10 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
       await setPhotoFiles(browser, 'input[type=file]', [gmi]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
       await u.openRettinger();
+      // A5: Rettinger hides FOTO markers on entry; «Vis bilder» is the user's way to bring them back for this visit.
+      await browser.waitFor(`!${marker} && document.querySelector('[data-rettinger-photo-toggle="hidden"]')`);
+      await u.clickButton('Vis bilder');
+      await browser.waitFor(marker);
       await draftOnLine1();
       assert.equal(await u.unloadBlocked(), true, 'the draft alone guards tab close');
 

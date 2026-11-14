@@ -1135,9 +1135,12 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
   // (or workspace view change); markers never re-read the session per feature.
   const { photoLayers } = usePhotoSession();
   const workspacePhotos = photoWorkspace?.photos, workspaceVisibleIds = photoWorkspace?.visibleIds, workspaceLayerId = photoWorkspace?.layerId;
-  const photoItems = useMemo(() => buildPhotoMapItems(photoLayers, photoSession.getLayerPhotos, workspaceLayerId ? {
+  // Rettinger's temporary override: no photo markers at all, while each layer's own visible flag stays untouched.
+  // Unmounting the markers also closes their popups and hover previews, so no invisible photo stays active.
+  const photosSuppressed = Boolean(photoDisplay?.suppressed) && !workspaceLayerId;
+  const photoItems = useMemo(() => photosSuppressed ? [] : buildPhotoMapItems(photoLayers, photoSession.getLayerPhotos, workspaceLayerId ? {
     photosByLayer: new Map([[workspaceLayerId, workspacePhotos]]), include: { layerId: workspaceLayerId, ids: workspaceVisibleIds },
-  } : {}), [photoLayers, workspaceLayerId, workspacePhotos, workspaceVisibleIds]);
+  } : {}), [photosSuppressed, photoLayers, workspaceLayerId, workspacePhotos, workspaceVisibleIds]);
   const hoverControllerRef = useRef(null);
   const data = useStore((state) => state.data);
   const multiLayerModeEnabled = useStore(

@@ -44,6 +44,7 @@ import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
 import MapPaneToolbar from '@/components/MapPaneToolbar';
 import { MapPanePresentationProvider } from '@/components/MapPanePresentationProvider';
+import { reconcileRettingerPhotoOverride, rettingerPhotosSuppressed, rettingerPhotoToggleAvailable, toggleRettingerPhotoOverride } from '@/lib/workspace/rettingerPhotoVisibility.mjs';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import GeminiConnectionButton from '@/components/gemini-wfs/GeminiConnectionButton';
@@ -194,6 +195,18 @@ export default function Home() {
   const workspaceLayer = photoLayers.find((layer) => layer.id === photoWorkspace.layerId);
   // Rettinger (GMI field corrections) is a sibling of the FOTO and Validator workspaces; FOTO wins if both are requested.
   const gmiEditActive = !workspaceLayer && Boolean(gmiEditLayerId && surveyLayers[gmiEditLayerId]);
+  // Rettinger hides FOTO markers for one visit (render-time only; photoSession visibility is never written). A visit is
+  // a continuous period in which Rettinger owns the workspace for one layer: entry, a layer switch, exit and a trip to
+  // FOTO each reset the override during render, so no frame shows a stale «Vis bilder» choice.
+  const rettingerVisitLayerId = gmiEditActive ? gmiEditLayerId : null;
+  const [rettingerPhotoState, setRettingerPhotoState] = useState(() => reconcileRettingerPhotoOverride(null, rettingerVisitLayerId));
+  const rettingerPhotos = reconcileRettingerPhotoOverride(rettingerPhotoState, rettingerVisitLayerId);
+  if (rettingerPhotos !== rettingerPhotoState) setRettingerPhotoState(rettingerPhotos);
+  const rettingerPhotosHidden = rettingerPhotosSuppressed(rettingerPhotos, gmiEditActive);
+  const rettingerPhotoToggle = rettingerPhotoToggleAvailable(photoLayers, gmiEditActive) ? {
+    shown: rettingerPhotos.shown,
+    onToggle: () => setRettingerPhotoState((state) => toggleRettingerPhotoOverride(reconcileRettingerPhotoOverride(state, rettingerVisitLayerId))),
+  } : null;
   // Runs `action` now, or after the Rettinger draft dialog when unsubmitted form values exist. Cancel = nothing happens.
   const guardGmiEditDraft = (action) => {
     const guard = gmiEditActive ? gmiEditGuardRef.current : null;
@@ -959,6 +972,7 @@ export default function Home() {
                   onReset={() => requestReset()}
                   onShare={() => setShowShareModal(true)}
                   showShare={parsingStatus === 'done'}
+                  photoToggle={rettingerPhotoToggle}
                 />}
                 <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
             {/* Show Map view when activeViewTab is 'map' or 3D viewer is not open */}
@@ -983,7 +997,7 @@ export default function Home() {
                     photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,
                       onAnnounce: setPhotoAnnouncement, centerRef: photoMapCenterRef, stackIds: photoEditStackIds,
                       clickMove: photoClickMove, onClickMoveEnd: () => setPhotoClickMoveId(null) } : null}
-                    photoDisplay={{ mode: photoMapDisplay, onChange: setPhotoMapDisplay, zoom: zoomLevel }}
+                    photoDisplay={{ mode: photoMapDisplay, onChange: setPhotoMapDisplay, zoom: zoomLevel, suppressed: rettingerPhotosHidden }}
                     photoLocateRequest={photoLocateRequest} onPhotoLocateHandled={() => setPhotoLocateRequest(null)} />
                   {photoEditing && <div className="photo-edit-command-anchor">
                     <PhotoEditCommandBar photo={activeWorkspacePhoto || null} siblingCount={activeSiblings.length} changedCount={changedIds.size}
