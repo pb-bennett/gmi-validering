@@ -14,6 +14,7 @@ import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSo
 import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
 import { PHOTO_DELIVERY_INTENTS, buildPhotoDeliverySnapshot, photoDeliveryEntry, photoLayerDelivery } from './photoDeliveryIntent.mjs';
+import { planPhotoExclusion } from './photoDeliveryChoice.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
   photos: Object.freeze([]), selectedId: null, batchSelectedIds: Object.freeze([]),
@@ -824,6 +825,22 @@ export function createPhotoSession({
     },
     // Combined delivery (M8). Explicit, atomic and owner-scoped: every id is validated before any write, a repeated
     // value is a no-op, and nothing else (positions, directions, metadata, sources, hyperlinks) is touched.
+    setPhotoDeliveryExclusion(layerId, photoIds, options = {}) {
+      const layer = layers.get(layerId);
+      const delivery = layer ? photoLayerDelivery(layer, records, deliveryDecisions) : null;
+      if (options.expectedStateKey && options.expectedStateKey !== delivery?.stateKey) return {
+        ok: false, error: 'stale-plan', changedIds: [], blocked: [{ reason: 'stale-plan', text: 'Leveringsvalgene er endret. Velg handlingen på nytt.' }] };
+      const plan = planPhotoExclusion(delivery, layer, photoIds, options);
+      if (!plan.ok) return { ...plan, error: 'exclusion-blocked', changedIds: [] };
+      // All linked/unlinked writes have been validated together. Never call the two individual
+      // actions here: each would publish separately and could leave a half-applied photograph.
+      for (const { photoId, decision } of plan.writes) {
+        if (decision) deliveryDecisions.set(photoId, Object.freeze(decision));
+        else deliveryDecisions.delete(photoId);
+      }
+      if (plan.writes.length) publish();
+      return { ...plan, changedIds: plan.writes.map((write) => write.photoId) };
+    },
     setDeliveryIntent(layerId, photoIds, intent) {
       const fail = (error, invalidIds = []) => ({ ok: false, error, invalidIds, changedIds: [] });
       if (!Object.values(PHOTO_DELIVERY_INTENTS).includes(intent)) return fail('invalid-intent');

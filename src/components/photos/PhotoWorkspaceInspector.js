@@ -16,6 +16,7 @@ import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { formatPhotoCaptureTime, formatPhotoCoordinates, formatPhotoMoveDistance, photoCaptureTimeStatus, photoDirectionEvidenceText, photoDirectionSourceLabel, photoMetadataConflict,
   photoMetadataSourceLabel, photoPlacementBasisLabel, photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoIconButton from './PhotoIconButton';
+import PhotoExclusionActions from './PhotoExclusionActions';
 import PhotoDeliveryControls from './PhotoDeliveryControls';
 import './photoCollectionPanel.css';
 
@@ -153,6 +154,8 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
     </div>
 
     <PhotoDeliveryControls photo={photo} layerId={layer.id} entry={delivery?.byPhotoId[photo.id]} assetDelivery={delivery?.assets[photo.assetId]} onResult={(result) => onDeliveryResult?.(photo.id, result)} />
+
+    {siblings.length > 1 && !editing && <PhotoExclusionActions key={photo.id} inspector layerId={layer.id} selectedIds={[photo.id]} visibleIds={[photo.id]} delivery={delivery} />}
 
     <Section title="Opptak" scope="gjelder bildet (alle plasseringer)" className="photo-inspector-capture">
       <dl className="photo-inspector-facts">

@@ -273,7 +273,7 @@ test('workspace filter and counts by delivery status; occurrences and assets cou
   session.setDeliveryIntent(layer.id, [byObject(KUM1).id], 'transfer');
   session.setCombinedDeliveryInclusion(layer.id, [byName('d.jpg')[0].id], true);
   const view = (deliveryFilter) => photoWorkspaceView(photos(), { filter: { ...DEFAULT_PHOTO_FILTER, delivery: deliveryFilter } }, { delivery: delivery() });
-  assert.deepEqual(view('all').counts.delivery, { all: 5, 'keep-link': 3, transfer: 1, exclude: 0, include: 1, 'not-selected': 0, review: 0 });
+  assert.deepEqual(view('all').counts.delivery, { all: 5, 'keep-link': 3, transfer: 1, exclude: 0, include: 1, 'not-selected': 0, 'not-delivered': 0, partial: 0, review: 0 });
   assert.deepEqual(view('transfer').rows.map((photo) => photo.id), [byObject(KUM1).id]);
   assert.deepEqual(view('include').rows.map((photo) => photo.originalFilename), ['d.jpg']);
   assert.equal(view('keep-link').rows.length, 3);

@@ -12,6 +12,51 @@ const option = (key, apply, { active = false, disabled = false, reason = null } 
 
 const LINE_LINK = PHOTO_DELIVERY_REASON_TEXT['linked-without-occurrence'];
 
+/** Pure, reviewable command. Only the session may apply its writes. IDs are occurrence IDs;
+ * photo scope expands them through the layer's asset identities, independently of filters. */
+export function planPhotoExclusion(delivery, layer, photoIds, { scope = 'photo', include = false, visibleIds = photoIds } = {}) {
+  const blocked = [], writes = [], affected = [];
+  const fail = (photoId, reason) => blocked.push({ photoId, reason, text: PHOTO_DELIVERY_REASON_TEXT[reason]
+    || ({ 'stale-occurrence': 'Plasseringen finnes ikke lenger i fotolaget.',
+      'invalid-selection': 'Velg minst én gyldig plassering.',
+      'links-without-occurrence': 'Bildet har GMI-lenker uten FOTO-plassering, for eksempel en ledning eller en fjernet plassering. Lenken og filen beholdes.' })[reason]
+    || 'Leveringsvalget må gjennomgås før bildet kan endres.' });
+  if (!layer || !delivery || !['photo', 'occurrences'].includes(scope) || typeof include !== 'boolean'
+    || !Array.isArray(photoIds) || !photoIds.length || new Set(photoIds).size !== photoIds.length) fail(null, 'invalid-selection');
+  const selected = new Set(Array.isArray(photoIds) ? photoIds : []), visible = new Set(visibleIds || []);
+  const assets = new Set();
+  for (const id of selected) {
+    const entry = delivery?.byPhotoId[id];
+    if (!layer?.photoIds.includes(id) || !entry) fail(id, 'stale-occurrence');
+    else assets.add(entry.assetId);
+  }
+  if (!blocked.length) {
+    if (scope === 'photo' && !include) for (const link of delivery.linksWithoutOccurrence || []) {
+      if (assets.has(link.assetId)) blocked.push({ assetId: link.assetId, objectLabel: link.objectLabel,
+        reason: 'links-without-occurrence', text: 'Bildet har en GMI-lenke uten FOTO-plassering. Lenken og filen beholdes.' });
+    }
+    for (const id of layer.photoIds) {
+      const entry = delivery.byPhotoId[id];
+      if (!(scope === 'photo' ? assets.has(entry?.assetId) : selected.has(id))) continue;
+      affected.push({ photoId: id, assetId: entry.assetId, objectLabel: entry.association.objectLabel });
+      if (entry.status === 'review') { fail(id, entry.reason); continue; }
+      if (entry.linked && !entry.canTransfer) { fail(id, entry.association.state); continue; }
+      if (!entry.linked && !entry.canInclude) { fail(id, 'linked-without-occurrence'); continue; }
+      if (entry.linked) {
+        if ((!include && entry.status !== 'exclude') || (include && entry.status === 'exclude')) writes.push({ photoId: id,
+          decision: include ? null : { kind: 'gmi', occurrenceKey: entry.association.occurrenceKey, intent: 'exclude' } });
+      } else if (entry.status !== (include ? 'include' : 'not-selected')) {
+        writes.push({ photoId: id, decision: include ? { kind: 'unlinked', include: true } : null });
+      }
+    }
+  }
+  const additional = affected.filter((item) => writes.some((write) => write.photoId === item.photoId)
+    && (!selected.has(item.photoId) || !visible.has(item.photoId)));
+  return { ok: !blocked.length, scope, include, stateKey: delivery?.stateKey, blocked, writes: blocked.length ? [] : writes,
+    affected, additional, needsConfirmation: !blocked.length && additional.length > 0, assetCount: assets.size,
+    occurrenceCount: affected.length, changedCount: blocked.length ? 0 : writes.length };
+}
+
 /**
  * The valid destinations of one occurrence, in display order. A GMI-linked occurrence offers GMI and GML; one without
  * a GMI reference offers «Ikke med» and GML and never an invalid GMI destination. A photo linked from a GMI object without

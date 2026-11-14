@@ -37,6 +37,8 @@ export const PHOTO_DELIVERY_FILTERS = Object.freeze([
   Object.freeze({ key: 'include', label: 'Tas med uten GMI-lenke' }),
   Object.freeze({ key: 'exclude', label: 'Ikke med i leveransen' }),
   Object.freeze({ key: 'not-selected', label: 'Ikke valgt' }),
+  Object.freeze({ key: 'not-delivered', label: 'Ikke med' }),
+  Object.freeze({ key: 'partial', label: 'Delvis med' }),
   Object.freeze({ key: 'review', label: 'Krever gjennomgang' }),
 ]);
 
@@ -193,9 +195,11 @@ export function derivePhotoAssetDelivery(entries, linksWithoutOccurrence = []) {
 /** Delivery entries for every occurrence of a layer, keyed by photo id. */
 export function photoLayerDelivery(layer, records, decisions) {
   const entries = layer.photoIds.map((id) => photoDeliveryEntry(layer, records.get(id), decisions.get(id) || null));
-  const assetStates = buildPhotoDeliverySnapshot(layer, records, decisions).assetStates;
+  const snapshot = buildPhotoDeliverySnapshot(layer, records, decisions);
   return Object.freeze({
-    assets: assetStates,
+    assets: snapshot.assetStates,
+    linksWithoutOccurrence: snapshot.linksWithoutOccurrence,
+    stateKey: snapshot.stateKey,
     byPhotoId: Object.freeze(Object.fromEntries(entries.map((entry) => [entry.photoId, entry]))),
     summary: summarizePhotoDelivery(entries),
   });

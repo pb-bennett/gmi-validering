@@ -1,15 +1,15 @@
-export const PHOTO_WORKSPACE_MODES = Object.freeze(['browse', 'edit', 'remove', 'delivery']);
+export const PHOTO_WORKSPACE_MODES = Object.freeze(['browse', 'edit', 'remove', 'delivery', 'exclude']);
 export const PHOTO_COLOUR_MODES = Object.freeze(['delivery', 'provenance']);
 export const DEFAULT_PHOTO_FILTER = Object.freeze({ placement: 'all', missingDirection: false, missingCaptureTime: false, repeated: false, changed: false, delivery: 'all' });
 export const DEFAULT_PHOTO_SORT = 'filename-asc';
 // Map colouring defaults to delivery destination (Leveringsvalg) throughout the workspace; the user's choice lasts for the
 // workspace session and no mode change overrides it.
 export const emptyPhotoWorkspace = Object.freeze({ layerId: null, activePhotoId: null, photoIds: Object.freeze([]),
-  mode: 'browse', colourMode: 'delivery', removalIds: Object.freeze([]), filter: DEFAULT_PHOTO_FILTER, sort: DEFAULT_PHOTO_SORT });
+  mode: 'browse', colourMode: 'delivery', removalIds: Object.freeze([]), excludeIds: Object.freeze([]), filter: DEFAULT_PHOTO_FILTER, sort: DEFAULT_PHOTO_SORT });
 
 const FILTER_PLACEMENTS = ['all', 'placed', 'unplaced', 'exif', 'gmi', 'gml', 'manual', 'unknown'];
 const FILTER_FLAGS = ['missingDirection', 'missingCaptureTime', 'repeated', 'changed'];
-const FILTER_DELIVERY = ['all', 'keep-link', 'transfer', 'include', 'exclude', 'not-selected', 'review'];
+const FILTER_DELIVERY = ['all', 'keep-link', 'transfer', 'include', 'exclude', 'not-selected', 'not-delivered', 'partial', 'review'];
 
 function normalizeFilter(filter, patch) {
   const next = { ...filter };
@@ -40,14 +40,14 @@ export function photoWorkspaceReducer(state, action) {
     const activePhotoId = photoIds.includes(state.activePhotoId) ? state.activePhotoId
       : state.photoIds.slice(oldIndex + 1).find((id) => photoIds.includes(id))
         || state.photoIds.slice(0, oldIndex).reverse().find((id) => photoIds.includes(id)) || photoIds[0] || null;
-    return { ...state, photoIds, activePhotoId, removalIds: state.removalIds.filter((id) => photoIds.includes(id)) };
+    return { ...state, photoIds, activePhotoId, removalIds: state.removalIds.filter((id) => photoIds.includes(id)), excludeIds: state.excludeIds.filter((id) => photoIds.includes(id)) };
   }
   if (action.type === 'active') return state.photoIds.includes(action.photoId) && state.activePhotoId !== action.photoId
     ? { ...state, activePhotoId: action.photoId } : state;
   if (action.type === 'mode' && PHOTO_WORKSPACE_MODES.includes(action.mode) && state.layerId) {
     if (state.mode === action.mode) return state;
     // The "changed" filter only exists inside Edit mode; the removal selection only inside its mode. The colour choice stays.
-    return { ...state, mode: action.mode, removalIds: [],
+    return { ...state, mode: action.mode, removalIds: [], excludeIds: [],
       filter: action.mode !== 'edit' && state.filter.changed ? normalizeFilter(state.filter, { changed: false }) : state.filter };
   }
   if (action.type === 'map-colour' && PHOTO_COLOUR_MODES.includes(action.value)) return state.colourMode === action.value ? state : { ...state, colourMode: action.value };
@@ -57,6 +57,10 @@ export function photoWorkspaceReducer(state, action) {
   }
   if (action.type === 'sort' && typeof action.sort === 'string') return { ...state, sort: action.sort };
   if (action.type === 'reset-view') return { ...state, filter: DEFAULT_PHOTO_FILTER, sort: DEFAULT_PHOTO_SORT };
+  if (action.type === 'toggle-exclusion' && state.mode === 'exclude' && state.photoIds.includes(action.photoId)) return { ...state,
+    excludeIds: state.excludeIds.includes(action.photoId) ? state.excludeIds.filter((id) => id !== action.photoId) : [...state.excludeIds, action.photoId] };
+  if (action.type === 'select-exclusion' && state.mode === 'exclude') return { ...state,
+    excludeIds: [...new Set(action.photoIds)].filter((id) => state.photoIds.includes(id)) };
   if (action.type === 'toggle-removal' && state.mode === 'remove' && state.photoIds.includes(action.photoId)) return { ...state,
     removalIds: state.removalIds.includes(action.photoId) ? state.removalIds.filter((id) => id !== action.photoId) : [...state.removalIds, action.photoId] };
   if (action.type === 'select-removal' && state.mode === 'remove') return { ...state,

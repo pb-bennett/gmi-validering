@@ -41,11 +41,13 @@ function matchesPlacement(photo, placement) {
 }
 
 // Delivery status comes from the session's derived entries (M8); without them only "all" matches.
-const matchesDelivery = (photo, delivery, statuses) => !delivery || delivery === 'all' || statuses?.[photo.id]?.status === delivery;
+const matchesDelivery = (photo, delivery, statuses, assets) => !delivery || delivery === 'all'
+  || (delivery === 'not-delivered' ? ['exclude', 'not-selected'].includes(statuses?.[photo.id]?.status)
+    : delivery === 'partial' ? assets?.[photo.assetId]?.status === 'partial' : statuses?.[photo.id]?.status === delivery);
 
-export function photoMatchesFilter(photo, filter, changedIds, deliveryStatuses = null) {
+export function photoMatchesFilter(photo, filter, changedIds, deliveryStatuses = null, deliveryAssets = null) {
   return (!filter.work || filter.work.ids.has(photo.id))
-    && matchesDelivery(photo, filter.delivery, deliveryStatuses)
+    && matchesDelivery(photo, filter.delivery, deliveryStatuses, deliveryAssets)
     && matchesPlacement(photo, filter.placement)
     && (!filter.missingDirection || photoMissingDirection(photo))
     && (!filter.missingCaptureTime || photoMissingCaptureTime(photo))
@@ -101,7 +103,7 @@ export function photoWorkspaceView(photos, { activePhotoId = null, filter = DEFA
     object: photo.occurrence?.object ? gmiObjectContext(photo.occurrence.object) : null }));
   const hasObjects = entries.some((entry) => entry.object !== null);
   const sortKey = comparators[sort] && (sort !== 'object' || hasObjects) ? sort : DEFAULT_PHOTO_SORT;
-  const matching = entries.filter((entry) => photoMatchesFilter(entry.photo, filter, changedIds, deliveryStatuses));
+  const matching = entries.filter((entry) => photoMatchesFilter(entry.photo, filter, changedIds, deliveryStatuses, delivery?.assets));
   const rows = matching.sort(comparators[sortKey]).map((entry) => entry.photo);
   const active = photos.find((photo) => photo.id === activePhotoId) || null;
   const pinned = active && !rows.includes(active) ? active : null;
@@ -119,6 +121,6 @@ export function photoWorkspaceView(photos, { activePhotoId = null, filter = DEFA
       repeated: photos.filter(photoIsRepeated).length,
       changed: photos.filter((photo) => changedIds.has(photo.id)).length,
       delivery: Object.fromEntries(PHOTO_DELIVERY_FILTERS.map((item) => [item.key, item.key === 'all' ? photos.length
-        : photos.filter((photo) => deliveryStatuses?.[photo.id]?.status === item.key).length])) },
+        : photos.filter((photo) => matchesDelivery(photo, item.key, deliveryStatuses, delivery?.assets)).length])) },
   };
 }

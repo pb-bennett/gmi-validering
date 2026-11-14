@@ -6,6 +6,7 @@ export const PHOTO_TOOL_LABELS = Object.freeze({
   'Legg til bilder': 'Legg til bilder…', 'Koble og posisjoner bilder': 'Koble og posisjoner bilder…', Eksporter: 'Eksporter…',
   'Juster plassering og retning': 'Juster plassering og retning', 'Kilder og koblinger': 'Kilder og koblinger', 'Fjern bilder fra laget': 'Fjern bilder fra laget…',
   'Fullfør opplysninger': 'Fullfør opplysninger…', 'Fordel bilder til GMI/GML': 'Fordel bilder til GMI/GML',
+  'Velg bilder som ikke skal med': 'Velg bilder som ikke skal med…',
 });
 // Delivery colouring is the workspace default; provenance-specific checks choose «Plasseringskilde» explicitly.
 export const setPhotoColourMode = (browser, value) => browser.evaluate(`(() => { const select = document.querySelector('.photo-map-display-card select');
