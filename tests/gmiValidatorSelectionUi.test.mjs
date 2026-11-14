@@ -4,6 +4,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { assertTableRowFill } from './helpers/layerTableStateAssertions.mjs';
 import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
 import { encodeSingleByte } from './helpers/gmiEditFixtures.mjs';
 
@@ -54,7 +55,14 @@ test('H2 production: Validator checkbox hosts, persistence, map halos, lifecycle
       const target = `Array.from(document.querySelectorAll('button[aria-label*="objekter i tabell:"]')).find(e => e.closest('section[data-validation-tone]')?.dataset.validationTone === ${JSON.stringify(tone)})`;
       await browser.waitFor(target); await browser.evaluate(`${target}.click()`); await browser.waitFor(table);
     };
-    const selectFirst = async () => { await geometry('Ledninger'); await field(); await diagnostic(); await browser.waitFor(box(0)); await browser.evaluate(`${box(0)}.click()`); await browser.waitFor(`${bar}?.innerText.includes('1 valgt')`); };
+    const selectFirst = async () => {
+      await geometry('Ledninger'); await field(); await diagnostic(); await browser.waitFor(box(0));
+      await browser.evaluate(`${box(0)}.click()`); await browser.waitFor(`${bar}?.innerText.includes('1 valgt')`);
+      const target = `${grid}.querySelector('[data-table-row="0"]')`;
+      // A newly loaded layer may have no active object; selection must paint the row in either case.
+      const active = await browser.evaluate(`${target}.getAttribute('aria-current') === 'true'`);
+      await assertTableRowFill(browser, target, { selected: true, active });
+    };
     const checked = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row][aria-selected=true]')).map(e => Number(e.dataset.tableRow)).sort((a,b) => a-b)`);
     const noSelection = async () => { assert.equal(await browser.evaluate(`Boolean(${bar})`), false); await browser.waitFor(`${halos}.length === 0`); };
     const shot = async (name) => {

@@ -4,6 +4,7 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { assertTableRowFill } from './helpers/layerTableStateAssertions.mjs';
 import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
 import { gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
 
@@ -69,7 +70,8 @@ test('R4 follow-up production: frozen layout, review sorting, actual severity an
       await click('Sorter etter Funn etter endring'); await browser.waitFor(`${first} === '1'`);
       await click('Sorter etter Funn etter endring'); await click('Sorter etter Funn etter endring');
       await browser.waitFor(`${first} === '0'`);
-      const truncation = await browser.evaluate(`(() => { const r = ${row(0)}, status = r.querySelector('.gmi-outcome-detail'), finding = r.querySelector('.gmi-review-finding > span'); return { status: { ellipsis: getComputedStyle(status).textOverflow, clipped: status.scrollWidth > status.clientWidth, text: status.textContent, tip: status.parentElement.title }, finding: { ellipsis: getComputedStyle(finding).textOverflow, clipped: finding.scrollWidth > finding.clientWidth, tip: finding.parentElement.title } }; })()`);
+      // The severity wrapper is deliberately untruncated; assert ellipsis on the finding prose.
+      const truncation = await browser.evaluate(`(() => { const r = ${row(0)}, status = r.querySelector('.gmi-outcome-detail'), finding = r.querySelector('.gmi-review-finding > .truncate'); return { status: { ellipsis: getComputedStyle(status).textOverflow, clipped: status.scrollWidth > status.clientWidth, text: status.textContent, tip: status.parentElement.title }, finding: { ellipsis: getComputedStyle(finding).textOverflow, clipped: finding.scrollWidth > finding.clientWidth, tip: finding.parentElement.title } }; })()`);
       assert.equal(truncation.status.ellipsis, 'ellipsis'); assert(truncation.status.clipped);
       assert.match(truncation.status.text, /SDR anbefales ikke/); assert(truncation.status.tip.length > 20);
       assert.equal(truncation.finding.ellipsis, 'ellipsis'); assert(truncation.finding.clipped); assert.match(truncation.finding.tip, /FEIL/);
@@ -86,6 +88,7 @@ test('R4 follow-up production: frozen layout, review sorting, actual severity an
         assert.equal(await columnWidth('Merknad'), 240, `Merknad at ${width}×${height}`);
         assert((await columnWidth('Nett type')) < 100, 'code column unchanged');
         assert(await browser.evaluate(`${grid}.getBoundingClientRect().right <= ${width}`));
+        await assertTableRowFill(browser, row(0), { selected: true, active: await browser.evaluate(`${row(0)}.getAttribute('aria-current') === 'true'`) });
         const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
         await writeFile(path.join(tmpdir(), `gmi-table-review-${width}.png`), Buffer.from(data, 'base64'));
       }

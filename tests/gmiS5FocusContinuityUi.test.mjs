@@ -40,9 +40,16 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
     const typeInto = (selector, value) => browser.evaluate(`(() => { const e=${selector};
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)}); e.dispatchEvent(new Event('input',{bubbles:true})); })()`);
     const view = () => browser.evaluate(`${modes}.dataset.gmiTableView`);
-    const focusState = () => browser.evaluate(`(() => { const b=${toggle}; const h=${grid}.querySelector('[role=columnheader][data-focus-column]');
+    const focusState = async () => { const state = await browser.evaluate(`(() => { const b=${toggle}; const h=${grid}.querySelector('[role=columnheader][data-focus-column]');
       const headers=Array.from(${grid}.querySelectorAll('[role=columnheader]')).map(e=>e.innerText.trim());
       return { fields: b?.dataset.gmiColumnFocus ?? null, active: b?.getAttribute('aria-pressed') ?? null, header: h?.innerText.trim() ?? null, headers }; })()`);
+      if (state.active === 'true') {
+        assert.equal(state.header, state.fields, 'pressed indicator has a visible focused header');
+        const attributes = state.headers.filter(h => h && !['Nr.', 'S_FCODE', 'Status', 'Endring', 'Funn etter endring'].includes(h));
+        assert.equal(attributes[0], state.fields, 'pressed indicator matches the applied priority order');
+      }
+      return state;
+    };
     /** A meaningful, visible element owns keyboard focus (never body). */
     const activeElement = () => browser.evaluate(`(() => { const e=document.activeElement, r=e.getBoundingClientRect();
       return { body: e===document.body, tag: e.tagName, label: e.getAttribute('aria-label'), text: e.innerText?.trim().slice(0,80),
@@ -145,6 +152,11 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         await typeInto(`${inspector}.querySelector('[aria-label="Ny verdi"]')`, 'Kontrollert');
         await click('Forhåndsvis endringer', inspector);
         assert.equal(await view(), 'original', 'batch preview never switches views');
+        await ready();
+        await click('Tilbake til oppsett', inspector);
+        assert.equal((await focusState()).active, 'true', 'returning to setup keeps the applied field order');
+        await click('Tilbake til forhåndsvisningen', inspector);
+        assert.equal((await focusState()).active, 'true', 'returning to preview keeps the applied field order');
         await ready(); await click('Legg til masseendring', inspector);
         await browser.waitFor(risk);
         assert.equal(await view(), 'original', 'pending approval never switches views');
@@ -221,6 +233,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         assert.match(focused.text, /^Angret: /);
         assert.notEqual(await counts(), stagedCounts, 'undo removed the batch');
         assert.equal(await view(), 'original', 'undo alone keeps the explicit view');
+        await focusState();
         // Tab reaches the contextual «Gjør om»; the keyboard redo restores the batch and keeps focus on the result.
         await press('Tab', 'Tab', 9);
         assert.equal(await browser.evaluate(`document.activeElement?.dataset.gmiContextRedo ?? null`), 'notice', 'Tab reaches «Gjør om»');
@@ -230,6 +243,9 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         assert(focused.notice && focused.visible && !focused.body, JSON.stringify(focused));
         assert.equal(await counts(), stagedCounts, '«Gjør om» restored the batch');
         assert.equal(await view(), 'original', 'redo alone keeps the explicit view');
+        await focusState();
+        await click('Foreslått', modes); await focusState();
+        await click('Original', modes); await focusState();
         assert.equal(await browser.evaluate(`Boolean(document.querySelector('[data-gmi-context-redo=notice]'))`), false, 'nothing left to redo in context');
         assert.equal(await browser.evaluate(`${inspector}.dataset.batchStep !== '3'`), true, 'redo does not reopen the staged view');
         await click('Avslutt', inspector); await browser.waitFor(`!${inspector}`);

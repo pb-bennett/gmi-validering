@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { assertTableRowFill } from './helpers/layerTableStateAssertions.mjs';
 import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
 import { gmiFieldBatchFixture } from './helpers/gmiFieldBatchFixture.mjs';
 
@@ -50,8 +51,10 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`T3 production ${
         await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
         await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
         await current(0); await noGuard();
+        await assertTableRowFill(browser, row(0), { selected: true, active: true });
         await browser.evaluate(`${box(1)}.focus()`); await key(' ', 'Space', 32); await current(1);
         assert.equal(await browser.evaluate(`${box(1)}.checked`), true);
+        await assertTableRowFill(browser, row(0), { selected: true, active: false });
         await browser.evaluate(`${box(0)}.click()`); await current(1); // uncheck
         const header = `${grid}.querySelector('[role=columnheader] input[type=checkbox]')`;
         await browser.evaluate(`${header}.click()`); await current(1);
@@ -59,7 +62,10 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`T3 production ${
         await browser.evaluate(`${header}.click()`); await current(1);
         await browser.evaluate(`${grid}.focus()`); await key('End', 'End', 35); await key(' ', 'Space', 32); await current(5);
         assert.equal(await browser.evaluate(`document.activeElement===${grid}`), true, 'soft focus does not steal grid keyboard focus');
+        const cursor = await browser.evaluate(`({ current: ${row(5)}.dataset.keyboardCurrent, width: getComputedStyle(${row(5)}).outlineWidth, style: getComputedStyle(${row(5)}).outlineStyle })`);
+        assert.deepEqual(cursor, { current: 'true', width: '2px', style: 'solid' });
         await key(' ', 'Space', 32); await current(5); // keyboard uncheck
+        await assertTableRowFill(browser, row(5), { selected: false, active: true });
         await browser.evaluate(`${box(0)}.click()`); await current(0);
         await click('Velg alle 6 synlige', bar); await current(0);
         await click('Fjern utvalg', bar); await current(0);

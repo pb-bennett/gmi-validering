@@ -368,8 +368,8 @@ export default function LayerDataTable() {
     setLastColumnFocus(columnFocusSignature);
     if (columnFocusOff && columnFocusOff !== columnFocusSignature) setColumnFocusOff(null);
   }
-  const columnFocusActive = Boolean(columnFocus && columnFocusOff !== columnFocusSignature);
-  const focusFields = columnFocusActive ? columnFocus.fields : NO_FIELDS;
+  const columnFocusEnabled = Boolean(columnFocus && columnFocusOff !== columnFocusSignature);
+  const focusFields = columnFocusEnabled ? columnFocus.fields : NO_FIELDS;
 
   const { allItemsWithIndex, items, searchedItems, displayItems } = useMemo(() => deriveLayerTableRows({
     dataset: proposedData || layer?.data,
@@ -477,6 +477,13 @@ export default function LayerDataTable() {
       ? normalizeColumnOrder(initial, contextualColumnOrder.fields)
       : initial;
   }, [fields, savedOrder, isContextualInspection, inspection, contextualColumnOrder, focusFields]);
+
+  // A request can outlive its visible fields (geometry switch, empty search, changed-only view).
+  // Report the applied order, while retaining the request and the user's explicit off choice.
+  const columnFocusActive = columnFocusEnabled && focusFields.length > 0
+    && focusFields.every((field) => orderedFields.includes(field))
+    && applyColumnFocus(orderedFields, focusFields, LEADING_FIELDS)
+      .every((field, index) => orderedFields[index] === field);
 
   useEffect(() => {
     if (isExactInspection || !layerId || fields.length === 0 || tableView === GMI_EDIT_TABLE_VIEWS.CHANGED) return;
@@ -1192,7 +1199,7 @@ export default function LayerDataTable() {
                     role="columnheader"
                     aria-colindex={index + 1 + (selectionEnabled ? 1 : 0)}
                     aria-sort={isZoom ? undefined : header.column.getIsSorted() === 'asc' ? 'ascending' : header.column.getIsSorted() === 'desc' ? 'descending' : 'none'}
-                    data-focus-column={focusFields.includes(headerId) || undefined}
+                    data-focus-column={columnFocusActive && focusFields.includes(headerId) || undefined}
                     draggable={!isZoom && !isIdentity && (!isContextualInspection || !isFixed)}
                     onDragStart={() => handleDragStart(headerId)}
                     onDragOver={(e) => e.preventDefault()}
@@ -1247,6 +1254,8 @@ export default function LayerDataTable() {
             {virtualRows.map((virtualRow) => {
               const row = rows[virtualRow.index];
               const isActiveObject = highlightedFeatureId === `${activeTab}-${layerId}-${row.original.__index}`;
+              const rowFill = isActiveObject || selectedKeys.has(gmiSelectionKey(scope, row.original.__index))
+                ? 'bg-gmi-cyan-soft' : 'bg-gmi-surface group-hover:bg-gmi-surface-soft';
               return (
                 <div
                   key={row.id}
@@ -1270,7 +1279,7 @@ export default function LayerDataTable() {
                     )
                   }
                   onMouseLeave={handleRowHoverEnd}
-                  className={`group flex cursor-pointer border-b border-gmi-border ${isActiveObject || selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) ? 'bg-gmi-cyan-soft' : 'bg-gmi-surface'} hover:bg-gmi-surface-soft`}
+                  className={`group flex cursor-pointer border-b border-gmi-border ${rowFill}`}
                   style={{
                     outline: row.id === revealedRowId || gridHasFocus && row.id === navigationRow?.id ? '2px solid var(--gmi-interactive)' : undefined,
                     outlineOffset: '-2px',
@@ -1282,7 +1291,7 @@ export default function LayerDataTable() {
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
-                  {selectionEnabled && <div role="gridcell" aria-colindex={1} className="sticky left-0 z-10 flex shrink-0 items-center justify-center bg-gmi-surface" style={{ width: selectionWidth, height: ROW_HEIGHT }}>
+                  {selectionEnabled && <div role="gridcell" aria-colindex={1} className={`sticky left-0 z-10 flex shrink-0 items-center justify-center ${rowFill}`} style={{ width: selectionWidth, height: ROW_HEIGHT }}>
                     <SelectionCheckbox label={`${selectedKeys.has(gmiSelectionKey(scope, row.original.__index)) ? 'Fjern' : 'Velg'} ${gmiObjectNumber(scope, row.original.__index, objectIdOf(scope, row.original.__index)).label.toLowerCase()}`}
                       checked={selectedKeys.has(gmiSelectionKey(scope, row.original.__index))} onToggle={(range) => toggleSelectionRow(row.original, range)} />
                   </div>}
@@ -1303,8 +1312,8 @@ export default function LayerDataTable() {
                         className={`flex shrink-0 items-center px-1.5 text-[10px] ${
                           isZoom ? 'justify-center' : ''
                         } ${isZoom || isFixed ? 'sticky z-10' : ''} ${
-                          (isZoom || isFixed) && !cell.column.columnDef.meta?.contextualField
-                            ? `${isActiveObject ? 'bg-gmi-cyan-soft' : 'bg-gmi-surface'} group-hover:bg-gmi-surface-soft`
+                          !cell.column.columnDef.meta?.contextualField
+                            ? rowFill
                             : ''
                         }`}
                         style={{

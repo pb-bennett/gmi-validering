@@ -4,6 +4,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
+import { assertTableRowFill } from './helpers/layerTableStateAssertions.mjs';
 import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
 import { encodeSingleByte } from './helpers/gmiEditFixtures.mjs';
 
@@ -51,6 +52,7 @@ test('T1 production: late sorted row reveal, explicit search/filter reset and in
       await browser.waitFor(`${grid}.querySelector('[data-table-row="0"]')`);
       await browser.evaluate(`${grid}.querySelector('[data-table-row="0"] input').click(); ${grid}.querySelector('[data-table-row="0"]').click()`);
       await browser.waitFor(`${editor}?.dataset.gmiObject === 'line:0'`);
+      await assertTableRowFill(browser, `${grid}.querySelector('[data-table-row="0"]')`, { selected: true, active: true });
       await click('Endringer (1)', 'document.querySelector(".gmi-edit-workspace")');
       await click('Vis detaljer', 'document.querySelector(".gmi-edit-workspace")'); await browser.waitFor(detail);
       await input(search, '');
