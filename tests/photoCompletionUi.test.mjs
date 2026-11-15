@@ -416,7 +416,7 @@ layerTest('profiles: requirements change with the target; the choice and AsBuilt
   assert.equal(await browser.evaluate(`JSON.stringify({ ...localStorage, ...sessionStorage }).includes('Syntetisk prosjekt')`), false);
 
   // The export configuration ends with the session.
-  await clickSourceControl(browser, 'Tilbake til appen', 'document');
+  await clickSourceControl(browser, 'Lukk FOTO', 'document');
   await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
   await browser.evaluate(`document.querySelector('button[aria-label^="Fjern fotokartlag"]').click()`);
   await clickSourceControl(browser, 'Fjern', 'document');
@@ -427,7 +427,7 @@ layerTest('layer deletion and session reset clear the transient configuration', 
   await openHub(browser);
   await setSelect(browser, `${hub}.querySelector('.photo-completion-target select')`, 'legacy2019');
   await closeHub(browser);
-  await clickSourceControl(browser, 'Tilbake til appen', 'document');
+  await clickSourceControl(browser, 'Lukk FOTO', 'document');
   await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
   await browser.evaluate(`document.querySelector('button[aria-label^="Fjern fotokartlag"]').click()`);
   await clickSourceControl(browser, 'Fjern', 'document');
@@ -438,7 +438,7 @@ layerTest('layer deletion and session reset clear the transient configuration', 
   assert.equal(await browser.evaluate(`${hub}.querySelector('.photo-completion-target select').value`), 'gemini-legacy2019', 'a new layer starts at the default');
   await setSelect(browser, `${hub}.querySelector('.photo-completion-target select')`, 'asbuilt52');
   await closeHub(browser);
-  await clickSourceControl(browser, 'Tilbake til appen', 'document');
+  await clickSourceControl(browser, 'Lukk FOTO', 'document');
   await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
   await browser.evaluate(`document.querySelector('[aria-label="Nullstill og åpne ny fil"]').click()`);
   await browser.waitFor(`!document.querySelector('section[aria-label^="Fotokartlag"]')`);

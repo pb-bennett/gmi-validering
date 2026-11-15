@@ -103,7 +103,7 @@ export async function applyPhotoSourcePositions(browser, kind = 'gml', { photoId
   await clickSourceControl(browser, label);
   await browser.waitFor(`!${sourceWizard}`);
   if (entered) {
-    await clickSourceControl(browser, 'Tilbake til appen', 'document');
+    await clickSourceControl(browser, 'Lukk FOTO', 'document');
     await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
   }
 }

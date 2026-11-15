@@ -34,7 +34,7 @@ test('H3 production: exact Validator selections enter object/batch editing, pres
     };
     const selected = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row][aria-selected=true]')).map(e=>Number(e.dataset.tableRow)).sort((a,b)=>a-b)`);
     const openInspection = async (geometry, field, datasetKind = 'original') => {
-      if (await browser.evaluate('Boolean(document.querySelector(".gmi-edit-workspace"))')) await click('Tilbake til appen');
+      if (await browser.evaluate('Boolean(document.querySelector(".gmi-edit-workspace"))')) await click('Lukk Rettinger');
       await browser.waitFor('document.querySelector("button[title=Feltvalidering]")');
       await browser.evaluate('document.querySelector("button[title=Feltvalidering]").click()');
       await browser.waitFor(`document.querySelector('[aria-label="Datasett i Validator"]')`);
@@ -171,7 +171,7 @@ test('H3 production: exact Validator selections enter object/batch editing, pres
           }
           await shot(`context-staged-${width}`);
         }
-        await click('Tilbake til appen', 'document.querySelector(".gmi-edit-workspace")');
+        await click('Lukk Rettinger', 'document.querySelector(".gmi-edit-workspace")');
         await browser.waitFor('!document.querySelector(".gmi-edit-workspace")');
         assert.equal(await browser.evaluate(`Boolean(${grid}.querySelector('[data-focus-column=true]'))`), false);
         const labels = await browser.evaluate(`Array.from(${grid}.querySelectorAll('[role=columnheader] button')).map(e=>e.getAttribute('aria-label'))`);

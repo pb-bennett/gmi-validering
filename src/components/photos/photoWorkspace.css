@@ -2,11 +2,11 @@
 .photo-workspace-shell .workspace-left { width: clamp(292px, 23vw, 316px) !important; }
 .photo-workspace-collection { display: flex; flex-direction: column; height: 100%; min-height: 0; font-size: 12px; background: var(--gmi-surface, #fff); border-right: 1px solid #dce3ea; }
 
-/* Header: back, layer name, visibility, counts, tools/filter/sort. */
+/* Header: layer name, visibility, close, counts, tools/filter/sort. */
 .photo-workspace-header { flex-shrink: 0; padding: 8px 10px 8px; border-bottom: 1px solid #dce3ea; display: grid; gap: 6px; }
-.photo-workspace-title-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; align-items: center; gap: 4px; }
+.photo-workspace-title-row { display: grid; grid-template-columns: minmax(0, 1fr) 32px 32px; align-items: center; gap: 4px; }
 .photo-workspace-collection h1 { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--gmi-navy); }
-.photo-workspace-counts { margin: 0; padding-left: 38px; color: var(--gmi-text-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.photo-workspace-counts { margin: 0; color: var(--gmi-text-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .photo-workspace-unplaced-count { color: #8a5a00; }
 .photo-workspace-unplaced-count::before { content: '·'; margin-right: 6px; color: var(--gmi-text-muted); }
 .photo-workspace-editing-pill { display: inline-flex; align-items: center; padding: 0 7px; border-radius: 999px; background: var(--gmi-cyan-soft, #e6f6f9); border: 1px solid var(--gmi-interactive); color: var(--gmi-interactive); font-weight: 600; font-size: 11px; line-height: 18px; }
@@ -15,9 +15,10 @@
 
 /* Shared icon-only button and its tooltip (hover after a delay, focus immediately). */
 .photo-icon-button { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 999px; color: var(--gmi-text, #24364b); background: transparent; position: relative; }
-.photo-icon-button:hover:not(.photo-icon-button-unavailable) { background: var(--gmi-surface-soft); color: var(--gmi-navy); }
+.photo-icon-button:hover:not(:disabled):not(.photo-icon-button-unavailable):not([aria-pressed='true']) { background: var(--gmi-surface-soft); color: var(--gmi-navy); }
+.photo-icon-button:active:not(:disabled):not(.photo-icon-button-unavailable):not([aria-pressed='true']) { background: color-mix(in srgb, var(--gmi-border-strong) 35%, var(--gmi-surface)); }
 .photo-icon-button-unavailable { opacity: .45; cursor: default; }
-.photo-toolbar-square, .photo-workspace-back.photo-icon-button { border-radius: 8px; border: 1px solid var(--gmi-border-strong, #c4ced8); background: var(--gmi-surface, #fff); }
+.photo-toolbar-square { border-radius: 8px; border: 1px solid var(--gmi-border-strong); background: var(--gmi-surface); }
 .photo-filter-dot { position: absolute; right: 5px; top: 5px; width: 6px; height: 6px; border-radius: 999px; background: var(--gmi-interactive); }
 /* .photo-icon-tooltip lives in globals.css: layer cards use the same tooltip outside the workspace. */
 

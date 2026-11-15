@@ -426,7 +426,7 @@ layerTest('going to another tool leaves the handoff only after the boundary, and
 });
 
 layerTest('layer switching, deletion and reset end the handoff without reopening a stale dialog', async (browser, directory) => {
-  const exit = async () => { await clickSourceControl(browser, 'Tilbake til appen', 'document'); };
+  const exit = async () => { await clickSourceControl(browser, 'Lukk FOTO', 'document'); };
   const shell = 'document.querySelector(".photo-workspace-shell")';
   await exit();
   await browser.waitFor(`!${shell}`);

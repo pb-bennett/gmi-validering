@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, CaretLeftIcon, CaretRightIcon, DownloadSimpleIcon, TableIcon, StackIcon } from '@phosphor-icons/react';
+import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, CaretLeftIcon, CaretRightIcon, DownloadSimpleIcon, TableIcon, StackIcon, XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
@@ -345,11 +345,11 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   return <section className="gmi-edit-workspace" aria-label="Rettinger" data-gmi-edit-state={descriptor?.state || 'none'}>
     <header className="gmi-edit-header">
       <div className="gmi-edit-title-row">
-        <PhotoIconButton icon={ArrowLeftIcon} size={20} label="Tilbake til appen" onClick={exit} className="photo-workspace-back" />
         <div className="min-w-0">
           <p className="gmi-edit-kicker">Rettinger</p>
           <h1 title={layer.name}>{layer.name}</h1>
         </div>
+        <PhotoIconButton icon={XIcon} size={18} label="Lukk Rettinger" onClick={exit} className="gmi-workspace-close" data-workspace-close="rettinger" />
       </div>
       <p className="gmi-edit-status-line">
         <span className="gmi-edit-status-pill" data-tone={presentation.tone} data-gmi-edit-status>{presentation.label}</span>

@@ -22,7 +22,7 @@ test('deleting the final FOTO layer during animated zoom and remounting the map 
       await browser.waitFor('document.querySelector("button[aria-label=Lukk]")');
       await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
       await importPhoto();
-      await clickSourceControl(browser, 'Tilbake til appen', 'document');
+      await clickSourceControl(browser, 'Lukk FOTO', 'document');
       await browser.waitFor('!document.querySelector(".leaflet-zoom-anim")');
       // Use the actual zoom and layer-deletion controls. rAF keeps deletion
       // inside the 250 ms animation, without a race against polling intervals.

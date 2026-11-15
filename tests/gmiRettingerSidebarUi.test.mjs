@@ -68,7 +68,7 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
         await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
         assert.equal(await browser.evaluate(`${modes}.contains(document.activeElement)`), false, 'Tab skips both disabled modes');
-        await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+        await click('Lukk Rettinger', workspace); await browser.waitFor(`!${workspace}`);
         assert(await browser.evaluate(`Boolean(${table})`));
         assert.equal(await browser.evaluate(`Boolean(${modes})`), false, 'an open editing session alone does not expose the modes');
         await open(); await checkEmptyModes();
@@ -79,7 +79,7 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
         assert.equal(await browser.evaluate(`${workspace}.querySelectorAll('[data-object-key], [aria-label="Objekttype"], [aria-label="Søk etter objekt"]').length`), 0);
         assert.equal(await browser.evaluate(`${table}.dataset.tableGeometry`), 'ledninger');
         await click('Punkter', table);
-        await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+        await click('Lukk Rettinger', workspace); await browser.waitFor(`!${workspace}`);
         await open();
         assert.equal(await browser.evaluate(`${table}.dataset.tableGeometry`), 'punkter');
         assert.equal((await tabs())[0].selected, 'true');
@@ -119,14 +119,14 @@ test('R6B production: Filter default, table-only object navigation, GUID search,
               await capture(`u4-undo-zero-${width}x${height}`);
             }
           }
-          await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+          await click('Lukk Rettinger', workspace); await browser.waitFor(`!${workspace}`);
           assert.equal(await browser.evaluate(`Boolean(${modes})`), false);
           await open(); await checkEmptyModes();
           await click('Gjør om retting', workspace);
           await browser.waitFor(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText.includes('1 retting')`);
           assert.equal(await browser.evaluate(`${modes}.dataset.gmiTableView`), view, `${label} restored`);
           assert.equal(await browser.evaluate(`${table}.querySelectorAll('[data-gmi-changed-cell]').length > 0`), view !== 'original');
-          await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+          await click('Lukk Rettinger', workspace); await browser.waitFor(`!${workspace}`);
           assert.equal(await browser.evaluate(`${modes}.dataset.gmiTableView`), view, 'ordinary table exposes the corrected views');
           await open();
         }

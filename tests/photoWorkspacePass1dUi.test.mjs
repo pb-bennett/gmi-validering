@@ -272,7 +272,7 @@ test('Pass 1D: source dots, dark previews, display-sized images, Save button sta
         await selectPhotoRow(browser, ids['solo-b']);
         await browser.evaluate(`document.querySelector('.photo-workspace-inspector .photo-inspector-locate').click()`);
         await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length >= 7');
-        await browser.evaluate('document.querySelector(".photo-workspace-back").click()');
+        await browser.evaluate('document.querySelector(".gmi-workspace-close").click()');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length >= 7');
         await wait(800);
@@ -405,7 +405,7 @@ test('Pass 1D: source dots, dark previews, display-sized images, Save button sta
         await clickText(browser, 'Åpne i bildemodul', 'document.querySelector(".photo-map-popup")');
         await browser.waitFor('document.querySelector(".photo-workspace-shell")');
         await browser.waitFor(`document.querySelector('.photo-workspace-row[aria-pressed=true]')?.closest('li').dataset.photoId === ${JSON.stringify(shownId)}`);
-        await browser.evaluate('document.querySelector(".photo-workspace-back").click()');
+        await browser.evaluate('document.querySelector(".gmi-workspace-close").click()');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       });
 
@@ -497,7 +497,7 @@ test('Pass 1D: source dots, dark previews, display-sized images, Save button sta
         await selectPhotoRow(browser, ids['solo-a']);
         await browser.waitFor('document.querySelector(".photo-collection-original img")?.naturalWidth > 0');
         assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-inspector h2").innerText'), fixtures.name('solo-a'), 'the original File remains readable');
-        await browser.evaluate('document.querySelector(".photo-workspace-back").click()');
+        await browser.evaluate('document.querySelector(".gmi-workspace-close").click()');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         await browser.waitFor('window.__audit.originals.size === 0');
       });

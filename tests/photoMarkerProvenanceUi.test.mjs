@@ -269,7 +269,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         }
         assert(await browser.evaluate(`Boolean(${arrowOf('document.querySelector(".photo-marker-selected")')})`));
         await screenshot('pass1c-four-source-thumbnails-workspace');
-        await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+        await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         assert.deepEqual(await badges(), baseline, 'main map reuses exactly the same source dots and borders');
         await screenshot('pass1c-four-source-thumbnails-main-map');
         await click('Bildemodul'); await browser.waitFor(legend);
@@ -295,13 +295,13 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         for (let i = 0; i < 3; i++) {
           await enterEditMode(browser);
           // Back with no staged changes leaves Edit mode and the workspace without a prompt.
-          await click('Tilbake til appen'); await browser.waitFor(`!${legend} && document.body.innerText.includes('Tegnforklaring')`);
+          await click('Lukk FOTO'); await browser.waitFor(`!${legend} && document.body.innerText.includes('Tegnforklaring')`);
           assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-edit-boundary[open]"))'), false);
           assert.notEqual(await cursor(), 'crosshair');
           await click('Bildemodul'); await browser.waitFor(legend);
           assert.equal(await browser.evaluate('document.body.innerText.includes("Tegnforklaring")'), false);
         }
-        await click('Tilbake til appen');
+        await click('Lukk FOTO');
         await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
         await browser.waitFor('document.querySelector("button[aria-label=\\\"Nullstill og åpne ny fil\\\"]")');
         await browser.evaluate('document.querySelector("button[aria-label=\\\"Nullstill og åpne ny fil\\\"]").click()');

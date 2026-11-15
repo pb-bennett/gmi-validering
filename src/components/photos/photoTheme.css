@@ -22,11 +22,11 @@
 :is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar, .photo-exclusion-actions, .photo-exclusion-confirmation) .gmi-primary-control:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Secondary buttons: a teal edge and tint on hover, a stronger tint while pressed. */
-:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar, .photo-exclusion-actions, .photo-exclusion-confirmation) .gmi-compact-button:not(.gmi-primary-control) { transition: background-color 120ms, border-color 120ms, color 120ms; }
-:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar, .photo-exclusion-actions, .photo-exclusion-confirmation) .gmi-compact-button:not(.gmi-primary-control):hover:not(:disabled):not([aria-disabled='true']) {
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar, .photo-exclusion-actions, .photo-exclusion-confirmation) .gmi-compact-button:not(.gmi-primary-control):not(.gmi-edit-destructive) { transition: background-color 120ms, border-color 120ms, color 120ms; }
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar, .photo-exclusion-actions, .photo-exclusion-confirmation) .gmi-compact-button:not(.gmi-primary-control):not(.gmi-edit-destructive):hover:not(:disabled):not([aria-disabled='true']) {
   border-color: var(--photo-accent); background: var(--photo-accent-tint); color: var(--gmi-navy);
 }
-:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar, .photo-exclusion-actions, .photo-exclusion-confirmation) .gmi-compact-button:not(.gmi-primary-control):active:not(:disabled):not([aria-disabled='true']) {
+:is(.photo-collection-dialog, .photo-metadata-dialog, .photo-edit-boundary, .photo-edit-command-bar, .photo-exclusion-actions, .photo-exclusion-confirmation) .gmi-compact-button:not(.gmi-primary-control):not(.gmi-edit-destructive):active:not(:disabled):not([aria-disabled='true']) {
   background: var(--photo-accent-tint-strong);
 }
 /* Selected and pressed controls. */

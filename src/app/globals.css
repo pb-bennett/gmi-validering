@@ -59,6 +59,10 @@
 /* Compact icon-only action inside layer-card headers; same footprint as the existing p-1 icon buttons. */
 .photo-icon-button.layer-card-icon-button { width: 22px; height: 22px; border-radius: 0.5rem; color: var(--gmi-text-subtle); }
 .photo-icon-button.layer-card-icon-button:hover:not(.photo-icon-button-unavailable) { color: var(--gmi-navy); }
+/* Workspace exits share Validator's compact 32px X footprint. */
+.photo-icon-button.gmi-workspace-close { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--gmi-text-muted); }
+.photo-icon-button.gmi-workspace-close:hover:not(:disabled) { background: var(--gmi-surface-soft); color: var(--gmi-navy); }
+.photo-icon-button.gmi-workspace-close:active:not(:disabled) { background: color-mix(in srgb, var(--gmi-border-strong) 35%, var(--gmi-surface)); }
 /* Rettinger «Vis bilder» in the map toolbar: same 36px height and 8px radius as its toolbar neighbours. */
 .photo-icon-button.gmi-map-toolbar-icon-button { width: 36px; height: 36px; flex: none; border-radius: 0.5rem; border-color: var(--gmi-border-strong); background: color-mix(in srgb, var(--gmi-surface) 95%, transparent); color: var(--gmi-text); }
 .photo-icon-button.gmi-map-toolbar-icon-button:hover:not(.photo-icon-button-unavailable) { background: var(--gmi-surface-soft); color: var(--gmi-navy); }
@@ -219,10 +223,12 @@
 
   .gmi-compact-button {
     @apply rounded-lg text-gmi-text transition-colors;
+    cursor: pointer;
   }
 
-  .gmi-compact-button:hover:not(:disabled) {
-    @apply bg-gmi-surface-soft;
+  :is(.gmi-compact-button, .gmi-primary-control):is(:disabled, [aria-disabled='true']) {
+    cursor: not-allowed;
+    opacity: .5;
   }
 
   .gmi-focus-ring {
@@ -239,15 +245,29 @@
 
   .gmi-primary-control {
     @apply rounded-lg bg-gmi-navy text-gmi-surface shadow-sm transition-opacity;
+    cursor: pointer;
   }
 
-  .gmi-primary-control:hover:not(:disabled) {
+  .gmi-primary-control:hover:not(:disabled):not([aria-disabled='true']) {
     @apply opacity-90;
+  }
+
+  .gmi-primary-control:active:not(:disabled):not([aria-disabled='true']) {
+    opacity: .8;
   }
 
   .gmi-primary-control:disabled {
     @apply opacity-60;
   }
+}
+
+/* Interaction recipes also apply when a utility supplies the resting surface.
+   Low specificity lets scoped semantic/selected treatments retain ownership. */
+.gmi-compact-button:where(:hover:not(:disabled):not([aria-disabled='true']):not(.gmi-primary-control):not(.gmi-selected-control):not(.gmi-edit-destructive):not([aria-pressed='true'])) {
+  background: var(--gmi-surface-soft);
+}
+.gmi-compact-button:where(:active:not(:disabled):not([aria-disabled='true']):not(.gmi-primary-control):not(.gmi-selected-control):not(.gmi-edit-destructive):not([aria-pressed='true'])) {
+  background: color-mix(in srgb, var(--gmi-border-strong) 35%, var(--gmi-surface));
 }
 
 /* Theme: Modern Blue (Default) */

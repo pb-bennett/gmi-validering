@@ -92,7 +92,7 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
 
       await t.test('original FEIL and SJEKK attach to fields with accessible explanatory tooltips', async () => {
         assert.equal(await tableType(), 'Ledninger');
-        const back = `${workspace}.querySelector('button[aria-label="Tilbake til appen"]')`;
+        const back = `${workspace}.querySelector('button[aria-label="Lukk Rettinger"]')`;
         await browser.evaluate(`${back}.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }))`);
         await browser.waitFor('document.querySelector(".photo-icon-tooltip")');
         assert.equal(await browser.evaluate('document.querySelector(".photo-icon-tooltip").hasAttribute("data-validation-tone")'), false, 'ordinary FOTO/shared control tooltip keeps its default styling');

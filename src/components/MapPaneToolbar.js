@@ -11,14 +11,17 @@ import { isTestModeEnabled } from '@/lib/telemetry/uploadTelemetry.mjs';
 import { MapToolbarMode } from '@/lib/workspace/mapPanePresentation.mjs';
 import useStore from '@/lib/store';
 import { useMapPanePresentation } from './MapPanePresentationProvider';
-import PhotoIconButton from './photos/PhotoIconButton';
+import PhotoIconButton, { usePhotoIconTooltip } from './photos/PhotoIconButton';
 import TabSwitcher from './TabSwitcher';
 import TestModeControl from './TestModeControl';
 
-const ToolbarButton = forwardRef(function ToolbarButton({ children, className = '', ...props }, ref) {
+const ToolbarButton = forwardRef(function ToolbarButton({ children, className = '', title, ...props }, ref) {
+  const ownRef = useRef(null);
+  const label = props['aria-label'];
+  usePhotoIconTooltip(ownRef, title || label, label);
   return (
     <button
-      ref={ref}
+      ref={(node) => { ownRef.current = node; if (typeof ref === 'function') ref(node); else if (ref) ref.current = node; }}
       type="button"
       className={`gmi-elevated-surface gmi-compact-button gmi-focus-ring inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 bg-gmi-surface/95 px-2.5 py-1.5 text-xs font-medium backdrop-blur-sm ${className}`}
       {...props}

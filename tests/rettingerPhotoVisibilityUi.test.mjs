@@ -38,7 +38,7 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
       await browser.waitFor(workspace);
     };
     const exitRettinger = async () => {
-      await clickButton('Tilbake til appen', workspace);
+      await clickButton('Lukk Rettinger', workspace);
       await browser.waitFor(`!${workspace}`);
     };
     // Persistent FOTO visibility as the layer card states it (the card is the Layer Manager's own control).
@@ -63,7 +63,7 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
       await browser.waitFor('document.querySelector(".photo-workspace-shell") && document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 2');
       const pills = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map((li) => [li.dataset.photoId, li.querySelector('.photo-delivery-pill')?.innerText ?? null])`);
       const workspaceMarkers = await browser.evaluate(markerCount);
-      await clickButton('Tilbake til appen');
+      await clickButton('Lukk FOTO');
       await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       return { pills, workspaceMarkers };
     };
@@ -82,7 +82,7 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
         const pills = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map((li) => [li.dataset.photoId, li.querySelector('.photo-delivery-pill')?.innerText ?? null])`);
         return pills;
       })();
-      await clickButton('Tilbake til appen');
+      await clickButton('Lukk FOTO');
       await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       for (const file of [first, second]) {
         await clickButton('Legg til fil');

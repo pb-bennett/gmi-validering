@@ -163,7 +163,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       assert.equal(await browser.evaluate(markerCount), 0); await applyPhotoSourcePositions(browser, 'gml');
       await browser.waitFor(`${markerCount} === 148`);
       await browser.waitFor('/Zoom: (1[6-8])/.test(document.body.innerText)');
-      await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+      await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       const locations = await browser.evaluate('new Set(Array.from(document.querySelectorAll(".photo-camera-marker")).map(e => e.style.transform)).size');
       assert(locations > 120 && locations <= 136); await browser.waitFor(`${originalCount} === 0`);
       await screenshot('photo-workspace-normal-map'); checks.push(`148 markers, ${locations} rounded pixel locations; 136 geographic positions checked independently`);
@@ -230,7 +230,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       await browser.waitFor(`${inspector}.querySelector('h2').innerText === ${JSON.stringify(clickedWorkspacePhoto)}`);
       assert(!await browser.evaluate('Boolean(document.querySelector(".photo-map-popup"))'));
       checks.push('layer-card entry, 148 collection records, active/batch independence, selected marker, provenance and one live original URL');
-      await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+      await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       assert.equal(await browser.evaluate(originalCount), 0);
       const markerTitle = await browser.evaluate('document.querySelector(".photo-camera-marker").title.replace(/^Vis bilde: /, "").split(" · ")[0]');
       const originalsBeforePopup = await browser.evaluate('window.__photoUrlAudit.originalCreated');
@@ -301,7 +301,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       await browser.evaluate(`document.querySelector('.photo-workspace-visibility').click()`); await browser.waitFor(`${markerCount} === 148`);
       await screenshot('photo-workspace-dense-selection');
       checks.push('duplicate GML diagnosed; changed source requires explicit wizard confirmation; reversible 148-photo GML/EXIF and visibility');
-      await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await deleteLayer();
+      await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await deleteLayer();
       assert.equal(await browser.evaluate(markerCount), 0); assert.equal(await browser.evaluate(originalCount), 0);
 
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await inputFiles('input[aria-label="Velg bildefiler"]', photos);
@@ -312,7 +312,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       await applyPhotoSourcePositions(browser, 'gml'); await browser.waitFor(`${markerCount} === 148`);
       await applyPhotoSourcePositions(browser, 'exif'); await browser.waitFor(current('EXIF'));
       await applyPhotoSourcePositions(browser, 'gml'); await browser.waitFor(current('GML'));
-      await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await deleteLayer();
+      await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await deleteLayer();
       checks.push('photos-only EXIF and late real GML remain candidate-only; all 148 explicitly accepted in batch; reversible source basis');
 
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await syntheticPhotos(['empty-layer.png']);
@@ -322,7 +322,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")'); await click('Fjern fra lag', 'document.querySelector(".photo-remove-confirmation")');
       await browser.waitFor(`${collectionCount} === 0`);
       assert(await browser.evaluate('document.body.innerText.includes("Laget er tomt")')); assert(await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))'));
-      await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+      await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       assert(await browser.evaluate('Boolean(document.querySelector("section[aria-label^=Fotokartlag]"))')); await deleteLayer();
       checks.push('final member removal retains empty FOTO layer and map; separate layer deletion');
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await inputFiles('input[aria-label="Velg bildefiler"]', [photos[0]]);

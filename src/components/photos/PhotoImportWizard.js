@@ -1,6 +1,6 @@
  'use client';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { ImagesIcon, FolderOpenIcon, XIcon } from '@phosphor-icons/react';
+import { CheckIcon, ImagesIcon, FolderOpenIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { initialImportState, importSteps, importWizardReducer, canAdvance, canNavigateBack } from '@/lib/photos/photoImportWizardState.mjs';
 import FileDropOverlay from '@/components/FileDropOverlay';
@@ -79,7 +79,7 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
     {session.lastImport?.rejectedNames.length > 0 && <details><summary>Avviste filer ({session.lastImport.rejectedNames.length})</summary>{session.lastImport.rejectedNames.join(', ')}</details>}
     {session.duplicateNames.length > 0 && <details><summary>Like filnavn ({session.duplicateNames.length})</summary>{session.duplicateNames.map((item) => <p key={item.filename}>{item.filename}</p>)}</details>}
   </div>;
-  return <dialog ref={dialogRef} className="photo-collection-dialog bg-gmi-surface text-gmi-text shadow-2xl" aria-labelledby="photo-collection-title" data-thumbnails-pending={photos.filter((photo) => photo.preview.state === 'pending').length} data-exif-pending={photos.filter((photo) => photo.spatial.exifRead.state === 'pending').length}
+  return <dialog ref={dialogRef} className="photo-collection-dialog photo-import-wizard bg-gmi-surface text-gmi-text shadow-2xl" aria-labelledby="photo-collection-title" data-thumbnails-pending={photos.filter((photo) => photo.preview.state === 'pending').length} data-exif-pending={photos.filter((photo) => photo.spatial.exifRead.state === 'pending').length}
     onCancel={(event) => {
       // File inputs emit a bubbling cancel event when their native picker is dismissed.
       // Only a cancel targeted at this dialog (Escape) cancels the import session.
@@ -121,11 +121,11 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
         <div className="mr-auto text-sm" id="photo-import-status" role="status">{error || advance.reason || (preview ? `${preview.outcome.total} bilder · ${preview.outcome.placed} plassert · ${preview.outcome.unplaced} uten posisjon` : '')}</div>
         <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border px-3 py-2 text-gmi-text-muted" onClick={onClose}>Avbryt</button>
         {state.step !== 'photos' && <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong bg-gmi-surface px-4 py-2" onClick={() => navigateBack(steps[steps.indexOf(state.step) - 1])}>Tilbake</button>}
-        <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4" disabled={!advance.ok || (final && (!preview || (!target && !preview.outcome.total)))} aria-describedby="photo-import-status" onClick={() => {
+        <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4${final ? ' photo-import-final' : ''}`} disabled={!advance.ok || (final && (!preview || (!target && !preview.outcome.total)))} aria-describedby="photo-import-status" onClick={() => {
           if (!final) { dispatch({ type: 'step', step: steps[steps.indexOf(state.step) + 1] }); return; }
           const result = photoSession.completeImport({ loadedReview: review, placement: state.placement, preview });
           if (result.ok) onComplete(result); else setError('Bildene eller kilden er endret. Kontrollen er oppdatert – se over før du fortsetter.');
-        }}>{primary}</button>
+        }}>{final && <CheckIcon size={16} weight="regular" aria-hidden="true" />}{primary}</button>
       </footer>
     </div>
   </dialog>;

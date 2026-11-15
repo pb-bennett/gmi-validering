@@ -90,7 +90,7 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
       await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', [photo]);
       await waitForThumbnails(browser);
       await createLayerWithPlacement(browser, 'exif');
-      await u.clickButton('Tilbake til appen');
+      await u.clickButton('Lukk FOTO');
       await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       await u.clickButton('Legg til fil');
       await browser.waitFor('document.querySelector("input[type=file]")');
@@ -135,7 +135,7 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
         await browser.waitFor('document.querySelector(".photo-workspace-shell")');
         assert.equal(await u.unloadBlocked(), false, 'nothing unsaved remains after the confirmed discard');
         // Back from FOTO: Rettinger resumes for the same layer, the discarded draft is gone, nothing was staged.
-        await u.clickButton('Tilbake til appen');
+        await u.clickButton('Lukk FOTO');
         await browser.waitFor(`${workspace}?.querySelector('[data-gmi-edit-status]')?.innerText === 'Redigerbar'`);
         assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')`), null);
       });
@@ -156,12 +156,12 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
       await t.test('leaving Rettinger (the only route to «Fjern lag» or another layer): cancel keeps the draft, confirm leaves', async () => {
         const before = await u.snapshot();
         assert.equal(await browser.evaluate('document.querySelectorAll(\'button[aria-label="Fjern lag"]\').length'), 0, 'layer cards are not reachable inside Rettinger');
-        await u.clickButton('Tilbake til appen', workspace);
+        await u.clickButton('Lukk Rettinger', workspace);
         await browser.waitFor(draftDialog);
         await u.clickButton('Avbryt', draftDialog);
         await browser.waitFor(`!${draftDialog}`);
         assert.deepEqual(await u.snapshot(), before);
-        await u.clickButton('Tilbake til appen', workspace);
+        await u.clickButton('Lukk Rettinger', workspace);
         await browser.waitFor(draftDialog);
         await u.clickButton('Forkast skjemaet', draftDialog);
         await browser.waitFor(`!${workspace}`);

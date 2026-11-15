@@ -145,14 +145,14 @@ test('R3 production: source-bound snapshot selection, full filtered model, teal 
 
       await t.test('exit and source removal/reimport clear selection and restore the ordinary table', async () => {
         await browser.evaluate(`${box(0)}.click()`); await waitTotal(1);
-        await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+        await click('Lukk Rettinger', workspace); await browser.waitFor(`!${workspace}`);
         await browser.waitFor(`!${bar}`);
         assert.equal(await browser.evaluate(`${grid}.querySelectorAll('[data-table-row] input').length`), 0);
         await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
         await browser.waitFor(header); assert.equal(await browser.evaluate(`Boolean(${bar})`), false);
         await click('Forkast alle', workspace);
         await click('Forkast alle', `document.querySelector('dialog[open]')`);
-        await click('Tilbake til appen', workspace);
+        await click('Lukk Rettinger', workspace);
         await click('Fjern lag');
         await click('Fjern');
         await click('Åpne fil'); await setPhotoFiles(browser, 'input[type=file]', [file]);

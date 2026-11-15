@@ -56,16 +56,16 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
       }
       assert.deepEqual(Object.keys(ids).sort(), ['IMG_10', 'IMG_2', 'shared1', 'shared2', 'unplaced']);
 
-      await t.test('quiet left pane: back arrow, compact counts, Verktøy, filter/sort; toast instead of a permanent banner', async () => {
+      await t.test('quiet left pane: X close, compact counts, Verktøy, filter/sort; toast instead of a permanent banner', async () => {
         const text = await browser.evaluate('document.querySelector(".photo-workspace-collection").innerText');
         for (const removed of ['Velg alle viste', 'Kilder og koblinger ·', 'Opptaksmetadata for', 'Lukk importmelding', 'Vis på kartet', 'Eksporter', 'Legg til bilder']) assert(!text.includes(removed), removed);
         // Unique assets · placements, and unplaced separately; no third competing count.
         assert.match(text, /4 bilder · 5 plasseringer/);
         assert.match(text, /3 uplassert/);
         assert.doesNotMatch(text, /\d+ plassert ·/);
-        const back = await browser.evaluate(`(() => { const b = document.querySelector('.photo-workspace-back'); return { label: b.getAttribute('aria-label'), tip: b.dataset.iconTooltip, title: b.getAttribute('title'), text: b.innerText.trim() }; })()`);
-        assert.deepEqual(back, { label: 'Tilbake til appen', tip: 'Tilbake til appen', title: null, text: '' });
-        assert(await browser.evaluate(`parseFloat(getComputedStyle(document.querySelector('.photo-workspace-back')).borderTopWidth) >= 1`), 'back arrow has a visible button treatment');
+        const back = await browser.evaluate(`(() => { const b = document.querySelector('.gmi-workspace-close'); return { label: b.getAttribute('aria-label'), tip: b.dataset.iconTooltip, title: b.getAttribute('title'), text: b.innerText.trim() }; })()`);
+        assert.deepEqual(back, { label: 'Lukk FOTO', tip: 'Lukk FOTO', title: null, text: '' });
+        assert(await browser.evaluate(`getComputedStyle(document.querySelector('.gmi-workspace-close')).borderRadius === '8px'`), 'X close has the shared workspace button treatment');
         const tools = await browser.evaluate(`(() => { const b = document.querySelector('.photo-tools-trigger'); return { label: b.getAttribute('aria-label'), tip: b.dataset.iconTooltip, text: b.innerText.trim(), icons: b.querySelectorAll('svg').length }; })()`);
         assert.deepEqual(tools, { label: 'Verktøy', tip: 'Verktøy', text: '', icons: 2 }, 'Verktøy is a wrench + chevron icon button');
         assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-toast")?.getAttribute("role")'), 'status');
@@ -110,12 +110,12 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
       });
 
       await t.test('icon-only controls: hover and focus tooltips, no title, state-aware eye; text controls have none', async () => {
-        await hover('document.querySelector(".photo-workspace-back")');
+        await hover('document.querySelector(".gmi-workspace-close")');
         await wait(150); assert.equal(await tooltipText(), null, 'hover waits for the delay');
         await browser.waitFor('document.querySelector(".photo-icon-tooltip")');
-        assert.equal(await tooltipText(), 'Tilbake til appen');
+        assert.equal(await tooltipText(), 'Lukk FOTO');
         assert.equal(await browser.evaluate('document.querySelector(".photo-icon-tooltip").getAttribute("aria-hidden")'), 'true');
-        assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-back").hasAttribute("aria-describedby")'), false);
+        assert.equal(await browser.evaluate('document.querySelector(".gmi-workspace-close").hasAttribute("aria-describedby")'), false);
         await unhover(); await browser.waitFor('!document.querySelector(".photo-icon-tooltip")');
         const eye = 'document.querySelector(".photo-workspace-visibility")';
         await keyboardFocus(eye);
@@ -436,7 +436,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
       await t.test('Back, Verktøy and Rediger opptaksdata… all hit the boundary; the shared header has no Bilder button', async () => {
         assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('.workspace-left > header button')).some((b) => /Bilder/.test(b.innerText))`), false);
         for (const [name, action] of [
-          ['back', () => browser.evaluate('document.querySelector(".photo-workspace-back").click()')],
+          ['back', () => browser.evaluate('document.querySelector(".gmi-workspace-close").click()')],
           ['tools', () => openTool(browser, 'Eksporter…')],
           ['metadata', () => clickText(browser, 'Rediger opptaksdata…')],
         ]) {
@@ -590,7 +590,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await selectPhotoRow(browser, ids.IMG_2);
         await dragSelectedMarker(browser, 25, 0);
         await browser.waitFor(`${editCount()} === 1`);
-        await browser.evaluate('document.querySelector(".photo-workspace-back").click()');
+        await browser.evaluate('document.querySelector(".gmi-workspace-close").click()');
         await browser.waitFor('document.querySelector(".photo-edit-boundary[open]")');
         await clickText(browser, 'Lagre endringer', 'document.querySelector(".photo-edit-boundary")');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');

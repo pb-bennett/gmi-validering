@@ -319,7 +319,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(urls[0], urls[1]);
         assert.equal(await browser.evaluate('getComputedStyle(document.querySelector(".leaflet-photo-markers-pane")).zIndex'), '620');
         expectedPhotographerAfterAppend = await browser.evaluate(inspectorFact('Opptak', 'Fotograf'));
-        await click(browser, 'Tilbake til appen', 'document');
+        await click(browser, 'Lukk FOTO', 'document');
       });
       await t.test('append reuses existing assets and recheck does not multiply occurrences or issue WFS requests', async () => {
         await openEntry(); await folder(); await waitForThumbnails(browser);
@@ -333,7 +333,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await browser.evaluate(inspectorFact('Opptak', 'Fotograf')),expectedPhotographerAfterAppend);
       });
       await t.test('ordinary Bilder import still works independently and does not fetch WFS', async () => {
-        await click(browser, 'Tilbake til appen', 'document'); await click(browser, 'Bilder', 'document');
+        await click(browser, 'Lukk FOTO', 'document'); await click(browser, 'Bilder', 'document');
         await browser.evaluate(`(() => {const data=Uint8Array.from(atob(${JSON.stringify(bytes)}),c=>c.charCodeAt(0)),t=new DataTransfer();t.items.add(new File([data],'ordinary.png',{type:'image/png'}));
           const i=document.querySelector('input[aria-label="Velg bildefiler"]');i.files=t.files;i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
         await createLayerWithoutPlacement(browser);

@@ -98,7 +98,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await click(browser, 'Bruk valgte posisjoner for 3 plasseringer');
       await browser.waitFor(`!${sourceWizard}`);
       assert.equal(await browser.evaluate(markers), 3);
-      await click(browser, 'Tilbake til appen', 'document');
+      await click(browser, 'Lukk FOTO', 'document');
       await click(browser, 'Legg til fil', 'document');
       await browser.waitFor('document.querySelector("input[type=file]")');
       await browser.evaluate('window.confirm = () => true');

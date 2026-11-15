@@ -146,7 +146,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await click(browser, 'Lukk eksport');
       });
 
-      await click(browser, 'Tilbake til appen', 'document');
+      await click(browser, 'Lukk Rettinger', 'document');
       await browser.waitFor('!document.querySelector(".gmi-edit-workspace")');
       await browser.waitFor('document.querySelector("button[aria-label=\\\"Koble bilder til GMI-laget\\\"]")');
       await browser.evaluate('document.querySelector("button[aria-label=\\\"Koble bilder til GMI-laget\\\"]").click()');

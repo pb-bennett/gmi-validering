@@ -71,7 +71,7 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
         assert.equal(await browser.evaluate(`${legend}.getAttribute('aria-expanded')`), 'false', 'U3 entering Rettinger collapses legend');
         await browser.evaluate(`${legend}.click()`);
         assert.equal(await browser.evaluate(`${legend}.getAttribute('aria-expanded')`), 'true', 'U3 manual reopen works');
-        await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+        await click('Lukk Rettinger', workspace); await browser.waitFor(`!${workspace}`);
         assert.equal(await browser.evaluate(`${legend}.getAttribute('aria-expanded')`), 'true', 'U3 ordinary state restored');
         await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
         await browser.waitFor(workspace); await click('Filter', workspace); await browser.waitFor(panel);
@@ -148,7 +148,7 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
         }
         await hideMaterial(); await count(1);
         await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`);
-        await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+        await click('Lukk Rettinger', workspace); await browser.waitFor(`!${workspace}`);
         // The ordinary host still displays Original, even when Rettinger used Foreslått.
         await open(felt); await open(field('Material'));
         assert.equal(await browser.evaluate(`${field('Material')}.querySelector('[data-filter-value=PE] input').checked`), false);
@@ -163,7 +163,7 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
         await browser.evaluate(`Array.from(${tema}.querySelectorAll('div.cursor-pointer')).find(e => e.querySelector('span.font-mono')?.textContent === 'VL').click()`);
         await count(0);
         assert.equal(await browser.evaluate(`${table}.dataset.tableGeometry`), 'ledninger');
-        await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
+        await click('Lukk Rettinger', workspace); await browser.waitFor(`!${workspace}`);
         await open(tema);
         assert.equal(await browser.evaluate(`Array.from(${tema}.querySelectorAll('div.cursor-pointer')).find(e => e.querySelector('span.font-mono')?.textContent === 'VL').querySelector('input').checked`), false);
         await count(0);

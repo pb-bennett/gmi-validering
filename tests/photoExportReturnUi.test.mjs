@@ -740,7 +740,7 @@ layerTest('another tool ends the journey, only after the boundary, and nothing c
 });
 
 layerTest('leaving FOTO, removing the layer and resetting the session clear the journey, and nothing reopens', async (browser, directory) => {
-  const exit = () => clickSourceControl(browser, 'Tilbake til appen', 'document');
+  const exit = () => clickSourceControl(browser, 'Lukk FOTO', 'document');
   const openLayer = async () => { await browser.evaluate(`document.querySelector('button[aria-label^="Åpne bildemodul"]').click()`); await browser.waitFor(shell); };
   const nothingOpen = async (context) => { await delay(300); assert.equal(await openDialogs(browser), 0, context); assert.equal(await browser.evaluate(`Boolean(${commandBar})`), false, context); };
 
@@ -824,7 +824,7 @@ layerTest('leaving FOTO, removing the layer and resetting the session clear the 
 for (const where of ['hub', 'map', 'positioning wizard']) for (const how of ['remove', 'reset']) {
   layerTest(`${how === 'remove' ? 'the layer is removed' : 'the session is reset'} while the journey is on the ${where}: everything closes and nothing comes back`, async (browser, directory) => {
     const capture = (expression, name) => browser.evaluate(`(() => { const element = ${expression}, key = Object.keys(element).find((item) => item.startsWith('__reactProps')); window.${name} = element[key].onClick; })()`);
-    await clickSourceControl(browser, 'Tilbake til appen', 'document');
+    await clickSourceControl(browser, 'Lukk FOTO', 'document');
     await browser.waitFor(`!${shell}`);
     await browser.evaluate(`document.querySelector('button[aria-label^="Fjern fotokartlag"]').click()`);
     await browser.waitFor(`Array.from(document.querySelectorAll('button')).some((item) => item.innerText.trim() === 'Fjern')`);

@@ -30,3 +30,7 @@
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) .photo-collection-original { min-height:120px; position:relative; }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) .photo-collection-facts { max-height:none; overflow:visible; overflow-wrap:anywhere; }
 .photo-import-footer button:disabled { opacity:.45; }
+.photo-import-wizard .photo-import-footer > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; min-height: 40px; }
+.photo-import-wizard .gmi-primary-control.photo-import-final { background: var(--gmi-navy); border-color: var(--gmi-navy); color: var(--gmi-surface); }
+.photo-import-wizard .gmi-primary-control.photo-import-final:hover:not(:disabled) { background: color-mix(in srgb, var(--gmi-navy) 82%, var(--gmi-ink)); opacity: 1; }
+.photo-import-wizard .gmi-primary-control.photo-import-final:active:not(:disabled) { background: color-mix(in srgb, var(--gmi-navy) 64%, var(--gmi-ink)); opacity: 1; }

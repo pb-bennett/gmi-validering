@@ -40,7 +40,7 @@ test('R1: geometry survives Felt and Tema hide/show; explicit scope and inspecti
         assert.equal(await browser.evaluate(`${workspace}.querySelector('[role=tab][aria-selected=true]').innerText`), 'Filter');
         await click('Punkter', table); await geometry('punkter');
         await click('Ledninger', table); await geometry('ledninger');
-        await click('Tilbake til appen', workspace);
+        await click('Lukk Rettinger', workspace);
         await browser.waitFor(`!${workspace}`);
       });
 

@@ -325,7 +325,7 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
       });
 
       await t.test('main map: shared Miniatyrer preference, stack popup paging, zoom fallback, inspection only', async () => {
-        await browser.evaluate('document.querySelector(".photo-workspace-back").click()');
+        await browser.evaluate('document.querySelector(".gmi-workspace-close").click()');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         const legend = 'document.querySelector("[data-legend-photos]")';
         // The legend is a lazily loaded chunk; with only FOTO layers it now carries the photo display modes.
@@ -385,7 +385,7 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         await clickText(browser, 'Åpne i bildemodul', 'document.querySelector(".photo-map-popup")');
         await browser.waitFor('document.querySelector(".photo-workspace-shell")');
         assert.equal(await activeId(), ids[shown], 'the paged photo opens in the workspace');
-        await browser.evaluate('document.querySelector(".photo-workspace-back").click()');
+        await browser.evaluate('document.querySelector(".gmi-workspace-close").click()');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         for (const [key, occurrence] of [['solo1', '1 av 2'], ['solo2', '2 av 2']]) {
           await click(await elementCentre(browser, `document.querySelector('.leaflet-marker-icon[data-photo-id="${ids[key]}"]')`));
@@ -396,7 +396,7 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
           await clickText(browser, 'Åpne i bildemodul', 'document.querySelector(".photo-map-popup")');
           await browser.waitFor('document.querySelector(".photo-workspace-shell")');
           assert.equal(await activeId(), ids[key], 'opens this exact occurrence of the shared asset');
-          await clickText(browser, 'Tilbake til appen');
+          await clickText(browser, 'Lukk FOTO');
           await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         }
         for (let i = 0; i < 6 && await browser.evaluate('Boolean(document.querySelector(".photo-thumb-marker"))'); i++) {
@@ -441,7 +441,7 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
             return source.right<=stack.left || source.left>=stack.right || source.bottom<=stack.top || source.top>=stack.bottom;})()`);
           assert(clear, 'source dot and stack count never overlap');
           await screenshot(`pass1c-stack-${kind}-workspace`);
-          await clickText(browser, 'Tilbake til appen');
+          await clickText(browser, 'Lukk FOTO');
           await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
           assert.equal(await browser.evaluate('document.querySelector(".photo-marker-stack").closest(".leaflet-marker-icon").querySelector(".photo-thumb").dataset.positionSource'), kind);
           await screenshot(`pass1c-stack-${kind}-main`);

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { XIcon, FunnelIcon, ArrowsDownUpIcon, ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
+import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import useStore from '@/lib/store';
 import { validateGmiDataset } from '@/lib/gmi-edit/index.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
@@ -412,15 +413,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
       <div className="flex-none border-b border-gmi-border bg-gmi-surface px-2 py-2">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-gmi-navy">Validator · {datasetLabel}</h2>
-          <button
-            type="button"
-            onClick={closeValidator}
-            aria-label="Lukk Validator"
-            title="Lukk Validator"
-            className="gmi-compact-button gmi-focus-ring inline-flex h-8 w-8 items-center justify-center text-gmi-text-muted hover:text-gmi-navy"
-          >
-            <XIcon aria-hidden="true" size={18} weight="regular" />
-          </button>
+          <PhotoIconButton icon={XIcon} size={18} label="Lukk Validator" onClick={closeValidator} className="gmi-workspace-close" data-workspace-close="validator" />
         </div>
         <div className="mt-2 grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-1.5">
           <label className="text-[11px] font-medium text-gmi-text" htmlFor="validation-v2-layer">Lag</label>

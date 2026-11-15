@@ -99,7 +99,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
       await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', [photo]);
       await waitForThumbnails(browser);
       await createLayerWithoutPlacement(browser);
-      await u.clickButton('Tilbake til appen');
+      await u.clickButton('Lukk FOTO');
       await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       await u.loadGmi(corePath);
       const photoLayerCount = () => browser.evaluate('document.querySelectorAll("section[aria-label^=Fotokartlag]").length');
@@ -308,7 +308,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         assert(await browser.evaluate(`Boolean(${workspace})`), "Rettinger still open");
         assert.equal(await browser.evaluate(`${editor}.dataset.gmiObject`), 'point:1', 'selection kept');
         assert.equal(await browser.evaluate(`${workspace}.querySelectorAll('[data-change-set]').length + ${workspace}.querySelector('[data-gmi-edit-counts]').innerText.length > 0`), true);
-        await u.clickButton('Tilbake til appen', workspace);
+        await u.clickButton('Lukk Rettinger', workspace);
         await browser.waitFor(`!${workspace}`);
         assert.equal(await photoLayerCount(), photoLayersBefore, 'FOTO layer untouched by a cancelled reset');
         assert(await browser.evaluate(`document.querySelector('[data-gmi-layer-pill]')?.innerText.includes('3 rettinger · ikke lastet ned')`));
@@ -339,7 +339,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await browser.evaluate(`${editor}.querySelector('[data-gmi-new-errors] input')?.click()`);
         await u.clickButton('Legg til retting', editor);
         await browser.waitFor(`${workspace}.querySelector('[data-download-state]')?.dataset.downloadState === 'unsaved'`);
-        await u.clickButton('Tilbake til appen', workspace);
+        await u.clickButton('Lukk Rettinger', workspace);
         await browser.waitFor(`!${workspace}`);
         const remove = `document.querySelector('[data-gmi-edit-action]').closest('.py-1').querySelector('button[aria-label="Fjern lag"]')`;
         await browser.evaluate(`${remove}.click()`);
@@ -360,7 +360,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         assert.equal(await browser.evaluate(`${editor}.querySelectorAll('input').length`), 0);
         assert.match(await u.text(editor), /kan ikke rettes/);
         await u.shot('m4-rettinger-read-only');
-        await u.clickButton('Tilbake til appen', workspace);
+        await u.clickButton('Lukk Rettinger', workspace);
       });
     } finally {
       await browser.close();

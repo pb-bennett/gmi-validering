@@ -274,7 +274,7 @@ test('FOTO direction arrows: one lower pane under every photo, live in Edit mode
         await assertLayering('after redo', { ...headings, 'a.png': '225' });
 
         // Leaving with unsaved changes, then «Fortsett redigering»: nothing changes, still one arrow.
-        await clickSourceControl(browser, 'Tilbake til appen', 'document');
+        await clickSourceControl(browser, 'Lukk FOTO', 'document');
         await browser.waitFor('document.querySelector(".photo-edit-boundary[open]")');
         await clickSourceControl(browser, 'Fortsett redigering', 'document.querySelector(".photo-edit-boundary")');
         await browser.waitFor('!document.querySelector(".photo-edit-boundary[open]")');
@@ -318,7 +318,7 @@ test('FOTO direction arrows: one lower pane under every photo, live in Edit mode
 
       await t.test('main map and layer removal: arrows follow the layer and leave nothing behind', async () => {
         const layerName = await browser.evaluate('document.querySelector(".photo-workspace-collection h1").textContent');
-        await clickSourceControl(browser, 'Tilbake til appen', 'document');
+        await clickSourceControl(browser, 'Lukk FOTO', 'document');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         await browser.waitFor(`document.querySelectorAll('${DIRECTION_PANE} .photo-direction-marker').length === ${PHOTOS.length}`);
         await assertLayering('main map', { ...headings, 'a.png': '300' });

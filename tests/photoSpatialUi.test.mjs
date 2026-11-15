@@ -61,7 +61,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     const renderedLocations = await browser.evaluate('new Set(Array.from(document.querySelectorAll(".photo-camera-marker")).map(e => e.style.transform)).size');
     assert(renderedLocations <= 136 && renderedLocations > 120);
     checks.push(`148 marker records; initial photo fit; ${renderedLocations} rounded pixel locations (136 geographic positions verified separately)`);
-    await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+    await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
     await screenshot('photo-spatial-map');
 
     await browser.evaluate(`document.querySelector('input[aria-label^="Vis lag"]').click()`);
@@ -91,7 +91,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await screenshot('photo-spatial-inspector');
     await applyPhotoSourcePositions(browser, 'exif', { filename: markerTitle });
     await browser.waitFor(`${placementSource} === 'EXIF'`);
-    await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+    await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
     await browser.waitFor(`${markerSource(markerTitle)} === 'exif'`);
     await applyPhotoSourcePositions(browser, 'gml', { filename: markerTitle });
     // Called from the main map, the helper enters and leaves the workspace; reopen it at the same photo.
@@ -115,7 +115,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
       await browser.waitFor(`${placementSource} === 'GML'`);
     }
     checks.push('current/GML/EXIF locate retain workspace, markers and accepted basis');
-    await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await deleteLayer();
+    await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await deleteLayer();
     assert.equal(await browser.evaluate(markerCount), 0);
 
     await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")');
@@ -124,7 +124,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await browser.waitFor('document.querySelector(".photo-workspace-counts")?.innerText.includes("148 bilder") && document.querySelector(".photo-workspace-counts")?.innerText.includes("148 uplassert") && document.querySelector(".leaflet-container")');
     assert.equal(await browser.evaluate(markerCount), 0);
      await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-    await applyPhotoSourcePositions(browser, 'exif', { filename: await browser.evaluate('document.querySelector(".photo-workspace-inspector h2").innerText') }); await click('Tilbake til appen');
+    await applyPhotoSourcePositions(browser, 'exif', { filename: await browser.evaluate('document.querySelector(".photo-workspace-inspector h2").innerText') }); await click('Lukk FOTO');
     await browser.waitFor(`${markerCount} === 1`);
     assert(await browser.evaluate('document.body.innerText.includes("1 plassert") && document.body.innerText.includes("147 uplassert")'));
     checks.push('all 148 EXIF candidates stay unplaced without GML; explicit acceptance creates exactly one marker');
@@ -153,7 +153,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     assert(await browser.evaluate('(() => { const point = document.querySelector(".photo-camera-marker").getBoundingClientRect(); const map = document.querySelector(".leaflet-container").getBoundingClientRect(); return point.left >= map.left && point.right <= map.right && point.top >= map.top && point.bottom <= map.bottom; })()'));
     assert.equal(await browser.evaluate(markerCount), 1);
     checks.push('GMI/SOSI/KOF survey import, fitting and explicit photo geographic locate coexist');
-    await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+    await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
 
     await click('Nullstill og åpne ny fil');
     await browser.waitFor(`!document.querySelector('section[aria-label^="Fotokartlag"]') && !document.querySelector('.leaflet-container')`);

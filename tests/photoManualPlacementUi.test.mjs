@@ -55,7 +55,7 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
     };
     const boundary = 'document.querySelector(".photo-edit-boundary[open]")';
     const deleteLayer = async () => {
-      await click('Tilbake til appen');
+      await click('Lukk FOTO');
       await browser.evaluate(`document.querySelector('button[aria-label^="Fjern fotokartlag"]').click()`);
       await click('Fjern'); await browser.waitFor('!document.querySelector("section[aria-label^=Fotokartlag]")');
     };
@@ -129,13 +129,13 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
       const manual=await currentText();
       await enterEditMode(browser); await selectIndex(1); await mapClick(-70,30); await selectIndex(0);
       assert.equal(await currentText(),manual); assert.equal(await browser.evaluate(editCount),1);
-      for (const label of ['Legg til bilder', 'Koble og posisjoner bilder', 'Tilbake til appen']) {
+      for (const label of ['Legg til bilder', 'Koble og posisjoner bilder', 'Lukk FOTO']) {
         await click(label); await browser.waitFor(boundary);
         assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-collection-dialog[open], .photo-positioning-wizard[open]"))'),false);
         await click('Fortsett redigering','document.querySelector(".photo-edit-boundary")'); await browser.waitFor(`!${boundary}`);
       }
       assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-visibility").getAttribute("aria-disabled")'),'true');
-      await click('Tilbake til appen'); await browser.waitFor(boundary);
+      await click('Lukk FOTO'); await browser.waitFor(boundary);
       await click('Forkast endringer','document.querySelector(".photo-edit-boundary")');
       await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
@@ -193,7 +193,7 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
       await browser.evaluate('document.querySelector(".photo-removal-primary").click()');
       await click('Fjern fra lag','document.querySelector(".photo-remove-confirmation")');
       await browser.waitFor(`${markerCount}===147`);
-      await click('Tilbake til appen'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+      await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       await browser.waitFor('window.__originalUrls.size===0 && !document.querySelector(".photo-edit-mode")');
       await settleMapLayout();
       // Outside the workspace, a marker still opens only the compact popup.
