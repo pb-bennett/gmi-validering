@@ -67,7 +67,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       assert.equal(await browser.evaluate(`${option('gmi')}.getAttribute('aria-checked')`), 'true');
       assert.equal(await browser.evaluate(`${option('gml')}.getAttribute('aria-checked')`), 'false');
       assert.match(await browser.evaluate(`${section}.querySelector('[role=radiogroup]').getAttribute('aria-label')`), /^Leveringsvalg for a.png · .*Kum 1/);
-      assert.deepEqual(await Promise.all(['Kum 1', 'Kum 2', 'Kum 3', 'c.png', 'd.png'].map(pill)), ['GMI', 'GMI', 'GMI', 'GMI', 'Ikke med']);
+      assert.deepEqual(await Promise.all(['Kum 1', 'Kum 2', 'Kum 3', 'c.png', 'd.png'].map(pill)), ['GMI', 'GMI', 'GMI', 'GMI', 'Ikke']);
       assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-delivery-summary"))'), false);
       assert.equal(await browser.evaluate(`${section}.querySelectorAll('input').length`), 0, 'compact pills, no permanent radio list');
       const switcher = `${inspector}.querySelector('.photo-occurrence-switcher')`;
@@ -97,7 +97,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       // Third choice is explicit; arrows include it and restoring a pill returns to GMI.
       await pressKey('ArrowRight', 39);
       await browser.waitFor(`${option('excluded')}.getAttribute('aria-checked') === 'true' && document.activeElement === ${option('excluded')}`);
-      assert.equal(await pill('Kum 1'), 'Ikke med');
+      assert.equal(await pill('Kum 1'), 'Ikke');
       assert.equal(await pill('Kum 2'), 'GMI');
       assert.match(await browser.evaluate(`${section}.innerText`), /Bildefilen er fortsatt med via andre/);
       assert.match(await browser.evaluate(`${option('excluded')}.title`), /Behold bildet i FOTO/);
@@ -125,7 +125,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
 
       // Unlinked photo: «Ikke med» / GML, never an invalid GMI destination. Line-only link: fixed GMI.
       await select('d.png');
-      assert.deepEqual(await browser.evaluate(`Array.from(${section}.querySelectorAll('[role=radio]')).map((b) => b.innerText.trim())`), ['Ikke med', 'GML']);
+      assert.deepEqual(await browser.evaluate(`Array.from(${section}.querySelectorAll('[role=radio]')).map((b) => b.innerText.trim())`), ['Ikke', 'GML']);
       await browser.evaluate(`${option('gml')}.click()`);
       await browser.waitFor(`${option('gml')}.getAttribute('aria-checked') === 'true'`);
       assert.equal(await pill('d.png'), 'GML');
@@ -137,7 +137,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       await click(browser, 'Fordel bilder til GMI/GML', 'document');
       await browser.waitFor('document.querySelector(".photo-delivery-bar")');
       const bar = 'document.querySelector(".photo-delivery-bar")';
-      assert(await browser.evaluate(`${bar}.innerText.includes('Bruk leveringsknappen for å endre GMI/GML.')`));
+      assert(await browser.evaluate(`${bar}.innerText.includes('GMI → GML → Ikke → GMI')`));
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input, .photo-delivery-actions").length'), 0);
       assert.equal(await browser.evaluate(`${bar}.innerText.includes('Velg alle viste')`), false);
       assert.equal(await browser.evaluate('document.querySelector(".photo-map-display-card select").value'), 'delivery');
@@ -150,7 +150,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       await select('Kum 1');
       await browser.evaluate(`${option('excluded')}.click()`);
       await browser.waitFor(`${option('excluded')}.getAttribute('aria-checked') === 'true'`);
-      assert.equal(await counts(), 'GMI 3 | GML 1 | Ikke med 1');
+      assert.equal(await counts(), 'GMI 3 | GML 1 | Ikke 1');
       await browser.evaluate(`${rowOf('Kum 1')}.querySelector('button.photo-delivery-row-button').click()`);
       await browser.waitFor(`${option('gmi')}.getAttribute('aria-checked') === 'true'`);
       await browser.evaluate(`${rowOf('Kum 1')}.querySelector('button.photo-delivery-row-button').click()`);
@@ -174,11 +174,13 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       assert.deepEqual(await mapPosition(), beforeMap, 'destination editing does not pan or zoom');
       assert.match(await browser.evaluate(`${bar}.querySelector('[role=status]').innerText`), /^a\.png · .*Kum 2: Overføres til GML$/);
       await planRow('Kum 3', 'GML');
-      await planRow('d.png', 'Ikke med');
-      assert.equal(await counts(), 'GMI 1 | GML 3 | Ikke med 1');
-      assert.match(await browser.evaluate(`${rowOf('Kum 2')}.querySelector('button.photo-delivery-row-button').getAttribute('aria-label')`), /Overføres til GML\. Klikk for GMI$/);
+      await planRow('d.png', 'Ikke');
+      assert.equal(await counts(), 'GMI 1 | GML 3 | Ikke valgt 1');
+      assert.match(await browser.evaluate(`${rowOf('Kum 2')}.querySelector('button.photo-delivery-row-button').getAttribute('aria-label')`), /Overføres til GML\. Klikk for å velge Ikke med i leveransen/);
       // Keyboard activation of the destination button: Space toggles it back.
       await browser.evaluate(`${rowOf('Kum 2')}.querySelector('button.photo-delivery-row-button').focus()`);
+      await pressKey(' ', 32, 'Space');
+      await browser.waitFor(`${rowOf('Kum 2')}.querySelector('.photo-delivery-pill')?.innerText === 'Ikke'`);
       await pressKey(' ', 32, 'Space');
       await browser.waitFor(`${rowOf('Kum 2')}.querySelector('.photo-delivery-pill')?.innerText === 'GMI'`);
       await planRow('d.png', 'GML');

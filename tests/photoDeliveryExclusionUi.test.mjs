@@ -10,17 +10,15 @@ import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
 const app = process.env.PHOTO_UI_URL;
 const collection = 'document.querySelector(".photo-workspace-collection")';
 const dialog = 'document.querySelector(".photo-exclusion-confirmation[open]")';
-const actions = 'document.querySelector(".photo-exclusion-actions")';
 const row = (id) => `document.querySelector('.photo-workspace-list li[data-photo-id="${id}"]')`;
-const box = (id) => `${row(id)}.querySelector('input[type=checkbox]')`;
 const pill = (id) => `${row(id)}.querySelector('.photo-delivery-pill')`;
 
-test('Slice 2 production: whole-photo confirmation, scoped selections, restore, keyboard, filters and unchanged planning/removal',
+test('Direct delivery cycle: equal badges, canonical inspector sync, shared placements, keyboard and separate layer removal',
   { skip: !chromePath || !app, timeout: 240000 }, async () => {
     const fixtures = await createWorkspaceFixtures(), browser = await openTestChrome();
     const originals = await Promise.all([fixtures.gmi, ...fixtures.photos.map((photo) => photo.file)].map((file) => readFile(file)));
     const key = async (name, code, number) => {
-      await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code, windowsVirtualKeyCode: number });
+      await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code, windowsVirtualKeyCode: number, ...(name === 'Enter' ? { text: '\r' } : {}) });
       await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code, windowsVirtualKeyCode: number });
     };
     const select = async (id) => {
@@ -58,87 +56,58 @@ test('Slice 2 production: whole-photo confirmation, scoped selections, restore, 
       assert.equal(await browser.evaluate('document.activeElement.innerText'), 'Ta ut alle plasseringer av bildet');
       await click(browser, 'Ta ut alle plasseringer av bildet', 'document.querySelector(".photo-exclusion-inspector")');
       await click(browser, 'Ta ut av leveransen', dialog);
-      await browser.waitFor(`${pill(a)}.innerText === 'Ikke med' && ${pill(b)}.innerText === 'Ikke med'`);
+      await browser.waitFor(`${pill(a)}.innerText === 'Ikke' && ${pill(b)}.innerText === 'Ikke'`);
       assert.match(await browser.evaluate('document.querySelector(".photo-exclusion-inspector [role=status]").innerText'), /2 plasseringer tatt ut/);
 
-      await click(browser, 'Velg bilder som ikke skal med…', 'document');
-      await browser.waitFor(`${collection}.dataset.mode === 'exclude'`);
-      await browser.evaluate(`${box(a)}.click()`);
-      await browser.evaluate(`Array.from(${actions}.querySelectorAll('button')).find(b=>b.innerText==='Ta med igjen').focus()`);
-      await click(browser, 'Ta med igjen', actions); await browser.waitFor(dialog);
-      await click(browser, 'Ta med igjen', dialog);
-      await browser.waitFor(`${pill(a)}.innerText === 'GMI' && ${pill(b)}.innerText === 'GMI'`);
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input:checked").length'), 0);
-      await browser.waitFor('document.activeElement.matches(".photo-workspace-list input[type=checkbox]")');
-      // Native checkbox keyboard activation and teal accent; Escape clears this mode's selection.
-      await browser.evaluate(`${box(a)}.focus()`); await key(' ', 'Space', 32);
-      await browser.waitFor(`${box(a)}.checked`);
-      assert.equal(await browser.evaluate(`getComputedStyle(${box(a)}).accentColor`), 'rgb(0, 117, 149)');
-      await key('Tab', 'Tab', 9);
-      assert(await browser.evaluate(`${collection}.contains(document.activeElement)`));
-      await key('Escape', 'Escape', 27); await browser.waitFor(`${collection}.dataset.mode === 'browse'`);
-      await click(browser, 'Velg bilder som ikke skal med…', 'document');
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input:checked").length'), 0);
-
-      // The repeated filter shows exactly the two shared placements. Select-all ignores filtered-out records.
-      await select(single);
-      await browser.evaluate(`document.querySelector('button[aria-label^="Filtrer bilder"]').click()`);
-      await browser.waitFor('document.querySelector(".photo-filter-panel")');
-      assert.equal(await browser.evaluate('getComputedStyle(document.querySelector(".photo-filter-panel input")).accentColor'), 'rgb(0, 117, 149)');
-      await browser.evaluate(`Array.from(document.querySelectorAll('.photo-filter-panel label')).find(e=>e.innerText.startsWith('Flere plasseringer')).querySelector('input').click()`);
-      await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 3');
-      await click(browser, 'Velg alle viste', 'document.querySelector(".photo-exclusion-bar")');
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input:checked").length'), 2);
-      assert.equal(await browser.evaluate(`${box(single)}.checked`), false, 'pinned active photo is outside the filter');
-      await browser.evaluate(`${box(b)}.click()`);
-      await click(browser, 'Bare valgte plasseringer (1)', actions);
-      await browser.waitFor(`${pill(a)}.innerText === 'Ikke med' && ${pill(b)}.innerText === 'GMI'`);
-      assert.equal(await browser.evaluate(`Boolean(${dialog})`), false);
-      await browser.evaluate(`${box(a)}.click()`);
-      assert.match(await browser.evaluate(`${actions}.innerText`), /1 bilde delvis med/);
-      // Whole-photo exclusion also changes the unselected sibling and therefore requires confirmation.
-      await click(browser, 'Ta ut 1 bilde av leveransen', actions); await browser.waitFor(dialog);
-      for (const [width, height] of [[1280, 720], [1366, 768]]) {
-        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-        const geometry = await browser.evaluate(`(() => {const d=${dialog}, r=d.getBoundingClientRect();return {fits:r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight, overflow:d.scrollWidth>d.clientWidth};})()`);
-        assert(geometry.fits && !geometry.overflow);
-        assert(await browser.evaluate(`document.querySelector('.photo-workspace-list').getBoundingClientRect().height >= 80`));
-        await screenshot(`slice2-confirmation-${width}x${height}`);
-      }
-      await click(browser, 'Ta ut av leveransen', dialog);
-      await browser.waitFor(`${pill(a)}.innerText === 'Ikke med' && ${pill(b)}.innerText === 'Ikke med'`);
-      // Exclude -> filter Ikke med -> select all -> restore (linked GMI, unlinked GML).
-      await browser.evaluate(`Array.from(document.querySelectorAll('.photo-filter-panel label')).find(e=>e.innerText.startsWith('Flere plasseringer')).querySelector('input').click()`);
-      await browser.evaluate('document.querySelector(".photo-filter-panel input[value=not-delivered]").click()');
-      await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 5');
-      await click(browser, 'Velg alle viste', 'document.querySelector(".photo-exclusion-bar")');
-      await click(browser, 'Ta med igjen', actions);
-      await browser.waitFor(`${actions}.querySelector('[role=status]').innerText.includes('5 plasseringer tatt med igjen')`);
-      assert.match(await browser.evaluate(`${actions}.querySelector('[role=status]').innerText`), /5 plasseringer tatt med igjen/);
-      await browser.evaluate('document.querySelector(".photo-filter-panel input[value=all][name$=delivery]").click()');
-      await browser.waitFor(`${pill(a)}.innerText === 'GMI' && ${pill(b)}.innerText === 'GMI'`);
-      await browser.evaluate(`document.querySelector('button[aria-label^="Filtrer bilder"]').click()`);
-      await select(single);
-      await browser.evaluate(`${box(single)}.click()`);
-      await click(browser, 'Ta ut 1 bilde av leveransen', actions);
-      assert.equal(await browser.evaluate(`Boolean(${dialog})`), false, 'safe single visible placement needs no confirmation');
-      await browser.waitFor(`${pill(single)}.innerText === 'Ikke med'`);
-      for (const [width, height] of [[1280, 720], [1366, 768]]) {
-        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-        assert(await browser.evaluate(`${collection}.scrollWidth <= ${collection}.clientWidth + 1`));
-        assert(await browser.evaluate(`document.querySelector('.photo-workspace-list').getBoundingClientRect().height > 80`));
-        await screenshot(`slice2-selection-${width}x${height}`);
-      }
-      await click(browser, 'Avbryt', 'document.querySelector(".photo-exclusion-bar")');
+      await browser.evaluate('document.querySelector("button[aria-label=Verktøy]").click()');
+      assert.equal(await browser.evaluate('Array.from(document.querySelectorAll("[role=menuitem]")).some(e=>e.innerText.includes("Velg bilder som ikke skal med"))'), false);
       await click(browser, 'Fordel bilder til GMI/GML', 'document');
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input").length'), 0);
-      await browser.evaluate(`${row(a)}.querySelector('.photo-delivery-row-button').click()`);
-      await browser.waitFor(`${pill(a)}.innerText === 'GML'`);
-      await browser.evaluate(`${row(a)}.querySelector('.photo-delivery-row-button').click()`);
+      await browser.waitFor('document.querySelector(".photo-delivery-bar")');
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input, .photo-exclusion-bar, .photo-exclusion-actions").length'), 0);
+      const button = (id) => `${row(id)}.querySelector('.photo-delivery-row-button')`;
+      const inspectorChoice = (key) => `document.querySelector('.photo-delivery-section [role=radio][data-destination=${key}]')`;
+      await select(a);
+      await browser.evaluate(`${button(a)}.click()`); // restore excluded placement only
       await browser.waitFor(`${pill(a)}.innerText === 'GMI'`);
+      assert.equal(await browser.evaluate(`${pill(b)}.innerText`), 'Ikke', 'sibling remains excluded');
+      assert.equal(await browser.evaluate(`document.querySelector('.photo-delivery-counts [data-destination=notSelected]').innerText.replace(/\\s+/g, ' ')`), 'Ikke valgt 3');
+      assert.equal(await browser.evaluate(`getComputedStyle(${pill(single)}).borderStyle`), 'dashed');
+      assert.equal(await browser.evaluate(`${pill(single)}.dataset.deliveryStatus`), 'not-selected');
+      for (const [width, height] of [[1280, 720], [1366, 768]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        const styles = [];
+        for (const [label, destination, colour] of [['GMI','gmi','rgb(30, 64, 175)'], ['GML','gml','rgb(22, 101, 52)'], ['Ikke','excluded','rgb(100, 116, 139)']]) {
+          await browser.waitFor(`${pill(a)}.innerText === ${JSON.stringify(label)}`);
+          assert.equal(await browser.evaluate(`${inspectorChoice(destination)}.getAttribute('aria-checked')`), 'true');
+          const css = await browser.evaluate(`(() => {const e=${button(a)},s=getComputedStyle(e),r=e.getBoundingClientRect();return {width:r.width,height:r.height,radius:s.borderRadius,font:s.fontSize,weight:s.fontWeight,padding:s.padding,align:s.textAlign,display:s.display,background:s.backgroundColor,color:s.color};})()`);
+          assert.equal(css.background, colour); assert.equal(css.color, 'rgb(255, 255, 255)');
+          const {background, color, ...geometry} = css; styles.push(geometry);
+          assert.match(await browser.evaluate(`${button(a)}.getAttribute('aria-label')`), /Bare denne plasseringen endres/);
+          await browser.evaluate(`${row(a)}.querySelector('.photo-workspace-row').focus()`);
+          await key('Tab', 'Tab', 9);
+          assert(await browser.evaluate(`${button(a)}.matches(':focus-visible')`));
+          assert.match(await browser.evaluate(`getComputedStyle(${button(a)}).boxShadow`), /rgb\(0, 117, 149\)/);
+          await screenshot(`direct-cycle-${destination}-${width}x${height}`);
+          await key(' ', 'Space', 32);
+        }
+        assert.deepEqual(styles[0], styles[1]); assert.deepEqual(styles[1], styles[2]);
+        await browser.waitFor(`${pill(a)}.innerText === 'GMI'`);
+        // A row selects/locates, never cycles, even in delivery mode.
+        await select(b); assert.equal(await browser.evaluate(`${pill(b)}.innerText`), 'Ikke');
+        await select(a); assert.equal(await browser.evaluate(`${pill(a)}.innerText`), 'GMI');
+        assert(await browser.evaluate(`${collection}.scrollWidth <= ${collection}.clientWidth + 1`));
+      }
+      await browser.evaluate(`${button(a)}.focus()`); await key('Enter', 'Enter', 13);
+      await browser.waitFor(`${pill(a)}.innerText === 'GML'`);
+      await browser.evaluate(`${inspectorChoice('excluded')}.click()`);
+      await browser.waitFor(`${pill(a)}.innerText === 'Ikke'`);
+      assert.equal(await browser.evaluate(`${button(a)}.dataset.deliveryStatus`), 'exclude');
+      await browser.evaluate(`${button(a)}.click()`); await browser.waitFor(`${pill(a)}.innerText === 'GMI'`);
       await click(browser, 'Ferdig', 'document.querySelector(".photo-delivery-bar")');
       await click(browser, 'Fjern bilder fra laget…', 'document');
-      await browser.evaluate(`${row(single)}.querySelector('input').click()`);
+      await browser.waitFor(`${collection}.dataset.mode === 'remove'`);
+      await browser.evaluate(`${row(single)}.querySelector('input').focus()`); await key(' ', 'Space', 32);
+      assert.equal(await browser.evaluate(`${row(single)}.querySelector('input').checked`), true);
       await browser.evaluate(`Array.from(document.querySelectorAll('.photo-removal-actions button')).find(b=>b.innerText.startsWith('Fjern 1')).click()`);
       await browser.waitFor('document.querySelector(".photo-remove-confirmation[open]")');
       await click(browser, 'Avbryt', 'document.querySelector(".photo-remove-confirmation[open]")');
@@ -149,7 +118,7 @@ test('Slice 2 production: whole-photo confirmation, scoped selections, restore, 
     } finally { await browser.close(); await fixtures.cleanup(); }
   });
 
-test('Slice 2 production: retained line links explain atomic refusal in inspector and bulk commands',
+test('Retained line links still explain atomic inspector refusal',
   { skip: !chromePath || !app, timeout: 120000 }, async () => {
     const fixtures = await createWorkspaceFixtures('photo-exclusion-blocked-'), browser = await openTestChrome();
     await writeFile(fixtures.gmi, gmiText([
@@ -173,13 +142,7 @@ test('Slice 2 production: retained line links explain atomic refusal in inspecto
       await browser.evaluate('document.querySelector(".photo-delivery-section [data-destination=gml]").click()');
       await browser.waitFor(`${pill(single)}.innerText === 'GML'`);
       const before = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list .photo-delivery-pill')).map(e=>e.innerText)`);
-      await click(browser, 'Velg bilder som ikke skal med…', 'document');
-      await browser.evaluate(`${box(shared)}.click(); ${box(single)}.click()`);
-      await click(browser, 'Ta ut 2 bilder av leveransen', actions);
-      await browser.waitFor(dialog);
-      assert.match(await browser.evaluate(`${dialog}.innerText`), /Lenken og filen beholdes/);
-      await click(browser, 'Avbryt', dialog);
+      assert.equal(await browser.evaluate(`${pill(single)}.innerText`), 'GML');
       assert.deepEqual(await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list .photo-delivery-pill')).map(e=>e.innerText)`), before);
-      assert.equal(await browser.evaluate(`${actions}.querySelector('[role=status]').innerText`), '');
     } finally { await browser.close(); await fixtures.cleanup(); }
   });

@@ -58,7 +58,7 @@ export function planPhotoExclusion(delivery, layer, photoIds, { scope = 'photo',
 }
 
 /**
- * The valid destinations of one occurrence, in display order. A GMI-linked occurrence offers GMI and GML; one without
+ * The valid destinations of one occurrence, in display order. A GMI-linked occurrence offers GMI, GML and exclusion; one without
  * a GMI reference offers «Ikke med» and GML and never an invalid GMI destination. A photo linked from a GMI object without
  * its own FOTO placement (a line) stays in GMI.
  */
@@ -81,26 +81,31 @@ export function photoDeliveryOptions(entry) {
 }
 
 /**
- * The destination one click moves to: the other valid option. A decision that needs review resolves to its safe default
- * (GMI for a linked occurrence, «Ikke med» otherwise) when that is available. Null when nothing can change.
+ * One explicit occurrence step: GMI → GML → Ikke → GMI. Review states require an inspector choice;
+ * direct clicks never clear stale evidence or skip an unavailable destination.
  */
 export function photoDeliveryToggleTarget(entry) {
   const available = photoDeliveryOptions(entry).filter((item) => !item.disabled && item.apply);
-  if (entry?.status === 'review') return available[0] || null;
-  if (entry?.linked) return available.find((item) => item.key === (entry.status === 'keep-link' ? 'gml' : 'gmi')) || null;
+  if (entry?.status === 'review') return null;
+  if (entry?.linked) {
+    if (!entry.canTransfer) return null;
+    const next = { 'keep-link': 'gml', transfer: 'excluded', exclude: 'gmi' }[entry.status];
+    return available.find((item) => item.key === next) || null;
+  }
   return available.find((item) => !item.active) || null;
 }
 
 /** Why a click cannot change this occurrence, or null. */
 export function photoDeliveryUnavailableReason(entry) {
   if (!entry || photoDeliveryToggleTarget(entry)) return null;
+  if (entry.status === 'review') return `${PHOTO_DELIVERY_REASON_TEXT[entry.reason] || 'Leveringsvalget krever gjennomgang.'} Avklar leveringsvalget i kontrollpanelet.`;
   return photoDeliveryOptions(entry).find((item) => item.reason)?.reason || 'Leveringsvalget kan ikke endres for denne plasseringen.';
 }
 
 /** Destination key for presentation (gmi, gml, excluded, review). */
 export const photoDeliveryDestination = (entry) => photoDeliveryColourState(entry?.status);
 
-/** Short status text for one occurrence: «GMI», «GML», «Ikke med», «Gjennomgå». */
+/** Short status text for one occurrence: «GMI», «GML», «Ikke», «Gjennomgå». */
 export const photoDeliveryShortLabel = (entry) => entry ? PHOTO_DELIVERY_COLOURS[photoDeliveryDestination(entry)].short : null;
 
 /** Full planned-state text for accessible names and announcements. */
@@ -115,7 +120,7 @@ export function applyPhotoDeliveryChoice(session, layerId, photoId, choice) {
 
 /**
  * One click in delivery planning: reads the current entry from the session (never a stale rendered copy), then applies
- * the other destination. Returns the session result plus the entry after the change.
+ * the next destination. Returns the session result plus the entry after the change.
  */
 export function togglePhotoDelivery(session, layerId, photoId) {
   const before = session.getLayerDelivery(layerId)?.byPhotoId[photoId] || null;
@@ -130,16 +135,17 @@ export function togglePhotoDelivery(session, layerId, photoId) {
 export function photoStackDeliverySummary(members, entries) {
   const counts = new Map();
   for (const member of members) {
-    const key = photoDeliveryDestination(entries?.[member.id]);
+    const entry = entries?.[member.id];
+    const key = entry?.status === 'not-selected' ? 'notSelected' : photoDeliveryDestination(entry);
     counts.set(key, (counts.get(key) || 0) + 1);
   }
   return [`${members.length} ${members.length === 1 ? 'plassering' : 'plasseringer'}`,
-    ...['gmi', 'gml', 'excluded', 'review'].filter((key) => counts.get(key)).map((key) => `${counts.get(key)} ${PHOTO_DELIVERY_COLOURS[key].short}`)].join(' · ');
+    ...['gmi', 'gml', 'excluded', 'notSelected', 'review'].filter((key) => counts.get(key)).map((key) => `${counts.get(key)} ${key === 'notSelected' ? 'Ikke valgt' : PHOTO_DELIVERY_COLOURS[key].short}`)].join(' · ');
 }
 
 /** Destination counts for the planning bar, by occurrence. */
 export function photoDeliveryDestinationCounts(delivery) {
-  const counts = { gmi: 0, gml: 0, excluded: 0, review: 0 };
-  for (const entry of Object.values(delivery?.byPhotoId || {})) counts[photoDeliveryDestination(entry)]++;
+  const counts = { gmi: 0, gml: 0, excluded: 0, notSelected: 0, review: 0 };
+  for (const entry of Object.values(delivery?.byPhotoId || {})) counts[entry.status === 'not-selected' ? 'notSelected' : photoDeliveryDestination(entry)]++;
   return counts;
 }

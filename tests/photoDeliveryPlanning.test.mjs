@@ -45,27 +45,30 @@ async function setup() {
   return { session, layer, photos, byObject, byName, entry, destinations, toggle, setLive: (value) => { live = value; } };
 }
 
-test('one click toggles GMI -> GML -> GMI for exactly one occurrence; a shared photo keeps independent decisions', async () => {
+test('one click toggles GMI -> GML -> Ikke -> GMI for exactly one occurrence; a shared photo keeps independent decisions', async () => {
   const f = await setup();
   const kum1 = f.byObject(KUM1), kum2 = f.byObject(KUM2);
   assert.equal(kum1.assetId, kum2.assetId, 'one physical photograph, two placements');
   assert.deepEqual(f.destinations(), { [KUM1]: 'gmi', [KUM2]: 'gmi', [KUM3]: 'gmi', 'c.jpg': 'gmi', 'd.jpg': 'excluded' });
   const counts = () => photoDeliveryDestinationCounts(f.session.getLayerDelivery(f.layer.id));
-  assert.deepEqual(counts(), { gmi: 4, gml: 0, excluded: 1, review: 0 });
+  assert.deepEqual(counts(), { gmi: 4, gml: 0, excluded: 0, notSelected: 1, review: 0 });
 
   let result = f.toggle(kum1);
   assert(result.ok); assert.deepEqual(result.changedIds, [kum1.id]);
   assert.equal(result.entry.status, 'transfer');
   assert.deepEqual(f.destinations(), { [KUM1]: 'gml', [KUM2]: 'gmi', [KUM3]: 'gmi', 'c.jpg': 'gmi', 'd.jpg': 'excluded' }, 'Kum 2 is untouched');
-  assert.deepEqual(counts(), { gmi: 3, gml: 1, excluded: 1, review: 0 });
+  assert.deepEqual(counts(), { gmi: 3, gml: 1, excluded: 0, notSelected: 1, review: 0 });
   result = f.toggle(kum2);
   assert.deepEqual(result.changedIds, [kum2.id]);
   assert.equal(f.entry(kum1).status, 'transfer', 'the sibling keeps its own choice');
   result = f.toggle(kum1);
   assert.deepEqual(result.changedIds, [kum1.id]);
-  assert.equal(f.entry(kum1).status, 'keep-link');
+  assert.equal(f.entry(kum1).status, 'exclude');
+  assert.deepEqual(counts(), { gmi: 2, gml: 1, excluded: 1, notSelected: 1, review: 0 });
+  assert.equal(f.session.getPhotoDeliverySnapshot(f.layer.id).exclusions[0].photoId, kum1.id);
+  assert.equal(f.toggle(kum1).entry.status, 'keep-link');
   assert.equal(f.entry(kum2).status, 'transfer');
-  assert.deepEqual(counts(), { gmi: 3, gml: 1, excluded: 1, review: 0 });
+  assert.deepEqual(counts(), { gmi: 3, gml: 1, excluded: 0, notSelected: 1, review: 0 });
   // Canonical snapshot for M9: only the toggled occurrence is a removal selection.
   const snapshot = f.session.getPhotoDeliverySnapshot(f.layer.id);
   assert.deepEqual(snapshot.transfers.map((item) => item.photoId), [kum2.id]);
@@ -75,7 +78,7 @@ test('one click toggles GMI -> GML -> GMI for exactly one occurrence; a shared p
 test('unlinked placements toggle «Ikke med» <-> GML and never offer GMI; line-linked photos stay in GMI', async () => {
   const f = await setup();
   const unlinked = f.byName('d.jpg'), line = f.byName('c.jpg');
-  assert.deepEqual(photoDeliveryOptions(f.entry(unlinked)).map(({ key, label, active }) => [key, label, active]), [['excluded', 'Ikke med', true], ['gml', 'GML', false]]);
+  assert.deepEqual(photoDeliveryOptions(f.entry(unlinked)).map(({ key, label, active }) => [key, label, active]), [['excluded', 'Ikke', true], ['gml', 'GML', false]]);
   assert(!photoDeliveryOptions(f.entry(unlinked)).some((item) => item.key === 'gmi'), 'no invalid GMI destination');
   assert.equal(f.toggle(unlinked).entry.status, 'include');
   assert.equal(photoDeliveryShortLabel(f.entry(unlinked)), 'GML');
@@ -91,7 +94,7 @@ test('unlinked placements toggle «Ikke med» <-> GML and never offer GMI; line-
   assert.equal(f.entry(line).status, 'keep-link');
 });
 
-test('transfer unavailable or needing review: clicks never write an invalid decision and review resolves to keeping the GMI link', async () => {
+test('transfer unavailable or needing review: clicks never write an invalid decision and review requires an explicit inspector choice', async () => {
   const f = await setup();
   const kum3 = f.byObject(KUM3);
   assert.equal(f.toggle(kum3).entry.status, 'transfer');
@@ -99,10 +102,13 @@ test('transfer unavailable or needing review: clicks never write an invalid deci
   f.session.reconcileLoadedGmiBindings(() => false);
   const review = f.entry(kum3);
   assert.equal(review.status, 'review'); assert.equal(review.reason, 'source-not-live');
-  // A stale transfer resolves to its safe default (GMI); GML stays unavailable while the source is not live.
-  assert.equal(photoDeliveryToggleTarget(review).key, 'gmi');
+  // A stale transfer stays under review until an explicit inspector choice; unsafe GML remains unavailable.
+  assert.equal(photoDeliveryToggleTarget(review), null);
+  assert.match(f.toggle(kum3).reason, /kontrollpanelet/);
+  assert.equal(f.entry(kum3).status, 'review');
   assert.deepEqual(photoDeliveryOptions(review).map(({ key, active, disabled }) => [key, active, disabled]), [['gmi', false, false], ['gml', false, true], ['excluded', false, true]]);
-  assert.equal(f.toggle(kum3).entry.status, 'keep-link');
+  assert(applyPhotoDeliveryChoice(f.session, f.layer.id, kum3.id, photoDeliveryOptions(review)[0]).ok);
+  assert.equal(f.entry(kum3).status, 'keep-link');
   const blocked = f.toggle(kum3);
   assert.equal(blocked.error, 'not-changeable');
   assert.equal(f.entry(kum3).status, 'keep-link', 'nothing invalid was written');
@@ -110,14 +116,20 @@ test('transfer unavailable or needing review: clicks never write an invalid deci
   // Synthetic entries cover every state independently of how a session reaches it.
   const linked = (status, canTransfer = true) => ({ photoId: 'p', linked: true, status, canTransfer, association: { state: canTransfer ? 'confident' : 'association-lost' } });
   assert.equal(photoDeliveryToggleTarget(linked('keep-link')).key, 'gml');
-  assert.equal(photoDeliveryToggleTarget(linked('transfer')).key, 'gmi');
-  assert.equal(photoDeliveryToggleTarget(linked('review')).key, 'gmi');
+  assert.equal(photoDeliveryToggleTarget(linked('transfer')).key, 'excluded');
+  assert.equal(photoDeliveryToggleTarget(linked('review')), null);
   assert.equal(photoDeliveryToggleTarget(linked('keep-link', false)), null);
+  for (const status of ['keep-link', 'transfer', 'exclude', 'review']) assert.equal(photoDeliveryToggleTarget(linked(status, false)), null);
+  for (const reason of ['occurrence-changed', 'association-lost', 'fingerprint-mismatch', 'source-not-live']) {
+    const stale = { ...linked('review'), reason };
+    assert.equal(photoDeliveryToggleTarget(stale), null);
+    assert.match(photoDeliveryUnavailableReason(stale), /kontrollpanelet/);
+  }
   assert.match(photoDeliveryUnavailableReason(linked('keep-link', false)), /sikre GMI-koblingen/);
   const staleUnlinked = { photoId: 'p', linked: false, status: 'review', reason: 'link-removed', canInclude: true };
-  assert.equal(photoDeliveryToggleTarget(staleUnlinked).key, 'excluded', 'a link-removed review can be explicitly cleared to not selected');
+  assert.equal(photoDeliveryToggleTarget(staleUnlinked), null, 'a link-removed review requires an explicit inspector choice');
   const lineReview = { photoId: 'p', linked: false, linkedWithoutOccurrence: true, status: 'review', reason: 'decision-type-changed' };
-  assert.deepEqual(photoDeliveryToggleTarget(lineReview).apply, { kind: 'inclusion', include: false });
+  assert.equal(photoDeliveryToggleTarget(lineReview), null);
   assert.deepEqual(applyPhotoDeliveryChoice({}, 'l', 'p', { disabled: true, apply: { kind: 'intent', intent: 'transfer' } }), { ok: false, error: 'unavailable', changedIds: [] });
 });
 
@@ -137,6 +149,7 @@ test('overlapping groups summarise per occurrence and colour as mixed without a 
   assert.equal(photoStackDeliverySummary(members.slice(0, 1), entries), '1 plassering · 1 GMI');
   assert.equal(photoStackDeliveryState(members, entries), 'mixed');
   assert.equal(photoStackDeliveryState(members.slice(1), entries), 'gml');
+  assert.equal(photoStackDeliverySummary(members.slice(0, 2), { a: { status: 'exclude' }, b: { status: 'not-selected' } }), '2 plasseringer \u00b7 1 Ikke \u00b7 1 Ikke valgt');
   const mixed = photoMarkerOptions('markers', { colourMode: 'delivery', deliveryColourState: 'mixed', deliveryStatus: 'keep-link' });
   assert(mixed.html.includes(PHOTO_DELIVERY_COLOURS.mixed.color) && mixed.html.includes('stroke-dasharray'));
 });
@@ -179,9 +192,13 @@ test('UI source contract: direct-click planning replaced the batch workflow; the
   assert.match(tools, /label: 'Fordel bilder til GMI\/GML'/);
   assert.doesNotMatch(tools, /Velg samlet levering/);
   assert.match(collection, /onClick=\{\(\) => onSelect\(photo.id\)\}/);
-  assert.match(collection, /event.stopPropagation\(\); if \(target\) onPlan\(photo.id\)/);
+  assert.match(collection, /<PhotoDeliveryCycleButton/);
+  assert.match(popup, /<PhotoDeliveryCycleButton/);
+  assert.doesNotMatch(tools, /key: 'exclude'/);
+  assert.doesNotMatch(collection, /PhotoExclusionActions|excludeIds|toggle-exclusion/);
+  assert.doesNotMatch(state, /excludeIds/);
   assert.doesNotMatch(collection, /pan: false|const planPhoto/);
-  assert.match(collection, /Bruk leveringsknappen for å endre GMI\/GML\./);
+  assert.match(collection, /GMI → GML → Ikke → GMI/);
   for (const removed of [/for samlet levering`\}/, /photo-delivery-actions/, /Overfør \{unit/, /Behold lenker for/, /select-delivery/, /toggle-delivery/])
     assert.doesNotMatch(collection, removed);
   const planningBar = collection.slice(collection.indexOf('{deliveryMode && <div className="photo-delivery-bar"'), collection.indexOf('<ul ref={listRef}'));
@@ -228,7 +245,7 @@ test('pills and selected destination controls share dark fills; marker green sta
 });
 
 
-test('explicit inspector exclusion restores to GMI on pill/marker click; included clicks never exclude', async () => {
+test('explicit inspector exclusion restores to GMI on pill/marker click; direct clicks cycle all three destinations', async () => {
   const f = await setup(), a = f.byObject(KUM1), sibling = f.byObject(KUM2);
   const choices = () => photoDeliveryOptions(f.entry(a));
   assert.deepEqual(choices().map((item) => item.key), ['gmi', 'gml', 'excluded']);
@@ -238,7 +255,7 @@ test('explicit inspector exclusion restores to GMI on pill/marker click; include
   assert.equal(f.entry(a).status, 'exclude'); assert.equal(f.entry(sibling).status, 'keep-link');
   assert.equal(f.session.getLayerDelivery(f.layer.id).assets[a.assetId].status, 'partial');
   assert.equal(choices().find((item) => item.active).key, 'excluded');
-  assert.equal(photoDeliveryShortLabel(f.entry(a)), 'Ikke med');
+  assert.equal(photoDeliveryShortLabel(f.entry(a)), 'Ikke');
   const marker = photoMarkerOptions('markers', { colourMode: 'delivery', deliveryStatus: 'exclude' });
   assert(marker.className.includes('photo-delivery-excluded'));
   assert(marker.html.includes(PHOTO_DELIVERY_COLOURS.excluded.color));
@@ -247,7 +264,7 @@ test('explicit inspector exclusion restores to GMI on pill/marker click; include
   assert.equal(f.session.getLayerDelivery(f.layer.id).assets[a.assetId].status, 'excluded');
   assert.equal(f.toggle(a).entry.status, 'keep-link');
   assert.equal(f.entry(sibling).status, 'exclude');
-  for (let i = 0; i < 6; i++) assert.equal(f.toggle(a).entry.status, i % 2 ? 'keep-link' : 'transfer');
+  for (let i = 0; i < 6; i++) assert.equal(f.toggle(a).entry.status, ['transfer', 'exclude', 'keep-link'][i % 3]);
   const review = { linked: false, status: 'review', reason: 'link-removed', canInclude: true };
   assert.equal(photoDeliveryOptions(review)[0].disabled, false);
   assert.deepEqual(photoDeliveryOptions(review)[0].apply, { kind: 'inclusion', include: false });

@@ -115,7 +115,7 @@ const stagedDot = (staged) => staged ? '<span class="photo-marker-staged-dot" ar
 export const PHOTO_DELIVERY_COLOURS = Object.freeze({
   gmi: Object.freeze({ color: '#1e40af', label: 'Beholdes i GMI', short: 'GMI' }),
   gml: Object.freeze({ color: '#22c55e', label: 'Til GML', short: 'GML' }),
-  excluded: Object.freeze({ color: '#64748b', label: 'Ikke med i leveransen', short: 'Ikke med' }),
+  excluded: Object.freeze({ color: '#64748b', label: 'Ikke med i leveransen', short: 'Ikke' }),
   review: Object.freeze({ color: '#b06a08', label: 'Krever gjennomgang', short: 'Gjennomg\u00e5' }),
   mixed: Object.freeze({ color: '#64748b', label: 'Ulike leveringsvalg', short: 'Ulike' }),
 });

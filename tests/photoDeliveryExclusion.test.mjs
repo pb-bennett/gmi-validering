@@ -109,17 +109,15 @@ test('line links and removed FOTO placements block whole-photo exclusion without
   }
 });
 
-test('exclusion selection is mode-scoped, reconciled, filter-independent and separate from removal/planning', () => {
+test('obsolete exclusion mode and selection are absent; removal and planning modes remain separate', () => {
   let s = photoWorkspaceReducer(emptyPhotoWorkspace, { type: 'enter', layerId: 'layer', photoIds: ['a', 'b'] });
-  s = photoWorkspaceReducer(s, { type: 'mode', mode: 'exclude' });
-  s = photoWorkspaceReducer(s, { type: 'select-exclusion', photoIds: ['a', 'a', 'b', 'gone'] }); assert.deepEqual(s.excludeIds, ['a', 'b']);
-  s = photoWorkspaceReducer(s, { type: 'filter', filter: { delivery: 'not-delivered' } }); assert.deepEqual(s.excludeIds, ['a', 'b']);
-  s = photoWorkspaceReducer(s, { type: 'reconcile', layer: { id: 'layer', photoIds: ['b'] } }); assert.deepEqual(s.excludeIds, ['b']);
-  s = photoWorkspaceReducer(s, { type: 'mode', mode: 'remove' }); assert.deepEqual(s.excludeIds, []);
+  assert.strictEqual(photoWorkspaceReducer(s, { type: 'mode', mode: 'exclude' }), s);
+  assert.strictEqual(photoWorkspaceReducer(s, { type: 'select-exclusion', photoIds: ['a'] }), s);
+  assert(!('excludeIds' in s));
+  s = photoWorkspaceReducer(s, { type: 'mode', mode: 'remove' });
   s = photoWorkspaceReducer(s, { type: 'toggle-removal', photoId: 'b' }); assert.deepEqual(s.removalIds, ['b']);
   s = photoWorkspaceReducer(s, { type: 'mode', mode: 'delivery' }); assert.deepEqual(s.removalIds, []);
-  assert.strictEqual(photoWorkspaceReducer(s, { type: 'toggle-exclusion', photoId: 'b' }), s);
-  s = photoWorkspaceReducer(s, { type: 'enter', layerId: 'other', photoIds: ['c'] }); assert.deepEqual(s.excludeIds, []);
+  assert.strictEqual(photoWorkspaceReducer(s, { type: 'toggle-removal', photoId: 'a' }), s);
 });
 
 test('50 physical photographs can be excluded and restored in one publish each, including a repeated asset', async () => {

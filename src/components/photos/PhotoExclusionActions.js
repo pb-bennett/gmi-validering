@@ -17,9 +17,7 @@ function ExclusionConfirmation({ request, onCancel, onConfirm }) {
     return () => {
       dialog.close();
       if (opener?.isConnected) {
-        // A successful bulk command clears selection, disabling its opener.
-        const target = opener.disabled ? opener.closest('.photo-workspace-collection')?.querySelector('.photo-workspace-list input') : opener;
-        target?.focus();
+        opener.focus();
       }
     };
   }, []);
@@ -53,19 +51,11 @@ function ExclusionConfirmation({ request, onCancel, onConfirm }) {
   </dialog>;
 }
 
-/** Both entry points use exactly the same fresh plan, confirmation and atomic session action. */
-export default function PhotoExclusionActions({ layerId, selectedIds, visibleIds, delivery, inspector = false, onComplete }) {
+/** Inspector whole-photo action retains the existing confirmation and atomic session command. */
+export default function PhotoExclusionActions({ layerId, selectedIds, visibleIds, delivery, onComplete }) {
   const [request, setRequest] = useState(null), [announcement, setAnnouncement] = useState('');
   const layer = photoSession.getLayer(layerId);
   const plan = planPhotoExclusion(delivery, layer, selectedIds, { visibleIds });
-  const selectedEntries = selectedIds.map((id) => delivery?.byPhotoId[id]).filter(Boolean);
-  const selectedAssets = new Set(selectedEntries.map((entry) => entry.assetId));
-  const omitted = selectedEntries.filter((entry) => ['exclude', 'not-selected'].includes(entry.status)).length;
-  const restorable = Object.values(delivery?.byPhotoId || {}).some((entry) => selectedAssets.has(entry.assetId)
-    && ['exclude', 'not-selected'].includes(entry.status));
-  const partial = [...selectedAssets].filter((id) => delivery?.assets[id]?.status === 'partial').length;
-  const repeated = plan.occurrenceCount > selectedIds.length || selectedEntries.some((entry) =>
-    Object.values(delivery?.byPhotoId || {}).filter((other) => other.assetId === entry.assetId).length > 1);
   const apply = (command) => {
     const result = photoSession.setPhotoDeliveryExclusion(layerId, command.ids, { scope: command.scope, include: command.include,
       visibleIds: command.visibleIds, expectedStateKey: command.plan.stateKey });
@@ -83,20 +73,10 @@ export default function PhotoExclusionActions({ layerId, selectedIds, visibleIds
     if (!fresh.ok || fresh.needsConfirmation) setRequest(command);
     else apply(command);
   };
-  return <div className={inspector ? 'photo-exclusion-inspector' : 'photo-exclusion-actions'}>
-    {!inspector && <p>{countLabel(selectedAssets.size, 'bilde', 'bilder')} valgt · {countLabel(selectedIds.length, 'plassering', 'plasseringer')} valgt · {countLabel(omitted, 'plassering', 'plasseringer')} ikke med · {countLabel(partial, 'bilde', 'bilder')} delvis med</p>}
-    {!inspector && selectedIds.length > 0 && !plan.ok && <p role="note">{plan.blocked.length} forhold må avklares: {plan.blocked.map((item) => item.text).join(' ')}</p>}
-    {inspector && <p>{plan.occurrenceCount} plasseringer av samme bilde. Andre plasseringer kan bli berørt.</p>}
-    <button type="button" className={`${inspector ? 'photo-link-button' : 'gmi-primary-control'} gmi-focus-ring`}
-      disabled={!selectedIds.length} onClick={() => run('photo', false)}>
-      {inspector ? 'Ta ut alle plasseringer av bildet' : `Ta ut ${countLabel(selectedAssets.size, 'bilde', 'bilder')} av leveransen`}</button>
-    {!inspector && plan.occurrenceCount > selectedIds.length && <small>{plan.occurrenceCount} plasseringer berøres, {plan.occurrenceCount - selectedIds.length} er ikke valgt.</small>}
-    {!inspector && repeated && <button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => run('occurrences', false)}>
-      Bare valgte plasseringer ({selectedIds.length})</button>}
-    {!inspector && <button type="button" className="gmi-compact-button gmi-focus-ring" disabled={!restorable}
-      onClick={() => run('photo', true)}>Ta med igjen</button>}
-    {!inspector && repeated && omitted > 0 && <button type="button" className="gmi-compact-button gmi-focus-ring"
-      onClick={() => run('occurrences', true)}>Ta med valgte plasseringer igjen</button>}
+  return <div className="photo-exclusion-inspector">
+    <p>{plan.occurrenceCount} plasseringer av samme bilde. Andre plasseringer kan bli berørt.</p>
+    <button type="button" className="photo-link-button gmi-focus-ring" disabled={!selectedIds.length} onClick={() => run('photo', false)}>
+      Ta ut alle plasseringer av bildet</button>
     <p role="status" aria-live="polite">{announcement}</p>
     {request && <ExclusionConfirmation request={request} onCancel={() => setRequest(null)} onConfirm={() => apply(request)} />}
   </div>;

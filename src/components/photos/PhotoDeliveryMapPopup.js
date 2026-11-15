@@ -3,11 +3,11 @@
 import { useEffect } from 'react';
 import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
 import { photoDeliveryUnavailableReason, photoStackDeliverySummary } from '@/lib/photos/photoDeliveryChoice.mjs';
-import PhotoDeliveryToggle from './PhotoDeliveryToggle';
+import PhotoDeliveryCycleButton from './PhotoDeliveryCycleButton';
 
 // Occurrence chooser for an exact-coordinate stack in delivery planning. Every placement is listed with its filename and
 // object and has its own direct toggle; changing one never changes another, and there is no group-level action.
-export default function PhotoDeliveryMapPopup({ members, workspace, layerId, onLayout }) {
+export default function PhotoDeliveryMapPopup({ members, workspace, onLayout }) {
   const entries = workspace.delivery?.byPhotoId;
   const summary = photoStackDeliverySummary(members, entries);
   useEffect(() => { onLayout?.(); }, [summary, onLayout]);
@@ -19,8 +19,8 @@ export default function PhotoDeliveryMapPopup({ members, workspace, layerId, onL
       const reason = photoDeliveryUnavailableReason(entry);
       return <li key={member.id} className="photo-delivery-popup-occurrence" data-occurrence-id={member.id}>
         <p className="photo-delivery-popup-name"><span>{member.originalFilename}</span><small>{object}</small></p>
-        {entry && <PhotoDeliveryToggle compact allowExclusion={false} entry={entry} layerId={layerId} label={`Leveringsvalg for ${member.originalFilename} · ${object}`}
-          onResult={(result) => workspace.onDeliveryResult?.(member.id, result)} />}
+        {entry && <PhotoDeliveryCycleButton entry={entry} label={`${member.originalFilename} · ${object}`}
+          onCycle={workspace.onToggleDelivery} />}
         {reason && <small className="photo-delivery-popup-reason">{reason}</small>}
       </li>;
     })}</ul>

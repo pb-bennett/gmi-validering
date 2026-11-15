@@ -323,7 +323,7 @@ export default function Home() {
   // otherwise: the hub's own step to the map comes through here too, before any handoff exists.
   const requestWorkspaceAction = (action = () => {}, { keepFlow = false } = {}) => {
     const run = keepFlow ? action : () => { if (closePhotoExportFlow()) setPhotoExportReturn(null); action(); };
-    if (photoWorkspace.mode === 'remove' || photoWorkspace.mode === 'delivery' || photoWorkspace.mode === 'exclude') dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
+    if (photoWorkspace.mode === 'remove' || photoWorkspace.mode === 'delivery') dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
     if (photoWorkspace.mode !== 'edit') { run(); return; }
     if (!changedPhotoIds(photoEdit).length) { endPhotoEditSession(); run(); return; }
     setPhotoBoundary({ variant: 'boundary', then: run });
@@ -439,7 +439,6 @@ export default function Home() {
     // During a handoff this is the way back, so the task it came from is not lost.
     else if (tool === 'complete') { if (photoExportFlow) leavePhotoEditMode(); else openCompletePhotoDetails(opener); }
     else if (tool === 'export') requestWorkspaceAction(() => { photoToolOpenerRef.current = opener; setPhotoExportReturn(null); setPhotoExportResumed(false); setPhotoDialog('export'); });
-    else if (tool === 'exclude') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'exclude' }));
     else if (tool === 'remove') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'remove' }));
     else if (tool === 'delivery') requestWorkspaceAction(() => { setPhotoDeliveryAnnouncement(''); dispatchPhotoWorkspace({ type: 'mode', mode: 'delivery' }); });
   };
@@ -501,7 +500,7 @@ export default function Home() {
     }
     if (event.key !== 'Escape') return;
     if (photoEditing) { event.preventDefault(); leavePhotoEditMode(); }
-    else if (photoWorkspace.mode === 'remove' || photoWorkspace.mode === 'delivery' || photoWorkspace.mode === 'exclude') { event.preventDefault(); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); }
+    else if (photoWorkspace.mode === 'remove' || photoWorkspace.mode === 'delivery') { event.preventDefault(); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); }
   });
   const photoKeysActive = Boolean(workspaceLayer) && photoWorkspace.mode !== 'browse';
   useEffect(() => {

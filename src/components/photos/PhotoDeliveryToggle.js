@@ -8,10 +8,8 @@ import { applyPhotoDeliveryChoice, photoDeliveryOptions } from '@/lib/photos/pho
 // chosen one is filled, carries a check mark and is aria-checked. A click applies the choice at once through the M8
 // session actions: ordinary choices are reversible and need no confirmation. Unlinked occurrences offer «Ikke med» and
 // GML instead of an invalid GMI destination.
-export default function PhotoDeliveryToggle({ entry, layerId, label, describedBy, onResult, compact = false, allowExclusion = true }) {
-  const options = photoDeliveryOptions(entry).filter((item) => allowExclusion || !entry.linked || item.key !== 'excluded' || item.active)
-    .map((item) => !allowExclusion && entry.linked && item.key === 'excluded'
-      ? { ...item, disabled: true, reason: 'Ikke med i leveransen. Velg GMI for å ta med igjen. Nye unntak velges i kontrollpanelet.' } : item);
+export default function PhotoDeliveryToggle({ entry, layerId, label, describedBy, onResult, compact = false }) {
+  const options = photoDeliveryOptions(entry);
   if (!options.length) return null;
   const choose = (item) => {
     if (item.disabled || item.active || !item.apply) return;
@@ -30,6 +28,7 @@ export default function PhotoDeliveryToggle({ entry, layerId, label, describedBy
       event.currentTarget.querySelector(`[data-destination="${next.key}"]`)?.focus();
     }}>
     {options.map((item) => <button key={item.key} type="button" role="radio" aria-checked={item.active} data-destination={item.key}
+      aria-label={item.key === 'gmi' ? 'Beholdes i GMI' : item.key === 'gml' ? 'Tas med i GML' : entry.linked ? 'Ikke med i leveransen' : 'Ikke valgt for GML'}
       aria-disabled={item.disabled || undefined} tabIndex={item.key === focusKey ? 0 : -1} title={item.reason || (item.key === 'excluded' ? 'Ikke med i leveransen. Behold bildet i FOTO-arbeidsområdet.' : item.key === 'gmi' ? 'Behold bildelenken i GMI' : 'Ta med plasseringen i GML')}
       className="photo-delivery-option gmi-focus-ring" onClick={() => choose(item)}>
       {item.active && <CheckIcon size={12} weight="regular" aria-hidden="true" />}{item.label}

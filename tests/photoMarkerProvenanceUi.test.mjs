@@ -128,12 +128,12 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert.equal(await pillOf(repeated[0].id), 'GMI');
         await select(exif.id);
         await browser.waitFor(`${markerOf(exif.id)}.classList.contains('photo-camera-marker-selected')`);
-        assert.equal(await pillOf(exif.id), 'Ikke med');
+        assert.equal(await pillOf(exif.id), 'Ikke');
         assert.equal(await pillOf(repeated[0].id), 'GMI');
         await select(repeated[0].id);
         await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=excluded]').click()`);
         await browser.waitFor(`${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(NEUTRAL)}`);
-        assert.equal(await pillOf(repeated[0].id), 'Ikke med');
+        assert.equal(await pillOf(repeated[0].id), 'Ikke');
         assert.match(await browser.evaluate(`${markerOf(repeated[0].id)}.getAttribute('aria-label')`), /Ikke med i leveransen/);
         await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
         await browser.waitFor(`${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GMI)}`);
@@ -141,7 +141,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert.equal(await pillOf(repeated[1].id), 'GMI');
         await select(exif.id);
         // An isolated GMI-linked marker: GMI -> GML -> GMI, at once; its sibling placement of the same photograph is untouched.
-        for (const [expectedFill, expectedPill] of [[GML, 'GML'], [GMI, 'GMI'], [GML, 'GML']]) {
+        for (const [expectedFill, expectedPill] of [[GML, 'GML'], [NEUTRAL, 'Ikke'], [GMI, 'GMI'], [GML, 'GML']]) {
           await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
           await browser.waitFor(`${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(expectedFill)}`);
           assert.equal(await pillOf(repeated[0].id), expectedPill);
@@ -165,7 +165,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile())})`);
         // Restore the defaults through the same one-click path, then leave planning.
         await browser.evaluate(`${markerOf(exif.id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
-        await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+        for (let i = 0; i < 2; i++) await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
         await browser.waitFor(`${markerOf(exif.id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(NEUTRAL)}
           && ${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GMI)}`);
         await click('Ferdig', 'document.querySelector(".photo-delivery-bar")');
