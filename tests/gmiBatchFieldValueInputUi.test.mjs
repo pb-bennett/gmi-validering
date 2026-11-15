@@ -50,7 +50,7 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
     const preview = async () => { await click('Forhåndsvis endringer'); await ready(); };
     const select = async (scope, indices) => {
       if (await browser.evaluate(`Boolean(${inspector})`)) {
-        await click('Avslutt');
+        await browser.evaluate(`document.querySelector('[data-gmi-batch-inspector]').querySelector('[data-gmi-batch-cancel]').click()`);
         if (await browser.evaluate(`Boolean(${guard})`)) await click('Forkast skjemaet', guard);
       }
       if (await browser.evaluate(`Boolean(${bar})`)) await click('Fjern utvalg', bar);
@@ -81,7 +81,7 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
         assert.equal(await browser.evaluate(`${value}.value`), '');
         await browser.evaluate(`${value}.focus()`); await key('Escape', 27);
         assert.equal(await buttonDisabled('Forhåndsvis endringer'), true);
-        await click('Avslutt'); await browser.waitFor(`!${inspector}`);
+        await browser.evaluate(`document.querySelector('[data-gmi-batch-inspector]').querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(`!${inspector}`);
         assert.equal(await browser.evaluate(`Boolean(${guard})`), false);
         await click('Rediger valgte (2)', bar); await browser.waitFor(inspector);
         assert.equal(await browser.evaluate(`${field}.value`), '');
@@ -100,7 +100,7 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
         await custom(); await change(value, 'id');
         assert.equal(await browser.evaluate(`${value}.value`), 'ID');
         await preview(); assert.match(await browser.evaluate(`${inspector}.innerText`), /2 av 2 punkter endres/);
-        await click('Legg til masseendring'); await browser.waitFor(`${inspector}.dataset.batchStep === '3'`);
+        await click('Legg til endringer'); await browser.waitFor(`${inspector}.dataset.batchStep === '3'`);
         assert.equal(await browser.evaluate(`Boolean(${risk})`), false);
       });
 
@@ -161,10 +161,10 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
           await preview();
           assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), lexeme);
           assert.match(await browser.evaluate(`${inspector}.innerText`), /2 av 2 ledninger endres/);
-          if (lexeme !== '11.0') await click('Tilbake til oppsett');
+          if (lexeme !== '11.0') await click('Tilbake');
         }
         // B2 (deliberate update): the two lines differ in Material and Dimensjon, so staging needs the risk approval.
-        await click('Legg til masseendring'); await browser.waitFor(risk);
+        await click('Legg til endringer'); await browser.waitFor(risk);
         assert.match(await browser.evaluate(`${risk}.innerText`), /Blandet blant objektene som endres: [^.]*Dimensjon/);
         await click('Godkjenn og legg til', risk);
         await browser.waitFor(`${inspector}.dataset.batchStep === '3'`);
@@ -192,11 +192,11 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
         await change(value, 'a;b'); assert.equal(await buttonDisabled('Forhåndsvis endringer'), true);
         assert.match(await browser.evaluate(`${inspector}.querySelector('[role=alert]').innerText`), /Semikolon/);
         await change(value, 'egenkode'); await preview();
-        await click('Legg til masseendring'); await browser.waitFor(risk);
+        await click('Legg til endringer'); await browser.waitFor(risk);
         assert.match(await browser.evaluate(`${risk}.innerText`), /FEIL/);
         assert.match(await browser.evaluate(`${risk}.innerText`), /EGENKODE/);
-        await click('Tilbake til utvalget', risk);
-        await click('Avslutt'); await browser.waitFor(guard); await click('Avbryt', guard);
+        await click('Avbryt', risk);
+        await browser.evaluate(`document.querySelector('[data-gmi-batch-inspector]').querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(guard); await click('Avbryt', guard);
         assert.match(await browser.evaluate(`${inspector}.innerText`), /EGENKODE/);
       });
       assert.deepEqual(new Uint8Array(await readFile(file)), bytes);

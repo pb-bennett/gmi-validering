@@ -407,14 +407,27 @@
 .gmi-individual-selection > button.gmi-edit-link:hover { color: var(--gmi-navy); text-decoration-thickness: 2px; }
 .gmi-individual-selection .gmi-compact-button:hover:not(:disabled) { border-color: var(--gmi-interactive); }
 .gmi-individual-selection .gmi-compact-button:disabled { opacity: .5; cursor: not-allowed; }
-/* B3: «Rett én og én» sits beside «Avslutt» in the batch header (compact secondary action). */
-.gmi-batch-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex-shrink: 0; }
 
 /* G6: keep exact-value choices readable within the existing inspector grid. */
 .gmi-batch-match { grid-column: 1 / -1; min-width: 0; }
 .gmi-batch-match select { width: 100%; max-width: 100%; }
-/* A1: one active stage. Setup actions share one row; back controls lead with their arrow. */
-.gmi-batch-setup-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* Batch navigation stays in the existing inspector scroll owner. The footer has its own
+   layout space, so its sticky surface cannot cover the last content at the end of a scroll. */
+.gmi-batch-inspector { display: flex; flex-direction: column; min-height: 100%; padding-bottom: 0; }
+.gmi-batch-content { display: grid; gap: 8px; flex: 1 0 auto; align-content: start; }
+.gmi-batch-navigation { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; flex-shrink: 0; padding: 8px 0; border-top: 1px solid var(--gmi-border); background: var(--gmi-surface); }
+.gmi-batch-navigation-status { flex: 1 1 140px; margin: 0; }
+.gmi-batch-navigation-status:empty { display: none; }
+.gmi-batch-navigation-actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-left: auto; }
+.gmi-batch-navigation-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 30px; padding: 0 8px; border-radius: 8px; white-space: nowrap; font-size: 12px; }
+.gmi-batch-navigation-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.gmi-batch-navigation-actions .gmi-compact-button:hover:not(:disabled) { border-color: var(--gmi-interactive); }
+.gmi-batch-navigation-actions .gmi-compact-button:active:not(:disabled) { background: var(--gmi-cyan-soft); }
+.gmi-batch-navigation-actions .gmi-primary-control:hover:not(:disabled) { opacity: 1; background: color-mix(in srgb, var(--gmi-interactive) 82%, var(--gmi-ink)); }
+.gmi-batch-navigation-actions .gmi-primary-control:active:not(:disabled) { background: color-mix(in srgb, var(--gmi-interactive) 80%, var(--gmi-ink)); }
+.gmi-batch-navigation-actions .gmi-primary-control.gmi-batch-commit { background: var(--gmi-navy); border-color: var(--gmi-navy); color: var(--gmi-surface); }
+.gmi-batch-navigation-actions .gmi-primary-control.gmi-batch-commit:hover:not(:disabled) { background: color-mix(in srgb, var(--gmi-navy) 82%, var(--gmi-ink)); }
+.gmi-batch-navigation-actions .gmi-primary-control.gmi-batch-commit:active:not(:disabled) { background: color-mix(in srgb, var(--gmi-navy) 80%, var(--gmi-ink)); }
 .gmi-batch-back { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .gmi-batch-object-detail > .gmi-batch-back { margin: 2px 0 4px; }
 .gmi-batch-proposal-kicker { border-radius: 3px; }

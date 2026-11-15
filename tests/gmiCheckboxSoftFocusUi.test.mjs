@@ -111,7 +111,7 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`T3 production ${
         assert.match(await browser.evaluate(`${batch}.querySelector('.gmi-batch-object-detail').innerText`), /skrivebeskyttet/);
         await noGuard();
         // Close through the ordinary batch guard, stage one correction, then leave history via a check.
-        await click('Avslutt', batch); await browser.waitFor(guard); await click('Forkast skjemaet', guard); await browser.waitFor(`!${batch}`);
+        await browser.evaluate(`${batch}.querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(guard); await click('Forkast skjemaet', guard); await browser.waitFor(`!${batch}`);
         await browser.evaluate(`${row(1)}.click()`); await current(1);
         await input(`${editor}.querySelector('[data-field="Merknad"] input')`, 'Staged value');
         await click('Forhåndsvis endringer (1)', editor); await browser.waitFor(`${editor}.querySelector('.gmi-edit-review')`);

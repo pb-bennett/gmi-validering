@@ -133,7 +133,7 @@ test('H4 production: return to the originating Validator rule, guard cancellatio
       await t.test('after staging, «Kontroller i Validator (Foreslått)» opens the same rule with updated findings', async () => {
         await click('Forhåndsvis endringer', batch);
         await browser.waitFor(`${batch}.getAttribute('aria-busy') === 'false' && ${batch}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK')`);
-        await click('Legg til masseendring', batch); await browser.waitFor(`${batch}.dataset.batchStep === '3'`);
+        await click('Legg til endringer', batch); await browser.waitFor(`${batch}.dataset.batchStep === '3'`);
         assert.match(await changeSetCount(), /1 retting/);
         await browser.waitFor(`${returnLink}?.dataset.gmiValidatorReturn === 'proposed'`);
         const check = `${batch}.querySelector('[data-gmi-validator-check]')`;

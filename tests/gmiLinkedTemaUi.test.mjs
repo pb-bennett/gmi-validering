@@ -35,7 +35,7 @@ test('G8 production: linked Tema review, ambiguity, explicit/stale consent, poin
     const count = () => browser.evaluate(`${workspace}.querySelectorAll('[data-change-set]').length`);
     const select = async (scope, indices) => {
       if (await browser.evaluate(`Boolean(${inspector})`)) {
-        await click('Avslutt');
+        await browser.evaluate(`document.querySelector('[data-gmi-batch-inspector]').querySelector('[data-gmi-batch-cancel]').click()`);
         if (await browser.evaluate(`Boolean(${guard})`)) await click('Forkast skjemaet', guard);
       }
       if (await browser.evaluate(`Boolean(${bar})`)) await click('Fjern utvalg', bar);
@@ -66,8 +66,8 @@ test('G8 production: linked Tema review, ambiguity, explicit/stale consent, poin
         await change(matches, '0'); await preview();
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-changed]').dataset.gmiBatchChanged`), '1');
         assert.match(await browser.evaluate(`document.querySelector('[role=grid] [data-table-row="0"]').innerText`), /Sett verdi/);
-        await click('Legg til masseendring'); await browser.waitFor(risk);
-        await click('Tilbake til utvalget', risk); await click('Tilbake til oppsett'); await mode('Sett verdi');
+        await click('Legg til endringer'); await browser.waitFor(risk);
+        await click('Avbryt', risk); await click('Tilbake'); await mode('Sett verdi');
         assert.equal(await count(), 0);
         assert.equal(await browser.evaluate(`Boolean(${inspector}.querySelector('[data-gmi-batch-changed]'))`), false);
       });
@@ -101,7 +101,7 @@ test('G8 production: linked Tema review, ambiguity, explicit/stale consent, poin
           assert(await browser.evaluate(`document.documentElement.scrollWidth<=${width} && ${inspector}.scrollWidth<=${inspector}.clientWidth`));
           await screenshot(`g8-linked-${width}x${height}.png`);
         }
-        await click('Legg til masseendring'); await browser.waitFor(risk);
+        await click('Legg til endringer'); await browser.waitFor(risk);
         assert.equal(await count(), 0);
         assert.match(await browser.evaluate(`${risk}.innerText`), /Tema og S_FCODE oppdateres samlet/);
         assert.match(await browser.evaluate(`${risk}.innerText`), /FEIL/);
@@ -114,7 +114,7 @@ test('G8 production: linked Tema review, ambiguity, explicit/stale consent, poin
         // Publish a changed selection through the real table while consent is open.
         await browser.evaluate(`${box(1)}.click()`); await click('Godkjenn og legg til', risk);
         await browser.waitFor(`!${risk}`); assert.equal(await count(), 0);
-        await ready(); await click('Legg til masseendring'); await browser.waitFor(risk);
+        await ready(); await click('Legg til endringer'); await browser.waitFor(risk);
         await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
         assert.equal(await count(), 1);
       });
@@ -140,7 +140,7 @@ test('G8 production: linked Tema review, ambiguity, explicit/stale consent, poin
 
       await t.test('line domain and downstream hydraulic consequences use the same linked confirmation', async () => {
         await select('Ledninger', [0]); await mode('Sett verdi'); await change(value, 'SP'); await preview();
-        await click('Legg til masseendring'); await browser.waitFor(risk);
+        await click('Legg til endringer'); await browser.waitFor(risk);
         assert.match(await browser.evaluate(`${risk}.innerText`), /Tema og S_FCODE oppdateres samlet/);
         await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
         assert.equal(await count(), 2);

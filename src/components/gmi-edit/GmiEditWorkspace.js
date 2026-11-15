@@ -198,6 +198,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const onBatchRequest = useEffectEvent((request) => {
     if (!request || request.layerId !== layerId) return;
     useStore.setState({ gmiBatchInspectorRequest: null });
+    if (request.mode === 'individual') { if (view && !batchOpen) editIndividually(); return; }
     if (batchOpen || batchInspector || !view) return;
     guard(() => {
       // Re-read after the draft confirmation; its scope may have changed.
@@ -397,7 +398,6 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     </footer>
     {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector key={`batch:${formRevision}`} view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
       onClose={closeBatchInspector} onRequestClose={() => guard(closeBatchInspector, 'masseendringen')} inspected={batchInspected} onInspectClose={() => setBatchInspected(null)}
-      onEditIndividually={editIndividually}
       renderChangeSet={(changeSet) => renderChangeSet(changeSet, 'staged')}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice(null); showStagedResult(); }} />
       : detailChangeSet && view ? <div className="gmi-edit-editor">{renderChangeSet(detailChangeSet, 'history')}</div>

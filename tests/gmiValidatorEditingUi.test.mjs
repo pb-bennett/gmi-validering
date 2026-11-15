@@ -83,7 +83,7 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         assert.deepEqual(await browser.evaluate(`Array.from(document.querySelectorAll('[role=row][aria-selected=true]')).map(e => Number(e.dataset.tableRow))`), [0, 6, 7]);
         assert.match(await browser.evaluate(`${dialog}.querySelector('[type=radio]:checked').closest('label').innerText`), /Fyll manglende verdier/);
         // A1 (deliberate update): Oppsett renders no staging action at all (previously a disabled button).
-        assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(e => e.innerText === 'Legg til masseendring')`), false);
+        assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(e => e.innerText === 'Legg til endringer')`), false);
         assert.equal(await browser.evaluate(`${dialog}.dataset.batchStage`), 'setup');
         assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText || ''`), '');
         // U4: before staging, proposed modes stay visible but disabled. They cannot alter the R5 source selection.
@@ -125,7 +125,7 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         }
         await shot('m5c-exact-batch-review');
         await browser.waitFor(`${dialog}.getAttribute('aria-busy') === 'false'`);
-        await click('Legg til masseendring', dialog);
+        await click('Legg til endringer', dialog);
         await browser.waitFor(`document.querySelector('dialog[open][data-gmi-confirm=batch-risk]')`);
         await click('Godkjenn og legg til', `document.querySelector('dialog[open][data-gmi-confirm=batch-risk]')`);
         await browser.waitFor(`${dialog}?.dataset.batchStep === '3'`);
@@ -149,7 +149,7 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await click('Kontroller endringer', workspace); await browser.waitFor('document.querySelector("[data-gmi-full-comparison]")');
       });
       await t.test('verified Foreslått and unchanged Original, retained selection and remaining exact targets', async () => {
-        await click('Avslutt', dialog);
+        await browser.evaluate(`${dialog}.querySelector('[data-gmi-batch-cancel]').click()`);
         await clickGmiTableObject(browser, 'line:0');
         await browser.waitFor(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input')`);
         await value(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input')`, '17.0');
@@ -196,7 +196,7 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await click('Filtrert visning');
         await browser.evaluate(`document.querySelector('[role=row][aria-selected=false] input[type=checkbox]').click()`);
         assert.equal(await browser.evaluate(`document.querySelectorAll('[role=row][aria-selected=true]').length`), 2);
-        await click('Avslutt', dialog);
+        await browser.evaluate(`${dialog}.querySelector('[data-gmi-batch-cancel]').click()`);
         await click('Åpne Validator', workspace); await browser.waitFor(`${dataset}?.value === 'proposed'`);
         await shot('m5c-validator-retained');
       });

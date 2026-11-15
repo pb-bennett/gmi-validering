@@ -38,11 +38,11 @@ test('G6 production: exact replacement, clearing, required-field consent, select
     const mode = (name) => browser.evaluate(`Array.from(${inspector}.querySelectorAll('.gmi-batch-modes label')).find(e=>e.innerText.trim()===${JSON.stringify(name)}).querySelector('input').click()`);
     const ready = () => browser.waitFor(`${inspector}.getAttribute('aria-busy')==='false' && ${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK')`);
     const preview = async () => { await click('Forhåndsvis endringer'); await ready(); };
-    const stage = async () => { await click('Legg til masseendring'); await browser.waitFor(risk); await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`); };
+    const stage = async () => { await click('Legg til endringer'); await browser.waitFor(risk); await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`); };
     const count = () => browser.evaluate(`${workspace}.querySelectorAll('[data-change-set]').length`);
     const select = async (scope, indices) => {
       if (await browser.evaluate(`Boolean(${inspector})`)) {
-        await click('Avslutt');
+        await browser.evaluate(`document.querySelector('[data-gmi-batch-inspector]').querySelector('[data-gmi-batch-cancel]').click()`);
         if (await browser.evaluate(`Boolean(${guard})`)) await click('Forkast skjemaet', guard);
       }
       if (await browser.evaluate(`Boolean(${bar})`)) await click('Fjern utvalg', bar);
@@ -83,6 +83,12 @@ test('G6 production: exact replacement, clearing, required-field consent, select
             await writeFile(path.join(process.env.GMI_EDIT_SCREENSHOT_DIR, `g6-replace-${width}x${height}.png`), Buffer.from(data, 'base64'));
           }
         }
+        const setup = await browser.evaluate(`({ field:${field}.value, match:${match}.value, value:${value}.value })`);
+        await preview();
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-changed]').dataset.gmiBatchChanged`), '2');
+        await click('Tilbake');
+        assert.deepEqual(await browser.evaluate(`({ field:${field}.value, match:${match}.value, value:${value}.value })`), setup);
+        assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('.gmi-batch-modes label')).find(e=>e.innerText.trim()==='Erstatt verdi').querySelector('input').checked`));
         await preview();
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-changed]').dataset.gmiBatchChanged`), '2');
         await stage();
@@ -95,7 +101,7 @@ test('G6 production: exact replacement, clearing, required-field consent, select
         await preview();
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Allerede tomme: 2/);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-changed]').dataset.gmiBatchChanged`), '5');
-        await click('Legg til masseendring'); await browser.waitFor(risk);
+        await click('Legg til endringer'); await browser.waitFor(risk);
         assert.match(await browser.evaluate(`${risk}.innerText`), /5 nye FEIL/);
         // A2: clear-specific wording; never «samme verdi» for a clear.
         assert.match(await browser.evaluate(`${risk}.querySelector('[data-gmi-risk-confirm]').innerText`), /^Bekreft at verdien skal tømmes for disse objektene\.$/);
@@ -150,7 +156,7 @@ test('G6 production: exact replacement, clearing, required-field consent, select
         await stage();
         await click('Ny masseendring for utvalget'); await change(field, 'Material'); await mode('Tøm verdi'); await preview();
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-changed]').dataset.gmiBatchChanged`), '2');
-        await click('Legg til masseendring'); await browser.waitFor(risk);
+        await click('Legg til endringer'); await browser.waitFor(risk);
         assert(await browser.evaluate(`${risk}.querySelector('[data-validation-tone=error] li') !== null`));
         await click('Godkjenn og legg til', risk); await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
       });

@@ -186,7 +186,7 @@ test('A6 production: live linked Tema/S_FCODE search, preview naming and B3 navi
           await browser.waitFor(box); await browser.evaluate(`${box}.click()`);
         }
         await waitClick('Rediger valgte (3)', bar); await browser.waitFor(batch);
-        await waitClick('Rett én og én', batch);
+        await waitClick('Rett én og én', bar);
         const current = (i) => browser.waitFor(`${editor}?.dataset.gmiObject === 'line:${i}' && ${nav}?.innerText.includes('Objekt ${i + 1} av 3 i utvalget')`);
         await current(0);
         const controls = await browser.evaluate(`Array.from(${nav}.querySelectorAll('button')).map(b => ({ name: b.innerText.trim(), icon: b.querySelectorAll('svg[aria-hidden=true]').length,
@@ -228,7 +228,7 @@ test('A6 production: live linked Tema/S_FCODE search, preview naming and B3 navi
         await click('Tilbake til utvalget', nav); await browser.waitFor(guard); await click('Forkast skjemaet', guard);
         await browser.waitFor(batch);
         assert.deepEqual(await browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row][aria-selected=true]')).map(e => Number(e.dataset.tableRow)).sort((a, b) => a - b)`), [0, 1, 2]);
-        await click('Avslutt', batch);
+        await browser.evaluate(`${batch}.querySelector('[data-gmi-batch-cancel]').click()`);
         if (await browser.evaluate(`Boolean(${guard})`)) await click('Forkast skjemaet', guard);
         if (await browser.evaluate(`Boolean(${bar})`)) await click('Fjern utvalg', bar);
       });

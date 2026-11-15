@@ -154,10 +154,9 @@ test('G8 object editor production: one linked Tema control, explicit consent, B3
           await browser.waitFor(box); await browser.evaluate(`${box}.click()`);
         }
         await waitClick('Rediger valgte (3)', bar); await browser.waitFor(batch);
-        const head = await browser.evaluate(`(() => { const a = ${batch}.querySelector('[data-gmi-individual-entry]').getBoundingClientRect();
-          const b = Array.from(${batch}.querySelectorAll('button')).find(e => e.innerText.trim() === 'Avslutt').getBoundingClientRect(); return Math.abs(a.top - b.top); })()`);
-        assert(head < 2, 'compact batch header retained');
-        await waitClick('Rett én og én', batch);
+        assert.equal(await browser.evaluate(`${batch}.querySelectorAll('[data-gmi-individual-entry]').length`), 0);
+        assert(await browser.evaluate(`${bar}.querySelector('[data-gmi-individual-entry]') !== null`));
+        await waitClick('Rett én og én', bar);
         const current = (i) => browser.waitFor(`${editor}?.dataset.gmiObject === 'point:${i}' && ${nav}?.innerText.includes('Objekt ${i + 1} av 3 i utvalget')`);
         await current(0);
         assert.equal(await browser.evaluate(`${editor}.querySelectorAll('tr[data-gmi-linked-tema-row]').length`), 1);
@@ -180,7 +179,7 @@ test('G8 object editor production: one linked Tema control, explicit consent, B3
         assert.equal(await browser.evaluate(`${editor}.dataset.gmiObject`), 'point:2', 'selected object identity retained');
         await click('Tilbake til utvalget', nav); await browser.waitFor(batch);
         assert.deepEqual(await browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row][aria-selected=true]')).map(e => Number(e.dataset.tableRow)).sort((a, b) => a - b)`), [0, 1, 2]);
-        await click('Avslutt', batch);
+        await browser.evaluate(`${batch}.querySelector('[data-gmi-batch-cancel]').click()`);
         if (await browser.evaluate(`Boolean(${guard})`)) await click('Forkast skjemaet', guard);
         if (await browser.evaluate(`Boolean(${bar})`)) await click('Fjern utvalg', bar);
       });

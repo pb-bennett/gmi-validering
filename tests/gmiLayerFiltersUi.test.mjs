@@ -40,7 +40,7 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
       await open(felt); await open(field('Material'));
       await browser.evaluate(`${field('Material')}.querySelector('[data-filter-value="PE"]').click()`);
     };
-    const stageDisabled = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring').disabled`);
+    const stageDisabled = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til endringer').disabled`);
     const shot = async (name) => {
       if (!process.env.GMI_EDIT_SCREENSHOT_DIR) return;
       await mkdir(process.env.GMI_EDIT_SCREENSHOT_DIR, { recursive: true });
@@ -113,7 +113,7 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
         assert.equal(await stageDisabled(), false);
         assert.deepEqual(await selected(), [0, 2]);
         await click('Nullstill filtre', panel);
-        await click('Legg til masseendring', inspector);
+        await click('Legg til endringer', inspector);
         await browser.waitFor(`${inspector}.dataset.batchStep === '3'`);
         await click('Filter', workspace); await open(felt); await open(field('SDR'));
       });
@@ -147,7 +147,7 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
           await shot(`r6a-filter-${width}x${height}`);
         }
         await hideMaterial(); await count(1);
-        await click('Avslutt', inspector);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`);
         await click('Tilbake til appen', workspace); await browser.waitFor(`!${workspace}`);
         // The ordinary host still displays Original, even when Rettinger used Foreslått.
         await open(felt); await open(field('Material'));

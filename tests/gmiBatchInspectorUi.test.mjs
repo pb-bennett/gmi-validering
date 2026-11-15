@@ -44,13 +44,13 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
     const ready = () => browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK') && ${inspector}.getAttribute('aria-busy')==='false'`);
     const preview = async () => { await click('Forhåndsvis endringer', inspector); await ready(); };
     const stage = async (expectRisk = false) => {
-      await ready(); await click('Legg til masseendring', inspector);
+      await ready(); await click('Legg til endringer', inspector);
       if (expectRisk) { await browser.waitFor(risk); await click('Godkjenn og legg til', risk); }
       await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
     };
     const selectObjects = async (scope, indices) => {
       if (await browser.evaluate(`Boolean(${inspector})`)) {
-        await click('Avslutt', inspector);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`);
         if (await browser.evaluate(`Boolean(${confirm})`)) await click('Forkast skjemaet', confirm);
         await browser.waitFor(`!${inspector}`);
       }
@@ -89,8 +89,8 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           const bounds = await browser.evaluate(`(() => { const i=${inspector}.closest('aside').getBoundingClientRect(), g=${grid}.getBoundingClientRect(); return {width:document.documentElement.scrollWidth, right:i.right, bottom:i.bottom, tableHeight:g.height}; })()`);
           assert(bounds.width <= width && bounds.right <= width && bounds.bottom <= height && bounds.tableHeight > 120, JSON.stringify(bounds));
-          // A1: for a single-field fill, «Legg til masseendring» is visible in the inspector without scrolling.
-          const reach = await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText.trim() === 'Legg til masseendring');
+          // A1: for a single-field fill, «Legg til endringer» is visible in the inspector without scrolling.
+          const reach = await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText.trim() === 'Legg til endringer');
             let s = b.parentElement; while (s && !/(auto|scroll)/.test(getComputedStyle(s).overflowY)) s = s.parentElement;
             const r = b.getBoundingClientRect(), v = (s || document.documentElement).getBoundingClientRect();
             return { top: r.top, bottom: r.bottom, viewTop: v.top, viewBottom: Math.min(v.bottom, innerHeight), scrollTop: s ? s.scrollTop : 0,
@@ -150,14 +150,14 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         assert.match(cell.text, /Ingen nye funn|\(ny\)|Forverret|Forbedret/, 'only what the change does is shown');
         // S1 (deliberate update): only the empty line changes, so the populated,
         // skipped line no longer makes the selection «mixed». It stages directly.
-        await ready(); await click('Legg til masseendring', inspector);
+        await ready(); await click('Legg til endringer', inspector);
         await browser.waitFor(`${risk} || ${inspector}.dataset.batchStep==='3'`);
         assert.equal(await browser.evaluate(`Boolean(${risk})`), false, 'no mixed dialog for a skipped populated object');
         await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
         await click('Ny masseendring for utvalget', inspector);
         await choose('Felt for masseendring', 'Merknad'); await input('Kontrollert');
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await preview();
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk); assert.match(await text(risk), /1 utfylte verdier overskrives/);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk); assert.match(await text(risk), /1 utfylte verdier overskrives/);
         // Both lines change and their current Merknad differs (tom vs «old»): still mixed.
         // B2 (deliberate update): the B1 profile column Dimensjon (160 vs 200) is now also named, with its distribution.
         assert.match(await text(risk), /Blandet blant objektene som endres: Merknad, Dimensjon\./);
@@ -174,8 +174,14 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await browser.waitFor(`${inspector}.getAttribute('aria-busy')==='false'`);
         assert.match(await text(), /Erstatt tidligere rettinger for 2/);
         await browser.evaluate(`Array.from(${inspector}.querySelectorAll('label')).find(e=>e.innerText.includes('Erstatt tidligere rettinger')).querySelector('input').click()`);
-        await ready(); await click('Legg til masseendring', inspector); await browser.waitFor(risk);
-        assert.match(await text(risk), /2 tidligere rettinger erstattes/); await click('Tilbake til utvalget', risk);
+        await ready(); await click('Legg til endringer', inspector); await browser.waitFor(risk);
+        assert.match(await text(risk), /2 tidligere rettinger erstattes/); await click('Avbryt', risk);
+        await click('Tilbake', inspector);
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), 'Ny vurdering');
+        await click('Forhåndsvis endringer', inspector);
+        await browser.waitFor(`${inspector}.getAttribute('aria-busy')==='false' && ${inspector}.querySelector('[data-gmi-batch-counts]')`);
+        assert.equal(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('label')).find(e=>e.innerText.includes('Erstatt tidligere rettinger')).querySelector('input').checked`), false, 'replacement approval belongs to one preview');
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-stage-action]').disabled`), true);
       });
 
       await t.test('manual non-applicable point and unvalidated field require explicit approval', async () => {
@@ -185,13 +191,21 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await browser.waitFor(`${inspector}.getAttribute('aria-busy')==='false'`);
         await browser.evaluate(`${inspector}.querySelector('.gmi-batch-advanced input').click()`);
         await browser.waitFor(`${row(0)}.querySelector('.gmi-manual-toggle')`); await click('Inkluder manuelt', row(0));
-        await ready(); await click('Legg til masseendring', inspector); await browser.waitFor(risk);
-        assert.match(await text(risk), /1 manuelt inkludert/); await click('Tilbake til utvalget', risk);
-        await click('Tilbake til oppsett', inspector); await choose('Felt for masseendring', 'EgetFelt'); await input('a;b');
+        await ready(); await click('Legg til endringer', inspector); await browser.waitFor(risk);
+        assert.match(await text(risk), /1 manuelt inkludert/); await click('Avbryt', risk);
+        await browser.evaluate(`void (window.__oldBatchProposal=${inspector}.querySelector('[data-gmi-batch-counts]'))`);
+        await click('Tilbake', inspector);
+        assert.equal(await browser.evaluate('window.__oldBatchProposal.isConnected'), false);
+        await click('Forhåndsvis endringer', inspector);
+        await browser.waitFor(`${inspector}.getAttribute('aria-busy')==='false' && ${inspector}.querySelector('[data-gmi-batch-counts]')`);
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-advanced input').checked`), false, 'manual inclusion permission resets');
+        assert.equal(await browser.evaluate(`${row(0)}.querySelectorAll('.gmi-manual-toggle').length`), 0, 'manual row inclusion resets');
+        assert.equal(await browser.evaluate(`window.__oldBatchProposal === ${inspector}.querySelector('[data-gmi-batch-counts]')`), false, 'Forward creates a new preview');
+        await click('Tilbake', inspector); await choose('Felt for masseendring', 'EgetFelt'); await input('a;b');
         assert.match(await text(), /Semikolon/);
         await input('Vurdert'); await preview();
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
-        assert.match(await text(risk), /kontrolleres ikke av Validator/); await click('Tilbake til utvalget', risk);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk);
+        assert.match(await text(risk), /kontrolleres ikke av Validator/); await click('Avbryt', risk);
       });
 
       await t.test('mixed point Tema and existing values are named only across the objects that change', async () => {
@@ -201,17 +215,17 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await choose('Felt for masseendring', 'InnvendigUtvendig'); await choose('Ny verdi', 'OD');
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await preview();
         assert.match(await text(), /1 av 2 punkter endres/);
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk);
         assert.match(await text(risk), /1 utfylte verdier overskrives/);
         assert.doesNotMatch(await text(risk), /Blandet/);
-        await click('Tilbake til utvalget', risk);
+        await click('Avbryt', risk);
         // Both points change (LOK 650 and KUM 1000): Tema and the edited field are still named.
-        await click('Tilbake til oppsett', inspector); await choose('Felt for masseendring', 'Bredde'); await input('800');
+        await click('Tilbake', inspector); await choose('Felt for masseendring', 'Bredde'); await input('800');
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`); await preview();
         assert.match(await text(), /2 av 2 punkter endres/);
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk);
         assert.match(await text(risk), /Blandet blant objektene som endres: Tema, Bredde/);
-        await click('Tilbake til utvalget', risk);
+        await click('Avbryt', risk);
       });
 
       await t.test('S3: an actual table SJEKK uses the shared warning symbol and compact label at laptop sizes', async () => {
@@ -239,7 +253,7 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('trinn')`);
         await click('Avbryt full kontroll', inspector);
         assert.match(await text(), /Avbrutt/);
-        assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText==='Legg til masseendring').disabled`));
+        assert(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText==='Legg til endringer').disabled`));
         await browser.evaluate('window.setTimeout=window.g4Timeout');
         await click('Kjør full kontroll', inspector); await ready();
         // S2 (deliberate update): the line's empty Anleggsår is a SJEKK, so «ugyldig» worsens it to FEIL.
@@ -248,11 +262,11 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         assert.match(severity, /0 nye FEIL/); assert.match(severity, /1 forverret/); assert.match(severity, /0 løst/);
         assert.match(await text(row(0)), /Forverret: SJEKK → FEIL/);
         // Safety: the worsened FEIL still counts as a new FEIL for approval, so the risk dialog is required.
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk);
         assert.match(await text(risk), /1 ny eller forverret FEIL/); assert.match(await text(risk), /Forverret: SJEKK → FEIL/);
         assert.doesNotMatch(await text(risk), /Ingen nye FEIL/);
         assert.deepEqual(await browser.evaluate(`Array.from(${risk}.querySelectorAll('.gmi-risk-group')).map(e => e.dataset.validationTone)`), ['error']);
-        await click('Tilbake til utvalget', risk);
+        await click('Avbryt', risk);
         // A2 (deliberate update): whole-dataset findings sit inside the preview's «Detaljer» disclosure.
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-details]').open`), false);
         await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-details] > summary').click()`);
@@ -261,21 +275,44 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await click('Angre siste retting', workspace);
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state==='stale'`);
         // A1 (deliberate update): a stale preview offers no staging action at all (absent counts as blocked).
-        assert(await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring'); return !b || b.disabled; })()`));
+        assert(await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til endringer'); return !b || b.disabled; })()`));
       });
 
       await t.test('A1: exclusive Oppsett/Forhåndsvis/Lagt til stages, back navigation, narrowed draft guard and A2 detail', async () => {
         const stageOf = () => browser.evaluate(`${inspector}.dataset.batchStage`);
         const current = () => browser.evaluate(`${inspector}.querySelector('.gmi-batch-steps [aria-current=step]').innerText.replace(/\\s+/g, ' ').trim()`);
         const has = (selector) => browser.evaluate(`Boolean(${inspector}.querySelector(${JSON.stringify(selector)}))`);
-        const stageButton = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).some(e => e.innerText.trim() === 'Legg til masseendring')`);
+        const stageButton = () => browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).some(e => e.innerText.trim() === 'Legg til endringer')`);
         const press = async (key, code, keyCode, text) => { for (const type of ['keyDown', 'keyUp']) await browser.send('Input.dispatchKeyEvent', { type, key, code, windowsVirtualKeyCode: keyCode, ...(type === 'keyDown' && text ? { text } : {}) }); };
         // Each visible stage at both laptop sizes: no page overflow; screenshots when GMI_EDIT_SCREENSHOT_DIR is set.
+        const footerBottoms = new Map();
         const shots = async (name) => {
           for (const [width, height] of [[1280, 720], [1366, 768]]) {
             await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
             await browser.waitFor(`document.documentElement.clientWidth === ${width}`);
             assert(await browser.evaluate(`document.documentElement.scrollWidth <= ${width} && ${inspector}.scrollWidth <= ${inspector}.clientWidth`), `${name} ${width}`);
+            const footer = await browser.evaluate(`(() => {
+              const root=${inspector}, footer=root.querySelector('[data-gmi-batch-footer]'), pane=root.closest('aside');
+              const rect=footer.getBoundingClientRect(), buttons=Array.from(footer.querySelectorAll('button'));
+              const top=pane.scrollTop; pane.scrollTop=pane.scrollHeight;
+              const last=root.querySelector('.gmi-batch-content').getBoundingClientRect(), end=footer.getBoundingClientRect();
+              const uncovered=last.bottom <= end.top + 1; pane.scrollTop=top;
+              return { bottom:rect.bottom, top:rect.top, right:rect.right, names:buttons.map(e=>e.innerText.trim()),
+                heights:buttons.map(e=>e.getBoundingClientRect().height), uncovered,
+                scrollOwner:getComputedStyle(pane).overflowY, internalScroll:getComputedStyle(root).overflowY,
+                colour:getComputedStyle(buttons.at(-1)).backgroundColor, icon:Boolean(buttons.at(-1).querySelector('svg[aria-hidden=true]')) };
+            })()`);
+            const expected = name === 'staged' ? ['Lukk', 'Ny masseendring for utvalget'] : name === 'setup'
+              ? ['Avbryt', 'Forhåndsvis endringer'] : ['Avbryt', 'Tilbake', name === 'stale' ? 'Oppdater forhåndsvisning' : 'Legg til endringer'];
+            assert.deepEqual(footer.names, expected);
+            assert(footer.top >= 0 && footer.bottom <= height && footer.right <= width, JSON.stringify(footer));
+            if (footerBottoms.has(width)) assert(Math.abs(footerBottoms.get(width) - footer.bottom) < 2, 'footer keeps the same bottom edge in every stage');
+            else footerBottoms.set(width, footer.bottom);
+            assert(footer.heights.every(h => h === 30), JSON.stringify(footer));
+            assert(footer.uncovered, 'footer does not obscure the final content at maximum scroll');
+            assert.equal(footer.scrollOwner, 'auto'); assert.equal(footer.internalScroll, 'visible');
+            assert.equal(footer.colour, ['preview', 'conflict'].includes(name) ? 'rgb(15, 23, 43)' : 'rgb(0, 117, 149)');
+            if (name === 'preview') assert(footer.icon, 'navy final action has a named control and decorative Phosphor icon');
             if (!process.env.GMI_EDIT_SCREENSHOT_DIR) continue;
             await mkdir(process.env.GMI_EDIT_SCREENSHOT_DIR, { recursive: true });
             const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
@@ -292,13 +329,13 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         // Draft guard: a mode and a field choice alone are no draft.
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`);
         await choose('Felt for masseendring', 'Merknad');
-        await click('Avslutt', inspector);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`);
         await browser.waitFor(`!${inspector}`);
         assert.equal(await browser.evaluate(`Boolean(${confirm})`), false, 'mode/field alone does not ask to discard');
         await selectObjects('Ledninger', [0, 1]);
         await choose('Felt for masseendring', 'Merknad'); await input('A1 test');
         await browser.evaluate(`${inspector}.querySelectorAll('input[type=radio]')[1].click()`);
-        await click('Avslutt', inspector); await browser.waitFor(confirm);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(confirm);
         assert.match(await text(confirm), /Forkaste endringer i skjemaet\?/);
         await click('Avbryt', confirm); await browser.waitFor(`!${confirm}`);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), 'A1 test');
@@ -314,7 +351,7 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-details]').open`), false, 'reading aids collapsed');
         assert.match(await text(`${inspector}.querySelector('[data-gmi-batch-dry-run]')`), /Full kontroll av forslaget: OK/, 'full-control status stays visible');
         const back = await browser.evaluate(`(() => { const b = ${inspector}.querySelector('[data-gmi-batch-back-setup]'); return { text: b.innerText.trim(), icon: Boolean(b.querySelector('svg[aria-hidden=true]')), primary: b.classList.contains('gmi-primary-control') }; })()`);
-        assert.deepEqual(back, { text: 'Tilbake til oppsett', icon: true, primary: false });
+        assert.deepEqual(back, { text: 'Tilbake', icon: true, primary: false });
         await shots('preview');
         // A2: the inspected object shows only the edited field and its outcome, never an attribute dump.
         await browser.evaluate(`${row(0)}.click()`);
@@ -322,20 +359,24 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         assert.equal(await has('.gmi-batch-object-detail dl'), false, 'no duplicate attribute list');
         assert.doesNotMatch(await text(`${inspector}.querySelector('.gmi-batch-object-detail')`), /Dimensjon|Stedfestingsårsak/);
         assert.match(await text(`${inspector}.querySelector('.gmi-batch-object-detail')`), /Merknad → «A1 test»/);
-        await click('Tilbake til masseendringen', inspector); await browser.waitFor(`!${inspector}.querySelector('.gmi-batch-object-detail')`);
+        await click('Lukk objektdetaljer', inspector); await browser.waitFor(`!${inspector}.querySelector('.gmi-batch-object-detail')`);
         // Back to Oppsett genuinely leaves the preview and keeps the whole configuration.
-        await click('Tilbake til oppsett', inspector);
+        await click('Tilbake', inspector);
         assert.equal(await stageOf(), 'setup'); assert.match(await current(), /Oppsett$/);
         assert.equal(await has('[data-gmi-batch-counts]'), false); assert.equal(await stageButton(), false);
         assert.deepEqual(await browser.evaluate(`({ field: ${inspector}.querySelector('[aria-label="Felt for masseendring"]').value, value: ${inspector}.querySelector('[aria-label="Ny verdi"]').value,
           mode: ${inspector}.querySelectorAll('input[type=radio]')[1].checked, focus: document.activeElement?.getAttribute('aria-label') })`),
           { field: 'Merknad', value: 'A1 test', mode: true, focus: 'Felt for masseendring' });
-        // Unchanged setup returns to the same, still valid preview without recomputation.
-        await click('Tilbake til forhåndsvisningen', inspector);
+        assert.equal(await has('[data-gmi-batch-back-preview]'), false);
+        assert.equal(await has('[data-gmi-batch-setup-retained]'), false);
+        assert.equal(await browser.evaluate(`${grid}.querySelectorAll('[data-review-outcome]').length`), 0, 'Back clears the table preview too');
+        // Unchanged inputs still calculate and validate a fresh preview.
+        await preview();
         assert.deepEqual(await browser.evaluate(`({ stage: ${inspector}.dataset.batchStage, busy: ${inspector}.getAttribute('aria-busy'), state: ${inspector}.querySelector('[data-gmi-batch-counts]')?.dataset.state,
           ok: ${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK') })`), { stage: 'preview', busy: 'false', state: 'valid', ok: true });
-        // Keyboard only: focus is back at the proposal; Tab reaches «Tilbake til oppsett», Enter returns to the field choice.
+        // Keyboard only: the footer is ordered Cancel, Back, Forward; Back returns focus to the field choice.
         assert.equal(await browser.evaluate(`document.activeElement?.classList.contains('gmi-batch-proposal-kicker')`), true);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').focus()`);
         await press('Tab', 'Tab', 9);
         assert.equal(await browser.evaluate(`document.activeElement?.hasAttribute('data-gmi-batch-back-setup')`), true);
         await press('Enter', 'Enter', 13, '\r');
@@ -359,16 +400,18 @@ test('G4 production: general points/lines, exact reviewed bytes, gates, cancella
         await click('Forhåndsvis endringer', inspector);
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]') && ${inspector}.getAttribute('aria-busy')==='false'`);
         assert.match(await text(), /Erstatt tidligere rettinger for 2/);
-        assert.equal(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText.trim() === 'Legg til masseendring').disabled`), true, 'conflict gate unchanged');
+        assert.equal(await browser.evaluate(`Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText.trim() === 'Legg til endringer').disabled`), true, 'conflict gate unchanged');
+        await shots('conflict');
         await click('Angre siste retting', workspace);
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]')?.dataset.state==='stale'`);
         assert.equal(await stageOf(), 'preview'); assert.match(await current(), /Forhåndsvis\s*\(ugyldig\)$/);
         assert.equal(await stageButton(), false, 'a stale preview cannot be staged');
         await shots('stale');
-        await click('Tilbake til oppsett', inspector);
-        await click('Tilbake til forhåndsvisningen', inspector);
-        assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'stale', 'returning never revives a stale preview');
-        assert.equal(await stageButton(), false);
+        await click('Tilbake', inspector);
+        assert.equal(await has('[data-gmi-batch-counts]'), false);
+        await preview();
+        assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'valid', 'Forward calculates against the current session');
+        assert.equal(await stageButton(), true);
         await click('Gjør om retting', workspace);
       });
       assert.deepEqual(new Uint8Array(await readFile(file)), bytes);
@@ -394,12 +437,12 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
     const select = (value) => browser.evaluate(`(() => { const select = ${inspector}.querySelector('select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(value)}); select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
     const text = () => browser.evaluate(`${inspector}.innerText`);
     // A1 (deliberate update): Oppsett and a stale Forhåndsvis render no staging action; absent counts as blocked.
-    const stageDisabled = () => browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring'); return !b || b.disabled; })()`);
+    const stageDisabled = () => browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til endringer'); return !b || b.disabled; })()`);
     const calculate = async () => {
       // Stale reviews offer «Oppdater forhåndsvisning» in the summary; otherwise the configuration form.
       const label = await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')); return b.some(e => e.innerText === 'Oppdater forhåndsvisning') ? 'Oppdater forhåndsvisning' : b.some(e => e.innerText === 'Forhåndsvis endringer') ? 'Forhåndsvis endringer' : null; })()`);
       // A1 (deliberate update): a valid preview returns to Oppsett first, which offers «Forhåndsvis endringer».
-      if (!label) await click('Tilbake til oppsett', inspector);
+      if (!label) await click('Tilbake', inspector);
       await click(label || 'Forhåndsvis endringer', inspector);
       await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]') && ${inspector}.getAttribute('aria-busy') === 'false'`);
     };
@@ -471,11 +514,11 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await browser.waitFor(`${inspector}.querySelector('.gmi-batch-object-detail')`);
         // Row inspection keeps the reviewed proposal (and its draft) intact.
         assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '11');
-        await click('Tilbake til masseendringen', inspector);
-        await click('Legg til masseendring', inspector);
+        await click('Lukk objektdetaljer', inspector);
+        await click('Legg til endringer', inspector);
         const risk = `document.querySelector('dialog[open][data-gmi-confirm=batch-risk]')`;
         await browser.waitFor(risk); assert.match(await browser.evaluate(`${risk}.innerText`), /1 manuelt inkludert/);
-        await click('Tilbake til utvalget', risk); await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        await click('Avbryt', risk); await click('Legg til endringer', inspector); await browser.waitFor(risk);
         await click('Godkjenn og legg til', risk);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length === 1`);
         await browser.waitFor(`${inspector}.innerText.includes('Utvalget er beholdt')`);
@@ -496,11 +539,11 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await browser.waitFor(`${inspector}.innerText.includes('rettingene er endret')`); assert.equal(await stageDisabled(), true);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'stale');
         await click('Gjør om retting', workspace); assert.equal(await stageDisabled(), true);
-        await click('Avslutt', inspector); await browser.waitFor(confirm); await click('Avbryt', confirm);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(confirm); await click('Avbryt', confirm);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('.gmi-batch-proposal-value').innerText.trim()`), '17');
-        await click('Tilbake til oppsett', inspector);
+        await click('Tilbake', inspector);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[aria-label="Ny verdi"]').value`), '17');
-        await click('Avslutt', inspector); await browser.waitFor(confirm); await click('Forkast skjemaet', confirm);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(confirm); await click('Forkast skjemaet', confirm);
         await browser.waitFor(`!${inspector}`);
       });
 
@@ -510,7 +553,7 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await click('Rediger valgte (1)', bar); await browser.waitFor(inspector);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('select').value`), '');
         assert(await browser.evaluate(`Array.from(${inspector}.querySelector('select').options).some(o => o.disabled && o.textContent.includes('Finnes ikke i filen'))`)); assert.equal(await stageDisabled(), true);
-        await click('Avslutt', inspector); await browser.waitFor(`!${inspector}`);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(`!${inspector}`);
         await click('Masseendringer', workspace); await browser.waitFor(`document.querySelector('dialog[open].gmi-batch-dialog')`);
         assert.equal(await browser.evaluate(`Boolean(${inspector})`), false);
         await click('Avbryt', `document.querySelector('dialog[open].gmi-batch-dialog')`);

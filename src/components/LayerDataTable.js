@@ -1129,6 +1129,8 @@ export default function LayerDataTable() {
           ? <span className="gmi-batch-mode-indicator" role="status"><PencilSimpleIcon size={14} weight="regular" aria-hidden="true" />Masseendring pågår · se panelet til høyre</span>
           : <button type="button" className="gmi-primary-control gmi-focus-ring gmi-batch-entry" onClick={() => useStore.setState({ gmiBatchInspectorRequest: { layerId, at: Date.now() } })}>
             <PencilSimpleIcon size={14} weight="regular" aria-hidden="true" />Rediger valgte ({selectionCounts.total})</button>)}
+        {!isExactInspection && <button type="button" className="gmi-bar-button gmi-focus-ring" data-gmi-individual-entry
+          onClick={() => useStore.setState({ gmiBatchInspectorRequest: { layerId, mode: 'individual', at: Date.now() } })}>Rett én og én</button>}
       </div>}
       {replaceSelection && (() => {
         const { from, to } = replaceSelection;

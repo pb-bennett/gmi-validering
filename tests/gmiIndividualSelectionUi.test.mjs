@@ -63,9 +63,9 @@ test('B3 production: Validator five points, source order, draft cancellation, in
       assert.match(await browser.evaluate(`${batch}.innerText`), /SDR, Trykklasse og Ringstivhet kan bare masseendres på ledninger/);
       await browser.evaluate(`(() => { const e=${batch}.querySelector('[aria-label="Felt for masseendring"]');e.value='Merknad';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
       await browser.evaluate(`(() => { const e=${batch}.querySelector('[aria-label="Ny verdi"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'Batch draft');e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-      await click('Rett én og én', batch); await browser.waitFor(dialog); await click('Avbryt', dialog);
+      await click('Rett én og én', bar); await browser.waitFor(dialog); await click('Avbryt', dialog);
       assert.equal(await browser.evaluate(`${batch}.querySelector('[aria-label="Ny verdi"]').value`), 'Batch draft');
-      await click('Rett én og én', batch); await browser.waitFor(dialog); await click('Forkast skjemaet', dialog);
+      await click('Rett én og én', bar); await browser.waitFor(dialog); await click('Forkast skjemaet', dialog);
       await current(0); await membership();
       assert.equal(await browser.evaluate(`${nav}.querySelectorAll('button')[1].disabled`), true);
       await edit('First independent'); await stage();
@@ -99,7 +99,7 @@ test('B3 production: Validator five points, source order, draft cancellation, in
       assert.equal(await browser.evaluate(`${nav}.querySelectorAll('button')[2].disabled`), true);
       await click('Forrige', nav); await current(3); await membership();
       await click('Tilbake til utvalget', nav); await browser.waitFor(batch); await membership();
-      await click('Rett én og én', batch); await current(0);
+      await click('Rett én og én', bar); await current(0);
       assert.equal(await browser.evaluate(`${editor}.querySelector('[data-field="Merknad"] input').value`), 'First independent');
       await click('Neste', nav); await current(1);
       assert.equal(await browser.evaluate(`${editor}.querySelector('[data-field="Merknad"] input').value`), 'Draft kept');

@@ -65,7 +65,7 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
     const search = (value) => input(`document.querySelector('[aria-label="Søk i data"]')`, value);
     const text = (expression) => browser.evaluate(`${expression}.innerText`);
     // A1 (deliberate update): Oppsett and a stale Forhåndsvis render no staging action; absent counts as blocked.
-    const stageDisabled = () => browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til masseendring'); return !b || b.disabled; })()`);
+    const stageDisabled = () => browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(e => e.innerText === 'Legg til endringer'); return !b || b.disabled; })()`);
     const headers = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[role=columnheader]')).map(e => e.innerText.trim())`);
     const shot = async (name) => { const { data } = await browser.send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(tmpdir(), `gmi-r4-ux-${name}.png`), Buffer.from(data, 'base64')); };
     // Every rendered object number must equal the source :L number of that row's source index.
@@ -227,7 +227,7 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
           await shot(`severity-${width}x${height}`);
         }
         await browser.waitFor(`${inspector}.getAttribute('aria-busy') === 'false'`);
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk);
         // Risk dialog: panels keep the shared orange/red palette with the shared symbols.
         const groups = await severityAppearance(browser, 'dialog[open] .gmi-risk-group');
         console.log(`S3 risk groups: ${assertSeverityContrast('risk groups', groups)}`);
@@ -249,12 +249,12 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
         assert.match(dialog.text, /Ledning 101: Både SDR og Ringstivhet er utfylt/);
         assert.match(dialog.text, /Ledning 101: SDR anbefales ikke for selvfallsledninger \(Tema SP\)/, 'actual applicability reason');
         assert.notEqual(dialog.approveBg, 'rgb(0, 117, 149)', 'risk approval differs from ordinary confirmation');
-        assert.equal(dialog.focused, 'Tilbake til utvalget', 'cancel is the default focus'); assert.equal(dialog.tone, 'risk');
+        assert.equal(dialog.focused, 'Avbryt', 'cancel is the default focus'); assert.equal(dialog.tone, 'risk');
         await shot('risk');
-        await click('Tilbake til utvalget', risk);
+        await click('Avbryt', risk);
         assert.equal(await browser.evaluate(`${workspace}.querySelectorAll('[data-change-set]').length`), 0);
         await browser.waitFor(`${inspector}.getAttribute('aria-busy') === 'false'`);
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk);
         await click('Godkjenn og legg til', risk);
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-change-detail]')`);
       });
@@ -292,7 +292,7 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
 
       await t.test('history details open in the inspector; geometry replacement is contextual and cancellable', async () => {
         await click('Ny masseendring for utvalget', inspector);
-        await click('Avslutt', inspector); await browser.waitFor(`!${inspector}`);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(`!${inspector}`);
         await click('Vis detaljer for 3 ledninger', workspace);
         await browser.waitFor(`document.querySelector('[data-gmi-change-detail][data-variant=history]')`);
         const detail = `document.querySelector('[data-gmi-change-detail][data-variant=history]')`;

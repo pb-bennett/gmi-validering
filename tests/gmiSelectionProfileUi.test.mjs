@@ -47,7 +47,7 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
     const selectedCount = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row] input[type=checkbox]')).filter(e=>e.checked).length`);
     const selectLines = async (indices) => {
       if (await browser.evaluate(`Boolean(${inspector})`)) {
-        await click('Avslutt', inspector);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`);
         if (await browser.evaluate(`Boolean(${confirm})`)) await click('Forkast skjemaet', confirm);
         await browser.waitFor(`!${inspector}`);
       }
@@ -122,7 +122,7 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
         assert.equal(await total(), 3);
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Utvalget er utvidet etter forhåndsvisningen/);
         // A1 (deliberate update): a stale preview renders no staging action (absent counts as blocked).
-        assert(await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText.trim()==='Legg til masseendring'); return !b || b.disabled; })()`));
+        assert(await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText.trim()==='Legg til endringer'); return !b || b.disabled; })()`));
         assert.equal(await browser.evaluate(`${profile}.querySelector('[data-profile-field="hydraulicClass"]')`), null, 'no rule context from a stale preview');
       });
 
@@ -132,10 +132,10 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
         await choose('Felt for masseendring', 'Material'); await choose('Ny verdi', 'PE');
         await preview(); await ready();
         assert.match(await browser.evaluate(`${inspector}.innerText`), /3 av 3 ledninger endres/);
-        await click('Legg til masseendring', inspector);
+        await click('Legg til endringer', inspector);
         await browser.waitFor(risk);
         assert.match(await browser.evaluate(`${risk}.innerText`), /Blandet blant objektene som endres: Tema/);
-        await click('Tilbake til utvalget', risk); await browser.waitFor(`!${risk}`);
+        await click('Avbryt', risk); await browser.waitFor(`!${risk}`);
         await browser.evaluate(`${openProfile}; (${profile}).querySelector('[data-profile-field=tema] details').open=true`);
         await click('Behold bare Tema SP: 2 ledninger', profile);
         await browser.waitFor(`${profile}?.dataset.total==='2'`);
@@ -143,7 +143,7 @@ test('B1 production: selection profile, shrink-only narrowing, preview validity,
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'valid');
         await ready();
         assert.match(await browser.evaluate(`${inspector}.innerText`), /2 av 2 ledninger endres/);
-        await click('Legg til masseendring', inspector);
+        await click('Legg til endringer', inspector);
         // B2 (deliberate update): the two SP lines still differ in Dimensjon and Stedfestingsårsak, so the
         // dialog may remain; Tema is no longer part of the mix after narrowing.
         if (await browser.evaluate(`Boolean(${risk})`)) {

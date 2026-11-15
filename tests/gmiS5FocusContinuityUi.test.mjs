@@ -68,7 +68,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
     const counts = () => browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText ?? null`);
     const ready = () => browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-dry-run]')?.innerText.includes('OK') && ${inspector}.getAttribute('aria-busy')==='false'`);
     const stage = async (expectRisk) => {
-      await ready(); await click('Legg til masseendring', inspector);
+      await ready(); await click('Legg til endringer', inspector);
       if (expectRisk) { await browser.waitFor(risk); await click('Godkjenn og legg til', risk); }
       try { await browser.waitFor(`${inspector}.dataset.batchStep==='3'`); } catch (error) {
         throw new Error(`${error.message}\n${await browser.evaluate(`(${risk} ? 'RISK: ' + ${risk}.innerText + '\\n' : '') + ${inspector}.innerText`)}`);
@@ -144,7 +144,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         assert(state.headers.indexOf('Merknad') < state.headers.indexOf('Material'), JSON.stringify(state.headers));
         assert.equal(await browser.evaluate(`Boolean(${inspector}.querySelector('[data-gmi-batch-counts]'))`), false, 'before any preview');
         // Choosing a field alone is not a draft: closing needs no confirmation and drops the focus.
-        await click('Avslutt', inspector); await browser.waitFor(`!${inspector}`);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(`!${inspector}`);
         assert.equal(await browser.evaluate(`Boolean(${draftDialog})`), false);
         assert.equal((await focusState()).fields, null);
         await click('Rediger valgte (2)', bar); await browser.waitFor(inspector);
@@ -153,14 +153,14 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         await click('Forhåndsvis endringer', inspector);
         assert.equal(await view(), 'original', 'batch preview never switches views');
         await ready();
-        await click('Tilbake til oppsett', inspector);
+        await click('Tilbake', inspector);
         assert.equal((await focusState()).active, 'true', 'returning to setup keeps the applied field order');
-        await click('Tilbake til forhåndsvisningen', inspector);
+        await click('Forhåndsvis endringer', inspector);
         assert.equal((await focusState()).active, 'true', 'returning to preview keeps the applied field order');
-        await ready(); await click('Legg til masseendring', inspector);
+        await ready(); await click('Legg til endringer', inspector);
         await browser.waitFor(risk);
         assert.equal(await view(), 'original', 'pending approval never switches views');
-        await click('Tilbake til utvalget', risk); await browser.waitFor(`!${risk}`);
+        await click('Avbryt', risk); await browser.waitFor(`!${risk}`);
         assert.equal(await view(), 'original', 'cancelled staging never switches views');
         const beforeStage = await continuity();
         assert(beforeStage.map.length > 0, 'map highlights are present before staging');
@@ -248,7 +248,7 @@ test('S5 production: column focus continuity, Foreslått after staging and keybo
         await click('Original', modes); await focusState();
         assert.equal(await browser.evaluate(`Boolean(document.querySelector('[data-gmi-context-redo=notice]'))`), false, 'nothing left to redo in context');
         assert.equal(await browser.evaluate(`${inspector}.dataset.batchStep !== '3'`), true, 'redo does not reopen the staged view');
-        await click('Avslutt', inspector); await browser.waitFor(`!${inspector}`);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(`!${inspector}`);
         assert.equal((await focusState()).fields, null, 'nothing retained after the inspector closes');
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });

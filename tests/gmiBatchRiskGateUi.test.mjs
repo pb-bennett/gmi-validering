@@ -54,7 +54,7 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
     const selectedCount = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row] input[type=checkbox]')).filter(e=>e.checked).length`);
     const selectLines = async (indices) => {
       if (await browser.evaluate(`Boolean(${inspector})`)) {
-        await click('Avslutt', inspector);
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`);
         if (await browser.evaluate(`Boolean(${confirm})`)) await click('Forkast skjemaet', confirm);
         await browser.waitFor(`!${inspector}`);
       }
@@ -82,7 +82,7 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
         // A2 (deliberate update): the SJEKK explanation is offered only when a SJEKK exists (see the mixed case below).
         assert.equal(await browser.evaluate(`${split}.querySelector('[data-gmi-split-why]')`), null);
         assert.equal(await browser.evaluate(`${split}.querySelector('[data-gmi-split-keep]')`), null, 'no narrowing when every object has FEIL');
-        await click('Legg til masseendring', inspector);
+        await click('Legg til endringer', inspector);
         await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
         assert.equal(await browser.evaluate(`Boolean(${risk})`), false, 'direct staging');
         assert.equal(await changeSets(), 1);
@@ -97,7 +97,7 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
         assert.doesNotMatch(await browser.evaluate(`${split}.innerText`), /kan Validator gi SJEKK/);
         await browser.evaluate(`${split}.querySelector('[data-gmi-split-why] summary').click()`);
         assert.match(await browser.evaluate(`${split}.innerText`), /kan Validator gi SJEKK i stedet for FEIL\. Slike objekter må ikke nødvendigvis rettes\./);
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk);
         assert.equal(await browser.evaluate(`${risk}.querySelector('[data-gmi-risk-mixed-details]').open`), false, 'distributions collapsed by default');
         assert.match(await browser.evaluate(`${risk}.querySelector('[data-risk-reason=mixed]').innerText`), /Blandet blant objektene som endres/, 'the mixed reason itself stays visible');
         assert.deepEqual(await mixedRows(), ['Material: PE (3) · PVC (1)', 'Dimensjon: 110 (3) · 160 (1)', 'Stedfestingsårsak: NYTT (3) · UENDR (1)']);
@@ -109,7 +109,7 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
           const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
           await writeFile(path.join(shots, `gmi-b2-mixed-${width}x${height}.png`), Buffer.from(data, 'base64'));
         }
-        await click('Tilbake til utvalget', risk); await browser.waitFor(`!${risk}`);
+        await click('Avbryt', risk); await browser.waitFor(`!${risk}`);
         assert.equal(await changeSets(), 1, 'cancel stages nothing');
         // «Behold bare FEIL» is a shrink: preview stays valid, counts follow.
         await click('Behold bare objekter med FEIL på SDR: 3 ledninger', split);
@@ -127,7 +127,7 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
           const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
           await writeFile(path.join(shots, `gmi-b2-split-${width}x${height}.png`), Buffer.from(data, 'base64'));
         }
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk);
         assert.deepEqual(await mixedRows(), ['Material: PE (2) · PVC (1)', 'Dimensjon: 110 (2) · 160 (1)'], 'Stedfestingsårsak is uniform after narrowing');
         // The selection changes while the dialog is open: the approval is refused.
         await browser.evaluate(`${box(2)}.click()`);
@@ -138,7 +138,7 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
         assert.equal(await changeSets(), 1, 'stale approval staged nothing');
         // Now uniform (two PE/110/NYTT lines), no new FEIL: no mixed warning, direct staging.
         await ready();
-        await click('Legg til masseendring', inspector);
+        await click('Legg til endringer', inspector);
         await browser.waitFor(`${inspector}.dataset.batchStep==='3'`);
         assert.equal(await browser.evaluate(`Boolean(${risk})`), false);
         assert.equal(await changeSets(), 2);
@@ -153,13 +153,13 @@ test('B2 production: current-finding split, mixed/new-FEIL confirmation, stale a
         await browser.waitFor(`${inspector}.querySelector('[data-gmi-batch-counts]')?.dataset.state==='stale'`);
         assert.equal(await browser.evaluate(`Boolean(${split})`), false);
         // A1 (deliberate update): a stale preview renders no staging action (absent counts as blocked).
-        assert(await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText.trim()==='Legg til masseendring'); return !b || b.disabled; })()`));
+        assert(await browser.evaluate(`(() => { const b = Array.from(${inspector}.querySelectorAll('button')).find(b=>b.innerText.trim()==='Legg til endringer'); return !b || b.disabled; })()`));
         await click('Gjør om retting', workspace);
         await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===2`);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-counts]').dataset.state`), 'stale', 'redo does not revive an old preview');
-        await click('Oppdater forhåndsvisning', `${inspector}.querySelector('.gmi-batch-stale')`); await ready();
+        await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-refresh]').click()`); await ready();
         assert(await browser.evaluate(`Boolean(${split})`));
-        await click('Legg til masseendring', inspector); await browser.waitFor(risk);
+        await click('Legg til endringer', inspector); await browser.waitFor(risk);
         const text = await browser.evaluate(`${risk}.innerText`);
         assert.match(text, /\d+ (ny|nye)( eller forverrede?)? FEIL/);
         assert.doesNotMatch(text, /Blandet/, 'uniform: only the new FEIL needs approval');
