@@ -57,18 +57,18 @@ export async function buildPreview(browser) {
   await browser.evaluate(`${advance}.click()`);
   await browser.waitFor(`${exportDialog}.dataset.exportPhase !== 'building'`, SLOW);
   if (await browser.evaluate(`${exportDialog}.dataset.exportPhase !== 'ready'`)) throw new Error(`Delivery review blocked: ${await browser.evaluate(`${exportDialog}.innerText`)}`);
-  await clickSourceControl(browser, 'Til pakke', exportDialog);
+  await clickSourceControl(browser, 'Neste', exportDialog);
   await browser.waitFor(`${packageStep} && ${packageStep}.dataset.packageState !== 'building'`, SLOW);
 }
 
 // A4: findings, photo readiness and format detail live on Kontroll; Pakke links back with «Se kontrollen».
 const reviewStep = `${exportDialog}?.querySelector('[data-export-step="review"]')`;
 export async function showReview(browser) {
-  await clickSourceControl(browser, 'Se kontrollen', exportDialog);
+  await clickSourceControl(browser, 'Tilbake', exportDialog);
   await browser.waitFor(reviewStep);
 }
 export async function toPackage(browser) {
-  await clickSourceControl(browser, 'Til pakke', exportDialog);
+  await clickSourceControl(browser, 'Neste', exportDialog);
   await browser.waitFor(`${exportDialog}.querySelector('[data-export-step="package"]')`);
 }
 // Folded text (Tekniske detaljer, Informasjon) has no innerText, so read its textContent.

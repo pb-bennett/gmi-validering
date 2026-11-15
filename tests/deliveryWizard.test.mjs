@@ -53,6 +53,24 @@ test('step transitions cannot bypass M9 blockers or retain a review after return
   } finally { f.session.clear(); }
 });
 
+test('adjacent package back keeps the exact verified plan; content back requires a fresh review', async () => {
+  const f = await deliveryFixture();
+  try {
+    const plan = await f.plan(), review = { plan, snapshot: f.capture() };
+    let state = reduce(DELIVERY_WIZARD_START, { type: 'build', run: 1 });
+    state = reduce(state, { type: 'built', run: 1, review });
+    state = reduce(state, { type: 'package', run: 1 });
+    state = reduce(state, { type: 'review', run: 1 });
+    assert.equal(state.step, 'review'); assert.strictEqual(state.review, review);
+    assert.strictEqual(state.review.plan, plan); assert.equal(deliveryWizardStatus(state), 'ready');
+    state = reduce(state, { type: 'back' });
+    assert.equal(state.step, 'content'); assert.equal(state.review, null);
+    assert.strictEqual(reduce(state, { type: 'package', run: state.run }), state);
+    state = reduce(state, { type: 'build', run: state.run + 1 });
+    assert.equal(state.phase, 'building'); assert.equal(state.review, null);
+  } finally { f.session.clear(); }
+});
+
 test('review, download failure, retry and staleness preserve meaningful state and cannot auto-download', async () => {
   const f = await deliveryFixture();
   try {

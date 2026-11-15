@@ -17,8 +17,6 @@
 /* Pakke: one compact package line and one status line back to Kontroll. */
 .delivery-package-line { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .delivery-review-status { color: var(--gmi-text-muted); }
-.delivery-wizard .delivery-review-link { color: var(--gmi-interactive); text-decoration: underline; text-underline-offset: 2px; border-radius: 4px; cursor: pointer; }
-.delivery-wizard .delivery-review-link:hover { color: color-mix(in srgb, var(--gmi-interactive) 75%, var(--gmi-ink)); text-decoration-thickness: 2px; }
 .delivery-diagnostics ul, .delivery-inventory ul { list-style: disc; padding-left: 20px; display: grid; gap: 4px; }
 .delivery-inventory { padding: 12px; border: 1px solid var(--gmi-border); background: var(--gmi-surface-soft); overflow-wrap: anywhere; }
 .delivery-inventory ul { font-family: monospace; margin: 8px 0; }
@@ -53,3 +51,10 @@
   .delivery-summary.photo-export-summary { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-flow: row; }
   .delivery-wizard[data-delivery-step=package] { max-height: calc(100dvh - 12px); }
 }
+
+/* Batch 3: scoped dialog navigation, using the existing teal and navy recipes. */
+.delivery-wizard .photo-import-footer > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; height: 40px; border-radius: 8px; white-space: nowrap; }
+.delivery-wizard .photo-import-footer button:disabled { cursor: not-allowed; }
+.delivery-wizard .gmi-primary-control.delivery-final-action { background: var(--gmi-navy); border-color: var(--gmi-navy); color: var(--gmi-surface); }
+.delivery-wizard .gmi-primary-control.delivery-final-action:hover:not(:disabled) { background: color-mix(in srgb, var(--gmi-navy) 82%, var(--gmi-ink)); opacity: 1; }
+.delivery-wizard .gmi-primary-control.delivery-final-action:active:not(:disabled) { background: color-mix(in srgb, var(--gmi-navy) 64%, var(--gmi-ink)); }

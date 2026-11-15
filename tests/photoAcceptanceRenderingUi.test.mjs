@@ -118,12 +118,12 @@ browserTest('rendered M10 done screen: download initiation, filename, schema war
   const done = `${exportDialog}.querySelector('[data-package-state="done"]')`;
   assert.equal(await browser.evaluate(`${done}.querySelector('[data-export-heading]').innerText.trim()`), 'Nedlastingen er startet');
   assert.equal(await browser.evaluate(`${done}.querySelector('[data-downloaded-filename]').innerText`), first.zip);
-  assert.match(await browser.evaluate(`${done}.querySelector('[data-review-status]').innerText`), /^Kontroll fullført · [1-9]\d* merknad(er)? · Se kontrollen$/);
+  assert.match(await browser.evaluate(`${done}.querySelector('[data-review-status]').innerText`), /^Kontroll fullført · [1-9]\d* merknad(er)?$/);
   assert.equal(await browser.evaluate(`${done}.querySelectorAll('ol, [data-export-guidance]').length`), 0, 'no numbered import steps');
   assert.doesNotMatch(await browser.evaluate(`${exportDialog}.innerText`), OLD_COPY);
-  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake til Innhold', 'Last ned rapport', 'Last ned på nytt']);
+  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake', 'Last ned ZIP']);
   await screenshot(browser, 'export-done');
-  await clickSourceControl(browser, 'Last ned på nytt', exportDialog);
+  await clickSourceControl(browser, 'Last ned ZIP', exportDialog);
   await browser.waitFor(`window.__downloads.length === 2 && ${done}`);
   assert.deepEqual(await browser.evaluate('window.__downloads'), [first.zip, first.zip], 'the same package again');
   assert.equal(await browser.evaluate(`${done}.querySelector('[data-export-heading]').innerText.trim()`), 'Nedlastingen er startet');
@@ -141,7 +141,7 @@ browserTest('rendered Kontroll: each review reason explains itself, and the comp
   await writeFile(gml, text);
   await stagePhotoSource(browser, gml, 'gml');
   await savePhotoSource(browser, 'gml');
-  await clickSourceControl(browser, 'Kontroller tilgjengelige posisjoner');
+  await clickSourceControl(browser, 'Neste');
   await browser.waitFor(`${sourceWizard}.querySelector('section[aria-label="Kontroller posisjoner"]')`);
   const rowAction = (name) => browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id]')).find((row) => row.querySelector('.photo-positioning-filename strong').innerText === ${JSON.stringify(name)}).dataset.action`);
   assert.equal(await rowAction('far.jpg'), 'place', 'GML is still preselected');

@@ -48,15 +48,13 @@ export async function openPhotoSources(browser) {
 
 export async function closePhotoSources(browser) {
   await browser.evaluate(`${sourceWizard}.querySelector('header button').click()`);
+  if (await browser.evaluate('Boolean(document.querySelector("dialog[open][data-gmi-confirm=positioning-draft]"))')) await browser.evaluate("Array.from(document.querySelector('[data-gmi-confirm=positioning-draft]').querySelectorAll('button')).find(e=>e.innerText==='Forkast posisjonsvalg').click()");
   await browser.waitFor(`!${sourceWizard}`);
 }
 
 export async function stagePhotoSource(browser, file, kind = 'gml') {
   if (!await browser.evaluate(`Boolean(${sourceWizard})`)) await openPhotoSources(browser);
-  if (!await browser.evaluate(`Boolean(${sourceWizard}.querySelector('input[name=photo-external-source]'))`)) {
-    const add = await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('button')).some(button=>button.innerText.trim()==='Legg til en kilde')`);
-    await clickSourceControl(browser, add ? 'Legg til en kilde' : 'Tilbake');
-  }
+  while (await browser.evaluate(`${sourceWizard}.dataset.step !== '1'`)) await clickSourceControl(browser, 'Tilbake');
   await browser.evaluate(`${sourceWizard}.querySelector('input[name=photo-external-source][value=${kind}]').click()`);
   await setPhotoFiles(browser, `input[aria-label="Velg ${kind.toUpperCase()}-kilde"]`, [file]);
   await browser.waitFor(`${sourceWizard}.querySelector('section[aria-label="Kontroller koblinger"]') && !${sourceWizard}.innerText.includes('Analyserer kilden')`);
@@ -67,7 +65,7 @@ export async function savePhotoSource(browser, kind = 'gml') {
   const label = await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('button')).map(button=>button.innerText.trim()).find(label=>${JSON.stringify(labels)}.includes(label))`);
   assert(label, 'source checkpoint action');
   await clickSourceControl(browser, label);
-  await browser.waitFor(`${sourceWizard}?.querySelector('.photo-source-saved') && !${sourceWizard}.innerText.includes('Forkast uspart kilde')`);
+  await browser.waitFor(`${sourceWizard}?.querySelector('.photo-source-saved') && !${sourceWizard}.innerText.includes('Forkast kilde som ikke er lagret')`);
 }
 
 // Existing regression suites explicitly establish the accepted baseline they test.
@@ -80,7 +78,7 @@ export async function applyPhotoSourcePositions(browser, kind = 'gml', { photoId
   }
   if (!await browser.evaluate(`Boolean(${sourceWizard})`)) await openPhotoSources(browser);
   if (!await browser.evaluate(`Boolean(${sourceWizard}.querySelector('section[aria-label="Kontroller posisjoner"]'))`))
-    await clickSourceControl(browser, 'Kontroller tilgjengelige posisjoner');
+    while (await browser.evaluate(`${sourceWizard}.dataset.step !== '3'`)) await clickSourceControl(browser, 'Neste');
   await browser.waitFor(`${sourceWizard}.querySelector('section[aria-label="Kontroller posisjoner"]')`);
   if (photoId || filename) {
     await clickSourceControl(browser, 'Behold alle gjeldende');

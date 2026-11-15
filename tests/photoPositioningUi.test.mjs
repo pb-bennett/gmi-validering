@@ -82,7 +82,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       await savePhotoSource(browser);
       assert(await browser.evaluate(`${sourceWizard}===window.__unifiedDialog`));
       assert.equal(await browser.evaluate(markerCount), 1, 'GML save retains evidence only');
-      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      await click(browser, 'Neste');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '3 valgt');
       assert(await browser.evaluate(`${sourceWizard}.innerText.includes('GMI: koblet til 2 objekter')`));
       // A source difference is stated by its size, neutrally, and stays visible without opening anything.
@@ -133,7 +133,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       // The layer-wide Tools entry also reviews the still-unplaced second a.png occurrence.
       // The removed inspector entry restricted default proposals to the focused c.png.
       await openPhotoSources(browser);
-      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      await click(browser, 'Neste');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '1 valgt');
       assert.deepEqual(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('li[data-action="place"]')).map(row => row.querySelector('.photo-positioning-filename strong').innerText)`), ['a.png']);
       assert.equal(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id]')).find(row => row.querySelector('.photo-positioning-filename strong').innerText === 'c.png').dataset.action`), 'keep', 'manual current is never proposed for replacement');
@@ -179,7 +179,7 @@ test('real 148-photo import retains GML/EXIF evidence until central explicit sou
       await browser.waitFor(`document.querySelectorAll('.photo-workspace-list li[data-photo-id]').length===148`);
       assert.equal((await sourcesInfo(browser)).exif, 148);
       await openPhotoSources(browser);
-      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      await click(browser, 'Neste');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '148 valgt', 'GML is proposed for every photo, so nobody changes 148 dropdowns');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelectorAll('select').length`), 148);
       await closePhotoSources(browser);

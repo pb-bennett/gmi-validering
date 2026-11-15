@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useReducer, useRef, useState } from 'react';
-import { XIcon } from '@phosphor-icons/react';
+import { DownloadSimpleIcon, XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
@@ -89,16 +89,16 @@ function ReviewDetails({ review, hasGmi, photoReadiness }) {
 }
 
 /** Pakke: the package and its download; findings stay in Kontroll. */
-function PackageDetails({ review, status, recorded, photoReadiness, onReview }) {
+function PackageDetails({ review, status, recorded, photoReadiness, onReport, reportDisabled }) {
   const { plan } = review, photoNotes = plan.photoPlan && photoReadiness && photoCaptureTimeSchemaWarning(photoReadiness) ? 1 : 0;
   return <>
     <p className="delivery-package-line"><strong data-export-filename="">{plan.filename}</strong>
       <span className="text-gmi-text-muted" data-export-package-facts> · {deliveryPackageFacts(plan).join(' · ')}</span></p>
-    <p className="delivery-review-status" data-review-status>{deliveryReviewStatus(plan, photoNotes)}
-      {status !== 'packaging' && <> · <button type="button" className="delivery-review-link gmi-focus-ring" onClick={onReview}>Se kontrollen</button></>}</p>
+    <p className="delivery-review-status" data-review-status>{deliveryReviewStatus(plan, photoNotes)}</p>
     <section className="delivery-inventory" aria-label="Innhold i leveransen"><h4>Innhold i leveransen</h4>
       <DeliveryInventory plan={plan} />
       <p>Leveranserapporten lastes ned separat. Den legges ikke i ZIP-filen.</p>
+      <button type="button" className={photoSourceButton} disabled={reportDisabled} onClick={onReport} data-export-report>Last ned rapport</button>
     </section>
     {status === 'done' && <p role="status">Nedlastingen er startet: <strong data-downloaded-filename>{plan.filename}</strong>. Nettleseren håndterer lagringen.</p>}
     {status === 'done' && plan.gmiFingerprint && <p className="photo-export-hint">SHA-256 for revidert GMI: <code data-downloaded-fingerprint>{plan.gmiFingerprint.replace(/^sha256:/, '')}</code></p>}
@@ -188,7 +188,12 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
       if (work.current.active && token === work.current.token) dispatch({ type: 'build-failed', run, error: deliveryMessage(error.code) });
     } finally { if (token === work.current.token) work.current.busy = false; }
   };
-  const back = () => { if (status !== 'packaging') { work.current.token++; work.current.busy = false; dispatch({ type: 'back' }); setReportError(null); ignoreFollowUpClick(); } };
+  const back = () => { if (status !== 'packaging') {
+    work.current.token++; work.current.busy = false;
+    dispatch(state.step === 'package' && status !== 'stale' ? { type: 'review', run: state.run } : { type: 'back' });
+    setReportError(null); ignoreFollowUpClick();
+  } };
+  const backToContent = () => { if (status !== 'packaging') { work.current.token++; work.current.busy = false; dispatch({ type: 'back' }); setReportError(null); ignoreFollowUpClick(); } };
   const download = async () => {
     if (work.current.busy || !['ready', 'done', 'download-failed'].includes(status)) return;
     const { plan } = state.review, token = ++work.current.token, run = state.run;
@@ -220,7 +225,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
       </header>
       <PhotoWizardSteps steps={DELIVERY_STEPS} current={state.step}
         canGoBack={(key) => status !== 'packaging' && (key === 'content' && state.step !== 'content' || key === 'review' && state.step === 'package' && status !== 'stale')}
-        onBack={(key) => key === 'review' ? dispatch({ type: 'review', run: state.run }) : back()} />
+        onBack={(key) => key === 'review' ? back() : backToContent()} />
       {state.step === 'content' ? <div className="delivery-body delivery-content" data-export-step="delivery">
         <section>
           <h3 tabIndex={-1} data-export-heading>{waiting ? 'Leser bildedata …' : 'Velg innhold'}</h3>
@@ -250,7 +255,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
               {decision?.active && <p>Kun GML med bilder tar med alle plasserte forekomster, uavhengig av valgene om samlet levering.</p>}</>
               : <p>{decision?.occurrences.transfer ?? 0} plasseringer er valgt for overføring til GML. {decision?.occurrences.include ?? 0} er valgt uten GMI-lenke.
                 {' '}{decision?.occurrences.exclude ?? 0} er valgt Ikke med i leveransen. Endre valgene under Samlet levering i FOTO.</p>}
-            {onOpenCompletion && photoId === initialPhotoLayerId && <button type="button" className={mode === 'photos-only' && photoModel.completionPrimary ? primary : photoSourceButton} data-export-completion onClick={onOpenCompletion}>Fullfør opplysninger…</button>}
+            {onOpenCompletion && photoId === initialPhotoLayerId && <button type="button" className={photoSourceButton} data-export-completion onClick={onOpenCompletion}>Fullfør opplysninger…</button>}
           </>}
           {hasPhoto && !photoLayer && <p>Last inn bilder i FOTO før du velger en bildeleveranse.</p>}
           {waiting && <p role="status">Leser bildedata … Vent før du kontrollerer leveransen.</p>}
@@ -263,21 +268,20 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
           {state.review.plan.mode !== 'gmi-only' && <p data-export-zip={state.review.plan.naming.zipFilename} data-export-gml={state.review.plan.photoPlan ? state.review.plan.naming.gmlFilename : ''} />}
           {state.step === 'review' ? <ReviewDetails review={state.review} hasGmi={hasGmi} photoReadiness={photoReadiness} />
             : <PackageDetails review={state.review} status={status} recorded={state.recorded} photoReadiness={photoReadiness}
-              onReview={() => { dispatch({ type: 'review', run: state.run }); ignoreFollowUpClick(); }} />}
+              onReport={report} reportDisabled={busy || status === 'stale'} />}
         </>}
         {reportError && <p role="alert">{reportError}</p>}
       </div>}
-      <footer className="photo-import-footer border-t border-gmi-border">
+      <footer className="photo-import-footer border-t border-gmi-border" data-export-footer>
         {state.step === 'content' && <p className="photo-export-footer-status" role="status">{resumed && 'Kontrollen er oppdatert. '}{waiting ? photoReadingNote(photosBeingRead(layerPhotos))
           : mode === 'photos-only' && photoModel ? photoModel.advance.reason || `${photoCount(photoReadiness.counts.assets)} i pakken` : ''}</p>}
-        <button type="button" className={photoSourceButton} onClick={close}>{status === 'done' ? 'Lukk' : 'Avbryt'}</button>
+        <button type="button" className={photoSourceButton} onClick={close} data-export-cancel>{status === 'done' ? 'Lukk' : 'Avbryt'}</button>
         {state.step === 'content' ? <button type="button" className={primary} data-export-advance disabled={!canBuild} onClick={build}>Kontroller leveransen</button> : <>
-          <button type="button" className={photoSourceButton} disabled={status === 'packaging'} onClick={back}>{status === 'stale' ? 'Tilbake og kontroller på nytt' : 'Tilbake til Innhold'}</button>
-          {state.step === 'review' && <button type="button" className={primary} disabled={status !== 'ready'} onClick={() => { dispatch({ type: 'package', run: state.run }); ignoreFollowUpClick(); }}>Til pakke</button>}
+          <button type="button" className={photoSourceButton} disabled={status === 'packaging'} onClick={back} data-export-back>{status === 'stale' ? 'Tilbake og kontroller på nytt' : 'Tilbake'}</button>
+          {state.step === 'review' && <button type="button" className={primary} data-export-next disabled={status !== 'ready'} onClick={() => { dispatch({ type: 'package', run: state.run }); ignoreFollowUpClick(); }}>Neste</button>}
           {state.step === 'package' && <>
-            <button type="button" className={photoSourceButton} disabled={busy || status === 'stale'} onClick={report}>Last ned rapport</button>
-            <button type="button" className={primary} disabled={busy || !['ready', 'done', 'download-failed'].includes(status)} onClick={download}>
-              {busy ? 'Lager leveransen …' : status === 'done' ? 'Last ned på nytt' : state.review.plan.mode === 'gmi-only' ? 'Last ned GMI' : 'Last ned ZIP'}
+            <button type="button" className={`${primary} delivery-final-action`} data-export-download aria-busy={busy} disabled={busy || !['ready', 'done', 'download-failed'].includes(status)} onClick={download}>
+              <DownloadSimpleIcon size={16} weight="regular" aria-hidden="true" />{busy ? 'Lager leveransen …' : state.review.plan.mode === 'gmi-only' ? 'Last ned GMI' : 'Last ned ZIP'}
             </button>
           </>}
         </>}

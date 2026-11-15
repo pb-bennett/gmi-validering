@@ -96,7 +96,7 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
     onDrop={(event) => { event.preventDefault(); event.stopPropagation(); fileDrag.reset(); if (acceptsDrop) addFiles(event.dataTransfer.files); }}>
     <div className="photo-collection-frame">
       {fileDragActive && <FileDropOverlay contained icon={ImagesIcon} title="Slipp bilder her" />}
-      <header className="photo-collection-header"><div><h2 id="photo-collection-title">Legg til bilder</h2><p className="text-sm text-gmi-text-muted">{context.kind === 'gmi-layer' ? `Til ${session.loadedImport?.binding?.filename || ''}` : target ? `Legg til i ${target.name}` : 'Nytt fotolag'}</p></div><button type="button" className="gmi-focus-ring" aria-label="Lukk bilder" onClick={onClose}><XIcon size={22} /></button></header>
+      <header className="photo-collection-header"><div><h2 id="photo-collection-title">Legg til bilder</h2><p className="text-sm text-gmi-text-muted">{context.kind === 'gmi-layer' ? `Til ${session.loadedImport?.binding?.filename || ''}` : target ? `Legg til i ${target.name}` : 'Nytt fotolag'}</p></div><button type="button" className="gmi-focus-ring" aria-label="Avbryt import" onClick={onClose}><XIcon size={22} /></button></header>
       <PhotoWizardSteps steps={steps.map((step) => ({ key: step, label: STEP_LABELS[step] }))} current={state.step}
         canGoBack={(step) => canNavigateBack(context, state, step)} onBack={navigateBack} />
       <h3 ref={heading} tabIndex={-1} className="photo-import-heading">{STEP_LABELS[state.step]}</h3>

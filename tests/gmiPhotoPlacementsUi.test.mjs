@@ -68,7 +68,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await closePhotoSources(browser);
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 3);
       await openPhotoSources(browser);
-      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      await click(browser, 'Neste');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '3 valgt');
       await stagePhotoSource(browser, sourceFile, 'gmi');
       await savePhotoSource(browser, 'gmi');
@@ -163,7 +163,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       assert.equal(await browser.evaluate(fact('Retning')), '75° Ø');
       assert(await browser.evaluate(`${arrowOf("document.querySelector('.leaflet-photo-markers-pane .photo-camera-marker-selected')")}?.dataset.degrees === "75"`));
       await openPhotoSources(browser);
-      await click(browser, 'Kontroller tilgjengelige posisjoner');
+      await click(browser, 'Neste');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('li[data-photo-id="${b}"] select').value`), '');
       await closePhotoSources(browser);
       await openPhotoSources(browser);

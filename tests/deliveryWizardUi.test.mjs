@@ -36,19 +36,26 @@ const assertPackageOnly = async (browser) => {
     return { repeated: Array.from(body.querySelectorAll('.delivery-diagnostics, .delivery-summary, [data-export-status], [data-export-format], [data-export-technical], [data-export-experimental], [data-export-counts], [data-diagnostic-code]')).map((item) => item.className || item.tagName),
       status: body.querySelector('[data-review-status]')?.innerText ?? null, filename: body.querySelector('[data-export-filename]')?.innerText ?? null }; })()`);
   assert.deepEqual(found.repeated, [], 'Pakke repeats no Kontroll content');
-  assert.match(found.status, /^Kontroll fullført · (ingen merknader|\d+ merknad(er)?) · Se kontrollen$/);
+  assert.match(found.status, /^Kontroll fullført · (ingen merknader|\d+ merknad(er)?)$/);
   assert(found.filename);
   assert.equal(await primaries(browser), 1, 'one primary action on Pakke');
+  assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('footer [data-export-report]').length`), 0);
+  assert(await browser.evaluate(`${dialog}.querySelector('.delivery-inventory [data-export-report]') !== null`));
+  assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(e=>e.innerText==='Se kontrollen')`), false);
+  assert.deepEqual(await browser.evaluate(`(() => { const b=${dialog}.querySelector('[data-export-download]'),s=getComputedStyle(b);return [s.backgroundColor,Boolean(b.querySelector('svg[aria-hidden=true]'))]; })()`), ['rgb(15, 23, 43)', true]);
 };
 // Returns the Kontroll summary, read where it is shown, before moving to Pakke.
 const pack = async (browser) => {
   await review(browser); assert.equal(await status(browser), 'ready', await browser.evaluate(`${dialog}.innerText`));
   const facts = await summary(browser);
   assert.equal(await primaries(browser), 1, 'one primary action on Kontroll');
-  await click(browser, 'Til pakke'); await assertPackageOnly(browser);
+  await click(browser, 'Neste'); await assertPackageOnly(browser);
   return facts;
 };
-const back = async (browser) => { await click(browser, 'Tilbake til Innhold'); await browser.waitFor(`${dialog}.querySelector('[data-export-step="delivery"]')`); };
+const back = async (browser) => {
+  while (await browser.evaluate(`${dialog}.dataset.deliveryStep !== 'content'`)) await browser.evaluate(`${dialog}.querySelector('[data-export-back]').click()`);
+  await browser.waitFor(`${dialog}.querySelector('[data-export-step="delivery"]')`);
+};
 // The destination pill follows its filename on the same line, inside the same label (not in a right-hand column).
 const pillPlacement = (browser) => browser.evaluate(`(() => { const row = ${dialog}.querySelector('.delivery-file .delivery-destination').closest('.delivery-file');
   const name = row.querySelector('.delivery-file-name'), pill = row.querySelector('.delivery-destination'), rects = name.getClientRects(), last = rects[rects.length - 1], box = pill.getBoundingClientRect();
@@ -219,9 +226,9 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         const facts = await pack(browser); assert.equal(await currentStep(browser), '3. Pakke / Last ned');
         assert.match(facts.GML, /^2 /);
         await screenshot(browser, 'a4-pakke-photos-only');
-        await click(browser, 'Se kontrollen'); assert.equal(await currentStep(browser), '2. Kontroll');
+        await click(browser, 'Tilbake'); assert.equal(await currentStep(browser), '2. Kontroll');
         await screenshot(browser, 'a4-kontroll-photos-only');
-        await click(browser, 'Til pakke'); await assertPackageOnly(browser);
+        await click(browser, 'Neste'); await assertPackageOnly(browser);
         assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-tree input[type=checkbox]').checked`), false);
         assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-folder').getAttribute('aria-expanded')`), 'false');
         await screenshot(browser, 'polish-tree-collapsed');
@@ -263,7 +270,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         assertGeminiConventions(strFromU8(entries[gml]));
         assert.equal((strFromU8(entries[gml]).match(/<app:Skråfoto/g) ?? []).length, 2);
         assert.deepEqual(entries['Attachments/shared.jpg'], new Uint8Array(photograph));
-        const again = await downloaded(browser, directory, 'Last ned på nytt'); assert.deepEqual(again.bytes, output.bytes);
+        const again = await downloaded(browser, directory, 'Last ned ZIP'); assert.deepEqual(again.bytes, output.bytes);
         await back(browser);
       });
 
@@ -275,7 +282,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await click(browser, 'Gå tilbake til Kontroll');
         assert.equal(await currentStep(browser), '2. Kontroll');
         await screenshot(browser, 'm10-split-review-1366x768');
-        await click(browser, 'Til pakke');
+        await click(browser, 'Neste');
         const output = await downloaded(browser, directory, 'Last ned ZIP');
         const entries = unzipSync(output.bytes), gmi = Object.keys(entries).find((name) => name.endsWith('.gmi'));
         const xml = strFromU8(entries[Object.keys(entries).find((name) => name.endsWith('.gml'))]);
@@ -291,10 +298,22 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         const facts = await pack(browser); assert.match(facts.Rettinger, /^1 /); assert.match(facts.GML, /^1 /);
         // «Se kontrollen» returns to the same valid review: same plan name, no rebuild, findings shown without interaction.
         const reviewed = await browser.evaluate(`${dialog}.querySelector('[data-export-zip]').dataset.exportZip`);
-        await click(browser, 'Se kontrollen');
+        await click(browser, 'Tilbake');
         assert.equal(await currentStep(browser), '2. Kontroll'); assert.equal(await status(browser), 'ready');
         assert.equal(await browser.evaluate(`${dialog}.querySelector('[data-export-zip]').dataset.exportZip`), reviewed);
         assert.deepEqual(await summary(browser), facts);
+        await browser.evaluate(`${dialog}.querySelector('[data-export-back]').click()`);
+        assert.equal(await currentStep(browser), '1. Innhold');
+        assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-export-zip]').length`), 0, 'content Back invalidates the old plan');
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('input[value=combined]').checked`), true);
+        await setValue(browser, `${dialog}.querySelector('[aria-label="Eksportetikett"]')`, 'Fresh-check');
+        await review(browser); assert.equal(await status(browser), 'ready');
+        const freshName = await browser.evaluate(`${dialog}.querySelector('[data-export-zip]').dataset.exportZip`);
+        assert.notEqual(freshName, reviewed); assert.match(freshName, /Fresh-check/);
+        // Return to the original label and obtain a fresh review for the remaining package assertions.
+        await browser.evaluate(`${dialog}.querySelector('[data-export-back]').click()`);
+        await setValue(browser, `${dialog}.querySelector('[aria-label="Eksportetikett"]')`, 'M10');
+        await review(browser);
         assert.equal(await browser.evaluate(`document.activeElement === ${dialog}.querySelector('[data-export-heading]')`), true, 'focus moves to the Kontroll heading');
         assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-export-step="review"] [data-review-status], [data-export-step="review"] .delivery-inventory').length`), 0, 'Kontroll has no package tree');
         assert.equal(await browser.evaluate(`Boolean(${dialog}.querySelector('details[data-export-technical]:not([open])'))`), true, 'technical details start folded');
@@ -308,10 +327,14 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
           assert(Math.abs(rows[0].top - rows[3].top) < 2); assert(rows[3].left > rows[0].left);
           const footer = await browser.evaluate(`${dialog}.querySelector('footer').getBoundingClientRect().bottom`);
           assert(footer <= height);
+          assert.deepEqual(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('footer button')).map(e=>e.innerText.trim())`), ['Avbryt', 'Tilbake', 'Neste']);
+          assert.equal(await browser.evaluate(`getComputedStyle(${dialog}.querySelector('[data-export-next]')).backgroundColor`), 'rgb(0, 117, 149)');
+          assert(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('footer button')).every(e=>e.getBoundingClientRect().height===40)`));
+          await screenshot(browser, `navigation-export-review-${width}x${height}`);
         }
         await screenshot(browser, 'a4-kontroll-combined');
-        await click(browser, 'Til pakke'); await assertPackageOnly(browser);
-        assert.equal(await browser.evaluate(`${dialog}.querySelector('[data-export-zip]').dataset.exportZip`), reviewed);
+        await click(browser, 'Neste'); await assertPackageOnly(browser);
+        assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-zip]').dataset.exportZip`), /M10/);
         assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-folder').getAttribute('aria-expanded')`), 'false', 'the package tree starts collapsed');
         await screenshot(browser, 'a4-pakke-combined');
         for (const [width, height] of [[1280, 720], [1366, 768], [390, 844]]) {
@@ -319,6 +342,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
           const bounds = await browser.evaluate(`(() => {const d=${dialog}, f=d.querySelector('footer');return {dialog:d.getBoundingClientRect().toJSON(),footer:f.getBoundingClientRect().toJSON(),overflow:d.scrollWidth>d.clientWidth+1};})()`);
           assert(!bounds.overflow); assert(bounds.footer.bottom <= height); assert(bounds.dialog.top >= 0);
           assert(bounds.dialog.height >= height * .94, 'package uses the available viewport height');
+          assert.deepEqual(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('footer button')).map(e=>e.innerText.trim())`), ['Avbryt', 'Tilbake', 'Last ned ZIP']);
           await click(browser, 'Utvid alle');
           assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').textContent`), 'GMI + GML');
           await assertPillFollowsName(browser);
@@ -358,10 +382,10 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
       await t.test('GMI-only keeps both links and includes the exact corrected field', async () => {
         await choose(browser, 'gmi-only'); await pack(browser);
         await screenshot(browser, 'a4-pakke-gmi-only');
-        await click(browser, 'Se kontrollen'); assert.equal(await currentStep(browser), '2. Kontroll');
+        await click(browser, 'Tilbake'); assert.equal(await currentStep(browser), '2. Kontroll');
         assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-experimental]').innerText`), /^Eksperimentell\. Revidert GMI er ikke akseptansetestet i Gemini VA\.$/);
         await screenshot(browser, 'a4-kontroll-gmi-only');
-        await click(browser, 'Til pakke'); await assertPackageOnly(browser);
+        await click(browser, 'Neste'); await assertPackageOnly(browser);
         const output = await downloaded(browser, directory, 'Last ned GMI');
         assert.match(output.name, /\.gmi$/);
         assert.equal(strFromU8(output.bytes), strFromU8(original).replace('Punkt 1', 'M10 corrected'));
@@ -377,7 +401,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
           return errors.closest('details') === null && errors.getBoundingClientRect().height > 0 && errors.querySelectorAll('li').length > 0; })()`), 'blockers are shown without interaction');
         assert.equal(await primaries(browser), 1, 'one (disabled) primary action on a blocked Kontroll');
         await screenshot(browser, 'a4-kontroll-blocked');
-        assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).find(button=>button.textContent==='Til pakke').disabled`), true);
+        assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).find(button=>button.textContent==='Neste').disabled`), true);
         await screenshot(browser, 'm10-blocked-review');
         await browser.evaluate('Blob.prototype.arrayBuffer=window.__m10Read'); await back(browser);
       });
@@ -421,7 +445,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
           assert.match(await browser.evaluate(`${dialog}.querySelector('[data-delivery-exclusions]').innerText`), /shared.jpg.*Punkt 1.*bildelenke fjernet.*fortsatt med via.*Punkt 2/);
           assert(await browser.evaluate(`${dialog}.querySelector('footer').getBoundingClientRect().bottom <= ${height}`));
           await screenshot(browser, `slice3-kontroll-partial-${width}x${height}`);
-          await click(browser, 'Til pakke'); await click(browser, 'Utvid alle');
+          await click(browser, 'Neste'); await click(browser, 'Utvid alle');
           assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').innerText`), 'GMI');
           await screenshot(browser, `slice3-inventory-partial-${width}x${height}`);
           const reportDirectory = await mkdtemp(path.join(directory, 'report-'));

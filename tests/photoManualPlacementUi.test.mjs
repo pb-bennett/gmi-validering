@@ -175,7 +175,7 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
       assert.deepEqual(await evidence(),oldEvidence,'GML/EXIF evidence is preserved'); assert.equal(await browser.evaluate(markerCount),148);
       const movedCurrent=await currentText();
       await click('Koble og posisjoner bilder'); await browser.waitFor('document.querySelector(".photo-positioning-wizard[open]")');
-      await clickSourceControl(browser, 'Kontroller tilgjengelige posisjoner');
+      await clickSourceControl(browser, 'Neste');
       await clickSourceControl(browser, 'Foreslå EXIF for viste');
       await browser.waitFor('document.querySelector(".photo-positioning-rows")');
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-positioning-rows [data-action=move]").length'),0,'a bulk proposal leaves a manual position alone');

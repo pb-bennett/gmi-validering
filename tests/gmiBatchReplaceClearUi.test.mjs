@@ -133,7 +133,7 @@ test('G6 production: exact replacement, clearing, required-field consent, select
         await click('Gjør om retting', workspace); await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===2`);
         await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`); await browser.waitFor(dialog);
         await click('Kontroller leveransen', dialog); await browser.waitFor(`${dialog}.dataset.exportPhase==='ready'`);
-        await click('Til pakke', dialog);
+        await click('Neste', dialog);
         const downloads = await mkdtemp(path.join(directory, 'download-'));
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
         await click('Last ned GMI', dialog); await browser.waitFor(`${dialog}.dataset.exportPhase==='done'`);

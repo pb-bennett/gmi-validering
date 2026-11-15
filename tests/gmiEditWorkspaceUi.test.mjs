@@ -262,7 +262,7 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await u.clickButton('Kontroller leveransen', exportDialog);
         await browser.waitFor(`${exportDialog}.dataset.exportPhase === 'ready'`);
         assert.match(await u.text(exportDialog), /Eksperimentell\./);
-        await u.clickButton('Til pakke', exportDialog);
+        await u.clickButton('Neste', exportDialog);
         await browser.waitFor(`/^\\d{8}-\\d{6}-Rettet\\.gmi$/.test(${exportDialog}.querySelector('[data-export-filename]').innerText)`);
         await u.shot('m4-rettinger-export');
         await u.clickButton('Last ned GMI', exportDialog);

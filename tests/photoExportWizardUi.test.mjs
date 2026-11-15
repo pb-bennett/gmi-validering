@@ -117,7 +117,7 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   const packageText = await dialogText(browser);
   for (const expected of [names.zip, names.gml]) assert(packageText.includes(expected), expected);
   // A4: Pakke points back to Kontroll and counts the schema warning instead of repeating it.
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-review-status]').innerText`), /^Kontroll fullført · [1-9]\d* merknad(er)? · Se kontrollen$/);
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-review-status]').innerText`), /^Kontroll fullført · [1-9]\d* merknad(er)?$/);
   assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-export-warning], [data-export-format], [data-export-counts], .delivery-diagnostics').length`), 0, 'Pakke does not repeat Kontroll');
   await showReview(browser);
   const text = await reviewText(browser);
@@ -135,11 +135,11 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   assert(done.includes(first.zip), 'the downloaded name');
   assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-review-status]').innerText`), /^Kontroll fullført · [1-9]\d* merknad(er)?/, 'the warning stays counted after initiation');
   assert(done.includes('Attachments/'), 'the reviewed inventory remains visible after initiation');
-  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake til Innhold', 'Last ned rapport', 'Last ned på nytt']);
+  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake', 'Last ned ZIP']);
   assert.deepEqual(await previewNames(browser), { zip: first.zip, gml: first.gml });
 
   // Again: same plan, so the same name and the same bytes, identifiers included.
-  await clickSourceControl(browser, 'Last ned på nytt', exportDialog);
+  await clickSourceControl(browser, 'Last ned ZIP', exportDialog);
   await browser.waitFor(`window.__downloads.length === 2 && ${exportDialog}.querySelector('[data-package-state="done"]')`);
   assert.deepEqual(await downloads(browser), [first.zip, first.zip]);
   assert.equal(await browser.evaluate(`(async () => { const [one, two] = await Promise.all(window.__blobs.map((blob) => blob.bytes())); return one.length === two.length && one.every((byte, index) => byte === two[index]); })()`), true);
@@ -176,7 +176,7 @@ layerTest('format, CRS and label stay for the session, a choice is never folded 
   assert.equal(await canAdvance(browser), false);
   assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-warning]'))`), false, 'required, so it blocks and is not a warning');
   assert.match(await browser.evaluate(`${exportDialog}.querySelector('.photo-import-footer [role=status]').innerText`), /Rett det som mangler for å gå videre/);
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-completion]').className`), /gmi-primary-control/, 'correcting is now the main action');
+  assert.doesNotMatch(await browser.evaluate(`${exportDialog}.querySelector('[data-export-completion]').className`), /gmi-primary-control/, 'the completion shortcut stays secondary to the footer action');
 
   await closeExport(browser);
   await openExport(browser);
@@ -192,7 +192,7 @@ layerTest('Fullfør opplysninger replaces the wizard and stays open, and a doubl
   await watchDownloads(browser);
   const { x, y } = await realClick(browser, advance);
   await browser.waitFor(`${exportDialog}.querySelector('[data-package-state="ready"]')`);
-  const { x: downloadX, y: downloadY } = await elementCentre(browser, button('Til pakke'));
+  const { x: downloadX, y: downloadY } = await elementCentre(browser, button('Neste'));
   assert(Math.abs(downloadX - x) < 60 && Math.abs(downloadY - y) < 10, 'the two buttons share a place, which is the risk');
   await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: downloadX, y: downloadY, button: 'left', buttons: 1, clickCount: 2 });
   await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: downloadX, y: downloadY, button: 'left', buttons: 0, clickCount: 2 });
@@ -306,7 +306,7 @@ layerTest('closing during ZIP generation: the finished ZIP reaches no download, 
     await clickSourceControl(browser, 'Last ned ZIP', exportDialog);
     await browser.waitFor(`${exportDialog}.querySelector('[data-package-state="packaging"]')`);
     await browser.waitFor(`window.__heldFiles.length === 1`);
-    assert.equal(await browser.evaluate(`${button('Lager leveransen …')}.disabled && ${button('Tilbake til Innhold')}.disabled`), true, name);
+    assert.equal(await browser.evaluate(`${button('Lager leveransen …')}.disabled && ${button('Tilbake')}.disabled`), true, name);
     await close();
     await browser.waitFor(`!${exportDialog}`);
     await releaseFiles(browser);
@@ -336,7 +336,7 @@ layerTest('repeated clicks in one tick give one plan and one download', async (b
   await delay(200);
   assert.equal(await fileReads(browser), 2, 'two originals hashed once: a second plan would read them again');
   assert.equal(await packageState(browser), 'ready');
-  await clickSourceControl(browser, 'Til pakke', exportDialog);
+  await clickSourceControl(browser, 'Neste', exportDialog);
   const { zip } = await previewNames(browser);
   await browser.evaluate(`(() => { const download = ${button('Last ned ZIP')}; download.click(); download.click(); download.click(); })()`);
   await browser.waitFor(`${exportDialog}.querySelector('[data-package-state="done"]')`);

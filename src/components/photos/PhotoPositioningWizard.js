@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- Reuses session-owned thumbnail URLs only. */
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircleIcon, XIcon } from '@phosphor-icons/react';
+import { CheckCircleIcon, CheckIcon, FloppyDiskIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPositionDistance, PHOTO_POSITION_TOLERANCE_METRES, photoSourceEvidenceSignature, photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '@/lib/photos/photoPositioning.mjs';
 import { photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
@@ -12,6 +12,7 @@ import PhotoGmiSummary from './PhotoGmiSummary';
 import PhotoOccurrenceContext from './PhotoOccurrenceContext';
 import PhotoSourceOption, { photoSourceButton } from './PhotoSourceOption';
 import PhotoWizardSteps from './PhotoWizardSteps';
+import GmiConfirmDialog from '../gmi-edit/GmiConfirmDialog';
 import './photoPositioningWizard.css';
 import './photoGmi.css';
 
@@ -135,6 +136,8 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const [plan, setPlan] = useState(null), [choices, setChoices] = useState({});
   const [notice, setNotice] = useState(''), [error, setError] = useState('');
   const [removeSourceId, setRemoveSourceId] = useState(null);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [sourceSaved, setSourceSaved] = useState(false);
   const ready = review?.state === 'ready';
   const selected = plan ? selectedPhotoSourcePositions(plan, choices) : [];
   const positionRows = !plan ? [] : !focusedPhotoId ? plan.rows : [
@@ -147,6 +150,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const viableExif = assets.filter((photo) => photo.spatial.candidates.some((candidate) => candidate.kind === 'exif' && candidate.status === 'viable')).length;
   const newEvidence = plan && plan.evidenceSignature !== photoSourceEvidenceSignature(photos);
   const saved = Boolean(notice);
+  const steps = STEPS.map((label, index) => ({ key: index + 1, label })).filter(({ key }) => key !== 2 || review || sourceSaved || step === 2);
 
   useEffect(() => {
     const dialog = dialogRef.current, opener = document.activeElement;
@@ -198,12 +202,12 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const keepSource = () => {
     const result = photoSession.saveSourceWorkflowSource(ticketRef.current, review);
     if (!result.ok) { setError('Bildene eller kilden er endret. Kontroller kilden på nytt før du bekrefter.'); return; }
-    setNotice(savedMessage); setError('');
+    setSourceSaved(true); setNotice(savedMessage); setError('');
     if (review.source.kind === 'gmi') positions(review.source.id);
   };
   const positions = (newGmiSourceId = null) => {
     const next = photoSession.reviewSourceWorkflowPositions(ticketRef.current);
-    if (!next) { setError('Behold eller forkast den usparte kilden før du kontrollerer posisjoner.'); return; }
+    if (!next) { setError('Behold eller forkast kilden som ikke er lagret før du kontrollerer posisjoner.'); return; }
     setChoices(photoSourcePositionChoices(next, plan, choices, focusedPhotoId, { newGmiSourceId, editedIds: editedIds.current }));
     setPlan(next); setStep(3); setError(''); setRemoveSourceId(null);
   };
@@ -216,16 +220,23 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const optionLabel = (candidate) => candidate.kind === 'exif' ? 'EXIF GPS' : candidate.kind === 'gmi' ? 'GMI – objektposisjon' :
     `GML: ${candidate.sourceFilename || layer.spatialSources.find((source) => source.id === candidate.sourceId)?.filename} (${layer.spatialSources.findIndex((source) => source.id === candidate.sourceId) + 1})`;
   const goBack = (target) => { setStep(target); setError(''); };
+  const requestClose = () => { if (editedIds.current.size) setConfirmClose(true); else onClose(); };
+  const nextFromSources = () => { if (steps.some(({ key }) => key === 2)) goBack(2); else positions(); };
   const status = step >= 3 && plan ? `${selected.length} ${selectionUnit} valgt` : '';
 
   return <dialog ref={dialogRef} className="photo-collection-dialog photo-positioning-wizard bg-gmi-surface text-gmi-text shadow-2xl" aria-labelledby="photo-positioning-title"
-    data-step={step} onCancel={(event) => { if (event.target !== event.currentTarget) return; event.preventDefault(); onClose(); }}>
+    onKeyDown={(event) => {
+      if (event.key === 'Escape' && !event.defaultPrevented && event.target.closest('dialog') === event.currentTarget) {
+        event.preventDefault(); event.stopPropagation(); requestClose();
+      }
+    }}
+    data-step={step} onCancel={(event) => { if (event.target !== event.currentTarget) return; event.preventDefault(); requestClose(); }}>
     <div className="photo-collection-frame">
       <header className="photo-collection-header"><div><h2 id="photo-positioning-title">Koble og posisjoner bilder</h2>
         <p className="text-sm text-gmi-text-muted">{layer.name} · {assets.length} bilder{repeats ? ` · ${photos.length} plasseringer` : ''}</p></div>
-        <button type="button" className="gmi-focus-ring" aria-label={saved ? 'Lukk kildekontroll' : 'Avbryt kildekontroll'} onClick={onClose}><XIcon size={22} aria-hidden="true" /></button>
+        <button type="button" className="gmi-focus-ring" aria-label={saved ? 'Lukk kildekontroll' : 'Avbryt kildekontroll'} onClick={requestClose}><XIcon size={22} aria-hidden="true" /></button>
       </header>
-      <PhotoWizardSteps label="Steg i kildekontroll" steps={STEPS.map((label, index) => ({ key: index + 1, label }))} current={step}
+      <PhotoWizardSteps label="Steg i kildekontroll" steps={steps} current={step}
         canGoBack={(target) => target < step && (target !== 3 || Boolean(plan))} onBack={goBack} />
       <h3 ref={heading} tabIndex={-1} className="photo-import-heading">{STEPS[step - 1]}</h3>
       {notice && <p className="photo-source-saved" role="status">{notice}</p>}
@@ -233,7 +244,6 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
         <div className="photo-positioning-step">
           {error && <p role="alert">{error}</p>}
           {step === 1 && <section aria-label="Kilder og koblinger">
-            <p>Behold først kildedata og koblinger. Posisjoner brukes bare etter egen bekreftelse.</p>
             <h4 className="photo-positioning-subheading">Kilder i fotolaget</h4>
             <div className="photo-source-inventory">
               <PhotoSourceOption as="section" value="exif" label="Fra EXIF-data i bildene"
@@ -251,7 +261,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
                 {removeSourceId === source.id && <div className="photo-source-removal"><p>Fjern {source.filename} og GMI-koblingene fra laget? Bilder, posisjoner og retning beholdes.</p>
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className={photoSourceButton} onClick={() => setRemoveSourceId(null)}>Avbryt fjerning</button>
-                    <button type="button" className={photoSourceButton} onClick={() => {
+                    <button type="button" className={`${photoSourceButton} gmi-edit-destructive`} onClick={() => {
                       if (photoSession.sourceWorkflowIsLive(ticketRef.current) && photoSession.removeGmiSource(layer.id, source.id, { confirmed: true })) {
                         setNotice('GMI-kilden og koblingene er fjernet. Posisjoner er ikke endret.');
                       }
@@ -272,7 +282,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
               </PhotoSourceOption>)}
             </fieldset>
             <input ref={inputRef} type="file" accept={`.${kind}`} hidden aria-label={`Velg ${kind.toUpperCase()}-kilde`} onChange={readFile} />
-            {review && <p>Du har en uspart kilde. <button type="button" className={photoSourceButton} onClick={() => setStep(2)}>Se uspart kilde</button></p>}
+            {review && <p>En kilde er ikke lagret.</p>}
           </section>}
           {step === 2 && <section aria-label="Kontroller koblinger" className="photo-positioning-links">
             {review?.state === 'pending' && <p role="status">Analyserer kilden …</p>}
@@ -286,8 +296,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
             {!review && !saved && <p>Ingen ekstern kilde er valgt. EXIF GPS trenger ingen filkobling.</p>}
             {(review || saved) && <SourceStages saved={saved && !review} kind={review?.source?.kind} />}
             <div className="flex flex-wrap gap-2">
-              {review && <button type="button" className={photoSourceButton} onClick={discard}>Forkast uspart kilde</button>}
-              {!review && <button type="button" className={photoSourceButton} onClick={() => setStep(1)}>Legg til en kilde</button>}
+              {review && <button type="button" className={photoSourceButton} onClick={discard}>Forkast kilde som ikke er lagret</button>}
             </div>
           </section>}
           {step === 3 && plan && <section aria-label="Kontroller posisjoner">
@@ -347,17 +356,24 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
           {step === 4 && plan && <PositioningSummary plan={plan} selected={selected} selectionUnit={selectionUnit} repeats={repeats} optionLabel={optionLabel} newEvidence={newEvidence} />}
         </div>
       </div>
-      <footer className="photo-import-footer border-t border-gmi-border">
+      <footer className="photo-import-footer border-t border-gmi-border" data-positioning-footer>
         <div className="mr-auto text-sm" role="status">{status}</div>
-        <button type="button" className={`${control} border border-gmi-border px-3 py-2 text-gmi-text-muted`} onClick={onClose}>{saved ? 'Fullfør uten å endre posisjoner' : 'Avbryt'}</button>
-        {step > 1 && <button type="button" className={`${control} border border-gmi-border-strong bg-gmi-surface px-4 py-2`} onClick={() => goBack(step === 4 ? 3 : 1)}>Tilbake</button>}
-        {step === 1 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} disabled={Boolean(review)} onClick={() => positions()}>Kontroller tilgjengelige posisjoner</button>}
-        {step === 2 && (review ? <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} disabled={!ready} onClick={keepSource}>
-          {review.source?.kind === 'gmi' ? review.recheck ? 'Oppdater koblinger' : 'Behold kilde og koblinger' : review.recheck ? 'Oppdater treff' : 'Behold GML-kilden'}</button>
-          : <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} onClick={() => positions()}>Kontroller tilgjengelige posisjoner</button>)}
-        {step === 3 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} disabled={!selected.length} onClick={() => setStep(4)}>Neste</button>}
-        {step === 4 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} disabled={!selected.length} onClick={apply}>Bruk valgte posisjoner for {selected.length} {selectionUnit}</button>}
+        <button type="button" className={`${control} border border-gmi-border-strong px-3 py-2 text-gmi-text-muted`} onClick={requestClose} data-positioning-cancel>{saved ? 'Lukk' : 'Avbryt'}</button>
+        {step > 1 && <button type="button" className={`${control} border border-gmi-border-strong bg-gmi-surface px-4 py-2`} onClick={() => goBack(steps[steps.findIndex(({ key }) => key === step) - 1].key)} data-positioning-back>Tilbake</button>}
+        {step === 1 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} onClick={nextFromSources} data-positioning-next>Neste</button>}
+        {step === 2 && (review ? <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary photo-positioning-final`} disabled={!ready} onClick={keepSource} data-positioning-save>
+          <FloppyDiskIcon size={16} weight="regular" aria-hidden="true" />{review.source?.kind === 'gmi' ? review.recheck ? 'Oppdater koblinger' : 'Behold kilde og koblinger' : review.recheck ? 'Oppdater treff' : 'Behold GML-kilden'}</button>
+          : <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} onClick={() => positions()} data-positioning-next>Neste</button>)}
+        {step === 3 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} disabled={!selected.length} onClick={() => setStep(4)} data-positioning-next>Neste</button>}
+        {step === 4 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary photo-positioning-final`} disabled={!selected.length} onClick={apply} data-positioning-apply><CheckIcon size={16} weight="regular" aria-hidden="true" />Bruk valgte posisjoner for {selected.length} {selectionUnit}</button>}
       </footer>
     </div>
+    {confirmClose && <div onKeyDown={(event) => {
+      // Consume the nested modal's Escape before native dialog dismissal reaches the parent.
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setConfirmClose(false); }
+    }}><GmiConfirmDialog testId="positioning-draft" title="Forkaste posisjonsvalgene?" confirmLabel="Forkast posisjonsvalg" cancelLabel="Fortsett posisjonering"
+      onCancel={() => setConfirmClose(false)} onConfirm={onClose}>
+      <p>Posisjonsvalgene i denne kontrollen forkastes. Lagrede kilder, koblinger og gjeldende posisjoner beholdes.</p>
+    </GmiConfirmDialog></div>}
   </dialog>;
 }

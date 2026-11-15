@@ -124,7 +124,7 @@ test('G8 production: linked Tema review, ambiguity, explicit/stale consent, poin
         await click('Gjør om retting', workspace); await browser.waitFor(`${workspace}.querySelectorAll('[data-change-set]').length===1`);
         await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`); await browser.waitFor(dialog);
         await click('Kontroller leveransen', dialog); await browser.waitFor(`${dialog}.dataset.exportPhase==='ready'`);
-        await click('Til pakke', dialog);
+        await click('Neste', dialog);
         const downloads = await mkdtemp(path.join(directory, 'download-'));
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
         await click('Last ned GMI', dialog); await browser.waitFor(`${dialog}.dataset.exportPhase==='done'`);

@@ -100,3 +100,14 @@
   .photo-positioning-action { width: auto; margin-left: 68px; }
   .photo-positioning-comparison { margin-left: 68px; }
 }
+
+/* Batch 3: scoped dialog navigation, using the existing teal and navy recipes. */
+.photo-positioning-wizard .photo-import-footer > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; height: 40px; border-radius: 8px; white-space: nowrap; }
+.photo-positioning-wizard .photo-import-footer button:disabled { cursor: not-allowed; }
+.photo-positioning-wizard .gmi-primary-control.photo-positioning-final { background: var(--gmi-navy); border-color: var(--gmi-navy); color: var(--gmi-surface); }
+.photo-positioning-wizard .gmi-primary-control.photo-positioning-final:hover:not(:disabled) { background: color-mix(in srgb, var(--gmi-navy) 82%, var(--gmi-ink)); opacity: 1; }
+.photo-positioning-wizard .gmi-primary-control.photo-positioning-final:active:not(:disabled) { background: color-mix(in srgb, var(--gmi-navy) 64%, var(--gmi-ink)); }
+.photo-positioning-wizard .gmi-edit-destructive { border-color: var(--gmi-validation-error-text) !important; color: var(--gmi-validation-error-text); }
+.photo-positioning-wizard.photo-collection-dialog .gmi-compact-button.gmi-edit-destructive:hover:not(:disabled):not([aria-disabled='true']) { color: var(--gmi-validation-error-text); background: var(--gmi-validation-error-bg); }
+.photo-positioning-wizard .gmi-edit-confirm-dialog { border-color: var(--gmi-border-strong); border-radius: 16px; background: var(--gmi-surface); color: var(--gmi-text); }
+.photo-positioning-wizard .gmi-edit-confirm-dialog::backdrop { background: color-mix(in srgb, var(--gmi-ink) 40%, transparent); }

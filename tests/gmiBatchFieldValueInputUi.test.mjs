@@ -173,7 +173,7 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
         const dialog = `document.querySelector('dialog[open].delivery-wizard')`;
         await browser.waitFor(dialog);
         await click('Kontroller leveransen', dialog); await browser.waitFor(`${dialog}.dataset.exportPhase==='ready'`);
-        await click('Til pakke', dialog); await click('Last ned GMI', dialog);
+        await click('Neste', dialog); await click('Last ned GMI', dialog);
         await browser.waitFor(`${dialog}?.dataset.exportPhase === 'done'`);
         const filename = await browser.evaluate(`${dialog}.querySelector('[data-downloaded-filename]').innerText`);
         let output;
