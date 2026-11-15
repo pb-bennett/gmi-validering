@@ -15,6 +15,6 @@ export default function RemovePhotosConfirmation({ count, occurrences, onCancel,
     <h2 id="photo-remove-title">{`Fjern ${occurrences ? `${count} ${count === 1 ? 'plassering' : 'plasseringer'}` : count === 1 ? 'bildet' : `${count} bilder`} fra laget?`}</h2>
     <p>Valgte {occurrences ? 'plasseringer' : 'bilder'} fjernes fra laget. Bildet beholdes så lenge det har en annen plassering. Originalfilene på disken endres ikke.</p>
     <div><button type="button" className={control} onClick={onCancel} autoFocus>Avbryt</button>
-      <button type="button" className={`${control} photo-remove-confirm`} onClick={onConfirm}>Fjern fra lag</button></div>
+      <button type="button" className={`${control} gmi-edit-destructive photo-remove-confirm`} onClick={onConfirm}>Fjern fra lag</button></div>
   </dialog>;
 }

@@ -1,4 +1,4 @@
-// M8 browser test: per-occurrence combined-delivery choices in the FOTO workspace (direct-click «Fordel bilder til GMI/GML»).
+// M8 browser test: per-occurrence combined-delivery choices in normal FOTO browsing.
 // Synthetic files only. Needs PHOTO_UI_URL (a running production build); saves screenshots with PHOTO_SCREENSHOT_DIR.
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -133,15 +133,9 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       assert(await browser.evaluate(`${section}.innerText.includes('Lenken beholdes i GMI') && ${section}.querySelectorAll('[role=radio]').length === 1
         && ${option('gmi')}.getAttribute('aria-disabled') === 'true' && ${option('gmi')}.getAttribute('aria-checked') === 'true'`));
 
-      // Fordel bilder til GMI/GML: separate destination buttons toggle that occurrence; no checkboxes, selection or Apply step.
-      await click(browser, 'Fordel bilder til GMI/GML', 'document');
-      await browser.waitFor('document.querySelector(".photo-delivery-bar")');
-      const bar = 'document.querySelector(".photo-delivery-bar")';
-      assert(await browser.evaluate(`${bar}.innerText.includes('GMI → GML → Ikke → GMI')`));
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input, .photo-delivery-actions").length'), 0);
-      assert.equal(await browser.evaluate(`${bar}.innerText.includes('Velg alle viste')`), false);
-      assert.equal(await browser.evaluate('document.querySelector(".photo-map-display-card select").value'), 'delivery');
-      const counts = () => browser.evaluate(`Array.from(${bar}.querySelectorAll('.photo-delivery-counts li')).map((li) => li.innerText.replace(/\\s+/g, ' ').trim()).join(' | ')`);
+      // Delivery controls are available directly in ordinary browsing.
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-bar").length'), 0);
+      const counts = () => browser.evaluate(`Array.from(document.querySelectorAll('.photo-delivery-counts > span')).map(e => e.innerText).join(' | ')`);
       assert.equal(await counts(), 'GMI 3 | GML 2');
       const planRow = async (name, expected) => {
         await browser.evaluate(`${rowOf(name)}.querySelector('button.photo-delivery-row-button').click()`);
@@ -172,7 +166,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       assert.equal(await pill('Kum 1'), 'GML', 'sibling occurrence unchanged');
       assert.equal(await browser.evaluate(`${rowOf('Kum 1')}.querySelector('.photo-workspace-row').getAttribute('aria-pressed')`), 'true', 'destination editing does not navigate');
       assert.deepEqual(await mapPosition(), beforeMap, 'destination editing does not pan or zoom');
-      assert.match(await browser.evaluate(`${bar}.querySelector('[role=status]').innerText`), /^a\.png · .*Kum 2: Overføres til GML$/);
+      assert.match(await browser.evaluate(`document.querySelector('.photo-delivery-announcement').innerText`), /^a\.png · .*Kum 2: Overføres til GML$/);
       await planRow('Kum 3', 'GML');
       await planRow('d.png', 'Ikke');
       assert.equal(await counts(), 'GMI 1 | GML 3 | Ikke valgt 1');
@@ -205,7 +199,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       await browser.evaluate('document.querySelector(".photo-workspace-collection").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
       await browser.waitFor('!document.querySelector(".photo-delivery-bar")');
       assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary").innerText'), 'Samlet levering: 2 overføres til GML · 1 tas med uten GMI-lenke');
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-row-button").length'), 0);
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-row-button").length'), 5);
       // Outside planning, a row click opens the photo again and changes nothing.
       await select('Kum 3');
       assert.equal(await pill('Kum 3'), 'GML');

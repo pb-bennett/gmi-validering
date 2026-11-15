@@ -29,7 +29,7 @@ export function photoRowLabel(photo, changed, deliveryStatus = null) {
 }
 
 // The destination pill follows the shared delivery palette on every row, in every mode: a plan, not an export.
-function PhotoRow({ photo, active, tabbable, changed, removal, removalSelected, planning, deliveryEntry, onSelect, onPlan, onToggleRemoval, onKeyDown }) {
+function PhotoRow({ photo, active, tabbable, changed, removal, removalSelected, deliveryEntry, onSelect, onPlan, onToggleRemoval, onKeyDown }) {
   const placed = photoIsPlaced(photo);
   const source = photoPositionSourcePresentation(photoPositionSourceKind(photo));
   const degrees = photo.direction?.current?.degrees;
@@ -39,7 +39,7 @@ function PhotoRow({ photo, active, tabbable, changed, removal, removalSelected, 
   const destination = deliveryEntry ? photoDeliveryDestination(deliveryEntry) : null;
   const label = photoRowLabel(photo, changed, deliveryEntry?.status);
   return <li data-photo-id={photo.id} className={active ? 'photo-workspace-active' : undefined} data-changed={changed || undefined}>
-    {removal && <input type="checkbox" aria-label={`Velg ${photo.originalFilename} for fjerning`} checked={removalSelected} onChange={() => onToggleRemoval(photo.id)} />}
+    {removal && <input type="checkbox" className="accent-gmi-interactive" aria-label={`Velg ${photo.originalFilename} for fjerning`} checked={removalSelected} onChange={() => onToggleRemoval(photo.id)} />}
     {/* Navigation and delivery editing are sibling buttons, never nested controls. */}
     <button type="button" className="photo-workspace-row gmi-focus-ring" aria-label={label} aria-pressed={active}
       tabIndex={tabbable ? 0 : -1} onClick={() => onSelect(photo.id)} onKeyDown={onKeyDown}>
@@ -50,13 +50,13 @@ function PhotoRow({ photo, active, tabbable, changed, removal, removalSelected, 
           {placed ? <><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />{source.label}</> : <span className="photo-workspace-unplaced">Uplassert</span>}
           {degrees != null && <> · {photoDirectionLabel(degrees)}</>}
           {changed && <span className="photo-workspace-changed">Endret</span>}
-          {destination && !planning && <span className="photo-delivery-pill" data-destination={destination} data-delivery-status={deliveryEntry.status}
+          {destination && removal && <span className="photo-delivery-pill" data-destination={destination} data-delivery-status={deliveryEntry.status}
             title={photoDeliveryStatusText(deliveryEntry)}>{PHOTO_DELIVERY_COLOURS[destination].short}</span>}
         </span>
         {context && <span className="photo-workspace-context">{context}</span>}
       </span>
     </button>
-    {planning && destination && <PhotoDeliveryCycleButton entry={deliveryEntry}
+    {!removal && destination && <PhotoDeliveryCycleButton entry={deliveryEntry}
       label={`${photo.originalFilename}${context ? ` · ${context}` : ''}`} onCycle={onPlan} />}
   </li>;
 }
@@ -72,8 +72,8 @@ export function photoDeliverySummaryText(summary) {
   return parts.length ? `Samlet levering: ${parts.join(' · ')}` : null;
 }
 
-// Delivery planning bar: per-occurrence destination counts, always up to date.
-function photoPlanningCounts(delivery) {
+// Compact per-occurrence counts in the existing collection summary.
+function photoDestinationCounts(delivery) {
   const counts = photoDeliveryDestinationCounts(delivery);
   return ['gmi', 'gml', 'excluded', 'notSelected', 'review'].filter((key) => counts[key] || key === 'gmi' || key === 'gml')
     .map((key) => ({ key, label: key === 'notSelected' ? 'Ikke valgt' : PHOTO_DELIVERY_COLOURS[key].short, count: counts[key] }));
@@ -87,7 +87,6 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
   const filterId = useId(), sortId = useId();
   const listRef = useRef(null), sortTriggerRef = useRef(null), sortMenuRef = useRef(null);
   const removal = workspace.mode === 'remove';
-  const deliveryMode = workspace.mode === 'delivery';
   const deliverySummary = photoDeliverySummaryText(delivery?.summary);
   const assetCount = layer.assetCount ?? layer.photoCount;
   const repeats = assetCount < layer.photoCount;
@@ -139,7 +138,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
   const placementOptions = PHOTO_PLACEMENT_FILTERS.filter((item) => item.key !== 'unknown' || view.counts.unknown > 0);
 
   return <section className="photo-workspace-collection" aria-label="Bildemodul" data-mode={workspace.mode}
-    onKeyDown={(event) => { if (event.key === 'Escape' && (removal || deliveryMode) && !event.defaultPrevented) { event.preventDefault(); dispatch({ type: 'mode', mode: 'browse' }); } }}>
+    onKeyDown={(event) => { if (event.key === 'Escape' && removal && !event.defaultPrevented && !document.querySelector('dialog[open]')) { event.preventDefault(); dispatch({ type: 'mode', mode: 'browse' }); } }}>
     <header className="photo-workspace-header">
       <div className="photo-workspace-title-row">
         <PhotoIconButton icon={ArrowLeftIcon} size={20} label="Tilbake til appen" onClick={onExit} className="photo-workspace-back" />
@@ -153,9 +152,10 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
       <p className="photo-workspace-counts">
         <span>{plural(assetCount, 'bilde', 'bilder')}{repeats ? ` · ${plural(layer.photoCount, 'plassering', 'plasseringer')}` : ''}</span>
         {view.counts.unplaced > 0 && <span className="photo-workspace-unplaced-count">{view.counts.unplaced} uplassert</span>}
+        {delivery && <span className="photo-delivery-counts" aria-label="Plasseringer per leveringsvalg">{photoDestinationCounts(delivery).map(({ key, label, count }) => <span key={key} data-destination={key}>{label} {count}</span>)}</span>}
         {editing && <span className="photo-workspace-editing-pill">Justerer</span>}
       </p>
-      {deliverySummary && !deliveryMode && <p className="photo-delivery-summary" title="Valgene brukes når en samlet leveranse lages senere. Ingen filer er endret.">{deliverySummary}</p>}
+      {deliverySummary && <p className="photo-delivery-summary" title="Valgene brukes når en samlet leveranse lages senere. Ingen filer er endret.">{deliverySummary}</p>}
       <div className="photo-workspace-toolbar">
         <PhotoWorkspaceToolsMenu occurrenceCount={layer.photoCount} onSelect={onTool} />
         <span className="photo-workspace-toolbar-icons">
@@ -219,21 +219,13 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
       <span><button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => dispatch({ type: 'select-removal', photoIds: shownRows.map((photo) => photo.id) })}>Velg alle viste</button>
         <button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => dispatch({ type: 'mode', mode: 'browse' })}>Avbryt</button></span>
     </div>}
-    {deliveryMode && <div className="photo-delivery-bar" role="region" aria-label="Fordel bilder til GMI/GML">
-      <p>Fordel bilder til GMI/GML</p>
-      <span><button type="button" className="gmi-compact-button gmi-focus-ring" onClick={() => dispatch({ type: 'mode', mode: 'browse' })}>Ferdig</button></span>
-      <small>Klikk på bildet for å vise det. Leveringsknappen bytter GMI → GML → Ikke → GMI. Bare denne plasseringen endres.</small>
-      <ul className="photo-delivery-counts" aria-label="Plasseringer per leveringsvalg">
-        {photoPlanningCounts(delivery).map(({ key, label, count }) => <li key={key} data-destination={key}><span className="photo-delivery-pill" data-destination={key}>{label}</span> {count}</li>)}
-      </ul>
-      <p className="photo-delivery-announcement" role="status" aria-live="polite">{deliveryAnnouncement}</p>
-    </div>}
+    <p className="photo-delivery-announcement sr-only" role="status" aria-live="polite">{deliveryAnnouncement}</p>
     <ul ref={listRef} className="photo-workspace-list" aria-label="Bilder i fotokartlaget">
       {view.pinned && <li className="photo-workspace-pinned-heading"><span>Valgt bilde (skjult av filteret)</span>
         <button type="button" className="photo-link-button gmi-focus-ring" onClick={clearFilter}>Vis alle</button></li>}
       {shownRows.map((photo) => <PhotoRow key={photo.id} photo={photo} active={photo.id === workspace.activePhotoId} tabbable={photo.id === tabbableId} changed={changedIds.has(photo.id)}
         removal={removal} removalSelected={removalIds.includes(photo.id)} onSelect={onSelect} onKeyDown={rowKeyDown}
-        planning={deliveryMode} deliveryEntry={delivery?.byPhotoId[photo.id] || null} onPlan={onToggleDelivery}
+        deliveryEntry={delivery?.byPhotoId[photo.id] || null} onPlan={onToggleDelivery}
         onToggleRemoval={(id) => dispatch({ type: 'toggle-removal', photoId: id })} />)}
       {!shownRows.length && <li className="photo-workspace-empty">{photos.length ? 'Ingen bilder med dette filteret.' : 'Laget er tomt. Legg til bilder for å fortsette.'}</li>}
     </ul>

@@ -100,7 +100,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await move(true); assert.equal(await sourceOfSelected(), 'manual');
         assert.deepEqual(await browser.evaluate(`${markers}.filter(e=>e.title.includes('shared.png')).map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['gmi', 'manual']);
       });
-      await t.test('delivery colours are the default; planning toggles isolated markers in one click; provenance identity and mode remain', async () => {
+      await t.test('delivery colours are the default; marker selection is safe and explicit controls update destinations', async () => {
         const colourSelect = `${legend}.querySelector('select')`;
         const markerOf = (id) => `document.querySelector('.photo-camera-marker[data-photo-id="${id}"]')`;
         const fillOf = (id) => browser.evaluate(`${markerOf(id)}.querySelector('.photo-camera-glyph path').getAttribute('fill')`);
@@ -118,8 +118,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert.deepEqual(await browser.evaluate(`Array.from(${legend}.querySelectorAll('li[data-legend-delivery]')).map(e => [e.dataset.legendDelivery, e.querySelector('.photo-camera-glyph path').getAttribute('fill'), e.innerText.trim()])`),
           [['gmi', GMI, 'Beholdes i GMI'], ['gml', GML, 'Til GML'], ['excluded', NEUTRAL, 'Ikke med i leveransen'], ['review', '#b06a08', 'Krever gjennomgang'], ['mixed', NEUTRAL, 'Ulike leveringsvalg']]);
 
-        await click('Fordel bilder til GMI/GML');
-        await browser.waitFor('document.querySelector(".photo-delivery-bar")');
+        assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-bar").length'), 0);
         assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
         // Sidebar navigation still locates/highlights the placement during planning and never edits it.
         await select(repeated[0].id);
@@ -136,13 +135,15 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert.equal(await pillOf(repeated[0].id), 'Ikke');
         assert.match(await browser.evaluate(`${markerOf(repeated[0].id)}.getAttribute('aria-label')`), /Ikke med i leveransen/);
         await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+        assert.equal(await pillOf(repeated[0].id), 'Ikke', 'marker selection preserves exclusion');
+        await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=gmi]').click()`);
         await browser.waitFor(`${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GMI)}`);
         assert.equal(await pillOf(repeated[0].id), 'GMI');
         assert.equal(await pillOf(repeated[1].id), 'GMI');
         await select(exif.id);
         // An isolated GMI-linked marker: GMI -> GML -> GMI, at once; its sibling placement of the same photograph is untouched.
         for (const [expectedFill, expectedPill] of [[GML, 'GML'], [NEUTRAL, 'Ikke'], [GMI, 'GMI'], [GML, 'GML']]) {
-          await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+          await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${repeated[0].id}"] .photo-delivery-row-button').click()`);
           await browser.waitFor(`${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(expectedFill)}`);
           assert.equal(await pillOf(repeated[0].id), expectedPill);
           assert.equal(await fillOf(repeated[1].id), GMI);
@@ -150,9 +151,11 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         }
         // An isolated photo without a GMI reference: «Ikke med» <-> GML, never GMI.
         await browser.evaluate(`${markerOf(exif.id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+        assert.equal(await pillOf(exif.id), 'Ikke', 'map navigation changes no destination');
+        await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=gml]').click()`);
         await browser.waitFor(`${markerOf(exif.id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GML)}`);
         assert.equal(await pillOf(exif.id), 'GML');
-        assert.match(await browser.evaluate(`${markerOf(exif.id)}.getAttribute('aria-label')`), /^Endre leveringsvalg: exif\.png.*plassering: EXIF.*Planlagt: Tas med i GML uten GMI-lenke$/);
+        assert.match(await browser.evaluate(`${markerOf(exif.id)}.getAttribute('aria-label')`), /^Vis bilde: exif\.png.*plassering: EXIF.*Planlagt: Tas med i GML uten GMI-lenke$/);
         for (const dark of [false, true]) {
           await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile(dark))})`);
           await browser.waitFor('Array.from(document.querySelectorAll(".leaflet-tile")).every(e=>e.complete && e.naturalWidth>0)');
@@ -164,11 +167,10 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         }
         await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile())})`);
         // Restore the defaults through the same one-click path, then leave planning.
-        await browser.evaluate(`${markerOf(exif.id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
-        for (let i = 0; i < 2; i++) await browser.evaluate(`${markerOf(repeated[0].id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+        await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${exif.id}"] .photo-delivery-row-button').click()`);
+        for (let i = 0; i < 2; i++) await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${repeated[0].id}"] .photo-delivery-row-button').click()`);
         await browser.waitFor(`${markerOf(exif.id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(NEUTRAL)}
           && ${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GMI)}`);
-        await click('Ferdig', 'document.querySelector(".photo-delivery-bar")');
         await browser.waitFor('!document.querySelector(".photo-delivery-bar")');
         assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery', 'leaving planning keeps the delivery colours');
         await screenshot('refine-delivery-normal-navigation');

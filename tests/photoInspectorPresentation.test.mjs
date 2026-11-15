@@ -105,7 +105,7 @@ test('inspector is read-only by construction; metadata writes live only in the f
   assert.match(dialog, /photoSession\.setCaptureMetadata\(/);
   assert.doesNotMatch(dialog, /applyPhotoEdits|beginPhotoEdits/, 'capture metadata is never part of the Edit transaction');
   const labels = [...tools.matchAll(/label: '([^']+)'/g)].map((match) => match[1]);
-  assert.deepEqual(labels, ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Fordel bilder til GMI/GML', 'Fjern bilder fra laget…']);
+  assert.deepEqual(labels, ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Fjern bilder fra laget…']);
   // M8: the one write the inspector embeds is the per-occurrence delivery choice. It calls only the two explicit
   // delivery actions; capture metadata, positions and directions are still never written from the inspector.
   // The compact toggle writes through one shared dispatcher (photoDeliveryChoice.mjs), which is the only caller.

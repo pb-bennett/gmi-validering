@@ -1,4 +1,4 @@
-// Direct-click GMI/GML delivery planning («Fordel bilder til GMI/GML»). Synthetic data only.
+// Direct-click GMI/GML delivery choices («Fordel bilder til GMI/GML»). Synthetic data only.
 // Every write goes through the canonical M8 session actions for exactly one occurrence.
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -184,26 +184,23 @@ test('the destination palette is shared, clearly distinguishable and readable', 
   assert.deepEqual(PHOTO_POSITION_SOURCES.map((source) => source.color), ['#19785b', '#2463b5', '#a03b82', '#b06a08']);
 });
 
-test('UI source contract: direct-click planning replaced the batch workflow; the tree pill follows the filename', async () => {
+test('UI source contract: direct delivery choices need no mode; the tree pill follows the filename', async () => {
   const read = (name) => readFile(new URL(`../src/${name}`, import.meta.url), 'utf8');
-  const [collection, popup, markers, tools, toggle, inventory, inspector, state] = await Promise.all(['components/photos/PhotoWorkspaceCollection.js',
-    'components/photos/PhotoDeliveryMapPopup.js', 'components/photos/PhotoMarkersLayer.js', 'components/photos/PhotoWorkspaceToolsMenu.js',
+  const [collection, markers, tools, toggle, inventory, inspector, state] = await Promise.all(['components/photos/PhotoWorkspaceCollection.js',
+    'components/photos/PhotoMarkersLayer.js', 'components/photos/PhotoWorkspaceToolsMenu.js',
     'components/photos/PhotoDeliveryToggle.js', 'components/delivery/DeliveryInventory.js', 'components/photos/PhotoWorkspaceInspector.js', 'lib/photos/photoWorkspaceState.mjs'].map(read));
-  assert.match(tools, /label: 'Fordel bilder til GMI\/GML'/);
+  assert.doesNotMatch(tools, /key: 'delivery'/);
   assert.doesNotMatch(tools, /Velg samlet levering/);
   assert.match(collection, /onClick=\{\(\) => onSelect\(photo.id\)\}/);
-  assert.match(collection, /<PhotoDeliveryCycleButton/);
-  assert.match(popup, /<PhotoDeliveryCycleButton/);
+  assert.match(collection, /!removal && destination && <PhotoDeliveryCycleButton/);
+  assert.doesNotMatch(collection, /deliveryMode|photo-delivery-bar/);
+  assert.doesNotMatch(markers, /onToggleDelivery|deliveryWorkspace/);
   assert.doesNotMatch(tools, /key: 'exclude'/);
   assert.doesNotMatch(collection, /PhotoExclusionActions|excludeIds|toggle-exclusion/);
   assert.doesNotMatch(state, /excludeIds/);
   assert.doesNotMatch(collection, /pan: false|const planPhoto/);
-  assert.match(collection, /GMI → GML → Ikke → GMI/);
   for (const removed of [/for samlet levering`\}/, /photo-delivery-actions/, /Overfør \{unit/, /Behold lenker for/, /select-delivery/, /toggle-delivery/])
     assert.doesNotMatch(collection, removed);
-  const planningBar = collection.slice(collection.indexOf('{deliveryMode && <div className="photo-delivery-bar"'), collection.indexOf('<ul ref={listRef}'));
-  assert(planningBar.length > 0 && !/Velg alle viste|type="checkbox"/.test(planningBar), 'no selection controls in the planning bar');
-  assert.doesNotMatch(popup, /Massevalg|role="tab"|type="checkbox"/);
   assert.doesNotMatch(markers, /batchSelected|deliveryIds|aria-pressed/);
   assert.doesNotMatch(state, /deliveryIds|deliveryPopupTab/);
   // The toggle writes through the shared dispatcher only.
@@ -245,7 +242,7 @@ test('pills and selected destination controls share dark fills; marker green sta
 });
 
 
-test('explicit inspector exclusion restores to GMI on pill/marker click; direct clicks cycle all three destinations', async () => {
+test('explicit inspector exclusion restores to GMI on pill click; direct clicks cycle all three destinations', async () => {
   const f = await setup(), a = f.byObject(KUM1), sibling = f.byObject(KUM2);
   const choices = () => photoDeliveryOptions(f.entry(a));
   assert.deepEqual(choices().map((item) => item.key), ['gmi', 'gml', 'excluded']);

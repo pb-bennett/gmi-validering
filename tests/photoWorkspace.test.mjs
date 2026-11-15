@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 test('delivery colours are the workspace default; an explicit colour choice survives every mode change and re-entry', () => {
   let state = photoWorkspaceReducer(emptyPhotoWorkspace, { type: 'enter', layerId: 'layer', photoIds: ['a', 'b'], photoId: 'a' });
   assert.equal(state.colourMode, 'delivery', 'Leveringsvalg is the default in normal navigation');
-  for (const mode of ['delivery', 'browse', 'edit', 'remove', 'browse']) {
+  for (const mode of ['browse', 'edit', 'remove', 'browse']) {
     state = photoWorkspaceReducer(state, { type: 'mode', mode });
     assert.equal(state.colourMode, 'delivery', `entering ${mode} keeps the default`);
   }
   state = photoWorkspaceReducer(state, { type: 'map-colour', value: 'provenance' });
-  for (const mode of ['delivery', 'browse', 'edit', 'browse']) {
+  for (const mode of ['browse', 'edit', 'browse']) {
     state = photoWorkspaceReducer(state, { type: 'mode', mode });
     assert.equal(state.colourMode, 'provenance', `entering ${mode} never overrides the explicit choice`);
   }
@@ -20,7 +20,7 @@ test('delivery colours are the workspace default; an explicit colour choice surv
   assert.equal(state.colourMode, 'delivery', 'a new workspace session starts from the default');
   assert.equal(photoWorkspaceReducer(state, { type: 'exit' }).colourMode, 'delivery');
   // Direct-click planning has no selection state of its own; the removed batch actions are inert.
-  state = photoWorkspaceReducer(state, { type: 'mode', mode: 'delivery' });
+  assert.strictEqual(photoWorkspaceReducer(state, { type: 'mode', mode: 'delivery' }), state);
   assert(!('deliveryIds' in state) && !('deliveryPopupTab' in state));
   for (const type of ['toggle-delivery', 'select-delivery', 'delivery-popup-tab']) assert.strictEqual(photoWorkspaceReducer(state, { type, photoId: 'x', photoIds: ['x'], value: 'batch' }), state);
   // Removal selection is a separate, still-supported workflow.

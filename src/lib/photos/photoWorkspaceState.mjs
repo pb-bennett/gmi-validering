@@ -1,4 +1,4 @@
-export const PHOTO_WORKSPACE_MODES = Object.freeze(['browse', 'edit', 'remove', 'delivery']);
+export const PHOTO_WORKSPACE_MODES = Object.freeze(['browse', 'edit', 'remove']);
 export const PHOTO_COLOUR_MODES = Object.freeze(['delivery', 'provenance']);
 export const DEFAULT_PHOTO_FILTER = Object.freeze({ placement: 'all', missingDirection: false, missingCaptureTime: false, repeated: false, changed: false, delivery: 'all' });
 export const DEFAULT_PHOTO_SORT = 'filename-asc';
@@ -24,7 +24,6 @@ function normalizeFilter(filter, patch) {
 
 // UI selection is independent of ownership, layer inclusion, and survey highlights.
 // Filter and sort are transient workspace presentation; they never change selection.
-// Delivery planning (mode 'delivery') has no selection of its own: each click writes one occurrence's M8 decision.
 export function photoWorkspaceReducer(state, action) {
   if (action.type === 'exit') return emptyPhotoWorkspace;
   // Re-entering the open layer (after adding photos, say) is the same workspace session and keeps the colour choice.

@@ -226,7 +226,7 @@ export default function Home() {
     [effectiveWorkspacePhotos, photoWorkspace, changedIds, workspaceDelivery]);
   const activeWorkspacePhoto = effectiveWorkspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
   const activeSiblings = activeWorkspacePhoto ? effectiveWorkspacePhotos.filter((photo) => photo.assetId === activeWorkspacePhoto.assetId) : [];
-  // Delivery planning («Fordel bilder til GMI/GML») and the inspector toggle: every change is one occurrence's M8 decision,
+  // List delivery pills and the inspector toggle: every change is one occurrence's M8 decision,
   // written at once through the session. Nothing is exported or changed in the GMI or photographs here.
   const reportDeliveryChange = (photoId, result) => {
     if (!result?.ok) { notifyPhoto(result?.reason || 'Valget kunne ikke lagres fordi utvalget er endret. Prøv igjen.', 'error'); return; }
@@ -323,7 +323,7 @@ export default function Home() {
   // otherwise: the hub's own step to the map comes through here too, before any handoff exists.
   const requestWorkspaceAction = (action = () => {}, { keepFlow = false } = {}) => {
     const run = keepFlow ? action : () => { if (closePhotoExportFlow()) setPhotoExportReturn(null); action(); };
-    if (photoWorkspace.mode === 'remove' || photoWorkspace.mode === 'delivery') dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
+    if (photoWorkspace.mode === 'remove') dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
     if (photoWorkspace.mode !== 'edit') { run(); return; }
     if (!changedPhotoIds(photoEdit).length) { endPhotoEditSession(); run(); return; }
     setPhotoBoundary({ variant: 'boundary', then: run });
@@ -440,7 +440,6 @@ export default function Home() {
     else if (tool === 'complete') { if (photoExportFlow) leavePhotoEditMode(); else openCompletePhotoDetails(opener); }
     else if (tool === 'export') requestWorkspaceAction(() => { photoToolOpenerRef.current = opener; setPhotoExportReturn(null); setPhotoExportResumed(false); setPhotoDialog('export'); });
     else if (tool === 'remove') requestWorkspaceAction(() => dispatchPhotoWorkspace({ type: 'mode', mode: 'remove' }));
-    else if (tool === 'delivery') requestWorkspaceAction(() => { setPhotoDeliveryAnnouncement(''); dispatchPhotoWorkspace({ type: 'mode', mode: 'delivery' }); });
   };
   const closePhotos = () => {
     photoSession.cancelImport();
@@ -500,7 +499,7 @@ export default function Home() {
     }
     if (event.key !== 'Escape') return;
     if (photoEditing) { event.preventDefault(); leavePhotoEditMode(); }
-    else if (photoWorkspace.mode === 'remove' || photoWorkspace.mode === 'delivery') { event.preventDefault(); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); }
+    else if (photoWorkspace.mode === 'remove') { event.preventDefault(); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); }
   });
   const photoKeysActive = Boolean(workspaceLayer) && photoWorkspace.mode !== 'browse';
   useEffect(() => {
@@ -990,8 +989,7 @@ export default function Home() {
                     photoWorkspace={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId, activeAssetId: activeWorkspacePhoto?.assetId || null,
                       photos: effectiveWorkspacePhotos, visibleIds: workspaceView.visibleIds, displayMode: photoMapDisplay, onDisplayModeChange: setPhotoMapDisplay,
                       colourMode: photoWorkspace.colourMode, onColourModeChange: (value) => dispatchPhotoWorkspace({ type: 'map-colour', value }),
-                      delivery: workspaceDelivery, deliveryMode: photoWorkspace.mode === 'delivery',
-                      onToggleDelivery: toggleWorkspaceDelivery, onDeliveryResult: reportDeliveryChange,
+                      delivery: workspaceDelivery,
                       zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null } : null}
                     onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
                     photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,

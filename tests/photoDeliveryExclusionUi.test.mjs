@@ -61,8 +61,9 @@ test('Direct delivery cycle: equal badges, canonical inspector sync, shared plac
 
       await browser.evaluate('document.querySelector("button[aria-label=Verktøy]").click()');
       assert.equal(await browser.evaluate('Array.from(document.querySelectorAll("[role=menuitem]")).some(e=>e.innerText.includes("Velg bilder som ikke skal med"))'), false);
-      await click(browser, 'Fordel bilder til GMI/GML', 'document');
-      await browser.waitFor('document.querySelector(".photo-delivery-bar")');
+      assert.equal(await browser.evaluate('Array.from(document.querySelectorAll("[role=menuitem]")).some(e=>e.innerText.includes("Fordel bilder til GMI/GML"))'), false);
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-bar, [role=menuitem][data-tool=delivery]").length'), 0);
+      await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input, .photo-exclusion-bar, .photo-exclusion-actions").length'), 0);
       const button = (id) => `${row(id)}.querySelector('.photo-delivery-row-button')`;
       const inspectorChoice = (key) => `document.querySelector('.photo-delivery-section [role=radio][data-destination=${key}]')`;
@@ -99,11 +100,14 @@ test('Direct delivery cycle: equal badges, canonical inspector sync, shared plac
       }
       await browser.evaluate(`${button(a)}.focus()`); await key('Enter', 'Enter', 13);
       await browser.waitFor(`${pill(a)}.innerText === 'GML'`);
+      await key('Escape', 'Escape', 27);
+      assert.equal(await browser.evaluate(`${collection}.dataset.mode`), 'browse');
+      assert.equal(await browser.evaluate(`${pill(a)}.innerText`), 'GML');
+      assert.equal(await browser.evaluate(`${row(a)}.querySelector('.photo-workspace-row').getAttribute('aria-pressed')`), 'true');
       await browser.evaluate(`${inspectorChoice('excluded')}.click()`);
       await browser.waitFor(`${pill(a)}.innerText === 'Ikke'`);
       assert.equal(await browser.evaluate(`${button(a)}.dataset.deliveryStatus`), 'exclude');
       await browser.evaluate(`${button(a)}.click()`); await browser.waitFor(`${pill(a)}.innerText === 'GMI'`);
-      await click(browser, 'Ferdig', 'document.querySelector(".photo-delivery-bar")');
       await click(browser, 'Fjern bilder fra laget…', 'document');
       await browser.waitFor(`${collection}.dataset.mode === 'remove'`);
       await browser.evaluate(`${row(single)}.querySelector('input').focus()`); await key(' ', 'Space', 32);

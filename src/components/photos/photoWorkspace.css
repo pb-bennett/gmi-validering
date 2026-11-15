@@ -55,18 +55,8 @@
 .photo-removal-actions { flex-shrink: 0; display: grid; gap: 6px; padding: 8px 10px; border-top: 1px solid #ecc8c3; background: #fdf3f2; }
 .photo-removal-primary:not(:disabled) { border-color: #9b2c23 !important; color: #9b2c23; font-weight: 600; }
 .photo-removal-actions button:disabled { opacity: .45; }
-/* Delivery planning (Fordel bilder til GMI/GML) and the shared destination palette: GMI deep blue, GML dark green (map markers retain bright green),
-   neutral «Ikke med», warning for review. Same tokens on rows, inspector toggle, popup chooser and package tree. */
-.photo-delivery-bar { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 4px 6px; flex-wrap: wrap; padding: 6px 10px; background: #eef7f9; border-bottom: 1px solid #a9d4de; }
-.photo-delivery-bar p { margin: 0; font-weight: 600; color: var(--gmi-navy); }
-.photo-delivery-bar span { display: inline-flex; gap: 6px; }
-.photo-delivery-bar small { width: 100%; color: var(--gmi-text); font-size: 11.5px; }
-.photo-delivery-bar button { min-height: 30px; padding: 0 8px; border: 1px solid var(--gmi-border-strong); background: var(--gmi-surface); }
-.photo-delivery-counts { width: 100%; display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 0; padding: 0; list-style: none; color: var(--gmi-text); font-variant-numeric: tabular-nums; }
-.photo-delivery-counts li { display: inline-flex; align-items: center; gap: 4px; }
-.photo-delivery-counts .photo-delivery-pill { margin-left: 0; }
-.photo-delivery-bar .photo-delivery-announcement { width: 100%; min-height: 16px; font-weight: 400; font-size: 11px; color: var(--gmi-text-muted); overflow-wrap: anywhere; }
-.photo-delivery-bar .photo-delivery-announcement:empty { display: none; }
+/* Shared delivery palette for the compact summary, rows, inspector and package tree. */
+.photo-workspace-counts .photo-delivery-counts { display: inline-flex; flex-wrap: wrap; gap: 4px 8px; font-variant-numeric: tabular-nums; }
 .photo-delivery-summary { margin: 2px 0 0; font-size: 11px; color: var(--gmi-interactive); }
 .photo-workspace-row:hover { background: var(--gmi-surface-soft); }
 
@@ -222,10 +212,12 @@
 .photo-workspace-toast[data-tone='error'] { border-color: #e2a39b; background: #fdf3f2; color: #7f1d1d; }
 .photo-workspace-toast-action { min-height: 30px; padding: 0 8px; border: 1px solid currentColor; border-radius: 6px; white-space: nowrap; }
 
-.photo-remove-confirmation { margin: auto; width: min(440px, calc(100vw - 32px)); padding: 20px; border: 1px solid #c4ced8; border-radius: 8px; background: white; color: #24364b; }
-.photo-remove-confirmation::backdrop { background: #15233566; }
+.photo-remove-confirmation { margin: auto; width: min(440px, calc(100vw - 32px)); padding: 20px; border: 1px solid var(--gmi-border-strong); border-radius: 16px; background: var(--gmi-surface); color: var(--gmi-text); }
+.photo-remove-confirmation::backdrop { background: color-mix(in srgb, var(--gmi-ink) 40%, transparent); }
 .photo-remove-confirmation h2 { font-size: 18px; font-weight: 600; }
 .photo-remove-confirmation p { margin: 12px 0 20px; }
+.photo-remove-confirmation .gmi-edit-destructive { border-color: var(--gmi-validation-error-text) !important; color: var(--gmi-validation-error-text); }
+.photo-remove-confirmation .gmi-edit-destructive:hover:not(:disabled) { background: var(--gmi-validation-error-bg); }
 .photo-remove-confirmation > div { display: flex; justify-content: flex-end; gap: 8px; }
 /* Scoped to photo popups; GMI and Gemini Leaflet popup styling stays independent. */
 .photo-map-viewer-popup .leaflet-popup-content-wrapper { padding: 0; border: 1px solid var(--gmi-border-strong); border-radius: 10px; background: var(--gmi-surface); color: var(--gmi-text); box-shadow: 0 10px 28px #0206182e; overflow: hidden; }
@@ -312,20 +304,10 @@
 .photo-occurrence-context details { overflow-wrap: anywhere; }
 .photo-metadata-missing { margin: 4px 0 6px; padding: 6px 10px; border-left: 3px solid var(--gmi-interactive); border-radius: 4px; background: var(--gmi-surface-soft); color: var(--gmi-text); font-size: 12.5px; }
 .photo-map-display-card { max-height: calc(100% - 100px); overflow-y: auto; }
-.photo-delivery-map-popup .leaflet-popup-content-wrapper { background: var(--gmi-surface); color: var(--gmi-text); border: 1px solid var(--gmi-border-strong); }
 
 .photo-map-colour-switch { display: grid; gap: 2px; margin-top: 5px; font-size: 10px; }
 .photo-map-colour-switch select { width: 100%; border: 1px solid var(--gmi-border-strong); border-radius: 4px; padding: 2px; background: var(--gmi-surface); font-size: 11px; }
 .photo-delivery-mixed .photo-thumb { border-style: dashed; }
-.photo-delivery-popup-occurrence { padding: 5px 0; border-bottom: 1px solid var(--gmi-border); }
-.photo-delivery-popup-occurrence:last-child { border-bottom: 0; }
-/* Overlapping-occurrence chooser: one row per placement, each with its own toggle. */
-.photo-delivery-popup-summary { margin: 0 0 4px !important; font-size: 11px; font-weight: 600; color: var(--gmi-text-muted); }
-.photo-delivery-popup-list { margin: 0; padding: 0; list-style: none; }
-.photo-delivery-popup-occurrence { display: grid; grid-template-columns: minmax(7.5rem, 1fr) auto; align-items: center; gap: 2px 8px; }
-.photo-delivery-popup-name { display: grid; min-width: 0; margin: 0 !important; overflow-wrap: break-word; font-weight: 600; }
-.photo-delivery-popup-name small { font-weight: 400; color: var(--gmi-text-muted); font-size: 10.5px; }
-.photo-delivery-popup-reason { grid-column: 1 / -1; color: var(--gmi-text-subtle); font-size: 10.5px; }
 /* Delivery colours: a slightly heavier thumbnail border, so the destination reads at small sizes. */
 .photo-thumb-marker[class*='photo-delivery-'] .photo-thumb { border-width: 3px; }
 

@@ -155,8 +155,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
       await browser.waitFor(section);
       await browser.evaluate(`${section}.querySelector('[role=radio][data-destination=gml]').click()`);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list .photo-delivery-pill[data-destination=gml]").length === 1');
-      await t.test('direct-click planning: delivery colours by default, overlapping chooser toggles exact occurrences, isolated markers toggle in one click', async () => {
-        const popup = 'document.querySelector(".photo-delivery-map-popup")';
+      await t.test('normal browsing: safe stack/marker navigation, explicit destination controls and synchronized delivery colours', async () => {
         const marker = 'document.querySelector(".photo-camera-marker.photo-marker-selected")';
         const fill = () => browser.evaluate(`${marker}.querySelector('.photo-camera-glyph path').getAttribute('fill')`);
         const pills = () => browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map((li) => li.querySelector('.photo-delivery-pill').innerText)`);
@@ -179,89 +178,34 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await screenshot(browser, 'final-marker-provenance');
         await setColour('delivery');
 
-        await click(browser, 'Fordel bilder til GMI/GML', 'document');
-        await browser.waitFor('document.querySelector(".photo-delivery-bar")');
-        assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
-        assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list input").length'), 0, 'no selection checkboxes');
-        assert.match(await browser.evaluate(`${marker}.getAttribute('aria-label')`), /^Velg plassering:/);
-        assert.equal(await browser.evaluate(`${marker}.getAttribute('aria-haspopup')`), 'dialog');
+        assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-bar").length'), 0);
+        const cycle = (id) => `document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] .photo-delivery-row-button')`;
+        const exactMarker = `document.querySelector('.photo-camera-marker[data-photo-id="${rows[1]}"]')`;
+        // Stack and isolated marker navigation select only; the inspector owns explicit destination changes.
+        const before = await pills();
         await browser.evaluate(`${marker}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
-        await browser.waitFor(popup);
-        const occurrence = (id) => `${popup}.querySelector('[data-occurrence-id="${id}"]')`;
-        const choose = async (id, destination) => {
-          for (let i = 0; i < 3 && await checked(id) !== destination; i++) await browser.evaluate(`${occurrence(id)}.querySelector('.photo-delivery-row-button').click()`);
-          assert.equal(await checked(id), destination);
-        };
-        const checked = (id) => browser.evaluate(`${occurrence(id)}.querySelector('.photo-delivery-row-button').dataset.destination`);
-        assert.equal(await browser.evaluate(`${popup}.querySelectorAll('[data-occurrence-id]').length`), 2);
-        assert.equal(await browser.evaluate(`${popup}.querySelectorAll('input, [role=tab]').length`), 0, 'no Massevalg tabs or checkboxes');
-        assert.equal(await browser.evaluate(`${popup}.querySelector('.photo-delivery-popup-summary').innerText`), '2 plasseringer · 1 GMI · 1 GML');
-        assert.match(await browser.evaluate(`${occurrence(rows[1])}.innerText`), /shared\.jpg/);
-        assert.deepEqual([await checked(rows[0]), await checked(rows[1])], ['gml', 'gmi']);
-        assert.deepEqual(await browser.evaluate(`Array.from(${popup}.querySelectorAll('.photo-delivery-row-button')).map(e => {
-          const s=getComputedStyle(e); return [s.backgroundColor,s.color]; })`),
-        [['rgb(22, 101, 52)', 'rgb(255, 255, 255)'], ['rgb(30, 64, 175)', 'rgb(255, 255, 255)']]);
-        assert.deepEqual(await pills(), ['GML', 'GMI'], 'opening the chooser changes nothing');
-        await screenshot(browser, 'refine-overlap-chooser');
-        // Each occurrence changes alone; the stack colour follows all of its members at once.
-        await choose(rows[1], 'gml');
-        await browser.waitFor(`${popup}.querySelector('.photo-delivery-popup-summary').innerText === '2 plasseringer · 2 GML'`);
+        assert.deepEqual(await pills(), before);
+        await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] .photo-workspace-row').getAttribute('aria-pressed') === 'true'`);
+        await browser.evaluate(`${exactMarker}.focus()`);
+        await key(' ', 'Space', 32);
+        await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[0]}"] .photo-workspace-row').getAttribute('aria-pressed') === 'true'`);
+        assert.deepEqual(await pills(), before);
+        await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] .photo-workspace-row').click()`);
+        await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=gml]').click()`);
+        await browser.waitFor(`${cycle(rows[1])}.dataset.destination === 'gml'`);
         assert.deepEqual(await pills(), ['GML', 'GML']);
         await browser.waitFor(`${marker}.querySelector('.photo-camera-glyph path').getAttribute('fill') === '#22c55e'`);
-        await choose(rows[0], 'gmi');
-        await browser.waitFor(`${popup}.querySelector('.photo-delivery-popup-summary').innerText === '2 plasseringer · 1 GMI · 1 GML'`);
-        assert.deepEqual([await checked(rows[0]), await checked(rows[1])], ['gmi', 'gml']);
-        await browser.waitFor(`${marker}.querySelector('.photo-camera-glyph path').getAttribute('fill') === '#64748b'`);
-        // Keyboard inside the chooser: arrows choose within one occurrence's toggle.
-        await browser.evaluate(`${occurrence(rows[1])}.querySelector('.photo-delivery-row-button').focus()`);
-        await key(' ', 'Space', 32);
-        await browser.waitFor(`${popup}.querySelector('.photo-delivery-popup-summary').innerText === '2 plasseringer · 1 GMI · 1 Ikke'`);
-        assert.equal(await checked(rows[1]), 'excluded');
-        assert.deepEqual(await pills(), ['GMI', 'Ikke']);
-        await key(' ', 'Space', 32);
-        await browser.waitFor(`${popup}.querySelector('.photo-delivery-popup-summary').innerText === '2 plasseringer · 2 GMI'`);
-        await browser.waitFor(`${marker}.querySelector('.photo-camera-glyph path').getAttribute('fill') === '#1e40af'`);
-        assert.equal(await checked(rows[0]), 'gmi');
-        await choose(rows[0], 'gml');
-        await browser.waitFor(`${popup}.querySelector('.photo-delivery-popup-summary').innerText === '2 plasseringer · 1 GMI · 1 GML'`);
-        for (const [width, height] of [[1280, 720], [1366, 768]]) {
-          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-          await delay(300);
-          await screenshot(browser, `refine-overlap-chooser-${width}x${height}`);
-        }
-        await browser.evaluate(`${popup}.querySelector('.leaflet-popup-close-button').click()`);
-        await browser.waitFor(`!${popup}`);
-        // A single-occurrence marker: one click toggles that exact occurrence, no popup and no selection step.
-        const exactMarker = `document.querySelector('.photo-camera-marker[data-photo-id="${rows[1]}"]')`;
-        assert.match(await browser.evaluate(`${exactMarker}.getAttribute('aria-label')`), /^Endre leveringsvalg:.*Planlagt: Beholdes i GMI/);
-        await browser.evaluate(`${exactMarker}.dispatchEvent(new MouseEvent('click', {bubbles:true}))`);
-        await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] .photo-delivery-pill').innerText === 'GML'`);
-        assert.equal(await browser.evaluate(`Boolean(${popup})`), false);
-        assert.deepEqual(await pills(), ['GML', 'GML'], 'the sibling keeps its own decision');
-        assert.match(await browser.evaluate('document.querySelector(".photo-delivery-bar [role=status]").innerText'), /^shared\.jpg · .*: Overføres til GML$/);
-        await browser.evaluate(`${exactMarker}.dispatchEvent(new MouseEvent('click', {bubbles:true}))`);
-        await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] .photo-delivery-pill').innerText === 'Ikke'`);
-        await browser.evaluate(`${exactMarker}.dispatchEvent(new MouseEvent('click', {bubbles:true}))`);
-        await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] .photo-delivery-pill').innerText === 'GMI'`);
-        for (const expected of ['GML', 'Ikke', 'GMI']) {
-          await browser.evaluate(`${exactMarker}.focus()`);
+        for (const expected of ['Ikke', 'GMI']) {
+          await browser.evaluate(`${cycle(rows[1])}.focus()`);
           await key(' ', 'Space', 32);
           await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] .photo-delivery-pill').innerText === ${JSON.stringify(expected)}`);
         }
         assert.deepEqual(await pills(), ['GML', 'GMI']);
-        await click(browser, 'Ferdig', 'document.querySelector(".photo-delivery-bar")');
-        await browser.waitFor('!document.querySelector(".photo-delivery-bar")');
-        assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
-        // An explicit colour choice survives entering and leaving planning.
         await setColour('provenance');
-        await click(browser, 'Fordel bilder til GMI/GML', 'document');
-        await browser.waitFor('document.querySelector(".photo-delivery-bar")');
-        assert.equal(await browser.evaluate(`${colourSelect}.value`), 'provenance');
-        await click(browser, 'Ferdig', 'document.querySelector(".photo-delivery-bar")');
-        await browser.waitFor('!document.querySelector(".photo-delivery-bar")');
         assert.equal(await browser.evaluate(`${colourSelect}.value`), 'provenance');
         await setColour('delivery');
         // Normal navigation again: a marker click selects the photo and changes no decision.
+        await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[0]}"] .photo-workspace-row').click()`);
         await browser.evaluate(`${exactMarker}.dispatchEvent(new MouseEvent('click', {bubbles:true}))`);
         await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${rows[1]}"] button').getAttribute('aria-pressed') === 'true'`);
         assert.deepEqual(await pills(), ['GML', 'GMI']);
