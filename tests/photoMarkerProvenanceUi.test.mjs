@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
-import { gpsPng } from './helpers/photoGpsFixtures.mjs';
+import { gpsPng, noGpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, setPhotoColourMode, setPhotoFiles, stagePhotoSource, savePhotoSource, closePhotoSources } from './helpers/photoSourceWorkflow.mjs';
 import { PHOTO_POSITION_SOURCES } from '../src/lib/photos/photoMarkerPresentation.mjs';
@@ -15,9 +15,10 @@ const app = process.env.PHOTO_UI_URL;
 test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, display card lifecycle and rendered layouts',
   { skip: !chromePath || !app, timeout: 240000 }, async (t) => {
     const root = path.resolve(tmpdir()), directory = await mkdtemp(path.join(root, 'photo-marker-provenance-'));
-    const names = ['exif.png', 'gml.png', 'shared.png'];
+    // hand.png has no position evidence: it is placed by hand, the only genuine «Manuell» source (Slice 2 provenance).
+    const names = ['exif.png', 'gml.png', 'shared.png', 'hand.png'];
     const photos = names.map((name) => path.join(directory, name));
-    await Promise.all(photos.map((filename, i) => writeFile(filename, gpsPng({ longitude: [10, 26, 5 + i * 2] }))));
+    await Promise.all(photos.map((filename, i) => writeFile(filename, path.basename(filename) === 'hand.png' ? noGpsPng() : gpsPng({ longitude: [10, 26, 5 + i * 2] }))));
     const gml = path.join(directory, 'positions.gml'), gmi = path.join(directory, 'Marker survey.gmi');
     await writeFile(gmi, gmiText([0, 1].map((i) => ({ label: `K${i}`, hyperlink: 'h:1(link:"shared.png") ', xyz: `${581930 + i * 50} 6566000 1` }))));
     await writeFile(gml, '<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="EPSG:5972"/></gml:boundedBy><gml:featureMember><app:Skråfoto gml:id="photo"><app:fotolink>gml.png</app:fotolink><app:fotograferingspunkt><gml:Point srsDimension="3"><gml:pos>581910 6566050 0</gml:pos></gml:Point></app:fotograferingspunkt></app:Skråfoto></gml:featureMember></gml:FeatureCollection>');
@@ -33,14 +34,14 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
       await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').getAttribute('aria-pressed')==='true'`);
     };
     const editCount = 'Number(document.querySelector("[data-edit-count]")?.innerText.match(/\\d+/)?.[0] || 0)';
-    // Moves are staged in Edit mode; the staged marker already shows the manual provenance it will have after save.
+    // Moves are staged in Edit mode. Provenance survives a manual adjustment: the moved GMI placement stays GMI.
     const move = async (commit) => {
       await enterEditMode(browser);
       assert.notEqual(await cursor(), 'crosshair', 'a placed photo is moved by dragging, not by click capture');
       assert.equal(await browser.evaluate(`getComputedStyle(${editTarget}).cursor`), 'grab');
       await dragSelectedMarker(browser, 70, 50);
       await browser.waitFor(`${editCount} === 1`);
-      assert.equal(await sourceOfSelected(), 'manual', 'staged move previews manual provenance');
+      assert.equal(await sourceOfSelected(), 'gmi', 'a staged move keeps its original source');
       if (commit) await saveEdits(browser); else await discardEdits(browser);
       await browser.waitFor(`!${commandBar}`);
     };
@@ -79,7 +80,8 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
       const rows = await browser.evaluate('Array.from(document.querySelectorAll(".photo-workspace-list li[data-photo-id]")).map(e=>({id:e.dataset.photoId,name:e.querySelector(".photo-workspace-filename").innerText}))');
       const repeated = rows.filter((row) => row.name === 'shared.png');
       assert.equal(repeated.length, 2);
-      const exif = rows.find((row) => row.name === 'exif.png'), gmlPhoto = rows.find((row) => row.name === 'gml.png');
+      const exif = rows.find((row) => row.name === 'exif.png'), gmlPhoto = rows.find((row) => row.name === 'gml.png'), hand = rows.find((row) => row.name === 'hand.png');
+      const idFor = (kind) => ({ exif: exif.id, gml: gmlPhoto.id, gmi: repeated[0].id, manual: hand.id })[kind];
       await t.test('accepted GML/EXIF source replacement updates rendered source without separate color state', async () => {
         await applyPhotoSourcePositions(browser, 'gml', { photoId: gmlPhoto.id });
         await select(gmlPhoto.id); assert.equal(await sourceOfSelected(), 'gml');
@@ -95,23 +97,36 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         }
       });
       await select(repeated[1].id);
-      await t.test('discard preserves GMI; save produces manual while shared sibling remains GMI', async () => {
+      await t.test('discard and save keep GMI provenance; the shared sibling stays GMI; a hand placement is Manuell', async () => {
         await move(false); assert.equal(await sourceOfSelected(), 'gmi');
-        await move(true); assert.equal(await sourceOfSelected(), 'manual');
-        assert.deepEqual(await browser.evaluate(`${markers}.filter(e=>e.title.includes('shared.png')).map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['gmi', 'manual']);
+        await move(true); assert.equal(await sourceOfSelected(), 'gmi', 'a saved move keeps its original source');
+        assert.deepEqual(await browser.evaluate(`${markers}.filter(e=>e.title.includes('shared.png')).map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['gmi', 'gmi']);
+        assert.match(await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${repeated[1].id}"]').innerText`), /GMI · justert/);
         // The saved move away from its GMI point makes only this placement GML; the sibling keeps GMI.
         const pill = (id) => browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] .photo-delivery-pill').innerText`);
         assert.deepEqual([await pill(repeated[0].id), await pill(repeated[1].id)], ['GMI', 'GML']);
         // An explicit GMI choice restores the starting point for the delivery checks below.
         await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=gmi]').click()`);
         await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${repeated[1].id}"] .photo-delivery-pill').innerText === 'GMI'`);
+        // Place hand.png by clicking the map in Edit mode: no source evidence, so its provenance is Manuell.
+        await select(hand.id);
+        await enterEditMode(browser);
+        const box = await browser.evaluate('document.querySelector(".leaflet-container").getBoundingClientRect().toJSON()');
+        const [x, y] = [box.left + box.width / 2 - 220, box.top + box.height / 2 + 160];
+        await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+        await browser.waitFor(`${editCount} === 1`);
+        await saveEdits(browser);
+        await browser.waitFor(`${selected}?.dataset.photoId === ${JSON.stringify(hand.id)}`);
+        assert.equal(await sourceOfSelected(), 'manual');
       });
       await t.test('delivery colours are the default; marker selection is safe and explicit controls update destinations', async () => {
         const colourSelect = `${legend}.querySelector('select')`;
         const markerOf = (id) => `document.querySelector('.photo-camera-marker[data-photo-id="${id}"]')`;
         const fillOf = (id) => browser.evaluate(`${markerOf(id)}.querySelector('.photo-camera-glyph path').getAttribute('fill')`);
         const pillOf = (id) => browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] .photo-delivery-pill').innerText`);
-        const [GMI, GML, NEUTRAL] = ['#1e40af', '#22c55e', '#64748b'];
+        // Approved Slice 2 palette; NEUTRAL is «Ikke». Mixed stacks keep the slate grey with a dashed outline.
+        const [GMI, GML, NEUTRAL, MIXED] = ['#60a5fa', '#4ade80', '#cbd5e1', '#64748b'];
         await setPhotoColourMode(browser, 'delivery');
         assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
         // Destination colours on every marker; provenance stays on the marker as data and in the tooltip.
@@ -119,10 +134,10 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         for (const source of PHOTO_POSITION_SOURCES) {
           assert(await browser.evaluate(`${markers}.some(marker => marker.querySelector('.photo-camera-glyph').dataset.positionSource === ${JSON.stringify(source.kind)} && !marker.querySelector('.photo-marker-delivery, .photo-marker-batch'))`));
         }
-        assert.equal(await fillOf(repeated[0].id), GMI, 'GMI-linked placement: deep blue');
+        assert.equal(await fillOf(repeated[0].id), GMI, 'GMI-linked placement: light blue');
         assert.equal(await fillOf(exif.id), NEUTRAL, 'placed photo without a GMI reference, not included: neutral');
         assert.deepEqual(await browser.evaluate(`Array.from(${legend}.querySelectorAll('li[data-legend-delivery]')).map(e => [e.dataset.legendDelivery, e.querySelector('.photo-camera-glyph path').getAttribute('fill'), e.innerText.trim()])`),
-          [['gmi', GMI, 'Beholdes i GMI'], ['gml', GML, 'Til GML'], ['excluded', NEUTRAL, 'Ikke med i leveransen'], ['review', '#b06a08', 'Krever gjennomgang'], ['mixed', NEUTRAL, 'Ulike leveringsvalg']]);
+          [['gmi', GMI, 'Beholdes i GMI'], ['gml', GML, 'Til GML'], ['excluded', NEUTRAL, 'Ikke med i leveransen'], ['review', '#b06a08', 'Krever gjennomgang'], ['mixed', MIXED, 'Ulike leveringsvalg']]);
 
         assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-bar").length'), 0);
         assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
@@ -197,8 +212,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
       await t.test('selection, hover and accepted direction keep all four source fills', async () => {
         await setPhotoColourMode(browser, 'provenance'); // provenance palette checks choose Plasseringskilde explicitly
         for (const source of PHOTO_POSITION_SOURCES) {
-          const id = source.kind === 'exif' ? exif.id : source.kind === 'gml' ? gmlPhoto.id : repeated[source.kind === 'gmi' ? 0 : 1].id;
-          await select(id); assert.equal(await sourceOfSelected(), source.kind);
+          await select(idFor(source.kind)); assert.equal(await sourceOfSelected(), source.kind);
           assert(await browser.evaluate(`${selected}.title.includes(${JSON.stringify(source.label)})`));
           assert.equal(await browser.evaluate(`${selected}.querySelector('.photo-camera-glyph path').getAttribute('fill')`), source.color);
           await browser.evaluate(`${selected}.dispatchEvent(new MouseEvent('mouseover',{bubbles:true}))`);
@@ -228,8 +242,8 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           assert.equal(layout.controls, 3, 'colour mode selector plus the Markører/Miniatyrer display toggle');
           assert.equal(layout.radios, 2);
           assert.deepEqual(layout.entries, PHOTO_POSITION_SOURCES.map(({ kind, label, color }) => ({ kind, label, fill: color })));
-          assert.deepEqual(await browser.evaluate(`${markers}.map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['exif', 'gmi', 'gml', 'manual']);
-          assert(await browser.evaluate(`(() => {const map=document.querySelector('.leaflet-container').getBoundingClientRect();return ${markers}.every(e=>{const b=e.getBoundingClientRect();return b.left>=map.left && b.right<=map.right && b.top>=map.top && b.bottom<=map.bottom});})()`), 'all four markers are inside the rendered map');
+          assert.deepEqual(await browser.evaluate(`${markers}.map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['exif', 'gmi', 'gmi', 'gml', 'manual']);
+          assert(await browser.evaluate(`(() => {const map=document.querySelector('.leaflet-container').getBoundingClientRect();return ${markers}.every(e=>{const b=e.getBoundingClientRect();return b.left>=map.left && b.right<=map.right && b.top>=map.top && b.bottom<=map.bottom});})()`), 'all five markers are inside the rendered map');
           await browser.waitFor('Array.from(document.querySelectorAll(".leaflet-tile")).every(e=>e.complete && e.naturalWidth>0)');
           for (const id of [gmlPhoto.id, repeated[0].id]) {
             await select(id);
@@ -263,39 +277,43 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           size:e.getBoundingClientRect().width, border:getComputedStyle(e.querySelector('.photo-thumb')).borderTopColor,
           dot:getComputedStyle(e.querySelector('.photo-thumb-source')).backgroundColor, glyphs:e.querySelectorAll('.photo-source-glyph').length,
           corner:(() => {const a=e.querySelector('.photo-thumb-source').getBoundingClientRect(), b=e.querySelector('.photo-thumb').getBoundingClientRect(); return a.width<=8 && a.height<=8 && Math.abs(a.left-b.left)<=2 && Math.abs(a.bottom-b.bottom)<=2;})() })).sort((a,b)=>a.kind.localeCompare(b.kind))`);
-        await browser.waitFor('document.querySelectorAll(".photo-thumb-source").length === 4');
+        await browser.waitFor('document.querySelectorAll(".photo-thumb-source").length === 5');
         const baseline = await badges();
-        assert.deepEqual(baseline.map(e=>e.kind), ['exif','gmi','gml','manual']);
+        assert.deepEqual(baseline.map(e=>e.kind), ['exif','gmi','gmi','gml','manual']);
         assert(baseline.every(e=>e.size===44 && e.corner && e.dot===e.border && e.glyphs===0), JSON.stringify(baseline));
         for (const source of PHOTO_POSITION_SOURCES) {
-          const id = source.kind === 'exif' ? exif.id : source.kind === 'gml' ? gmlPhoto.id : repeated[source.kind === 'gmi' ? 0 : 1].id;
-          await select(id);
+          await select(idFor(source.kind));
           assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-thumb").dataset.positionSource'), source.kind);
           assert.equal(await browser.evaluate('document.querySelector(".photo-marker-selected .photo-thumb-source").getAttribute("aria-label")'), source.kind==='manual'?'Manuelt plassert':`Plassering fra ${source.label}`);
         }
         assert(await browser.evaluate(`Boolean(${arrowOf('document.querySelector(".photo-marker-selected")')})`));
         await screenshot('pass1c-four-source-thumbnails-workspace');
         await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
-        assert.deepEqual(await badges(), baseline, 'main map reuses exactly the same source dots and borders');
+        // Slice 2: the main map always colours by delivery choice. Same thumbnails, sources kept as data, delivery fills.
+        const main = await badges();
+        assert.deepEqual(main.map(({ kind, size, corner, glyphs }) => ({ kind, size, corner, glyphs })),
+          baseline.map(({ kind, size, corner, glyphs }) => ({ kind, size, corner, glyphs })));
+        const deliveryRgb = ['rgb(96, 165, 250)', 'rgb(74, 222, 128)', 'rgb(203, 213, 225)', 'rgb(100, 116, 139)'];
+        assert(main.every((e) => e.dot === e.border && deliveryRgb.includes(e.border) && /^Planlagt: /.test(e.label)), JSON.stringify(main));
         await screenshot('pass1c-four-source-thumbnails-main-map');
-        await click('Bildemodul'); await browser.waitFor(legend);
+        await click('Åpne FOTO'); await browser.waitFor(legend);
         await browser.evaluate(`${legend}.querySelector('[data-mode=markers]').click()`);
-        await browser.waitFor(`${markers}.length === 4`);
-        await select(repeated[1].id); // Restore this suite's manual-occurrence selection after re-entering the workspace.
+        await browser.waitFor(`${markers}.length === 5`);
+        await select(repeated[1].id); // The moved (manually adjusted) GMI occurrence, for the replacement check below.
       });
       await t.test('hidden layer, repeated workspace exits/entries, manual to GMI replacement and reset have no stale display card', async () => {
         const visibility = 'document.querySelector(".photo-workspace-visibility")';
         await enterEditMode(browser);
         assert.equal(await browser.evaluate(`${visibility}.getAttribute('aria-disabled')`), 'true', 'Edit mode keeps the layer visible');
         await browser.evaluate(`${visibility}.click()`);
-        assert.equal(await browser.evaluate(`${markers}.length`), 4);
+        assert.equal(await browser.evaluate(`${markers}.length`), 5);
         await pressKey(browser, 'Escape', KEYS.Escape);
         await browser.waitFor(`!${commandBar}`);
         await browser.evaluate(`${visibility}.click()`);
         await browser.waitFor(`${markers}.length===0`);
         assert.notEqual(await cursor(), 'crosshair'); assert(await browser.evaluate(`Boolean(${legend})`));
         await browser.evaluate(`${visibility}.click()`);
-        await browser.waitFor(`${markers}.length===4`);
+        await browser.waitFor(`${markers}.length===5`);
         await applyPhotoSourcePositions(browser, 'gmi', { photoId: repeated[1].id });
         assert.equal(await sourceOfSelected(), 'gmi');
         for (let i = 0; i < 3; i++) {
@@ -304,7 +322,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           await click('Lukk FOTO'); await browser.waitFor(`!${legend} && document.body.innerText.includes('Tegnforklaring')`);
           assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-edit-boundary[open]"))'), false);
           assert.notEqual(await cursor(), 'crosshair');
-          await click('Bildemodul'); await browser.waitFor(legend);
+          await click('Åpne FOTO'); await browser.waitFor(legend);
           assert.equal(await browser.evaluate('document.body.innerText.includes("Tegnforklaring")'), false);
         }
         await click('Lukk FOTO');

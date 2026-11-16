@@ -1003,7 +1003,7 @@ export default function Home() {
                     photoWorkspace={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId, activeAssetId: activeWorkspacePhoto?.assetId || null,
                       photos: effectiveWorkspacePhotos, visibleIds: workspaceView.visibleIds, displayMode: photoMapDisplay, onDisplayModeChange: setPhotoMapDisplay,
                       colourMode: photoWorkspace.colourMode, onColourModeChange: (value) => dispatchPhotoWorkspace({ type: 'map-colour', value }),
-                      delivery: shownDelivery,
+                      delivery: shownDelivery, onToggleDelivery: toggleWorkspaceDelivery,
                       zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null } : null}
                     onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
                     photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,

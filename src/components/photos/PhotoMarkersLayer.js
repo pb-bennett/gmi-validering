@@ -5,7 +5,8 @@ import { Marker, Pane, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { PHOTO_DELIVERY_LABELS, photoStackDeliveryState } from '@/lib/photos/photoMarkerPresentation.mjs';
 import PhotoMapPopup from './PhotoMapPopup';
-import { photoPositionSourceDescription, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { photoPositionProvenanceKind, photoPositionSourceDescription, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
+import PhotoWorkspaceMapPreview from './PhotoWorkspaceMapPreview';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
 import { gmiObjectLabel } from '@/lib/photos/gmiPhotoSource.mjs';
 import { PHOTO_DIRECTION_PANE, PHOTO_DIRECTION_Z_INDEX, PHOTO_MARKER_PANE, PHOTO_MARKER_Z_INDEX } from '@/lib/photos/photoMapPanes.mjs';
@@ -53,7 +54,9 @@ function previewContent({ thumbnailUrl, filename, photoWidth, photoHeight, sourc
 // Exact-coordinate stacks are grouped per FOTO layer (workspace and main map alike). In Edit mode the selected
 // occurrence is drawn by PhotoEditLayer instead; it still counts as a stack member and carries the stack badge
 // there, so no hidden member below it shows a second, smaller count.
-function markerModels(items, workspace, thumbnails) {
+// Delivery colours are the default everywhere. Outside the workspace each FOTO layer's saved delivery entries are read
+// once per session publish (mainDeliveries), never per marker; the workspace layer uses the workspace's own delivery.
+function markerModels(items, workspace, thumbnails, mainDeliveries) {
   const stacks = new Map();
   for (const item of items) {
     if (workspace && item.layerId !== workspace.layerId) continue;
@@ -77,13 +80,15 @@ function markerModels(items, workspace, thumbnails) {
     const members = stacks.get(stackKey) || null;
     const top = members && stackTop.get(stackKey);
     const selected = inWorkspace && photo.id === workspace.photoId;
-    // Delivery colours apply in every workspace mode (default «Leveringsvalg»). A drawn stack is coloured by all of its
-    // occurrences, so a mixed group never takes the colour of its top member; a hidden member keeps its own.
+    // Delivery colours apply in every mode and on the main map (default «Leveringsvalg»); only the FOTO workspace offers
+    // «Plasseringskilde», drawn from the original source (provenance), so a moved photo keeps its source colour.
+    // A drawn stack is coloured by all of its occurrences, so a mixed group never takes the colour of its top member.
+    const entries = inWorkspace ? workspace.delivery?.byPhotoId : mainDeliveries?.get(layerId);
     const options = {
-      sourceKind: photoPositionSourceKind(photo), selected,
-      colourMode: inWorkspace ? workspace.colourMode : 'provenance',
-      deliveryColourState: inWorkspace && members && top === photo ? photoStackDeliveryState(members, workspace.delivery?.byPhotoId) : null,
-      deliveryStatus: inWorkspace ? workspace.delivery?.byPhotoId[photo.id]?.status : null,
+      sourceKind: photoPositionProvenanceKind(photo), selected,
+      colourMode: inWorkspace ? workspace.colourMode : 'delivery',
+      deliveryColourState: entries && members && top === photo ? photoStackDeliveryState(members, entries) : null,
+      deliveryStatus: entries?.[photo.id]?.status || null,
       staged: Boolean(photo.staged),
       sibling: inWorkspace && !selected && Boolean(workspace.activeAssetId) && photo.assetId === workspace.activeAssetId,
       stackCount: top === photo ? members.length : 1, editing: false,
@@ -102,7 +107,8 @@ function markerModels(items, workspace, thumbnails) {
       interactive: !(workspace?.editing && !inWorkspace),
       stackIds: top === photo ? members.map((member) => member.id).join('\n') : '',
       thumbnailUrl: options.thumbnailUrl, filename: photo.originalFilename || 'Bilde', assetId: photo.assetId,
-      photoWidth: photo.dimensions?.width || 0, photoHeight: photo.dimensions?.height || 0, sourceKind: options.sourceKind,
+      // The hover preview keeps its accepted current-source dot.
+      photoWidth: photo.dimensions?.width || 0, photoHeight: photo.dimensions?.height || 0, sourceKind: photoPositionSourceKind(photo),
       // Main map: inspection only. A stack's popup pages through its members; it never edits.
       popupPhoto: inWorkspace || workspace?.editing ? null : photo,
       popupStack: !inWorkspace && !workspace?.editing && top === photo ? members : null }];
@@ -140,14 +146,14 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
   }, [popupWidth, popupHeight]);
   const position = useMemo(() => [lat, lng], [lat, lng]);
   const eventHandlers = useMemo(() => ({
-    // Workspace marker navigation only selects; destination controls live in the inspector.
-    click: () => { if (inWorkspace) actions.current.select(photoId, stackIds); },
+    // Workspace marker click selects and opens the persistent preview; it never changes delivery by itself.
+    click: () => { if (inWorkspace) actions.current.select(photoId, stackIds, { preview: true }); },
     popupopen: () => actions.current.clearPreview(),
     keydown: (event) => {
       if (!['Enter', ' '].includes(event.originalEvent?.key)) return;
       event.originalEvent.preventDefault();
       event.originalEvent.stopPropagation();
-      if (inWorkspace) actions.current.select(photoId, stackIds);
+      if (inWorkspace) actions.current.select(photoId, stackIds, { preview: true });
       else event.target.openPopup();
     },
   }), [actions, inWorkspace, photoId, stackIds]);
@@ -186,6 +192,41 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
   </Marker>;
 });
 
+// FOTO persistent preview at the selected occurrence. Closed by X or Escape (focus returns to its marker when it was
+// inside the map); no map click closes it. React Leaflet re-adds the same popup when it follows another marker, so
+// only a close from outside (another map popup opening, say) leaves it off the map; the open state then follows.
+function WorkspacePreviewPopup({ photo, lat, lng, mode, width, maxHeight, deliveryEntry, onCycleDelivery, onClose }) {
+  const map = useMap();
+  const popupRef = useRef(null);
+  const latest = useRef(onClose);
+  useEffect(() => { latest.current = onClose; });
+  const position = useMemo(() => [lat, lng], [lat, lng]);
+  const photoId = photo.id;
+  const close = useMemo(() => (restoreFocus) => {
+    latest.current();
+    if (restoreFocus) map.getContainer().querySelector(`.leaflet-photo-markers-pane [data-photo-id="${CSS.escape(photoId)}"]`)?.focus();
+  }, [map, photoId]);
+  const events = useMemo(() => ({ remove: () => setTimeout(() => {
+    const popup = popupRef.current;
+    if (popup && !map.hasLayer(popup)) latest.current();
+  }, 0) }), [map]);
+  useEffect(() => {
+    const escape = (event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || document.querySelector('dialog[open]')) return;
+      event.preventDefault();
+      close(map.getContainer().contains(document.activeElement));
+    };
+    document.addEventListener('keydown', escape);
+    return () => document.removeEventListener('keydown', escape);
+  }, [map, close]);
+  return <Popup ref={popupRef} position={position} pane="popupPane" className="photo-workspace-preview-popup" minWidth={width} maxWidth={width}
+    maxHeight={maxHeight} offset={[0, mode === 'thumbnails' ? -20 : -6]} closeButton={false} closeOnClick={false} closeOnEscapeKey={false}
+    autoPanPadding={[24, 24]} eventHandlers={events}>
+    <PhotoWorkspaceMapPreview photo={photo} deliveryEntry={deliveryEntry} onCycleDelivery={(id) => onCycleDelivery?.(id)}
+      onClose={() => close(true)} onLayout={() => popupRef.current?.update()} />
+  </Popup>;
+}
+
 // displayMode: the shared Markører/Miniatyrer preference. In the workspace it applies to the workspace layer;
 // on the main map to every visible FOTO layer, with the same zoom-16 fallback to ordinary markers.
 export default function PhotoMarkersLayer({ items, workspace = null, displayMode = 'markers', onOpenPhoto, onSelectPhoto }) {
@@ -194,8 +235,19 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
   const [mapSize, setMapSize] = useState(() => map.getSize());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()), resize: () => setMapSize(map.getSize()) });
   const thumbnails = photoThumbnailsVisible(workspace ? workspace.displayMode : displayMode, zoom);
-  const models = markerModels(items, workspace, thumbnails);
+  // items is rebuilt on every session publish, so the saved delivery entries are re-read exactly then.
+  const mainDeliveries = useMemo(() => new Map([...new Set(items.map((item) => item.layerId))]
+    .map((layerId) => [layerId, photoSession.getLayerDelivery(layerId)?.byPhotoId || null])), [items]);
+  const models = markerModels(items, workspace, thumbnails, mainDeliveries);
   const actions = useRef(null);
+  // FOTO persistent preview: open/closed only. It always shows the selected occurrence, so list, inspector and
+  // stack cycling stay the one selection. It closes with X, Escape, edit mode, a cleared selection or when the
+  // selected occurrence leaves the map (filter or delivery change); it never reopens by itself.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const previewModel = workspace && !workspace.editing && workspace.photoId
+    ? models.find((model) => model.inWorkspace && model.photoId === workspace.photoId) || null : null;
+  if (previewOpen && !previewModel) setPreviewOpen(false);
+  const previewPhoto = previewOpen && previewModel ? workspace.photos?.find((photo) => photo.id === previewModel.photoId) || null : null;
   const preview = useRef({ tooltip: null, timer: null, element: null, request: null });
 
   useEffect(() => {
@@ -221,11 +273,13 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
       });
     };
     actions.current = {
-      select: (photoId, stackIds) => {
+      select: (photoId, stackIds, { preview: withPreview = false } = {}) => {
         const members = stackIds ? stackIds.split('\n') : [];
         // Clicking a stack whose member is already active cycles through the identical coordinates.
         const index = members.indexOf(workspace?.photoId);
         onSelectPhoto?.(index >= 0 ? members[(index + 1) % members.length] : photoId);
+        // As with the main-map popups, the transient hover thumbnail gives way to the opened preview.
+        if (withPreview && !workspace?.editing) { actions.current.clearPreview(); setPreviewOpen(true); }
       },
       openPhoto: (layerId, photoId) => { map.closePopup(); onOpenPhoto?.(layerId, photoId); },
       schedulePreview: (target) => { clearTimeout(state.timer); state.timer = setTimeout(() => open(target), PREVIEW_DELAY_MS); },
@@ -257,6 +311,10 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
         {models.map(({ directionIcon, ...model }) => <PhotoMarker key={`${model.markerKey}:${model.interactive ? 'i' : 'n'}`} {...model}
           popupWidth={Math.min(340, Math.max(160, mapSize.x - 64))} popupHeight={Math.max(160, mapSize.y - 80)} actions={actions} />)}
       </Pane>
+      {previewPhoto && <WorkspacePreviewPopup photo={previewPhoto} lat={previewModel.lat} lng={previewModel.lng} mode={previewModel.mode}
+        width={Math.min(320, Math.max(160, mapSize.x - 64))} maxHeight={Math.max(160, mapSize.y - 80)}
+        deliveryEntry={workspace.delivery?.byPhotoId[previewPhoto.id] || null} onCycleDelivery={workspace.onToggleDelivery}
+        onClose={() => setPreviewOpen(false)} />}
     </>
   );
 }

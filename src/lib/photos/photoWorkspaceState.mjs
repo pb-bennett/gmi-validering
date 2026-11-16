@@ -9,7 +9,7 @@ export const emptyPhotoWorkspace = Object.freeze({ layerId: null, activePhotoId:
 
 const FILTER_PLACEMENTS = ['all', 'placed', 'unplaced', 'exif', 'gmi', 'gml', 'manual', 'unknown'];
 const FILTER_FLAGS = ['missingDirection', 'missingCaptureTime', 'repeated', 'changed'];
-const FILTER_DELIVERY = ['all', 'keep-link', 'transfer', 'include', 'exclude', 'not-selected', 'not-delivered', 'partial', 'review'];
+const FILTER_DELIVERY = ['all', 'keep-link', 'gml', 'transfer', 'include', 'exclude', 'not-selected', 'not-delivered', 'partial', 'review'];
 
 function normalizeFilter(filter, patch) {
   const next = { ...filter };

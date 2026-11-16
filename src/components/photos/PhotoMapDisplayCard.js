@@ -2,6 +2,7 @@
 
 import { CameraIcon, ImageSquareIcon } from '@phosphor-icons/react';
 import './photoTheme.css';
+import './photoWorkspace.css';
 import { PHOTO_DELIVERY_COLOURS, PHOTO_POSITION_SOURCES, PHOTO_THUMBNAIL_MIN_ZOOM, photoCameraGlyph, photoLegendArrow, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 
 const MODES = [['markers', 'Markører', CameraIcon], ['thumbnails', 'Miniatyrer', ImageSquareIcon]];
@@ -28,6 +29,15 @@ export function PhotoMapDisplayModes({ mode, onModeChange, zoom }) {
   </>;
 }
 
+// Delivery swatches drawn like the markers themselves; the FOTO card and the main-map legend share them.
+export function photoDeliveryLegendItems({ thumbnails = false, keys = Object.keys(PHOTO_DELIVERY_COLOURS) } = {}) {
+  return keys.map((key) => { const value = PHOTO_DELIVERY_COLOURS[key]; return <li key={key} data-legend-delivery={key}>
+    {thumbnails
+      ? <span className="photo-map-display-swatch"><span className="photo-source-dot" style={{ '--photo-source': value.color, borderStyle: key === 'mixed' ? 'dashed' : 'solid' }} /></span>
+      : <span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ size: 16, markerColor: value.color, mixedDelivery: key === 'mixed' }) }} />}
+    <span>{value.label}</span></li>; });
+}
+
 // Map-local display control and legend for the workspace FOTO layer. Colours default to delivery destination
 // (Leveringsvalg); Plasseringskilde restores the provenance palette. The swatches are drawn like the markers themselves.
 export default function PhotoMapDisplayCard({ mode, onModeChange, zoom, editing = false, colourMode = 'delivery', onColourModeChange }) {
@@ -49,11 +59,7 @@ export default function PhotoMapDisplayCard({ mode, onModeChange, zoom, editing 
               : <span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ sourceKind: kind, size: 16 }) }} />}
             <span>{label}</span>
           </li>
-        )) : Object.entries(PHOTO_DELIVERY_COLOURS).map(([key, value]) => <li key={key} data-legend-delivery={key}>
-          {thumbnails
-            ? <span className="photo-map-display-swatch"><span className="photo-source-dot" style={{ '--photo-source': value.color, borderStyle: key === 'mixed' ? 'dashed' : 'solid' }} /></span>
-            : <span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ size: 16, markerColor: value.color, mixedDelivery: key === 'mixed' }) }} />}
-          <span>{value.label}</span></li>)}
+        )) : photoDeliveryLegendItems({ thumbnails })}
         <li data-legend="direction"><span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoLegendArrow() }} /><span>Retning</span></li>
         <li data-legend="selected"><span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ sourceKind: 'unknown', size: 14, selected: true }) }} /><span>Valgt</span></li>
         <li data-legend="sibling"><span className="photo-map-display-swatch" dangerouslySetInnerHTML={{ __html: photoCameraGlyph({ sourceKind: 'unknown', size: 14, sibling: true }) }} /><span>Samme bilde</span></li>

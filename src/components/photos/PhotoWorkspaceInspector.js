@@ -7,7 +7,7 @@ import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPreviewMessage } from '@/lib/photos/imagePreview.mjs';
 import { exifGpsMessage } from '@/lib/photos/exifGps.mjs';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
-import { PHOTO_DELIVERY_COLOURS, photoPositionSourceKind, photoPositionSourcePresentation } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { PHOTO_DELIVERY_COLOURS, photoPositionAdjusted, photoPositionProvenanceKind, photoPositionSourcePresentation } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { photoDeliveryDestination, photoDeliveryStatusText } from '@/lib/photos/photoDeliveryChoice.mjs';
 import { photoPositionDistance } from '@/lib/photos/photoPositioning.mjs';
 import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
@@ -111,7 +111,9 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
     <Preview photo={null} />
   </section>;
   const current = photo.spatial.current, placed = isPhotoPosition(current?.position);
-  const source = photoPositionSourcePresentation(photoPositionSourceKind(photo));
+  // Provenance, like the list and «Plasseringskilde» on the map: a moved GMI point reads «GMI · justert», never «Manuell».
+  const source = photoPositionSourcePresentation(photoPositionProvenanceKind(photo));
+  const sourceLabel = `${source.label}${photoPositionAdjusted(photo) ? ' · justert' : ''}`;
   const basis = photo.spatial.candidates.find((candidate) => candidate.id === current?.basis?.candidateId);
   const direction = photo.direction?.current || null;
   const capture = photo.captureMetadata || {};
@@ -144,7 +146,7 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
     <Preview photo={photo} onOpenViewer={onOpenViewer} />
     <div className="photo-inspector-status-row">
       <ul className="photo-inspector-chips" aria-label="Oppsummering">
-        <li>{placed ? <><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />Plassert · {source.label}</> : 'Uplassert'}</li>
+        <li>{placed ? <><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />Plassert · {sourceLabel}</> : 'Uplassert'}</li>
         <li>{direction ? `Retning ${photoDirectionLabel(direction.degrees)}` : 'Uten retning'}</li>
         <li>{photoCaptureTimeStatus(photo)}</li>
         {editing && staged && <li className="photo-inspector-chip-staged">Endret – ikke lagret</li>}
@@ -194,7 +196,7 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
         <Disclosure id="placement-provenance" summary="Kilde, grunnlag og retning">
           <dl className="photo-inspector-facts">
             <Fact term="Status">{placed ? 'Plassert' : 'Uplassert'}</Fact>
-            {placed && <Fact term="Kilde"><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />{source.label}</Fact>}
+            {placed && <Fact term="Kilde"><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />{sourceLabel}</Fact>}
             {placed && <Fact term="Grunnlag">{photoPlacementBasisLabel(current)}{current.acceptedAt ? ` · ${formatTimestamp(current.acceptedAt)}` : ''}</Fact>}
             {basis?.sourceFilename && <Fact term="Kildefil"><span className="break-all">{basis.sourceFilename}</span></Fact>}
             <Fact term="Retning">{direction ? photoDirectionLabel(direction.degrees) : 'Ikke angitt'}</Fact>

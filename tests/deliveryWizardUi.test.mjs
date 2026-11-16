@@ -201,7 +201,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=gml]').click()`);
         await browser.waitFor(`${cycle(rows[1])}.dataset.destination === 'gml'`);
         assert.deepEqual(await pills(), ['GML', 'GML']);
-        await browser.waitFor(`${marker}.querySelector('.photo-camera-glyph path').getAttribute('fill') === '#22c55e'`);
+        await browser.waitFor(`${marker}.querySelector('.photo-camera-glyph path').getAttribute('fill') === '#4ade80'`);
         for (const expected of ['Ikke', 'GMI']) {
           await browser.evaluate(`${cycle(rows[1])}.focus()`);
           await key(' ', 'Space', 32);
@@ -236,7 +236,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await browser.waitFor(`${dialog}.querySelector('[data-package-path="Attachments/shared.jpg"]')`);
         assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').textContent`), 'GML');
         assert.deepEqual(await browser.evaluate(`(() => { const s=getComputedStyle(${dialog}.querySelector('.delivery-destination')); return [s.backgroundColor,s.color]; })()`),
-          ['rgb(22, 101, 52)', 'rgb(255, 255, 255)']);
+          ['rgb(74, 222, 128)', 'rgb(15, 23, 42)']); // Slice 2 palette: light GML fill, dark ink
         await assertPillFollowsName(browser);
         await screenshot(browser, 'polish-tree-expanded');
         await browser.evaluate(`${dialog}.querySelector('.delivery-tree input[type=checkbox]').click()`);

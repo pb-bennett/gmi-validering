@@ -12,7 +12,7 @@ import PhotoOccurrenceContext from './PhotoOccurrenceContext';
 import './photoWorkspace.css';
 
 // The thumbnail shows at once; the sharper preview replaces it, but only for the photo it was requested for.
-function useDisplayPreview({ assetId, preview }) {
+export function useDisplayPreview({ assetId, preview }) {
   const [loaded, setLoaded] = useState(null);
   const thumbnailUrl = preview.thumbnailUrl;
   useEffect(() => {

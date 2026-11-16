@@ -30,12 +30,24 @@ export function acceptPhotoCandidate(spatial, candidateId, acceptance = 'explici
   });
 }
 
-// Manual current is accepted working data, never source evidence or a fake candidate.
+// The kind of source the current position originally came from (exif/gmi/gml/...). A manual adjustment of a
+// sourced position keeps that origin; a photo placed by hand from scratch is 'manual'. Null when unplaced.
+export function photoPositionOriginKind(spatial) {
+  const current = spatial?.current;
+  if (!current) return null;
+  if (current.basis?.kind === 'candidate') return spatial.candidates?.find((item) => item.id === current.basis.candidateId)?.kind || 'unknown';
+  if (current.basis?.kind === 'manual') return current.origin || 'manual';
+  return current.basis?.kind || 'unknown';
+}
+
+// Manual current is accepted working data, never source evidence or a fake candidate. Its `origin` is provenance
+// only (presentation and filtering); it never feeds a position, export or delivery decision.
 export function acceptManualPhotoPosition(spatial, position, acceptedAt = Date.now()) {
   if (!isPhotoPosition(position)) return null;
+  const origin = photoPositionOriginKind(spatial);
   return Object.freeze({ ...spatial, current: immutable({
     position: { crs: 'EPSG:4326', longitude: position.longitude, latitude: position.latitude },
-    basis: { kind: 'manual' }, acceptance: 'manual', acceptedAt,
+    basis: { kind: 'manual' }, acceptance: 'manual', acceptedAt, ...(origin && origin !== 'manual' ? { origin } : {}),
   }) });
 }
 

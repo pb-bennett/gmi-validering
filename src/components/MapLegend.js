@@ -8,7 +8,8 @@ import useStore from '@/lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import { useMapPanePresentation } from './MapPanePresentationProvider';
 import usePhotoSession from './photos/usePhotoSession';
-import { PhotoMapDisplayModes } from './photos/PhotoMapDisplayCard';
+import { PhotoMapDisplayModes, photoDeliveryLegendItems } from './photos/PhotoMapDisplayCard';
+import { photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 
 /**
  * MapLegend — Floating legend overlay for the map
@@ -193,6 +194,10 @@ export default function MapLegend({ photoDisplay = null }) {
           {showPhotoModes && <section aria-label="Bilder på kartet" className={`photo-map-legend-photos px-1${hasVisibleLegend ? ' mb-3 border-b border-gmi-border pb-2' : ''}`} data-legend-photos>
             <div className="mb-1.5 text-xs font-semibold text-gmi-text-muted">Bilder</div>
             <PhotoMapDisplayModes mode={photoDisplay.mode} onModeChange={photoDisplay.onChange} zoom={photoDisplay.zoom} />
+            {/* Main-map photo markers are always coloured by delivery choice, like the FOTO default. */}
+            <ul className="photo-map-display-legend" aria-label="Leveringsvalg">
+              {photoDeliveryLegendItems({ thumbnails: photoThumbnailsVisible(photoDisplay.mode, photoDisplay.zoom), keys: ['gmi', 'gml', 'excluded', 'mixed'] })}
+            </ul>
           </section>}
           {hasVisibleLegend && <>
           <div className="mb-2 px-1 text-xs font-semibold text-gmi-text-muted">

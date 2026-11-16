@@ -106,7 +106,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
         assert(await noOverflow());
         await browser.evaluate('new Promise(resolve => setTimeout(resolve, 200))');
-        assert.deepEqual(await browser.evaluate(`(() => { const s=getComputedStyle(${option('excluded')}); return [s.backgroundColor,s.color]; })()`), ['rgb(100, 116, 139)', 'rgb(255, 255, 255)']);
+        assert.deepEqual(await browser.evaluate(`(() => { const s=getComputedStyle(${option('excluded')}); return [s.backgroundColor,s.color]; })()`), ['rgb(203, 213, 225)', 'rgb(15, 23, 42)']);
         await screenshot(browser, `slice1-partial-exclusion-${width}x${height}`);
       }
       await browser.evaluate(`${option('excluded')}.focus()`);
@@ -192,7 +192,7 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
         const styles = await browser.evaluate(`['gmi','gml'].map(key => {
           const e = document.querySelector('.photo-delivery-row-button[data-destination='+key+']');
           const s = getComputedStyle(e); return [s.backgroundColor,s.color]; })`);
-        assert.deepEqual(styles, [['rgb(30, 64, 175)', 'rgb(255, 255, 255)'], ['rgb(22, 101, 52)', 'rgb(255, 255, 255)']]);
+        assert.deepEqual(styles, [['rgb(96, 165, 250)', 'rgb(15, 23, 42)'], ['rgb(74, 222, 128)', 'rgb(15, 23, 42)']]);
         assert.deepEqual(await browser.evaluate(`(() => {const s=getComputedStyle(${option('gml')}); return [s.backgroundColor,s.color];})()`), styles[1]);
         await screenshot(browser, `sidebar-destinations-${width}x${height}`);
       }
@@ -208,10 +208,11 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       await select('Kum 1');
       await browser.evaluate('document.querySelector("button[aria-label^=\'Filtrer bilder\']").click()');
       await browser.waitFor('document.querySelector(".photo-filter-panel")');
-      const options = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-filter-panel fieldset')).find((item) => item.querySelector('legend').innerText==='Samlet levering').innerText`);
-      for (const label of ['Beholdes i GMI (2)', 'Overføres til GML (2)', 'Tas med uten GMI-lenke (1)', 'Ikke med i leveransen (0)', 'Ikke valgt (0)', 'Krever gjennomgang (0)']) assert(options.includes(label), label);
-      await browser.evaluate(`document.querySelector('.photo-filter-panel input[value="transfer"]').click()`);
-      await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 2');
+      const options = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-filter-panel fieldset')).find((item) => item.querySelector('legend').innerText==='Leveringsvalg').innerText`);
+      // Slice 2: destination choices like the pills; GML = 2 overføres + 1 uten lenke; «Gjennomgå» only while needed.
+      assert.deepEqual(options.split('\n').map((line) => line.trim()).filter(Boolean), ['Leveringsvalg', 'Alle (5)', 'GMI (2)', 'GML (3)', 'Ikke (0)', 'Delvis med (0)']);
+      await browser.evaluate(`document.querySelector('.photo-filter-panel input[value="gml"][name$="-delivery"]').click()`);
+      await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 3');
       await screenshot(browser, 'm8-filter-transfer');
       await browser.evaluate(`document.querySelector('.photo-filter-panel input[value="all"][name$="-delivery"]').click()`);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 5');

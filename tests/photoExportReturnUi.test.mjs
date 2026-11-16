@@ -741,7 +741,7 @@ layerTest('another tool ends the journey, only after the boundary, and nothing c
 
 layerTest('leaving FOTO, removing the layer and resetting the session clear the journey, and nothing reopens', async (browser, directory) => {
   const exit = () => clickSourceControl(browser, 'Lukk FOTO', 'document');
-  const openLayer = async () => { await browser.evaluate(`document.querySelector('button[aria-label^="Åpne bildemodul"]').click()`); await browser.waitFor(shell); };
+  const openLayer = async () => { await browser.evaluate(`document.querySelector('button[aria-label="Åpne FOTO"]').click()`); await browser.waitFor(shell); };
   const nothingOpen = async (context) => { await delay(300); assert.equal(await openDialogs(browser), 0, context); assert.equal(await browser.evaluate(`Boolean(${commandBar})`), false, context); };
 
   // Leaving from the hub. The hub is modal, so a person gets out through the map; the script covers the state itself.
@@ -830,7 +830,7 @@ for (const where of ['hub', 'map', 'positioning wizard']) for (const how of ['re
     await browser.waitFor(`Array.from(document.querySelectorAll('button')).some((item) => item.innerText.trim() === 'Fjern')`);
     await capture(`Array.from(document.querySelectorAll('button')).find((item) => item.innerText.trim() === 'Fjern')`, '__remove');
     await capture(`document.querySelector('[aria-label="Nullstill og åpne ny fil"]')`, '__reset');
-    await browser.evaluate(`document.querySelector('button[aria-label^="Åpne bildemodul"]').click()`);
+    await browser.evaluate(`document.querySelector('button[aria-label="Åpne FOTO"]').click()`);
     await browser.waitFor(shell);
 
     await openExport(browser);

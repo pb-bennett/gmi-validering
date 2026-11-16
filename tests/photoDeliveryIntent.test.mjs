@@ -281,11 +281,14 @@ test('workspace filter and counts by delivery status; occurrences and assets cou
   session.setDeliveryIntent(layer.id, [byObject(KUM1).id], 'transfer');
   session.setCombinedDeliveryInclusion(layer.id, [byName('d.jpg')[0].id], true);
   const view = (deliveryFilter) => photoWorkspaceView(photos(), { filter: { ...DEFAULT_PHOTO_FILTER, delivery: deliveryFilter } }, { delivery: delivery() });
-  assert.deepEqual(view('all').counts.delivery, { all: 5, 'keep-link': 3, transfer: 1, exclude: 0, include: 1, 'not-selected': 0, 'not-delivered': 0, partial: 0, review: 0 });
+  // Listed choices follow the destinations (GML = overføres + uten lenke); the finer statuses still filter exactly.
+  assert.deepEqual(view('all').counts.delivery, { all: 5, 'keep-link': 3, gml: 2, 'not-delivered': 0, partial: 0, review: 0 });
+  assert.equal(view('gml').rows.length, 2);
   assert.deepEqual(view('transfer').rows.map((photo) => photo.id), [byObject(KUM1).id]);
   assert.deepEqual(view('include').rows.map((photo) => photo.originalFilename), ['d.jpg']);
   assert.equal(view('keep-link').rows.length, 3);
-  assert.deepEqual(view('transfer').summary, ['Overføres til GML']);
+  assert.deepEqual(view('transfer').summary, ['Levering: Overføres til GML']);
+  assert.deepEqual(view('gml').summary, ['Levering: GML']);
   assert.equal(view('transfer').filterActive, true);
   // Without delivery entries only "all" matches (no accidental filtering elsewhere).
   assert.equal(photoWorkspaceView(photos(), { filter: DEFAULT_PHOTO_FILTER }).rows.length, 5);
@@ -365,7 +368,7 @@ test('exclusion is occurrence-scoped, reversible, counted and source preserving;
   assert.equal(f.delivery().summary.occurrences.exclude, 1);
   const view = photoWorkspaceView(f.photos(), { filter: { ...DEFAULT_PHOTO_FILTER, delivery: 'exclude' } }, { delivery: f.delivery() });
   assert.deepEqual(view.rows.map((photo) => photo.id), [a.id]);
-  assert.equal(view.counts.delivery.exclude, 1);
+  assert.equal(view.shownCount, 1);
   f.session.setDeliveryIntent(f.layer.id, [sibling.id, b.id], 'exclude');
   snap = f.session.getPhotoDeliverySnapshot(f.layer.id);
   assert.equal(snap.assetStates[a.assetId].status, 'partial', 'a line link still delivers the file');

@@ -1,9 +1,9 @@
-import { photoPositionSourceKind } from './photoMarkerPresentation.mjs';
+import { photoPositionProvenanceKind } from './photoMarkerPresentation.mjs';
 import { gmiObjectContext } from './photoImportOutcome.mjs';
 import { isPhotoPosition } from './photoSpatial.mjs';
 import { photoAssetSequence } from './photoStacks.mjs';
 import { DEFAULT_PHOTO_FILTER, DEFAULT_PHOTO_SORT, photoFilterIsDefault } from './photoWorkspaceState.mjs';
-import { PHOTO_DELIVERY_FILTERS } from './photoDeliveryIntent.mjs';
+import { PHOTO_DELIVERY_FILTERS, PHOTO_DELIVERY_STATUS_LABELS } from './photoDeliveryIntent.mjs';
 
 export const PHOTO_SORT_MODES = Object.freeze([
   Object.freeze({ key: 'filename-asc', label: 'Filnavn A–Å' }),
@@ -25,7 +25,8 @@ const collator = new Intl.Collator('nb', { numeric: true, sensitivity: 'base' })
 
 export const photoSortLabel = (key) => PHOTO_SORT_MODES.find((mode) => mode.key === key)?.label || PHOTO_SORT_MODES[0].label;
 export const photoIsPlaced = (photo) => isPhotoPosition(photo.spatial?.current?.position);
-export const photoPlacementKind = (photo) => photoIsPlaced(photo) ? photoPositionSourceKind(photo) : 'unplaced';
+// Position source (provenance), the same one «Farge etter: Plasseringskilde» shows: a moved GMI point stays GMI.
+export const photoPlacementKind = (photo) => photoIsPlaced(photo) ? photoPositionProvenanceKind(photo) : 'unplaced';
 export const photoIsRepeated = (photo) => (photo.repeatGroup?.occurrenceCount || 1) > 1 || (photo.repeatGroup?.referringObjectCount || 0) > 1;
 export const photoMissingDirection = (photo) => photoIsPlaced(photo) && photo.direction?.current == null;
 export const photoMissingCaptureTime = (photo) => photo.captureMetadata?.captureTime == null;
@@ -43,6 +44,7 @@ function matchesPlacement(photo, placement) {
 // Delivery status comes from the session's derived entries (M8); without them only "all" matches.
 const matchesDelivery = (photo, delivery, statuses, assets) => !delivery || delivery === 'all'
   || (delivery === 'not-delivered' ? ['exclude', 'not-selected'].includes(statuses?.[photo.id]?.status)
+    : delivery === 'gml' ? ['transfer', 'include'].includes(statuses?.[photo.id]?.status)
     : delivery === 'partial' ? assets?.[photo.assetId]?.status === 'partial' : statuses?.[photo.id]?.status === delivery);
 
 export function photoMatchesFilter(photo, filter, changedIds, deliveryStatuses = null, deliveryAssets = null) {
@@ -86,12 +88,19 @@ export function photoPlacementCounts(photos) {
   return counts;
 }
 
+const photoPlacementSummary = (key) => {
+  const label = PHOTO_PLACEMENT_FILTERS.find((item) => item.key === key)?.label;
+  return label && (['placed', 'unplaced'].includes(key) ? label : `Kilde: ${label}`);
+};
+
 export function photoFilterSummary(filter) {
   return [
-    filter.work?.label, filter.placement !== 'all' && PHOTO_PLACEMENT_FILTERS.find((item) => item.key === filter.placement)?.label,
+    filter.work?.label, filter.placement !== 'all' && photoPlacementSummary(filter.placement),
     filter.missingDirection && 'Mangler retning', filter.missingCaptureTime && 'Mangler opptakstid',
     filter.repeated && 'Flere plasseringer', filter.changed && 'Endret',
-    filter.delivery && filter.delivery !== 'all' && PHOTO_DELIVERY_FILTERS.find((item) => item.key === filter.delivery)?.label,
+    // Prefixed: «GMI» as a position source and «GMI» as a delivery destination must never read alike.
+    filter.delivery && filter.delivery !== 'all' && (PHOTO_DELIVERY_FILTERS.find((item) => item.key === filter.delivery)?.summary
+      || `Levering: ${PHOTO_DELIVERY_STATUS_LABELS[filter.delivery] || filter.delivery}`),
   ].filter(Boolean);
 }
 

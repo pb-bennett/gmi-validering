@@ -30,16 +30,17 @@ export const PHOTO_DELIVERY_STATUS = Object.freeze({
   REVIEW: 'review',
 });
 
+// The workspace filter speaks the destination vocabulary of the pills, markers and legend (GMI / GML / Ikke). Statuses
+// that share a destination are one choice: GML = overføres + tas med uten lenke, Ikke = ikke med + ikke valgt.
+// «Delvis med» finds shared photos with different choices; «Gjennomgå» appears only while something needs review.
+// The finer status keys stay valid filter values for programmatic use (photoWorkspaceState), they are just not listed.
 export const PHOTO_DELIVERY_FILTERS = Object.freeze([
   Object.freeze({ key: 'all', label: 'Alle' }),
-  Object.freeze({ key: 'keep-link', label: 'Beholdes i GMI' }),
-  Object.freeze({ key: 'transfer', label: 'Overføres til GML' }),
-  Object.freeze({ key: 'include', label: 'Tas med uten GMI-lenke' }),
-  Object.freeze({ key: 'exclude', label: 'Ikke med i leveransen' }),
-  Object.freeze({ key: 'not-selected', label: 'Ikke valgt' }),
-  Object.freeze({ key: 'not-delivered', label: 'Ikke med' }),
-  Object.freeze({ key: 'partial', label: 'Delvis med' }),
-  Object.freeze({ key: 'review', label: 'Krever gjennomgang' }),
+  Object.freeze({ key: 'keep-link', label: 'GMI', summary: 'Levering: GMI' }),
+  Object.freeze({ key: 'gml', label: 'GML', summary: 'Levering: GML' }),
+  Object.freeze({ key: 'not-delivered', label: 'Ikke', summary: 'Levering: Ikke' }),
+  Object.freeze({ key: 'partial', label: 'Delvis med', summary: 'Levering: delvis med' }),
+  Object.freeze({ key: 'review', label: 'Gjennomgå', summary: 'Levering: gjennomgå', optional: true }),
 ]);
 
 export const PHOTO_DELIVERY_STATUS_LABELS = Object.freeze({

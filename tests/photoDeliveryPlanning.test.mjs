@@ -5,7 +5,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { parseGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
-import { PHOTO_DELIVERY_COLOURS, PHOTO_POSITION_SOURCES, photoMarkerOptions, photoStackDeliveryState } from '../src/lib/photos/photoMarkerPresentation.mjs';
+import { PHOTO_DELIVERY_COLOURS, PHOTO_DELIVERY_INK, PHOTO_POSITION_SOURCES, photoMarkerOptions, photoStackDeliveryState } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { applyPhotoDeliveryChoice, photoDeliveryDestination, photoDeliveryDestinationCounts, photoDeliveryOptions, photoDeliveryShortLabel,
   photoDeliveryToggleTarget, photoDeliveryUnavailableReason, photoStackDeliverySummary, togglePhotoDelivery } from '../src/lib/photos/photoDeliveryChoice.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
@@ -164,22 +164,27 @@ const contrast = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((p
 test('the destination palette is shared, clearly distinguishable and readable', async () => {
   const css = await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8');
   const token = (name) => css.match(new RegExp(`--gmi-delivery-${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1]?.toLowerCase();
+  // Approved palette (2026-11-16): one set of light fills for markers, pills, controls and legends, with dark ink.
+  assert.deepEqual([token('gmi'), token('gml'), token('excluded'), token('ink')], ['#60a5fa', '#4ade80', '#cbd5e1', '#0f172a']);
   assert.equal(token('gmi'), PHOTO_DELIVERY_COLOURS.gmi.color, 'CSS token and marker colour are one palette');
-  assert.equal(token('gml-marker'), PHOTO_DELIVERY_COLOURS.gml.color);
-  assert.equal(token('gml'), '#166534');
-  assert.equal(token('gmi-ink'), '#ffffff');
-  assert.equal(token('gml-ink'), '#ffffff');
-  assert.equal(token('neutral'), PHOTO_DELIVERY_COLOURS.excluded.color);
+  assert.equal(token('gml'), PHOTO_DELIVERY_COLOURS.gml.color);
+  assert.equal(token('excluded'), PHOTO_DELIVERY_COLOURS.excluded.color);
+  assert.equal(token('ink'), PHOTO_DELIVERY_INK);
+  assert.equal(token('gml-marker'), undefined, 'no separate marker green any more');
+  for (const key of ['gmi', 'gml', 'excluded']) assert.match(css, new RegExp(`--gmi-delivery-${key}-ink:\\s*var\\(--gmi-delivery-ink\\)`));
   const { gmi, gml, excluded } = PHOTO_DELIVERY_COLOURS;
-  // Not a subtle hue difference: GMI and GML differ strongly in lightness too (the rejected pair was ~1.3:1).
-  assert(contrast(gmi.color, gml.color) >= 3.5, `GMI/GML lightness separation ${contrast(gmi.color, gml.color).toFixed(2)}`);
+  // Three destinations, each clearly different from the others (hue and lightness), never the replaced near-equal pair.
   assert(contrast('#2463b5', '#19785b') < 1.5, 'the replaced pair was nearly equal in lightness');
-  assert(contrast(gml.color, excluded.color) >= 2 && contrast(gmi.color, excluded.color) >= 1.5);
-  // Pill text on the filled destination colours (AA for small text).
-  assert(contrast(gmi.color, token('gmi-ink')) >= 4.5);
-  assert(contrast(token('gml'), token('gml-ink')) >= 4.5);
-  // Markers keep a white casing and dark outline, so both fills stay visible on light and dark map backgrounds.
-  for (const background of ['#ffffff', '#f2efe9', '#1f2937']) assert(Math.max(contrast(gmi.color, background), contrast(gml.color, background)) >= 3);
+  assert(contrast(gml.color, gmi.color) >= 1.4, `GMI/GML lightness separation ${contrast(gmi.color, gml.color).toFixed(2)}`);
+  assert(contrast(excluded.color, gmi.color) >= 1.6);
+  // Dark ink on every fill, AA for small text.
+  for (const fill of [gmi.color, gml.color, excluded.color]) assert(contrast(fill, PHOTO_DELIVERY_INK) >= 6, `${fill} ink ${contrast(fill, PHOTO_DELIVERY_INK).toFixed(2)}`);
+  // Light fills need an outline on light maps: markers keep a white casing plus a dark #172b3a outline that separates
+  // from light and dark map backgrounds, and the lens takes the dark ink.
+  for (const background of ['#ffffff', '#f2efe9']) assert(contrast('#172b3a', background) >= 3);
+  assert(contrast('#ffffff', '#1f2937') >= 3);
+  const marker = photoMarkerOptions('markers', { colourMode: 'delivery', deliveryStatus: 'keep-link' });
+  assert(marker.html.includes('stroke="#172b3a"') && marker.html.includes(`stroke="${PHOTO_DELIVERY_INK}"`));
   // Provenance mode keeps its accepted palette.
   assert.deepEqual(PHOTO_POSITION_SOURCES.map((source) => source.color), ['#19785b', '#2463b5', '#a03b82', '#b06a08']);
 });
@@ -194,7 +199,12 @@ test('UI source contract: direct delivery choices need no mode; the tree pill fo
   assert.match(collection, /onClick=\{\(\) => onSelect\(photo.id\)\}/);
   assert.match(collection, /!removal && destination && <PhotoDeliveryCycleButton/);
   assert.doesNotMatch(collection, /deliveryMode|photo-delivery-bar/);
-  assert.doesNotMatch(markers, /onToggleDelivery|deliveryWorkspace/);
+  // A marker click only selects (and opens the FOTO preview); delivery changes only through the preview's cycle pill.
+  assert.doesNotMatch(markers, /deliveryWorkspace/);
+  const markerClick = markers.split(/\r?\n/).find((line) => line.trim().startsWith('click: () =>'));
+  assert.match(markerClick, /actions\.current\.select\(photoId, stackIds, \{ preview: true \}\)/);
+  assert.doesNotMatch(markerClick, /Toggle|Delivery|cycle/i);
+  assert.match(markers, /onCycleDelivery=\{workspace\.onToggleDelivery\}/);
   assert.doesNotMatch(tools, /key: 'exclude'/);
   assert.doesNotMatch(collection, /PhotoExclusionActions|excludeIds|toggle-exclusion/);
   assert.doesNotMatch(state, /excludeIds/);
@@ -223,7 +233,7 @@ test('UI source contract: direct delivery choices need no mode; the tree pill fo
 });
 
 
-test('pills and selected destination controls share dark fills; marker green stays separate', async () => {
+test('pills, selected destination controls and the package tree share the delivery fills and ink', async () => {
   const css = await readFile(new URL('../src/components/photos/photoWorkspace.css', import.meta.url), 'utf8');
   const tree = await readFile(new URL('../src/components/delivery/deliveryWizard.css', import.meta.url), 'utf8');
   for (const [key, label] of [['gmi', 'GMI'], ['gml', 'GML']]) {
@@ -238,7 +248,11 @@ test('pills and selected destination controls share dark fills; marker green sta
   assert.match(css, /photo-delivery-row-button:hover:not\(\[aria-disabled\]\)/);
   assert.match(css, /photo-delivery-row-button\[aria-disabled\][^}]*border-style: dashed/);
   assert.match(tree, /linear-gradient\(90deg, var\(--gmi-delivery-gmi\) 0 50%, var\(--gmi-delivery-gml\) 50% 100%\)/);
-  assert(!css.includes('#22c55e') && !tree.includes('#22c55e'), 'bright green belongs to map presentation only');
+  for (const retired of ['#22c55e', '#1e40af', '#166534']) assert(!css.includes(retired) && !tree.includes(retired), `${retired} is retired`);
+  // Light fills are never used as text colour; hover keeps the dark ink.
+  assert.doesNotMatch(css, /color: var\(--gmi-delivery-(gmi|gml|excluded)\)/);
+  const excluded = css.slice(css.indexOf('.photo-delivery-pill[data-destination=excluded] {')).split('}')[0];
+  assert(excluded.includes('background: var(--gmi-delivery-excluded)') && excluded.includes('color: var(--gmi-delivery-excluded-ink)'));
 });
 
 

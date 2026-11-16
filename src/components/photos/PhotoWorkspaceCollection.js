@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowCounterClockwiseIcon, ArrowsDownUpIcon, EyeIcon, EyeSlashIcon, FunnelIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { normalizePhotoDirection, photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
-import { photoPositionSourceKind, photoPositionSourcePresentation } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { photoPositionAdjusted, photoPositionProvenanceKind, photoPositionSourcePresentation } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
 import { PHOTO_PLACEMENT_FILTERS, PHOTO_SORT_MODES, photoIsPlaced, photoSortLabel } from '@/lib/photos/photoWorkspaceView.mjs';
 import { PHOTO_DELIVERY_FILTERS, PHOTO_DELIVERY_STATUS_LABELS } from '@/lib/photos/photoDeliveryIntent.mjs';
@@ -23,7 +23,7 @@ export function photoRowLabel(photo, changed, deliveryStatus = null) {
   const placed = photoIsPlaced(photo);
   const degrees = photo.direction?.current?.degrees;
   const repeat = photo.repeatGroup?.occurrenceCount > 1 ? `, plassering ${photo.repeatGroup.occurrenceIndex} av ${photo.repeatGroup.occurrenceCount}` : '';
-  return `${photo.originalFilename}, ${placed ? `plassert, ${photoPositionSourcePresentation(photoPositionSourceKind(photo)).label}` : 'uplassert'}`
+  return `${photo.originalFilename}, ${placed ? `plassert, ${photoPositionSourcePresentation(photoPositionProvenanceKind(photo)).label}${photoPositionAdjusted(photo) ? ', justert' : ''}` : 'uplassert'}`
     + `${degrees != null ? `, retning ${normalizePhotoDirection(degrees)} grader` : ''}${repeat}${changed ? ', endret – ikke lagret' : ''}`
     + `${PHOTO_DELIVERY_STATUS_LABELS[deliveryStatus] ? `, levering: ${PHOTO_DELIVERY_STATUS_LABELS[deliveryStatus].toLowerCase()}` : ''}`;
 }
@@ -31,7 +31,9 @@ export function photoRowLabel(photo, changed, deliveryStatus = null) {
 // The destination pill follows the shared delivery palette on every row, in every mode: a plan, not an export.
 function PhotoRow({ photo, active, tabbable, changed, removal, removalSelected, deliveryEntry, onSelect, onPlan, onToggleRemoval, onKeyDown }) {
   const placed = photoIsPlaced(photo);
-  const source = photoPositionSourcePresentation(photoPositionSourceKind(photo));
+  // Provenance, like the map's «Plasseringskilde» colours and the filter: a moved GMI point reads «GMI · justert».
+  const source = photoPositionSourcePresentation(photoPositionProvenanceKind(photo));
+  const adjusted = photoPositionAdjusted(photo);
   const degrees = photo.direction?.current?.degrees;
   const repeated = photo.repeatGroup?.occurrenceCount > 1;
   const context = [photo.occurrence?.object ? gmiObjectContext(photo.occurrence.object) : null,
@@ -47,7 +49,7 @@ function PhotoRow({ photo, active, tabbable, changed, removal, removalSelected, 
       <span className="photo-workspace-row-text">
         <span className="photo-workspace-filename" title={photo.sourceRelativePath || photo.originalFilename}>{photo.originalFilename}</span>
         <span className="photo-workspace-status">
-          {placed ? <><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />{source.label}</> : <span className="photo-workspace-unplaced">Uplassert</span>}
+          {placed ? <><span className="photo-source-dot" style={{ background: source.color }} aria-hidden="true" />{source.label}{adjusted && ' · justert'}</> : <span className="photo-workspace-unplaced">Uplassert</span>}
           {degrees != null && <> · {photoDirectionLabel(degrees)}</>}
           {changed && <span className="photo-workspace-changed">Endret</span>}
           {destination && removal && <span className="photo-delivery-pill" data-destination={destination} data-delivery-status={deliveryEntry.status}
@@ -179,7 +181,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
         </span>
       </div>
       {filterOpen && <div id={filterId} className="photo-filter-panel gmi-elevated-surface">
-        <fieldset><legend>Plassering</legend>
+        <fieldset><legend>Plasseringskilde</legend>
           {placementOptions.map((item) => {
             const count = view.counts[item.key];
             return <label key={item.key} data-disabled={(!count && filter.placement !== item.key) || undefined}>
@@ -198,9 +200,10 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
           {filter.work && <label><input type="checkbox" checked onChange={() => setFilter({ work: null })} />{filter.work.label} ({filter.work.ids.size})</label>}
           {editing && <label><input type="checkbox" checked={filter.changed} onChange={(event) => setFilter({ changed: event.target.checked })} />Endret (ikke lagret) ({view.counts.changed})</label>}
         </fieldset>
-        {delivery && view.counts.delivery && <fieldset><legend>Samlet levering</legend>
+        {delivery && view.counts.delivery && <fieldset><legend>Leveringsvalg</legend>
           {PHOTO_DELIVERY_FILTERS.map((item) => {
             const count = view.counts.delivery[item.key], current = (filter.delivery || 'all') === item.key;
+            if (item.optional && !count && !current) return null;
             return <label key={item.key} data-disabled={(!count && !current) || undefined}>
               <input type="radio" name={`${filterId}-delivery`} value={item.key} checked={current}
                 disabled={!count && !current && item.key !== 'all'} onChange={() => setFilter({ delivery: item.key })} />

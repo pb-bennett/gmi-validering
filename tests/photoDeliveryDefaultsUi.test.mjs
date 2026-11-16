@@ -55,7 +55,7 @@ test('FOTO delivery defaults: GML round trip, move away from GMI point, immediat
     }
     await browser.evaluate(`document.querySelector('.photo-filter-panel input[value="${key}"][name$="-delivery"]').click()`);
   };
-  const deliveryOptions = () => browser.evaluate(`Array.from(document.querySelectorAll('.photo-filter-panel fieldset')).find((item) => item.querySelector('legend').innerText==='Samlet levering').innerText`);
+  const deliveryOptions = () => browser.evaluate(`Array.from(document.querySelectorAll('.photo-filter-panel fieldset')).find((item) => item.querySelector('legend').innerText==='Leveringsvalg').innerText`);
   try {
     await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
     await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'localStorage.clear();' });
@@ -90,13 +90,14 @@ test('FOTO delivery defaults: GML round trip, move away from GMI point, immediat
     const kum1 = await browser.evaluate(`${rowOf('Kum 1')}.dataset.photoId`);
     await filterDelivery('keep-link');
     await browser.waitFor(`${rows}.length === 5`);
-    assert((await deliveryOptions()).includes('Beholdes i GMI (5)'));
+    assert((await deliveryOptions()).includes('GMI (5)'));
     await browser.evaluate(`${rowOf('Kum 1')}.querySelector('.photo-delivery-row-button').click()`);
     await browser.waitFor(`${rows}.length === 4`);
     assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-workspace-pinned-heading"))'), false, 'no «Valgt bilde (skjult av filteret)»');
     assert.equal(await browser.evaluate(`Boolean(${rowOf('Kum 1')})`), false);
-    assert((await deliveryOptions()).includes('Beholdes i GMI (4)'));
-    assert((await deliveryOptions()).includes('Overføres til GML (1)'));
+    assert((await deliveryOptions()).includes('GMI (4)'));
+    // Slice 2: one GML choice for both GML statuses (9 tas med uten lenke + 1 overføres).
+    assert((await deliveryOptions()).includes('GML (10)'));
     assert.equal((await markerIds()).includes(kum1), false, 'the map follows the list');
     assert.equal(await browser.evaluate(`${section}.dataset.deliveryStatus`), 'transfer', 'still selected in the inspector');
     await screenshot(browser, 'defaults-filter-left-1366x768');

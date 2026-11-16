@@ -444,7 +444,7 @@ layerTest('layer switching, deletion and reset end the handoff without reopening
   assert.equal(await browser.evaluate(`Boolean(document.querySelector('.photo-completion-dialog'))`), false);
 
   // The other layer opens clean, with its own data.
-  await browser.evaluate(`document.querySelector('button[aria-label^="Åpne bildemodul"]').click()`);
+  await browser.evaluate(`document.querySelector('button[aria-label="Åpne FOTO"]').click()`);
   await browser.waitFor(shell);
   await settle();
   assert.equal(await browser.evaluate(`Boolean(${commandBar}) || Boolean(document.querySelector('.photo-completion-dialog'))`), false);
@@ -464,7 +464,7 @@ layerTest('layer switching, deletion and reset end the handoff without reopening
   await browser.waitFor(`document.querySelectorAll('button[aria-label^="Fjern fotokartlag"]').length === 1`);
   assert.equal(await browser.evaluate(`Boolean(document.querySelector('.photo-completion-dialog'))`), false);
 
-  await browser.evaluate(`document.querySelector('button[aria-label^="Åpne bildemodul"]').click()`);
+  await browser.evaluate(`document.querySelector('button[aria-label="Åpne FOTO"]').click()`);
   await browser.waitFor(shell);
   await startDirection(browser);
   await exit();

@@ -145,7 +145,7 @@ test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, stag
       await assertHeading(90, false);
       await saveEdits(browser);
       assert.equal(await accepted(), '90° Ø'); assert.notEqual(await position(), originalPosition);
-      assert.equal(await browser.evaluate(fact('Kilde')), 'Manuell');
+      assert.equal(await browser.evaluate(fact('Kilde')), 'GML · justert'); // Slice 2: a manual adjustment keeps the original source (provenance)
       const activeFilename = await browser.evaluate(`${inspector}.querySelector('h2').innerText`);
       await applyPhotoSourcePositions(browser, 'gml', { filename: activeFilename }); assert.equal(await position(), originalPosition); assert.equal(await accepted(), '90° Ø');
       await applyPhotoSourcePositions(browser, 'exif', { filename: activeFilename }); assert.equal(await accepted(), '90° Ø'); assert.deepEqual(await evidence(), originalEvidence);

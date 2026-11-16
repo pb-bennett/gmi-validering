@@ -77,11 +77,11 @@ test('Direct delivery cycle: equal badges, canonical inspector sync, shared plac
       for (const [width, height] of [[1280, 720], [1366, 768]]) {
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
         const styles = [];
-        for (const [label, destination, colour] of [['GMI','gmi','rgb(30, 64, 175)'], ['GML','gml','rgb(22, 101, 52)'], ['Ikke','excluded','rgb(100, 116, 139)']]) {
+        for (const [label, destination, colour] of [['GMI','gmi','rgb(96, 165, 250)'], ['GML','gml','rgb(74, 222, 128)'], ['Ikke','excluded','rgb(203, 213, 225)']]) {
           await browser.waitFor(`${pill(a)}.innerText === ${JSON.stringify(label)}`);
           assert.equal(await browser.evaluate(`${inspectorChoice(destination)}.getAttribute('aria-checked')`), 'true');
           const css = await browser.evaluate(`(() => {const e=${button(a)},s=getComputedStyle(e),r=e.getBoundingClientRect();return {width:r.width,height:r.height,radius:s.borderRadius,font:s.fontSize,weight:s.fontWeight,padding:s.padding,align:s.textAlign,display:s.display,background:s.backgroundColor,color:s.color};})()`);
-          assert.equal(css.background, colour); assert.equal(css.color, 'rgb(255, 255, 255)');
+          assert.equal(css.background, colour); assert.equal(css.color, 'rgb(15, 23, 42)');
           const {background, color, ...geometry} = css; styles.push(geometry);
           assert.match(await browser.evaluate(`${button(a)}.getAttribute('aria-label')`), /Bare denne plasseringen endres/);
           await browser.evaluate(`${row(a)}.querySelector('.photo-workspace-row').focus()`);

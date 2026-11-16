@@ -2224,7 +2224,8 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       <PhotoMarkersLayer items={photoItems} onOpenPhoto={onOpenPhoto} workspace={photoWorkspace} displayMode={photoDisplay?.mode} onSelectPhoto={onSelectPhoto} />
       {photoEdit && <PhotoEditLayer photo={photoEdit.photo} displayMode={photoWorkspace?.displayMode} connectors={photoEdit.connectors}
         stackIds={photoEdit.stackIds} onSelectPhoto={onSelectPhoto} clickMove={photoEdit.clickMove} onClickMoveEnd={photoEdit.onClickMoveEnd}
-        onStage={photoEdit.onStage} onAnnounce={photoEdit.onAnnounce} centerRef={photoEdit.centerRef} />}
+        onStage={photoEdit.onStage} onAnnounce={photoEdit.onAnnounce} centerRef={photoEdit.centerRef}
+        colourMode={photoWorkspace?.colourMode} delivery={photoWorkspace?.delivery} />}
       <LayersControl
         key={`layers-control-${customWmsConfig?.url ?? 'none'}`}
         position="topright"

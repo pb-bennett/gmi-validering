@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Marker, Pane, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { normalizePhotoDirection, photoDirectionLabel, photoDirectionSpokenLabel } from '@/lib/photos/photoDirection.mjs';
-import { photoPositionSourceKind, photoThumbnailsVisible, PHOTO_STAGED_COLOR } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { photoPositionProvenanceKind, photoThumbnailsVisible, PHOTO_STAGED_COLOR } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { photoPositionDistance } from '@/lib/photos/photoPositioning.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { formatPhotoMoveDistance } from '@/lib/photos/photoPresentation.mjs';
@@ -222,12 +222,14 @@ function RotationKnob({ photoId, filename, lat, lng, degrees, innerRadius, onSta
 // same drag lifecycle (drag, Escape, and the reset after every gesture), so it never stays behind at the old spot.
 // A plain click (no drag) on a stacked selection selects the next occurrence at the same coordinates,
 // exactly like stack cycling outside Edit mode; it never moves anything.
-function EditableMarker({ photo, mode, stackIds = [], onSelectPhoto, onStage, onAnnounce, knobApi, connectorRef }) {
+// The edit target keeps the active colour mode: its delivery colour (including an unsaved GML proposal) or its original
+// position source. Selection and editing are shown by size, ring and the staged dot, never by another fill colour.
+function EditableMarker({ photo, mode, stackIds = [], colourMode = 'delivery', deliveryStatus = null, onSelectPhoto, onStage, onAnnounce, knobApi, connectorRef }) {
   const map = useMap();
   const ref = useRef(null);
   const { latitude: lat, longitude: lng } = photo.spatial.current.position;
   const savedPosition = photo.saved ? photo.saved.current?.position : photo.spatial.current.position;
-  const icon = photoMarkerIcon(mode, { sourceKind: photoPositionSourceKind(photo), selected: true,
+  const icon = photoMarkerIcon(mode, { sourceKind: photoPositionProvenanceKind(photo), selected: true, colourMode, deliveryStatus,
     staged: Boolean(photo.staged), editing: true, thumbnailUrl: photo.preview?.thumbnailUrl || null, stackCount: stackIds.length });
   const directionIcon = photoDirectionIcon(mode, { degrees: photo.direction?.current?.degrees ?? null, directionStaged: Boolean(photo.staged?.direction),
     selected: true, editing: true });
@@ -323,7 +325,7 @@ function EditableMarker({ photo, mode, stackIds = [], onSelectPhoto, onStage, on
 }
 
 export default function PhotoEditLayer({ photo, displayMode, connectors = [], stackIds = [], onSelectPhoto, clickMove = false, onClickMoveEnd,
-  onStage, onAnnounce, centerRef }) {
+  onStage, onAnnounce, centerRef, colourMode = 'delivery', delivery = null }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
@@ -347,7 +349,8 @@ export default function PhotoEditLayer({ photo, displayMode, connectors = [], st
     <PlacementCapture active={Boolean(photo) && (!placed || clickMove)} throughMarkers={placed && clickMove}
       onPlace={(position) => { onStage(photo.id, 'position', position); if (clickMove) onClickMoveEnd?.(); }}
       onCancel={() => { onClickMoveEnd?.(); onAnnounce?.('Flytting med klikk ble avbrutt'); }} />
-    {placed && <EditableMarker key={photo.id} photo={photo} mode={mode} stackIds={stackIds} onSelectPhoto={onSelectPhoto} onStage={onStage} onAnnounce={onAnnounce}
+    {placed && <EditableMarker key={photo.id} photo={photo} mode={mode} stackIds={stackIds} colourMode={colourMode}
+      deliveryStatus={delivery?.byPhotoId[photo.id]?.status || null} onSelectPhoto={onSelectPhoto} onStage={onStage} onAnnounce={onAnnounce}
       knobApi={knobApi} connectorRef={connectorRef} />}
     {placed && <RotationKnob key={`knob:${photo.id}`} photoId={photo.id} filename={photo.originalFilename || 'Bilde'} lat={current.latitude} lng={current.longitude}
       degrees={photo.direction?.current?.degrees ?? null} innerRadius={mode === 'thumbnails' ? 26 : 14} onStage={onStage} onAnnounce={onAnnounce} apiRef={knobApi} />}

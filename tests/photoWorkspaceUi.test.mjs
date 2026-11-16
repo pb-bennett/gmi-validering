@@ -167,7 +167,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       const locations = await browser.evaluate('new Set(Array.from(document.querySelectorAll(".photo-camera-marker")).map(e => e.style.transform)).size');
       assert(locations > 120 && locations <= 136); await browser.waitFor(`${originalCount} === 0`);
       await screenshot('photo-workspace-normal-map'); checks.push(`148 markers, ${locations} rounded pixel locations; 136 geographic positions checked independently`);
-      await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+      await click('Åpne FOTO'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list img").length === 148');
       await browser.waitFor(`${originalCount} === 1`);
       assert.equal(await browser.evaluate(collectionCount), 148); assert(await browser.evaluate(current('GML')));

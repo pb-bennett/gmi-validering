@@ -203,15 +203,16 @@
   --gmi-brand-cyan: #53EAFD;
   --gmi-cyan-soft: #CEFAFE;
   --gmi-interactive: #007595;
-  /* FOTO delivery palette: dark blue/green pills with white text. Small map markers retain vivid green.
-     Marker colours are mirrored in PHOTO_DELIVERY_COLOURS (photoMarkerPresentation.mjs); tests keep them equal. */
-  --gmi-delivery-gmi: #1e40af;
-  --gmi-delivery-gmi-ink: #ffffff;
-  --gmi-delivery-gmi-soft: #dbeafe;
-  --gmi-delivery-gml: #166534;
-  --gmi-delivery-gml-marker: #22c55e;
-  --gmi-delivery-gml-ink: #ffffff;
-  --gmi-delivery-gml-soft: #dcfce7;
+  /* FOTO delivery palette (approved 2026-11-16): one light fill per destination for map markers, pills, controls
+     and legends, always with dark ink. Mirrored in PHOTO_DELIVERY_COLOURS (photoMarkerPresentation.mjs); tests keep
+     them equal. Edges are derived from fill and ink with color-mix (photoWorkspace.css), never a further colour. */
+  --gmi-delivery-gmi: #60a5fa;
+  --gmi-delivery-gml: #4ade80;
+  --gmi-delivery-excluded: #cbd5e1;
+  --gmi-delivery-ink: #0f172a;
+  --gmi-delivery-gmi-ink: var(--gmi-delivery-ink);
+  --gmi-delivery-gml-ink: var(--gmi-delivery-ink);
+  --gmi-delivery-excluded-ink: var(--gmi-delivery-ink);
   --gmi-delivery-neutral: #64748b;
 }
 

@@ -278,7 +278,7 @@ test('Pass 1D: source dots, dark previews, display-sized images, Save button sta
         await wait(800);
         const dots = await browser.evaluate(`Array.from(document.querySelectorAll('.photo-thumb-marker')).map((e) => { const dot = e.querySelector('.photo-thumb-source'), box = dot.getBoundingClientRect(), thumb = e.querySelector('.photo-thumb').getBoundingClientRect();
           return { width: box.width, radius: getComputedStyle(dot).borderTopLeftRadius, label: dot.getAttribute('aria-label'), onCorner: Math.abs(box.left - thumb.left) <= 2 && Math.abs(box.bottom - thumb.bottom) <= 2, glyph: Boolean(e.querySelector('.photo-source-glyph')) }; })`);
-        assert(dots.every((dot) => dot.width >= 6 && dot.width <= 8 && dot.radius === '999px' && dot.onCorner && !dot.glyph && dot.label === 'Plassering fra GMI'), JSON.stringify(dots[0]));
+        assert(dots.every((dot) => dot.width >= 6 && dot.width <= 8 && dot.radius === '999px' && dot.onCorner && !dot.glyph && dot.label === 'Planlagt: Beholdes i GMI'), JSON.stringify(dots[0])); // Slice 2: the main map shows delivery choice
         assert.equal(await browser.evaluate('document.querySelector(".photo-marker-stack").innerText'), '4');
         const separate = await browser.evaluate(`(() => { const e = document.querySelector('.photo-marker-stack').closest('.leaflet-marker-icon'), a = e.querySelector('.photo-thumb-source').getBoundingClientRect(), b = e.querySelector('.photo-marker-stack').getBoundingClientRect(); return a.right <= b.left && a.top >= b.bottom; })()`);
         assert(separate, 'dot and count sit in opposite corners');
@@ -490,7 +490,7 @@ test('Pass 1D: source dots, dark previews, display-sized images, Save button sta
         await browser.waitFor(`${overlay}?.dataset.tone !== 'refused' && ${overlay}`);
         await drag('drop', map, [fixtures.second, fixtures.photo, fixtures.gmi]); await wait(500);
         assert.equal((await state()).reads, reads + 1, 'global handler does not import the later supported or unsupported files');
-        await browser.evaluate(`Array.from(document.querySelectorAll('button')).find(e => e.getAttribute('aria-label')?.startsWith('Åpne bildemodul for ')).click()`);
+        await browser.evaluate(`document.querySelector('button[aria-label="Åpne FOTO"]').click()`);
         await browser.waitFor('document.querySelector(".photo-workspace-shell")');
         const rows = await browser.evaluate('Array.from(document.querySelectorAll(".photo-workspace-list li[data-photo-id]")).map(e => e.dataset.photoId).sort()');
         assert.deepEqual(rows, Object.values(ids).sort(), 'all in-memory photos and layer membership survived');

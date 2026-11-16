@@ -254,7 +254,7 @@ test('delivery filters drop a selected photograph that no longer matches, from t
   assert.equal(after.pinned, null, 'not presented in the pinned selected section');
   assert.equal(after.visibleIds.has(kum1.id), false, 'not kept on the map either');
   assert.equal(after.counts.delivery['keep-link'], 4);
-  assert.equal(after.counts.delivery.transfer, 1);
+  assert.equal(after.counts.delivery.gml, 1);
   // Other criteria still pin the selection, as before.
   const placement = photoWorkspaceView(photos(), { activePhotoId: kum1.id, filter: { ...DEFAULT_PHOTO_FILTER, placement: 'unplaced' } }, { delivery: delivery() });
   assert.equal(placement.pinned?.id, kum1.id);

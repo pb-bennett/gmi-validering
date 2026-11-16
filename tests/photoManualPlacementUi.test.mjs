@@ -138,7 +138,7 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
       await click('Lukk FOTO'); await browser.waitFor(boundary);
       await click('Forkast endringer','document.querySelector(".photo-edit-boundary")');
       await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
-      await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+      await click('Åpne FOTO'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       assert.equal(await browser.evaluate(markerCount),1,'discarded placement never reached canonical state');
       await deleteLayer(); assert.equal(await browser.evaluate('window.__originalUrls.size'),0);
 

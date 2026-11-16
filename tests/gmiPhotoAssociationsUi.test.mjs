@@ -160,7 +160,7 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
       await browser.waitFor('document.querySelector("[data-edit-count]")');
       await browser.evaluate(`${editTarget}.focus()`);
       await pressKey(browser, 'ArrowRight', KEYS.ArrowRight);
-      await saveEdits(browser); await browser.waitFor(currentSource('Manuell'));
+      await saveEdits(browser); await browser.waitFor(currentSource('GML · justert')); // Slice 2: a manual adjustment keeps the original source (provenance)
       assert.equal(await browser.evaluate(fact('Retning')), '123° SØ');
       assert.equal(await browser.evaluate(linkCount), 2);
       await browser.evaluate('document.querySelector(".photo-preview-open").click()'); await browser.waitFor('document.querySelector(".photo-image-viewer[open]")');

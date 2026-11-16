@@ -1,4 +1,5 @@
 import { normalizePhotoDirection } from './photoDirection.mjs';
+import { photoPositionOriginKind } from './photoSpatial.mjs';
 
 export const PHOTO_POSITION_SOURCES = Object.freeze([
   Object.freeze({ kind: 'exif', label: 'EXIF', color: '#19785b' }),
@@ -31,6 +32,14 @@ export function photoPositionSourceKind(photo) {
   return photoPositionSourcePresentation(kind).kind;
 }
 
+// Provenance: where the position originally came from. A later manual adjustment (drag, keyboard, click move) keeps
+// it, so «Farge etter: Plasseringskilde», its legend and the placement filter never turn a moved GMI/GML/EXIF point
+// into «Manuell». Only a photo placed by hand from scratch is «Manuell».
+export function photoPositionProvenanceKind(photo) {
+  return photoPositionSourcePresentation(photoPositionOriginKind(photo?.spatial)).kind;
+}
+export const photoPositionAdjusted = (photo) => photo?.spatial?.current?.basis?.kind === 'manual' && photoPositionProvenanceKind(photo) !== 'manual';
+
 const escapeHtml = (value) => String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // Map icons only ever reuse session-owned derived thumbnails, never another URL scheme.
 const safeThumbnailUrl = (url) => typeof url === 'string' && /^(blob:|data:image\/)/.test(url) ? url : null;
@@ -38,9 +47,11 @@ const safeThumbnailUrl = (url) => typeof url === 'string' && /^(blob:|data:image
 export function photoCameraGlyph({ sourceKind = 'unknown', size = 16, selected = false, sibling = false, markerColor = null, mixedDelivery = false } = {}) {
   const source = photoPositionSourcePresentation(sourceKind);
   const color = markerColor || source.color;
+  // Delivery fills are light: the lens takes the dark delivery ink, provenance fills keep the white lens.
+  const lens = markerColor ? PHOTO_DELIVERY_INK : 'white';
   const ring = selected ? '<circle cx="12" cy="12" r="14" fill="none" stroke="white" stroke-width="4"/><circle cx="12" cy="12" r="14" fill="none" stroke="#172b3a" stroke-width="2"/>'
     : sibling ? `<circle class="photo-sibling-ring" cx="12" cy="12" r="14" fill="none" stroke="white" stroke-width="3"/><circle cx="12" cy="12" r="14" fill="none" stroke="${PHOTO_SIBLING_COLOR}" stroke-width="1.5" stroke-dasharray="3 2.5"/>` : '';
-  return `<svg class="photo-camera-glyph" data-position-source="${source.kind}" aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-linejoin="round">${ring}<path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${color}" stroke="white" stroke-width="4"/><path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${color}" stroke="#172b3a" stroke-width="1.5"${mixedDelivery ? ' stroke-dasharray="2 2"' : ''}/><circle cx="12" cy="13" r="3.5" fill="none" stroke="white" stroke-width="2"/></svg>`;
+  return `<svg class="photo-camera-glyph" data-position-source="${source.kind}" aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-linejoin="round">${ring}<path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${color}" stroke="white" stroke-width="4"/><path d="M3 7h4l2-3h6l2 3h4v13H3z" fill="${color}" stroke="#172b3a" stroke-width="1.5"${mixedDelivery ? ' stroke-dasharray="2 2"' : ''}/><circle cx="12" cy="13" r="3.5" fill="none" stroke="${lens}" stroke-width="2"/></svg>`;
 }
 
 // How far the drawn marker reaches from its anchor, in px, at a heading. The arrow starts behind the marker and its tip clears
@@ -110,12 +121,14 @@ export function photoSourceGlyph(kind, size = 13) {
 }
 
 const stagedDot = (staged) => staged ? '<span class="photo-marker-staged-dot" aria-hidden="true"></span>' : '';
-// Delivery destinations, the default FOTO workspace colouring. GMI deep blue and GML bright green differ strongly in
-// lightness, not only hue. Mirrors the --gmi-delivery-* tokens in globals.css (kept equal by a test).
+// Delivery destinations, the default marker colouring everywhere (FOTO and the main map). One approved light palette
+// with dark ink; markers keep their white casing and dark outline, so the light fills read on any background.
+// Mirrors the --gmi-delivery-* tokens in globals.css (kept equal by a test).
+export const PHOTO_DELIVERY_INK = '#0f172a';
 export const PHOTO_DELIVERY_COLOURS = Object.freeze({
-  gmi: Object.freeze({ color: '#1e40af', label: 'Beholdes i GMI', short: 'GMI' }),
-  gml: Object.freeze({ color: '#22c55e', label: 'Til GML', short: 'GML' }),
-  excluded: Object.freeze({ color: '#64748b', label: 'Ikke med i leveransen', short: 'Ikke' }),
+  gmi: Object.freeze({ color: '#60a5fa', label: 'Beholdes i GMI', short: 'GMI' }),
+  gml: Object.freeze({ color: '#4ade80', label: 'Til GML', short: 'GML' }),
+  excluded: Object.freeze({ color: '#cbd5e1', label: 'Ikke med i leveransen', short: 'Ikke' }),
   review: Object.freeze({ color: '#b06a08', label: 'Krever gjennomgang', short: 'Gjennomg\u00e5' }),
   mixed: Object.freeze({ color: '#64748b', label: 'Ulike leveringsvalg', short: 'Ulike' }),
 });

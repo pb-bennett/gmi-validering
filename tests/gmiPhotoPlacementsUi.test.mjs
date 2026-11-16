@@ -104,7 +104,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await browser.evaluate('window.confirm = () => true');
       await setPhotoFiles(browser, 'input[type=file]', [sourceFile]);
       await browser.waitFor('document.body.innerText.includes("points-and-lines")');
-      await click(browser, 'Bildemodul', 'document');
+      await click(browser, 'Åpne FOTO', 'document');
       await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       assert(await browser.evaluate(`(() => {
         const pane=document.querySelector('.leaflet-photo-markers-pane'), survey=document.querySelector('.leaflet-marker-pane');
@@ -155,7 +155,7 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await pressKey(browser, 'Enter', KEYS.Enter);
       await browser.waitFor(`${editArrow}?.dataset.degrees === "75"`);
       await saveEdits(browser);
-      assert.equal(await browser.evaluate(fact('Kilde')), 'Manuell');
+      assert.equal(await browser.evaluate(fact('Kilde')), 'GMI · justert'); // Slice 2: a manual adjustment keeps the original source (provenance)
       await select(a);
       assert.equal(await positionText(), aPosition);
       assert.equal(await browser.evaluate(fact('Retning')), '0° N', 'its own default, untouched by the other occurrence');

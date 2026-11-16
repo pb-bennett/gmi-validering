@@ -429,7 +429,7 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         assert.equal(exceptions().length, 0, JSON.stringify(exceptions().map((event) => event.params.exceptionDetails.text)));
       });
       await t.test('Pass 1C: real six-photo stacks carry each provenance badge in both map surfaces', async () => {
-        await clickText(browser, 'Bildemodul');
+        await clickText(browser, 'Åpne FOTO');
         await browser.waitFor(inspector);
         const verify = async (kind) => {
           await selectPhotoRow(browser, ids['stack-1.png']);
@@ -445,7 +445,7 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
           await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
           assert.equal(await browser.evaluate('document.querySelector(".photo-marker-stack").closest(".leaflet-marker-icon").querySelector(".photo-thumb").dataset.positionSource'), kind);
           await screenshot(`pass1c-stack-${kind}-main`);
-          await clickText(browser, 'Bildemodul');
+          await clickText(browser, 'Åpne FOTO');
           await browser.waitFor(inspector);
         };
         await verify('gmi');
@@ -464,7 +464,7 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         }
         assert.equal(await browser.evaluate(editCount()), 6);
         await saveEdits(browser);
-        await verify('manual');
+        await verify('gml'); // Slice 2: a manual adjustment keeps the original source (provenance)
         assert.equal(exceptions().length, 0);
       });
     } finally {

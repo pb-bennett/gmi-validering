@@ -64,9 +64,14 @@
 /* Destination pill: fully rounded, compact; one look everywhere. */
 .photo-delivery-pill { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 44px; height: 22px; flex-shrink: 0; margin-left: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--gmi-delivery-neutral); background: var(--gmi-surface);
   color: var(--gmi-text-muted); font-size: 10px; font-weight: 500; line-height: 15px; white-space: nowrap; }
-.photo-delivery-pill[data-destination=gmi] { border-color: var(--gmi-delivery-gmi); background: var(--gmi-delivery-gmi); color: var(--gmi-delivery-gmi-ink); }
-.photo-delivery-pill[data-destination=gml] { border-color: var(--gmi-delivery-gml); background: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml-ink); }
-.photo-delivery-pill[data-destination=excluded] { background: var(--gmi-delivery-neutral); color: var(--gmi-delivery-gmi-ink); }
+/* Light fills with dark ink. The edge (--photo-delivery-edge, below) is the fill mixed towards the ink, so a light
+   pill stays outlined on white. */
+.photo-delivery-pill[data-destination=gmi] { border-color: var(--photo-delivery-edge); background: var(--gmi-delivery-gmi); color: var(--gmi-delivery-gmi-ink); }
+.photo-delivery-pill[data-destination=gml] { border-color: var(--photo-delivery-edge); background: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml-ink); }
+.photo-delivery-pill[data-destination=excluded] { border-color: var(--photo-delivery-edge); background: var(--gmi-delivery-excluded); color: var(--gmi-delivery-excluded-ink); }
+:is(.photo-delivery-pill, .photo-delivery-option)[data-destination=gmi] { --photo-delivery-edge: color-mix(in srgb, var(--gmi-delivery-gmi) 55%, var(--gmi-delivery-ink)); }
+:is(.photo-delivery-pill, .photo-delivery-option)[data-destination=gml] { --photo-delivery-edge: color-mix(in srgb, var(--gmi-delivery-gml) 55%, var(--gmi-delivery-ink)); }
+:is(.photo-delivery-pill, .photo-delivery-option)[data-destination=excluded] { --photo-delivery-edge: color-mix(in srgb, var(--gmi-delivery-excluded) 55%, var(--gmi-delivery-ink)); }
 .photo-delivery-pill[data-delivery-status=not-selected], .photo-delivery-pill[data-destination=notSelected] { background: var(--gmi-surface); color: var(--gmi-text-muted); border-style: dashed; }
 .photo-delivery-pill[data-destination=notSelected] { width: auto; }
 .photo-delivery-pill[data-destination=review] { width: auto; min-width: 44px; border-color: var(--gmi-validation-warning-border); color: var(--gmi-validation-warning-text); background: var(--gmi-validation-warning-bg); }
@@ -82,11 +87,11 @@
 .photo-delivery-option { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 64px; min-height: 26px; padding: 0 6px; border: 1px solid transparent;
   border-radius: 999px; background: transparent; color: var(--gmi-text); font-size: 12px; font-weight: 600; cursor: pointer; transition: background-color 120ms, border-color 120ms, color 120ms; }
 .photo-delivery-option:hover:not([aria-disabled]):not([aria-checked=true]) { background: var(--gmi-surface); border-color: var(--gmi-border-strong); }
-.photo-delivery-option[data-destination=gmi]:hover:not([aria-disabled]):not([aria-checked=true]) { border-color: var(--gmi-delivery-gmi); color: var(--gmi-delivery-gmi); }
-.photo-delivery-option[data-destination=gml]:hover:not([aria-disabled]):not([aria-checked=true]) { border-color: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml); }
-.photo-delivery-option[aria-checked=true][data-destination=gmi] { background: var(--gmi-delivery-gmi); border-color: var(--gmi-delivery-gmi); color: var(--gmi-delivery-gmi-ink); }
-.photo-delivery-option[aria-checked=true][data-destination=gml] { background: var(--gmi-delivery-gml); border-color: var(--gmi-delivery-gml); color: var(--gmi-delivery-gml-ink); }
-.photo-delivery-option[aria-checked=true][data-destination=excluded] { background: var(--gmi-delivery-neutral); border-color: var(--gmi-delivery-neutral); color: var(--gmi-delivery-gmi-ink); }
+/* Hover previews the destination by its edge; text stays dark (light fills are never used as text colour). */
+.photo-delivery-option[data-destination]:hover:not([aria-disabled]):not([aria-checked=true]) { border-color: var(--photo-delivery-edge); color: var(--gmi-delivery-ink); }
+.photo-delivery-option[aria-checked=true][data-destination=gmi] { background: var(--gmi-delivery-gmi); border-color: var(--photo-delivery-edge); color: var(--gmi-delivery-gmi-ink); }
+.photo-delivery-option[aria-checked=true][data-destination=gml] { background: var(--gmi-delivery-gml); border-color: var(--photo-delivery-edge); color: var(--gmi-delivery-gml-ink); }
+.photo-delivery-option[aria-checked=true][data-destination=excluded] { background: var(--gmi-delivery-excluded); border-color: var(--photo-delivery-edge); color: var(--gmi-delivery-excluded-ink); }
 .photo-delivery-option[aria-disabled] { opacity: .55; color: var(--gmi-text-subtle); cursor: not-allowed; }
 .photo-delivery-option[aria-disabled][aria-checked=true] { cursor: default; }
 .photo-delivery-toggle[data-delivery-status=review] { border-color: var(--gmi-validation-warning-border); background: var(--gmi-validation-warning-bg); }
@@ -221,6 +226,14 @@
 .photo-remove-confirmation .gmi-edit-destructive:hover:not(:disabled) { background: var(--gmi-validation-error-bg); }
 .photo-remove-confirmation > div { display: flex; justify-content: flex-end; gap: 8px; }
 /* Scoped to photo popups; GMI and Gemini Leaflet popup styling stays independent. */
+/* FOTO persistent preview: same frame as the main-map viewer popup, reduced to image, filename and the delivery pill. */
+.photo-workspace-preview-popup .leaflet-popup-content-wrapper { padding: 0; border: 1px solid var(--gmi-border-strong); border-radius: 10px; background: var(--gmi-surface); color: var(--gmi-text); box-shadow: 0 10px 28px #0206182e; overflow: hidden; }
+.photo-workspace-preview-popup .leaflet-popup-content { margin: 0; line-height: 1.45; }
+.photo-workspace-preview-popup .photo-map-popup p { margin: 0; overflow-wrap: anywhere; }
+.photo-workspace-map-preview-caption { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; }
+.photo-workspace-map-preview-caption .photo-map-popup-title { flex: 1; min-width: 0; }
+.photo-workspace-map-preview-repeat { font-weight: 400; color: var(--gmi-text-muted); }
+.photo-workspace-map-preview-caption .photo-delivery-row-button { margin: 0; }
 .photo-map-viewer-popup .leaflet-popup-content-wrapper { padding: 0; border: 1px solid var(--gmi-border-strong); border-radius: 10px; background: var(--gmi-surface); color: var(--gmi-text); box-shadow: 0 10px 28px #0206182e; overflow: hidden; }
 .photo-map-viewer-popup .leaflet-popup-content { margin: 0; line-height: 1.45; }
 .photo-map-viewer-popup .leaflet-popup-scrolled { border: 0; scrollbar-gutter: stable; }

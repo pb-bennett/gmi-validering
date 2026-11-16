@@ -73,7 +73,7 @@ export async function savePhotoSource(browser, kind = 'gml') {
 export async function applyPhotoSourcePositions(browser, kind = 'gml', { photoId = null, filename = null, sourceFilename = null } = {}) {
   const entered = !await browser.evaluate('Boolean(document.querySelector(".photo-workspace-shell"))');
   if (entered) {
-    await clickSourceControl(browser, 'Bildemodul', 'document');
+    await clickSourceControl(browser, 'Åpne FOTO', 'document');
     await browser.waitFor('document.querySelector(".photo-workspace-shell")');
   }
   if (!await browser.evaluate(`Boolean(${sourceWizard})`)) await openPhotoSources(browser);

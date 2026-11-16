@@ -68,7 +68,8 @@ test('every filter, AND combination and counts', () => {
   assert.deepEqual(ids(view({ filter: { ...DEFAULT_PHOTO_FILTER, repeated: true } })), ['s:1', 's:2']);
   const combined = view({ filter: { ...DEFAULT_PHOTO_FILTER, placement: 'gmi', missingDirection: true, repeated: true } });
   assert.deepEqual(ids(combined), ['s:1']);
-  assert.deepEqual(combined.summary, ['GMI', 'Mangler retning', 'Flere plasseringer']);
+  // Prefixed, so a position source never reads like the GMI delivery destination.
+  assert.deepEqual(combined.summary, ['Kilde: GMI', 'Mangler retning', 'Flere plasseringer']);
   assert(combined.filterActive); assert.equal(combined.shownCount, 1); assert.equal(combined.totalCount, 6);
 });
 
@@ -95,7 +96,10 @@ test('effective staged sources drive filters; the changed filter uses staged ids
   const effective = photos.map((item) => effectivePhoto(item, state));
   const changedIds = new Set(Object.keys(state.staged));
   const result = photoWorkspaceView(effective, { filter: { ...DEFAULT_PHOTO_FILTER, placement: 'manual' } }, { changedIds });
-  assert.deepEqual(ids(result), ['u', 'p2', 's:2'], 'staged moves count as Manuell');
+  // Provenance: a staged move of a sourced photo keeps its source; a staged placement of an unplaced photo is Manuell.
+  assert.deepEqual(ids(result), ['u', 's:2'], 'only hand-placed photos count as Manuell');
+  const source = photos.find((item) => item.id === 'p2').spatial.current.basis.candidateId;
+  assert(photoWorkspaceView(effective, { filter: { ...DEFAULT_PHOTO_FILTER, placement: source } }, { changedIds }).rows.some((item) => item.id === 'p2'), 'a moved photo keeps its source');
   assert.equal(result.counts.unplaced, 0);
   assert.deepEqual(ids(photoWorkspaceView(effective, { filter: { ...DEFAULT_PHOTO_FILTER, changed: true } }, { changedIds })), ['u', 'p2']);
   assert.equal(photoWorkspaceView(effective, {}, { changedIds }).counts.changed, 2);

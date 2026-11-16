@@ -1,5 +1,5 @@
 import { normalizePhotoDirection } from './photoDirection.mjs';
-import { isPhotoPosition } from './photoSpatial.mjs';
+import { isPhotoPosition, photoPositionOriginKind } from './photoSpatial.mjs';
 
 // Staged Edit-mode values live outside photoSession. Canonical records are never
 // written until applyPhotoEdits, so export/readiness can never see staged values.
@@ -130,7 +130,9 @@ export function photoEditChanges(state) {
 export function effectiveCurrent(photo, state) {
   const staged = state?.staged[photo.id];
   if (!staged || !Object.hasOwn(staged, 'position')) return photo.spatial.current;
-  return Object.freeze({ position: staged.position, basis: Object.freeze({ kind: 'manual' }), acceptance: 'staged', acceptedAt: null });
+  const origin = photoPositionOriginKind(photo.spatial);
+  return Object.freeze({ position: staged.position, basis: Object.freeze({ kind: 'manual' }), acceptance: 'staged', acceptedAt: null,
+    ...(origin && origin !== 'manual' ? { origin } : {}) });
 }
 
 export function effectiveDirection(photo, state) {

@@ -96,7 +96,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await applyPhotoSourcePositions(browser, 'gml', { filename: markerTitle });
     // Called from the main map, the helper enters and leaves the workspace; reopen it at the same photo.
     await browser.waitFor(`${markerSource(markerTitle)} === 'gml'`);
-    await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+    await click('Åpne FOTO'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
     await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-row')).find(e => e.getAttribute('aria-label').startsWith(${JSON.stringify(`${markerTitle},`)})).click()`);
     await browser.waitFor(`${placementSource} === 'GML'`);
     for (const [width, height] of [[1024, 620], [390, 700]]) {
@@ -147,7 +147,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await browser.waitFor('document.body.innerText.includes("photo-coexistence")', 45000);
     assert.equal(await browser.evaluate(markerCount), 1);
     await screenshot('photo-survey-coexistence');
-    await click('Bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+    await click('Åpne FOTO'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
     await locateCurrent(); await browser.waitFor('!document.querySelector("dialog[open]")');
     await browser.waitFor('document.body.innerText.includes("Zoom: 18")');
     assert(await browser.evaluate('(() => { const point = document.querySelector(".photo-camera-marker").getBoundingClientRect(); const map = document.querySelector(".leaflet-container").getBoundingClientRect(); return point.left >= map.left && point.right <= map.right && point.top >= map.top && point.bottom <= map.bottom; })()'));

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ImagesIcon, TrashIcon } from '@phosphor-icons/react';
+import { ImageIcon, TrashIcon } from '@phosphor-icons/react';
+import PhotoIconButton from './PhotoIconButton';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import LayerTypeBadge from '../LayerTypeBadge';
 
@@ -18,7 +19,9 @@ export default function PhotoLayerCard({ layer, onOpen }) {
           <div className="flex min-w-0 items-center gap-1.5"><LayerTypeBadge layer={layer} /><span className="truncate text-xs font-medium" title={layer.name}>{layer.name}</span></div>
           <p className="text-[10px] text-gmi-text-subtle">{layer.assetCount ?? layer.photoCount} bilder{layer.assetCount < layer.photoCount ? ` · ${layer.photoCount} plasseringer` : ''} · {layer.placedCount} plassert · {layer.unplacedCount} uplassert</p>
         </div>
-        <button type="button" onClick={(event) => onOpen(layer.id, event.currentTarget)} title="Åpne bildemodul" aria-label={`Åpne bildemodul for ${layer.name}`} className="gmi-compact-button gmi-focus-ring flex items-center gap-1 px-2 py-1 text-xs"><ImagesIcon size={15} aria-hidden="true" />Bildemodul</button>
+        {/* Compact icon action like the other layer-card actions; the card's own label names the layer. */}
+        <PhotoIconButton icon={ImageIcon} size={14} label="Åpne FOTO" tooltip="Åpne bildemodul" data-photo-layer-open={layer.id}
+          className="layer-card-icon-button" onClick={(event) => onOpen(layer.id, event.currentTarget)} />
         <button type="button" onClick={() => setConfirmRemove(true)} aria-label={`Fjern fotokartlag ${layer.name}`} className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle hover:bg-red-100 hover:text-red-600"><TrashIcon size={14} aria-hidden="true" /></button>
       </div>
       {confirmRemove && (

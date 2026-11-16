@@ -303,13 +303,13 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert(await browser.evaluate(`!${editKnob}.classList.contains('photo-edit-knob-ghost') && ${editArrow}?.dataset.degrees === '0'`), 'a default is drawn as a north heading');
       });
 
-      await t.test('drag moves only the selected photo, stages at gesture end and shows manual provenance and displacement', async () => {
+      await t.test('drag moves only the selected photo, stages at gesture end and keeps its provenance and shows displacement', async () => {
         const before = await elementCentre(browser, editTarget);
         await dragSelectedMarker(browser, 90, 45);
         await browser.waitFor(`${editCount()} === 1`);
         const after = await elementCentre(browser, editTarget);
         assert(Math.abs(after.x - before.x - 90) < 3 && Math.abs(after.y - before.y - 45) < 3, JSON.stringify({ before, after }));
-        assert.equal(await browser.evaluate(`${editTarget}.querySelector('[data-position-source]').dataset.positionSource`), 'manual');
+        assert.equal(await browser.evaluate(`${editTarget}.querySelector('[data-position-source]').dataset.positionSource`), 'exif'); // Slice 2: a manual adjustment keeps the original source (provenance)
         assert(await browser.evaluate(`Boolean(${editTarget}.querySelector('.photo-marker-staged-dot'))`));
         assert(await browser.evaluate(`document.querySelector('.photo-edit-connector-selected')?.getTotalLength() > 50`));
         assert.match(await browser.evaluate(`${commandBar}.innerText`), /Flyttet ca\. \d/);
@@ -477,15 +477,15 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
           return [e.classList.contains('photo-camera-marker-selected'), arrow?.dataset.degrees, arrow?.dataset.staged,
             arrow?.querySelector('path:nth-child(2)')?.getAttribute('stroke')]; })`);
         assert.deepEqual(arrows, [[false, '200', 'false', '#0F172B'], [false, '90', 'false', '#0F172B']]);
-        assert.equal(await browser.evaluate(`${marker(ids.IMG_10)}.querySelector('[data-position-source]').dataset.positionSource`), 'manual');
-        assert.match(await browser.evaluate(`${row(ids.IMG_10)}.innerText`), /Manuell · 200° S$/m);
+        assert.equal(await browser.evaluate(`${marker(ids.IMG_10)}.querySelector('[data-position-source]').dataset.positionSource`), 'exif'); // Slice 2: a manual adjustment keeps the original source (provenance)
+        assert.match(await browser.evaluate(`${row(ids.IMG_10)}.innerText`), /EXIF · justert · 200° S$/m);
         await selectPhotoRow(browser, ids.IMG_10);
         await openInspectorDetails();
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Grunnlag\s+Manuelt plassert/);
         assert.match(await browser.evaluate(`${inspector}.innerText`), /Andre mulige posisjoner \(1\)/, 'EXIF evidence is kept as a candidate');
         await pressKey(browser, 'z', { code: 'KeyZ', keyCode: 90, modifiers: CTRL });
         await wait(150);
-        assert.match(await browser.evaluate(`${row(ids.IMG_10)}.innerText`), /Manuell · 200° S$/m, 'there is no undo into a saved session');
+        assert.match(await browser.evaluate(`${row(ids.IMG_10)}.innerText`), /EXIF · justert · 200° S$/m, 'there is no undo into a saved session');
         await enterEditMode(browser);
         assert.equal(await browser.evaluate(`${commandBar}.querySelector('[aria-label="Angre"]').getAttribute('aria-disabled')`), 'true');
         await clickText(browser, 'Avslutt redigering');
@@ -504,7 +504,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         const rgb = (hex) => `rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`;
         for (const thumb of thumbs) {
           assert.deepEqual(thumb.size, [44, 44]);
-          assert.equal(thumb.border, rgb(colour(thumb.id === ids.IMG_10 ? 'manual' : 'exif')), 'thin provenance border in the accepted source colour');
+          assert.equal(thumb.border, rgb(colour('exif')), 'thin provenance border in the accepted source colour');
           assert.equal(thumb.fit, 'cover');
           assert.equal(thumb.title, null, 'aria-label instead of a duplicate native title');
           assert.match(thumb.label, /^Vis bilde: /);
