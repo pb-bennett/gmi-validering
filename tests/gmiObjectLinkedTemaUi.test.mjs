@@ -28,9 +28,10 @@ test('G8 object editor production: one linked Tema control, explicit consent, B3
     const directory = await mkdtemp(path.join(tmpdir(), 'gmi-g8-object-ui-'));
     const file = path.join(directory, 'Synthetic G8 object.gmi'), downloads = path.join(directory, 'downloads');
     await mkdir(downloads);
-    // Bredde is populated so the LOK reconciliation introduces no FEIL, only SJEKK.
-    const bytes = gmiFieldBatchFixture({ pointFields: ['Tema', 'S_FCODE', 'Kumform', 'Bredde', 'Merknad'],
-      points: [['LOK', 'ANB', '', '1000', ''], ['LOK', 'LOK', '', '1000', ''], ['LOK', 'LOK', '', '1000', '']] });
+    // Bredde is populated so the LOK reconciliation introduces no FEIL, only SJEKK. Byggemetode is not
+    // required on LOK (2026-11-16), so UNDER_GRUNN supplies the one Tema-dependent SJEKK on LOK.
+    const bytes = gmiFieldBatchFixture({ pointFields: ['Tema', 'S_FCODE', 'Kumform', 'Bredde', 'Vertikalnivå', 'Merknad'],
+      points: [['LOK', 'ANB', '', '1000', 'UNDER_GRUNN', ''], ['LOK', 'LOK', '', '1000', 'UNDER_GRUNN', ''], ['LOK', 'LOK', '', '1000', 'UNDER_GRUNN', '']] });
     await writeFile(file, bytes);
     const browser = await openTestChrome();
     const click = (label, root = editor) => browser.evaluate(`(() => {

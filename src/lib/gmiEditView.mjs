@@ -234,6 +234,16 @@ export function gmiObjectNumber(scope, sourceIndex, objectId = null) {
 }
 
 /**
+ * Whether a parsed GMI dataset carries original object numbers (`:P 3`, `:L 5`)
+ * for one geometry. Only GMI layers qualify; no number is invented for others.
+ */
+export function hasNativeGmiObjectNumbers(dataset, scope) {
+  if (dataset?.format !== 'GMI') return false;
+  const objects = (scope === 'line' ? dataset.lines : dataset.points) || [];
+  return objects.some((object) => Number.isFinite(object?.id));
+}
+
+/**
  * Whether a normalized table search names this object exactly: "38", "#38",
  * "nr 38", "l38"/"ledning 38" for lines and "p5"/"punkt 5" for points.
  * Partial numbers never match, so ordinary attribute search is unchanged.

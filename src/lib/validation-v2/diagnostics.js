@@ -299,18 +299,28 @@ function dependencyNote(outcomes, rule, field, geometryScope, denominator) {
     if (!grouped.has(suppression)) grouped.set(suppression, []);
     grouped.get(suppression).push(outcome);
   });
-  return [...grouped.entries()].map(([suppression, entries]) => Object.freeze({
-    diagnosticId: `${rule.canonicalFieldId}:${geometryScope}:DEPENDENCY_UNRESOLVED:${suppression}`,
-    type: T.DEPENDENCY_UNRESOLVED,
-    state: null,
-    field: { canonicalFieldId: rule.canonicalFieldId, displayName: fieldName(rule.canonicalFieldId, field), geometryScope, ruleIds: [rule.ruleId] },
-    count: entries.length,
-    denominator,
-    reasonCodes: [...new Set(entries.map((entry) => entry.reasonCode).filter(Boolean))],
-    ruleIds: [rule.ruleId],
-    dependency: suppression,
-    affectedObjects: { total: entries.length, sampleRefs: entries.slice(0, MAX_OBJECT_REFS).map((entry) => objectLabel(entry.objectRef)).filter(Boolean), omittedCount: Math.max(0, entries.length - MAX_OBJECT_REFS) },
-  }));
+  return [...grouped.entries()].map(([suppression, entries]) => {
+    // Runtime action data only, as for finding diagnostics: the exact blocked
+    // objects, so the note can open the objects whose prerequisite is missing.
+    const exactObjectRefs = new Map();
+    entries.forEach((entry) => {
+      if (entry.objectRef?.key && !exactObjectRefs.has(entry.objectRef.key)) exactObjectRefs.set(entry.objectRef.key, entry.objectRef);
+    });
+    return Object.freeze({
+      diagnosticId: `${rule.canonicalFieldId}:${geometryScope}:DEPENDENCY_UNRESOLVED:${suppression}`,
+      type: T.DEPENDENCY_UNRESOLVED,
+      state: null,
+      field: { canonicalFieldId: rule.canonicalFieldId, displayName: fieldName(rule.canonicalFieldId, field), geometryScope, ruleIds: [rule.ruleId] },
+      count: entries.length,
+      denominator,
+      reasonCodes: [...new Set(entries.map((entry) => entry.reasonCode).filter(Boolean))],
+      ruleIds: [rule.ruleId],
+      dependency: suppression,
+      affectedObjects: { total: entries.length, sampleRefs: entries.slice(0, MAX_OBJECT_REFS).map((entry) => objectLabel(entry.objectRef)).filter(Boolean), omittedCount: Math.max(0, entries.length - MAX_OBJECT_REFS) },
+      exactObjectRefs: Object.freeze([...exactObjectRefs.values()]),
+      hasCompleteExactObjectRefs: exactObjectRefs.size === entries.length,
+    });
+  });
 }
 
 export function buildFieldDiagnostics({ result, rule, field, geometryScope, summary = null } = {}) {

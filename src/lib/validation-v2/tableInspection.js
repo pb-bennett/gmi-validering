@@ -7,7 +7,12 @@ function outcomeResult(outcome) {
   if (outcome?.state === 'FAIL') return 'FAIL';
   if (outcome?.state === 'CHECK' || outcome?.state === 'INDETERMINATE') return 'CHECK';
   if (outcome?.state === 'PASS') return 'PASS';
-  return null; // NOT_EVALUATED is deliberately outside the evaluated field population.
+  // A result blocked by a prerequisite (Tema, Rørform, Material ...) is shown
+  // as Sjekk in the rule list, so its object belongs to the inspected
+  // population as Sjekk. Other NOT_EVALUATED outcomes stay outside it.
+  if (outcome?.state === 'NOT_EVALUATED'
+    && (outcome.reasonCode === 'DEPENDENT_TEMA_UNRESOLVED' || outcome.suppression)) return 'CHECK';
+  return null;
 }
 
 export function resolveBoundColumn(field, objects) {

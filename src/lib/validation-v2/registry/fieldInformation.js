@@ -379,7 +379,7 @@ const POLICY_METADATA = Object.freeze({
   type: ['Type vurderes mot løst Tema. DIV krever Type; andre Tema med kjente Type-koblinger gir Sjekk ved fravær.', ['XLOK er godkjent sammen med Tema KUM. Ugyldig eller inkompatibel levert Type gir Feil.']],
   typeCompatibility: ['Levert godkjent Type må være tillatt for objektets løste Tema.', []],
   manholeShape: ['Kumform er kontekstavhengig etter eksplisitt Tema-applicability. Manglende verdi er Feil når feltet gjelder.', []],
-  constructionMethod: ['Byggemetode er kontekstavhengig etter eksplisitt Tema-applicability. UK er gyldig, men gir Sjekk.', []],
+  constructionMethod: ['Byggemetode er kontekstavhengig etter eksplisitt Tema-applicability. UK er gyldig, men gir Sjekk.', ['Byggemetode kreves ikke for kumlokk (LOK/TOP); manglende verdi gir verken Feil eller Sjekk, og en levert verdi kontrolleres som vanlig. Byggemetode er ikke lokkmateriale.']],
   cone: ['Kjegle er kontekstavhengig etter eksplisitt Tema-applicability. Manglende verdi er Feil når feltet gjelder.', []],
   insideOutside: ['For punkt er InnvendigUtvendig påkrevd når Bredde er oppgitt. Kode uten Bredde gir Sjekk. KUM forventes normalt målt innvendig (ID), LOK utvendig (OD); motsatt kode gir Sjekk. For ledning er feltet påkrevd. Bare ID og OD er godkjent.', []],
   width: ['Bredde er et kontekstavhengig heltall i mm. Når feltet gjelder, gir minst 20 Pass og 0–19 Sjekk. For GUT gir manglende Bredde Sjekk.', []],
@@ -430,7 +430,7 @@ const RULE_EVALUATION_GUIDANCE = Object.freeze({
 });
 
 const USER_SUMMARIES = Object.freeze({
-  constructionMethod: 'Byggemetode brukes for relevante punktobjekter. Om feltet er påkrevd avhenger av Tema.',
+  constructionMethod: 'Byggemetode brukes for relevante punktobjekter. Om feltet er påkrevd avhenger av Tema. Feltet kreves ikke for kumlokk (LOK/TOP).',
   access: 'Adkomst beskriver tilkomst til punktobjektet. Feltet er ønsket for kummer, men er ikke et generelt krav.',
   attachmentLink: 'S_HYPERLINK brukes til å referere til bilder for relevante objekter. Hva som forventes avhenger av Tema.',
   type: 'Type beskriver punktobjektet. Verdien må være en godkjent kode som passer til objektets Tema.',

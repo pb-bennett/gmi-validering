@@ -467,7 +467,7 @@ const BASE_VALIDATION_RULES = [
     evaluatorKind: RuleEvaluatorKind.ALLOWED_VALUE,
     category: RuleCategory.ALLOWED_VALUE,
     title: 'Byggemetode er gyldig når den er oppgitt',
-    description: 'Oppgitt Byggemetode for punktobjekt skal være en gyldig v3.2-kode; feltet er valgfritt i denne automatiske valideringen.',
+    description: 'Oppgitt Byggemetode for punktobjekt skal være en gyldig v3.2-kode. Manglende verdi vurderes etter Tema; Byggemetode kreves ikke for kumlokk (LOK/TOP).',
     severity: RuleSeverity.ERROR,
     provenance: RuleProvenance.STANDARD,
     source: { document: 'Innmålingsinstruks Vedlegg A', pages: '5, 15' },

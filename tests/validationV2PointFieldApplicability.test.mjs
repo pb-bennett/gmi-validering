@@ -29,7 +29,7 @@ const LEGACY_EXPLICIT_CELLS = [
   { tema: 'SLU', canonicalFieldId: 'manholeShape', state: 'APPLICABLE' },
   { tema: 'SLU', canonicalFieldId: 'cone', state: 'APPLICABLE' },
   { tema: 'SLU', canonicalFieldId: 'width', state: 'APPLICABLE' },
-  { tema: 'LOK', canonicalFieldId: 'constructionMethod', state: 'APPLICABLE' },
+  { tema: 'LOK', canonicalFieldId: 'constructionMethod', state: 'OPTIONAL_SUPPORTED' },
   { tema: 'LOK', canonicalFieldId: 'width', state: 'APPLICABLE' },
   { tema: 'LOK', canonicalFieldId: 'manholeShape', state: 'NOT_APPLICABLE' },
   { tema: 'LOK', canonicalFieldId: 'cone', state: 'NOT_APPLICABLE' },
@@ -115,21 +115,22 @@ const EXPECTED_EXPLICIT_CELLS = [
   ...['KRN'].flatMap((tema) => EXTRA_CONTEXTUAL_FIELDS.map((canonicalFieldId) => ({ tema, canonicalFieldId, state: 'NOT_APPLICABLE' }))),
   ...['KMR', 'SUMP'].flatMap((tema) => EXTRA_CONTEXTUAL_FIELDS.map((canonicalFieldId) => ({ tema, canonicalFieldId, state: 'UNKNOWN' }))),
   { tema: 'INR', canonicalFieldId: 'width', state: 'OPTIONAL_SUPPORTED' },
+  { tema: 'TOP', canonicalFieldId: 'constructionMethod', state: 'OPTIONAL_SUPPORTED' },
   { tema: 'PSP', canonicalFieldId: 'constructionMethod', state: 'OPTIONAL_SUPPORTED' },
   { tema: 'PSP', canonicalFieldId: 'width', state: 'OPTIONAL_SUPPORTED' },
   { tema: 'GUT', canonicalFieldId: 'width', state: 'APPLICABLE' },
 ];
 
-test('production policy has exactly the independent explicit 132-cell inventory', () => {
+test('production policy has exactly the independent explicit 133-cell inventory', () => {
   const actualCells = POINT_FIELD_APPLICABILITY_POLICY.cells;
   const key = ({ tema, canonicalFieldId }) => `${tema}:${canonicalFieldId}`;
   const expectedKeys = EXPECTED_EXPLICIT_CELLS.map(key);
   const actualKeys = actualCells.map(key);
 
-  assert.equal(actualCells.length, 132);
-  assert.equal(new Set(actualKeys).size, 132);
-  assert.equal(actualCells.filter(({ state }) => state === 'APPLICABLE').length, 105);
-  assert.equal(actualCells.filter(({ state }) => state === 'OPTIONAL_SUPPORTED').length, 3);
+  assert.equal(actualCells.length, 133);
+  assert.equal(new Set(actualKeys).size, 133);
+  assert.equal(actualCells.filter(({ state }) => state === 'APPLICABLE').length, 104);
+  assert.equal(actualCells.filter(({ state }) => state === 'OPTIONAL_SUPPORTED').length, 5);
   assert.equal(actualCells.filter(({ state }) => state === 'UNKNOWN').length, 12);
   assert.equal(actualCells.filter(({ state }) => state === 'NOT_APPLICABLE').length, 12);
 
@@ -228,7 +229,7 @@ test('Tema lookup uses exact current identity and does not normalize aliases or 
 test('policy metadata identifies project/domain authority and separate provenance', () => {
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyId, 'validator-2-point-field-applicability');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyVersion, '3.2.0');
-  assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyRevision, '2026-11-07.1');
+  assert.equal(POINT_FIELD_APPLICABILITY_POLICY.policyRevision, '2026-11-16.1');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.effectiveDate, '2026-11-07');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.decisionDate, '2026-11-07');
   assert.equal(POINT_FIELD_APPLICABILITY_POLICY.authority, 'PROJECT/DOMAIN POLICY');

@@ -62,16 +62,25 @@ for (const tema of NEW_APPLICABLE_TEMAS) {
     });
   }
 }
-for (const canonicalFieldId of ['constructionMethod', 'width']) {
+cells.push({
+  tema: 'LOK',
+  canonicalFieldId: 'width',
+  state: PointFieldApplicabilityState.APPLICABLE,
+  authority: POLICY_AUTHORITY,
+  rationale:
+    'Field width / Bredde was included in the legacy Bredde applicability subset and that legacy behavior is retained as PRAKSIS evidence; LOK × Bredde is explicitly approved by PROJECT/DOMAIN POLICY and is not STANDARD Innmålingsinstruks behavior.',
+});
+// Real-delivery business correction (2026-11-16): Byggemetode is not required
+// on manhole covers. A supplied value is still validated normally; Byggemetode
+// is not a cover-material field and no value is derived or copied.
+for (const tema of ['LOK', 'TOP']) {
   cells.push({
-    tema: 'LOK',
-    canonicalFieldId,
-    state: PointFieldApplicabilityState.APPLICABLE,
+    tema,
+    canonicalFieldId: 'constructionMethod',
+    state: PointFieldApplicabilityState.OPTIONAL_SUPPORTED,
     authority: POLICY_AUTHORITY,
     rationale:
-      canonicalFieldId === 'width'
-        ? 'Field width / Bredde was included in the legacy Bredde applicability subset and that legacy behavior is retained as PRAKSIS evidence; LOK × Bredde is explicitly approved by PROJECT/DOMAIN POLICY and is not STANDARD Innmålingsinstruks behavior.'
-        : 'Explicit domain-owner approval; the legacy Byggemetode inclusion is preserved separately as PRAKSIS evidence.',
+      'Explicit real-delivery domain correction (2026-11-16): Byggemetode is not required on LOK/TOP; a missing value gives neither Feil nor Sjekk, and a supplied value is validated normally. Byggemetode is not cover material.',
   });
 }
 cells.push({
@@ -154,7 +163,7 @@ for (const tema of ['KMR', 'SUMP']) {
 export const POINT_FIELD_APPLICABILITY_POLICY = deepFreeze({
   policyId: 'validator-2-point-field-applicability',
   policyVersion: '3.2.0',
-  policyRevision: '2026-11-07.1',
+  policyRevision: '2026-11-16.1',
   effectiveDate: '2026-11-07',
   decisionDate: '2026-11-07',
   authority: POLICY_AUTHORITY,

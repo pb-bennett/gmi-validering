@@ -85,7 +85,8 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
       await browser.evaluate(`document.querySelector('[title="Synthetic R4 UX.gmi"]').click()`);
       await click('Åpne datatabell'); await click('Ledninger', `document.querySelector('[data-table-geometry]')`);
       await browser.waitFor(`${grid}?.getAttribute('aria-rowcount') === '49'`);
-      assert(!(await headers()).includes('Nr.'), 'the ordinary application table is unchanged');
+      // Slice 3 (2026-11-16): the ordinary table shows original GMI object numbers once; Rettinger-only controls stay out.
+      assert.equal((await headers()).filter((header) => header === 'Nr.').length, 1, 'the ordinary GMI table shows one Nr. column');
       assert.equal(await browser.evaluate(`Boolean(document.querySelector('[data-gmi-table-size]'))`), false);
       await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
       await browser.waitFor(box(0));

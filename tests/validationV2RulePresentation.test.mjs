@@ -21,7 +21,9 @@ test('Regel keeps technical identifiers out of primary presentation', () => {
 
 test('Regel presents conditional applicability and construction-method UK guidance', () => {
   const { view } = presentation('constructionMethod');
-  assert.deepEqual(view.applicabilityGuidance.values, ['KOTREKUM', 'KUM', 'KUMI', 'LOK', 'MKS', 'MKV', 'PMK', 'PMKAF', 'PMKOV', 'PMKSP', 'PMKVL', 'RED', 'SAN', 'SANI', 'SLG', 'SLI', 'SLS', 'SLU']);
+  assert.deepEqual(view.applicabilityGuidance.values, ['KOTREKUM', 'KUM', 'KUMI', 'MKS', 'MKV', 'PMK', 'PMKAF', 'PMKOV', 'PMKSP', 'PMKVL', 'RED', 'SAN', 'SANI', 'SLG', 'SLI', 'SLS', 'SLU']);
+  assert.equal(view.applicabilityGuidance.values.includes('TOP'), false);
+  assert.match(JSON.stringify(view), /kreves ikke for kumlokk \(LOK\/TOP\)/);
   assert(view.evaluationGuidance.some((row) => row.status === 'Sjekk' && row.text.includes('UK')));
   assert.deepEqual(view.allowedValues.columns, ['code', 'meaning']);
   assert.deepEqual(view.allowedValues.rows.map((row) => row.code), ['B', 'BU', 'E', 'E0', 'E1', 'G', 'K', 'M', 'MU', 'P', 'S', 'SU', 'UK', 'V', 'W']);

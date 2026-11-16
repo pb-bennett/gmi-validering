@@ -39,7 +39,7 @@ import { gmiValidatorReturnTarget, validatorInspectionLayer } from '@/lib/gmiVal
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { Lexeme } from '@/components/gmi-edit/GmiObjectEditor';
 import { GMI_EDIT_TABLE_VIEWS, gmiEditMessage, describeGmiEditStatus, gmiObjectKey, gmiProposedViewForStatus, tableTabToScope,
-  gmiObjectNumber, gmiObjectMatchesQuery, gmiObjectCountLabel, gmiTableViewControls } from '@/lib/gmiEditView.mjs';
+  gmiObjectNumber, gmiObjectMatchesQuery, hasNativeGmiObjectNumbers, gmiObjectCountLabel, gmiTableViewControls } from '@/lib/gmiEditView.mjs';
 
 const ROW_HEIGHT = 28;
 const OBJECT_NUMBER_WIDTH = 40;
@@ -342,12 +342,16 @@ export default function LayerDataTable() {
   const selectedKeys = useMemo(() => new Set(selection?.keys || []), [selection]);
   const batchReview = !isExactInspection && selectionEnabled && batchTableReview?.layerId === layerId
     && batchTableReview.selection === selection && batchTableReview.revision === gmiEditStatus?.revision ? batchTableReview : null;
-  // Rettinger object labels ("Ledning 38"): a compact, stable source-number column, also in
-  // Validator inspections opened inside Rettinger. Never derived from the sorted/virtual row.
-  const showObjectNumber = Boolean(layerId) && gmiEditWorkspaceLayerId === layerId;
+  const inRettinger = Boolean(layerId) && gmiEditWorkspaceLayerId === layerId;
+  const sourceData = importedLayer?.data;
+  // Original GMI object numbers ("Ledning 38"): a compact, stable source-number column. Rettinger
+  // always shows it; the ordinary table shows it for GMI layers whose current geometry carries
+  // parser object numbers, so no number is invented for other formats. Never derived from the
+  // sorted/virtual row.
+  const hasNativeObjectNumbers = useMemo(() => hasNativeGmiObjectNumbers(sourceData, scope), [sourceData, scope]);
+  const showObjectNumber = inRettinger || hasNativeObjectNumbers;
   const zoomWidth = showObjectNumber ? 32 : 36;
   const numberWidth = showObjectNumber ? OBJECT_NUMBER_WIDTH : 0;
-  const sourceData = importedLayer?.data;
   const objectIdOf = useCallback((objectScope, index) => (objectScope === 'line' ? sourceData?.lines : sourceData?.points)?.[index]?.id ?? null, [sourceData]);
   const identityMatches = useMemo(() => showObjectNumber
     // Preserve source-GUID lookup from the retired list; numeric queries keep Nr. semantics.
@@ -361,7 +365,7 @@ export default function LayerDataTable() {
     return { layerId, fields: [resolveBoundColumn(field, objects)] };
   }, [workspaceHandoff, scope, sourceData, layerId]);
   const effectiveColumnFocus = validatorColumnFocus || columnFocusRequest;
-  const columnFocus = showObjectNumber && !isContextualInspection && effectiveColumnFocus?.layerId === layerId ? effectiveColumnFocus : null;
+  const columnFocus = inRettinger && !isContextualInspection && effectiveColumnFocus?.layerId === layerId ? effectiveColumnFocus : null;
   const columnFocusSignature = columnFocus ? [columnFocus.layerId, ...columnFocus.fields].join('\u0000') : null;
   // A focus on other fields ends the earlier «off» choice; a gap without focus (handover) does not.
   if (columnFocusSignature && columnFocusSignature !== lastColumnFocus) {
@@ -679,7 +683,7 @@ export default function LayerDataTable() {
         </span>;
       },
     }] : [];
-    // The ordinary application keeps its exact columns; Rettinger adds Nr. after the zoom tool.
+    // Nr. follows the zoom tool when the layer has object numbers (always in Rettinger).
     const [zoom, ...attributes] = base;
     if (!batchReview) return showObjectNumber ? [zoom, ...numberColumn, ...attributes] : base;
     const fixed = attributes.filter((column) => column.meta?.isFixed);
@@ -938,7 +942,7 @@ export default function LayerDataTable() {
             </span>
           )}
           {/* Rettinger already names the file in its header; the room goes to the table controls. */}
-          {!showObjectNumber && <span
+          {!inRettinger && <span
             className="max-w-50 truncate text-[10px] text-gmi-text-subtle"
             title={layer.name}
           >
@@ -980,7 +984,7 @@ export default function LayerDataTable() {
         {tableView !== GMI_EDIT_TABLE_VIEWS.ORIGINAL && (
           <span className="gmi-edit-table-banner" role="status" title={tableView === GMI_EDIT_TABLE_VIEWS.PROPOSED ? 'Foreslått kopi – originalen er uendret' : undefined}>
             {/* Narrow tables keep the short form so the toolbar stays on one line. */}
-            {tableView === GMI_EDIT_TABLE_VIEWS.PROPOSED ? <>Foreslått kopi<span className={showObjectNumber ? 'hidden min-[1700px]:inline' : undefined}> – originalen er uendret</span></> : `Kun endrede · ${proposedView.changed.byKey.size} felt`}
+            {tableView === GMI_EDIT_TABLE_VIEWS.PROPOSED ? <>Foreslått kopi<span className={inRettinger ? 'hidden min-[1700px]:inline' : undefined}> – originalen er uendret</span></> : `Kun endrede · ${proposedView.changed.byKey.size} felt`}
           </span>
         )}
         {columnFocus && (
@@ -1073,7 +1077,7 @@ export default function LayerDataTable() {
         </div>
 
         {/* Rettinger layout: one compact icon toggle for the 62/38 ↔ 35/65 split, always reachable. */}
-        {showObjectNumber && <PhotoIconButton icon={tableExpanded ? ArrowsInLineVerticalIcon : ArrowsOutLineVerticalIcon} size={14}
+        {inRettinger && <PhotoIconButton icon={tableExpanded ? ArrowsInLineVerticalIcon : ArrowsOutLineVerticalIcon} size={14}
           label={tableExpanded ? 'Mindre tabell' : 'Større tabell'} data-gmi-table-size={tableExpanded ? 'expanded' : 'normal'}
           tooltip={tableExpanded ? 'Mindre tabell: gi kartet og inspektøren mer plass igjen' : 'Større tabell: vis flere rader (kart og inspektør blir lavere)'}
           className="gmi-table-icon-button" onClick={() => useStore.setState({ gmiEditTableExpanded: !tableExpanded })} />}

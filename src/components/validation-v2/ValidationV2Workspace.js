@@ -26,7 +26,7 @@ import {
   reduceValidationV2PresentationState,
 } from '@/lib/validation-v2/resultPresentation';
 import { composeFieldInformation } from '@/lib/validation-v2/registry/fieldInformation';
-import { getValidationV2DiagnosticPresentation } from '@/lib/validation-v2/diagnostics';
+import { ValidationV2DiagnosticType, getValidationV2DependencyPresentation, getValidationV2DiagnosticPresentation } from '@/lib/validation-v2/diagnostics';
 import { buildValidatorFieldInspectionRequest } from '@/lib/validation-v2/tableInspection';
 import ValidationV2RuleList from './ValidationV2RuleList';
 import ValidationV2FieldInfoModal from './ValidationV2FieldInfoModal';
@@ -301,13 +301,17 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
       datasetKind,
     });
     if (!inspectionRequest) return;
+    // A prerequisite-blocked result is presented as Sjekk; it is never a Feil.
+    const isDependencyNote = diagnostic.type === ValidationV2DiagnosticType.DEPENDENCY_UNRESOLVED;
     openObjectTable({
       ...inspectionRequest,
       ...(datasetKind === 'proposed' ? { editBasis: { layerId: selectedLayerId, session: editView.session, datasetRevision: selectedRevision } } : {}),
       context: {
         title: `${datasetLabel} · ${diagnostic.field.displayName}`,
-        reason: getValidationV2DiagnosticPresentation(diagnostic).summary,
-        status: diagnostic.state,
+        reason: isDependencyNote
+          ? getValidationV2DependencyPresentation(diagnostic).summary
+          : getValidationV2DiagnosticPresentation(diagnostic).summary,
+        status: isDependencyNote ? 'CHECK' : diagnostic.state,
         source: 'validation-v2-diagnostic',
       },
     });

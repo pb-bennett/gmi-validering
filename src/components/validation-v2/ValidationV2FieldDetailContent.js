@@ -276,6 +276,20 @@ function LegacyResultPanel({ summary, isLoading, error, onRetry, result, geometr
   );
 }
 
+function OpenObjectsButton({ diagnostic, summary, onOpenObjects }) {
+  if (!diagnostic.hasCompleteExactObjectRefs || !diagnostic.exactObjectRefs?.length || !onOpenObjects) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenObjects(diagnostic)}
+      aria-label={`Vis ${diagnostic.exactObjectRefs.length} objekter i tabell: ${summary}`}
+      className="gmi-compact-button -mt-0.5 shrink-0 border border-gmi-border-strong bg-gmi-surface px-1.5 py-0.5 text-[10px] font-semibold text-gmi-interactive shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-gmi-interactive"
+    >
+      Vis {diagnostic.exactObjectRefs.length} {diagnostic.exactObjectRefs.length === 1 ? 'objekt' : 'objekter'}
+    </button>
+  );
+}
+
 function DiagnosticBlock({ diagnostic, onOpenObjects }) {
   const isFail = diagnostic.state === ValidationV2DiagnosticState.FAIL;
   const presentation = getValidationV2DiagnosticPresentation(diagnostic);
@@ -285,16 +299,7 @@ function DiagnosticBlock({ diagnostic, onOpenObjects }) {
       <div className="gmi-validation-accent text-[10px] font-bold uppercase tracking-wide">
         {isFail ? 'Feil' : 'Sjekk'} · {diagnostic.count} {diagnostic.count === 1 ? 'objekt' : 'objekter'}
       </div>
-      {diagnostic.hasCompleteExactObjectRefs && onOpenObjects && (
-        <button
-          type="button"
-          onClick={() => onOpenObjects(diagnostic)}
-          aria-label={`Vis ${diagnostic.exactObjectRefs.length} objekter i tabell: ${presentation.summary}`}
-          className="gmi-compact-button -mt-0.5 shrink-0 border border-gmi-border-strong bg-gmi-surface px-1.5 py-0.5 text-[10px] font-semibold text-gmi-interactive shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-gmi-interactive"
-        >
-          Vis {diagnostic.exactObjectRefs.length} {diagnostic.exactObjectRefs.length === 1 ? 'objekt' : 'objekter'}
-        </button>
-      )}
+      <OpenObjectsButton diagnostic={diagnostic} summary={presentation.summary} onOpenObjects={onOpenObjects} />
       </div>
       <p className="mt-0.5 text-xs leading-4 text-gmi-text">{presentation.summary}</p>
       {presentation.detailLines.map((line) => <p key={line} className="mt-0.5 text-[11px] leading-4 text-gmi-text">{line}</p>)}
@@ -412,8 +417,11 @@ function DiagnosticResultPanel({ summary, diagnostics, isLoading, error, onRetry
       {model.unresolved.map((note) => {
         const presentation = getValidationV2DependencyPresentation(note);
         return (
-          <section key={note.diagnosticId} className="rounded-lg border border-gmi-border bg-gmi-surface-soft px-2.5 py-2 text-xs leading-5 text-gmi-text-muted">
-            <p>{presentation.summary}</p>
+          <section key={note.diagnosticId} data-dependency-note={note.dependency} className="rounded-lg border border-gmi-border bg-gmi-surface-soft px-2.5 py-2 text-xs leading-5 text-gmi-text-muted">
+            <div className="flex items-start justify-between gap-2">
+              <p>{presentation.summary}</p>
+              <OpenObjectsButton diagnostic={note} summary={presentation.summary} onOpenObjects={onOpenObjects} />
+            </div>
             {presentation.detailLines.map((line) => <p key={line} className="mt-1 text-[11px] leading-4">{line}</p>)}
             {presentation.guidance && <p className="mt-2 text-[11px] leading-4">{presentation.guidance}</p>}
           </section>
