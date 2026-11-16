@@ -20,14 +20,20 @@ function FormatCard({ profile, card, config, onConfigChange }) {
   </PhotoSourceOption>;
 }
 
-function FilenameHint({ label }) {
+export function FilenameHint({ label, mode = 'photos-only', sourceFilename, onUseSuggestion }) {
   const part = sanitizePhotoExportLabel(label);
-  if (label.trim() && !part) return <p className="photo-export-hint" data-export-name-format>Etiketten har ingen tegn som kan brukes i filnavn. Bare tidspunktet brukes.</p>;
-  return <p className="photo-export-hint" data-export-name-format>Filnavn: ÅÅÅÅMMDD-TTmmss{part && `-${part}`}.zip og .gml. Tidspunktet settes når pakken lages.</p>;
+  const extensions = mode === 'gmi-only' ? '.gmi' : mode === 'photos-only' ? '.zip og .gml' : '.zip, .gmi og .gml';
+  return <>
+    {sourceFilename && <p className="photo-export-hint" data-export-name-source>Foreslått ut fra {sourceFilename}.</p>}
+    {onUseSuggestion && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive px-2 py-1" onClick={onUseSuggestion}>Bruk forslag</button>}
+    <p className="photo-export-hint" data-export-name-format>{label.trim() && !part
+      ? 'Etiketten har ingen tegn som kan brukes i filnavn. Bare tidspunktet brukes. '
+      : ''}Filnavn: ÅÅÅÅMMDD-TTmmss{part && `-${part}`}{extensions}. Tidspunktet settes når leveransen kontrolleres.</p>
+  </>;
 }
 
 // Everything that shapes the package is chosen here, before a plan exists. Status follows each choice at once.
-export function PhotoExportSettings({ config, onConfigChange }) {
+export function PhotoExportSettings({ config, onConfigChange, filenameHint }) {
   const [moreOpen, setMoreOpen] = useState(false);
   // A chosen format is never hidden, whether it was chosen here or in Fullfør opplysninger.
   const advanced = PHOTO_EXPORT_PROFILE_METADATA[config.profile]?.tier !== 'primary';
@@ -41,7 +47,7 @@ export function PhotoExportSettings({ config, onConfigChange }) {
       <label className="photo-export-label">Etikett i filnavnet (valgfritt)
         <input className="gmi-focus-ring" type="text" autoComplete="off" aria-label="Eksportetikett" value={config.label} onChange={(event) => onConfigChange({ label: event.target.value })} />
       </label>
-      <FilenameHint label={config.label} />
+      <FilenameHint label={config.label} {...filenameHint} />
   </>;
 }
 

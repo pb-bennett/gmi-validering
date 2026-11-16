@@ -429,7 +429,9 @@ test('boundaries: the wizard components write no metadata, compose no final name
   for (const text of steps) assert(!text.includes('photoSession'));
   const shared = await readFile(new URL('../src/components/delivery/DeliveryWizard.js', import.meta.url), 'utf8');
   const service = await readFile(new URL('../src/lib/delivery/deliveryWizard.mjs', import.meta.url), 'utf8');
-  assert(shared.includes('captureDeliverySnapshot(') && shared.includes('buildDeliveryPlan(snapshot, config)'));
+  assert(shared.includes('captureDeliverySnapshot(') && shared.includes('buildDeliveryPlan(snapshot, { ...config, label })'));
+  assert(shared.includes('hasGmi ? gmi.descriptor?.filename : undefined'), 'suggestions use the live source');
+  assert(shared.includes('config.labelEdited ? config.label : suggestedLabel'), 'manual input takes precedence');
   assert(shared.includes('link.download = filename') && service.includes('save(blob, plan.filename)'), 'the browser gets the name the M9 plan fixed');
   for (const name of ['adoptSourceEvidence', 'setCaptureMetadata', 'fillMissingPhotoValues', 'localStorage', 'sessionStorage', 'indexedDB']) assert(!shared.includes(name), name);
 });

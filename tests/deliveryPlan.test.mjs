@@ -9,6 +9,7 @@ import { buildPhotoExportPackage } from '../src/lib/photos/export/photoExportPac
 import { validateDeliveryGml } from '../src/lib/delivery/deliveryGml.mjs';
 import { planAttachmentNames } from '../src/lib/photos/export/attachmentNames.mjs';
 import { exportFixture } from './helpers/photoExportFixtures.mjs';
+import { deliveryReport } from '../src/lib/delivery/deliveryWizard.mjs';
 
 const archive = async (plan) => unzipSync(new Uint8Array(await (await buildDeliveryPackage(plan)).arrayBuffer()));
 const ready = (plan) => assert.equal(plan.status, 'ready', JSON.stringify(plan.errors));
@@ -348,5 +349,21 @@ test('exclusions remove their references in combined/split packages; restore is 
     const restored = await f.plan(); ready(restored);
     assert.deepEqual(getDeliveryGmiBytes(restored), f.bytes);
     assert.deepEqual(getDeliveryGmiBytes(restored), getDeliveryGmiBytes(await f.plan()));
+  } finally { f.session.clear(); }
+});
+
+test('revision labels keep one basename for GMI, GML, ZIP and the separate report', async () => {
+  const f = await deliveryFixture();
+  try {
+    f.transfer();
+    const p = await f.plan('combined', { label: 'Ledninger_rev02' }); ready(p);
+    const basename = '20261113-121213-Ledninger_rev02';
+    assert.equal(p.naming.basename, basename);
+    assert.equal(p.filename, `${basename}.zip`);
+    assert.equal(p.naming.gmiFilename, `${basename}.gmi`);
+    assert.equal(p.photoPlan.naming.gmlFilename, `${basename}.gml`);
+    const entries = await archive(p);
+    assert(`${basename}.gmi` in entries); assert(`${basename}.gml` in entries);
+    assert.match(deliveryReport({ plan: p, fieldCount: 0 }), /20261113-121213-Ledninger_rev02\.zip/);
   } finally { f.session.clear(); }
 });

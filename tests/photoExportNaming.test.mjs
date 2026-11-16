@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { unzipSync, strFromU8 } from 'fflate';
 import { exportFixture } from './helpers/photoExportFixtures.mjs';
 import { geminiGoldenFixture, normalizeGeminiIdentifiers, readGeminiGolden } from './helpers/photoExportGolden.mjs';
-import { formatPhotoExportTimestamp, photoExportNames, sanitizePhotoExportLabel, PHOTO_EXPORT_LABEL_MAX_LENGTH } from '../src/lib/photos/export/photoExportNaming.mjs';
+import { suggestRevisionLabel, formatPhotoExportTimestamp, photoExportNames, sanitizePhotoExportLabel, PHOTO_EXPORT_LABEL_MAX_LENGTH } from '../src/lib/photos/export/photoExportNaming.mjs';
 import { PHOTO_EXPORT_PROFILES } from '../src/lib/photos/export/exportContract.mjs';
 import { buildPhotoExportPackage } from '../src/lib/photos/export/photoExportPackage.mjs';
 import { serializePhotoExport } from '../src/lib/photos/export/photoExportXml.mjs';
@@ -57,7 +57,9 @@ test('labels are reduced to safe filename text', () => {
     ['  Torkopp PS  ', 'Torkopp-PS'],
     ['Torkopp   -  PS', 'Torkopp-PS'],
     ['--Torkopp--', 'Torkopp'],
-    ['fase_2.v3', 'fase-2-v3'],
+    ['fase_2.v3', 'fase_2-v3'],
+    ['__fase -_ 2__', 'fase_2'],
+    ['Ledninger_Nord', 'Ledninger_Nord'],
     ['Skøyen Ærøy Åsane', 'Skoeyen-Aeroey-Aasane'],
     ['blåbærsyltetøy', 'blaabaersyltetoey'],
     ['Å\u0308 a\u030A', 'Aa-aa'],
@@ -80,7 +82,7 @@ test('every label yields a name that needs no further escaping', () => {
   const labels = ['..', '../..', '.gml', 'a/../b', '\\\\server\\share', 'NUL.txt', ' . ', 'æ'.repeat(500), '%2e%2e%2f', 'x'.repeat(5000), '\ud800'];
   for (const label of labels) {
     const { zipFilename, gmlFilename } = photoExportNames({ label, date: instant });
-    assert.match(zipFilename, /^\d{8}-\d{6}(?:-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?\.zip$/, label);
+    assert.match(zipFilename, /^\d{8}-\d{6}(?:-[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*)?\.zip$/, label);
     assert.equal(gmlFilename, zipFilename.replace(/\.zip$/, '.gml'));
   }
 });
@@ -166,4 +168,41 @@ test('a plan built without a label or a clock still gets a timestamped name', as
     assert.match(naming.zipFilename, /^\d{8}-\d{6}\.zip$/);
     assert.equal(naming.label, '');
   } finally { f.session.clear(); }
+});
+
+const revisionCases = [
+  ['Ledninger.gmi', 'Ledninger_rev01'], ['Ledninger_rev01.gmi', 'Ledninger_rev02'],
+  ['Ledninger_rev09.gmi', 'Ledninger_rev10'], ['Ledninger-rev3.gmi', 'Ledninger_rev04'],
+  ['20261116-105236-Ledninger_rev03.gmi', 'Ledninger_rev04'],
+  ['20261116-105236-Ledninger-rev03.gmi', 'Ledninger_rev04'],
+  ['Ledninger_rev99.gmi', 'Ledninger_rev100'], ['Ledninger_rev001.gmi', 'Ledninger_rev002'],
+  ['LEDNINGER_REV01.GMI', 'LEDNINGER_rev02'], ['Ledninger Rev 1.gmi', 'Ledninger_rev02'],
+  ['Ledninger.rev.1.gmi', 'Ledninger_rev02'], ['Ledninger_rev-1.gmi', 'Ledninger_rev02'],
+  ['Ledninger', 'Ledninger_rev01'], ['Ledninger.txt', 'Ledninger-txt_rev01'],
+  ['Ledninger 2026-11-16.gmi', 'Ledninger-2026-11-16_rev01'],
+  ['20261116 Ledninger.gmi', '20261116-Ledninger_rev01'],
+  ['2026-11-16_Ledninger.gmi', '2026-11-16_Ledninger_rev01'],
+  ['20261116-105236.gmi', 'rev01'],
+  ['20261116-105236-20261115-090000-Ledninger_rev02.gmi', 'Ledninger_rev03'],
+  ['20261399-999999-Ledninger.gmi', '20261399-999999-Ledninger_rev01'],
+  ['20261116-105236-Ledninger_rev03 (1).gmi', 'Ledninger_rev04'],
+  ['Ledninger_rev01 - Kopi.gmi', 'Ledninger_rev01-Kopi_rev01'],
+  ['Ledninger_rev01 - Copy.gmi', 'Ledninger_rev01-Copy_rev01'],
+  ['Ledninger_rev01_final.gmi', 'Ledninger_rev01_final_rev01'],
+  ['Ledningerrev01.gmi', 'Ledningerrev01_rev01'], ['Ledninger_v2.gmi', 'Ledninger_v2_rev01'],
+  ['Ledninger_r2.gmi', 'Ledninger_r2_rev01'], ['Ledninger_rev.gmi', 'Ledninger_rev_rev01'],
+  ['Grøft nord.gmi', 'Groeft-nord_rev01'], ['日本語.gmi', 'rev01'], ['.gmi', 'rev01'],
+  ['x'.repeat(60) + '.gmi', 'x'.repeat(42) + '_rev01'], ['rev05.gmi', 'rev06'],
+  ['x'.repeat(60) + '_rev0099.gmi', 'x'.repeat(40) + '_rev0100'],
+  ['x'.repeat(60) + '_rev9999.gmi', 'x'.repeat(39) + '_rev10000'],
+  ['  C:/imports/Ledninger_rev01.gmi  ', 'Ledninger_rev02'],
+];
+test('revision suggestions follow the approved source-name rules and survive sanitizing unchanged', () => {
+  for (const [filename, expected] of revisionCases) {
+    const label = suggestRevisionLabel(filename);
+    assert.equal(label, expected, filename);
+    assert.equal(sanitizePhotoExportLabel(label), label, filename);
+    assert(label.length <= PHOTO_EXPORT_LABEL_MAX_LENGTH);
+  }
+  for (const input of [null, undefined, 123, {}, '', '  ']) assert.equal(suggestRevisionLabel(input), '');
 });
