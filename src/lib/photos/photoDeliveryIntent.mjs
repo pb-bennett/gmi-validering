@@ -111,8 +111,11 @@ function unlinkedAssetEvidence(layer, assetId) {
   return { confident, ambiguous };
 }
 
-/** The derived delivery state of one occurrence. */
-export function photoDeliveryEntry(layer, record, decision = null) {
+/**
+ * The derived delivery state of one occurrence. `userChosen` records that the user explicitly chose the current
+ * state, including a default one (GMI, Ikke valgt); automatic delivery defaults never override such a choice.
+ */
+export function photoDeliveryEntry(layer, record, decision = null, { userChosen = false } = {}) {
   const occurrence = record.occurrence || null;
   const linked = Boolean(occurrence);
   const association = photoOccurrenceAssociation(layer, record);
@@ -144,6 +147,7 @@ export function photoDeliveryEntry(layer, record, decision = null) {
     intent,
     include,
     explicit: Boolean(decision),
+    userChosen: Boolean(userChosen),
     canTransfer: linked && association.state === 'confident',
     canInclude: !linked && !evidence.confident,
     linkedWithoutOccurrence: !linked && evidence.confident,
@@ -192,9 +196,10 @@ export function derivePhotoAssetDelivery(entries, linksWithoutOccurrence = []) {
   })));
 }
 
-/** Delivery entries for every occurrence of a layer, keyed by photo id. */
-export function photoLayerDelivery(layer, records, decisions) {
-  const entries = layer.photoIds.map((id) => photoDeliveryEntry(layer, records.get(id), decisions.get(id) || null));
+/** Delivery entries for every occurrence of a layer, keyed by photo id. `choiceIds`: occurrences the user chose explicitly. */
+export function photoLayerDelivery(layer, records, decisions, choiceIds = null) {
+  const entries = layer.photoIds.map((id) => photoDeliveryEntry(layer, records.get(id), decisions.get(id) || null,
+    { userChosen: Boolean(choiceIds?.has(id)) }));
   const snapshot = buildPhotoDeliverySnapshot(layer, records, decisions);
   return Object.freeze({
     assets: snapshot.assetStates,

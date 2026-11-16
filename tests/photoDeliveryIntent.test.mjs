@@ -117,10 +117,18 @@ test('invalid and stale identities are rejected atomically; reapplying a value i
   assert.equal(publishes, 0, 'no rejected call publishes');
   assert.equal(status(kum1), 'keep-link');
   assert.equal(status(d), 'not-selected');
-  // Reapplying the current (default) value changes nothing and does not publish.
+  // Choosing the current (default) value changes no decision. The first explicit choice is recorded once (it protects
+  // the occurrence from automatic delivery defaults) and publishes; reapplying it again is silent.
+  const before = session.getPhotoDeliverySnapshot(layer.id).stateKey;
   assert.deepEqual(session.setDeliveryIntent(layer.id, [kum1.id], 'keep-link'), { ok: true, changedIds: [], unchangedIds: [kum1.id] });
   assert.deepEqual(session.setCombinedDeliveryInclusion(layer.id, [d.id], false).changedIds, []);
-  assert.equal(publishes, 0);
+  assert.equal(publishes, 2);
+  assert.equal(session.getLayerDelivery(layer.id).byPhotoId[kum1.id].userChosen, true);
+  assert.equal(session.getPhotoDeliverySnapshot(layer.id).stateKey, before, 'an explicit default choice never changes the export snapshot');
+  assert.deepEqual(session.setDeliveryIntent(layer.id, [kum1.id], 'keep-link').changedIds, []);
+  assert.deepEqual(session.setCombinedDeliveryInclusion(layer.id, [d.id], false).changedIds, []);
+  assert.equal(publishes, 2);
+  publishes = 0;
   assert.deepEqual(session.setCombinedDeliveryInclusion(layer.id, [d.id], true).changedIds, [d.id]);
   assert.deepEqual(session.setCombinedDeliveryInclusion(layer.id, [d.id], true).changedIds, []);
   assert.equal(publishes, 1);

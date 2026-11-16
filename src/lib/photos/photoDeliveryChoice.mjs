@@ -4,8 +4,10 @@
 // through `setDeliveryIntent` (GMI-linked occurrences) or `setCombinedDeliveryInclusion` (occurrences without a GMI link),
 // for exactly one photo id, so a shared photograph's other placements are never touched. Nothing here changes a GMI
 // file, a hyperlink or a photograph; the choices are used when a delivery is exported.
-import { PHOTO_DELIVERY_REASON_TEXT, PHOTO_DELIVERY_STATUS_LABELS } from './photoDeliveryIntent.mjs';
+import { PHOTO_DELIVERY_REASON_TEXT, PHOTO_DELIVERY_STATUS_LABELS, summarizePhotoDelivery } from './photoDeliveryIntent.mjs';
 import { PHOTO_DELIVERY_COLOURS, photoDeliveryColourState } from './photoMarkerPresentation.mjs';
+import { PHOTO_POSITION_TOLERANCE_METRES, photoPositionDistance } from './photoPositioning.mjs';
+import { isPhotoPosition } from './photoSpatial.mjs';
 
 const option = (key, apply, { active = false, disabled = false, reason = null } = {}) =>
   Object.freeze({ key, label: PHOTO_DELIVERY_COLOURS[key].short, apply, active, disabled, reason });
@@ -141,6 +143,41 @@ export function photoStackDeliverySummary(members, entries) {
   }
   return [`${members.length} ${members.length === 1 ? 'plassering' : 'plasseringer'}`,
     ...['gmi', 'gml', 'excluded', 'notSelected', 'review'].filter((key) => counts.get(key)).map((key) => `${counts.get(key)} ${key === 'notSelected' ? 'Ikke valgt' : PHOTO_DELIVERY_COLOURS[key].short}`)].join(' · ');
+}
+
+// Automatic delivery defaults. They only ever replace an untouched default state: an occurrence with a stored decision
+// (GML, Ikke, an inclusion) or one whose current state the user chose explicitly (`userChosen`) is never changed.
+
+/** An unlinked occurrence in its default «Ikke valgt» state that adopts a GML position becomes a GML inclusion. */
+export const photoGmlPositionSetsDelivery = (entry) => Boolean(entry) && !entry.linked && entry.status === 'not-selected'
+  && !entry.explicit && !entry.userChosen && entry.canInclude;
+
+/** The GMI object position this occurrence was placed from (its provenance), or null. */
+export function photoOriginGmiPosition(photo) {
+  const occurrence = photo?.occurrence;
+  if (!occurrence?.key) return null;
+  const candidate = photo.spatial?.candidates?.find((item) => item.kind === 'gmi' && item.provenance?.key === occurrence.key
+    && item.sourceId === occurrence.sourceId);
+  return isPhotoPosition(candidate?.position) ? candidate.position : null;
+}
+
+/**
+ * Whether moving a default GMI occurrence to `position` proposes GMI → GML: only when the new position is further from
+ * the originating GMI point than the shared positioning tolerance. Returning to the GMI point proposes nothing.
+ */
+export function photoMoveProposesTransfer(photo, entry, position) {
+  if (!entry?.linked || entry.status !== 'keep-link' || entry.explicit || entry.userChosen || !entry.canTransfer) return false;
+  const origin = photoOriginGmiPosition(photo);
+  const distance = origin && isPhotoPosition(position) ? photoPositionDistance(origin, position) : null;
+  return distance !== null && distance > PHOTO_POSITION_TOLERANCE_METRES;
+}
+
+/** Presentation overlay for unsaved move proposals: the proposed entries read as GML, marked `proposed`. */
+export function photoDeliveryWithProposals(delivery, proposedIds) {
+  if (!delivery || !proposedIds?.size) return delivery;
+  const byPhotoId = { ...delivery.byPhotoId };
+  for (const id of proposedIds) if (byPhotoId[id]) byPhotoId[id] = Object.freeze({ ...byPhotoId[id], status: 'transfer', intent: 'transfer', proposed: true });
+  return Object.freeze({ ...delivery, byPhotoId: Object.freeze(byPhotoId), summary: summarizePhotoDelivery(Object.values(byPhotoId)) });
 }
 
 /** Destination counts for the planning bar, by occurrence. */

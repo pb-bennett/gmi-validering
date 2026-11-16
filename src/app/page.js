@@ -15,7 +15,7 @@ import { canRedoPhotoEdit, canUndoPhotoEdit, changedPhotoIds, effectivePhoto, em
   photoEditReducer } from '@/lib/photos/photoEditSession.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { photoStackMembers } from '@/lib/photos/photoStacks.mjs';
-import { photoDeliveryStatusText, togglePhotoDelivery } from '@/lib/photos/photoDeliveryChoice.mjs';
+import { applyPhotoDeliveryChoice, photoDeliveryStatusText, photoDeliveryToggleTarget, photoDeliveryWithProposals, photoMoveProposesTransfer, togglePhotoDelivery } from '@/lib/photos/photoDeliveryChoice.mjs';
 import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
 import { photoExportConfigFor, reconcilePhotoExportConfig, updatePhotoExportConfig } from '@/lib/photos/photoExportConfig.mjs';
 import { createPhotoExportFlow, photoExportFlowFilter, photoExportFlowIsLive, photoExportFlowProgress } from '@/lib/photos/photoExportFlow.mjs';
@@ -65,6 +65,9 @@ import useStore from '@/lib/store';
 const DEV_RUNTIME_SNAPSHOTS_KEY = 'gmi:dev:runtime:snapshots';
 const DEV_RUNTIME_EVENTS_KEY = 'gmi:dev:runtime:events';
 const DEV_RUNTIME_MAX_ITEMS = 120;
+// Saved FOTO edits that moved GMI placements away from their GMI point and so now go to GML.
+const photoTransferNote = (result) => result?.transferIds?.length
+  ? ` · ${result.transferIds.length} ${result.transferIds.length === 1 ? 'plassering' : 'plasseringer'} overføres til GML` : '';
 const PUBLIC_REPO_URL =
   'https://github.com/pb-bennett/gmi-validering';
 
@@ -224,6 +227,12 @@ export default function Home() {
     ? photoSession.getLayerDelivery(photoWorkspace.layerId) : null, [photoLayers, photoWorkspace.layerId]);
   const workspaceView = useMemo(() => photoWorkspaceView(effectiveWorkspacePhotos, photoWorkspace, { changedIds, delivery: workspaceDelivery }),
     [effectiveWorkspacePhotos, photoWorkspace, changedIds, workspaceDelivery]);
+  // Unsaved moves away from the originating GMI point propose GML. Shown on pills, markers and the inspector, and
+  // committed only by Save together with the position (the session re-derives it); filters use saved choices.
+  const shownDelivery = useMemo(() => photoEditing && workspaceDelivery ? photoDeliveryWithProposals(workspaceDelivery,
+    new Set(effectiveWorkspacePhotos.filter((photo) => photo.staged?.position
+      && photoMoveProposesTransfer(photo, workspaceDelivery.byPhotoId[photo.id], photo.spatial.current?.position)).map((photo) => photo.id)))
+    : workspaceDelivery, [photoEditing, workspaceDelivery, effectiveWorkspacePhotos]);
   const activeWorkspacePhoto = effectiveWorkspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
   const activeSiblings = activeWorkspacePhoto ? effectiveWorkspacePhotos.filter((photo) => photo.assetId === activeWorkspacePhoto.assetId) : [];
   // List delivery pills and the inspector toggle: every change is one occurrence's M8 decision,
@@ -236,7 +245,12 @@ export default function Home() {
     setPhotoDeliveryAnnouncement(`${name}: ${photoDeliveryStatusText(entry) || 'endret'}`);
   };
   const toggleWorkspaceDelivery = (photoId) => {
-    if (workspaceLayer) reportDeliveryChange(photoId, togglePhotoDelivery(photoSession, workspaceLayer.id, photoId));
+    if (!workspaceLayer) return;
+    // A proposed GML continues the cycle from GML: the next click is an explicit choice that replaces the proposal.
+    const proposed = shownDelivery?.byPhotoId[photoId];
+    reportDeliveryChange(photoId, proposed?.proposed
+      ? applyPhotoDeliveryChoice(photoSession, workspaceLayer.id, photoId, photoDeliveryToggleTarget(proposed))
+      : togglePhotoDelivery(photoSession, workspaceLayer.id, photoId));
   };
   const [photoSourceWorkflow, setPhotoSourceWorkflow] = useState(null);
   const sourceWorkflowLayer = photoLayers.find((layer) => layer.id === photoSourceWorkflow?.layerId);
@@ -305,7 +319,7 @@ export default function Home() {
       dispatchPhotoEdit({ type: 'end' });
       dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' });
       setPhotoBoundary(null);
-      if (changes.length) notifyPhoto(`Endringer lagret for ${changes.length} ${changes.length === 1 ? 'bilde' : 'bilder'}`);
+      if (changes.length) notifyPhoto(`Endringer lagret for ${changes.length} ${changes.length === 1 ? 'bilde' : 'bilder'}${photoTransferNote(result)}`);
       then?.();
       return;
     }
@@ -752,7 +766,7 @@ export default function Home() {
             const result = photoSession.applyPhotoEdits(ticket, changes);
             if (result.ok) {
               dispatchPhotoEdit({ type: 'end' }); dispatchPhotoWorkspace({ type: 'mode', mode: 'browse' }); setPhotoBoundary(null);
-              notifyPhoto(`Endringer lagret for ${changes.length} ${changes.length === 1 ? 'bilde' : 'bilder'}`);
+              notifyPhoto(`Endringer lagret for ${changes.length} ${changes.length === 1 ? 'bilde' : 'bilder'}${photoTransferNote(result)}`);
               then?.();
             } else if (result.error === 'edit-conflict') { photoEditTicketRef.current = ticket; setPhotoBoundary({ variant: 'conflict', staleIds: result.staleIds, then }); }
             else abandonPhotoEdits(ticket);
@@ -934,7 +948,7 @@ export default function Home() {
             appInfoTriggerRef={appInfoTriggerRef}
             sidebar={workspaceLayer ? <PhotoWorkspaceCollection key={workspaceLayer.id} layer={workspaceLayer} photos={effectiveWorkspacePhotos}
               view={workspaceView} workspace={photoWorkspace} dispatch={dispatchPhotoWorkspace} editing={photoEditing} changedIds={changedIds}
-              delivery={workspaceDelivery} deliveryAnnouncement={photoDeliveryAnnouncement} onToggleDelivery={toggleWorkspaceDelivery}
+              delivery={shownDelivery} deliveryAnnouncement={photoDeliveryAnnouncement} onToggleDelivery={toggleWorkspaceDelivery}
               onExit={exitPhotoWorkspace} onTool={runWorkspaceTool} onSelect={(photoId, options = { pan: true }) => selectWorkspacePhoto(photoId, options)} />
               : gmiEditActive ? <GmiEditWorkspace key={gmiEditLayerId} layerId={gmiEditLayerId} inspectorRoot={gmiEditInspector}
                 onGuardChange={registerGmiEditGuard} onDraftChange={setGmiEditDraft} /> : fieldValidationOpen ? (
@@ -989,7 +1003,7 @@ export default function Home() {
                     photoWorkspace={workspaceLayer ? { layerId: workspaceLayer.id, photoId: photoWorkspace.activePhotoId, activeAssetId: activeWorkspacePhoto?.assetId || null,
                       photos: effectiveWorkspacePhotos, visibleIds: workspaceView.visibleIds, displayMode: photoMapDisplay, onDisplayModeChange: setPhotoMapDisplay,
                       colourMode: photoWorkspace.colourMode, onColourModeChange: (value) => dispatchPhotoWorkspace({ type: 'map-colour', value }),
-                      delivery: workspaceDelivery,
+                      delivery: shownDelivery,
                       zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null } : null}
                     onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
                     photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,
@@ -1092,7 +1106,7 @@ export default function Home() {
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
             {!photoImport && <PhotoWorkspaceInspector key={activeWorkspacePhoto?.assetId || 'empty'} photo={activeWorkspacePhoto} layer={workspaceLayer}
-              siblings={activeSiblings} editing={photoEditing} delivery={workspaceDelivery} onDeliveryResult={reportDeliveryChange}
+              siblings={activeSiblings} editing={photoEditing} delivery={shownDelivery} onDeliveryResult={reportDeliveryChange}
               onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} onLocate={locatePhoto}
               onEditMetadata={() => requestWorkspaceAction(() => setPhotoDialog('metadata'))} onOpenViewer={() => setPhotoViewerOpen(true)} />}
           </aside> : gmiEditActive ? <aside id={GMI_EDIT_INSPECTOR_ROOT_ID} key={gmiEditLayerId} ref={setGmiEditInspector} className="gmi-edit-inspector" aria-label="Objektinspektør" />

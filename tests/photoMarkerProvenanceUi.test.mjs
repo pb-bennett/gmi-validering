@@ -99,6 +99,12 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await move(false); assert.equal(await sourceOfSelected(), 'gmi');
         await move(true); assert.equal(await sourceOfSelected(), 'manual');
         assert.deepEqual(await browser.evaluate(`${markers}.filter(e=>e.title.includes('shared.png')).map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['gmi', 'manual']);
+        // The saved move away from its GMI point makes only this placement GML; the sibling keeps GMI.
+        const pill = (id) => browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] .photo-delivery-pill').innerText`);
+        assert.deepEqual([await pill(repeated[0].id), await pill(repeated[1].id)], ['GMI', 'GML']);
+        // An explicit GMI choice restores the starting point for the delivery checks below.
+        await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=gmi]').click()`);
+        await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${repeated[1].id}"] .photo-delivery-pill').innerText === 'GMI'`);
       });
       await t.test('delivery colours are the default; marker selection is safe and explicit controls update destinations', async () => {
         const colourSelect = `${legend}.querySelector('select')`;

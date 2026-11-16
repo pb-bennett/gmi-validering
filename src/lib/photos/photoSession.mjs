@@ -14,7 +14,7 @@ import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSo
 import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
 import { PHOTO_DELIVERY_INTENTS, buildPhotoDeliverySnapshot, photoDeliveryEntry, photoLayerDelivery } from './photoDeliveryIntent.mjs';
-import { planPhotoExclusion } from './photoDeliveryChoice.mjs';
+import { photoGmlPositionSetsDelivery, photoMoveProposesTransfer, planPhotoExclusion } from './photoDeliveryChoice.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
   photos: Object.freeze([]), selectedId: null, batchSelectedIds: Object.freeze([]),
@@ -81,8 +81,26 @@ export function createPhotoSession({
   const sourceWorkflows = new Map();
   const workflowReviews = new WeakMap();
   // Combined-delivery decisions (M8), one per occurrence (record id), kept apart from the records so that no
-  // positioning, metadata or edit action can change them. Only the two explicit delivery actions write here.
+  // positioning, metadata or edit action can change them. The explicit delivery actions write here; the only other
+  // writers are the two automatic defaults (GML positions adopted in the source workflow, a saved move away from the
+  // originating GMI point), which are committed together with their position and never replace a stored decision
+  // or an explicit choice.
   const deliveryDecisions = new Map();
+  // Occurrences whose current delivery state the user chose explicitly, including a default state (GMI, Ikke valgt).
+  // Presentation input for automatic defaults only; never part of the export snapshot.
+  const deliveryChoiceIds = new Set();
+  const markDeliveryChoices = (ids) => {
+    const before = deliveryChoiceIds.size;
+    for (const id of ids) deliveryChoiceIds.add(id);
+    return deliveryChoiceIds.size !== before;
+  };
+  const layerDelivery = (layer) => photoLayerDelivery(layer, records, deliveryDecisions, deliveryChoiceIds);
+  // Occurrences among validated GML position requests whose untouched «Ikke valgt» default becomes GML.
+  const gmlDeliveryDefaults = (layer, requests) => {
+    const delivery = layerDelivery(layer);
+    return requests.map((request) => request.photoId).filter((id) => photoGmlPositionSetsDelivery(delivery.byPhotoId[id]));
+  };
+  const includeAsGml = (ids) => { for (const id of ids) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true })); };
 
   function sourceWorkflowIsLive(ticket) {
     return Boolean(ticket && ticket.generation === generation && sourceWorkflows.get(ticket.layerId) === ticket
@@ -352,7 +370,7 @@ export function createPhotoSession({
 
   function release(ids) {
     const candidates = assetIds(ids);
-    for (const id of ids) { records.delete(id); appendOverrideIds.delete(id); deliveryDecisions.delete(id); }
+    for (const id of ids) { records.delete(id); appendOverrideIds.delete(id); deliveryDecisions.delete(id); deliveryChoiceIds.delete(id); }
     const live = new Set([...records.values()].map((record) => record.assetId));
     const removed = new Set(candidates.filter((id) => !live.has(id)));
     queue = queue.filter((job) => !removed.has(job.id));
@@ -667,13 +685,17 @@ export function createPhotoSession({
           return { ok: false, error: 'review-changed' };
         seen.add(request.photoId);
       }
+      // Every request is validated; positions and their GML delivery default are committed together, published once.
+      const deliveryIds = gmlDeliveryDefaults(layer, requests.filter((request) =>
+        plan.rows.find((item) => item.photoId === request.photoId).options.find((item) => item.id === request.candidateId).kind === 'gml'));
       const acceptedAt = Date.now();
       for (const request of requests) updateRecord(request.photoId, (live) => ({
         spatial: acceptPhotoCandidate(live.spatial, request.candidateId, 'explicit-candidate', acceptedAt),
       }));
+      includeAsGml(deliveryIds);
       workflowReviews.delete(plan);
       publish();
-      return { ok: true, acceptedIds: [...seen] };
+      return { ok: true, acceptedIds: [...seen], deliveryIds };
     },
     beginPhotoEdits(layerId) {
       const layer = layers.get(layerId);
@@ -713,14 +735,21 @@ export function createPhotoSession({
         writes.push({ photoId, position: hasPosition ? change.position : null, degrees });
       }
       if (staleIds.length) return { ok: false, error: 'edit-conflict', staleIds };
+      // A move away from the originating GMI point turns an untouched GMI default into GML, in the same commit.
+      // Rotation alone never does; the occurrence (GMI object relationship) and the GMI file are left as they are.
+      const delivery = layerDelivery(layer);
+      const transferIds = writes.filter(({ photoId, position }) => position
+        && photoMoveProposesTransfer(records.get(photoId), delivery.byPhotoId[photoId], position)).map((write) => write.photoId);
       const acceptedAt = Date.now();
       for (const { photoId, position, degrees } of writes) updateRecord(photoId, (live) => ({
         ...(position ? { spatial: acceptManualPhotoPosition(live.spatial, position, acceptedAt) } : {}),
         ...(degrees !== null ? { direction: acceptManualPhotoDirection(degrees, acceptedAt) } : {}),
       }));
+      for (const id of transferIds) deliveryDecisions.set(id, Object.freeze({ kind: 'gmi', occurrenceKey: records.get(id).occurrence.key,
+        intent: PHOTO_DELIVERY_INTENTS.TRANSFER }));
       editSessions.delete(ticket.layerId);
       if (autoAcceptMetadata() || writes.length) publish();
-      return { ok: true, changedIds: writes.map((write) => write.photoId) };
+      return { ok: true, changedIds: writes.map((write) => write.photoId), transferIds };
     },
     // Owner-scoped, deduplicated asset writes. Stale occurrences are ignored;
     // invalid values and stale evidence fail before any write.
@@ -827,7 +856,7 @@ export function createPhotoSession({
     // value is a no-op, and nothing else (positions, directions, metadata, sources, hyperlinks) is touched.
     setPhotoDeliveryExclusion(layerId, photoIds, options = {}) {
       const layer = layers.get(layerId);
-      const delivery = layer ? photoLayerDelivery(layer, records, deliveryDecisions) : null;
+      const delivery = layer ? layerDelivery(layer) : null;
       if (options.expectedStateKey && options.expectedStateKey !== delivery?.stateKey) return {
         ok: false, error: 'stale-plan', changedIds: [], blocked: [{ reason: 'stale-plan', text: 'Leveringsvalgene er endret. Velg handlingen på nytt.' }] };
       const plan = planPhotoExclusion(delivery, layer, photoIds, options);
@@ -838,7 +867,7 @@ export function createPhotoSession({
         if (decision) deliveryDecisions.set(photoId, Object.freeze(decision));
         else deliveryDecisions.delete(photoId);
       }
-      if (plan.writes.length) publish();
+      if (markDeliveryChoices(plan.writes.map((write) => write.photoId)) || plan.writes.length) publish();
       return { ...plan, changedIds: plan.writes.map((write) => write.photoId) };
     },
     setDeliveryIntent(layerId, photoIds, intent) {
@@ -861,7 +890,7 @@ export function createPhotoSession({
         if (intent === PHOTO_DELIVERY_INTENTS.KEEP_LINK) deliveryDecisions.delete(id);
         else deliveryDecisions.set(id, Object.freeze({ kind: 'gmi', occurrenceKey: records.get(id).occurrence.key, intent }));
       }
-      if (changed.length) publish();
+      if (markDeliveryChoices(photoIds) || changed.length) publish();
       return { ok: true, changedIds: changed, unchangedIds: photoIds.filter((id) => !changed.includes(id)) };
     },
     setCombinedDeliveryInclusion(layerId, photoIds, include) {
@@ -886,13 +915,13 @@ export function createPhotoSession({
         if (include) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true }));
         else deliveryDecisions.delete(id);
       }
-      if (changed.length) publish();
+      if (markDeliveryChoices(photoIds) || changed.length) publish();
       return { ok: true, changedIds: changed, unchangedIds: photoIds.filter((id) => !changed.includes(id)) };
     },
     // Read-only: per-occurrence delivery state and counts for the workspace.
     getLayerDelivery(layerId) {
       const layer = layers.get(layerId);
-      return layer ? photoLayerDelivery(layer, records, deliveryDecisions) : null;
+      return layer ? layerDelivery(layer) : null;
     },
     // Read-only, deterministic snapshot for the combined delivery planner (M9).
     getPhotoDeliverySnapshot(layerId) {
@@ -1078,6 +1107,7 @@ export function createPhotoSession({
         if (candidate?.id !== request.candidateId || candidate?.status !== 'viable' || !isPhotoPosition(candidate.position)) return fail('review-changed');
         seen.add(request.photoId);
       }
+      const deliveryIds = kind === 'gml' ? gmlDeliveryDefaults(layer, requests) : [];
       if (kind === 'gml') {
         const source = attachSource(review.source, layer.photoIds);
         const existing = layer.spatialSources.some((item) => item.id === source.id);
@@ -1090,8 +1120,9 @@ export function createPhotoSession({
       for (const request of requests) updateRecord(request.photoId, (live) => ({
         spatial: acceptPhotoCandidate(live.spatial, request.candidateId, 'explicit-candidate', acceptedAt),
       }));
+      includeAsGml(deliveryIds);
       publish();
-      return { ok: true, acceptedIds: [...seen] };
+      return { ok: true, acceptedIds: [...seen], deliveryIds };
     },
     removeLayerPhotos(layerId, photoIds, { confirmed = false } = {}) {
       const layer = layers.get(layerId);

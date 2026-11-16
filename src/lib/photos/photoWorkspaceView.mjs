@@ -95,8 +95,9 @@ export function photoFilterSummary(filter) {
   ].filter(Boolean);
 }
 
-// One derived view for the list and the workspace map. The selected occurrence is never hidden:
-// when filtered out it is pinned in the list and still rendered on the map.
+// One derived view for the list and the workspace map. A selected occurrence filtered out by placement, metadata or
+// work criteria is pinned in the list and still rendered on the map. One that does not match the delivery filter is
+// not pinned: a delivery change takes it out of the results at once, while it stays selected in the inspector.
 export function photoWorkspaceView(photos, { activePhotoId = null, filter = DEFAULT_PHOTO_FILTER, sort = DEFAULT_PHOTO_SORT } = {}, { changedIds = new Set(), delivery = null } = {}) {
   const deliveryStatuses = delivery?.byPhotoId || null;
   const entries = photos.map((photo, index) => ({ photo, index, capture: photoLocalCaptureKey(photo),
@@ -106,7 +107,7 @@ export function photoWorkspaceView(photos, { activePhotoId = null, filter = DEFA
   const matching = entries.filter((entry) => photoMatchesFilter(entry.photo, filter, changedIds, deliveryStatuses, delivery?.assets));
   const rows = matching.sort(comparators[sortKey]).map((entry) => entry.photo);
   const active = photos.find((photo) => photo.id === activePhotoId) || null;
-  const pinned = active && !rows.includes(active) ? active : null;
+  const pinned = active && !rows.includes(active) && matchesDelivery(active, filter.delivery, deliveryStatuses, delivery?.assets) ? active : null;
   const visibleIds = new Set(rows.map((photo) => photo.id));
   if (pinned) visibleIds.add(pinned.id);
   // Full-screen navigation follows the list's sort order across the whole layer, independent of the filter.

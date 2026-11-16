@@ -30,7 +30,10 @@ export async function deliveryFixture({ names = ['shared.png', 'only.png'],
   f.session.endSourceWorkflow(ticket);
   const photos = () => f.session.getLayerPhotos(f.layerId);
   // Source association can create additional occurrences. Accept each synthetic
-  // placement explicitly, just as the established export fixture does.
+  // placement explicitly, just as the established export fixture does. The synthetic positions are not the GMI points,
+  // so first record an explicit «keep in GMI» choice: a saved move away from the GMI point otherwise proposes GML.
+  const linkedIds = photos().filter((photo) => photo.occurrence).map((photo) => photo.id);
+  if (!options.unplaced && linkedIds.length) assert(f.session.setDeliveryIntent(f.layerId, linkedIds, 'keep-link').ok);
   if (!options.unplaced) for (const [index, photo] of photos().entries()) {
     assert(f.session.applyPhotoEdits(f.session.beginPhotoEdits(f.layerId), [{ photoId: photo.id,
       position: { crs: 'EPSG:4326', longitude: 10.43555 + index * .001, latitude: 59.22512 } }]).ok);
