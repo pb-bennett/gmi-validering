@@ -9,7 +9,7 @@ import { photoPositionProvenanceKind, photoPositionSourceDescription, photoPosit
 import PhotoWorkspaceMapPreview from './PhotoWorkspaceMapPreview';
 import { photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
 import { gmiObjectLabel } from '@/lib/photos/gmiPhotoSource.mjs';
-import { PHOTO_DIRECTION_PANE, PHOTO_DIRECTION_Z_INDEX, PHOTO_MARKER_PANE, PHOTO_MARKER_Z_INDEX } from '@/lib/photos/photoMapPanes.mjs';
+import { PHOTO_HOVER_PREVIEW_PANE, PHOTO_HOVER_PREVIEW_Z_INDEX, PHOTO_DIRECTION_PANE, PHOTO_DIRECTION_Z_INDEX, PHOTO_MARKER_PANE, PHOTO_MARKER_Z_INDEX } from '@/lib/photos/photoMapPanes.mjs';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoDirectionIcon, photoMarkerIcon } from './photoMarkerIcons';
 
@@ -164,10 +164,10 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
     element.dataset.photoId = photoId; element.dataset.layerId = layerId; element.dataset.displayMode = mode;
     element.dataset.lat = String(lat); element.dataset.lng = String(lng);
     element.setAttribute('aria-label', label);
-    // Thumbnail mode shows its own preview; a native title would duplicate it.
-    if (mode === 'thumbnails') element.removeAttribute('title'); else element.title = label;
-    if (mode !== 'thumbnails' || !interactive) return undefined;
-    const preview = { lat, lng, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, element };
+    // Both display modes use the visual preview; keep the accessible name without a native title.
+    element.removeAttribute('title');
+    if (!interactive) return undefined;
+    const preview = { photoId, lat, lng, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, element };
     const marker = ref.current;
     // Overlapping miniatures: the hovered one comes to the front imperatively, without React state.
     const enter = () => { marker.setZIndexOffset(Math.max(zIndexOffset, 800)); if (hoverCapable()) actions.current.schedulePreview(preview); };
@@ -193,9 +193,10 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
 });
 
 // FOTO persistent preview at the selected occurrence. Closed by X or Escape (focus returns to its marker when it was
-// inside the map); no map click closes it. React Leaflet re-adds the same popup when it follows another marker, so
-// only a close from outside (another map popup opening, say) leaves it off the map; the open state then follows.
-function WorkspacePreviewPopup({ photo, lat, lng, mode, width, maxHeight, deliveryEntry, onCycleDelivery, onClose }) {
+// inside the map), or an empty-map click. React Leaflet re-adds the same popup when it follows another marker, so
+// explicit removal leaves it off the map; the open state then follows. Survey popups may coexist;
+// their feature-click flag exempts them from map dismissal. WFS clicks still dismiss through the map handler.
+function WorkspacePreviewPopup({ photo, lat, lng, mode, width, maxHeight, deliveryEntry, onCycleDelivery, onEditPlacement, onClose }) {
   const map = useMap();
   const popupRef = useRef(null);
   const latest = useRef(onClose);
@@ -220,10 +221,10 @@ function WorkspacePreviewPopup({ photo, lat, lng, mode, width, maxHeight, delive
     return () => document.removeEventListener('keydown', escape);
   }, [map, close]);
   return <Popup ref={popupRef} position={position} pane="popupPane" className="photo-workspace-preview-popup" minWidth={width} maxWidth={width}
-    maxHeight={maxHeight} offset={[0, mode === 'thumbnails' ? -20 : -6]} closeButton={false} closeOnClick={false} closeOnEscapeKey={false}
+    maxHeight={maxHeight} offset={[0, mode === 'thumbnails' ? -20 : -6]} closeButton={false} autoClose={false} closeOnClick={false} closeOnEscapeKey={false}
     autoPanPadding={[24, 24]} eventHandlers={events}>
     <PhotoWorkspaceMapPreview photo={photo} deliveryEntry={deliveryEntry} onCycleDelivery={(id) => onCycleDelivery?.(id)}
-      onClose={() => close(true)} onLayout={() => popupRef.current?.update()} />
+      onEditPlacement={onEditPlacement} onClose={() => close(true)} onLayout={() => popupRef.current?.update()} />
   </Popup>;
 }
 
@@ -233,7 +234,12 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   const [mapSize, setMapSize] = useState(() => map.getSize());
-  useMapEvents({ zoomend: () => setZoom(map.getZoom()), resize: () => setMapSize(map.getSize()) });
+  useMapEvents({
+    zoomend: () => setZoom(map.getZoom()), resize: () => setMapSize(map.getSize()),
+    click: (event) => {
+      if (!event.originalEvent?._featureClicked && !event.originalEvent?._measureClick) setPreviewOpen(false);
+    },
+  });
   const thumbnails = photoThumbnailsVisible(workspace ? workspace.displayMode : displayMode, zoom);
   // items is rebuilt on every session publish, so the saved delivery entries are re-read exactly then.
   const mainDeliveries = useMemo(() => new Map([...new Set(items.map((item) => item.layerId))]
@@ -241,7 +247,7 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
   const models = markerModels(items, workspace, thumbnails, mainDeliveries);
   const actions = useRef(null);
   // FOTO persistent preview: open/closed only. It always shows the selected occurrence, so list, inspector and
-  // stack cycling stay the one selection. It closes with X, Escape, edit mode, a cleared selection or when the
+  // stack cycling stay the one selection. It closes with X, Escape, empty-map clicks, edit mode, a cleared selection or when the
   // selected occurrence leaves the map (filter or delivery change); it never reopens by itself.
   const [previewOpen, setPreviewOpen] = useState(false);
   const previewModel = workspace && !workspace.editing && workspace.photoId
@@ -252,15 +258,18 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
 
   useEffect(() => {
     const state = preview.current;
-    state.tooltip = L.tooltip({ direction: 'top', offset: [0, -26], className: 'photo-thumb-preview', opacity: 1, interactive: false });
+    const pane = map.getPane(PHOTO_HOVER_PREVIEW_PANE) || map.createPane(PHOTO_HOVER_PREVIEW_PANE);
+    pane.style.zIndex = String(PHOTO_HOVER_PREVIEW_Z_INDEX);
+    pane.style.pointerEvents = 'none';
+    state.tooltip = L.tooltip({ pane: PHOTO_HOVER_PREVIEW_PANE, direction: 'top', offset: [0, -26], className: 'photo-thumb-preview', opacity: 1, interactive: false });
     return () => { clearTimeout(state.timer); state.request?.abort(); if (state.tooltip && map.hasLayer(state.tooltip)) map.closeTooltip(state.tooltip); };
   }, [map]);
 
   useEffect(() => {
     const state = preview.current;
-    const open = ({ lat, lng, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, element }) => {
+    const open = ({ photoId, lat, lng, thumbnailUrl, filename, assetId, photoWidth, photoHeight, sourceKind, element }) => {
       clearTimeout(state.timer);
-      if (!thumbnailUrl || map.getContainer().classList.contains('photo-edit-gesture') || map.getContainer().querySelector('.photo-map-viewer-popup')) return;
+      if (!thumbnailUrl || workspace?.editing || previewPhoto?.id === photoId || (previewPhoto?.assetId && previewPhoto.assetId === assetId) || map.getContainer().classList.contains('photo-edit-gesture') || map.getContainer().querySelector('.photo-map-viewer-popup')) return;
       state.request?.abort();
       const { content, image } = previewContent({ thumbnailUrl, filename, photoWidth, photoHeight, sourceKind });
       state.element = element;
@@ -313,7 +322,7 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
       </Pane>
       {previewPhoto && <WorkspacePreviewPopup photo={previewPhoto} lat={previewModel.lat} lng={previewModel.lng} mode={previewModel.mode}
         width={Math.min(320, Math.max(160, mapSize.x - 64))} maxHeight={Math.max(160, mapSize.y - 80)}
-        deliveryEntry={workspace.delivery?.byPhotoId[previewPhoto.id] || null} onCycleDelivery={workspace.onToggleDelivery}
+        deliveryEntry={workspace.delivery?.byPhotoId[previewPhoto.id] || null} onCycleDelivery={workspace.onToggleDelivery} onEditPlacement={workspace.onEditPlacement}
         onClose={() => setPreviewOpen(false)} />}
     </>
   );

@@ -81,7 +81,8 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       const text = await browser.evaluate(`${section}.innerText`);
       assert(!text.includes('fjernes først når en samlet leveranse lages senere'), 'the link-removal explanation lives in the export wizard');
       assert(text.includes('Mangler for GML: godkjent plassering'), 'readiness is shown once, the choice is kept');
-      assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary").innerText'), 'Samlet levering: 1 overføres til GML');
+      assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-delivery-summary"))'), false);
+      assert.match(await browser.evaluate('document.querySelector(".photo-delivery-counts").innerText'), /GML 1\b/);
       assert.match(await browser.evaluate(`Array.from(${switcher}.querySelectorAll('button')).find((b) => b.innerText.includes('Kum 2')).innerText`), /GMI$/);
       await browser.evaluate(`${section}.scrollIntoView({ block: 'center' }); window.scrollTo(0, 0); document.scrollingElement.scrollTop = 0;`);
       await screenshot(browser, 'm8-inspector-transfer');
@@ -101,7 +102,8 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       assert.equal(await pill('Kum 2'), 'GMI');
       assert.match(await browser.evaluate(`${section}.innerText`), /Bildefilen er fortsatt med via andre/);
       assert.match(await browser.evaluate(`${option('excluded')}.title`), /Behold bildet i FOTO/);
-      assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary").innerText'), 'Samlet levering: 1 ikke med i leveransen');
+      assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-delivery-summary"))'), false);
+      assert.match(await browser.evaluate('document.querySelector(".photo-delivery-counts").innerText'), /GML 0\b/);
       for (const [width, height] of [[1280, 720], [1366, 768]]) {
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
         assert(await noOverflow());
@@ -198,7 +200,8 @@ test('FOTO delivery intent: compact inspector toggle, direct-click planning, ind
       }
       await browser.evaluate('document.querySelector(".photo-workspace-collection").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
       await browser.waitFor('!document.querySelector(".photo-delivery-bar")');
-      assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary").innerText'), 'Samlet levering: 2 overføres til GML · 1 tas med uten GMI-lenke');
+      assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-delivery-summary"))'), false);
+      assert.match(await browser.evaluate('document.querySelector(".photo-delivery-counts").innerText'), /GML 3\b/);
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-delivery-row-button").length'), 5);
       // Outside planning, a row click opens the photo again and changes nothing.
       await select('Kum 3');

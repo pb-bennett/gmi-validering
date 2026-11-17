@@ -82,7 +82,8 @@ test('FOTO delivery defaults: GML round trip, move away from GMI point, immediat
     assert.deepEqual(tally(await pills()), { GMI: 5, GML: 9 });
     for (const name of GMI_NAMES) assert.equal(await pill(name), 'GMI', `${name} stays GMI`);
     for (const name of GML_NAMES) assert.equal(await pill(name), 'GML', `${name} is GML`);
-    assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary")?.innerText'), 'Samlet levering: 9 tas med uten GMI-lenke');
+    assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-delivery-summary"))'), false);
+      assert.match(await browser.evaluate('document.querySelector(".photo-delivery-counts").innerText'), /GML 9\b/);
     await screenshot(browser, 'defaults-gml-roundtrip-1366x768');
 
     // Filter «Beholdes i GMI»: a selected photograph changed to GML leaves the list, its pinned section and the map at once.
@@ -118,7 +119,8 @@ test('FOTO delivery defaults: GML round trip, move away from GMI point, immediat
     await dragSelectedMarker(browser, 90, 45);
     await browser.waitFor(`${rowOf('Kum 2')}.querySelector('.photo-delivery-pill')?.innerText === 'GML'`);
     assert(await browser.evaluate(`Boolean(${section}.querySelector('[data-delivery-proposed]'))`), 'proposal explained in the inspector');
-    assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary")?.innerText'), 'Samlet levering: 1 overføres til GML · 9 tas med uten GMI-lenke');
+    assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-delivery-summary"))'), false);
+      assert.match(await browser.evaluate('document.querySelector(".photo-delivery-counts").innerText'), /GML 10\b/);
     for (const [width, height] of [[1280, 720], [1366, 768]]) {
       await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
       assert(await browser.evaluate(`['.photo-workspace-collection', '.photo-workspace-inspector'].every((selector) => { const e = document.querySelector(selector); return e && e.scrollWidth <= e.clientWidth + 1; })`));
@@ -142,7 +144,8 @@ test('FOTO delivery defaults: GML round trip, move away from GMI point, immediat
     await browser.waitFor('document.querySelector(".photo-workspace-toast")?.innerText.includes("overføres til GML")');
     assert.equal(await pill('Kum 2'), 'GML');
     assert.equal(await pill('Kum 3'), 'GMI');
-    assert.equal(await browser.evaluate('document.querySelector(".photo-delivery-summary")?.innerText'), 'Samlet levering: 1 overføres til GML · 9 tas med uten GMI-lenke');
+    assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-delivery-summary"))'), false);
+      assert.match(await browser.evaluate('document.querySelector(".photo-delivery-counts").innerText'), /GML 10\b/);
     await select('Kum 2');
     assert.equal(await browser.evaluate(`Boolean(${section}.querySelector('[data-delivery-proposed]'))`), false, 'a committed choice, no longer a proposal');
     assert.match(await browser.evaluate(`${inspector}.innerText`), /Kum 2/, 'GMI object relationship kept');

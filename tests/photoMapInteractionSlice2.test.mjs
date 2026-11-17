@@ -89,17 +89,23 @@ test('main map colours by delivery choice; only the FOTO card offers Plasserings
   assert.equal(photoWorkspaceReducer({ ...emptyPhotoWorkspace, layerId: 'a', colourMode: 'provenance' }, { type: 'enter', layerId: 'b', photoIds: [] }).colourMode, 'delivery');
 });
 
-test('persistent FOTO preview: image, filename, close and the shared delivery cycle pill only', async () => {
+test('persistent FOTO preview: image, filename, close, placement edit and the shared delivery cycle pill', async () => {
   const [preview, markers, page] = await Promise.all(['components/photos/PhotoWorkspaceMapPreview.js', 'components/photos/PhotoMarkersLayer.js', 'app/page.js'].map(read));
   assert.match(preview, /<PhotoIconButton icon=\{XIcon\} label="Lukk bildeforhåndsvisning"/);
   assert.match(preview, /<PhotoDeliveryCycleButton entry=\{deliveryEntry\}/);
   for (const absent of ['PhotoOccurrenceContext', 'Bildedetaljer', 'Åpne i bildemodul', 'captureTime', 'photoSession.set']) assert(!preview.includes(absent), absent);
-  // Browse mode only, X/Escape close, no map-click close, and it never shares the main-map popup class that hides hover previews.
+  // Browse mode only, X/Escape close, guarded map-click close, and it never shares the main-map popup class that hides hover previews.
   assert.match(markers, /workspace && !workspace\.editing && workspace\.photoId/);
-  assert.match(markers, /closeOnClick=\{false\} closeOnEscapeKey=\{false\}/);
+  assert.match(markers, /autoClose=\{false\} closeOnClick=\{false\} closeOnEscapeKey=\{false\}/);
   assert.match(markers, /className="photo-workspace-preview-popup"/);
   assert.match(markers, /querySelector\('\.photo-map-viewer-popup'\)/, 'the hover preview rule is unchanged');
   assert.match(markers, /PREVIEW_DELAY_MS = 250/);
+  assert.match(markers, /!event\.originalEvent\?\._featureClicked && !event\.originalEvent\?\._measureClick/);
+  assert.match(markers, /getPane\(PHOTO_HOVER_PREVIEW_PANE\) \|\| map\.createPane/);
+  assert.match(markers, /previewPhoto\?\.id === photoId/);
+  assert.doesNotMatch(markers, /mode !== 'thumbnails' \|\| !interactive/);
+  assert.match(preview, /icon=\{ArrowsOutCardinalIcon\} label="Juster plassering og retning"/);
+  assert.match(page, /onEditPlacement: \(\) => runWorkspaceTool\('edit'\)/);
   // The cycle pill uses the page's single per-occurrence toggle (proposal-aware), never a stack- or asset-wide write.
   assert.match(page, /delivery: shownDelivery, onToggleDelivery: toggleWorkspaceDelivery/);
 });

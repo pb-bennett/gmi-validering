@@ -69,6 +69,8 @@ function PhotoEditFlowRow({ progress, onSelect, onReturn }) {
 
 export default function PhotoEditCommandBar({ photo, siblingCount = 1, changedCount, canUndo, canRedo, onUndo, onRedo, onSave, onDiscard, onExit,
   onStage, onMapCenter, announcement = '', clickMove = false, onClickMove, stackCount = 1, flow = null }) {
+  const commandBarRef = useRef(null);
+  useEffect(() => { if (!flow) commandBarRef.current?.focus({ preventScroll: true }); }, [flow]);
   const placed = Boolean(photo) && isPhotoPosition(photo.spatial?.current?.position);
   const savedPosition = photo?.saved?.current?.position;
   const moved = placed && photo?.staged?.position && savedPosition ? photoPositionDistance(savedPosition, photo.spatial.current.position) : null;
@@ -76,7 +78,7 @@ export default function PhotoEditCommandBar({ photo, siblingCount = 1, changedCo
     : clickMove ? `Klikk i kartet der ${photo.originalFilename} skal stå. Esc avbryter.`
       : placed ? 'Dra bildet for å flytte, håndtaket for å rotere.'
         : `Klikk i kartet for å plassere ${photo.originalFilename}.`;
-  return <div className="photo-edit-command-bar gmi-elevated-surface">
+  return <div ref={commandBarRef} tabIndex={-1} role="group" aria-label="Juster plassering og retning" className="photo-edit-command-bar gmi-elevated-surface gmi-focus-ring">
     <div role="toolbar" aria-label="Juster plassering og retning" className="photo-edit-command-row">
       <span className="photo-edit-status"><strong>Justerer</strong>{changedCount > 0 && <> · <span data-edit-count>{changedCount} endret</span></>}</span>
       <span className="photo-edit-history" role="group" aria-label="Endringshistorikk">

@@ -7,3 +7,7 @@ export const PHOTO_MARKER_PANE = 'photo-markers';
 export const PHOTO_MARKER_Z_INDEX = 620;
 export const PHOTO_PLACEMENT_PANE = 'photo-placement';
 export const PHOTO_PLACEMENT_Z_INDEX = 640;
+
+// Hover previews remain above persistent photo popups without intercepting map interactions.
+export const PHOTO_HOVER_PREVIEW_PANE = 'photo-hover-preview';
+export const PHOTO_HOVER_PREVIEW_Z_INDEX = 710;

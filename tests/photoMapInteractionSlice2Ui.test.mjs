@@ -43,11 +43,13 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
     await writeFile(gmiPath, Buffer.from(await gmiFile([
       { guid: '00000000-0000-4000-8000-000000000001', label: 'Kum 1', hyperlink: 'h:1(link:"Attachments\\shared.png") ', xyz: '581930 6566000 1' },
       { guid: '00000000-0000-4000-8000-000000000002', label: 'Kum 2', hyperlink: 'h:1(link:"Attachments\\shared.png") ', xyz: '582030 6566100 1' },
+      { scope: 'line', label: 'Synthetic survey line', tema: 'VL', xyz: '581960 6566020 1' },
       { guid: '00000000-0000-4000-8000-000000000003', label: 'Kum 3', hyperlink: 'h:1(link:"Attachments\\b.png") ', xyz: '582130 6566050 1' },
     ]).arrayBuffer()));
     const idOf = (text) => browser.evaluate(`${rowOf(text)}.dataset.photoId`);
     const pill = (text) => browser.evaluate(`${rowOf(text)}?.querySelector('.photo-delivery-pill')?.innerText || null`);
     const mouseClick = async (expression) => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
       const { x, y } = await elementCentre(browser, expression);
       await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 });
       await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
@@ -65,7 +67,9 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
       await browser.send('Page.navigate', { url: app + '?testmodus=1' });
       await browser.waitFor('document.querySelector("button[aria-label=Lukk]")');
       await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
-      await click(browser, 'Bilder', 'document');
+      await setPhotoFiles(browser, 'input[type=file]', [gmiPath]);
+      await browser.waitFor('document.querySelector(".leaflet-overlay-pane path.leaflet-interactive")');
+      await click(browser, 'Legg til bilder', 'document');
       await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', files);
       await waitForThumbnails(browser);
       await createLayerWithoutPlacement(browser);
@@ -73,6 +77,7 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
       await savePhotoSource(browser, 'gmi');
       await applyPhotoSourcePositions(browser, 'gmi');
       await browser.waitFor(`${rows}.length === 4`);
+      await browser.evaluate('document.querySelector(".photo-workspace-toast-close")?.click()');
       const [kum1, kum2, kum3] = [await idOf('Kum 1'), await idOf('Kum 2'), await idOf('Kum 3')];
       await browser.waitFor(`${marker(kum1)} && ${marker(kum2)} && ${marker(kum3)}`);
 
@@ -84,13 +89,14 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
       assert(contrast(gmiFill, gmiInk) >= 4.5 && gmiEdge !== gmiFill, 'readable ink and a derived edge');
       assert.equal(await browser.evaluate(`document.querySelector('[data-legend-delivery="gmi"] .photo-camera-glyph path').getAttribute('fill')`), HEX.gmi);
 
+      await select('Kum 1');
       // 2. A marker click selects the occurrence and opens the persistent preview; it does not change delivery.
       await mouseClick(marker(kum1));
       await browser.waitFor(`${preview} && ${preview}.querySelector('[data-photo-id="${kum1}"]')`);
       assert.equal(await browser.evaluate(`${rowOf('Kum 1')}.querySelector('button.photo-workspace-row').getAttribute('aria-pressed')`), 'true', 'list follows the map');
       assert.equal(await pill('Kum 1'), 'GMI', 'an ordinary click never changes delivery');
       assert.match(await browser.evaluate(`${preview}.innerText`), /shared\.png/);
-      assert.equal(await browser.evaluate(`${preview}.querySelectorAll('button').length`), 2, 'close and the delivery pill only');
+      assert.equal(await browser.evaluate(`${preview}.querySelectorAll('button').length`), 3, 'placement edit, close and the delivery pill');
       assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-map-viewer-popup"))'), false, 'not the main-map viewer popup');
       await screenshot(browser, 'slice2-preview-1366x768');
 
@@ -107,22 +113,157 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
       }
 
       // 4. Another marker updates the preview; Escape and X close it; X returns focus to the marker.
-      await mouseClick(marker(kum3));
-      await browser.waitFor(`${preview}?.querySelector('[data-photo-id="${kum3}"]')`);
+      await mouseClick(marker(kum2));
+      await browser.waitFor(`${preview}?.querySelector('[data-photo-id="${kum2}"]')`);
       await pressKey(browser, 'Escape', KEYS.Escape);
       await browser.waitFor(`!${preview}`);
-      assert.equal(await browser.evaluate(`${rowOf('Kum 3')}.querySelector('button.photo-workspace-row').getAttribute('aria-pressed')`), 'true', 'closing keeps the selection');
-      await mouseClick(marker(kum3));
+      assert.equal(await browser.evaluate(`${rowOf('Kum 2')}.querySelector('button.photo-workspace-row').getAttribute('aria-pressed')`), 'true', 'closing keeps the selection');
+      await mouseClick(marker(kum2));
       const closeButton = `${preview}?.querySelector('[aria-label="Lukk bildeforhåndsvisning"]')`;
       await browser.waitFor(closeButton);
       await browser.evaluate(`${closeButton}.click()`);
-      await browser.waitFor(`!${preview} && document.activeElement === ${marker(kum3)}`);
+      await browser.waitFor(`!${preview} && document.activeElement === ${marker(kum2)}`);
       await select('Kum 2');
       assert.equal(await browser.evaluate(`Boolean(${preview})`), false, 'list selection alone never opens it');
 
+      // Acceptance corrections: hover in both modes, independent dismissal, exact edit target and stable list.
+      const emptyMapPoint = () => browser.evaluate(`(() => {
+        const map = document.querySelector('.leaflet-container'), b = map.getBoundingClientRect();
+        for (let y = b.top + 160; y < b.bottom - 80; y += 50) for (let x = b.left + 80; x < b.right - 80; x += 50) {
+          const e = document.elementFromPoint(x, y);
+          if (e?.closest('.leaflet-container') === map && e.matches('img.leaflet-tile, .leaflet-container, .leaflet-pane')) return { x, y };
+        }
+        throw new Error('No unobstructed empty-map point');
+      })()`);
+      const positionForPreview = async () => {
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const zoom = await browser.evaluate(`Number(document.body.innerText.match(/Zoom: (\\d+)/)?.[1])`);
+          if (zoom === 17) break;
+          await browser.evaluate(`document.querySelector('.leaflet-control-zoom-${zoom > 17 ? 'out' : 'in'}').click()`);
+          await new Promise((resolve) => setTimeout(resolve, 350));
+        }
+        await select('Kum 1');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const delta = await browser.evaluate(`(() => { const b = document.querySelector('.leaflet-container').getBoundingClientRect(), p = ${marker(kum1)}.getBoundingClientRect();
+          return { x: b.left + 180 - p.left - p.width / 2, y: b.top + 450 - p.top - p.height / 2 }; })()`);
+        const from = await emptyMapPoint();
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...from });
+        await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...from, button: 'left', buttons: 1, clickCount: 1 });
+        for (let step = 1; step <= 8; step++) await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x + delta.x * step / 8, y: from.y + delta.y * step / 8, button: 'left', buttons: 1 });
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: from.x + delta.x, y: from.y + delta.y, button: 'left', buttons: 0, clickCount: 1 });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      };
+      const hover = async (id) => {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 400, y: 70 });
+        const { x, y } = await elementCentre(browser, marker(id));
+        assert(await browser.evaluate(`document.elementFromPoint(${x}, ${y})?.closest('[data-photo-id]') === ${marker(id)}`), 'hover target is reachable');
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+      };
+      for (const mode of ['markers', 'thumbnails']) {
+        // The display controls expose their Norwegian labels rather than marker data attributes.
+        await click(browser, mode === 'markers' ? 'Mark\u00f8rer' : 'Miniatyrer', 'document');
+        await positionForPreview();
+        await hover(kum1);
+        await browser.waitFor('document.querySelector(".photo-thumb-preview")');
+        await mouseClick(marker(kum1));
+        await browser.waitFor(`${preview}?.querySelector('.photo-delivery-row-button')`);
+        await hover(kum1);
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-thumb-preview"))'), false, 'no duplicate for persistent photo');
+        await screenshot(browser, `acceptance-before-neighbour-${mode}`);
+        await hover(kum2);
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-thumb-preview"))'), false, 'no duplicate photograph through a repeated placement');
+        await hover(kum3);
+        await browser.waitFor('document.querySelector(".photo-thumb-preview")');
+        assert(await browser.evaluate(`(() => { const e = document.querySelector('.photo-thumb-preview'); const b = e.getBoundingClientRect();
+          // Temporarily enable hit testing to inspect paint order; production hover remains non-interactive.
+          e.style.pointerEvents = 'auto';
+          const above = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('.photo-thumb-preview') === e;
+          e.style.pointerEvents = ''; return above; })()`), 'neighbour hover above popup');
+        assert.equal(await browser.evaluate('document.querySelectorAll(".leaflet-photo-hover-preview-pane").length'), 1);
+        await screenshot(browser, `acceptance-hover-${mode}`);
+        const survey = 'document.querySelector(".leaflet-overlay-pane path.leaflet-interactive")';
+        await browser.evaluate(`${survey}.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 500, clientY: 300 }))`);
+        await browser.waitFor('document.querySelector(".gmi-object-popup")');
+        assert(await browser.evaluate(`Boolean(${preview})`), 'survey feature popup keeps photo preview');
+        await browser.evaluate('document.querySelector(".gmi-object-popup .leaflet-popup-close-button").click()');
+        // Controls and real drags do not dismiss; empty map click does.
+        await browser.evaluate('document.querySelector(".leaflet-control-zoom-in").click()');
+        assert(await browser.evaluate(`Boolean(${preview})`));
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await browser.evaluate('document.querySelector(".leaflet-control-zoom-out").click()');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const mapPoint = await emptyMapPoint();
+        await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...mapPoint, button: 'left', buttons: 1, clickCount: 1 });
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: mapPoint.x + 30, y: mapPoint.y + 25, button: 'left', buttons: 1 });
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: mapPoint.x + 30, y: mapPoint.y + 25, button: 'left', buttons: 0, clickCount: 1 });
+        assert(await browser.evaluate(`Boolean(${preview})`), 'drag keeps preview');
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        await screenshot(browser, `acceptance-before-dismiss-${mode}`);
+        const clickPoint = await emptyMapPoint();
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...clickPoint, button: 'none', buttons: 0 });
+        await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...clickPoint, button: 'left', buttons: 1, clickCount: 1 });
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...clickPoint, button: 'left', buttons: 0, clickCount: 1 });
+        await browser.waitFor(`!${preview}`);
+        assert.equal(await pill('Kum 1'), 'GMI');
+        assert.equal(await browser.evaluate(`${rowOf('Kum 1')}.querySelector('button.photo-workspace-row').getAttribute('aria-pressed')`), 'true');
+        await select('Kum 1');
+        await mouseClick(marker(kum1));
+        await browser.waitFor(`${preview}?.querySelector('.photo-delivery-row-button')`);
+        const doublePoint = await emptyMapPoint();
+        await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...doublePoint });
+        for (const clickCount of [1, 2]) {
+          await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...doublePoint, button: 'left', buttons: 1, clickCount });
+          await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...doublePoint, button: 'left', buttons: 0, clickCount });
+        }
+        await browser.waitFor(`!${preview}`);
+        // Restore the zoom after the approved double-click dismissal before testing the next mode.
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await browser.evaluate('document.querySelector(".leaflet-control-zoom-out").click()');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      for (const [width, height] of [[1280, 720], [1366, 768]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        await positionForPreview();
+        await mouseClick(marker(kum1));
+        await browser.waitFor(`${preview}?.querySelector('.photo-delivery-row-button')`);
+        const top = await browser.evaluate('document.querySelector(".photo-workspace-list").getBoundingClientRect().top');
+        for (const label of ['GML', 'Ikke', 'GMI']) {
+          const before = await browser.evaluate(`[${marker(kum1)}.dataset.lat, ${marker(kum1)}.dataset.lng]`);
+          await browser.evaluate(`${preview}.querySelector('.photo-delivery-row-button').click()`);
+          await browser.waitFor(`${preview}.querySelector('.photo-delivery-pill').innerText === '${label}'`);
+          assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-list").getBoundingClientRect().top'), top, 'delivery cycling keeps list position');
+          const edit = `${preview}.querySelector('[aria-label="Juster plassering og retning"]')`;
+          await pressKey(browser, 'Tab', { code: 'Tab', keyCode: 9 });
+          await browser.evaluate(`${edit}.focus()`);
+          await browser.waitFor(`${edit}.dataset.tooltipOpen === 'true'`);
+          await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' });
+          await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+          await browser.waitFor(editTarget);
+          assert.equal(await browser.evaluate(`${editTarget}.dataset.photoId`), kum1, 'exact repeated occurrence');
+          assert(await browser.evaluate('document.activeElement === document.querySelector(".photo-edit-command-bar")'), 'edit entry focuses command bar');
+          await browser.waitFor(`!${preview}`);
+          assert.equal(await browser.evaluate(`Boolean(${preview})`), false);
+          assert.equal(await pill('Kum 1'), label);
+          await click(browser, 'Avslutt redigering', 'document');
+          await browser.waitFor(`!${editTarget}`);
+          await browser.waitFor(marker(kum1));
+          assert.deepEqual(await browser.evaluate(`[${marker(kum1)}.dataset.lat, ${marker(kum1)}.dataset.lng]`), before);
+          await mouseClick(marker(kum1));
+          await browser.waitFor(`${preview}?.querySelector('.photo-delivery-row-button')`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await screenshot(browser, `acceptance-preview-${width}x${height}`);
+        await pressKey(browser, 'Escape', KEYS.Escape);
+      }
+
+      await click(browser, 'Mark\u00f8rer', 'document');
       // 5. Filters after a delivery change: the occurrence leaves list, map and preview at once; counts follow.
       await mouseClick(marker(kum1));
-      await browser.waitFor(preview);
+      await browser.waitFor(`${preview}?.querySelector('.photo-delivery-row-button')`);
       await browser.evaluate('document.querySelector("button[aria-label^=\'Filtrer bilder\']").click()');
       await browser.waitFor('document.querySelector(".photo-filter-panel")');
       const legends = await browser.evaluate('Array.from(document.querySelectorAll(".photo-filter-panel legend")).map((item) => item.innerText)');
@@ -181,7 +322,7 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
         await select('Kum 3');
         await browser.waitFor(`(() => { const b = ${marker(kum3)}.getBoundingClientRect(); return document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('[data-photo-id]') === ${marker(kum3)}; })()`);
         await mouseClick(marker(kum3));
-        await browser.waitFor(preview);
+        await browser.waitFor(`${preview}?.querySelector('.photo-delivery-row-button')`);
         assert(await noOverflow(), `no horizontal overflow at ${width}×${height}`);
         assert(await browser.evaluate(`(() => { const box = ${preview}.getBoundingClientRect(), map = document.querySelector('.leaflet-container').getBoundingClientRect();
           return box.width <= 330 && box.left >= map.left - 1 && box.right <= map.right + 1; })()`), `preview inside the map at ${width}×${height}`);

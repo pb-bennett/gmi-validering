@@ -78,6 +78,8 @@ These rules apply to every module: shell, Validator, Rettinger, FOTO, Data Table
 
 ### Implementation
 
+- Do not add helper text, explanatory paragraphs, placeholders or summary lines that restate information already visible (counts, labels, status, tooltips). State each fact once, where it applies. Required safety, blocking and fail-closed explanations are exempt.
+
 - Before adding a colour, size or visual variant, check the tokens, the shared recipes in `globals.css` (`.gmi-elevated-surface`, `.gmi-compact-button`, `.gmi-focus-ring`, `.gmi-compact-field`, `.gmi-selected-control`, `.gmi-primary-control`) and existing components. A new colour or variant is a design decision: propose it in the task report and wait for approval.
 - Prefer shared recipes and components over local CSS that restates the same rule. Module differences belong in scoped custom properties, as in `photoTheme.css`.
 - Scope module CSS under the module root class (`.photo-*`, `.gmi-edit-*`, `.delivery-wizard`). Do not write selectors that can restyle controls in other modules, such as bare `button`, `input` or `select` selectors outside a module root. Changes to global base styles need explicit task authorization.

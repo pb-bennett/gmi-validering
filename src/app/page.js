@@ -942,7 +942,7 @@ export default function Home() {
           <TerrainFetcher />
 
           <WorkspaceShell
-            sidebarWidth={workspaceLayer ? 316 : gmiEditActive ? 330 : sidebarWidth}
+            sidebarWidth={workspaceLayer ? 316 : sidebarWidth}
             photoWorkspace={Boolean(workspaceLayer)}
             onOpenAppInfo={(event) => openAppInfo('about', event.currentTarget)}
             appInfoTriggerRef={appInfoTriggerRef}
@@ -1004,6 +1004,7 @@ export default function Home() {
                       photos: effectiveWorkspacePhotos, visibleIds: workspaceView.visibleIds, displayMode: photoMapDisplay, onDisplayModeChange: setPhotoMapDisplay,
                       colourMode: photoWorkspace.colourMode, onColourModeChange: (value) => dispatchPhotoWorkspace({ type: 'map-colour', value }),
                       delivery: shownDelivery, onToggleDelivery: toggleWorkspaceDelivery,
+                      onEditPlacement: () => runWorkspaceTool('edit'),
                       zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null } : null}
                     onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
                     photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,

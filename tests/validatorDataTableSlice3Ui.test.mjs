@@ -26,7 +26,7 @@ function fixture() {
     '[L_]', '_FIELDNAMES Tema;Material;Dimensjon;Rørform;VertikalDimensjon;Stedfestingsårsak;Merknad;',
     '[P_]', '_FIELDNAMES Tema;Byggemetode;Stedfestingsårsak;Merknad;', '[+L_]'];
   LINE_NUMBERS.forEach((number, index) => lines.push(`:L ${number}`,
-    `_FIELDVALUES VL;PE100;110;${index === 3 ? '' : 'S'};;UENDR;Ledning ${String.fromCharCode(65 + index)};`,
+    `_FIELDVALUES VL;${index === 0 ? 'AN' : 'PE100'};110;${index === 3 ? '' : 'S'};;UENDR;Ledning ${String.fromCharCode(65 + index)};`,
     '/XYZ', `581940 ${6566000 + index * 3} 101`, `581945 ${6566001 + index * 3} 101`));
   lines.push('[+P_]');
   POINT_NUMBERS.forEach((number, index) => {
@@ -68,6 +68,14 @@ test('Slice 3 production: LOK/TOP Byggemetode, blocked VertikalDimensjon navigat
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
       await browser.evaluate(`document.querySelector('[title="Synthetic slice3.gmi"]').click()`);
+
+      await browser.waitFor('document.querySelector(".leaflet-container")');
+      const sidebarFacts = () => browser.evaluate(`(() => { const side = document.querySelector('.workspace-left').getBoundingClientRect(), map = document.querySelector('.leaflet-container').getBoundingClientRect(); return [side.width, map.left]; })()`);
+      const sharedSidebar = new Map();
+      for (const [width, height] of [[1280, 720], [1366, 768]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        sharedSidebar.set(width, await sidebarFacts());
+      }
 
       await t.test('standard Data Table shows original nonconsecutive point and line numbers', async () => {
         if (!await browser.evaluate(`Boolean(${table})`)) await click('Åpne datatabell');
@@ -127,6 +135,10 @@ test('Slice 3 production: LOK/TOP Byggemetode, blocked VertikalDimensjon navigat
         await browser.waitFor('document.querySelector("button[title=Feltvalidering]")');
         await browser.evaluate(`document.querySelector('button[title=Feltvalidering]').click()`);
         await browser.waitFor('document.querySelector("#validation-v2-layer")');
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          assert.deepEqual(await sidebarFacts(), sharedSidebar.get(width), 'Validator shares Layer Manager width and map edge');
+        }
         await geometry('Punkter');
         await field('Byggemetode');
         const target = `Array.from(document.querySelectorAll('button[aria-label*="objekter i tabell:"]')).find(e => e.closest('section[data-validation-tone]'))`;
@@ -140,12 +152,26 @@ test('Slice 3 production: LOK/TOP Byggemetode, blocked VertikalDimensjon navigat
 
       await t.test('blocked VertikalDimensjon opens and selects the pipe whose Rørform is missing', async () => {
         await geometry('Ledninger');
+        await field('Material');
+        await browser.waitFor(`document.querySelector('section.gmi-validation-panel[data-validation-tone="warning"]')`);
+        // Capture an ordinary CHECK panel for computed-colour parity.
+        const checkStyle = await browser.evaluate(`(() => { const e = document.querySelector('section.gmi-validation-panel[data-validation-tone="warning"]');
+          if (!e) return null; const s = getComputedStyle(e); return [s.backgroundColor, s.borderTopColor, getComputedStyle(e.querySelector('.gmi-validation-accent')).color]; })()`);
         await field('Rørform');
         const failure = `Array.from(document.querySelectorAll('button[aria-label*="objekter i tabell:"]')).find(e => e.closest('section[data-validation-tone]')?.dataset.validationTone === 'error')`;
         await browser.waitFor(failure);
         await field('VertikalDimensjon');
         const note = `document.querySelector('section[data-dependency-note="PIPE_SHAPE_UNRESOLVED"]')`;
         await browser.waitFor(note);
+        assert.equal(await browser.evaluate(`${note}.dataset.validationTone`), 'warning');
+        assert.match(await browser.evaluate(`${note}.querySelector('.gmi-validation-accent').innerText`), /Sjekk \u00b7 1 objekt/i);
+        const noteStyle = await browser.evaluate(`(() => { const e = ${note}, s = getComputedStyle(e); return [s.backgroundColor, s.borderTopColor, getComputedStyle(e.querySelector('.gmi-validation-accent')).color]; })()`);
+        assert(checkStyle, 'ordinary CHECK panel available');
+        assert.deepEqual(noteStyle, checkStyle);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await shot(`acceptance-sjekk-${width}x${height}`);
+        }
         assert.match(await browser.evaluate(`${note}.innerText`), /Rørform/);
         assert.equal(await browser.evaluate(`document.querySelectorAll('section[data-validation-tone="error"]').length`), 0, 'no duplicate Feil on VertikalDimensjon');
         const action = `${note}.querySelector('button[aria-label*="objekter i tabell:"]')`;
@@ -169,6 +195,12 @@ test('Slice 3 production: LOK/TOP Byggemetode, blocked VertikalDimensjon navigat
         await browser.waitFor(`${editor}?.dataset.gmiObject === 'line:3'`);
         await browser.waitFor(`${grid}?.querySelector('[data-table-row="3"][aria-current=true]')`);
         assert.equal(await browser.evaluate('document.querySelector("[data-gmi-validator-provenance]")?.innerText.includes("VertikalDimensjon")'), true);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          assert.deepEqual(await sidebarFacts(), sharedSidebar.get(width), 'Rettinger shares Layer Manager width and map edge');
+          assert(await browser.evaluate(`(() => { const e = ${bar}; return !e || e.scrollWidth <= e.clientWidth + 1; })()`), 'Rettinger table bar fits');
+          await shot(`acceptance-rettinger-${width}x${height}`);
+        }
         await click('Lukk Rettinger');
         await browser.waitFor('!document.querySelector(".gmi-edit-workspace")');
       });

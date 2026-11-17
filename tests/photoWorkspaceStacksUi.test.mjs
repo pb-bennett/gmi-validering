@@ -324,6 +324,23 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         assert.equal(exceptions().length, 0);
       });
 
+      await t.test('persistent preview edit targets the cycled non-top stack occurrence', async () => {
+        const stackMarker = `document.querySelector('.photo-marker-stack').closest('.leaflet-marker-icon')`;
+        await click(await elementCentre(browser, stackMarker));
+        await browser.waitFor('document.querySelector(".photo-workspace-map-preview")');
+        const first = await browser.evaluate('document.querySelector(".photo-workspace-map-preview").dataset.photoId');
+        await click(await elementCentre(browser, stackMarker));
+        await browser.waitFor(`document.querySelector('.photo-workspace-map-preview')?.dataset.photoId !== ${JSON.stringify(first)}`);
+        const active = await browser.evaluate('document.querySelector(".photo-workspace-map-preview").dataset.photoId');
+        const before = await browser.evaluate(`${row(active)}.innerText`);
+        await browser.evaluate('document.querySelector(".photo-workspace-map-preview-edit").click()');
+        await browser.waitFor(`${editTarget}?.dataset.photoId === ${JSON.stringify(active)}`);
+        assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-workspace-map-preview"))'), false);
+        await clickText(browser, 'Avslutt redigering');
+        await browser.waitFor(`!${commandBar}`);
+        assert.equal(await browser.evaluate(`${row(active)}.innerText`), before);
+      });
+
       await t.test('main map: shared Miniatyrer preference, stack popup paging, zoom fallback, inspection only', async () => {
         await browser.evaluate('document.querySelector(".gmi-workspace-close").click()');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');

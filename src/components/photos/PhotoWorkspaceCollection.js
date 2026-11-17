@@ -63,17 +63,6 @@ function PhotoRow({ photo, active, tabbable, changed, removal, removalSelected, 
   </li>;
 }
 
-export function photoDeliverySummaryText(summary) {
-  if (!summary) return null;
-  const { occurrences, assets } = summary;
-  const parts = [];
-  if (occurrences.transfer) parts.push(`${occurrences.transfer} overføres til GML${assets.transfer !== occurrences.transfer ? ` (${plural(assets.transfer, 'bilde', 'bilder')})` : ''}`);
-  if (occurrences.exclude) parts.push(`${occurrences.exclude} ikke med i leveransen`);
-  if (occurrences.include) parts.push(`${occurrences.include} tas med uten GMI-lenke`);
-  if (occurrences.review) parts.push(`${occurrences.review} krever gjennomgang`);
-  return parts.length ? `Samlet levering: ${parts.join(' · ')}` : null;
-}
-
 // Compact per-occurrence counts in the existing collection summary.
 function photoDestinationCounts(delivery) {
   const counts = photoDeliveryDestinationCounts(delivery);
@@ -89,7 +78,6 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
   const filterId = useId(), sortId = useId();
   const listRef = useRef(null), sortTriggerRef = useRef(null), sortMenuRef = useRef(null);
   const removal = workspace.mode === 'remove';
-  const deliverySummary = photoDeliverySummaryText(delivery?.summary);
   const assetCount = layer.assetCount ?? layer.photoCount;
   const repeats = assetCount < layer.photoCount;
   const filterCount = view.summary.length;
@@ -157,7 +145,6 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
         {delivery && <span className="photo-delivery-counts" aria-label="Plasseringer per leveringsvalg">{photoDestinationCounts(delivery).map(({ key, label, count }) => <span key={key} data-destination={key}>{label} {count}</span>)}</span>}
         {editing && <span className="photo-workspace-editing-pill">Justerer</span>}
       </p>
-      {deliverySummary && <p className="photo-delivery-summary" title="Valgene brukes når en samlet leveranse lages senere. Ingen filer er endret.">{deliverySummary}</p>}
       <div className="photo-workspace-toolbar">
         <PhotoWorkspaceToolsMenu occurrenceCount={layer.photoCount} onSelect={onTool} />
         <span className="photo-workspace-toolbar-icons">

@@ -417,11 +417,14 @@ function DiagnosticResultPanel({ summary, diagnostics, isLoading, error, onRetry
       {model.unresolved.map((note) => {
         const presentation = getValidationV2DependencyPresentation(note);
         return (
-          <section key={note.diagnosticId} data-dependency-note={note.dependency} className="rounded-lg border border-gmi-border bg-gmi-surface-soft px-2.5 py-2 text-xs leading-5 text-gmi-text-muted">
+          <section key={note.diagnosticId} data-dependency-note={note.dependency} data-validation-tone="warning" className="gmi-validation-panel rounded-lg border px-2 py-1.5 text-gmi-text">
             <div className="flex items-start justify-between gap-2">
-              <p>{presentation.summary}</p>
+              <div className="gmi-validation-accent text-[10px] font-bold uppercase tracking-wide">
+                Sjekk · {note.count} {note.count === 1 ? 'objekt' : 'objekter'}
+              </div>
               <OpenObjectsButton diagnostic={note} summary={presentation.summary} onOpenObjects={onOpenObjects} />
             </div>
+            <p className="mt-0.5 text-xs leading-4 text-gmi-text">{presentation.summary}</p>
             {presentation.detailLines.map((line) => <p key={line} className="mt-1 text-[11px] leading-4">{line}</p>)}
             {presentation.guidance && <p className="mt-2 text-[11px] leading-4">{presentation.guidance}</p>}
           </section>

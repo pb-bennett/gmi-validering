@@ -17,7 +17,7 @@ test('normal sidebar width is preserved and shared by the Validator and docked i
   assert.match(page, /const \[sidebarWidth, setSidebarWidth\] = useState\(380\)/);
   assert.match(page, /width=\{sidebarWidth\}[\s\S]*?onWidthChange=\{setSidebarWidth\}/);
   assert.match(page, /: fieldValidationOpen \? \([\s\S]*?<FieldValidationSidebar[\s\S]*?canDockInspector=\{canDockInspector\}/);
-  assert.match(page, /sidebarWidth=\{workspaceLayer \? 316 : gmiEditActive \? 330 : sidebarWidth\}/);
+  assert.match(page, /sidebarWidth=\{workspaceLayer \? 316 : sidebarWidth\}/);
   assert.match(shell, /style=\{\{ width: `\$\{sidebarWidth\}px` \}\}/);
   assert.match(inspector, /style=\{\{ width: VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH \}\}/);
   assert.match(validatorSidebar, /ValidationV2Workspace[\s\S]*sidebarWidth=\{sidebarWidth\}/);
