@@ -43,7 +43,7 @@ export async function chooseFormat(browser, profile) {
 
 export async function setLabel(browser, label) {
   await backToDelivery(browser);
-  await setControl(browser, exportDialog, '[aria-label="Eksportetikett"]', label);
+  await setControl(browser, exportDialog, '[data-export-filename-editor] input[type=text]', label);
 }
 
 export const deliveryState = (browser) => browser.evaluate(`${exportDialog}.querySelector('[data-delivery-state]')?.dataset.deliveryState ?? null`);

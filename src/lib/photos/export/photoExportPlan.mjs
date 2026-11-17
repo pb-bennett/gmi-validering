@@ -4,7 +4,7 @@ import { isPhotoPosition } from '../photoSpatial.mjs';
 import { fullCaptureTime, freezeExportData } from './exportContract.mjs';
 import { compareExportKeys, digestHex, exportGuid, foldAttachmentPath, isSafeAttachmentFilename, planAttachmentNames } from './attachmentNames.mjs';
 import { evaluatePhotoExportRules, normalizeExportContext } from './photoExportRules.mjs';
-import { photoExportNames } from './photoExportNaming.mjs';
+import { photoExportNames, exportFilenameOptions } from './photoExportNaming.mjs';
 
 const issuedPlans = new WeakSet();
 
@@ -58,7 +58,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
     return guid;
   };
   // Named once, here: like the Gemini UUIDs below, the name belongs to this plan, so preview and download cannot differ.
-  const naming = photoExportNames({ label: configuration.label, date: now() });
+  const naming = photoExportNames({ ...exportFilenameOptions(configuration), date: now() });
   const context = normalizeExportContext(configuration.context);
   const errors = [], warnings = [];
   const error = (code, message, occurrenceId, assetId) => errors.push({ code, message, occurrenceId, assetId });

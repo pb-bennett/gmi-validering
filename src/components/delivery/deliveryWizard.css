@@ -6,6 +6,21 @@
 .delivery-settings select { width: 100%; min-height: 36px; padding: 4px 8px; border: 1px solid var(--gmi-border-strong); border-radius: 4px; background: var(--gmi-surface); }
 .delivery-settings .delivery-exclusion { display: block; padding: 10px; border: 1px solid var(--gmi-border-strong); background: var(--gmi-surface-soft); }
 .delivery-exclusion input { accent-color: var(--gmi-interactive); margin-right: 6px; }
+/* Filename editor: fixed grey prefix and suffix around one input; the wrapper carries border, tone and focus ring. */
+.delivery-wizard .delivery-filename-field { display: grid; gap: 4px; min-width: 0; }
+.delivery-wizard .delivery-filename-label { font-weight: 500; }
+.delivery-wizard .delivery-filename { display: flex; align-items: center; min-width: 0; min-height: 34px; padding: 0 8px; border: 1px solid var(--gmi-border-strong); border-radius: 4px; background: var(--gmi-surface); }
+.delivery-wizard .delivery-filename[data-validation-tone] { border-color: var(--validation-border); background: var(--validation-bg); }
+.delivery-wizard .delivery-filename:focus-within { box-shadow: 0 0 0 2px var(--gmi-surface), 0 0 0 4px var(--gmi-interactive); }
+/* The wrapper's ring above replaces the input's own outline. */
+.delivery-wizard .delivery-filename input { flex: 1; min-width: 0; padding: 4px 0; border: 0; background: transparent; color: var(--gmi-text); outline: none; }
+.delivery-wizard .delivery-filename-affix { flex: none; white-space: nowrap; color: var(--gmi-text-muted); font-variant-numeric: tabular-nums; }
+.delivery-wizard .delivery-filename-options { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; }
+.delivery-wizard .delivery-filename-options label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.delivery-wizard .delivery-filename-options input { accent-color: var(--gmi-interactive); }
+.delivery-wizard .delivery-filename-options button { margin-left: auto; }
+.delivery-wizard .delivery-filename-message { font-size: 12px; color: var(--gmi-validation-compact-warning-text); }
+.delivery-wizard .delivery-filename-message:not([data-export-filename-message=long]) { color: var(--gmi-validation-error-text); }
 .delivery-summary.photo-export-summary > div { grid-template-columns: 7rem minmax(0, 1fr); }
 .delivery-diagnostics { padding: 10px 12px; border: 1px solid var(--gmi-border); border-radius: 6px; overflow-wrap: anywhere; }
 .delivery-diagnostics h4, .delivery-inventory h4 { font-weight: 600; }

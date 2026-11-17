@@ -10,7 +10,7 @@ import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { setPhotoFiles, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
 import { waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { clickGmiTableObject } from './helpers/gmiTableNavigation.mjs';
-import { enterEditMode, editTarget } from './helpers/photoWorkspace.mjs';
+import { enterEditMode, editTarget, pressKey, KEYS } from './helpers/photoWorkspace.mjs';
 import { assertGeminiConventions } from './helpers/geminiPhotoConventions.mjs';
 
 const app = process.env.PHOTO_UI_URL, shots = process.env.DELIVERY_SCREENSHOT_DIR;
@@ -80,13 +80,22 @@ const screenshot = async (browser, name) => {
   }
 };
 
-test('revision filenames: live sources, manual choices, reset and synthetic export/reimport cycles',
-  { skip: !chromePath || !app, timeout: 180000 }, async () => {
+test('filename editor: live sources, checkboxes, manual choices, reset, limits and synthetic export/reimport cycles',
+  { skip: !chromePath || !app, timeout: 240000 }, async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'gmi-revision-ui-'));
     const browser = await openTestChrome();
     const original = latin1Bytes(buildGmiText({ points: [{}] }));
-    const field = `${dialog}.querySelector('[aria-label="Eksportetikett"]')`;
+    const editor = `${dialog}.querySelector('[data-export-filename-editor]')`;
+    const field = `${editor}.querySelector('input[type=text]')`;
     const value = () => browser.evaluate(`${field}.value`);
+    const box = (label) => `Array.from(${editor}.querySelectorAll('.delivery-filename-options label')).find(l => l.innerText.trim() === ${JSON.stringify(label)})?.querySelector('input')`;
+    const toggle = async (label, checked) => { await browser.evaluate(`${box(label)}.click()`); await browser.waitFor(`${box(label)}.checked === ${checked}`); };
+    // What the editor shows: grey prefix | editable text | grey suffix, plus the message slot.
+    const parts = () => browser.evaluate(`(() => { const e = ${editor};
+      return { prefix: e.querySelector('[data-export-filename-prefix]')?.textContent ?? '', text: e.querySelector('input[type=text]').value,
+        suffix: e.querySelector('[data-export-filename-suffix]').textContent, message: e.querySelector('[data-export-filename-message]')?.textContent ?? '',
+        tone: e.querySelector('.delivery-filename').dataset.validationTone ?? '', revisionBox: Boolean(${box('Revisjonsnummer')}) }; })()`);
+    const advance = () => browser.evaluate(`${dialog}.querySelector('[data-export-advance]').disabled`);
     const load = async (name, bytes = original) => {
       const file = path.join(directory, name); await writeFile(file, bytes);
       if (!await browser.evaluate('Boolean(document.querySelector("input[type=file]"))')) {
@@ -102,43 +111,119 @@ test('revision filenames: live sources, manual choices, reset and synthetic expo
       await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
       await browser.waitFor(dialog);
     };
+    const long = '20261110 Ledninger og overvann Storgata nord, sone 4 – innmåling etappe 2 (Æ & Ø)';
     try {
       await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: 'localStorage.clear();' });
       await browser.send('Page.navigate', { url: `${app}?testmodus=1` });
       await browser.waitFor('document.querySelector("button[aria-label=Lukk]")');
       await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
-      await load('Syntetisk M10.gmi'); await load('20261116-105236-Nord_rev001.gmi');
+      await load('Syntetisk M10.gmi'); await load('20261116-105236-Nord_rev001.gmi'); await load(`${long}_rev01.gmi`);
       await open('Syntetisk M10.gmi');
-      await browser.waitFor(`${field}.value === 'Syntetisk-M10_rev01'`);
+      await browser.waitFor(`${field}.value === 'Syntetisk M10'`);
+      assert.deepEqual(await parts(), { prefix: 'ååååmmdd-ttmm-', text: 'Syntetisk M10', suffix: '_rev01.gmi', message: '', tone: '', revisionBox: true });
+      // D5: the accessible name is «Filnavn», from a visible label; prefix and suffix describe it.
+      assert.deepEqual(await browser.evaluate(`(() => { const f = ${field}; return [f.labels[0].innerText.trim(), f.getAttribute('aria-label'), f.maxLength,
+        f.getAttribute('aria-describedby').split(' ').map(id => document.getElementById(id).textContent)]; })()`), ['Filnavn', null, -1, ['ååååmmdd-ttmm-', '_rev01.gmi']]);
+      // Old duplicate inputs and explanations are gone.
+      assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[aria-label="Eksportetikett"], [data-export-name-source], [data-export-name-format], .photo-export-label').length`), 0);
+      assert.doesNotMatch(await browser.evaluate(`${dialog}.innerText`), /Etikett i filnavnet|Foreslått ut fra|Tidspunktet settes/);
+      // Teal native checkboxes, both checked by default.
+      assert.deepEqual(await browser.evaluate(`Array.from(${editor}.querySelectorAll('input[type=checkbox]')).map(i => [i.checked, getComputedStyle(i).accentColor])`),
+        [[true, 'rgb(0, 117, 149)'], [true, 'rgb(0, 117, 149)']]);
+
       const ids = await browser.evaluate(`Array.from(${dialog}.querySelector('[aria-label="GMI-kartlag"]').options).filter(o => o.value).map(o => ({ id: o.value, name: o.textContent }))`);
       const first = ids.find(o => o.name === 'Syntetisk M10.gmi').id;
       const second = ids.find(o => o.name.includes('Nord_rev001')).id;
+      const third = ids.find(o => o.name.includes('Ledninger og overvann')).id;
       const select = (id) => setValue(browser, `${dialog}.querySelector('[aria-label="GMI-kartlag"]')`, id);
-      await select(second); await browser.waitFor(`${field}.value === 'Nord_rev002'`);
-      assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-name-source]').textContent`), /20261116-105236-Nord_rev001.gmi/);
-      await select(first); await browser.waitFor(`${field}.value === 'Syntetisk-M10_rev01'`);
+      await select(second); await browser.waitFor(`${field}.value === 'Nord'`);
+      assert.equal((await parts()).suffix, '_rev002.gmi', 'legacy timestamp and revision are recognised');
+      // A long contractor name with a date prefix, æøå, spaces and punctuation stays whole in the field.
+      await select(third); await browser.waitFor(`${field}.value === ${JSON.stringify(long)}`);
+      assert.equal((await parts()).suffix, '_rev02.gmi');
+      assert.equal((await parts()).message, 'Filnavnet er over 80 tegn.');
+      assert.equal((await parts()).tone, 'warning');
+      assert.equal(await advance(), false, 'the advisory length never blocks');
+      await review(browser); assert.equal(await status(browser), 'ready'); await click(browser, 'Neste');
+      assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-filename]').textContent`), new RegExp(`^\\d{8}-\\d{4}-${long.replace(/[()&]/g, '\\$&')}_rev02\\.gmi$`));
+      await back(browser);
+      await select(first); await browser.waitFor(`${field}.value === 'Syntetisk M10'`);
       await review(browser); assert.equal(await status(browser), 'ready'); await back(browser);
-      assert.equal(await value(), 'Syntetisk-M10_rev01');
-      const manual = '  Min_etikett / nord  ';
+      assert.equal(await value(), 'Syntetisk M10');
+
+      // Manual text survives source and mode changes; the revision suffix keeps following the live source.
+      const manual = '  Min etikett / nord  ';
       await setValue(browser, field, manual); await select(second);
+      await browser.waitFor(`${editor}.querySelector('[data-export-filename-suffix]').textContent === '_rev002.gmi'`);
       await choose(browser, 'combined'); assert.equal(await value(), manual);
+      assert.equal((await parts()).suffix, '_rev002.zip', 'the suffix shows the primary artifact extension');
       await screenshot(browser, 'a4-revision-combined-content');
       await choose(browser, 'photos-only'); assert.equal(await value(), manual);
-      assert.equal(await browser.evaluate(`${dialog}.querySelector('[data-export-name-source]')`), null);
+      assert.deepEqual([(await parts()).suffix, (await parts()).revisionBox], ['.zip', false], 'D4: Kun GML has no revision');
+      assert.equal(await browser.evaluate(`Boolean(${dialog}.querySelector('[data-export-filename-editor] button'))`), false, 'no suggestion without a GMI source');
       await choose(browser, 'gmi-only'); assert.equal(await value(), manual);
-      await click(browser, 'Bruk forslag'); assert.equal(await value(), 'Nord_rev002');
-      await setValue(browser, field, ''); await select(first);
-      await review(browser); assert.equal(await status(browser), 'ready');
-      await click(browser, 'Neste');
-      assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-filename]').textContent`), /^\d{8}-\d{6}\.gmi$/);
-      await back(browser); assert.equal(await value(), '');
-      await click(browser, 'Bruk forslag'); assert.equal(await value(), 'Syntetisk-M10_rev01');
-      await choose(browser, 'photos-only'); assert.equal(await value(), '');
-      assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-name-format]').textContent`), /TTmmss.zip og .gml/);
-      await choose(browser, 'gmi-only'); assert.equal(await value(), 'Syntetisk-M10_rev01');
+      await click(browser, 'Bruk forslag'); assert.equal(await value(), 'Nord');
+      assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(b => b.innerText === 'Bruk forslag')`), false);
+
+      // Advisory boundary: 14 + text + _rev02 + .gmi; 80 is fine, 81 warns.
+      await select(first); await browser.waitFor(`${field}.value === 'Syntetisk M10'`);
+      await setValue(browser, field, 'x'.repeat(57)); await browser.waitFor(`${editor}.querySelector('[data-export-filename-message]')`);
+      await setValue(browser, field, 'x'.repeat(56)); await browser.waitFor(`!${editor}.querySelector('[data-export-filename-message]')`);
+      // Hard limit blocks with its reason; a reserved name blocks too.
+      await setValue(browser, field, 'x'.repeat(240));
+      await browser.waitFor(`${editor}.querySelector('[data-export-filename-message]')?.textContent === 'Filnavnet er for langt for filsystemet.'`);
+      assert.equal(await advance(), true);
+      assert.equal(await browser.evaluate(`${field}.getAttribute('aria-invalid')`), 'true');
+      await click(browser, 'Bruk forslag'); assert.equal(await value(), 'Syntetisk M10');
+
+      // Checkbox combinations change only their own part; navigation keeps text and checkboxes.
+      await toggle('Tidsstempel', false);
+      assert.deepEqual([(await parts()).prefix, (await parts()).suffix], ['', '_rev01.gmi']);
+      await toggle('Revisjonsnummer', false);
+      assert.deepEqual([(await parts()).prefix, (await parts()).suffix], ['', '.gmi']);
+      await setValue(browser, field, '');
+      await browser.waitFor(`${editor}.querySelector('[data-export-filename-message]')?.textContent === 'Filnavnet er tomt.'`);
+      assert.equal(await advance(), true, 'an empty name cannot reach review');
+      await setValue(browser, field, 'CON');
+      await browser.waitFor(`${editor}.querySelector('[data-export-filename-message]')?.textContent === 'Filnavnet er reservert i Windows.'`);
+      assert.equal(await advance(), true);
+      await click(browser, 'Bruk forslag');
+      await toggle('Tidsstempel', true);
+      await review(browser); assert.equal(await status(browser), 'ready'); await click(browser, 'Neste');
+      assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-filename]').textContent`), /^\d{8}-\d{4}-Syntetisk M10\.gmi$/);
+      await back(browser);
+      assert.deepEqual(await browser.evaluate(`Array.from(${editor}.querySelectorAll('input[type=checkbox]')).map(i => i.checked)`), [true, false], 'checkboxes survive navigation');
+      await toggle('Revisjonsnummer', true);
+
+      // Keyboard: the wrapper shows the focus ring; Tab reaches the checkboxes and Space toggles them.
+      await browser.evaluate(`${field}.focus()`);
+      assert.notEqual(await browser.evaluate(`getComputedStyle(${editor}.querySelector('.delivery-filename')).boxShadow`), 'none');
+      await pressKey(browser, 'Tab', KEYS.Tab);
+      assert.equal(await browser.evaluate(`document.activeElement === ${box('Tidsstempel')}`), true);
+      await pressKey(browser, ' ', { code: 'Space', keyCode: 32 });
+      await browser.waitFor(`${box('Tidsstempel')}.checked === false`);
+      await pressKey(browser, ' ', { code: 'Space', keyCode: 32 });
+      await browser.waitFor(`${box('Tidsstempel')}.checked === true`);
+      for (const [width, height] of [[1280, 720], [1366, 768]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        await delay(150);
+        const fit = await browser.evaluate(`(() => { const body = ${dialog}.querySelector('.delivery-body'), row = ${editor}.querySelector('.delivery-filename'),
+          section = ${editor}.closest('section'), footer = ${dialog}.querySelector('[data-export-footer]').getBoundingClientRect();
+          return { overflow: body.scrollWidth - body.clientWidth, inside: row.getBoundingClientRect().right <= section.getBoundingClientRect().right + 1,
+            height: Math.round(row.getBoundingClientRect().height), footer: footer.bottom <= innerHeight + 1 }; })()`);
+        assert.deepEqual(fit, { overflow: 0, inside: true, height: fit.height, footer: true }, `${width}x${height}`);
+        assert(fit.height <= 40, `compact row at ${width}x${height}: ${fit.height}`);
+      }
       await screenshot(browser, 'a4-revision-gmi-content');
-      for (let revision = 1; revision <= 3; revision++) {
-        if (revision > 1) await browser.waitFor(`${field}.value === 'Syntetisk-M10_rev0${revision}'`);
+      await setValue(browser, field, long);
+      await screenshot(browser, 'a4-filename-long-gmi');
+      await click(browser, 'Bruk forslag');
+
+      // Three export → re-import cycles with both on, then one with the timestamp off; every no-op GMI is byte-identical.
+      for (let revision = 1; revision <= 4; revision++) {
+        if (revision > 1) await browser.waitFor(`${editor}.querySelector('[data-export-filename-suffix]').textContent === '_rev0${revision}.gmi'`);
+        assert.equal(await value(), 'Syntetisk M10');
+        if (revision === 4) await toggle('Tidsstempel', false);
         await review(browser); assert.equal(await status(browser), 'ready'); await click(browser, 'Neste');
         if (revision === 1) {
           await browser.evaluate(`(() => { window.__revisionClick = HTMLAnchorElement.prototype.click;
@@ -151,10 +236,10 @@ test('revision filenames: live sources, manual choices, reset and synthetic expo
           } finally { await browser.evaluate('HTMLAnchorElement.prototype.click = window.__revisionClick'); }
         }
         const output = await downloaded(browser, directory, 'Last ned GMI');
-        assert.match(output.name, new RegExp(`^\\d{8}-\\d{6}-Syntetisk-M10_rev0${revision}\\.gmi$`));
+        assert.match(output.name, revision === 4 ? /^Syntetisk M10_rev04\.gmi$/ : new RegExp(`^\\d{8}-\\d{4}-Syntetisk M10_rev0${revision}\\.gmi$`));
         assert.deepEqual(output.bytes, original, 'no-op revision exports preserve every source byte');
         await click(browser, 'Lukk eksport'); await click(browser, 'Lukk Rettinger', 'document');
-        if (revision < 3) { await load(output.name, output.bytes); await open(output.name); }
+        if (revision < 4) { await load(output.name, output.bytes); await open(output.name); }
       }
     } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
   });
@@ -352,13 +437,13 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
       await click(browser, 'Eksporter…', 'document'); await browser.waitFor(dialog);
 
       await t.test('automatic combined names and report share the revision basename; Kun GML stays unlabelled', async () => {
-        const field = `${dialog}.querySelector('[aria-label="Eksportetikett"]')`;
+        const field = `${dialog}.querySelector('[data-export-filename-editor] input[type=text]')`;
         assert.equal(await browser.evaluate(`${field}.value`), '');
         await choose(browser, 'combined');
-        await browser.waitFor(`${field}.value === 'Syntetisk-M10_rev01'`);
+        await browser.waitFor(`${field}.value === 'Syntetisk M10'`);
         await review(browser); assert.equal(await status(browser), 'ready');
         const names = await browser.evaluate(`({...${dialog}.querySelector('[data-export-zip]').dataset})`);
-        assert.match(names.exportZip, /^\d{8}-\d{6}-Syntetisk-M10_rev01\.zip$/);
+        assert.match(names.exportZip, /^\d{8}-\d{4}-Syntetisk M10_rev01\.zip$/);
         assert.equal(names.exportGml, names.exportZip.replace(/\.zip$/, '.gml'));
         await click(browser, 'Neste');
         assert((await browser.evaluate(`${dialog}.querySelector('.delivery-inventory').textContent`)).includes(names.exportZip.replace(/\.zip$/, '.gmi')));
@@ -374,7 +459,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
 
       await t.test('FOTO entry point preserves all placed occurrences, Gemini IDs and original attachment bytes', async () => {
         assert.equal(await browser.evaluate(`${dialog}.querySelector('input[value="photos-only"]').checked`), true);
-        await setValue(browser, `${dialog}.querySelector('[aria-label="Eksportetikett"]')`, 'M10');
+        await setValue(browser, `${dialog}.querySelector('[data-export-filename-editor] input[type=text]')`, 'M10');
         const facts = await pack(browser); assert.equal(await currentStep(browser), '3. Pakke / Last ned');
         assert.match(facts.GML, /^2 /);
         await screenshot(browser, 'a4-pakke-photos-only');
@@ -458,13 +543,13 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         assert.equal(await currentStep(browser), '1. Innhold');
         assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-export-zip]').length`), 0, 'content Back invalidates the old plan');
         assert.equal(await browser.evaluate(`${dialog}.querySelector('input[value=combined]').checked`), true);
-        await setValue(browser, `${dialog}.querySelector('[aria-label="Eksportetikett"]')`, 'Fresh-check');
+        await setValue(browser, `${dialog}.querySelector('[data-export-filename-editor] input[type=text]')`, 'Fresh-check');
         await review(browser); assert.equal(await status(browser), 'ready');
         const freshName = await browser.evaluate(`${dialog}.querySelector('[data-export-zip]').dataset.exportZip`);
         assert.notEqual(freshName, reviewed); assert.match(freshName, /Fresh-check/);
         // Return to the original label and obtain a fresh review for the remaining package assertions.
         await browser.evaluate(`${dialog}.querySelector('[data-export-back]').click()`);
-        await setValue(browser, `${dialog}.querySelector('[aria-label="Eksportetikett"]')`, 'M10');
+        await setValue(browser, `${dialog}.querySelector('[data-export-filename-editor] input[type=text]')`, 'M10');
         await review(browser);
         assert.equal(await browser.evaluate(`document.activeElement === ${dialog}.querySelector('[data-export-heading]')`), true, 'focus moves to the Kontroll heading');
         assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[data-export-step="review"] [data-review-status], [data-export-step="review"] .delivery-inventory').length`), 0, 'Kontroll has no package tree');

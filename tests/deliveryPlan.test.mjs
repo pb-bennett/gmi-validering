@@ -352,18 +352,55 @@ test('exclusions remove their references in combined/split packages; restore is 
   } finally { f.session.clear(); }
 });
 
-test('revision labels keep one basename for GMI, GML, ZIP and the separate report', async () => {
+test('every checkbox combination keeps one basename for GMI, GML, ZIP and the separate report', async () => {
   const f = await deliveryFixture();
   try {
     f.transfer();
-    const p = await f.plan('combined', { label: 'Ledninger_rev02' }); ready(p);
-    const basename = '20261113-121213-Ledninger_rev02';
-    assert.equal(p.naming.basename, basename);
-    assert.equal(p.filename, `${basename}.zip`);
-    assert.equal(p.naming.gmiFilename, `${basename}.gmi`);
-    assert.equal(p.photoPlan.naming.gmlFilename, `${basename}.gml`);
-    const entries = await archive(p);
-    assert(`${basename}.gmi` in entries); assert(`${basename}.gml` in entries);
-    assert.match(deliveryReport({ plan: p, fieldCount: 0 }), /20261113-121213-Ledninger_rev02\.zip/);
+    const descriptive = '20261110 Grøft nord, sone 4 (Æ)';
+    for (const [filenameTimestamp, revision, basename] of [
+      [true, 'rev02', `20261113-1212-${descriptive}_rev02`],
+      [true, '', `20261113-1212-${descriptive}`],
+      [false, 'rev02', `${descriptive}_rev02`],
+      [false, '', descriptive],
+    ]) {
+      const p = await f.plan('combined', { label: descriptive, filenameTimestamp, revision }); ready(p);
+      assert.equal(p.naming.basename, basename);
+      assert.equal(p.filename, `${basename}.zip`);
+      assert.equal(p.naming.gmiFilename, `${basename}.gmi`);
+      assert.equal(p.naming.reportFilename, `${basename}-leveranserapport.txt`);
+      assert.equal(p.photoPlan.naming.gmlFilename, `${basename}.gml`);
+      assert.equal(p.photoPlan.naming.basename, basename);
+      const zip = new Uint8Array(await (await buildDeliveryPackage(p)).arrayBuffer());
+      const entries = unzipSync(zip);
+      assert(`${basename}.gmi` in entries); assert(`${basename}.gml` in entries);
+      assert.deepEqual(entries[`${basename}.gmi`], getDeliveryGmiBytes(p), 'the ZIP carries exactly the planned GMI bytes');
+      // Non-ASCII entry names are flagged UTF-8 (general-purpose bit 11) in their local headers.
+      const name = new TextEncoder().encode(`${basename}.gmi`);
+      const at = zip.findIndex((_, i) => zip[i] === 0x50 && zip[i + 1] === 0x4b && zip[i + 2] === 3 && zip[i + 3] === 4
+        && name.every((byte, k) => zip[i + 30 + k] === byte));
+      assert(at >= 0, 'local header found');
+      assert.equal(zip[at + 7] & 0x08, 0x08, 'UTF-8 flag (bit 11)');
+      assert(deliveryReport({ plan: p, fieldCount: 0 }).includes(`${basename}.zip`));
+    }
+    await assert.rejects(f.plan('combined', { label: '', filenameTimestamp: false, revision: '' }), { code: 'filename-empty' });
+    await assert.rejects(f.plan('combined', { label: 'CON', filenameTimestamp: false }), { code: 'filename-reserved' });
+    await assert.rejects(f.plan('gmi-only', { label: 'x'.repeat(300) }), { code: 'filename-too-long' });
+    await assert.rejects(f.plan('photos-only', { label: '...', filenameTimestamp: false }), { code: 'filename-empty' });
+  } finally { f.session.clear(); }
+});
+
+test('Kun GMI: the downloaded name and payload share the basename, and a no-op stays byte-identical', async () => {
+  const f = await deliveryFixture();
+  try {
+    for (const [filenameTimestamp, revision, basename] of [[true, 'rev03', '20261113-1212-Ledninger Nord_rev03'], [false, '', 'Ledninger Nord']]) {
+      const p = await f.plan('gmi-only', { label: 'Ledninger Nord', filenameTimestamp, revision }); ready(p);
+      assert.equal(p.filename, `${basename}.gmi`);
+      assert.equal(p.naming.reportFilename, `${basename}-leveranserapport.txt`);
+      assert.deepEqual(getDeliveryGmiBytes(p), f.bytes);
+    }
+    const direct = await buildGmiFieldExport(f.registry, f.handle, { date: DATE, descriptive: 'Ledninger Nord', revision: 'rev03' });
+    assert.equal(direct.filename, '20261113-1212-Ledninger Nord_rev03.gmi');
+    const refused = await buildGmiFieldExport(f.registry, f.handle, { date: DATE, descriptive: '', timestamp: false });
+    assert.equal(refused.ok, false); assert.equal(refused.code, 'filename-empty');
   } finally { f.session.clear(); }
 });

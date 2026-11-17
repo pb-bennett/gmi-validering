@@ -6,7 +6,7 @@ import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { isLoadedGmiSurveyLayer } from '@/lib/photos/loadedGmiSource.mjs';
-import { suggestRevisionLabel } from '@/lib/photos/export/photoExportNaming.mjs';
+import { parseSourceFilename, exportFilenamePreview } from '@/lib/photos/export/photoExportNaming.mjs';
 import { DEFAULT_PHOTO_EXPORT_CONFIG } from '@/lib/photos/photoExportConfig.mjs';
 import { photosBeingRead, photoReadingNote, photoCount, placementCount, photoCaptureTimeSchemaWarning } from '@/lib/photos/photoCompletion.mjs';
 import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRules.mjs';
@@ -21,7 +21,7 @@ import usePhotoSession from '@/components/photos/usePhotoSession';
 import useGmiEditLayer from '@/components/gmi-edit/useGmiEditLayer';
 import PhotoWizardSteps from '@/components/photos/PhotoWizardSteps';
 import PhotoSourceOption, { photoSourceButton } from '@/components/photos/PhotoSourceOption';
-import { PhotoExportSettings, FilenameHint } from '@/components/photos/PhotoExportDeliveryStep';
+import { PhotoExportSettings, ExportFilenameEditor } from '@/components/photos/PhotoExportDeliveryStep';
 import PhotoExportStatus, { PhotoExportDiagnostics, PhotoExportTone } from '@/components/photos/PhotoExportStatus';
 import { ignoreFollowUpClick } from '@/components/photos/photoFollowUpClick';
 import '@/components/photos/photoCollectionPanel.css';
@@ -128,16 +128,22 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
   const photoLayer = photoSession.getLayer(photoId);
   const layerPhotos = photoLayer ? photoSession.getLayerPhotos(photoId) : [];
   const config = suppliedConfig && photoId === initialPhotoLayerId ? suppliedConfig : localConfig;
-  const sourceFilename = hasGmi ? gmi.descriptor?.filename : undefined;
-  const suggestedLabel = suggestRevisionLabel(sourceFilename);
+  // The descriptive text is the user's once edited; the revision always follows the live source and is never stored.
+  const sourceParts = hasGmi ? parseSourceFilename(gmi.descriptor?.filename) : null;
+  const suggestedLabel = sourceParts?.descriptive ?? '';
   const label = config.labelEdited ? config.label : suggestedLabel;
+  const filenameTimestamp = config.filenameTimestamp !== false, revisionChecked = config.filenameRevision !== false;
+  const revision = revisionChecked && sourceParts ? `rev${sourceParts.nextRevision}` : '';
   const changeConfig = (patch) => {
     if (Object.hasOwn(patch, 'label')) patch = { ...patch, labelEdited: patch.labelEdited ?? true };
     if (onConfigChange && photoId === initialPhotoLayerId) onConfigChange(patch);
     else setLocalConfig((current) => ({ ...current, ...patch }));
   };
-  const filenameHint = { mode, sourceFilename, onUseSuggestion: hasGmi && suggestedLabel && config.labelEdited && label !== suggestedLabel
-    ? () => changeConfig({ label: '', labelEdited: false }) : undefined };
+  const extension = mode === 'gmi-only' ? '.gmi' : '.zip';
+  const filenameIssue = exportFilenamePreview({ descriptive: label, timestamp: filenameTimestamp, revision, extension }).issue;
+  const filename = { descriptive: label, timestamp: filenameTimestamp, revision, revisionChecked, showRevision: hasGmi, extension,
+    issueText: filenameIssue ? deliveryMessage(filenameIssue) : '',
+    onUseSuggestion: sourceParts && config.labelEdited && label !== suggestedLabel ? () => changeConfig({ label: '', labelEdited: false }) : undefined };
   const fieldCount = gmi.status?.changedCells ?? 0;
   const needsExclusion = mode === 'split' && (gmi.status?.changeSetCount ?? 0) > 0;
   // A changed session requires renewed acknowledgement, even after an undo/redo.
@@ -149,7 +155,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
   const photoReadiness = hasPhoto && photoLayer ? photoExportDeliveryReadiness(readinessPhotos, config, Date.now()) : null;
   const photoModel = photoReadiness ? photoExportDeliveryModel({ photos: layerPhotos, readiness: photoReadiness }) : null;
   const canBuild = (!hasGmi || gmi.descriptor?.state === 'editable') && (!hasPhoto || photoLayer)
-    && (!needsExclusion || excluded === exclusionKey) && !waiting && (mode !== 'photos-only' || photoModel?.advance.enabled);
+    && (!needsExclusion || excluded === exclusionKey) && !waiting && (mode !== 'photos-only' || photoModel?.advance.enabled) && !filenameIssue;
   const delivery = photoLayer ? photoSession.getLayerDelivery(photoId) : null;
   const decision = delivery?.summary;
   const deliveryChoices = photoLayer ? photoSession.getPhotoDeliverySnapshot(photoId) : null;
@@ -189,7 +195,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
     try {
       const snapshot = captureDeliverySnapshot({ mode, registry: gmiEditSessions, handle: gmi.view?.handle,
         photoSession, photoLayerId: photoId, includeFieldChanges: needsExclusion ? false : undefined });
-      const plan = await buildDeliveryPlan(snapshot, { ...config, label });
+      const plan = await buildDeliveryPlan(snapshot, { ...config, label, filenameTimestamp, filenameRevision: revisionChecked, revision });
       if (work.current.active && token === work.current.token) dispatch({ type: 'built', run, review: { plan, snapshot, fieldCount } });
     } catch (error) {
       if (work.current.active && token === work.current.token) dispatch({ type: 'build-failed', run, error: deliveryMessage(error.code) });
@@ -216,7 +222,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
   const report = () => {
     try {
       if (!state.review.plan.isLive()) throw new Error();
-      saveFile(new Blob(['\ufeff', deliveryReport(state.review)], { type: 'text/plain;charset=utf-8' }), `${state.review.plan.naming.basename}-leveranserapport.txt`);
+      saveFile(new Blob(['\ufeff', deliveryReport(state.review)], { type: 'text/plain;charset=utf-8' }), state.review.plan.naming.reportFilename);
       setReportError(null);
     } catch { setReportError('Rapporten kunne ikke lastes ned. Kontroller at forhåndsvisningen er gyldig og prøv igjen.'); }
   };
@@ -251,8 +257,8 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
           {hasGmi && gmi.descriptor?.state !== 'editable' && <p role="status">{gmi.descriptor?.state === 'loading' ? 'Leser GMI-kilden …' : 'Velg et GMI-kartlag som kan rettes sikkert.'}</p>}
           {needsExclusion && <label className="delivery-exclusion"><input type="checkbox" aria-label="Utelat feltrettingene" checked={excluded === exclusionKey}
             onChange={(event) => setExcluded(event.target.checked ? exclusionKey : null)} /> Jeg bekrefter at {fieldCount} {fieldCount === 1 ? 'feltretting utelates' : 'feltrettinger utelates'} fra denne leveransen. Rettingene beholdes i Rettinger.</label>}
-          {hasPhoto ? <PhotoExportSettings config={{ ...config, label }} onConfigChange={changeConfig} filenameHint={filenameHint} /> : <><label className="photo-export-label">Etikett i filnavnet (valgfritt)
-            <input type="text" aria-label="Eksportetikett" className="gmi-focus-ring" value={label} maxLength={60} onChange={(event) => changeConfig({ label: event.target.value })} /></label><FilenameHint label={label} {...filenameHint} /></>}
+          {hasPhoto ? <PhotoExportSettings config={{ ...config, label }} onConfigChange={changeConfig} filename={filename} />
+            : <ExportFilenameEditor filename={filename} onConfigChange={changeConfig} />}
           {exclusionNote && <p className="photo-export-hint" data-delivery-exclusion-note>{exclusionNote}</p>}
           {hasPhoto && photoLayer && <>
             {mode === 'photos-only' ? <><p data-delivery-state={photoModel.state}>{photoModel.heading}</p><PhotoExportStatus readiness={photoReadiness} reading={waiting} />

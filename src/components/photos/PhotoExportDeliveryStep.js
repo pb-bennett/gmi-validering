@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRules.mjs';
-import { sanitizePhotoExportLabel } from '@/lib/photos/export/photoExportNaming.mjs';
+import { exportFilenamePreview, EXPORT_FILENAME_ADVISORY_LENGTH } from '@/lib/photos/export/photoExportNaming.mjs';
 import PhotoExportStatus, { PhotoExportDiagnostics, PhotoExportTone } from './PhotoExportStatus';
 import PhotoSourceOption, { photoSourceButton } from './PhotoSourceOption';
 
@@ -20,20 +20,40 @@ function FormatCard({ profile, card, config, onConfigChange }) {
   </PhotoSourceOption>;
 }
 
-export function FilenameHint({ label, mode = 'photos-only', sourceFilename, onUseSuggestion }) {
-  const part = sanitizePhotoExportLabel(label);
-  const extensions = mode === 'gmi-only' ? '.gmi' : mode === 'photos-only' ? '.zip og .gml' : '.zip, .gmi og .gml';
-  return <>
-    {sourceFilename && <p className="photo-export-hint" data-export-name-source>Foreslått ut fra {sourceFilename}.</p>}
-    {onUseSuggestion && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive px-2 py-1" onClick={onUseSuggestion}>Bruk forslag</button>}
-    <p className="photo-export-hint" data-export-name-format>{label.trim() && !part
-      ? 'Etiketten har ingen tegn som kan brukes i filnavn. Bare tidspunktet brukes. '
-      : ''}Filnavn: ÅÅÅÅMMDD-TTmmss{part && `-${part}`}{extensions}. Tidspunktet settes når leveransen kontrolleres.</p>
-  </>;
+/**
+ * One filename field: grey timestamp prefix, the editable descriptive name, grey `_revNN.ext` suffix. `filename` is
+ * derived by the wizard: { descriptive, timestamp, revision, showRevision, extension, issueText, onUseSuggestion }.
+ * The timestamp itself is read when the plan is built, so the prefix shows a placeholder of the same length.
+ */
+export function ExportFilenameEditor({ filename, onConfigChange }) {
+  const id = useId();
+  const { descriptive, timestamp, revision, showRevision, revisionChecked, extension, issueText, onUseSuggestion } = filename;
+  const preview = exportFilenamePreview({ descriptive, timestamp, revision, extension });
+  const long = !preview.issue && preview.length > EXPORT_FILENAME_ADVISORY_LENGTH;
+  const message = preview.issue ? issueText : long ? `Filnavnet er over ${EXPORT_FILENAME_ADVISORY_LENGTH} tegn.` : '';
+  const describedBy = [preview.prefix && `${id}-prefix`, `${id}-suffix`, message && `${id}-message`].filter(Boolean).join(' ');
+  return <div className="delivery-filename-field" data-export-filename-editor>
+    <label htmlFor={`${id}-input`} className="delivery-filename-label">Filnavn</label>
+    <div className="delivery-filename" data-validation-tone={preview.issue ? 'error' : long ? 'warning' : undefined}>
+      {preview.prefix && <span id={`${id}-prefix`} className="delivery-filename-affix" data-export-filename-prefix>{preview.prefix}</span>}
+      <input id={`${id}-input`} type="text" autoComplete="off" spellCheck={false} value={descriptive}
+        aria-describedby={describedBy} aria-invalid={preview.issue ? 'true' : undefined}
+        onChange={(event) => onConfigChange({ label: event.target.value })} />
+      <span id={`${id}-suffix`} className="delivery-filename-affix" data-export-filename-suffix>{preview.suffix}</span>
+    </div>
+    <div className="delivery-filename-options">
+      <label><input type="checkbox" className="accent-gmi-interactive" checked={timestamp}
+        onChange={(event) => onConfigChange({ filenameTimestamp: event.target.checked })} />Tidsstempel</label>
+      {showRevision && <label><input type="checkbox" className="accent-gmi-interactive" checked={revisionChecked}
+        onChange={(event) => onConfigChange({ filenameRevision: event.target.checked })} />Revisjonsnummer</label>}
+      {onUseSuggestion && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive px-2 py-1" onClick={onUseSuggestion}>Bruk forslag</button>}
+    </div>
+    {message && <p id={`${id}-message`} className="delivery-filename-message" data-export-filename-message={preview.issue ?? 'long'}>{message}</p>}
+  </div>;
 }
 
 // Everything that shapes the package is chosen here, before a plan exists. Status follows each choice at once.
-export function PhotoExportSettings({ config, onConfigChange, filenameHint }) {
+export function PhotoExportSettings({ config, onConfigChange, filename }) {
   const [moreOpen, setMoreOpen] = useState(false);
   // A chosen format is never hidden, whether it was chosen here or in Fullfør opplysninger.
   const advanced = PHOTO_EXPORT_PROFILE_METADATA[config.profile]?.tier !== 'primary';
@@ -44,10 +64,7 @@ export function PhotoExportSettings({ config, onConfigChange, filenameHint }) {
         <summary onClick={(event) => { if (advanced) event.preventDefault(); }}>Flere formater</summary>
         {formats('advanced').map(([profile, card]) => <FormatCard key={profile} profile={profile} card={card} config={config} onConfigChange={onConfigChange} />)}
       </details>
-      <label className="photo-export-label">Etikett i filnavnet (valgfritt)
-        <input className="gmi-focus-ring" type="text" autoComplete="off" aria-label="Eksportetikett" value={config.label} onChange={(event) => onConfigChange({ label: event.target.value })} />
-      </label>
-      <FilenameHint label={config.label} {...filenameHint} />
+      {filename && <ExportFilenameEditor filename={filename} onConfigChange={onConfigChange} />}
   </>;
 }
 

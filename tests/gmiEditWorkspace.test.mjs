@@ -304,7 +304,7 @@ test('download: payload bytes equal the Blob, unrelated bytes are preserved, unc
   assert.equal(gmiEditDownloadState(h.statuses.a), 'unsaved');
   assert.equal(summarizeGmiEditCounts(h.statuses.a), '1 retting · 2 felt i 1 objekt');
   const payload = await buildGmiFieldExport(h.registry, handle, { date: DATE, label: 'Rettinger' });
-  assert.equal(payload.filename, '20261109-111112-Rettinger.gmi');
+  assert.equal(payload.filename, '20261109-1111-Rettinger.gmi');
   const blobBytes = new Uint8Array(await createGmiExportBlob(payload).arrayBuffer());
   assert.deepEqual(blobBytes, getGmiExportBytes(payload));
   const oracle = verifyCellChanges(loadGmiDocument(CORE), blobBytes, [

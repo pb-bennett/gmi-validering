@@ -112,7 +112,7 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   await buildPreview(browser);
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-current="step"]').innerText`), '3. Pakke / Last ned');
   const names = await previewNames(browser);
-  assert.match(names.zip, /^\d{8}-\d{6}\.zip$/);
+  assert.match(names.zip, /^\d{8}-\d{4}\.zip$/);
   assert.equal(names.gml, names.zip.replace(/\.zip$/, '.gml'));
   const packageText = await dialogText(browser);
   for (const expected of [names.zip, names.gml]) assert(packageText.includes(expected), expected);
@@ -147,18 +147,22 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   // Going back discards the plan, so the next one is a new delivery.
   await backToDelivery(browser);
   assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-zip]'))`), false);
-  await delay(1100);
+  // Minute precision: a changed name proves the new plan; the timestamp alone may repeat within the minute.
+  await setLabel(browser, 'Ny');
   await buildPreview(browser);
   assert.notEqual((await previewNames(browser)).zip, first.zip);
+  assert.match((await previewNames(browser)).zip, /^\d{8}-\d{4}-Ny\.zip$/);
   await closeExport(browser);
 });
 
 layerTest('format, CRS and label stay for the session, a choice is never folded away, and blockers hold Neste', async (browser) => {
   await openExport(browser);
   await setLabel(browser, '  Grøft / nord  ');
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-name-format]').innerText`), /^Filnavn: ÅÅÅÅMMDD-TTmmss-Groeft-nord\.zip og \.gml\./);
+  const affixes = () => browser.evaluate(`(() => { const e = ${exportDialog}.querySelector('[data-export-filename-editor]');
+    return [e.querySelector('[data-export-filename-prefix]')?.textContent ?? '', e.querySelector('[data-export-filename-suffix]').textContent, e.querySelectorAll('input[type=checkbox]').length]; })()`);
+  assert.deepEqual(await affixes(), ['ååååmmdd-ttmm-', '.zip', 1], 'Kun GML: timestamp only, no revision');
   await setLabel(browser, '///');
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-name-format]').innerText`), /Bare tidspunktet brukes/);
+  assert.deepEqual(await affixes(), ['ååååmmdd-ttmm', '.zip', 1], 'nothing usable left: the timestamp alone');
   await setLabel(browser, 'Nord');
 
   await chooseFormat(browser, 'legacy2019');
@@ -182,7 +186,7 @@ layerTest('format, CRS and label stay for the session, a choice is never folded 
   await openExport(browser);
   assert.equal(await selectedFormat(browser), 'legacy2019');
   assert.equal(await browser.evaluate(`${crs}.value`), 'EPSG:25833');
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksportetikett"]').value`), 'Nord');
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-filename-editor] input[type=text]').value`), 'Nord');
   assert.equal(await browser.evaluate(`JSON.stringify({ ...localStorage, ...sessionStorage }).includes('Nord')`), false, 'nothing reaches browser storage');
 });
 
@@ -367,6 +371,8 @@ layerTest('a change during Pakke removes the download, says so, and only an expl
   assert.equal(await packageState(browser), 'stale', 'not rebuilt silently');
 
   await clickSourceControl(browser, 'Tilbake og kontroller på nytt', exportDialog);
+  // Minute precision: the timestamp alone may repeat within the minute, so a changed name marks the new plan.
+  await setLabel(browser, 'Ny pakke');
   await buildPreview(browser);
   assert.notEqual((await previewNames(browser)).zip, zip, 'a new plan is a new package');
   assert(await canDownload(browser));

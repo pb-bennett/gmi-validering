@@ -367,7 +367,7 @@ test('label: what the config holds reaches the name through the plan', async () 
   const config = photoExportConfigFor(updatePhotoExportConfig(new Map(), 'a', { ...GEMINI, label: '  Grøft / nord  ' }), 'a');
   const { naming } = await fixture.plan(config);
   assert.equal(naming.label, '  Grøft / nord  ');
-  assert.match(naming.zipFilename, /^\d{8}-\d{6}-Groeft-nord\.zip$/);
+  assert.match(naming.zipFilename, /^\d{8}-\d{4}-Grøft - nord\.zip$/);
 });
 
 // Wording and boundaries
@@ -429,9 +429,10 @@ test('boundaries: the wizard components write no metadata, compose no final name
   for (const text of steps) assert(!text.includes('photoSession'));
   const shared = await readFile(new URL('../src/components/delivery/DeliveryWizard.js', import.meta.url), 'utf8');
   const service = await readFile(new URL('../src/lib/delivery/deliveryWizard.mjs', import.meta.url), 'utf8');
-  assert(shared.includes('captureDeliverySnapshot(') && shared.includes('buildDeliveryPlan(snapshot, { ...config, label })'));
-  assert(shared.includes('hasGmi ? gmi.descriptor?.filename : undefined'), 'suggestions use the live source');
+  assert(shared.includes('captureDeliverySnapshot(') && shared.includes('buildDeliveryPlan(snapshot, { ...config, label, filenameTimestamp, filenameRevision: revisionChecked, revision })'));
+  assert(shared.includes('hasGmi ? parseSourceFilename(gmi.descriptor?.filename) : null'), 'suggestions use the live source');
   assert(shared.includes('config.labelEdited ? config.label : suggestedLabel'), 'manual input takes precedence');
+  assert(shared.includes("revisionChecked && sourceParts ? `rev${sourceParts.nextRevision}` : ''"), 'the revision follows the live source and is never stored');
   assert(shared.includes('link.download = filename') && service.includes('save(blob, plan.filename)'), 'the browser gets the name the M9 plan fixed');
   for (const name of ['adoptSourceEvidence', 'setCaptureMetadata', 'fillMissingPhotoValues', 'localStorage', 'sessionStorage', 'indexedDB']) assert(!shared.includes(name), name);
 });

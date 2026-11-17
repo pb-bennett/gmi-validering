@@ -242,7 +242,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('4 plasseringer uten posisjon utelatt')`));
         assert(await browser.evaluate(`${exportDialog}.textContent.includes('Ikke testet med import i Gemini VA.')`));
         const unlabelled = await previewNames(browser);
-        assert.match(unlabelled.zip, /^\d{8}-\d{6}\.zip$/);
+        assert.match(unlabelled.zip, /^\d{8}-\d{4}\.zip$/);
         assert.equal(unlabelled.gml, unlabelled.zip.replace(/\.zip$/, '.gml'));
         const legacy = await downloadZip(browser, directory);
         assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-package-state="done"] [data-downloaded-filename]').innerText`), legacy.zip, 'the done screen names the real file');
@@ -256,13 +256,13 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         for(const [name,data] of Object.entries(legacy.entries))if(!name.endsWith('.gml'))assert.deepEqual(data,Uint8Array.from(Buffer.from(/\/(flat|line)\.png$/.test(name)?unresolvedBytes:bytes,'base64')));
         await setLabel(browser, '  Grøft / nord  ');
         assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-zip]'))`), false, 'a new label needs a new plan: going back to change it discarded the one with the old name');
-        assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-name-format]').innerText.includes('-Groeft-nord.zip')`));
-        assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksportetikett"]').value`), '  Grøft / nord  ');
+        assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-filename-suffix]').textContent`), '.zip');
+        assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-filename-editor] input[type=text]').value`), '  Grøft / nord  ');
         await chooseFormat(browser, 'gemini-legacy2019'); await buildPreview(browser); await showReview(browser);
         assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-z"]').textContent`), /^4 XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde\./);
         assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-diagnostic-code="capture-time-required"]').length`), 0);
         const labelled = await previewNames(browser);
-        assert.match(labelled.zip, /^\d{8}-\d{6}-Groeft-nord\.zip$/);
+        assert.match(labelled.zip, /^\d{8}-\d{4}-Grøft - nord\.zip$/);
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-import"]').textContent.includes(${JSON.stringify(labelled.gml)})`));
         const gemini = await downloadZip(browser, directory);
         const geminiXml = strFromU8(gemini.entries[gemini.gml]);
@@ -297,7 +297,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
           }
         }
         const modern = await downloadZip(browser, directory);
-        assert.match(modern.zip, /^\d{8}-\d{6}-AsBuilt\.zip$/);
+        assert.match(modern.zip, /^\d{8}-\d{4}-AsBuilt\.zip$/);
         const modernXml=strFromU8(modern.entries[modern.gml]);assert(!modernXml.includes('<app:fotoinformasjon>')); assert(modernXml.includes('Synthetic export dataset'));
         for (const value of ['Synthetic export project', '2026-05-12', 'åpenGrøft', 'nytt']) assert(modernXml.includes(value), value);
         assert.equal((modernXml.match(/<app:Skråfoto /g)||[]).length,4);

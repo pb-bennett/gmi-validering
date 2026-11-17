@@ -24,7 +24,7 @@
 import { computeGmiSourceFingerprint, getGmiSourceBytes, gmiSourceIntact } from './sourceDocument.mjs';
 import { getGmiDocumentDataset } from './proposed.mjs';
 import { diffGmiDatasets } from './diff.mjs';
-import { formatPhotoExportTimestamp, sanitizePhotoExportLabel } from '../photos/export/photoExportNaming.mjs';
+import { photoExportNames, ExportFilenameError, EXPORT_FILENAME_ISSUES } from '../photos/export/photoExportNaming.mjs';
 
 // Opaque bytes: no charset, so nothing between here and disk re-encodes them.
 export const GMI_EXPORT_MIME_TYPE = 'application/octet-stream';
@@ -33,20 +33,22 @@ export const GMI_EXPORT_FAILURES = Object.freeze([
   'invalid-handle', 'session-disposed', 'stale-session', 'source-identity-mismatch', 'fingerprint-mismatch',
   'source-stale', 'source-bytes-mutated', 'source-unreadable', 'source-fingerprint-mismatch', 'loaded-gmi-unreadable',
   'document-read-only', 'verification-failed', 'structural-difference', 'state-changed', 'output-integrity', 'invalid-date',
+  ...EXPORT_FILENAME_ISSUES,
 ]);
 
 const payloads = new WeakMap();   // payload -> { bytes, handle, effectiveKey }
 const fail = (code, detail = {}) => Object.freeze({ ok: false, code, ...detail });
 
 /**
- * Filename of a revised GMI: `YYYYMMDD-HHmmss[-label].gmi`, Europe/Oslo
- * wall-clock time, matching the FOTO ZIP/GML basename convention.
+ * Filename of a revised GMI: the shared export basename (photoExportNames) plus
+ * `.gmi`, so a GMI and its GML, ZIP and report never disagree. Throws
+ * ExportFilenameError for a name that cannot be saved.
  */
-export function gmiExportNames({ date, label = '' } = {}) {
+export function gmiExportNames({ date, label = '', descriptive, timestamp = true, revision = '' } = {}) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) throw new TypeError('gmiExportNames needs a valid Date');
-  const timestamp = formatPhotoExportTimestamp(date), sanitizedLabel = sanitizePhotoExportLabel(label);
-  const basename = sanitizedLabel ? `${timestamp}-${sanitizedLabel}` : timestamp;
-  return Object.freeze({ label: String(label ?? ''), sanitizedLabel, timestamp, basename, filename: `${basename}.gmi` });
+  const names = photoExportNames({ date, label, descriptive, timestamp, revision });
+  return Object.freeze({ label: names.label, sanitizedLabel: names.sanitizedLabel, timestamp: names.timestamp, revision: names.revision,
+    basename: names.basename, filename: `${names.basename}.gmi` });
 }
 
 function changeSetSummary(changeSet) {
@@ -81,10 +83,13 @@ export function getGmiExportReadiness(registry, handle) {
  * Build the field-only revised GMI for one editing session.
  * @param {object} registry createGmiEditSessions instance
  * @param {object} handle session handle from registry.open
- * @param {{date?: Date, label?: string}} [options]
+ * @param {{date?: Date, label?: string, descriptive?: string, timestamp?: boolean, revision?: string}} [options]
  */
-export async function buildGmiFieldExport(registry, handle, { date = new Date(), label = '' } = {}) {
+export async function buildGmiFieldExport(registry, handle, { date = new Date(), label = '', descriptive, timestamp = true, revision = '' } = {}) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return fail('invalid-date');
+  let names;
+  try { names = gmiExportNames({ date, label, descriptive, timestamp, revision }); }
+  catch (error) { if (error instanceof ExportFilenameError) return fail(error.code); throw error; }
   const start = registry.resolve(handle);
   if (!start.ok) return fail(start.code);
   const { session, document } = start;
@@ -118,7 +123,6 @@ export async function buildGmiFieldExport(registry, handle, { date = new Date(),
   if (!after.ok) return fail(after.code);
   if (after.session !== session) return fail('state-changed');
 
-  const names = gmiExportNames({ date, label });
   const effectiveKey = proposed.effectiveKey;
   const payload = Object.freeze({
     ok: true,

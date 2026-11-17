@@ -29,7 +29,7 @@ const hubGo = buttonIn(hub, 'Gå til eksport');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const openDialogs = (browser) => browser.evaluate(`document.querySelectorAll('dialog[open]').length`);
 const footerStatus = (browser) => browser.evaluate(`${exportDialog}.querySelector('.photo-import-footer [role=status]').innerText`);
-const label = (browser) => browser.evaluate(`${exportDialog}.querySelector('[aria-label="Eksportetikett"]').value`);
+const label = (browser) => browser.evaluate(`${exportDialog}.querySelector('[data-export-filename-editor] input[type=text]').value`);
 const excluded = (browser) => browser.evaluate(`${exportDialog}.querySelector('[data-export-excluded]')?.innerText ?? null`);
 const onDelivery = async (browser, context) => {
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[aria-current="step"]').innerText`), '1. Innhold', context);
@@ -281,9 +281,10 @@ layerTest('no navigation brings back a plan: not a finished one, and not one sti
   await openCompletionFromExport(browser);
   await returnToExport(browser);
   await onDelivery(browser, 'a finished plan stays discarded');
-  await delay(1100);
+  // Minute precision: the timestamp alone may repeat within the minute, so a changed name marks the new plan.
+  await setLabel(browser, `${await label(browser)} ny`);
   await buildPreview(browser);
-  assert.notEqual((await previewNames(browser)).zip, zip, 'a new plan, with a new timestamp');
+  assert.notEqual((await previewNames(browser)).zip, zip, 'a new plan, with a new name');
   await backToDelivery(browser);
 
   // Hold the build, leave for the hub, and let it finish there: nothing may come of it.

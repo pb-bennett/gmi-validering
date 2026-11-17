@@ -322,7 +322,7 @@ test('no-op export is the exact original file; the original layer and source sta
   assert(bytesEqual(getGmiExportBytes(payload), CORE));
   assert.equal(payload.fingerprint, handle.fingerprint);
   assert.equal(payload.size, CORE.length);
-  assert.equal(payload.filename, '20261109-111112.gmi');
+  assert.equal(payload.filename, '20261109-1111.gmi');
   assert.equal(payload.mimeType, 'application/octet-stream');
   assert.deepEqual(payload.summary.changes, []);
   assert.equal(payload.source.filename, 'Leveranse æøå.gmi');
@@ -342,7 +342,7 @@ test('modified export: only the approved value spans differ, it reparses indepen
   assert.equal(h.registry.stage(handle, merknad.changeSet).ok, true);
   const payload = await buildGmiFieldExport(h.registry, handle, { date: DATE, label: 'Rettet SDR på kum' });
   assert.equal(payload.ok, true, payload.code);
-  assert.equal(payload.filename, '20261109-111112-Rettet-SDR-paa-kum.gmi');
+  assert.equal(payload.filename, '20261109-1111-Rettet SDR på kum.gmi');
   assert.equal(payload.identical, false);
   const out = getGmiExportBytes(payload);
   assert.equal(payload.fingerprint, `sha256:${sha256Hex(out)}`);
@@ -473,10 +473,12 @@ test('the beforeunload guard is attached only while unsaved changes exist', asyn
   guard.dispose();
 });
 
-test('gmiExportNames follows the FOTO timestamp and label convention', () => {
-  assert.equal(gmiExportNames({ date: DATE }).filename, '20261109-111112.gmi');
-  assert.equal(gmiExportNames({ date: new Date('2026-07-01T22:30:00Z') }).filename, '20260702-003000.gmi');
-  assert.equal(gmiExportNames({ date: DATE, label: '  Å/../CON: x ' }).filename, '20261109-111112-Aa-CON-x.gmi');
+test('gmiExportNames delegates to the shared export naming rule', () => {
+  assert.equal(gmiExportNames({ date: DATE }).filename, '20261109-1111.gmi');
+  assert.equal(gmiExportNames({ date: new Date('2026-07-01T22:30:00Z') }).filename, '20260702-0030.gmi');
+  assert.equal(gmiExportNames({ date: DATE, label: '  Å/../CON: x ' }).filename, '20261109-1111-Å-..-CON- x.gmi');
+  assert.equal(gmiExportNames({ date: DATE, descriptive: 'Nord', timestamp: false, revision: 'rev04' }).filename, 'Nord_rev04.gmi');
+  assert.throws(() => gmiExportNames({ date: DATE, descriptive: 'CON', timestamp: false }), { code: 'filename-reserved' });
   assert.throws(() => gmiExportNames({ date: 'today' }), TypeError);
 });
 

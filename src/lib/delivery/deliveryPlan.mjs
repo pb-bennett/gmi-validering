@@ -5,7 +5,7 @@ import { getGmiDocumentDataset } from '../gmi-edit/proposed.mjs';
 import { diffGmiDatasets } from '../gmi-edit/diff.mjs';
 import { capturePhotoExportSnapshot, buildPhotoExportPlan, assertExportablePlan } from '../photos/export/photoExportPlan.mjs';
 import { serializePhotoExport } from '../photos/export/photoExportXml.mjs';
-import { photoExportNames } from '../photos/export/photoExportNaming.mjs';
+import { photoExportNames, exportFilenameOptions, ExportFilenameError } from '../photos/export/photoExportNaming.mjs';
 import { digestHex, compareExportKeys } from '../photos/export/attachmentNames.mjs';
 import { freezeExportData } from '../photos/export/exportContract.mjs';
 import { describeGmiObject } from '../gmiEditView.mjs';
@@ -121,14 +121,18 @@ export async function buildDeliveryPlan(snapshot, configuration = {}, { now = ()
   const errors = [], warnings = [], date = now();
   const error = (code, detail = {}) => errors.push({ code, ...detail });
   let gmiBytes = null, gmiFingerprint = null, gmiSummary = null, removal = null, photoPlan = null, xml = null, attachments = [], assets = [];
-  const naming = { ...photoExportNames({ date, label: configuration.label }), gmiFilename: null };
-  naming.gmiFilename = `${naming.basename}.gmi`;
+  // One clock read and one set of filename choices name every artifact; an unusable name fails closed here.
+  const filename = exportFilenameOptions(configuration);
+  let names;
+  try { names = photoExportNames({ date, ...filename }); }
+  catch (failure) { throw failure instanceof ExportFilenameError ? new DeliveryError(failure.code) : failure; }
+  const naming = { ...names, gmiFilename: `${names.basename}.gmi` };
   try {
     if (!snapshot.isLive()) throw new DeliveryError('stale-plan');
     const { registry, handle, gmi } = basis;
     const photoOptions = { ...configuration, profile: configuration.profile ?? 'gemini-legacy2019' };
     if (snapshot.mode === 'gmi-only') {
-      const exported = requireOk(await buildGmiFieldExport(registry, handle, { date, label: configuration.label }));
+      const exported = requireOk(await buildGmiFieldExport(registry, handle, { date, ...filename }));
       gmiBytes = getGmiExportBytes(exported); gmiSummary = exported.summary;
     } else if (snapshot.mode === 'photos-only') {
       // Mode B deliberately ignores M8 intent, preserving standalone scope and names.

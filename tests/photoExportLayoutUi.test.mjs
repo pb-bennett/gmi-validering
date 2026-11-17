@@ -75,8 +75,9 @@ async function assertKeyboard(browser, label, expected) {
     const stop = await browser.evaluate(`(() => {
       const item = document.activeElement, dialog = ${exportDialog}, rect = item.getBoundingClientRect(), style = getComputedStyle(item);
       const area = item.closest('.delivery-body, .photo-export-choices, .photo-export-state, .photo-export-package')?.getBoundingClientRect() || { top: 0, bottom: innerHeight };
-      return { name: item.getAttribute('aria-label') || item.value || item.innerText?.trim(), tag: item.tagName, inside: dialog.contains(item), visible: rect.top >= area.top - 1 && rect.bottom <= area.bottom + 1 && rect.bottom <= innerHeight,
-        marked: style.outlineStyle !== 'none' || style.boxShadow !== 'none' };
+      const ring = item.closest('.delivery-filename');
+      return { name: item.getAttribute('aria-label') || (['checkbox', 'text'].includes(item.type) && item.labels?.[0]?.innerText.trim()) || item.value || item.innerText?.trim(), tag: item.tagName, inside: dialog.contains(item), visible: rect.top >= area.top - 1 && rect.bottom <= area.bottom + 1 && rect.bottom <= innerHeight,
+        marked: style.outlineStyle !== 'none' || style.boxShadow !== 'none' || Boolean(ring && getComputedStyle(ring).boxShadow !== 'none') };
     })()`);
     if (stop.tag === 'BODY') continue;
     assert(stop.inside, `${label}: ${JSON.stringify(stop)}`);
@@ -156,7 +157,7 @@ layoutTest('missing times and blocked formats: Leveranse and the hub fit every s
   await picture(browser, '7a-leveranse-laptop-1366x625');
   await size(browser, 1093, 510, 1.25);
   await picture(browser, '7c-leveranse-small-laptop-125');
-  await assertKeyboard(browser, 'Innhold', ['Lukk eksport', 'gemini-legacy2019', 'Eksportetikett', 'Fullfør opplysninger…', 'Avbryt', 'Kontroller leveransen']);
+  await assertKeyboard(browser, 'Innhold', ['Lukk eksport', 'gemini-legacy2019', 'Filnavn', 'Tidsstempel', 'Fullfør opplysninger…', 'Avbryt', 'Kontroller leveransen']);
   await pressKey(browser, 'Escape', KEYS.Escape);
   await browser.waitFor(`!${exportDialog}`);
   assert.equal(await browser.evaluate(`document.activeElement === document.querySelector('.photo-tools-trigger')`), true, 'Escape at this size, and focus comes back');
