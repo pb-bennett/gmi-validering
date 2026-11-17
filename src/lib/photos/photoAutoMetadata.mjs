@@ -6,14 +6,18 @@ import { immutable } from './photoSpatial.mjs';
 // The FOTO metadata policy: available source values are used without being asked for, GML before EXIF, and a person
 // only steps in to correct something or to supply what no source has. Each plan returns the value to write, or null
 // to leave things alone, which keeps a repeated run from changing identities. Evidence is never altered here.
+// Capture time is the exception (M3, D1): only EXIF is adopted automatically. A GML capture time is used only through
+// the explicit wizard decision, so a declined GML value stays evidence and no publication can adopt it later.
 const replaceable = (accepted) => !accepted || accepted.acceptance === 'auto';
 const preferred = (items) => items.find((item) => item.kind === 'gml') || items.find((item) => item.kind === 'exif') || null;
 
 // A time without seconds is left as evidence: seconds, timezones and placeholder times are never made up.
+// Only an empty value or an automatic EXIF value may be written; any other accepted value is a decision.
 export function planAutoCaptureTime(metadata, evidence, acceptedAt = Date.now()) {
-  if (metadata.captureTimeCleared || !replaceable(metadata.captureTime)) return null;
+  const accepted = metadata.captureTime;
+  if (metadata.captureTimeCleared || (accepted && (accepted.acceptance !== 'auto' || accepted.provenance?.kind !== 'exif'))) return null;
   const usable = evidence.filter((item) => item.field === 'captureTime' && item.value);
-  const chosen = preferred(usable.filter((item) => completeCaptureValue(item.value)));
+  const chosen = usable.find((item) => item.kind === 'exif' && completeCaptureValue(item.value)) || null;
   if (!chosen || metadata.captureTime?.provenance.evidenceId === chosen.id) return null;
   return immutable({ value: chosen.value, provenance: evidenceProvenance(chosen, usable), acceptance: 'auto', acceptedAt });
 }

@@ -36,6 +36,22 @@
 .photo-import-capture-list li { display:flex; flex-wrap:wrap; gap:.25rem 1rem; padding:.125rem 0; }
 .photo-import-capture-file { overflow-wrap:anywhere; }
 .photo-import-capture-time { color:var(--gmi-text-muted); font-variant-numeric:tabular-nums; }
+/* GML capture-time choices (M3): positioning wizard Koblinger and import Kontroll. Tokens only. */
+.photo-gml-capture { display:grid; gap:.375rem; margin:.75rem 0; font-size:.875rem; }
+.photo-import-review .photo-gml-capture { max-width:1000px; margin:1rem auto; }
+.photo-gml-capture-choice { display:flex; align-items:center; gap:.5rem; width:fit-content; color:var(--gmi-text); cursor:pointer; }
+.photo-gml-capture-review { display:grid; gap:.375rem; padding:.75rem 1rem; border:1px solid; border-radius:.75rem; }
+.photo-gml-capture-title { display:flex; align-items:flex-start; gap:.375rem; }
+.photo-gml-capture-title svg { flex-shrink:0; margin-top:.125rem; }
+.photo-gml-capture-decision { display:flex; flex-wrap:wrap; align-items:center; gap:.25rem 1rem; margin:0; padding:0; border:0; color:var(--gmi-text); }
+.photo-gml-capture-decision legend { float:left; padding:0; font-weight:500; }
+.photo-gml-capture-review details { margin:0; color:var(--gmi-text); }
+.photo-gml-capture-list { display:grid; gap:.5rem; max-height:14rem; overflow:auto; margin-top:.375rem; }
+.photo-gml-capture-list li { display:flex; align-items:flex-start; gap:.5rem; }
+.photo-gml-capture-list img, .photo-gml-capture-thumbnail { width:40px; height:32px; flex-shrink:0; border-radius:4px; object-fit:cover; background:var(--gmi-surface-soft); }
+.photo-gml-capture-list li > div { display:grid; min-width:0; font-variant-numeric:tabular-nums; }
+.photo-gml-capture-file { overflow-wrap:anywhere; font-weight:500; }
+.photo-gml-capture-reason { color:var(--gmi-text-muted); }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) { overflow:auto; }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) .photo-collection-original { min-height:120px; position:relative; }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) .photo-collection-facts { max-height:none; overflow:visible; overflow-wrap:anywhere; }

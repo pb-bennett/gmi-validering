@@ -57,21 +57,25 @@ test('initial task: what blocks first, then anything outstanding; with nothing p
   assert.equal(task(model, 'direction').done, false);
 });
 
-test('capture time: EXIF and GML that agree stay as separate values, and GML is the one used', async () => {
-  const { session, layerId } = await completionLayer([jpeg('a.jpg', exifTime({ subsecond: '012' }))], { gml: [{ name: 'a.jpg', time: '2026-05-12T14:33:02' }] });
+// M3: agreeing GML adds no precision, so even the explicit «Bruk GML» choices keep the automatic EXIF value.
+test('capture time: EXIF and GML that agree stay as separate values, and EXIF stays the one used', async () => {
+  const { session, layerId } = await completionLayer([jpeg('a.jpg', exifTime({ subsecond: '012' }))], { gml: [{ name: 'a.jpg', time: '2026-05-12T14:33:02' }],
+    captureTime: { complete: true, partial: true, conflicts: 'gml' } });
   const { captureTime } = completionView(session, layerId).model;
   const item = captureTime.done[0];
   assert.equal(item.state, 'accepted'); assert.equal(item.origin, 'source'); assert.equal(item.note, null);
   assert.deepEqual(item.sources.map(({ text }) => text), ['EXIF: 12.05.2026 14:33:02,012 · tidssone ukjent', 'GML · kilde.gml: 12.05.2026 14:33:02 · tidssone ukjent']);
-  assert.equal(item.acceptedText, '12.05.2026 14:33:02 · tidssone ukjent · GML · kilde.gml');
-  assert.equal(session.getPhoto(item.photoId).captureMetadata.captureTime.provenance.kind, 'gml');
+  assert.equal(item.acceptedText, '12.05.2026 14:33:02,012 · tidssone ukjent · EXIF DateTimeOriginal');
+  assert.equal(session.getPhoto(item.photoId).captureMetadata.captureTime.provenance.kind, 'exif');
 });
 
-test('capture time: sources that really differ use GML, say so calmly, and the per-photo route keeps the chosen source', async () => {
-  const { session, layerId, ids: [id] } = await completionLayer([jpeg('a.jpg', exifTime())], { gml: [{ name: 'a.jpg', time: '2026-05-12T14:40:00' }] });
+test('capture time: sources that really differ keep EXIF by default, use GML only on «Bruk GML», and the per-photo route keeps the chosen source', async () => {
+  const { session, layerId, ids: [id] } = await completionLayer([jpeg('a.jpg', exifTime())], { gml: [{ name: 'a.jpg', time: '2026-05-12T14:40:00' }], captureTime: { complete: true, partial: true } });
   const { model, readiness } = completionView(session, layerId);
   const item = model.captureTime.done[0];
-  assert.equal(item.accepted.provenance.kind, 'gml');
+  assert.equal(item.accepted.provenance.kind, 'exif', 'the conflict default is «Behold gjeldende», even with both options on');
+  assert.equal(item.accepted.acceptance, 'auto');
+  // The note text predates M3 (it still names "den prioriterte kilden"); its wording belongs to M4 presentation.
   assert.equal(item.note, 'Kildene oppgir ulike tider. Den prioriterte kilden er brukt.');
   assert.equal(item.sources.length, 2);
   assert.deepEqual(completionRecommendations(readiness, 'captureTime').map(({ code }) => code), ['capture-time-sources-differ']);
@@ -79,11 +83,18 @@ test('capture time: sources that really differ use GML, say so calmly, and the p
   assert(session.setCaptureMetadata(layerId, [id], 'captureTime', null, { evidenceId }).ok);
   assert.equal(session.getPhoto(id).captureMetadata.captureTime.provenance.kind, 'exif');
   assert.equal(completionView(session, layerId).model.captureTime.done[0].sourcesDiffer, false, 'a person has settled it');
+  // «Bruk GML» is the explicit alternative: GML is then a decision, not an automatic value.
+  const chosen = await completionLayer([jpeg('a.jpg', exifTime())], { gml: [{ name: 'a.jpg', time: '2026-05-12T14:40:00' }], captureTime: { conflicts: 'gml' } });
+  const decided = completionView(chosen.session, chosen.layerId).model.captureTime.done[0];
+  assert.deepEqual([decided.accepted.provenance.kind, decided.accepted.provenance.via, decided.accepted.acceptance, decided.accepted.value.iso],
+    ['gml', 'positioning-wizard', undefined, '2026-05-12T14:40:00']);
+  assert.equal(decided.sourcesDiffer, false, 'a person has settled it');
 });
 
 test('capture time: every remaining state has a row, and accepted values can only be replaced one photo at a time', async () => {
   const { session, layerId, ids: [, , , , acceptedMinute] } = await completionLayer(['full', 'minute', 'garbled', 'blank', 'accepted-minute'].map((name) => jpeg(`${name}.jpg`)), {
-    gml: [{ name: 'full.jpg', time: '2026-05-12T14:33:02' }, { name: 'minute.jpg', time: '2026-05-12T14:33' }, { name: 'garbled.jpg', time: 'not a time' }] });
+    gml: [{ name: 'full.jpg', time: '2026-05-12T14:33:02' }, { name: 'minute.jpg', time: '2026-05-12T14:33' }, { name: 'garbled.jpg', time: 'not a time' }],
+    captureTime: { complete: true } });
   session.setCaptureMetadata(layerId, [acceptedMinute], 'captureTime', '2026-05-12T14:33');
   const { captureTime } = completionView(session, layerId).model;
   assert.deepEqual(captureTime.groups.map(({ state, rows }) => [state, rows.length]), [['none', 1], ['partial', 2], ['unusable', 1]]);
@@ -193,18 +204,23 @@ test('shared original: time is one row for the asset, direction one row per plac
   assert.equal(task(completionView(session, layerId).model, 'direction').outstanding, 0);
 });
 
-test('pending EXIF: GML is used at once, no default is assigned yet, and the rest follows the read', async () => {
+// M3: a GML capture time is never proposed while the photo's EXIF is still being read, even with the option on.
+test('pending EXIF: GML capture time waits for the read, GML direction does not, and the rest follows the read', async () => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   const session = evidenceSession({ extractGps: async (file) => { await gate; return readRealExif(file); } });
   const [time, blank] = session.importFiles([jpeg('time.jpg', exifTime({ direction: 45, directionRef: 'T' })), jpeg('blank.jpg')]).acceptedIds;
   const layerId = session.createLayer().id;
-  await attachGml(session, layerId, completionGml([{ name: 'time.jpg', time: '2026-05-12T14:33:02', direction: '0' }]));
+  const plan = await attachGml(session, layerId, completionGml([{ name: 'time.jpg', time: '2026-05-12T14:33:02', direction: '0' }]), { complete: true, partial: true });
+  assert.deepEqual([plan.pending.map((item) => item.filename), plan.fill.length], [['time.jpg'], 0]);
   placeAll(session, layerId, [time, blank]);
 
   const waiting = completionView(session, layerId);
   const { captureTime, direction } = waiting.model;
-  assert.equal(row(captureTime.rows, 'time.jpg').state, 'accepted', 'GML is authoritative, so it does not wait for EXIF');
+  // The GML time stays evidence and cannot be taken by hand either until the read finishes.
+  assert.equal(row(captureTime.rows, 'time.jpg').accepted, null, 'GML capture time is not adopted ahead of the EXIF read');
+  assert.equal(row(captureTime.rows, 'time.jpg').selectable, false);
+  assert.equal(isHeldBack(row(captureTime.rows, 'time.jpg')), true);
   assert.equal(row(direction.rows, 'time.jpg').accepted.degrees, 0);
   assert.equal(row(captureTime.rows, 'blank.jpg').state, 'pending');
   assert.equal(row(captureTime.rows, 'blank.jpg').selectable, false);
@@ -219,6 +235,7 @@ test('pending EXIF: GML is used at once, no default is assigned yet, and the res
   assert.equal(row(ready.captureTime.rows, 'blank.jpg').state, 'none');
   assert.equal(row(ready.direction.rows, 'blank.jpg').state, 'defaulted');
   assert.equal(row(ready.direction.rows, 'time.jpg').accepted.basis.kind, 'gml', 'a late EXIF heading does not displace GML');
+  assert.equal(session.getPhoto(time).captureMetadata.captureTime.provenance.kind, 'exif', 'EXIF is still adopted automatically after the read');
 });
 
 test('photographer: EXIF Artist is used automatically, values are shown, and omitted targets keep the value in the app', async () => {

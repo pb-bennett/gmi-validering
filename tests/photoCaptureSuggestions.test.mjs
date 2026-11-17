@@ -22,9 +22,9 @@ async function draft(list = files(), options = {}) {
   return session;
 }
 const byName = (session, layerId) => Object.fromEntries(session.getLayerPhotos(layerId).map((photo) => [photo.originalFilename, photo]));
-const commit = (session, captureSuggestions, placement = { kind: 'none' }, loadedReview = null) => {
+const commit = (session, captureSuggestions, placement = { kind: 'none' }, loadedReview = null, gmlCaptureTime = null) => {
   const preview = session.previewImport({ placement, loadedReview });
-  return { preview, result: session.completeImport({ placement, preview, loadedReview, captureSuggestions }) };
+  return { preview, result: session.completeImport({ placement, preview, loadedReview, captureSuggestions, gmlCaptureTime }) };
 };
 
 test('preview offers filename suggestions only where EXIF has no time, split by precision', async () => {
@@ -69,16 +69,21 @@ for (const [label, choices, expected] of [
 });
 
 test('a draft GML capture time excludes the photo; GML without a time does not', async () => {
-  const session = await draft([jpeg('20261014_143302.jpg'), jpeg('20261015_101010.jpg')]);
-  assert(await session.importPositioningGml(completionGml([{ name: '20261014_143302.jpg', time: '2026-10-14T15:00:00' }, { name: '20261015_101010.jpg' }])));
-  const placement = { kind: 'gml', exifFallback: false };
-  const { preview, result } = commit(session, { complete: true }, placement);
-  assert.deepEqual(preview.captureSuggestions.complete.map((item) => item.filename), ['20261015_101010.jpg']);
-  assert(result.ok);
-  const photos = byName(session, result.layer.id);
-  assert.equal(photos['20261014_143302.jpg'].captureMetadata.captureTime.provenance.kind, 'gml', 'existing GML policy is unchanged');
-  assert.equal(photos['20261015_101010.jpg'].captureMetadata.captureTime.provenance.kind, 'filename');
-  session.clear();
+  for (const gmlCaptureTime of [null, { complete: true, partial: false, conflicts: 'keep' }]) {
+    const session = await draft([jpeg('20261014_143302.jpg'), jpeg('20261015_101010.jpg')]);
+    assert(await session.importPositioningGml(completionGml([{ name: '20261014_143302.jpg', time: '2026-10-14T15:00:00' }, { name: '20261015_101010.jpg' }])));
+    const placement = { kind: 'gml', exifFallback: false };
+    const { preview, result } = commit(session, { complete: true }, placement, null, gmlCaptureTime);
+    assert.deepEqual(preview.captureSuggestions.complete.map((item) => item.filename), ['20261015_101010.jpg']);
+    assert.deepEqual(preview.gmlCaptureTimes.fill.map((row) => row.filename), ['20261014_143302.jpg'], 'the two candidate sets are disjoint');
+    assert(result.ok);
+    const photos = byName(session, result.layer.id);
+    // M3: the GML time is used only on its own explicit choice; a declined one stays evidence and is never padded by the filename.
+    assert.equal(photos['20261014_143302.jpg'].captureMetadata.captureTime?.provenance.kind ?? null, gmlCaptureTime ? 'gml' : null);
+    assert(photos['20261014_143302.jpg'].metadataEvidence.some((item) => item.kind === 'gml' && item.field === 'captureTime'));
+    assert.equal(photos['20261015_101010.jpg'].captureMetadata.captureTime.provenance.kind, 'filename');
+    session.clear();
+  }
 });
 
 test('later GML evidence does not replace an approved filename value automatically', async () => {

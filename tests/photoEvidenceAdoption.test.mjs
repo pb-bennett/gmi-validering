@@ -97,13 +97,19 @@ test('photographer: one value for the asset, on every occurrence; manual and rem
   } finally { s.clear(); }
 });
 
-test('missing, invalid and insufficient times stay unknown; where sources differ GML is used and EXIF kept', async () => {
+// M3: saving the GML adopts no capture time; «Bruk GML» for conflicts is the explicit choice that replaces EXIF.
+test('missing, invalid and insufficient times stay unknown; where sources differ GML is used only by choice and EXIF kept', async () => {
   const s = setup({ parseGml: async () => ({ entries: [{ id: 'date', raw: { fotolink: 'a.png', photographedAtText: '2025-01-01T01:02:03' }, status: 'invalid', position: null }] }) });
   try {
     const ids = s.importFiles([image(), image('missing.png', { captureTime: undefined, artist: undefined }), image('invalid.png', { captureTime: 'uncertain', artist: ' ' }), image('date.png', { captureTime: '2026-05-12' })]).acceptedIds;
     const layer = s.createLayer(); await settle(s, layer.id);
-    await s.stageLayerSource(layer.id, new File(['source'], 'dates.gml')); s.applyLayerSource(layer.id);
+    const exifAccepted = s.getPhoto(ids[0]).captureMetadata.captureTime;
+    await s.stageLayerSource(layer.id, new File(['source'], 'dates.gml'));
+    const plan = s.planLayerSourceCaptureTimes(layer.id);
+    assert.deepEqual(plan.conflicts.map((row) => row.assetId), [ids[0]]);
+    assert(s.applyLayerSource(layer.id, { captureTime: { complete: false, partial: false, conflicts: 'gml', plan } }));
     const accepted = s.getPhoto(ids[0]).captureMetadata.captureTime;
+    assert.notStrictEqual(accepted, exifAccepted);
     assert.equal(accepted.value.iso, '2025-01-01T01:02:03'); assert.equal(accepted.provenance.kind, 'gml');
     assert.equal(s.getPhoto(ids[0]).metadataEvidence.filter((item) => item.field === 'captureTime').length, 2);
     for (const id of ids.slice(1)) assert.equal(s.getPhoto(id).captureMetadata.captureTime, null);
@@ -119,10 +125,16 @@ test('GML-only and agreeing EXIF/GML times preserve every agreeing provenance', 
   try {
     const ids = s.importFiles([image(), image('b.png', { captureTime: undefined })]).acceptedIds;
     const layer = s.createLayer(); await settle(s, layer.id);
-    await s.stageLayerSource(layer.id, new File(['dates'], 'dates.gml')); s.applyLayerSource(layer.id);
-    assert.equal(s.getPhoto(ids[0]).captureMetadata.captureTime.provenance.evidence.length, 2);
+    const exifAccepted = s.getPhoto(ids[0]).captureMetadata.captureTime;
+    await s.stageLayerSource(layer.id, new File(['dates'], 'dates.gml'));
+    const plan = s.planLayerSourceCaptureTimes(layer.id);
+    assert(s.applyLayerSource(layer.id, { captureTime: { complete: true, partial: false, conflicts: 'keep', plan } }));
+    // The agreeing photo keeps its automatic EXIF value; both evidence items stay with the asset.
+    assert.strictEqual(s.getPhoto(ids[0]).captureMetadata.captureTime, exifAccepted);
+    assert.deepEqual(s.getPhoto(ids[0]).metadataEvidence.filter((item) => item.field === 'captureTime').map((item) => item.kind).sort(), ['exif', 'gml']);
     const provenance = s.getPhoto(ids[1]).captureMetadata.captureTime.provenance;
     assert.equal(provenance.kind, 'gml'); assert.equal(provenance.sourceFilename, 'dates.gml'); assert(provenance.sourceEntryId);
+    assert.equal(provenance.via, 'positioning-wizard'); assert.equal(provenance.evidence.length, 1);
   } finally { s.clear(); }
 });
 

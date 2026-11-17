@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { CheckIcon, ImagesIcon, FolderOpenIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
-import { initialImportState, importSteps, importWizardReducer, canAdvance, canNavigateBack } from '@/lib/photos/photoImportWizardState.mjs';
+import { initialImportState, importSteps, importWizardReducer, canAdvance, canNavigateBack, importGmlCaptureDecision } from '@/lib/photos/photoImportWizardState.mjs';
 import FileDropOverlay from '@/components/FileDropOverlay';
 import useFileDragTracker from '@/components/useFileDragTracker';
 import { hasFileDrag } from '@/lib/fileDragState.mjs';
@@ -12,6 +12,7 @@ import PhotoImportPreview from './PhotoImportPreview';
 import PhotoImportPlacementStep from './PhotoImportPlacementStep';
 import PhotoImportReviewStep from './PhotoImportReviewStep';
 import PhotoImportCaptureTimeChoices from './PhotoImportCaptureTimeChoices';
+import PhotoGmlCaptureTimeChoices from './PhotoGmlCaptureTimeChoices';
 import PhotoWizardSteps from './PhotoWizardSteps';
 
 const STEP_LABELS = { photos: 'Bilder', placement: 'Plassering', review: 'Kontroll' };
@@ -39,6 +40,12 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
   const acceptsDrop = state.step === 'photos';
   const captureChoices = final && <PhotoImportCaptureTimeChoices suggestions={preview?.captureSuggestions} choices={state.captureSuggestions}
     onChange={(value) => { dispatch({ type: 'captureSuggestions', value }); setError(''); }} />;
+  // «Fra GML-fil»: the draft GML's capture times are offered on Kontroll and applied only as chosen (M3).
+  const gmlSourceId = state.placement.kind === 'gml' ? session.positioning.source?.id || null : null;
+  const gmlDecision = importGmlCaptureDecision(state, gmlSourceId);
+  const gmlCaptureChoices = state.step === 'review' && gmlSourceId && <PhotoGmlCaptureTimeChoices plan={preview?.gmlCaptureTimes} choices={gmlDecision} showPending={false}
+    onChange={(value) => { dispatch({ type: 'gmlCaptureTime', sourceId: gmlSourceId, value }); setError(''); }}
+    thumbnailFor={(assetId) => photos.find((photo) => (photo.assetId || photo.id) === assetId)?.preview?.thumbnailUrl || null} />;
   const addFiles = (files) => {
     if (!files?.length) return;
     setError(''); photoSession.importFiles(Array.from(files));
@@ -118,7 +125,7 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
         {state.step === 'placement' ? captureChoices : <>
           {context.kind === 'gmi-layer' && session.loadedImport?.state === 'error' ? <p role="alert">GMI-laget er ikke lenger tilgjengelig. Avbryt og start på nytt fra GMI-laget.</p> : <PhotoImportReviewStep preview={preview} review={review} session={session} context={context} state={state}
             onInclude={(value) => dispatch({ type: 'include', value })} onFallback={(exifFallback) => dispatch({ type: 'placement', placement: { exifFallback } })}
-            onTarget={(id) => photoSession.setLoadedGmiTarget(id)} captureChoices={captureChoices} />}
+            onTarget={(id) => photoSession.setLoadedGmiTarget(id)} captureChoices={<>{captureChoices}{gmlCaptureChoices}</>} />}
         </>}
       </div>}
       <footer className="photo-import-footer border-t border-gmi-border">
@@ -127,7 +134,9 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
         {state.step !== 'photos' && <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong bg-gmi-surface px-4 py-2" onClick={() => navigateBack(steps[steps.indexOf(state.step) - 1])}>Tilbake</button>}
         <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4${final ? ' photo-import-final' : ''}`} disabled={!advance.ok || (final && (!preview || (!target && !preview.outcome.total)))} aria-describedby="photo-import-status" onClick={() => {
           if (!final) { dispatch({ type: 'step', step: steps[steps.indexOf(state.step) + 1] }); return; }
-          const result = photoSession.completeImport({ loadedReview: review, placement: state.placement, preview, captureSuggestions: state.captureSuggestions });
+          const { sourceId: _sourceId, ...gmlCaptureTime } = gmlDecision;
+          const result = photoSession.completeImport({ loadedReview: review, placement: state.placement, preview, captureSuggestions: state.captureSuggestions,
+            gmlCaptureTime: gmlSourceId ? gmlCaptureTime : null });
           if (result.ok) onComplete(result); else setError('Bildene eller kilden er endret. Kontrollen er oppdatert – se over før du fortsetter.');
         }}>{final && <CheckIcon size={16} weight="regular" aria-hidden="true" />}{primary}</button>
       </footer>

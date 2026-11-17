@@ -1,13 +1,15 @@
 'use client';
 
 /* eslint-disable @next/next/no-img-element -- Reuses session-owned thumbnail URLs only. */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircleIcon, CheckIcon, FloppyDiskIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPositionDistance, PHOTO_POSITION_TOLERANCE_METRES, photoSourceEvidenceSignature, photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '@/lib/photos/photoPositioning.mjs';
 import { photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import { readErrors } from '@/lib/photos/photoImportPresentation.mjs';
+import { EMPTY_GML_CAPTURE_DECISION } from '@/lib/photos/photoGmlCaptureReconciliation.mjs';
 import PhotoGmlSummary from './PhotoGmlSummary';
+import PhotoGmlCaptureTimeChoices from './PhotoGmlCaptureTimeChoices';
 import PhotoGmiSummary from './PhotoGmiSummary';
 import PhotoOccurrenceContext from './PhotoOccurrenceContext';
 import PhotoSourceOption, { photoSourceButton } from './PhotoSourceOption';
@@ -40,13 +42,14 @@ const STEPS = Object.freeze(['Kilder', 'Koblinger', 'Plassering', 'Kontroll']);
 const savedMessage = 'Kilder og koblinger er lagret. Posisjoner er ikke endret.';
 
 // Saving a source and applying its positions are two separate commitments, so the step shows both and where the user is.
-function SourceStages({ saved, kind }) {
+// Saving a GML source can also adopt its directions (automatic policy) and the capture times chosen in this step.
+function SourceStages({ saved, kind, captureTimeCount = 0 }) {
   const name = kind === 'gmi' ? 'GMI-kilden og koblingene' : kind === 'gml' ? 'GML-kilden' : 'kilden';
   return <ol className="photo-positioning-stages" aria-label="To trinn">
     <li data-stage-state={saved ? 'done' : 'current'}>
       <span className="photo-positioning-stage-marker" aria-hidden="true">{saved ? <CheckCircleIcon size={22} weight="regular" /> : '1'}</span>
       <div><strong>{saved ? 'Kilden er lagret i fotolaget' : `Lagre ${name} i fotolaget`}</strong>
-        <p>{saved ? 'Filen og treffene er beholdt. Ingen posisjoner er endret.' : 'Lagrer filen og treffene. Ingen posisjoner eller retninger endres.'}</p></div>
+        <p>{saved ? `Filen og treffene er beholdt. Ingen posisjoner er endret.${captureTimeCount ? ` Opptakstid er brukt for ${captureTimeCount} ${captureTimeCount === 1 ? 'bilde' : 'bilder'}.` : ''}` : 'Lagrer filen og treffene. Ingen posisjoner endres.'}</p></div>
     </li>
     <li data-stage-state={saved ? 'current' : 'next'}>
       <span className="photo-positioning-stage-marker" aria-hidden="true">2</span>
@@ -138,7 +141,16 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const [removeSourceId, setRemoveSourceId] = useState(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [sourceSaved, setSourceSaved] = useState(false);
+  const [savedCaptureTimes, setSavedCaptureTimes] = useState(0);
   const ready = review?.state === 'ready';
+  // GML capture-time choices are staged here and committed only with «Behold GML-kilden». They belong to one staged
+  // review: navigation keeps them, and another source or a recheck starts again from the unchecked defaults.
+  const captureKey = ready && review.source.kind === 'gml' ? `${review.source.id}:${review.recheck ? 'recheck' : 'new'}` : null;
+  const [captureChoice, setCaptureChoice] = useState({ key: null, ...EMPTY_GML_CAPTURE_DECISION });
+  const captureDecision = captureChoice.key === captureKey ? captureChoice : { key: captureKey, ...EMPTY_GML_CAPTURE_DECISION };
+  // The session revision re-freezes the review, so the plan always reflects the live assets it will be checked against.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- The review identity is the session revision boundary.
+  const capturePlan = useMemo(() => captureKey ? photoSession.planLayerSourceCaptureTimes(layer.id) : null, [captureKey, review, layer.id]);
   const selected = plan ? selectedPhotoSourcePositions(plan, choices) : [];
   const positionRows = !plan ? [] : !focusedPhotoId ? plan.rows : [
     ...plan.rows.filter((row) => row.photoId === focusedPhotoId), ...plan.rows.filter((row) => row.photoId !== focusedPhotoId),
@@ -200,8 +212,12 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
     setStep(1); setError('');
   };
   const keepSource = () => {
-    const result = photoSession.saveSourceWorkflowSource(ticketRef.current, review);
+    const { key: _key, ...decision } = captureDecision;
+    const result = photoSession.saveSourceWorkflowSource(ticketRef.current, review,
+      review.source.kind === 'gml' ? { captureTime: { ...decision, plan: capturePlan } } : undefined);
     if (!result.ok) { setError('Bildene eller kilden er endret. Kontroller kilden på nytt før du bekrefter.'); return; }
+    setSavedCaptureTimes(result.captureTimeCount || 0);
+    setCaptureChoice({ key: null, ...EMPTY_GML_CAPTURE_DECISION });
     setSourceSaved(true); setNotice(savedMessage); setError('');
     if (review.source.kind === 'gmi') positions(review.source.id);
   };
@@ -291,10 +307,12 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
               {review.recheck && <p>Kilden finnes i laget. Treffene kontrolleres på nytt.</p>}
               {review.source.kind === 'gmi' ? <><PhotoGmiSummary source={review.source} ledger={review.associationLedger} />
                 <p>Hvert punktobjekt gir en egen plassering som du kan bekrefte i neste steg. Linjer gir bare koblinger.</p><p>Kilden beholdes også uten treff. Flere bilder kan kobles ved en senere kontroll.</p></>
-                : <PhotoGmlSummary source={review.source} ledger={review.ledger} />}
+                : <><PhotoGmlSummary source={review.source} ledger={review.ledger} />
+                  <PhotoGmlCaptureTimeChoices plan={capturePlan} choices={captureDecision} onChange={(patch) => setCaptureChoice({ ...captureDecision, ...patch })}
+                    thumbnailFor={(assetId) => photos.find((photo) => (photo.assetId || photo.id) === assetId)?.preview?.thumbnailUrl || null} /></>}
             </>}
             {!review && !saved && <p>Ingen ekstern kilde er valgt. EXIF GPS trenger ingen filkobling.</p>}
-            {(review || saved) && <SourceStages saved={saved && !review} kind={review?.source?.kind} />}
+            {(review || saved) && <SourceStages saved={saved && !review} kind={review?.source?.kind} captureTimeCount={review ? 0 : savedCaptureTimes} />}
             <div className="flex flex-wrap gap-2">
               {review && <button type="button" className={photoSourceButton} onClick={discard}>Forkast kilde som ikke er lagret</button>}
             </div>

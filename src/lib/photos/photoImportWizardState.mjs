@@ -1,5 +1,10 @@
+// GML capture-time choices (M3) belong to one draft GML source: `sourceId` ties them to it, so another source starts
+// again from the unchecked defaults while navigation keeps them.
+export const EMPTY_IMPORT_GML_CAPTURE = Object.freeze({ sourceId: null, complete: false, partial: false, conflicts: 'keep' });
+export const importGmlCaptureDecision = (state, sourceId) => sourceId && state.gmlCaptureTime?.sourceId === sourceId ? state.gmlCaptureTime
+  : Object.freeze({ ...EMPTY_IMPORT_GML_CAPTURE, sourceId: sourceId || null });
 export const initialImportState = (context) => ({ step: 'photos', placement: { kind: context.kind === 'gmi-layer' ? 'gmi' : 'none', exifFallback: false }, includeUnreferenced: true,
-  captureSuggestions: Object.freeze({ complete: false, dateOnly: false }) });
+  captureSuggestions: Object.freeze({ complete: false, dateOnly: false }), gmlCaptureTime: EMPTY_IMPORT_GML_CAPTURE });
 export function importSteps(context, placement) {
   return context.kind === 'gmi-layer' ? ['photos', 'review'] : ['photos', 'placement', ...(placement.kind === 'none' ? [] : ['review'])];
 }
@@ -15,6 +20,7 @@ export function importWizardReducer(state, action) {
   if (action.type === 'include') return { ...state, includeUnreferenced: action.value };
   // Filename capture-time choices are independent of steps and placement, so back navigation keeps them.
   if (action.type === 'captureSuggestions') return { ...state, captureSuggestions: Object.freeze({ ...state.captureSuggestions, ...action.value }) };
+  if (action.type === 'gmlCaptureTime') return { ...state, gmlCaptureTime: Object.freeze({ ...importGmlCaptureDecision(state, action.sourceId), ...action.value, sourceId: action.sourceId }) };
   return state;
 }
 export function canAdvance(step, snapshot, state) {

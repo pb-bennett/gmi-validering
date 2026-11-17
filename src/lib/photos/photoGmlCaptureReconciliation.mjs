@@ -142,3 +142,23 @@ export function planGmlCaptureTimeReconciliation(assets, source, ledger = null) 
       stale, optionComplete: complete, optionPartial: partial.length }),
     options: Object.freeze({ complete, partial: partial.length, partialHasMinute: partial.some((row) => row.proposedValue.precision === 'minute') }) });
 }
+
+// M3: the wizard's group decision over one plan. Both options are off and conflicts keep the current value by default.
+export const EMPTY_GML_CAPTURE_DECISION = Object.freeze({ complete: false, partial: false, conflicts: 'keep' });
+export const gmlCaptureDecisionWrites = (decision) => Boolean(decision?.complete || decision?.partial || decision?.conflicts === 'gml');
+
+// The rows one decision authorises, one per asset and sorted by it. An option only ever reaches the planner's own
+// fill and completion rows; conflicts and review rows need the explicit «Bruk GML» choice. Nothing else is written.
+export function selectedGmlCaptureRows(plan, decision = EMPTY_GML_CAPTURE_DECISION) {
+  if (!plan) return [];
+  const option = (row) => (row.option === 'complete' && decision.complete) || (row.option === 'partial' && decision.partial);
+  return [...[...plan.fill, ...plan.fillPartial, ...plan.completions].filter(option),
+    ...(decision.conflicts === 'gml' ? [...plan.conflicts, ...plan.reviewRows] : [])].sort(byAsset);
+}
+
+// What a reviewed plan proposed, for comparing it with a re-plan made at commit time. Any change in a row's category,
+// current value or incoming evidence makes the review stale.
+export const gmlCapturePlanSignature = (plan) => JSON.stringify(plan ? ['fill', 'fillPartial', 'completions', 'reviewRows',
+  'conflicts', 'unchanged', 'ambiguous', 'pending'].map((key) => plan[key].map((row) => [row.assetId, row.rule ?? null,
+  row.reason ?? null, row.option ?? null, row.current?.class ?? null, row.current?.value?.iso ?? null,
+  row.current?.provenance?.evidenceId ?? null, row.incoming?.evidenceId ?? null, row.incoming?.value?.iso ?? null])) : null);

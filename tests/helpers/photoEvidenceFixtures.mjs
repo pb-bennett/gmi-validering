@@ -30,9 +30,13 @@ export const placeAll = (session, layerId, photoIds, degrees = null) => assert(s
   photoIds.map((photoId, index) => ({ photoId, position: { crs: 'EPSG:4326', longitude: 10.43555 + index * .001, latitude: 59.2251222222 },
     ...(degrees === null ? {} : { degrees }) }))).ok);
 
-export async function attachGml(session, layerId, file) {
+// Saving a GML source adopts no capture time (M3). `captureTime` is the explicit wizard decision
+// ({ complete, partial, conflicts: 'keep' | 'gml' }), sent with the plan it was made from. Returns that plan.
+export async function attachGml(session, layerId, file, captureTime = null) {
   assert(await session.stageLayerSource(layerId, file));
-  assert(session.applyLayerSource(layerId));
+  const plan = session.planLayerSourceCaptureTimes(layerId);
+  assert(session.applyLayerSource(layerId, captureTime ? { captureTime: { complete: false, partial: false, conflicts: 'keep', ...captureTime, plan } } : {}));
+  return plan;
 }
 
 // Accepts the viable GML position of every photo, the explicit per-candidate route.

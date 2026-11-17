@@ -59,22 +59,24 @@ test('direction: no default while EXIF is being read, but GML does not have to w
   assert.equal(planAutoDirection(emptyDirection(), [gml('45')], { exifPending: true }).current.degrees, 45);
 });
 
-test('capture time priority: complete GML, then complete EXIF, and otherwise nothing', () => {
+// M3 (D1): only EXIF capture time is automatic. GML capture time waits for the explicit wizard decision.
+test('capture time priority: complete EXIF only, GML never automatically, and otherwise nothing', () => {
   const plan = (...evidence) => planAutoCaptureTime(emptyCaptureMetadata(), evidence);
   const fullGml = time('gml', '2026-05-12T14:33:02'), fullExif = time('exif', '2026-05-12T09:00:00');
-  assert.equal(plan(fullExif, fullGml).value.iso, '2026-05-12T14:33:02');
-  assert.equal(plan(fullExif, fullGml).provenance.kind, 'gml');
+  assert.equal(plan(fullExif, fullGml).value.iso, '2026-05-12T09:00:00', 'a differing GML time does not displace EXIF');
+  assert.equal(plan(fullExif, fullGml).provenance.kind, 'exif');
   assert.equal(plan(fullExif, fullGml).acceptance, 'auto');
-  assert.equal(plan(time('gml', '2026-05-12T14:33'), fullExif).provenance.kind, 'exif', 'GML without seconds is not complete');
+  assert.equal(plan(fullGml), null, 'a complete GML time alone is not adopted');
+  assert.equal(plan(time('gml', '2026-05-12T14:33'), fullExif).provenance.kind, 'exif');
   assert.equal(plan(time('gml', '2026-05-12')), null, 'a date is not stretched into a time');
   assert.equal(plan(time('exif', '2026-05-12T14:33')), null, 'seconds are never invented');
   assert.equal(plan({ ...time('gml', 'nonsense') }), null);
   assert.equal(plan(), null);
-  const zoned = plan(time('gml', '2026-05-12T14:33:02'), time('exif', '2026-05-12T14:33:02+02:00'));
+  const zoned = plan(time('exif', '2026-05-12T14:33:02'), time('gml', '2026-05-12T14:33:02+02:00'));
   assert.equal(zoned.value.iso, '2026-05-12T14:33:02'); assert.equal(zoned.value.timezoneKnown, false, 'a timezone is not borrowed from the other source');
 });
 
-test('capture time: manual, explicit and removed values stay; automatic ones give way to GML', () => {
+test('capture time: manual, explicit and removed values stay; automatic EXIF never gives way to GML', () => {
   const evidence = [time('gml', '2026-05-12T14:33:02')];
   assert.equal(planAutoCaptureTime({ ...emptyCaptureMetadata(), captureTime: { value: normalizeCaptureTime('2020-01-01T10:00:00'), provenance: { kind: 'manual' } } }, evidence), null);
   assert.equal(planAutoCaptureTime({ ...emptyCaptureMetadata(), captureTime: { value: normalizeCaptureTime('2020-01-01T10:00:00'), provenance: { kind: 'exif', evidenceId: 'x' } } }, evidence), null, 'a chosen source is a decision too');
@@ -82,7 +84,11 @@ test('capture time: manual, explicit and removed values stay; automatic ones giv
   const fromExif = planAutoCaptureTime(emptyCaptureMetadata(), [time('exif', '2026-05-12T09:00:00')]);
   const metadata = { ...emptyCaptureMetadata(), captureTime: fromExif };
   assert.equal(planAutoCaptureTime(metadata, [time('exif', '2026-05-12T09:00:00')]), null);
-  assert.equal(planAutoCaptureTime(metadata, [time('exif', '2026-05-12T09:00:00'), ...evidence]).provenance.kind, 'gml');
+  assert.equal(planAutoCaptureTime(metadata, [time('exif', '2026-05-12T09:00:00'), ...evidence]), null, 'declined GML evidence is never adopted later');
+  for (const captureTime of [{ value: normalizeCaptureTime('2026-05-12T14:33:02'), provenance: { kind: 'gml', evidenceId: 'g' }, acceptance: 'auto' },
+    { value: normalizeCaptureTime('2026-05-12T14:33:02'), provenance: { kind: 'gml', evidenceId: 'g', via: 'positioning-wizard' } },
+    { value: normalizeCaptureTime('2026-05-12'), provenance: { kind: 'filename' } }])
+    assert.equal(planAutoCaptureTime({ ...emptyCaptureMetadata(), captureTime }, [time('exif', '2026-05-12T09:00:00')]), null, captureTime.provenance.kind);
 });
 
 // Precision-aware, circular comparison
@@ -122,8 +128,10 @@ test('initial import: GML is read before the layer exists and everything lands o
     const layer = session.createLayer();
     await settleExif(session, layer.id);
     const [a, b] = session.getLayerPhotos(layer.id);
-    assert.deepEqual([a.direction.current.degrees, a.direction.current.basis.kind, a.captureMetadata.captureTime.provenance.kind], [45.25, 'gml', 'gml']);
+    // Directions follow GML as before; capture time stays EXIF because no explicit GML choice was made.
+    assert.deepEqual([a.direction.current.degrees, a.direction.current.basis.kind, a.captureMetadata.captureTime.provenance.kind], [45.25, 'gml', 'exif']);
     assert.deepEqual([b.direction.current.degrees, b.direction.current.basis.kind, b.captureMetadata.captureTime], [0, 'gml', null]);
+    assert(a.metadataEvidence.some((item) => item.kind === 'gml' && item.field === 'captureTime'), 'the GML time stays evidence');
   } finally { session.clear(); }
 });
 
@@ -166,11 +174,25 @@ test('late GML matching: defaults and EXIF give way, evidence stays, and repeati
     const [liveA, liveB] = [a, b].map((id) => session.getPhoto(id));
     assert.deepEqual([liveA.direction.current.degrees, liveA.direction.current.basis.kind], [45, 'gml']);
     assert.deepEqual([liveB.direction.current.degrees, liveB.direction.current.basis.kind], [10.5, 'gml']);
-    assert.equal(liveA.captureMetadata.captureTime.value.iso, '2026-05-12T15:00:00');
+    // Capture time is not adopted by saving the source: EXIF stays and the empty value stays empty.
+    assert.equal(liveA.captureMetadata.captureTime.value.iso, '2026-05-12T14:33:02');
+    assert.equal(liveA.captureMetadata.captureTime.provenance.kind, 'exif');
+    assert.equal(liveB.captureMetadata.captureTime, null);
     assert.deepEqual(liveA.directionEvidence.map((item) => item.kind).sort(), ['exif', 'gml'], 'the original evidence is retained');
-    assert(session.recheckLayerSource(layerId, session.getLayer(layerId).spatialSources[0].id));
-    assert(session.applyLayerSource(layerId));
+    // A recheck with the explicit option fills only the empty value; the conflict keeps EXIF by default.
+    const sourceId = session.getLayer(layerId).spatialSources[0].id;
+    assert(session.recheckLayerSource(layerId, sourceId));
+    const plan = session.planLayerSourceCaptureTimes(layerId);
+    assert.deepEqual([plan.fill.map((row) => row.assetId), plan.conflicts.map((row) => row.assetId)], [[b], [a]]);
+    assert(session.applyLayerSource(layerId, { captureTime: { complete: true, partial: false, conflicts: 'keep', plan } }));
+    assert.strictEqual(session.getPhoto(a).captureMetadata.captureTime, liveA.captureMetadata.captureTime);
+    const filled = session.getPhoto(b).captureMetadata.captureTime;
+    assert.deepEqual([filled.value.iso, filled.provenance.kind, filled.provenance.via, filled.acceptance], ['2026-05-12T15:01:00', 'gml', 'positioning-wizard', undefined]);
+    assert(session.recheckLayerSource(layerId, sourceId));
+    const again = session.planLayerSourceCaptureTimes(layerId);
+    assert(session.applyLayerSource(layerId, { captureTime: { complete: true, partial: true, conflicts: 'keep', plan: again } }));
     assert.strictEqual(session.getPhoto(a).direction, liveA.direction, 'nothing is rewritten');
+    assert.strictEqual(session.getPhoto(b).captureMetadata.captureTime, filled, 'a repeated save is a no-op');
   } finally { session.clear(); }
 });
 

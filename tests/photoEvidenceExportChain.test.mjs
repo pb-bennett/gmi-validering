@@ -53,16 +53,20 @@ test('EXIF date-only evidence is not adopted and never reaches XML with invented
 
 const gml = (features) => new File([`<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="urn:ogc:def:crs:EPSG::5972"/></gml:boundedBy>${features.map(({ name, time }, index) => `<gml:featureMember><app:Skråfoto gml:id="f${index}"><gml:name>${name}</gml:name><app:fotograferingspunkt><gml:Point gml:id="p${index}" srsDimension="3"><gml:pos srsDimension="3">${581930 + index * 20} 6566000 0</gml:pos></gml:Point></app:fotograferingspunkt><app:fotolink>Attachments\\${name}</app:fotolink>${time ? `<app:fotograferingstidspunkt>${time}</app:fotograferingstidspunkt>` : ''}</app:Skråfoto></gml:featureMember>`).join('')}</gml:FeatureCollection>`], 'synthetic.gml');
 
-test('agreeing EXIF and GML: GML is used, both provenances stay, and the XML has the one time', async () => {
+// M3: agreeing GML adds no precision, so even an explicit «Bruk GML» leaves the automatic EXIF value in place.
+test('agreeing EXIF and GML: EXIF stays, both evidence items stay, and the XML has the one time', async () => {
   const session = evidenceSession();
   try {
     const ids = session.importFiles([jpeg('a.jpg')]).acceptedIds, layer = session.createLayer();
     await settleExif(session, layer.id);
-    await attachGml(session, layer.id, gml([{ name: 'a.jpg', time: '2026-05-12T14:33:02' }]));
+    const before = session.getPhoto(ids[0]).captureMetadata.captureTime;
+    const plan = await attachGml(session, layer.id, gml([{ name: 'a.jpg', time: '2026-05-12T14:33:02' }]), { complete: true, partial: true, conflicts: 'gml' });
+    assert.deepEqual(plan.unchanged.map((row) => row.reason), ['agrees']);
     assert.deepEqual(acceptGmlPositions(session, layer.id), ids);
-    const accepted = session.getPhoto(ids[0]).captureMetadata.captureTime;
-    assert.equal(accepted.provenance.kind, 'gml');
-    assert.deepEqual(accepted.provenance.evidence.map((item) => item.kind).sort(), ['exif', 'gml']);
+    const photo = session.getPhoto(ids[0]);
+    assert.strictEqual(photo.captureMetadata.captureTime, before);
+    assert.equal(before.provenance.kind, 'exif');
+    assert.deepEqual(photo.metadataEvidence.filter((item) => item.field === 'captureTime').map((item) => item.kind).sort(), ['exif', 'gml']);
     assert.deepEqual([...exportedTimes(await xmlFor(session, layer.id, 'gemini-legacy2019')).values()], ['2026-05-12T14:33:02']);
   } finally { session.clear(); }
 });

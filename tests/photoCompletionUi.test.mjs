@@ -173,9 +173,11 @@ layerTest('capture time: source values in place, the warning, corrections, neste
   // Details are folded away, but still there.
   await openGroup(browser, 'captureTime', 'done');
   assert.match(await browser.evaluate(`${rowOf('heading.jpg')}.innerText`), /Godtatt: 12\.05\.2026 15:00:10 · tidssone ukjent · EXIF DateTimeOriginal/);
-  assert.match(await browser.evaluate(`${rowOf('match.jpg')}.innerText`), /Godtatt: 12\.05\.2026 14:33:02 · tidssone ukjent · GML · kilde\.gml/);
+  // M3: saving the GML adopts no capture time, so the agreeing EXIF value stays the accepted one.
+  assert.match(await browser.evaluate(`${rowOf('match.jpg')}.innerText`), /Godtatt: 12\.05\.2026 14:33:02,012 · tidssone ukjent · EXIF DateTimeOriginal/);
   assert.doesNotMatch(await browser.evaluate(`${rowOf('match.jpg')}.innerText`), /EXIF: /, 'source values start folded');
   assert.match(await rowText(browser, 'match.jpg'), /EXIF: 12\.05\.2026 14:33:02,012 · tidssone ukjent/);
+  assert.match(await rowText(browser, 'match.jpg'), /GML · kilde\.gml: 12\.05\.2026 14:33:02 · tidssone ukjent/, 'the GML value stays evidence');
   assert.match(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /Kildene oppgir ulike tider\. Den prioriterte kilden er brukt\./);
 
   // A correction goes through the per-photo dialog; Escape closes only that dialog.
@@ -189,12 +191,13 @@ layerTest('capture time: source values in place, the warning, corrections, neste
   assert.equal(await browser.evaluate(`document.activeElement === ${choose}`), true, 'focus returns to the row action');
   await realClick(browser, choose);
   await browser.waitFor(nested);
-  await browser.evaluate(`Array.from(${nested}.querySelectorAll('label.photo-metadata-choice')).find((item) => item.innerText.startsWith('EXIF')).querySelector('input').click()`);
+  // M3: the automatic value is EXIF, so the deliberate per-photo correction chooses the GML value.
+  await browser.evaluate(`Array.from(${nested}.querySelectorAll('label.photo-metadata-choice')).find((item) => item.innerText.startsWith('GML')).querySelector('input').click()`);
   await clickSourceControl(browser, 'Lagre', nested);
   await browser.waitFor(`!${nested}`);
   assert.equal(await browser.evaluate(`${hub}.contains(document.activeElement)`), true, 'focus stays in the hub');
   assert.equal(await message(browser), 'Opptaksdata lagret for conflict.jpg');
-  await browser.waitFor(`${rowOf('conflict.jpg')}.innerText.includes('EXIF DateTimeOriginal')`);
+  await browser.waitFor(`${rowOf('conflict.jpg')}.innerText.includes('GML · kilde.gml')`);
   assert.doesNotMatch(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /Kildene oppgir ulike/, 'a person has settled it');
 
   // A source with minutes only: an untouched prefill is refused, and the deliberate confirmation is saved as manual.
@@ -478,7 +481,7 @@ layerTest('the Save/Discard boundary comes first when Edit mode has unsaved chan
   assert.equal(await countOf(browser, 'direction', 'manual'), '1', 'the saved direction is canonical, so readiness sees it');
 });
 
-layerTest('pending EXIF: rows say so, GML is in use already, and the panel follows the read without reopening', async (browser) => {
+layerTest('pending EXIF: rows say so, no GML time is adopted, and the panel follows the read without reopening', async (browser) => {
   await openHub(browser);
   await showTask(browser, 'captureTime');
   await browser.waitFor(`${panel('captureTime')}.querySelector('[data-recommendation="evidence-pending"]')`);
@@ -486,7 +489,7 @@ layerTest('pending EXIF: rows say so, GML is in use already, and the panel follo
   assert.match(await browser.evaluate(`${rowOf('blank.jpg')}.innerText`), /Leser bildedata/);
   assert.equal(await browser.evaluate(`${rowOf('blank.jpg')}.querySelector('input[type=checkbox]')`), null, 'a row still being read cannot be selected');
   assert.equal(await browser.evaluate(`Array.from(${rowOf('blank.jpg')}.querySelectorAll('button')).length`), 0, 'and offers no edit');
-  assert.equal(await countOf(browser, 'captureTime', 'source'), '2', 'a complete GML time does not wait for EXIF');
+  assert.equal(await countOf(browser, 'captureTime', 'source'), '0', 'saving the GML adopted no capture time (M3)');
   await screenshot(browser, '07-pending-1680');
   await browser.evaluate(`(() => { const held = window.__heldReads; window.__heldReads = null; held.forEach((read) => read()); })()`);
   await browser.waitFor(`!${panel('captureTime')}.querySelector('[data-recommendation="evidence-pending"]')`, 60000);

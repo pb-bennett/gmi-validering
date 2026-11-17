@@ -1,6 +1,6 @@
 ﻿import assert from 'node:assert/strict';
 import test from 'node:test';
-import { importSteps, canAdvance, initialImportState, importWizardReducer, canNavigateBack } from '../src/lib/photos/photoImportWizardState.mjs';
+import { importSteps, canAdvance, initialImportState, importWizardReducer, canNavigateBack, importGmlCaptureDecision } from '../src/lib/photos/photoImportWizardState.mjs';
 for (const kind of ['new','append','gmi-layer']) test(`${kind} step derivation`, () => {
  const context={kind}, state=initialImportState(context);
  assert.deepEqual(importSteps(context,{kind:'gmi'}),kind==='gmi-layer'?['photos','review']:['photos','placement','review']);
@@ -47,4 +47,20 @@ test('filename capture-time choices start off, are independent and survive navig
  const pending = { photos: [{ spatial: { exifRead: { state: 'pending' } } }] };
  assert.deepEqual(canAdvance('placement', pending, state), { ok: false, reason: 'Leser opptakstid fra bildene …' });
  assert.equal(canAdvance('placement', pending, { ...state, captureSuggestions: { complete: false, dateOnly: false } }).ok, true);
+});
+test('GML capture-time choices start unchecked with «Behold gjeldende», survive navigation and reset for another source', () => {
+ const context = { kind: 'new' };
+ let state = initialImportState(context);
+ const plain = (decision) => ({ ...decision });
+ assert.deepEqual(plain(importGmlCaptureDecision(state, 'gml-1')), { sourceId: 'gml-1', complete: false, partial: false, conflicts: 'keep' });
+ state = importWizardReducer(state, { type: 'gmlCaptureTime', sourceId: 'gml-1', value: { complete: true } });
+ state = importWizardReducer(state, { type: 'gmlCaptureTime', sourceId: 'gml-1', value: { conflicts: 'gml' } });
+ assert.deepEqual(plain(importGmlCaptureDecision(state, 'gml-1')), { sourceId: 'gml-1', complete: true, partial: false, conflicts: 'gml' });
+ state = importWizardReducer({ ...state, step: 'review', placement: { kind: 'gml', exifFallback: false } }, { type: 'back', context, step: 'placement' });
+ state = importWizardReducer(state, { type: 'step', step: 'review' });
+ assert.equal(importGmlCaptureDecision(state, 'gml-1').complete, true, 'back and forward keep the choice');
+ assert.deepEqual(plain(importGmlCaptureDecision(state, 'gml-2')), { sourceId: 'gml-2', complete: false, partial: false, conflicts: 'keep' }, 'another source starts again');
+ assert.equal(importGmlCaptureDecision(state, null).complete, false);
+ state = importWizardReducer(state, { type: 'gmlCaptureTime', sourceId: 'gml-2', value: { partial: true } });
+ assert.deepEqual(plain(importGmlCaptureDecision(state, 'gml-2')), { sourceId: 'gml-2', complete: false, partial: true, conflicts: 'keep' });
 });

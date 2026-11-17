@@ -79,7 +79,12 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert.equal(await browser.evaluate(markerCount), 1, 'GMI save creates zero positions');
       assert.equal(await browser.evaluate(`${spatial}.querySelector('section[aria-label=Plassering]').innerText`), manual, 'GMI save changes neither current nor direction');
       await stagePhotoSource(browser, gml);
+      // M3: GML capture time is an explicit, unchecked choice committed with the source.
+      const gmlTimeChoice = `Array.from(${sourceWizard}.querySelectorAll('[data-gml-capture] .photo-gml-capture-choice')).find(l=>l.textContent.trim()==='Bruk opptakstid fra GML (2)').querySelector('input')`;
+      assert.equal(await browser.evaluate(`${gmlTimeChoice}.checked`), false);
+      await browser.evaluate(`${gmlTimeChoice}.click()`);
       await savePhotoSource(browser);
+      assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Opptakstid er brukt for 2 bilder.')`));
       assert(await browser.evaluate(`${sourceWizard}===window.__unifiedDialog`));
       assert.equal(await browser.evaluate(markerCount), 1, 'GML save retains evidence only');
       await click(browser, 'Neste');
@@ -116,7 +121,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert(!await browser.evaluate(`Array.from(${spatial}.querySelectorAll('button')).some(button=>/^Bruk /.test(button.innerText))`), 'the inspector has no source-acceptance actions');
       await selectPhoto(browser, 'b.png');
       assert(await browser.evaluate(currentIs('GML')));
-      // A complete source time needs no step of its own.
+      // The complete GML time chosen in Koblinger is in place without a further step.
       await browser.waitFor(`${fact('Opptak', 'Opptakstid')}==='12.05.2026 14:33:02 · tidssone ukjent'`);
       assert.match(await browser.evaluate(`Array.from(${spatial}.querySelectorAll('section[aria-label=Opptak] dt')).find(e=>/^(Opptakstid|Fotograf) fra$/.test(e.textContent)).nextElementSibling.textContent`), /^GML/);
 

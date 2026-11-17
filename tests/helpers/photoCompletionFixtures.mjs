@@ -12,14 +12,16 @@ export const jpeg = (name, options = {}) => new File([gpsJpeg({ noLocation: true
 export const completionGmlText = (features) => `<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/LedningsnettEtablertEllerFlyttet/20190101"><gml:boundedBy><gml:Envelope srsName="urn:ogc:def:crs:EPSG::5972"/></gml:boundedBy>${features.map(({ name, time, direction }, index) => `<gml:featureMember><app:Skråfoto gml:id="f${index}"><gml:name>${name}</gml:name><app:fotograferingspunkt><gml:Point gml:id="p${index}" srsDimension="3"><gml:pos srsDimension="3">${581930 + index * 20} 6566000 0</gml:pos></gml:Point></app:fotograferingspunkt><app:fotolink>Attachments\\${name}</app:fotolink>${direction === undefined ? '' : `<app:retningsvektor><app:Retning><app:retningsverdi>${direction}</app:retningsverdi><app:retningsenhet>1</app:retningsenhet><app:retningsreferanse>1</app:retningsreferanse></app:Retning></app:retningsvektor>`}${time ? `<app:fotograferingstidspunkt>${time}</app:fotograferingstidspunkt>` : ''}</app:Skråfoto></gml:featureMember>`).join('')}</gml:FeatureCollection>`;
 export const completionGml = (features, filename = 'kilde.gml') => new File([completionGmlText(features)], filename);
 
-// Real bytes and the real GML parser, with every photo placed. `gml` lists the features to attach.
-export async function completionLayer(files, { gml = null, place = true, options = {} } = {}) {
+// Real bytes and the real GML parser, with every photo placed. `gml` lists the features to attach. Saving the GML
+// adopts no capture time (M3); `captureTime` is the explicit wizard decision ({ complete, partial, conflicts }).
+export async function completionLayer(files, { gml = null, captureTime = null, place = true, options = {} } = {}) {
   const session = evidenceSession(options);
   const ids = session.importFiles(files).acceptedIds, layer = session.createLayer();
   await settleExif(session, layer.id);
   if (gml) {
     assert(await session.stageLayerSource(layer.id, completionGml(gml)));
-    assert(session.applyLayerSource(layer.id));
+    const plan = captureTime ? session.planLayerSourceCaptureTimes(layer.id) : null;
+    assert(session.applyLayerSource(layer.id, plan ? { captureTime: { complete: false, partial: false, conflicts: 'keep', ...captureTime, plan } } : {}));
   }
   if (place) placeAll(session, layer.id, ids);
   return { session, layerId: layer.id, ids };
