@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Marker, Pane, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { normalizePhotoDirection, photoDirectionLabel, photoDirectionSpokenLabel } from '@/lib/photos/photoDirection.mjs';
-import { photoPositionProvenanceKind, photoThumbnailsVisible, PHOTO_STAGED_COLOR } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { photoPositionProvenanceKind, photoThumbnailsVisible, photoStackMarkerDelivery, PHOTO_STAGED_COLOR } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { photoPositionDistance } from '@/lib/photos/photoPositioning.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { formatPhotoMoveDistance } from '@/lib/photos/photoPresentation.mjs';
@@ -224,12 +224,12 @@ function RotationKnob({ photoId, filename, lat, lng, degrees, innerRadius, onSta
 // exactly like stack cycling outside Edit mode; it never moves anything.
 // The edit target keeps the active colour mode: its delivery colour (including an unsaved GML proposal) or its original
 // position source. Selection and editing are shown by size, ring and the staged dot, never by another fill colour.
-function EditableMarker({ photo, mode, stackIds = [], colourMode = 'delivery', deliveryStatus = null, onSelectPhoto, onStage, onAnnounce, knobApi, connectorRef }) {
+function EditableMarker({ photo, mode, stackIds = [], colourMode = 'delivery', deliveryStatus = null, stackMixed = false, onSelectPhoto, onStage, onAnnounce, knobApi, connectorRef }) {
   const map = useMap();
   const ref = useRef(null);
   const { latitude: lat, longitude: lng } = photo.spatial.current.position;
   const savedPosition = photo.saved ? photo.saved.current?.position : photo.spatial.current.position;
-  const icon = photoMarkerIcon(mode, { sourceKind: photoPositionProvenanceKind(photo), selected: true, colourMode, deliveryStatus,
+  const icon = photoMarkerIcon(mode, { sourceKind: photoPositionProvenanceKind(photo), selected: true, colourMode, deliveryStatus, stackMixed,
     staged: Boolean(photo.staged), editing: true, thumbnailUrl: photo.preview?.thumbnailUrl || null, stackCount: stackIds.length });
   const directionIcon = photoDirectionIcon(mode, { degrees: photo.direction?.current?.degrees ?? null, directionStaged: Boolean(photo.staged?.direction),
     selected: true, editing: true });
@@ -239,7 +239,7 @@ function EditableMarker({ photo, mode, stackIds = [], colourMode = 'delivery', d
   const latest = useRef(null);
   const gesture = useRef(null);
   const dragEndedAt = useRef(-Infinity);
-  const label = photoMarkerLabel(photo);
+  const label = photoMarkerLabel(photo) + (stackMixed ? ' \u00b7 Ulike leveringsvalg p\u00e5 samme sted' : '');
   useEffect(() => { latest.current = { icon, position, photoId: photo.id, savedPosition, onStage, onAnnounce, stackIds, onSelectPhoto }; });
   useEffect(() => {
     const element = ref.current?.getElement();
@@ -350,6 +350,7 @@ export default function PhotoEditLayer({ photo, displayMode, connectors = [], st
       onPlace={(position) => { onStage(photo.id, 'position', position); if (clickMove) onClickMoveEnd?.(); }}
       onCancel={() => { onClickMoveEnd?.(); onAnnounce?.('Flytting med klikk ble avbrutt'); }} />
     {placed && <EditableMarker key={photo.id} photo={photo} mode={mode} stackIds={stackIds} colourMode={colourMode}
+      stackMixed={stackIds.length > 1 && photoStackMarkerDelivery(stackIds.map((id) => ({ id })), delivery?.byPhotoId, true).stackMixed}
       deliveryStatus={delivery?.byPhotoId[photo.id]?.status || null} onSelectPhoto={onSelectPhoto} onStage={onStage} onAnnounce={onAnnounce}
       knobApi={knobApi} connectorRef={connectorRef} />}
     {placed && <RotationKnob key={`knob:${photo.id}`} photoId={photo.id} filename={photo.originalFilename || 'Bilde'} lat={current.latitude} lng={current.longitude}

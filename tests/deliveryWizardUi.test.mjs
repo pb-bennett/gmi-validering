@@ -10,6 +10,7 @@ import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { setPhotoFiles, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
 import { waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { clickGmiTableObject } from './helpers/gmiTableNavigation.mjs';
+import { enterEditMode, editTarget } from './helpers/photoWorkspace.mjs';
 import { assertGeminiConventions } from './helpers/geminiPhotoConventions.mjs';
 
 const app = process.env.PHOTO_UI_URL, shots = process.env.DELIVERY_SCREENSHOT_DIR;
@@ -241,6 +242,57 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
       await browser.waitFor(section);
       await browser.evaluate(`${section}.querySelector('[role=radio][data-destination=gml]').click()`);
       await browser.waitFor('document.querySelectorAll(".photo-workspace-list .photo-delivery-pill[data-destination=gml]").length === 1');
+      await t.test('stacked preview cycle, browse/edit parity and unselected overview', async () => {
+        const row = (id) => `document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] .photo-workspace-row')`;
+        const selected = 'document.querySelector(".photo-camera-marker.photo-marker-selected")';
+        const preview = 'document.querySelector(".photo-workspace-preview-popup")';
+        const previewPill = `${preview}.querySelector('.photo-delivery-row-button')`;
+        const fill = (target) => `${target}?.querySelector('.photo-camera-glyph path')?.getAttribute('fill')`;
+        const dashed = (target) => `${target}?.querySelector('path[stroke-dasharray="2 2"]') !== null`;
+        // Restore a uniform GMI baseline, then click the stack to select the other occurrence and open its preview.
+        await browser.evaluate(`${section}.querySelector('[data-destination=gmi]').click()`);
+        await browser.evaluate(`${selected}.dispatchEvent(new MouseEvent('click', {bubbles:true}))`);
+        await browser.waitFor(`${preview} && ${row(rows[1])}.getAttribute('aria-pressed') === 'true'`);
+        for (const [label, colour, mixed] of [['GML', '#4ade80', true], ['Ikke', '#cbd5e1', true], ['GMI', '#60a5fa', false]]) {
+          await browser.evaluate(`${previewPill}.click()`);
+          await browser.waitFor(`${previewPill}?.innerText === '${label}' && ${fill(selected)} === '${colour}'`);
+          assert.equal(await browser.evaluate(dashed(selected)), mixed);
+          assert.equal(await browser.evaluate(`${selected}.querySelector('.photo-marker-stack').textContent`), '2');
+          assert.equal(await browser.evaluate(`${selected}.getAttribute('aria-label').includes('Ulike leveringsvalg')`), mixed);
+          assert.equal(await browser.evaluate(`${row(rows[0])}.closest('li').querySelector('.photo-delivery-pill').innerText`), 'GMI');
+        }
+        // A mixed selected marker has the same fill, outline, count and description in browse and Edit mode.
+        await browser.evaluate(`${previewPill}.click()`);
+        await browser.waitFor(`${fill(selected)} === '#4ade80'`);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await screenshot(browser, `selected-mixed-browse-${width}x${height}`);
+          await enterEditMode(browser);
+          await browser.waitFor(editTarget);
+          assert.equal(await browser.evaluate(fill(editTarget)), '#4ade80');
+          assert(await browser.evaluate(dashed(editTarget)));
+          assert.equal(await browser.evaluate(`${editTarget}.querySelector('.photo-marker-stack').textContent`), '2');
+          assert.match(await browser.evaluate(`${editTarget}.getAttribute('aria-label')`), /Ulike leveringsvalg/);
+          await screenshot(browser, `selected-mixed-edit-${width}x${height}`);
+          await click(browser, 'Avslutt redigering', 'document');
+          await browser.waitFor(`${fill(selected)} === '#4ade80'`);
+          assert(await browser.evaluate(dashed(selected)));
+        }
+        // Main-map stacks have no workspace selection and retain their neutral mixed fill.
+        await click(browser, 'Lukk FOTO', 'document');
+        await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+        const stack = `Array.from(document.querySelectorAll('.photo-camera-marker')).find((marker) => marker.querySelector('.photo-marker-stack')?.textContent === '2')`;
+        await browser.waitFor(`${fill(stack)} === '#64748b'`);
+        assert(await browser.evaluate(dashed(stack)));
+        await browser.evaluate('document.querySelector("[data-photo-layer-open]").click()');
+        await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+        // Restore the state expected by the remaining navigation/export acceptance tests.
+        await browser.evaluate(`${row(rows[1])}.click()`);
+        await browser.evaluate(`${section}.querySelector('[data-destination=gmi]').click()`);
+        await browser.evaluate(`${row(rows[0])}.click()`);
+        await browser.evaluate(`${section}.querySelector('[data-destination=gml]').click()`);
+        await browser.waitFor(`${fill(selected)} === '#4ade80'`);
+      });
       await t.test('normal browsing: safe stack/marker navigation, explicit destination controls and synchronized delivery colours', async () => {
         const marker = 'document.querySelector(".photo-camera-marker.photo-marker-selected")';
         const fill = () => browser.evaluate(`${marker}.querySelector('.photo-camera-glyph path').getAttribute('fill')`);
@@ -251,11 +303,11 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
           await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code, windowsVirtualKeyCode: keyCode, ...(name === ' ' ? { text: ' ' } : {}) });
           await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code, windowsVirtualKeyCode: keyCode });
         };
-        // Normal navigation already colours by destination; the mixed stack is neutral and dashed, not its top member's colour.
+        // Selection keeps its own delivery colour and the dashed mixed-stack cue.
         await browser.waitFor(marker);
         assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery');
         assert.equal(await browser.evaluate(`${marker}.querySelector('.photo-camera-glyph').dataset.positionSource`), 'gmi', 'provenance identity is kept');
-        assert.equal(await fill(), '#64748b', 'mixed stack has no single destination colour');
+        assert.equal(await fill(), '#4ade80', 'selected mixed-stack occurrence keeps its own delivery colour');
         assert(await browser.evaluate(`${marker}.querySelector('.photo-camera-glyph').innerHTML.includes('stroke-dasharray')`));
         assert.match(await browser.evaluate(`${marker}.getAttribute('aria-label')`), /^Vis bilde:.*Ulike leveringsvalg på samme sted/);
         await screenshot(browser, 'refine-delivery-map-normal');

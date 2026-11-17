@@ -142,6 +142,11 @@ export function photoStackDeliveryState(members, entries) {
   const states = new Set(members.map((member) => photoDeliveryColourState(entries?.[member.id]?.status)));
   return states.size === 1 ? [...states][0] : 'mixed';
 }
+// A selected occurrence keeps its own delivery fill; the dashed cue still describes the whole stack.
+export function photoStackMarkerDelivery(members, entries, selected = false) {
+  const state = photoStackDeliveryState(members, entries);
+  return { deliveryColourState: selected ? null : state, stackMixed: state === 'mixed' };
+}
 const stackBadge = (count) => count > 1 ? `<span class="photo-marker-stack" aria-hidden="true">${Math.min(count, 99)}</span>` : '';
 const modifierClasses = ({ selected, sibling, staged, editing }) => [selected && 'photo-marker-selected', sibling && 'photo-marker-sibling',
   staged && 'photo-marker-staged', editing && 'photo-marker-editing'].filter(Boolean).join(' ');
@@ -173,7 +178,7 @@ export function thumbnailMarkerOptions({ sourceKind = 'unknown', selected = fals
 export function photoMarkerOptions(mode, options = {}) {
   const delivery = options.colourMode === 'delivery' ? options.deliveryColourState || photoDeliveryColourState(options.deliveryStatus) : null;
   const presentation = { ...options, markerColor: delivery ? PHOTO_DELIVERY_COLOURS[delivery].color : null,
-    markerLabel: delivery ? `Planlagt: ${PHOTO_DELIVERY_COLOURS[delivery].label}` : null, mixedDelivery: delivery === 'mixed' };
+    markerLabel: delivery ? `Planlagt: ${PHOTO_DELIVERY_COLOURS[delivery].label}` : null, mixedDelivery: delivery === 'mixed' || Boolean(delivery && options.stackMixed) };
   const result = mode === 'thumbnails' ? thumbnailMarkerOptions(presentation) : cameraMarkerOptions(presentation);
   const deliveryClass = delivery && `photo-delivery-${delivery}`;
   return deliveryClass && !result.className.split(' ').includes(deliveryClass) ? { ...result, className: `${result.className} ${deliveryClass}` } : result;
@@ -181,10 +186,10 @@ export function photoMarkerOptions(mode, options = {}) {
 
 // Stable cache key: identical presentation reuses one L.divIcon instance (and DOM-free comparisons).
 export function photoMarkerIconKey(mode, { sourceKind = 'unknown', selected = false, staged = false, sibling = false, stackCount = 1, editing = false,
-  thumbnailUrl = null, deliveryStatus = null, colourMode = 'provenance', deliveryColourState = null } = {}) {
+  thumbnailUrl = null, deliveryStatus = null, colourMode = 'provenance', deliveryColourState = null, stackMixed = false } = {}) {
   return JSON.stringify([mode === 'thumbnails' ? 't' : 'm', photoPositionSourcePresentation(sourceKind).kind, Boolean(selected),
     Boolean(staged), Boolean(sibling && !selected), stackCount > 1 ? Math.min(stackCount, 99) : 1, Boolean(editing),
-    mode === 'thumbnails' ? safeThumbnailUrl(thumbnailUrl) : null, deliveryStatus, colourMode, deliveryColourState]);
+    mode === 'thumbnails' ? safeThumbnailUrl(thumbnailUrl) : null, deliveryStatus, colourMode, deliveryColourState, Boolean(stackMixed)]);
 }
 
 // One non-interactive arrow per placed occurrence, in the direction pane at the photo's own lat/lng. The icon has no

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { deliveryInventory, deliveryAttachmentDestinations } from '../src/lib/delivery/deliveryInventory.mjs';
 import { DELIVERY_CHOICES, deliveryContents } from '../src/lib/delivery/deliveryWizard.mjs';
-import { photoMarkerOptions, photoMarkerIconKey, PHOTO_POSITION_SOURCES, PHOTO_DELIVERY_LABELS, PHOTO_DELIVERY_COLOURS, photoDeliveryColourState, photoStackDeliveryState } from '../src/lib/photos/photoMarkerPresentation.mjs';
+import { photoMarkerOptions, photoMarkerIconKey, PHOTO_POSITION_SOURCES, PHOTO_DELIVERY_LABELS, PHOTO_DELIVERY_COLOURS, photoDeliveryColourState, photoStackDeliveryState, photoStackMarkerDelivery } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { deliveryFixture } from './helpers/deliveryFixtures.mjs';
 import { readDeliveryAttachment } from '../src/lib/delivery/deliveryPlan.mjs';
 
@@ -95,4 +95,41 @@ test('destination badges follow actual M9 retained paths and GML paths across mo
     const presentation = { ...transferred, attachments: [...transferred.attachments, alias] };
     assert.equal(deliveryAttachmentDestinations(presentation).get(alias.path), 'GMI');
   } finally { f.session.clear(); }
+});
+
+
+test('stack presentation separates selected delivery fill from the mixed cue and cache identity', () => {
+  const members = [{ id: 'selected' }, { id: 'other' }];
+  const entries = { selected: { status: 'keep-link' }, other: { status: 'keep-link' } };
+  for (const [status, colour] of [['keep-link', 'gmi'], ['transfer', 'gml'], ['exclude', 'excluded'], ['keep-link', 'gmi']]) {
+    entries.selected.status = status;
+    const mixed = colour !== 'gmi';
+    const decision = photoStackMarkerDelivery(members, entries, true);
+    assert.deepEqual(decision, { deliveryColourState: null, stackMixed: mixed });
+    const overview = photoStackMarkerDelivery(members, entries);
+    assert.deepEqual(overview, { deliveryColourState: mixed ? 'mixed' : 'gmi', stackMixed: mixed });
+    for (const mode of ['markers', 'thumbnails']) {
+      const options = { colourMode: 'delivery', deliveryStatus: status, selected: true, stackCount: 2, ...decision };
+      for (const editing of [false, true]) {
+        const icon = photoMarkerOptions(mode, { ...options, editing });
+        assert(icon.html.includes(PHOTO_DELIVERY_COLOURS[colour].color));
+        assert.match(icon.html, /photo-marker-stack" aria-hidden="true">2/);
+        assert.equal(mode === 'markers' ? icon.html.includes('stroke-dasharray="2 2"') : icon.className.includes('photo-delivery-mixed'), mixed);
+      }
+      const unselected = photoMarkerOptions(mode, { ...options, ...overview, selected: false });
+      assert(unselected.html.includes(PHOTO_DELIVERY_COLOURS[mixed ? 'mixed' : 'gmi'].color));
+      assert.notEqual(photoMarkerIconKey(mode, { ...options, stackMixed: true }), photoMarkerIconKey(mode, { ...options, stackMixed: false }));
+      const provenance = { ...options, colourMode: 'provenance', sourceKind: 'gmi' };
+      assert.deepEqual(photoMarkerOptions(mode, provenance), photoMarkerOptions(mode, { ...provenance, stackMixed: false }));
+      const uniformEntries = { selected: { status }, other: { status } };
+      assert.deepEqual(photoStackMarkerDelivery(members, uniformEntries), { deliveryColourState: colour, stackMixed: false });
+      assert.deepEqual(photoMarkerOptions(mode, { ...options, ...photoStackMarkerDelivery(members, uniformEntries), selected: false }),
+        photoMarkerOptions(mode, { ...options, deliveryColourState: colour, stackMixed: false, selected: false }));
+      const isolated = photoMarkerOptions(mode, { ...options, stackCount: 1, ...photoStackMarkerDelivery([members[0]], entries, true) });
+      assert(isolated.html.includes(PHOTO_DELIVERY_COLOURS[colour].color));
+      assert(!isolated.html.includes('photo-marker-stack'));
+      assert(!isolated.html.includes('stroke-dasharray="2 2"'));
+      assert(!isolated.className.includes('photo-delivery-mixed'));
+    }
+  }
 });

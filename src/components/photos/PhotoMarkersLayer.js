@@ -3,7 +3,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Marker, Pane, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { PHOTO_DELIVERY_LABELS, photoStackDeliveryState } from '@/lib/photos/photoMarkerPresentation.mjs';
+import { PHOTO_DELIVERY_LABELS, photoStackMarkerDelivery } from '@/lib/photos/photoMarkerPresentation.mjs';
 import PhotoMapPopup from './PhotoMapPopup';
 import { photoPositionProvenanceKind, photoPositionSourceDescription, photoPositionSourceKind, photoPositionSourcePresentation, photoThumbnailsVisible } from '@/lib/photos/photoMarkerPresentation.mjs';
 import PhotoWorkspaceMapPreview from './PhotoWorkspaceMapPreview';
@@ -82,12 +82,12 @@ function markerModels(items, workspace, thumbnails, mainDeliveries) {
     const selected = inWorkspace && photo.id === workspace.photoId;
     // Delivery colours apply in every mode and on the main map (default «Leveringsvalg»); only the FOTO workspace offers
     // «Plasseringskilde», drawn from the original source (provenance), so a moved photo keeps its source colour.
-    // A drawn stack is coloured by all of its occurrences, so a mixed group never takes the colour of its top member.
+    // Unselected stacks use the aggregate fill; selection keeps its own fill and the mixed outline.
     const entries = inWorkspace ? workspace.delivery?.byPhotoId : mainDeliveries?.get(layerId);
     const options = {
       sourceKind: photoPositionProvenanceKind(photo), selected,
       colourMode: inWorkspace ? workspace.colourMode : 'delivery',
-      deliveryColourState: entries && members && top === photo ? photoStackDeliveryState(members, entries) : null,
+      ...(entries && members && top === photo ? photoStackMarkerDelivery(members, entries, selected) : {}),
       deliveryStatus: entries?.[photo.id]?.status || null,
       staged: Boolean(photo.staged),
       sibling: inWorkspace && !selected && Boolean(workspace.activeAssetId) && photo.assetId === workspace.activeAssetId,
@@ -102,7 +102,7 @@ function markerModels(items, workspace, thumbnails, mainDeliveries) {
     return [{ markerKey: feature.id, layerId, photoId: photo.id, lat, lng, mode, icon: photoMarkerIcon(mode, options), directionIcon,
       zIndexOffset: selected ? 1000 : photo.staged ? 500 : top === photo ? 100 : 0,
       label: photoMarkerLabel(photo, top === photo ? members.length : 1)
-        + (options.deliveryStatus ? ` · Planlagt: ${PHOTO_DELIVERY_LABELS[options.deliveryStatus]}` : '') + (options.deliveryColourState === 'mixed' ? ' \u00b7 Ulike leveringsvalg p\u00e5 samme sted' : ''), inWorkspace,
+        + (options.deliveryStatus ? ` · Planlagt: ${PHOTO_DELIVERY_LABELS[options.deliveryStatus]}` : '') + (options.stackMixed ? ' \u00b7 Ulike leveringsvalg p\u00e5 samme sted' : ''), inWorkspace,
       // Edit mode: other FOTO layers are context only, so no popup can switch layers by accident.
       interactive: !(workspace?.editing && !inWorkspace),
       stackIds: top === photo ? members.map((member) => member.id).join('\n') : '',
