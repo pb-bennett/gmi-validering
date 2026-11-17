@@ -1,4 +1,5 @@
-export const initialImportState = (context) => ({ step: 'photos', placement: { kind: context.kind === 'gmi-layer' ? 'gmi' : 'none', exifFallback: false }, includeUnreferenced: true });
+export const initialImportState = (context) => ({ step: 'photos', placement: { kind: context.kind === 'gmi-layer' ? 'gmi' : 'none', exifFallback: false }, includeUnreferenced: true,
+  captureSuggestions: Object.freeze({ complete: false, dateOnly: false }) });
 export function importSteps(context, placement) {
   return context.kind === 'gmi-layer' ? ['photos', 'review'] : ['photos', 'placement', ...(placement.kind === 'none' ? [] : ['review'])];
 }
@@ -12,6 +13,8 @@ export function importWizardReducer(state, action) {
   if (action.type === 'step') return { ...state, step: action.step };
   if (action.type === 'placement') return { ...state, placement: { ...state.placement, ...action.placement } };
   if (action.type === 'include') return { ...state, includeUnreferenced: action.value };
+  // Filename capture-time choices are independent of steps and placement, so back navigation keeps them.
+  if (action.type === 'captureSuggestions') return { ...state, captureSuggestions: Object.freeze({ ...state.captureSuggestions, ...action.value }) };
   return state;
 }
 export function canAdvance(step, snapshot, state) {
@@ -22,6 +25,7 @@ export function canAdvance(step, snapshot, state) {
     if (source && source.state !== 'ready') reason = source.state === 'pending' ? 'Leser kildefilen …' : 'Velg en tilgjengelig kilde.';
     if (['gmi', 'gml'].includes(state.placement.kind) && !source) reason = 'Velg en kildefil.';
     if (state.placement.kind !== 'none' && snapshot.photos.some((photo) => photo.spatial.exifRead.state === 'pending')) reason = 'Leser GPS fra bildene …';
+    if ((state.captureSuggestions?.complete || state.captureSuggestions?.dateOnly) && snapshot.photos.some((photo) => photo.spatial.exifRead.state === 'pending')) reason = 'Leser opptakstid fra bildene …';
     if (!count && !snapshot.loadedImport) reason = 'Ingen nye bilder legges til.';
   }
   return { ok: !reason, reason };

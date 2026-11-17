@@ -10,6 +10,7 @@ import { planEvidenceAdoption } from './photoEvidenceAdoption.mjs';
 import { planAutoCaptureTime, planAutoDirection, planAutoPhotographer } from './photoAutoMetadata.mjs';
 import { MANUAL_FILL_FIELDS, normalizeManualPhotoFill, planManualPhotoFill } from './photoManualFill.mjs';
 import { estimatedCaptureTime } from './photoEstimatedDates.mjs';
+import { localCalendarDate, planFilenameCaptureSuggestions, selectedFilenameCaptureWrites } from './photoFilenameCaptureTime.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
@@ -37,6 +38,7 @@ export function createPhotoSession({
   urls = globalThis.URL,
   yieldJob = () => new Promise((resolve) => setTimeout(resolve, 0)),
   sourceAdapters = {},
+  today = () => localCalendarDate(),
 } = {}) {
   // Originals and browser resources deliberately live outside Zustand/React snapshots.
   const records = new Map();
@@ -438,6 +440,29 @@ export function createPhotoSession({
       assetIdsByPhotoId: Object.freeze(Object.fromEntries(photoIds.map((id) => [id, lookup(id).assetId]))),
       spatialSources: Object.freeze(sources) }) };
   }
+  // Filename suggestions for the incoming draft assets. Assets with usable EXIF or draft-GML capture times are
+  // never candidates, so a suggestion can never compete with a source value at import.
+  function draftCaptureSuggestions(incoming) {
+    const photos = assetPhotos(incoming), draftGmlEvidenceByAsset = new Map();
+    if (positioning.source) for (const match of matchPhotoReferences(positioning.source.entries, photos).matches) {
+      if (match.status !== 'matched') continue;
+      const entry = positioning.source.entries.find((item) => item.id === match.entryId);
+      draftGmlEvidenceByAsset.set(match.photoId, [...(draftGmlEvidenceByAsset.get(match.photoId) || []), ...gmlCaptureEvidence(positioning.source, entry)]);
+    }
+    return planFilenameCaptureSuggestions(photos, { draftGmlEvidenceByAsset, today: today() });
+  }
+  const captureIdentity = (incoming) => assetIds(incoming).map((id) => [id, assets.get(id).captureMetadata, assets.get(id).metadataEvidence]);
+  // Approved filename values land before the committing method's single publication, so the automatic pass
+  // sees them as non-automatic. Accepted or removed values are never overwritten.
+  function applyCaptureTimeWrites(writes, eligibleIds) {
+    const eligible = new Set(assetIds(eligibleIds));
+    for (const [assetId, write] of writes || []) {
+      if (!eligible.has(assetId)) continue;
+      updateAsset(assetId, (asset) => asset.captureMetadata.captureTime || asset.captureMetadata.captureTimeCleared ? {}
+        : { captureMetadata: Object.freeze({ ...asset.captureMetadata, captureTime: write }) });
+    }
+  }
+
   function commitGmiPlan(plan) {
     for (const [id, record] of plan.replacements) records.set(id, record);
     for (const record of plan.additions) records.set(record.id, record);
@@ -503,22 +528,35 @@ export function createPhotoSession({
       const excludedPhotos = importIds.filter((id) => !included.has(id)).map((id) => ({ ...records.get(id),
         importExclusionReason: skipped.has(id) ? 'Finnes allerede i fotolaget og hoppes over.' : 'Ikke nevnt i GMI-filen.' }));
       const rows = previewImportPlacement({ plan, placement, gmiReview: loadedReview, excludedPhotos });
-      const preview = { rows, outcome: summarizeImportOutcome(rows, loadedReview) };
+      const preview = { rows, outcome: summarizeImportOutcome(rows, loadedReview), captureSuggestions: draftCaptureSuggestions(incoming) };
       importPreviews.set(preview, { generation, ids: [...importIds], positioning, loadedImport, target, eligible: [...incoming],
-        records: [...(target?.photoIds || []), ...importIds].map((id) => [id, records.get(id).spatial]), placement: JSON.stringify(placement) });
+        records: [...(target?.photoIds || []), ...importIds].map((id) => [id, records.get(id).spatial]), placement: JSON.stringify(placement),
+        capture: captureIdentity(incoming) });
       return preview;
     },
-    completeImport({ loadedReview = null, placement, preview }) {
+    completeImport({ loadedReview = null, placement, preview, captureSuggestions = null }) {
       const guard = importPreviews.get(preview);
+      const incoming = loadedReview?.includedIds || appendPolicy()?.appendableIds || importIds;
       if (!guard || guard.generation !== generation || guard.positioning !== positioning || guard.loadedImport !== loadedImport
         || guard.target !== (layers.get(draftTargetLayerId) || null) || guard.placement !== JSON.stringify(placement)
         || JSON.stringify(guard.eligible) !== JSON.stringify(loadedReview?.includedIds || appendPolicy()?.appendableIds || importIds)
         || guard.ids.length !== importIds.length || guard.ids.some((id, index) => id !== importIds[index])
-        || guard.records.some(([id, spatial]) => records.get(id)?.spatial !== spatial)) return { ok: false, error: 'review-changed' };
-      if (placement.kind !== 'none' && importIds.some((id) => records.get(id).spatial.exifRead.state === 'pending')) return { ok: false, error: 'pending-exif' };
+        || guard.records.some(([id, spatial]) => records.get(id)?.spatial !== spatial)
+        || captureIdentity(incoming).some(([id, metadata, evidence], index) => guard.capture[index]?.[0] !== id
+          || guard.capture[index][1] !== metadata || guard.capture[index][2] !== evidence)) return { ok: false, error: 'review-changed' };
+      const capturing = Boolean(captureSuggestions?.complete || captureSuggestions?.dateOnly);
+      if ((placement.kind !== 'none' || capturing) && importIds.some((id) => records.get(id).spatial.exifRead.state === 'pending')) return { ok: false, error: 'pending-exif' };
+      // Re-plan against live assets; the approved set must be the one the review showed.
+      let captureTimeWrites = [];
+      if (capturing) {
+        const plan = draftCaptureSuggestions(incoming);
+        if (JSON.stringify(plan) !== JSON.stringify(preview.captureSuggestions)) return { ok: false, error: 'review-changed' };
+        captureTimeWrites = selectedFilenameCaptureWrites(plan, captureSuggestions);
+      }
       const appended = Boolean(draftTargetLayerId);
       const addedCount = loadedReview?.includedIds.length ?? appendPolicy()?.appendableIds.length ?? importIds.length;
-      const result = loadedImport ? this.applyLoadedGmiImport(loadedReview) : { ok: true, layer: draftTargetLayerId ? this.appendImport() : this.createLayer() };
+      const commit = { captureTimeWrites };
+      const result = loadedImport ? this.applyLoadedGmiImport(loadedReview, commit) : { ok: true, layer: draftTargetLayerId ? this.appendImport(commit) : this.createLayer(commit) };
       if (!result.ok || !result.layer) return { ok: false, error: result.error || 'import-refused' };
       let placementError = false;
       if (placement.kind !== 'none') {
@@ -587,7 +625,7 @@ export function createPhotoSession({
     },
     // One checkpoint/publication for ownership + links + occurrence evidence.
     // Every preflight completes before assets or retained sources change.
-    applyLoadedGmiImport(review) {
+    applyLoadedGmiImport(review, { captureTimeWrites = [] } = {}) {
       const guard = loadedPlans.get(review), target = layers.get(draftTargetLayerId);
       const same = (a, b) => a.length === b.length && a.every((id, index) => id === b[index]);
       if (!guard || guard.operation !== loadedImport || loadedImport?.state !== 'ready'
@@ -616,6 +654,7 @@ export function createPhotoSession({
         const committed = layers.get(layer.id);
         layers.set(layer.id, Object.freeze({ ...committed, spatialSources: Object.freeze([...committed.spatialSources, gml]) }));
       }
+      applyCaptureTimeWrites(captureTimeWrites, review.includedIds);
       release(importIds.filter((id) => !review.includedIds.includes(id)));
       transferDraft(); loadedPlans.delete(review); publish();
       return { ok: true, layer: layers.get(layer.id), sourceId: review.source.id };
@@ -1224,7 +1263,7 @@ export function createPhotoSession({
       clearImport(); draftTargetLayerId = targetLayerId; publish(); return true;
     },
     cancelImport: clearImport,
-    createLayer() {
+    createLayer({ captureTimeWrites = [] } = {}) {
       if (loadedImport || draftTargetLayerId || !importIds.length || ['pending', 'error'].includes(positioning.state)) return null;
       const source = positioning.source;
       const attached = source ? attachSource(source, importIds) : null;
@@ -1240,12 +1279,13 @@ export function createPhotoSession({
         spatialSources: Object.freeze(attached ? [attached] : []),
         ...photoSpatialCounts(importIds.map((id) => records.get(id))),
       });
+      applyCaptureTimeWrites(captureTimeWrites, importIds);
       layers.set(layer.id, layer);
       transferDraft();
       publish();
       return layer;
     },
-    appendImport() {
+    appendImport({ captureTimeWrites = [] } = {}) {
       const layer = layers.get(draftTargetLayerId);
       const policy = appendPolicy();
       if (loadedImport || !layer || !policy.appendableIds.length || ['pending', 'error'].includes(positioning.state)) return null;
@@ -1256,6 +1296,7 @@ export function createPhotoSession({
         assetIdsByPhotoId: Object.freeze({ ...layer.assetIdsByPhotoId, ...Object.fromEntries(policy.appendableIds.map((id) => [id, records.get(id).assetId])) }),
         spatialSources: Object.freeze([...layer.spatialSources, ...(source ? [source] : [])]),
       });
+      applyCaptureTimeWrites(captureTimeWrites, policy.appendableIds);
       layers.set(layer.id, updated); release(policy.skippedIds); transferDraft(); publish(); return layers.get(layer.id);
     },
     setLayerVisibility(id, visible) {

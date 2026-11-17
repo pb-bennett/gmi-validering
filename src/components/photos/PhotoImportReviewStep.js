@@ -3,7 +3,7 @@
 import PhotoGmiSummary from './PhotoGmiSummary';
 import PhotoGmlSummary from './PhotoGmlSummary';
 const reasons = { ambiguous: 'Flere bilder har samme navn – kobles ikke automatisk.', 'linked-no-position': 'GMI-objektet mangler brukbar punktposisjon.', 'not-referenced': 'Ikke nevnt i GMI-filen.', excluded: 'Bildet tas ikke med.', 'no-position': 'Ingen brukbar posisjon fra den valgte kilden.', 'questionable-gps': 'GPS-posisjonen ser feil ut (0°, 0°).' };
-export default function PhotoImportReviewStep({ preview, review, session, context, state, onInclude, onFallback, onTarget }) {
+export default function PhotoImportReviewStep({ preview, review, session, context, state, onInclude, onFallback, onTarget, captureChoices = null }) {
   const outcome = preview?.outcome;
   if (!outcome) return <p role="status">Klargjør kontroll …</p>;
   const row = (item) => <li key={item.assetId} tabIndex={item.status === 'placed' ? undefined : 0} className="photo-import-result">{item.thumbnailUrl && <img src={item.thumbnailUrl} alt="" />}<div><strong>{item.filename}</strong><p>{item.status === 'placed' ? item.objects.join(' · ') : `⚠ ${item.reason || reasons[item.status]}`}</p></div></li>;
@@ -14,6 +14,7 @@ export default function PhotoImportReviewStep({ preview, review, session, contex
     {context.kind === 'gmi-layer' && <label>Legg bildene i <select aria-label="Velg FOTO-mållag" value={session.draftTargetLayerId || ''} onChange={(event) => onTarget(event.target.value || null)}><option value="">Nytt fotolag</option>{session.photoLayers.map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}</select></label>}
     {review?.unreferencedIds.length > 0 && <label className="block my-3"><input type="checkbox" checked={state.includeUnreferenced} onChange={(event) => onInclude(event.target.checked)} /> Ta med bilder som ikke er nevnt i GMI-filen</label>}
     {['gmi', 'gml'].includes(state.placement.kind) && preview.rows.some((row) => row.canUseExifFallback) && <label className="block my-3"><input type="checkbox" checked={state.placement.exifFallback} onChange={(event) => onFallback(event.target.checked)} /> Bruk GPS fra bildet når {state.placement.kind.toUpperCase()} mangler posisjon</label>}
+    {captureChoices}
     {outcome.attention.length > 0 && <section aria-label="Trenger kontroll"><h4>Trenger kontroll</h4><ul>{outcome.attention.map(row)}</ul></section>}
     {outcome.missingReferences.length > 0 && <details><summary>GMI-filen viser til {outcome.missingReferences.length} bilder som ikke er valgt.</summary><ul>{outcome.missingReferences.map((ref) => <li key={ref.id}>{ref.referenceRaw}</li>)}</ul><p>Gå tilbake for å legge dem til.</p></details>}
     {outcome.repeatedPhotos > 0 && <p>{outcome.repeatedPhotos} bilder brukes av flere objekter og får én plassering per objekt.</p>}

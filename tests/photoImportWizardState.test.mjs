@@ -31,3 +31,20 @@ test('initiating GMI navigation never offers a placement step', () => {
  assert.equal(canNavigateBack(context, state, 'placement'), false);
  assert.equal(importWizardReducer(state, { type: 'back', context, step: 'placement' }), state);
 });
+test('filename capture-time choices start off, are independent and survive navigation and placement changes', () => {
+ const context = { kind: 'new' };
+ let state = initialImportState(context);
+ assert.deepEqual({ ...state.captureSuggestions }, { complete: false, dateOnly: false });
+ state = importWizardReducer(state, { type: 'captureSuggestions', value: { dateOnly: true } });
+ assert.deepEqual({ ...state.captureSuggestions }, { complete: false, dateOnly: true });
+ state = importWizardReducer({ ...state, step: 'review', placement: { kind: 'gml', exifFallback: false } }, { type: 'back', context, step: 'placement' });
+ state = importWizardReducer(state, { type: 'placement', placement: { kind: 'none', exifFallback: false } });
+ state = importWizardReducer(state, { type: 'back', context, step: 'photos' });
+ assert.deepEqual({ ...state.captureSuggestions }, { complete: false, dateOnly: true });
+ state = importWizardReducer(state, { type: 'captureSuggestions', value: { complete: true } });
+ state = importWizardReducer(state, { type: 'captureSuggestions', value: { dateOnly: false } });
+ assert.deepEqual({ ...state.captureSuggestions }, { complete: true, dateOnly: false });
+ const pending = { photos: [{ spatial: { exifRead: { state: 'pending' } } }] };
+ assert.deepEqual(canAdvance('placement', pending, state), { ok: false, reason: 'Leser opptakstid fra bildene …' });
+ assert.equal(canAdvance('placement', pending, { ...state, captureSuggestions: { complete: false, dateOnly: false } }).ok, true);
+});

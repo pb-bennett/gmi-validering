@@ -11,6 +11,7 @@ import PhotoCollectionPanel from './PhotoCollectionPanel';
 import PhotoImportPreview from './PhotoImportPreview';
 import PhotoImportPlacementStep from './PhotoImportPlacementStep';
 import PhotoImportReviewStep from './PhotoImportReviewStep';
+import PhotoImportCaptureTimeChoices from './PhotoImportCaptureTimeChoices';
 import PhotoWizardSteps from './PhotoWizardSteps';
 
 const STEP_LABELS = { photos: 'Bilder', placement: 'Plassering', review: 'Kontroll' };
@@ -36,6 +37,8 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
   const final = state.step === 'review' || (state.step === 'placement' && state.placement.kind === 'none');
   const primary = final ? (session.draftTargetLayerId ? 'Legg til i fotolaget' : 'Opprett fotolag') : 'Neste';
   const acceptsDrop = state.step === 'photos';
+  const captureChoices = final && <PhotoImportCaptureTimeChoices suggestions={preview?.captureSuggestions} choices={state.captureSuggestions}
+    onChange={(value) => { dispatch({ type: 'captureSuggestions', value }); setError(''); }} />;
   const addFiles = (files) => {
     if (!files?.length) return;
     setError(''); photoSession.importFiles(Array.from(files));
@@ -111,10 +114,11 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
       </div> : <div className="photo-import-step-body">
         {state.step === 'placement' ? <PhotoImportPlacementStep session={session} placement={state.placement} loadedSources={loadedSources} onLoadedSource={onLoadedSource} onChange={(kind) => {
           photoSession.clearDraftGmiSource(); photoSession.clearDraftPositioningGml(); dispatch({ type: 'placement', placement: { kind, exifFallback: false } }); setError('');
-        }} /> : <>
+        }} /> : null}
+        {state.step === 'placement' ? captureChoices : <>
           {context.kind === 'gmi-layer' && session.loadedImport?.state === 'error' ? <p role="alert">GMI-laget er ikke lenger tilgjengelig. Avbryt og start på nytt fra GMI-laget.</p> : <PhotoImportReviewStep preview={preview} review={review} session={session} context={context} state={state}
             onInclude={(value) => dispatch({ type: 'include', value })} onFallback={(exifFallback) => dispatch({ type: 'placement', placement: { exifFallback } })}
-            onTarget={(id) => photoSession.setLoadedGmiTarget(id)} />}
+            onTarget={(id) => photoSession.setLoadedGmiTarget(id)} captureChoices={captureChoices} />}
         </>}
       </div>}
       <footer className="photo-import-footer border-t border-gmi-border">
@@ -123,7 +127,7 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
         {state.step !== 'photos' && <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong bg-gmi-surface px-4 py-2" onClick={() => navigateBack(steps[steps.indexOf(state.step) - 1])}>Tilbake</button>}
         <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4${final ? ' photo-import-final' : ''}`} disabled={!advance.ok || (final && (!preview || (!target && !preview.outcome.total)))} aria-describedby="photo-import-status" onClick={() => {
           if (!final) { dispatch({ type: 'step', step: steps[steps.indexOf(state.step) + 1] }); return; }
-          const result = photoSession.completeImport({ loadedReview: review, placement: state.placement, preview });
+          const result = photoSession.completeImport({ loadedReview: review, placement: state.placement, preview, captureSuggestions: state.captureSuggestions });
           if (result.ok) onComplete(result); else setError('Bildene eller kilden er endret. Kontrollen er oppdatert – se over før du fortsetter.');
         }}>{final && <CheckIcon size={16} weight="regular" aria-hidden="true" />}{primary}</button>
       </footer>

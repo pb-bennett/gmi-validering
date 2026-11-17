@@ -26,6 +26,16 @@
 .photo-import-result img { width:56px; height:48px; object-fit:contain; }
 .photo-import-review details { margin:1rem 0; }
 .photo-import-review summary { cursor:pointer; }
+/* Filename capture-time suggestions: one compact SJEKK panel on the final import step. */
+.photo-import-capture, .photo-import-capture-pending { max-width:1000px; margin:1rem auto; font-size:.875rem; }
+.photo-import-capture { display:grid; gap:.375rem; padding:.75rem 1rem; border:1px solid; border-radius:.75rem; }
+.photo-import-capture-title { display:flex; align-items:center; gap:.375rem; }
+.photo-import-capture-choice { display:flex; align-items:center; gap:.5rem; width:fit-content; color:var(--gmi-text); cursor:pointer; }
+.photo-import-capture details { margin:0; color:var(--gmi-text); }
+.photo-import-capture-list { max-height:12rem; overflow:auto; margin-top:.375rem; }
+.photo-import-capture-list li { display:flex; flex-wrap:wrap; gap:.25rem 1rem; padding:.125rem 0; }
+.photo-import-capture-file { overflow-wrap:anywhere; }
+.photo-import-capture-time { color:var(--gmi-text-muted); font-variant-numeric:tabular-nums; }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) { overflow:auto; }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) .photo-collection-original { min-height:120px; position:relative; }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) .photo-collection-facts { max-height:none; overflow:visible; overflow-wrap:anywhere; }

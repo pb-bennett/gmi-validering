@@ -59,3 +59,51 @@ test('unified import wizard: all entry contexts, sources, exceptions, lifecycle 
  assert.deepEqual(browser.events.filter(e=>e.method==='Runtime.exceptionThrown').map(e=>e.params.exceptionDetails.text),[]);
  }catch(error){console.error(await browser.evaluate('document.body.innerText.slice(0,6000)'));throw error;}finally{await browser.close();}
 });
+
+test('filename capture-time suggestions: final step, default off, persistence, styling, commit and layout', {skip:!app||!chromePath,timeout:240000},async()=>{
+ const browser=await openTestChrome();
+ const click=(label)=>clickSourceControl(browser,label,'document');
+ const noTime=gpsPng({}).toString('base64'),withTime=gpsPng({captureTime:'2026:10:16 12:00:00'}).toString('base64');
+ const names=[['20261014_143302.png',noTime],['KUM12_20261015.png',noTime],['20261013_0915.png',noTime],['IMG_1234.png',noTime],['20261016_120000.png',withTime],['IMG_20261012_101010.png',noTime]];
+ const panel=`${importDialog}?.querySelector('.photo-import-capture')`;
+ const box=(label)=>`Array.from(${importDialog}.querySelectorAll('.photo-import-capture-choice')).find(l=>l.textContent.startsWith(${JSON.stringify(label)}))?.querySelector('input')`;
+ const layout=async(name)=>{await mkdir(screenshotRoot,{recursive:true});for(const [width,height]of [[1280,720],[1366,768]]){await browser.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await browser.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');const g=await browser.evaluate(`(()=>{const d=${importDialog},b=d.querySelector('.photo-import-footer .gmi-primary-control').getBoundingClientRect(),p=d.querySelector('.photo-import-capture').getBoundingClientRect(),body=d.querySelector('.photo-import-step-body');return {overflow:d.scrollWidth>d.clientWidth||body.scrollWidth>body.clientWidth,right:b.right,bottom:b.bottom,panelRight:p.right,frame:d.getBoundingClientRect().right};})()`);assert(!g.overflow,name);assert(g.right<=width&&g.bottom<=height,name);assert(g.panelRight<=g.frame,name);const {data}=await browser.send('Page.captureScreenshot',{format:'png'});await writeFile(path.join(screenshotRoot,`capture-${name}-${width}x${height}.png`),Buffer.from(data,'base64'));}};
+ try{
+ await browser.send('Page.navigate',{url:app+'?testmodus=1'});await browser.waitFor('document.querySelector("button[aria-label=Lukk]")');await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
+ await click('Bilder');await browser.waitFor(`${importDialog}?.open`);
+ await browser.evaluate(`(() => {const transfer=new DataTransfer();for(const [name,data] of ${JSON.stringify(names)}){transfer.items.add(new File([Uint8Array.from(atob(data),c=>c.charCodeAt(0))],name,{type:'image/png'}));}const input=document.querySelector('input[aria-label="Velg bildefiler"]');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+ await waitForThumbnails(browser);await browser.waitFor(`${importDialog}.dataset.exifPending === '0'`,60000);
+ assert.equal(await browser.evaluate(`${panel}`),null,'not on the photo step');
+ await clickImport(browser,'Neste');await browser.waitFor(`${panel}`);
+ assert.equal(await browser.evaluate(`${panel}.dataset.validationTone`),'warning');
+ assert(await browser.evaluate(`${panel}.innerText.includes('SJEKK') && ${panel}.innerText.includes('5 bilder mangler opptakstid.')`));
+ assert(await browser.evaluate(`${panel}.querySelector('svg[aria-hidden="true"]') !== null`));
+ assert.deepEqual(await browser.evaluate(`Array.from(${panel}.querySelectorAll('.photo-import-capture-choice')).map(l=>[l.textContent.trim(),l.querySelector('input').checked,getComputedStyle(l.querySelector('input')).accentColor])`),
+  [['Bruk dato og klokkeslett fra filnavn (3)',false,'rgb(0, 117, 149)'],['Bruk kun dato fra filnavn (1)',false,'rgb(0, 117, 149)']]);
+ await browser.evaluate(`${panel}.querySelector('summary').click()`);
+ assert.equal(await browser.evaluate(`${panel}.querySelector('summary').textContent`),'Vis forslag (4)');
+ const rows=await browser.evaluate(`Array.from(${panel}.querySelectorAll('li')).map(li=>li.innerText.replace(/\\s+/g,' ').trim())`);
+ assert.deepEqual(rows,['20261014_143302.png 14.10.2026 14:33:02 · tidssone ukjent','20261013_0915.png 13.10.2026 09:15 · uten sekunder · tidssone ukjent','IMG_20261012_101010.png 12.10.2026 10:10:10 · tidssone ukjent','KUM12_20261015.png 15.10.2026 · bare dato']);
+ await layout('placement-final');
+ await browser.evaluate(`${box('Bruk kun dato fra filnavn')}.click()`);
+ // Kontroll becomes the final step: the section moves there and the choice survives the placement change and back navigation.
+ await chooseImportPlacement(browser,'exif');assert.equal(await browser.evaluate(`${panel}`),null);
+ await clickImport(browser,'Neste');await browser.waitFor(`${importDialog}?.querySelector('.photo-import-review')`);await browser.waitFor(`${panel}`);
+ assert.deepEqual(await browser.evaluate(`[${box('Bruk dato og klokkeslett fra filnavn')}.checked,${box('Bruk kun dato fra filnavn')}.checked]`),[false,true]);
+ await layout('review-final');
+ await clickImport(browser,'Tilbake');await clickImport(browser,'Tilbake');await clickImport(browser,'Neste');await chooseImportPlacement(browser,'none');await browser.waitFor(`${panel}`);
+ assert.deepEqual(await browser.evaluate(`[${box('Bruk dato og klokkeslett fra filnavn')}.checked,${box('Bruk kun dato fra filnavn')}.checked]`),[false,true]);
+ // Keyboard: the checkbox is reachable and toggles with Space.
+ await browser.evaluate(`${box('Bruk dato og klokkeslett fra filnavn')}.focus()`);
+ await browser.send('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',windowsVirtualKeyCode:32});await browser.send('Input.dispatchKeyEvent',{type:'keyUp',key:' ',code:'Space',windowsVirtualKeyCode:32});
+ assert.equal(await browser.evaluate(`${box('Bruk dato og klokkeslett fra filnavn')}.checked`),true);
+ await clickImport(browser,'Opprett fotolag');await browser.waitFor('!document.querySelector(".photo-collection-dialog[open]") && document.querySelector(".photo-workspace-shell")');
+ const inspect=async(name)=>{await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).find(li=>li.textContent.includes(${JSON.stringify(name)})).querySelector('.photo-workspace-row').click()`);await new Promise(resolve=>setTimeout(resolve,150));return browser.evaluate(`(()=>{const d=document.querySelector('[data-disclosure="capture-evidence"]');return {source:d?.textContent||'',text:document.body.textContent};})()`);};
+ const dateOnly=await inspect('KUM12_20261015.png');assert(dateOnly.source.includes('Opptakstid fra') && dateOnly.source.includes('Filnavn'));assert(dateOnly.text.includes('15.10.2026') && dateOnly.text.includes('bare dato'));
+ const complete=await inspect('20261013_0915.png');assert(complete.source.includes('Filnavn'));assert(complete.text.includes('13.10.2026 09:15') && complete.text.includes('uten sekunder'));
+ const exif=await inspect('20261016_120000.png');assert(exif.source.includes('EXIF DateTimeOriginal'));
+ // Cancel leaves nothing behind.
+ await click('Legg til bilder');await browser.waitFor(`${importDialog}?.open`);await clickImport(browser,'Avbryt');await browser.waitFor('!document.querySelector(".photo-collection-dialog[open]")');
+ assert.deepEqual(browser.events.filter(e=>e.method==='Runtime.exceptionThrown').map(e=>e.params.exceptionDetails.text),[]);
+ }catch(error){console.error(await browser.evaluate('document.body.innerText.slice(0,6000)'));throw error;}finally{await browser.close();}
+});
