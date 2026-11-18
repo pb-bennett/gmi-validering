@@ -34,14 +34,14 @@ const primaries = (browser) => browser.evaluate(`${dialog}.querySelectorAll('foo
 // A4: Pakke shows the package and its download only. Findings, photo readiness and technical detail stay in Kontroll.
 const assertPackageOnly = async (browser) => {
   const found = await browser.evaluate(`(() => { const body = ${dialog}.querySelector('[data-export-step="package"]');
-    return { repeated: Array.from(body.querySelectorAll('.delivery-diagnostics, .delivery-summary, [data-export-status], [data-export-format], [data-export-technical], [data-export-experimental], [data-export-counts], [data-diagnostic-code]')).map((item) => item.className || item.tagName),
+    return { repeated: Array.from(body.querySelectorAll('.delivery-diagnostics, .delivery-summary, [data-export-status], [data-export-format], [data-export-technical], [data-export-gemini-import], [data-export-counts], [data-diagnostic-code]')).map((item) => item.className || item.tagName),
       status: body.querySelector('[data-review-status]')?.innerText ?? null, filename: body.querySelector('[data-export-filename]')?.innerText ?? null }; })()`);
   assert.deepEqual(found.repeated, [], 'Pakke repeats no Kontroll content');
   assert.match(found.status, /^Kontroll fullført · (ingen merknader|\d+ merknad(er)?)$/);
   assert(found.filename);
   assert.equal(await primaries(browser), 1, 'one primary action on Pakke');
-  assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('footer [data-export-report]').length`), 0);
-  assert(await browser.evaluate(`${dialog}.querySelector('.delivery-inventory [data-export-report]') !== null`));
+  assert(await browser.evaluate(`${dialog}.querySelector('footer').firstElementChild.matches('[data-export-report]')`));
+  assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-inventory [data-export-report]')`), null);
   assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(e=>e.innerText==='Se kontrollen')`), false);
   assert.deepEqual(await browser.evaluate(`(() => { const b=${dialog}.querySelector('[data-export-download]'),s=getComputedStyle(b);return [s.backgroundColor,Boolean(b.querySelector('svg[aria-hidden=true]'))]; })()`), ['rgb(15, 23, 43)', true]);
 };
@@ -90,12 +90,14 @@ test('filename editor: live sources, checkboxes, manual choices, reset, limits a
     const value = () => browser.evaluate(`${field}.value`);
     const box = (label) => `Array.from(${editor}.querySelectorAll('.delivery-filename-options label')).find(l => l.innerText.trim() === ${JSON.stringify(label)})?.querySelector('input')`;
     const toggle = async (label, checked) => { await browser.evaluate(`${box(label)}.click()`); await browser.waitFor(`${box(label)}.checked === ${checked}`); };
-    // What the editor shows: grey prefix | editable text | grey suffix, plus the message slot.
+    const counter = `${editor}.querySelector('[data-export-filename-count]')`;
+    // The displayed filename parts and the blocking message.
     const parts = () => browser.evaluate(`(() => { const e = ${editor};
       return { prefix: e.querySelector('[data-export-filename-prefix]')?.textContent ?? '', text: e.querySelector('input[type=text]').value,
         suffix: e.querySelector('[data-export-filename-suffix]').textContent, message: e.querySelector('[data-export-filename-message]')?.textContent ?? '',
         tone: e.querySelector('.delivery-filename').dataset.validationTone ?? '', revisionBox: Boolean(${box('Revisjonsnummer')}) }; })()`);
     const advance = () => browser.evaluate(`${dialog}.querySelector('[data-export-advance]').disabled`);
+    const description = () => browser.evaluate(`${field}.getAttribute('aria-describedby').split(' ').map(id => document.getElementById(id).textContent)`);
     const load = async (name, bytes = original) => {
       const file = path.join(directory, name); await writeFile(file, bytes);
       if (!await browser.evaluate('Boolean(document.querySelector("input[type=file]"))')) {
@@ -122,8 +124,9 @@ test('filename editor: live sources, checkboxes, manual choices, reset, limits a
       await browser.waitFor(`${field}.value === 'Syntetisk M10'`);
       assert.deepEqual(await parts(), { prefix: 'ååååmmdd-ttmm-', text: 'Syntetisk M10', suffix: '_rev01.gmi', message: '', tone: '', revisionBox: true });
       // D5: the accessible name is «Filnavn», from a visible label; prefix and suffix describe it.
-      assert.deepEqual(await browser.evaluate(`(() => { const f = ${field}; return [f.labels[0].innerText.trim(), f.getAttribute('aria-label'), f.maxLength,
-        f.getAttribute('aria-describedby').split(' ').map(id => document.getElementById(id).textContent)]; })()`), ['Filnavn', null, -1, ['ååååmmdd-ttmm-', '_rev01.gmi']]);
+      assert.deepEqual(await browser.evaluate(`(() => { const f = ${field}, label = document.getElementById(f.getAttribute('aria-labelledby'));
+        return [f.labels[0].contains(label), label.innerText, f.maxLength]; })()`), [true, 'Filnavn', -1]);
+      assert.deepEqual(await description(), ['ååååmmdd-ttmm-', '_rev01.gmi', '37 tegn']);
       // Old duplicate inputs and explanations are gone.
       assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('[aria-label="Eksportetikett"], [data-export-name-source], [data-export-name-format], .photo-export-label').length`), 0);
       assert.doesNotMatch(await browser.evaluate(`${dialog}.innerText`), /Etikett i filnavnet|Foreslått ut fra|Tidspunktet settes/);
@@ -141,8 +144,9 @@ test('filename editor: live sources, checkboxes, manual choices, reset, limits a
       // A long contractor name with a date prefix, æøå, spaces and punctuation stays whole in the field.
       await select(third); await browser.waitFor(`${field}.value === ${JSON.stringify(long)}`);
       assert.equal((await parts()).suffix, '_rev02.gmi');
-      assert.equal((await parts()).message, 'Filnavnet er over 80 tegn.');
-      assert.equal((await parts()).tone, 'warning');
+      assert.equal((await parts()).message, '');
+      assert.equal((await parts()).tone, '');
+      assert((await description()).includes('Filnavnet er over 80 tegn.'));
       assert.equal(await advance(), false, 'the advisory length never blocks');
       await review(browser); assert.equal(await status(browser), 'ready'); await click(browser, 'Neste');
       assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-filename]').textContent`), new RegExp(`^\\d{8}-\\d{4}-${long.replace(/[()&]/g, '\\$&')}_rev02\\.gmi$`));
@@ -165,28 +169,50 @@ test('filename editor: live sources, checkboxes, manual choices, reset, limits a
       await click(browser, 'Bruk forslag'); assert.equal(await value(), 'Nord');
       assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(b => b.innerText === 'Bruk forslag')`), false);
 
-      // Advisory boundary: 14 + text + _rev02 + .gmi; 80 is fine, 81 warns.
+      // Advisory boundaries count the whole filename and leave the field valid.
       await select(first); await browser.waitFor(`${field}.value === 'Syntetisk M10'`);
-      await setValue(browser, field, 'x'.repeat(57)); await browser.waitFor(`${editor}.querySelector('[data-export-filename-message]')`);
-      await setValue(browser, field, 'x'.repeat(56)); await browser.waitFor(`!${editor}.querySelector('[data-export-filename-message]')`);
+      for (const [count, tone, token] of [[60, '', 'text-muted'], [61, 'warning', 'validation-compact-warning-text'],
+        [80, 'warning', 'validation-compact-warning-text'], [81, 'error', 'validation-error-text']]) {
+        if (count === 61) {
+          await browser.evaluate(`${field}.focus(); ${field}.setSelectionRange(36, 36)`);
+          await browser.send('Input.insertText', { text: 'x' });
+        } else await setValue(browser, field, 'x'.repeat(count - 24));
+        await browser.waitFor(`${counter}.textContent === '${count} tegn'`);
+        const style = await browser.evaluate(`(() => { const counter = ${counter}, probe = document.createElement('span');
+          probe.style.color = 'var(--gmi-${token})'; counter.append(probe);
+          const result = { matchesToken: getComputedStyle(counter).color === getComputedStyle(probe).color,
+            tone: counter.dataset.validationTone ?? '', icon: Boolean(counter.querySelector('svg[aria-hidden=true]')) };
+          probe.remove(); return result; })()`);
+        assert.deepEqual(style, { matchesToken: true, tone, icon: Boolean(tone) });
+        assert.equal((await parts()).message, '');
+        assert.equal((await parts()).tone, '');
+        assert.equal(await browser.evaluate(`${field}.hasAttribute('aria-invalid')`), false);
+        assert.equal(await advance(), false);
+      }
       // Hard limit blocks with its reason; a reserved name blocks too.
       await setValue(browser, field, 'x'.repeat(240));
       await browser.waitFor(`${editor}.querySelector('[data-export-filename-message]')?.textContent === 'Filnavnet er for langt for filsystemet.'`);
       assert.equal(await advance(), true);
       assert.equal(await browser.evaluate(`${field}.getAttribute('aria-invalid')`), 'true');
+      assert.equal((await parts()).tone, 'error');
+      assert((await description()).includes('Filnavnet er for langt for filsystemet.'));
       await click(browser, 'Bruk forslag'); assert.equal(await value(), 'Syntetisk M10');
 
       // Checkbox combinations change only their own part; navigation keeps text and checkboxes.
       await toggle('Tidsstempel', false);
       assert.deepEqual([(await parts()).prefix, (await parts()).suffix], ['', '_rev01.gmi']);
+      assert.equal(await browser.evaluate(`${counter}.textContent`), '23 tegn');
       await toggle('Revisjonsnummer', false);
       assert.deepEqual([(await parts()).prefix, (await parts()).suffix], ['', '.gmi']);
+      assert.equal(await browser.evaluate(`${counter}.textContent`), '17 tegn');
       await setValue(browser, field, '');
       await browser.waitFor(`${editor}.querySelector('[data-export-filename-message]')?.textContent === 'Filnavnet er tomt.'`);
       assert.equal(await advance(), true, 'an empty name cannot reach review');
+      assert.equal(await browser.evaluate(`${field}.getAttribute('aria-invalid')`), 'true');
       await setValue(browser, field, 'CON');
       await browser.waitFor(`${editor}.querySelector('[data-export-filename-message]')?.textContent === 'Filnavnet er reservert i Windows.'`);
       assert.equal(await advance(), true);
+      assert.equal(await browser.evaluate(`${field}.getAttribute('aria-invalid')`), 'true');
       await click(browser, 'Bruk forslag');
       await toggle('Tidsstempel', true);
       await review(browser); assert.equal(await status(browser), 'ready'); await click(browser, 'Neste');
@@ -196,8 +222,13 @@ test('filename editor: live sources, checkboxes, manual choices, reset, limits a
       await toggle('Revisjonsnummer', true);
 
       // Keyboard: the wrapper shows the focus ring; Tab reaches the checkboxes and Space toggles them.
-      await browser.evaluate(`${field}.focus()`);
-      assert.notEqual(await browser.evaluate(`getComputedStyle(${editor}.querySelector('.delivery-filename')).boxShadow`), 'none');
+      const focusRing = () => browser.evaluate(`getComputedStyle(${editor}.querySelector('.delivery-filename')).boxShadow`);
+      await browser.evaluate(`${box('Tidsstempel')}.focus()`);
+      assert.equal(await focusRing(), 'none');
+      await pressKey(browser, 'Tab', { ...KEYS.Tab, modifiers: 8 });
+      assert.equal(await browser.evaluate(`document.activeElement === ${field}`), true);
+      assert.match(await focusRing(), /rgb\(0, 117, 149\)/);
+      assert.equal(await browser.evaluate(`getComputedStyle(${field}).outlineStyle`), 'none');
       await pressKey(browser, 'Tab', KEYS.Tab);
       assert.equal(await browser.evaluate(`document.activeElement === ${box('Tidsstempel')}`), true);
       await pressKey(browser, ' ', { code: 'Space', keyCode: 32 });
@@ -207,11 +238,26 @@ test('filename editor: live sources, checkboxes, manual choices, reset, limits a
       for (const [width, height] of [[1280, 720], [1366, 768]]) {
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
         await delay(150);
+        await browser.evaluate(`${field}.focus(); ${field}.setSelectionRange(${field}.value.length, ${field}.value.length)`);
         const fit = await browser.evaluate(`(() => { const body = ${dialog}.querySelector('.delivery-body'), row = ${editor}.querySelector('.delivery-filename'),
-          section = ${editor}.closest('section'), footer = ${dialog}.querySelector('[data-export-footer]').getBoundingClientRect();
-          return { overflow: body.scrollWidth - body.clientWidth, inside: row.getBoundingClientRect().right <= section.getBoundingClientRect().right + 1,
-            height: Math.round(row.getBoundingClientRect().height), footer: footer.bottom <= innerHeight + 1 }; })()`);
-        assert.deepEqual(fit, { overflow: 0, inside: true, height: fit.height, footer: true }, `${width}x${height}`);
+          section = ${editor}.closest('section'), footer = ${dialog}.querySelector('[data-export-footer]').getBoundingClientRect(),
+          input = ${field}, prefix = row.firstElementChild, suffix = row.lastElementChild, count = ${counter};
+          const bounds = (node) => node.getBoundingClientRect();
+          const mirror = document.createRange(); mirror.selectNodeContents(input.previousElementSibling);
+          return { overflow: body.scrollWidth - body.clientWidth, inside: bounds(row).right <= bounds(section).right + 1,
+            height: Math.round(bounds(row).height), footer: footer.bottom <= innerHeight + 1,
+            continuous: Math.abs(bounds(prefix).right - bounds(input).left) <= 1 && Math.abs(bounds(input).right - bounds(suffix).left) <= 1,
+            inputWidth: bounds(input).width, textWidth: mirror.getBoundingClientRect().width,
+            oneBorder: getComputedStyle(row).borderTopWidth === '1px' && getComputedStyle(input).borderTopWidth === '0px',
+            affixesDistinct: getComputedStyle(prefix).color !== getComputedStyle(input).color &&
+              getComputedStyle(prefix).backgroundColor !== getComputedStyle(row).backgroundColor,
+            rightAlignedCount: Math.abs(bounds(count).right - bounds(row).right) <= 1 };
+          })()`);
+        await screenshot(browser, `batch-b-filename-${width}x${height}`);
+        const { inputWidth, textWidth, ...layout } = fit;
+        assert(Math.abs(inputWidth - textWidth) <= 1, `input width ${inputWidth}, text width ${textWidth} at ${width}x${height}`);
+        assert.deepEqual(layout, { overflow: 0, inside: true, height: fit.height, footer: true,
+          continuous: true, oneBorder: true, affixesDistinct: true, rightAlignedCount: true }, `${width}x${height}`);
         assert(fit.height <= 40, `compact row at ${width}x${height}: ${fit.height}`);
       }
       await screenshot(browser, 'a4-revision-gmi-content');
@@ -251,11 +297,14 @@ async function downloaded(browser, directory, label) {
   await click(browser, label);
   await browser.waitFor(`${dialog}.dataset.exportPhase === 'done'`);
   const name = await browser.evaluate(`${dialog}.querySelector('[data-downloaded-filename]').textContent`);
+  return { name, bytes: await readDownload(downloadDirectory, name) };
+}
+async function readDownload(directory, name) {
   for (let count = 0; count < 100; count++) {
-    try { return { name, bytes: new Uint8Array(await readFile(path.join(downloadDirectory, name))) }; }
+    try { return new Uint8Array(await readFile(path.join(directory, name))); }
     catch { await delay(50); }
   }
-  throw new Error('Download did not arrive');
+  throw new Error(`Download did not arrive: ${name}`);
 }
 
 test('FOTO-first combined export uses automatic and manual verified bindings and follows the selected photo layer',
@@ -649,6 +698,9 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('section.delivery-diagnostics[data-tone=warnings] li').length > 0
           && ${dialog}.querySelector('section.delivery-diagnostics[data-tone=warnings]').closest('details') === null`), true, 'warnings are not folded');
         assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('details.delivery-diagnostics[data-tone=info][open]').length`), 0, 'information starts folded');
+        assert.match(await browser.evaluate(`${dialog}.querySelector('[data-tone=info] [data-diagnostic-code="gemini-va-tested-import"]').textContent`),
+          /importert i Gemini VA i et testet oppsett 16\. november 2026/);
+        assert.equal(await browser.evaluate(`Boolean(${dialog}.querySelector('[data-diagnostic-code="gemini-g4-unverified"]'))`), false);
         assert.equal((await browser.evaluate(`${dialog}.innerText.match(/Dette er eksportkontroll/g)?.length ?? 0`)), 1, 'the disclaimer appears once');
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
@@ -666,13 +718,30 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-zip]').dataset.exportZip`), /M10/);
         assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-folder').getAttribute('aria-expanded')`), 'false', 'the package tree starts collapsed');
         await screenshot(browser, 'a4-pakke-combined');
+        await click(browser, 'Utvid alle');
+        await browser.evaluate(`${dialog}.querySelector('.delivery-tree input[type=checkbox]').click()`);
+        await browser.waitFor(`${dialog}.querySelector('.delivery-thumbnail img')?.naturalWidth > 0`);
         for (const [width, height] of [[1280, 720], [1366, 768], [390, 844]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           const bounds = await browser.evaluate(`(() => {const d=${dialog}, f=d.querySelector('footer');return {dialog:d.getBoundingClientRect().toJSON(),footer:f.getBoundingClientRect().toJSON(),overflow:d.scrollWidth>d.clientWidth+1};})()`);
           assert(!bounds.overflow); assert(bounds.footer.bottom <= height); assert(bounds.dialog.top >= 0);
           assert(bounds.dialog.height >= height * .94, 'package uses the available viewport height');
-          assert.deepEqual(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('footer button')).map(e=>e.innerText.trim())`), ['Avbryt', 'Tilbake', 'Last ned ZIP']);
-          await click(browser, 'Utvid alle');
+          assert.deepEqual(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('footer button')).map(e=>e.innerText.trim())`),
+            ['Last ned rapport', 'Avbryt', 'Tilbake', 'Last ned ZIP']);
+          if (width !== 390) {
+            const layout = await browser.evaluate(`(() => {
+              const footer = ${dialog}.querySelector('footer'), [report, cancel, back, zip] = footer.querySelectorAll('button');
+              const [start, second, third, end] = [report, cancel, back, zip].map((item) => item.getBoundingClientRect());
+              const box = footer.getBoundingClientRect(), padding = parseFloat(getComputedStyle(footer).paddingInlineStart);
+              return { reportOnLeft: Math.abs(start.left - box.left - padding) <= 1,
+                actionsOnRight: Math.abs(end.right - box.right + padding) <= 1 && start.right < second.left &&
+                  third.left - second.right <= 9 && end.left - third.right <= 9,
+                oneRow: [start, second, third, end].every((item) => item.top === start.top && item.height === 40),
+                reportReachable: !report.disabled && report.contains(document.elementFromPoint(start.x + start.width / 2, start.y + start.height / 2)) };
+            })()`);
+            assert.deepEqual(layout, { reportOnLeft: true, actionsOnRight: true, oneRow: true, reportReachable: true }, `${width}x${height}`);
+            await screenshot(browser, `batch-b-package-${width}x${height}`);
+          }
           assert.equal(await browser.evaluate(`${dialog}.querySelector('.delivery-destination').textContent`), 'GMI + GML');
           await assertPillFollowsName(browser);
           await screenshot(browser, `m10-combined-package-${width}x${height}`);
@@ -692,7 +761,14 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
         await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
         assert(await browser.evaluate(`${dialog}.contains(document.activeElement)`));
-        await click(browser, 'Last ned rapport');
+        const reportDirectory = await mkdtemp(path.join(directory, 'report-'));
+        await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: reportDirectory });
+        const reportButton = `${dialog}.querySelector('[data-export-report]')`;
+        await browser.evaluate(`${reportButton}.focus()`);
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+        await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+        const reportFilename = (await browser.evaluate(`${dialog}.querySelector('[data-export-zip]').dataset.exportZip`)).replace(/\.zip$/, '-leveranserapport.txt');
+        assert.match(strFromU8(await readDownload(reportDirectory, reportFilename)), /Leveranserapport/);
         assert(await browser.evaluate(`(() => {const event=new Event('beforeunload',{cancelable:true});window.dispatchEvent(event);return event.defaultPrevented;})()`), 'report does not mark corrections downloaded');
         await browser.evaluate(`(() => {window.__m10Click=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){throw new Error('Synthetic blocked download');};})()`);
         await click(browser, 'Last ned ZIP');
@@ -712,7 +788,8 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await choose(browser, 'gmi-only'); await pack(browser);
         await screenshot(browser, 'a4-pakke-gmi-only');
         await click(browser, 'Tilbake'); assert.equal(await currentStep(browser), '2. Kontroll');
-        assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-experimental]').innerText`), /^Eksperimentell\. Revidert GMI er ikke akseptansetestet i Gemini VA\.$/);
+        assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-gemini-import]').innerText`),
+          /importert i Gemini VA i et testet oppsett 16\. november 2026\. Kontroller resultatet etter import\./);
         await screenshot(browser, 'a4-kontroll-gmi-only');
         await click(browser, 'Neste'); await assertPackageOnly(browser);
         const output = await downloaded(browser, directory, 'Last ned GMI');
@@ -830,6 +907,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await click(browser, 'Last ned ZIP');
         await browser.waitFor(`${dialog}.dataset.exportPhase === 'stale'`);
         assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).find(button=>button.textContent==='Last ned ZIP').disabled`), true);
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('[data-export-report]').disabled`), true);
         await browser.evaluate('Blob.prototype.arrayBuffer=window.__m10Read');
         await click(browser, 'Tilbake og kontroller på nytt'); await pack(browser); await click(browser, 'Lukk eksport');
       });
@@ -840,6 +918,7 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
           window.__m10Read=Blob.prototype.arrayBuffer;window.__m10Pending=[];
           Blob.prototype.arrayBuffer=function(){return this.type==='image/jpeg'?new Promise(resolve=>window.__m10Pending.push(()=>window.__m10Read.call(this).then(resolve))):window.__m10Read.call(this);};})()`);
         await click(browser, 'Last ned ZIP'); await browser.waitFor('window.__m10Pending.length>0');
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('[data-export-report]').disabled`), true);
         await click(browser, 'Lukk eksport');
         await browser.evaluate('window.__m10Pending.forEach(resume=>resume());Blob.prototype.arrayBuffer=window.__m10Read');
         await delay(300); assert.deepEqual(await browser.evaluate('window.__m10Downloads'), []);

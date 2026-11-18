@@ -5,7 +5,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { exportFixture } from './helpers/photoExportFixtures.mjs';
 import { geminiGoldenFixture, normalizeGeminiIdentifiers, readGeminiGolden } from './helpers/photoExportGolden.mjs';
 import { parseSourceFilename, formatPhotoExportTimestamp, photoExportNames, sanitizeExportDescriptive, exportFilenamePreview,
-  exportFilenameOptions, ExportFilenameError, EXPORT_FILENAME_ADVISORY_LENGTH, EXPORT_FILENAME_MAX_BYTES, EXPORT_REPORT_SUFFIX } from '../src/lib/photos/export/photoExportNaming.mjs';
+  exportFilenameOptions, ExportFilenameError, EXPORT_FILENAME_NOTICE_LENGTH, EXPORT_FILENAME_ADVISORY_LENGTH, EXPORT_FILENAME_MAX_BYTES, EXPORT_REPORT_SUFFIX } from '../src/lib/photos/export/photoExportNaming.mjs';
 import { PHOTO_EXPORT_PROFILES } from '../src/lib/photos/export/exportContract.mjs';
 import { buildPhotoExportPackage } from '../src/lib/photos/export/photoExportPackage.mjs';
 import { serializePhotoExport } from '../src/lib/photos/export/photoExportXml.mjs';
@@ -134,16 +134,19 @@ test('the longest artifact name (the report) must fit 255 UTF-8 bytes', () => {
   assert.equal(photoExportNames({ date: instant, descriptive: 'x'.repeat(limit - 14) }).basename.length, limit);
 });
 
-test('the advisory length counts the whole primary filename; above 80 is a warning, never a block', () => {
+test('advisory thresholds count the whole primary filename and do not block', () => {
   const at = (n, options) => exportFilenamePreview({ descriptive: 'x'.repeat(n), ...options });
   // ååååmmdd-ttmm- (14) + text + _rev02 (6) + .gmi (4)
-  assert.equal(at(56, { revision: 'rev02', extension: '.gmi' }).length, 80);
-  assert.equal(at(57, { revision: 'rev02', extension: '.gmi' }).length, 81);
+  for (const [descriptiveLength, filenameLength] of [[36, 60], [37, 61], [56, 80], [57, 81]]) {
+    const preview = at(descriptiveLength, { revision: 'rev02', extension: '.gmi' });
+    assert.equal(preview.length, filenameLength);
+    assert.equal(preview.issue, null);
+  }
   assert.equal(at(62, { extension: '.zip' }).length, 80);
   assert.equal(at(76, { timestamp: false, extension: '.zip' }).length, 80);
   assert.equal(at(77, { timestamp: false, extension: '.zip' }).length, 81);
   assert.equal(at(70, { timestamp: false, revision: 'rev02', extension: '.gmi' }).length, 80);
-  assert.equal(EXPORT_FILENAME_ADVISORY_LENGTH, 80);
+  assert.deepEqual([EXPORT_FILENAME_NOTICE_LENGTH, EXPORT_FILENAME_ADVISORY_LENGTH], [60, 80]);
   assert.equal(at(200, { extension: '.zip' }).issue, null, 'long is allowed');
   assert.equal(at(300, { extension: '.zip' }).issue, 'filename-too-long');
   // Code points: Norwegian letters count once.

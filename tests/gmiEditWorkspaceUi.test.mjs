@@ -254,14 +254,14 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
       });
 
       let downloaded;
-      await t.test('download: experimental, verified, byte-identical to the M3 payload, original untouched', async () => {
+      await t.test('download: Gemini VA import wording, byte-identical to the M3 payload, original untouched', async () => {
         await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
         await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
         await browser.waitFor(exportDialog);
         await u.setValue(`${exportDialog}.querySelector('input[type=text]')`, 'Rettet');
         await u.clickButton('Kontroller leveransen', exportDialog);
         await browser.waitFor(`${exportDialog}.dataset.exportPhase === 'ready'`);
-        assert.match(await u.text(exportDialog), /Eksperimentell\./);
+        assert.match(await u.text(exportDialog), /importert i Gemini VA i et testet oppsett 16\. november 2026/);
         await u.clickButton('Neste', exportDialog);
         await browser.waitFor(`/^\\d{8}-\\d{4}-Rettet_rev\\d{2}\\.gmi$/.test(${exportDialog}.querySelector('[data-export-filename]').innerText)`);
         await u.shot('m4-rettinger-export');

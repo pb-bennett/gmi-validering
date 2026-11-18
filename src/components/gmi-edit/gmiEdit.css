@@ -5,7 +5,7 @@
 .gmi-edit-title-row h1 { font-size: 15px; font-weight: 600; color: var(--gmi-navy); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gmi-edit-kicker { margin: 0; font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--gmi-interactive); }
 .gmi-edit-status-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--gmi-text-muted); }
-.gmi-edit-status-pill, .gmi-edit-download-pill, .gmi-edit-state-pill, .gmi-edit-badge, .gmi-edit-experimental-tag {
+.gmi-edit-status-pill, .gmi-edit-download-pill, .gmi-edit-state-pill, .gmi-edit-badge {
   display: inline-flex; align-items: center; padding: 0 7px; border-radius: 999px; font-size: 10px; font-weight: 600; line-height: 17px; white-space: nowrap; }
 .gmi-edit-status-pill { border: 1px solid var(--gmi-border-strong); background: var(--gmi-surface-soft); color: var(--gmi-text-muted); }
 .gmi-edit-status-pill[data-tone="ok"] { border-color: var(--gmi-interactive); background: #e6f6f9; color: var(--gmi-interactive); }
@@ -23,7 +23,6 @@
 .gmi-edit-unbound-findings ul { display: grid; gap: 4px; margin-top: 4px; }
 .gmi-edit-badge { margin-left: 4px; border: 1px solid var(--gmi-border-strong); color: var(--gmi-text-muted); }
 .gmi-edit-badge-warning { border-color: #e5c07b; color: #7a4f00; background: #fff8e6; }
-.gmi-edit-experimental-tag { margin-left: 4px; background: #ffffff26; border: 1px solid #ffffff59; color: inherit; }
 
 .gmi-edit-message { margin: 0; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--gmi-border); background: var(--gmi-surface-soft); color: var(--gmi-text); line-height: 1.4; }
 .gmi-edit-message p { margin: 0; }

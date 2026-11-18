@@ -80,7 +80,8 @@ const messages = {
   'shared-path-not-gml-compatible': 'Et delt bilde har ingen beholdt sti som passer GML-leveransen. Avklar bildelenken før samlet levering.',
   'retained-path-outside-attachments': 'En beholdt bildelenke ligger utenfor Attachments/. Filen legges ved på sin opprinnelige relative sti.',
   'photo-linked-elsewhere': 'Samme bilde er fortsatt lenket fra et annet objekt. Den lenken og den nødvendige originalfilen beholdes.',
-  'gemini-g4-unverified': 'Fjerning og omnummerering av bildelenker i revidert GMI er ikke akseptansetestet i Gemini VA. Kontroller leveransen før videre bruk.',
+  'gemini-g4-unverified': 'Fjerning av bildelenker med uendret nummerering er ikke akseptansetestet i Gemini VA. Kontroller leveransen før videre bruk.',
+  'gemini-va-tested-import': 'Revidert GMI med feltrettinger og bilder fordelt mellom GMI og GML ble importert i Gemini VA i et testet oppsett 16. november 2026. Kontroller resultatet etter import.',
   'download-failed': 'Nedlastingen kunne ikke startes. Ingen rettinger er merket som lastet ned. Prøv igjen.',
 };
 export function deliveryMessage(item) {
@@ -90,7 +91,7 @@ export function deliveryMessage(item) {
   return gmiEditMessage(code, 'Leveransen kunne ikke kontrolleres sikkert. Kontroller kildefilen, koblingene og fotoopplysningene, og prøv igjen.');
 }
 const informational = new Set(['experimental-mapping', 'compatibility-import', 'compatibility-z', 'compatibility-time', 'compatibility-metadata',
-  'associations-omitted', 'shared-attachments', 'path-convention', 'retained-path-outside-attachments']);
+  'associations-omitted', 'shared-attachments', 'path-convention', 'retained-path-outside-attachments', 'gemini-va-tested-import']);
 export function deliveryDiagnostics(plan) {
   const groups = { errors: [], warnings: [], info: [] };
   for (const item of plan.errors) groups.errors.push({ ...item, text: deliveryMessage(item) });

@@ -1,8 +1,9 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRules.mjs';
-import { exportFilenamePreview, EXPORT_FILENAME_ADVISORY_LENGTH } from '@/lib/photos/export/photoExportNaming.mjs';
+import { exportFilenamePreview, EXPORT_FILENAME_NOTICE_LENGTH, EXPORT_FILENAME_ADVISORY_LENGTH } from '@/lib/photos/export/photoExportNaming.mjs';
 import PhotoExportStatus, { PhotoExportDiagnostics, PhotoExportTone } from './PhotoExportStatus';
 import PhotoSourceOption, { photoSourceButton } from './PhotoSourceOption';
 
@@ -29,18 +30,31 @@ export function ExportFilenameEditor({ filename, onConfigChange }) {
   const id = useId();
   const { descriptive, timestamp, revision, showRevision, revisionChecked, extension, issueText, onUseSuggestion } = filename;
   const preview = exportFilenamePreview({ descriptive, timestamp, revision, extension });
-  const long = !preview.issue && preview.length > EXPORT_FILENAME_ADVISORY_LENGTH;
-  const message = preview.issue ? issueText : long ? `Filnavnet er over ${EXPORT_FILENAME_ADVISORY_LENGTH} tegn.` : '';
-  const describedBy = [preview.prefix && `${id}-prefix`, `${id}-suffix`, message && `${id}-message`].filter(Boolean).join(' ');
+  const threshold = preview.length > EXPORT_FILENAME_ADVISORY_LENGTH ? EXPORT_FILENAME_ADVISORY_LENGTH
+    : preview.length > EXPORT_FILENAME_NOTICE_LENGTH ? EXPORT_FILENAME_NOTICE_LENGTH : null;
+  const countTone = threshold === EXPORT_FILENAME_ADVISORY_LENGTH ? 'error' : threshold ? 'warning' : undefined;
+  const describedBy = [preview.prefix && `${id}-prefix`, `${id}-suffix`, `${id}-count`,
+    threshold && `${id}-advisory`, preview.issue && `${id}-message`].filter(Boolean).join(' ');
   return <div className="delivery-filename-field" data-export-filename-editor>
-    <label htmlFor={`${id}-input`} className="delivery-filename-label">Filnavn</label>
-    <div className="delivery-filename" data-validation-tone={preview.issue ? 'error' : long ? 'warning' : undefined}>
-      {preview.prefix && <span id={`${id}-prefix`} className="delivery-filename-affix" data-export-filename-prefix>{preview.prefix}</span>}
-      <input id={`${id}-input`} type="text" autoComplete="off" spellCheck={false} value={descriptive}
-        aria-describedby={describedBy} aria-invalid={preview.issue ? 'true' : undefined}
-        onChange={(event) => onConfigChange({ label: event.target.value })} />
-      <span id={`${id}-suffix`} className="delivery-filename-affix" data-export-filename-suffix>{preview.suffix}</span>
-    </div>
+    <label htmlFor={`${id}-input`} className="delivery-filename-control">
+      <span className="delivery-filename-heading">
+        <span id={`${id}-label`} className="delivery-filename-label">Filnavn</span>
+        <span id={`${id}-count`} className="delivery-filename-count" data-export-filename-count data-validation-tone={countTone}>
+          {threshold && <WarningIcon size={12} weight="regular" aria-hidden="true" />}{preview.length} tegn
+        </span>
+        {threshold && <span id={`${id}-advisory`} className="sr-only">Filnavnet er over {threshold} tegn.</span>}
+      </span>
+      <span className="delivery-filename" data-validation-tone={preview.issue ? 'error' : undefined}>
+        {preview.prefix && <span id={`${id}-prefix`} className="delivery-filename-affix" data-export-filename-prefix>{preview.prefix}</span>}
+        <span className="delivery-filename-description">
+          <span aria-hidden="true">{descriptive}</span>
+          <input id={`${id}-input`} type="text" autoComplete="off" spellCheck={false} value={descriptive}
+            aria-labelledby={`${id}-label`} aria-describedby={describedBy} aria-invalid={preview.issue ? 'true' : undefined}
+            onChange={(event) => onConfigChange({ label: event.target.value })} />
+        </span>
+        <span id={`${id}-suffix`} className="delivery-filename-affix" data-export-filename-suffix>{preview.suffix}</span>
+      </span>
+    </label>
     <div className="delivery-filename-options">
       <label><input type="checkbox" className="accent-gmi-interactive" checked={timestamp}
         onChange={(event) => onConfigChange({ filenameTimestamp: event.target.checked })} />Tidsstempel</label>
@@ -48,7 +62,7 @@ export function ExportFilenameEditor({ filename, onConfigChange }) {
         onChange={(event) => onConfigChange({ filenameRevision: event.target.checked })} />Revisjonsnummer</label>}
       {onUseSuggestion && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive px-2 py-1" onClick={onUseSuggestion}>Bruk forslag</button>}
     </div>
-    {message && <p id={`${id}-message`} className="delivery-filename-message" data-export-filename-message={preview.issue ?? 'long'}>{message}</p>}
+    {preview.issue && <p id={`${id}-message`} className="delivery-filename-message" data-export-filename-message={preview.issue}>{issueText}</p>}
   </div>;
 }
 

@@ -201,7 +201,7 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
           assert.equal(await browser.evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
           assert.equal(await browser.evaluate(`(() => { const pane = document.querySelector('.gmi-edit-inspector'); return pane.scrollWidth <= pane.clientWidth + 2; })()`), true);
           assert.equal(await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').disabled`), false);
-          assert.match(await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').innerText`), /Eksperimentell/);
+          assert.equal(await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').innerText.trim()`), 'Last ned revidert GMI');
           if (process.env.GMI_EDIT_SCREENSHOT_DIR) {
             const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
             await writeFile(path.join(process.env.GMI_EDIT_SCREENSHOT_DIR, `m5a-${width}.png`), Buffer.from(data, 'base64'));

@@ -52,6 +52,14 @@ test('all four mode reviews describe the actual M9 artifact, correction choice a
   } finally { f.session.clear(); }
 });
 
+test('Gemini VA import evidence is informational and preserve remains unverified', () => {
+  const groups = deliveryDiagnostics({ errors: [], warnings: [{ code: 'gemini-va-tested-import' }, { code: 'gemini-g4-unverified' }] });
+  assert.deepEqual(groups.info.map((item) => item.code), ['gemini-va-tested-import']);
+  assert.match(groups.info[0].text, /testet oppsett 16\. november 2026/);
+  assert.deepEqual(groups.warnings.map((item) => item.code), ['gemini-g4-unverified']);
+  assert.match(groups.warnings[0].text, /uendret nummerering er ikke akseptansetestet/);
+});
+
 test('step transitions cannot bypass M9 blockers or retain a review after returning to content', async () => {
   const f = await deliveryFixture();
   try {

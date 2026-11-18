@@ -393,7 +393,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       </div>
       <button type="button" className="gmi-primary-control gmi-focus-ring gmi-edit-download" disabled={!editable} onClick={() => guard(() => setExportOpen(true), 'eksporten')}
         title={editable ? undefined : 'Filen kan ikke lastes ned som revidert GMI fordi den ikke kan rettes sikkert.'}>
-        <DownloadSimpleIcon size={16} aria-hidden="true" /> Last ned revidert GMI <span className="gmi-edit-experimental-tag">Eksperimentell</span>
+        <DownloadSimpleIcon size={16} aria-hidden="true" /> Last ned revidert GMI
       </button>
     </footer>
     {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector key={`batch:${formRevision}`} view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}

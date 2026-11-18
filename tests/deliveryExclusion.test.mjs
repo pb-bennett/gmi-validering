@@ -4,7 +4,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { deliveryFixture, DATE } from './helpers/deliveryFixtures.mjs';
 import { syntheticContext } from './helpers/photoExportFixtures.mjs';
 import { buildDeliveryPlan, buildDeliveryPackage, getDeliveryGmiBytes, getDeliveryGml } from '../src/lib/delivery/index.mjs';
-import { deliveryReport, deliverySummary, deliveryExclusionNote } from '../src/lib/delivery/deliveryWizard.mjs';
+import { deliveryDiagnostics, deliveryReport, deliverySummary, deliveryExclusionNote } from '../src/lib/delivery/deliveryWizard.mjs';
 import { deliveryInventory, deliveryAttachmentDestinations } from '../src/lib/delivery/deliveryInventory.mjs';
 
 const ready = (plan) => assert.equal(plan.status, 'ready', JSON.stringify(plan.errors));
@@ -29,9 +29,12 @@ test('single exclusion clears only the cell, omits photo/GML, composes with fiel
     assert.equal(p.counts.excludedReferences, 1); assert.equal(p.counts.excludedEntirelyAssets, 1);
     assert.equal(p.counts.gmiPlacements, 0); assert.equal(p.counts.gmlPlacements, 0);
     assert.equal(p.counts.includedAssets, 0); assert.equal(p.counts.retainedReferences, 0);
-    assert(p.warnings.some((item) => item.code === 'gemini-g4-unverified'));
+    const diagnostics = deliveryDiagnostics(p);
+    assert(diagnostics.info.some((item) => item.code === 'gemini-va-tested-import'));
+    assert(!diagnostics.warnings.some((item) => item.code === 'gemini-g4-unverified'));
     assert.deepEqual(Object.keys(await zip(p)), [p.naming.gmiFilename]);
     const report = deliveryReport({ plan: p });
+    assert.match(report, /importert i Gemini VA i et testet oppsett 16\. november 2026/);
     assert.match(report, /Ikke med i leveransen:/); assert.match(report, /Punkt 101/);
     assert.match(report, /bildelenke fjernet \(1\).*bildefilen er ikke med/);
     assert(!report.includes('Punkt 1 (GUID'), 'report uses actual object number');

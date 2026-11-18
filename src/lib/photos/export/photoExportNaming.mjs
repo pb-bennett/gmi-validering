@@ -9,7 +9,8 @@
 // Only these names come from here. Attachment names and paths belong to attachmentNames.mjs, and nothing in the XML
 // refers to the GML's own filename.
 
-/** Above this many characters in the primary artifact's filename, the editor shows an advisory warning. */
+/** Advisory thresholds for the primary artifact's filename. */
+export const EXPORT_FILENAME_NOTICE_LENGTH = 60;
 export const EXPORT_FILENAME_ADVISORY_LENGTH = 80;
 /** Conservative per-name limit shared by NTFS, APFS and ext4 (UTF-8 bytes). Exceeding it blocks the export. */
 export const EXPORT_FILENAME_MAX_BYTES = 255;
