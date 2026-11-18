@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { evidenceSession, tick } from './helpers/photoEvidenceFixtures.mjs';
 import { completionGml, jpeg } from './helpers/photoCompletionFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
+import { contractorFilenameTimes } from './helpers/photoContractorFilenameFixtures.mjs';
 import { formatPhotoCaptureTime, photoMetadataSourceLabel, photoSourceLabel } from '../src/lib/photos/photoPresentation.mjs';
 
 const exifTime = { captureTime: '2026:10:16 09:00:00' };
@@ -26,6 +27,29 @@ const commit = (session, captureSuggestions, placement = { kind: 'none' }, loade
   const preview = session.previewImport({ placement, loadedReview });
   return { preview, result: session.completeImport({ placement, preview, loadedReview, captureSuggestions, gmlCaptureTime }) };
 };
+
+test('approving contractor filename times commits the same Filnavn minutes individually and in a batch', async () => {
+  const batches = [contractorFilenameTimes, ...contractorFilenameTimes.map((entry) => [entry])];
+  for (const batch of batches) {
+    const session = await draft(batch.map(([name]) => jpeg(name)), { today: () => '2026-11-18' });
+    try {
+      const { preview, result } = commit(session, { complete: true });
+      assert(result.ok);
+      assert.equal(preview.captureSuggestions.complete.length, batch.length);
+      assert.deepEqual(preview.captureSuggestions.dateOnly, []);
+      const photos = byName(session, result.layer.id);
+      assert.equal(Object.keys(photos).length, batch.length);
+      for (const [name, iso] of batch) {
+        const accepted = photos[name].captureMetadata.captureTime;
+        assert.deepEqual(accepted.value, { iso, precision: 'minute', timezoneKnown: false, offset: null }, name);
+        assert.equal(accepted.provenance.pattern, 'ymd-hm-compact-seq');
+        assert.equal(photoMetadataSourceLabel('captureTime', accepted.provenance), 'Filnavn');
+      }
+    } finally {
+      session.clear();
+    }
+  }
+});
 
 test('preview offers filename suggestions only where EXIF has no time, split by precision', async () => {
   const session = await draft();

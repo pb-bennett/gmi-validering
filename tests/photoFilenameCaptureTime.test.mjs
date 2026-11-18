@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FILENAME_CAPTURE_PATTERNS, filenameCaptureTimeWrite, parseFilenameCaptureTime, planFilenameCaptureSuggestions, selectedFilenameCaptureWrites } from '../src/lib/photos/photoFilenameCaptureTime.mjs';
+import { contractorFilenameTimes } from './helpers/photoContractorFilenameFixtures.mjs';
 
 const today = '2026-11-17';
 const parse = (name) => parseFilenameCaptureTime(name, { today });
@@ -27,6 +28,21 @@ test('date-only and minute values never gain midnight, seconds or a zone', () =>
   assert.equal(parse('14.10.2026_1433.jpg').value.iso, '2026-10-14T14:33');
   assert.equal(parse('20261014T143302.jpg').value.iso, '2026-10-14T14:33:02');
   assert.equal(parse('20261014_143302_1.jpg').token, '20261014_143302');
+});
+
+test('only a single two-digit sequence suffix after a compact minute changes the pattern', () => {
+  const sequence = parse('IMG_20261014_1433-01.jpg');
+  assert.equal(sequence.pattern, 'ymd-hm-compact-seq');
+  assert.equal(sequence.token, '20261014_1433');
+  assert.equal(sequence.template, 'IMG_20261014_####-01.jpg');
+  for (const name of ['20261014_1433_011.jpg', '20261014_1433_01_02.jpg']) {
+    assert.equal(parse(name).pattern, 'ymd-hm-compact', name);
+    assert.equal(parse(name).value.iso, '2026-10-14T14:33', name);
+  }
+  assert.equal(parse('14.10.2026_1433_01.jpg').pattern, 'dmy-hm');
+  assert.equal(parse('20261014_143302_01.jpg').pattern, 'ymd-hms-compact');
+  assert.equal(parse('20261014_14-33_01.jpg').pattern, 'ymd-compact');
+  assert.equal(parse('20261014_2026_01_02.jpg'), null, 'an overlapping supported year still triggers the conflict check');
 });
 
 test('boundaries: digit runs, non-adjacent times and conflicting dates give nothing extra', () => {
@@ -66,6 +82,23 @@ test('ambiguous and non-capture names are rejected', () => {
 const asset = (id, originalFilename, extra = {}) => ({ id, originalFilename, captureMetadata: { captureTime: null, photographer: null },
   metadataEvidence: [], spatial: { exifRead: { state: 'ready' } }, ...extra });
 
+test('contractor filename suggestions preserve the same minute alone and in a batch', () => {
+  const photos = contractorFilenameTimes.map(([name]) => asset(name, name));
+  const batch = planFilenameCaptureSuggestions(photos, { today });
+  assert.equal(batch.complete.length, 12);
+  assert.deepEqual(batch.dateOnly, []);
+  for (const [index, [filename, iso]] of contractorFilenameTimes.entries()) {
+    const single = planFilenameCaptureSuggestions([photos[index]], { today });
+    assert.deepEqual(single.dateOnly, []);
+    assert.deepEqual(single.complete, [batch.complete[index]]);
+    const token = filename.split('_').slice(1, 3).join('_');
+    assert.deepEqual(batch.complete[index], {
+      assetId: filename, filename, pattern: 'ymd-hm-compact-seq', token,
+      value: { iso, precision: 'minute', timezoneKnown: false, offset: null },
+    });
+  }
+});
+
 test('planner offers only photos without usable EXIF, draft GML, accepted or removed time', () => {
   const exif = (value) => [{ id: 'exif:captureTime', field: 'captureTime', kind: 'exif', value }];
   const plan = planFilenameCaptureSuggestions([
@@ -100,6 +133,31 @@ test('sequence-counter guard downgrades consecutive HHmm suffixes to the date', 
   assert.deepEqual(plan.complete.map((item) => item.value.iso), ['2026-10-15T00:01', '2026-10-15T00:02']);
   const seconds = planFilenameCaptureSuggestions(['20261014_000001.jpg', '20261014_000002.jpg', '20261014_000003.jpg'].map((name, index) => asset(String(index), name)), { today });
   assert.equal(seconds.complete.length, 3);
+});
+
+test('counter downgrade follows the entire qualifying run and only its matching templates', () => {
+  for (const suffix of ['', '_01']) {
+    const clocks = suffix ? ['0001', '0002', '0003'] : ['0010', '0011', '0012', '0013'];
+    const counters = clocks.map((clock, index) => `${index === 3 ? 'C' : 'A'}_20261014_${clock}${suffix}.jpg`);
+    counters.push(`A_20261014_1433${suffix}.jpg`);
+    const unrelated = [`B_20261014_1433${suffix}.jpg`, 'A_20261015_0010.jpg', 'A_20261015_0011.jpg'];
+    const plan = planFilenameCaptureSuggestions([...counters, ...unrelated].map((name, index) => asset(String(index), name)), { today });
+    assert.deepEqual(plan.dateOnly.map((item) => item.filename), counters);
+    assert.deepEqual(plan.complete.map((item) => item.filename), unrelated);
+    assert.equal(plan.complete[0].value.iso, '2026-10-14T14:33');
+    assert.deepEqual(plan.dateOnly[0], {
+      assetId: '0', filename: counters[0], pattern: 'ymd-compact', token: '20261014', downgraded: 'sequence-counter',
+      value: { iso: '2026-10-14', precision: 'date', timezoneKnown: false, offset: null },
+    });
+  }
+});
+
+test('counter detection requires three distinct values starting at 0010 or earlier', () => {
+  const names = ['A_20261014_0001.jpg', 'B_20261014_0001.jpg', 'A_20261014_0002.jpg',
+    'A_20261014_0011.jpg', 'A_20261014_0012.jpg', 'A_20261014_0013.jpg'];
+  const plan = planFilenameCaptureSuggestions(names.map((name, index) => asset(String(index), name)), { today });
+  assert.deepEqual(plan.dateOnly, []);
+  assert.deepEqual(plan.complete.map((item) => item.filename), names);
 });
 
 test('writes are filename provenance without acceptance, and the choices are independent', () => {

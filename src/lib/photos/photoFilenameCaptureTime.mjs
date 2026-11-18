@@ -26,6 +26,7 @@ export const FILENAME_CAPTURE_PATTERNS = Object.freeze([
   { id: 'ymd-hms-separated', examples: ['2026-10-14_14-33-02', '2026-10-14 14.33.02', 'WP_20261014_14_33_02_Pro'], precision: 'second' },
   { id: 'dmy-hms', examples: ['14.10.2026_143302', '14.10.2026 14.33.02'], precision: 'second' },
   { id: 'ymd-hm-compact', examples: ['20261014_1433'], precision: 'minute' },
+  { id: 'ymd-hm-compact-seq', examples: ['20261014_1433_01', '0710261.1_20261014_1433_01'], precision: 'minute' },
   { id: 'ymd-hm-separated', examples: ['2026-10-14_14-33'], precision: 'minute' },
   { id: 'dmy-hm', examples: ['14.10.2026_1433'], precision: 'minute' },
   { id: 'ymd-compact', examples: ['20261014', 'KUM12_20261014'], precision: 'date' },
@@ -74,7 +75,10 @@ function followingTime(stem, token) {
     const match = rest.match(re);
     if (!match) continue;
     const clock = match.slice(1).filter((part) => /^\d+$/.test(part)).map(Number);
-    return { clock, precision, compact: Boolean(compact), end: token.end + match[0].length };
+    const sequenceSuffix = precision === 'minute' && compact
+      ? rest.slice(match[0].length).match(/^[_-](\d{2})(?!\d|[_-]\d)/)?.[1]
+      : undefined;
+    return { clock, precision, compact: Boolean(compact), end: token.end + match[0].length, sequenceSuffix };
   }
   return null;
 }
@@ -84,6 +88,7 @@ function patternId(token, time) {
   const order = token.form.startsWith('dmy') ? 'dmy' : 'ymd';
   if (!time) return token.form;
   if (order === 'dmy') return time.precision === 'second' ? 'dmy-hms' : 'dmy-hm';
+  if (time.sequenceSuffix) return 'ymd-hm-compact-seq';
   return `ymd-${time.precision === 'second' ? 'hms' : 'hm'}-${time.compact ? 'compact' : 'separated'}`;
 }
 
@@ -94,7 +99,14 @@ export function parseFilenameCaptureTime(filename, { today } = {}) {
   const stem = base.replace(/\.[^.]*$/, '');
   const tokens = dateTokens(stem);
   if (!tokens.length) return null;
-  const readings = tokens.map((token) => ({ token, time: followingTime(stem, token) }));
+  const readings = [];
+  for (const token of tokens) {
+    // A compact minute with two numeric suffixes can also look like YYYY_MM_DD.
+    // Keep checking for conflicts when the overlapping token has a supported year.
+    const overlapsMinute = token.separated && (token.year < 2000 || token.year > 2099)
+      && readings.some(({ time }) => time?.compact && time.precision === 'minute' && time.end === token.start + 4);
+    if (!overlapsMinute) readings.push({ token, time: followingTime(stem, token) });
+  }
   for (const { token, time } of readings) {
     if (!validDate(token.year, token.month, token.day)) return null;
     if (time && (time.clock[0] > 23 || time.clock[1] > 59 || (time.clock[2] ?? 0) > 59)) return null;
@@ -109,23 +121,35 @@ export function parseFilenameCaptureTime(filename, { today } = {}) {
   const chosen = timed[0] || readings[0];
   const value = normalizeCaptureTime(chosen.time ? `${date}T${chosen.time.clock.map(pad).join(':')}` : date);
   if (!value) return null;
+  const compactMinute = chosen.time?.precision === 'minute' && chosen.time.compact ? chosen.time.clock.map(pad).join('') : null;
   return Object.freeze({ value, precision: value.precision, pattern: patternId(chosen.token, chosen.time),
     token: stem.slice(chosen.token.start, chosen.time ? chosen.time.end : chosen.token.end), raw: base,
-    compactMinute: chosen.time?.precision === 'minute' && chosen.time.compact ? chosen.time.clock.map(pad).join('') : null });
+    compactMinute, ...(compactMinute ? { template: `${base.slice(0, chosen.time.end - 4)}####${base.slice(chosen.time.end)}` } : {}) });
 }
 
-// `20261014_0001` is a valid 00:01 but usually a sequence counter. When at least three compact HHmm names with
-// the same date form a consecutive integer run, every compact HHmm reading of that date falls back to the date.
-function sequenceCounterDates(parsed) {
+// Low consecutive compact HHmm values can be counters. Fall back to the date for the run and matching templates.
+function sequenceCounterIds(parsed) {
   const byDate = Map.groupBy(parsed.filter((item) => item.compactMinute), (item) => item.value.iso.slice(0, 10));
-  const dates = new Set();
-  for (const [date, items] of byDate) {
-    const numbers = [...new Set(items.map((item) => Number(item.compactMinute)))].sort((a, b) => a - b);
-    let run = 1;
-    for (let index = 1; index < numbers.length && run < 3; index++) run = numbers[index] === numbers[index - 1] + 1 ? run + 1 : 1;
-    if (run >= 3) dates.add(date);
+  const ids = new Set();
+  for (const items of byDate.values()) {
+    const byClock = Map.groupBy(items, (item) => Number(item.compactMinute));
+    const numbers = [...byClock.keys()].sort((a, b) => a - b);
+    const templates = new Set();
+    for (let start = 0; start < numbers.length && numbers[start] <= 10;) {
+      let end = start + 1;
+      while (end < numbers.length && numbers[end] === numbers[end - 1] + 1) end++;
+      if (end - start >= 3) {
+        for (const number of numbers.slice(start, end)) {
+          for (const item of byClock.get(number)) templates.add(item.template);
+        }
+      }
+      start = end;
+    }
+    for (const item of items) {
+      if (templates.has(item.template)) ids.add(item.assetId);
+    }
   }
-  return dates;
+  return ids;
 }
 
 const hasUsableCaptureEvidence = (evidence = []) => evidence.some((item) => item.field === 'captureTime' && item.value);
@@ -147,10 +171,10 @@ export function planFilenameCaptureSuggestions(photos, { draftGmlEvidenceByAsset
     const result = parseFilenameCaptureTime(photo.originalFilename, { today });
     if (result) parsed.push({ ...result, assetId, filename: photo.originalFilename });
   }
-  const counters = sequenceCounterDates(parsed);
+  const counters = sequenceCounterIds(parsed);
   const complete = [], dateOnly = [];
   for (const item of parsed) {
-    const downgrade = item.compactMinute && counters.has(item.value.iso.slice(0, 10));
+    const downgrade = counters.has(item.assetId);
     const value = downgrade ? normalizeCaptureTime(item.value.iso.slice(0, 10)) : item.value;
     const pattern = downgrade ? (item.pattern === 'dmy-hm' ? 'dmy-dotted' : 'ymd-compact') : item.pattern;
     const token = downgrade ? item.token.slice(0, item.token.length - 5) : item.token;
