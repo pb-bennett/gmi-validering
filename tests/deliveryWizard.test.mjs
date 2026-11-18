@@ -8,7 +8,24 @@ import { createGmiObjectCorrection } from '../src/lib/gmi-edit/index.mjs';
 import { GMIParser } from '../src/lib/parsing/gmiParser.js';
 import { decodeGmiBytes } from '../src/lib/parsing/gmiDecoding.js';
 import { DELIVERY_WIZARD_START, deliveryWizardReducer as reduce, deliveryWizardStatus, deliverySummary,
-  deliveryContents, deliveryReport, deliveryReportChanges, deliveryReviewSummary, deliveryPackageFacts, deliveryReviewStatus, deliveryMessage, deliveryDiagnostics, initiateDeliveryDownload } from '../src/lib/delivery/deliveryWizard.mjs';
+  deliveryContents, deliveryReport, deliveryReportChanges, deliveryReviewSummary, deliveryPackageFacts, deliveryReviewStatus, deliveryMessage, deliveryDiagnostics, deliverySurveySelection, initiateDeliveryDownload } from '../src/lib/delivery/deliveryWizard.mjs';
+
+test('export selects a unique verified association, falls back to live stored ids and respects explicit choices', () => {
+  const bindings = new Map([['a', 'input-a'], ['b', 'input-b']]);
+  const source = (layerId, live = true, inputId = bindings.get(layerId)) => ({ kind: 'gmi', loadedBinding: { layerId, inputId, live } });
+  const select = (sources, stored = '', explicit = null) => deliverySurveySelection({ sources, stored, explicit,
+    isAvailable: (id) => bindings.has(id), isSelectable: (id) => bindings.has(id),
+    isLive: ({ layerId, inputId }) => bindings.get(layerId) === inputId });
+  assert.equal(select([source('a')], 'b'), 'a');
+  assert.equal(select([source('b')], 'removed'), 'b');
+  assert.equal(select([source('a'), source('b')], 'b'), 'b');
+  assert.equal(select([source('a'), source('b')]), '');
+  assert.equal(select([source('a', false), source('a', true, 'old-input')], 'removed'), '');
+  assert.equal(select([{ kind: 'gmi', filename: 'a', fingerprint: 'some-fingerprint' }]), '');
+  assert.equal(select([source('a')], 'a', 'b'), 'b');
+  assert.equal(select([source('a')], 'a', 'removed'), 'a');
+  assert.equal(select([source('a')], 'a', ''), '');
+});
 
 test('all four mode reviews describe the actual M9 artifact, correction choice and original-source safety', async () => {
   const f = await deliveryFixture();

@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os';
 import { unzipSync, strFromU8 } from 'fflate';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { buildGmiText, latin1Bytes } from './helpers/gmiHyperlinkRemovalFixtures.mjs';
-import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
-import { setPhotoFiles, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
-import { waitForThumbnails } from './helpers/photoImportWizard.mjs';
+import { gpsJpeg, gpsPng } from './helpers/photoGpsFixtures.mjs';
+import { setPhotoFiles, clickSourceControl, openPhotoSources, savePhotoSource, closePhotoSources, sourceWizard } from './helpers/photoSourceWorkflow.mjs';
+import { chooseImportPlacement, clickImport, createLayerWithPlacement, importDialog, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { clickGmiTableObject } from './helpers/gmiTableNavigation.mjs';
 import { enterEditMode, editTarget, pressKey, KEYS } from './helpers/photoWorkspace.mjs';
 import { assertGeminiConventions } from './helpers/geminiPhotoConventions.mjs';
@@ -257,6 +257,92 @@ async function downloaded(browser, directory, label) {
   }
   throw new Error('Download did not arrive');
 }
+
+test('FOTO-first combined export uses automatic and manual verified bindings and follows the selected photo layer',
+  { skip: !chromePath || !app, timeout: 240000 }, async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'gmi-rebinding-ui-'));
+    const browser = await openTestChrome();
+    const photograph = gpsPng();
+    const imageFile = path.join(directory, 'shared.png');
+    const hyperlink = 'h:1(link:"Attachments\\shared.png") ';
+    const makeGmi = (merknad) => latin1Bytes(buildGmiText({ points: [{ hyperlink, merknad }, { hyperlink }] }));
+    const automatic = makeGmi('Automatic association'), manual = makeGmi('Manual association');
+    const autoFile = path.join(directory, 'Automatic S2.gmi'), manualFile = path.join(directory, 'Manual S2.gmi');
+    const surveySelect = `${dialog}.querySelector('[aria-label="GMI-kartlag"]')`;
+    const photoSelect = `${dialog}.querySelector('[aria-label="Fotolag"]')`;
+    const selectedSurvey = () => browser.evaluate(`${surveySelect}.selectedOptions[0].textContent`);
+    const content = async () => {
+      await click(browser, 'Eksporter…', 'document'); await browser.waitFor(dialog); await choose(browser, 'combined');
+    };
+    const readyToReview = () => browser.waitFor(`${dialog}.querySelector('footer .gmi-primary-control')?.disabled === false`);
+    const addIndependent = async (filename) => {
+      await click(browser, 'Bilder', 'document'); await browser.waitFor(importDialog);
+      await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', [imageFile]);
+      await waitForThumbnails(browser); await chooseImportPlacement(browser, 'gmi');
+      await setPhotoFiles(browser, 'input[aria-label="Velg GMI-fil"]', [filename]);
+      await browser.waitFor(`${importDialog}.innerText.includes(${JSON.stringify(path.basename(filename))})`);
+      await createLayerWithPlacement(browser, 'gmi');
+      await browser.waitFor('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length === 2');
+    };
+    const loadVector = async (filename, count) => {
+      await click(browser, 'Legg til fil', 'document');
+      await browser.waitFor('document.querySelector("input[type=file]")');
+      await setPhotoFiles(browser, 'input[type=file]', [filename]);
+      await browser.waitFor(`document.querySelectorAll('[data-gmi-edit-action]').length === ${count}`);
+    };
+    try {
+      await writeFile(autoFile, automatic); await writeFile(manualFile, manual); await writeFile(imageFile, photograph);
+      await browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: directory });
+      await browser.send('Page.navigate', { url: `${app}?testmodus=1` });
+      await browser.waitFor('document.querySelector("button[aria-label=Lukk]")');
+      await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
+      await addIndependent(autoFile);
+      await click(browser, 'Lukk FOTO', 'document');
+      const photoA = await browser.evaluate('document.querySelector("[data-photo-layer-open]").dataset.photoLayerOpen');
+      await loadVector(autoFile, 1);
+      await browser.evaluate(`document.querySelector('[data-photo-layer-open="${photoA}"]').click()`);
+      await content();
+      await browser.waitFor(`${surveySelect}.selectedOptions[0].textContent === 'Automatic S2.gmi'`);
+      const surveyA = await browser.evaluate(`${surveySelect}.value`);
+      await readyToReview();
+      await pack(browser);
+      const archive = unzipSync((await downloaded(browser, directory, 'Last ned ZIP')).bytes);
+      assert.deepEqual(archive[Object.keys(archive).find((name) => name.endsWith('.gmi'))], automatic);
+      assert.deepEqual(Buffer.from(archive['Attachments/shared.png']), photograph);
+      await click(browser, 'Lukk eksport');
+      await click(browser, 'Lukk FOTO', 'document');
+
+      await loadVector(manualFile, 2);
+      await addIndependent(manualFile);
+      await openPhotoSources(browser);
+      await browser.evaluate(`${sourceWizard}.querySelector('input[name=photo-external-source][value=gmi]').click()`);
+      await click(browser, 'Bruk Manual S2.gmi', sourceWizard);
+      await browser.waitFor(`${sourceWizard}.innerText.includes('Kilden kobles til GMI-laget «Manual S2.gmi».')`);
+      await savePhotoSource(browser, 'gmi');
+      await closePhotoSources(browser);
+      await content();
+      assert.equal(await selectedSurvey(), 'Manual S2.gmi');
+      const photoB = await browser.evaluate(`${photoSelect}.value`);
+      await setValue(browser, photoSelect, photoA);
+      assert.equal(await selectedSurvey(), 'Automatic S2.gmi');
+      await setValue(browser, photoSelect, photoB);
+      assert.equal(await selectedSurvey(), 'Manual S2.gmi');
+      await setValue(browser, surveySelect, surveyA);
+      await setValue(browser, photoSelect, photoA);
+      await setValue(browser, photoSelect, photoB);
+      assert.equal(await selectedSurvey(), 'Automatic S2.gmi');
+      await click(browser, 'Lukk eksport');
+      await content();
+      assert.equal(await selectedSurvey(), 'Manual S2.gmi');
+      await readyToReview();
+      await pack(browser);
+    } finally {
+      await browser.close();
+      const resolved = path.resolve(directory);
+      if (path.dirname(resolved) !== path.resolve(tmpdir()) || !path.basename(resolved).startsWith('gmi-rebinding-ui-')) throw new Error('Unsafe temporary directory');
+      await rm(resolved, { recursive: true, force: true });
+    }
+  });
 
 test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared intent, safety, downloads, keyboard and laptop layouts',
   { skip: !chromePath || !app, timeout: 300000 }, async (t) => {

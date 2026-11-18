@@ -13,6 +13,17 @@ export const DELIVERY_CHOICES = Object.freeze([
 export const DELIVERY_STEPS = Object.freeze([{ key: 'content', label: 'Innhold' }, { key: 'review', label: 'Kontroll' }, { key: 'package', label: 'Pakke / Last ned' }]);
 export const DELIVERY_WIZARD_START = Object.freeze({ step: 'content', run: 0, phase: 'idle', review: null, error: null, recorded: true });
 
+export function deliverySurveySelection({ sources, explicit, stored, isSelectable, isAvailable, isLive }) {
+  if (explicit === '' || (explicit && isSelectable(explicit))) return explicit;
+  const ids = new Set();
+  for (const source of sources || []) {
+    const binding = source.loadedBinding;
+    if (source.kind === 'gmi' && binding?.live === true && isLive(binding)) ids.add(binding.layerId);
+  }
+  if (ids.size === 1) return ids.values().next().value;
+  return stored && isAvailable(stored) ? stored : '';
+}
+
 export function deliveryWizardReducer(state, action) {
   if (action.type === 'build') return action.run > state.run && state.phase !== 'packaging'
     ? { ...DELIVERY_WIZARD_START, step: 'review', phase: 'building', run: action.run } : state;

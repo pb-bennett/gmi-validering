@@ -32,6 +32,26 @@ export async function parseGmiPhotoSource(file) {
   return createGmiPhotoSource(parser, fingerprint);
 }
 
+function sameEvidence(left, right) {
+  if (Object.is(left, right)) return true;
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object'
+    || Array.isArray(left) !== Array.isArray(right)) return false;
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length
+    && keys.every((key) => Object.hasOwn(right, key) && sameEvidence(left[key], right[key]));
+}
+
+export function equivalentGmiPhotoEvidence(attached, loaded) {
+  if (!attached.objectsByKey || !loaded.objectsByKey || !Array.isArray(attached.references) || !Array.isArray(loaded.references)) return false;
+  // Reference ids are source-scoped. The remaining fields carry the raw reference and its source ordinals.
+  const references = (source) => source.references.map(({ id: _id, ...reference }) => reference);
+  return sameEvidence(attached.objectsByKey, loaded.objectsByKey)
+    && sameEvidence(attached.crsContext, loaded.crsContext)
+    && sameEvidence(attached.header, loaded.header)
+    && sameEvidence(attached.issues, loaded.issues)
+    && sameEvidence(references(attached), references(loaded));
+}
+
 // Shared evidence factory: the survey uploader already has this exact parser.
 // Capture before operational/user-assumed CRS changes; never use display geometry.
 export function createGmiPhotoSource(parser, fingerprint = null) {

@@ -13,7 +13,7 @@ import { estimatedCaptureTime } from './photoEstimatedDates.mjs';
 import { localCalendarDate, planFilenameCaptureSuggestions, selectedFilenameCaptureWrites } from './photoFilenameCaptureTime.mjs';
 import { gmlCaptureDecisionWrites, gmlCapturePlanSignature, planGmlCaptureTimeReconciliation, selectedGmlCaptureRows } from './photoGmlCaptureReconciliation.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
-import { gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
+import { equivalentGmiPhotoEvidence, gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
 import { PHOTO_DELIVERY_INTENTS, buildPhotoDeliverySnapshot, photoDeliveryEntry, photoLayerDelivery } from './photoDeliveryIntent.mjs';
 import { photoGmlPositionSetsDelivery, photoMoveProposesTransfer, planPhotoExclusion } from './photoDeliveryChoice.mjs';
@@ -162,6 +162,28 @@ export function createPhotoSession({
       ...(binding ? { loadedBinding: { ...binding, live: true } } : {}) });
   }
 
+  function verifiedGmiBinding(attached, loaded, binding, isLive) {
+    if (!binding?.layerId || !binding.inputId || !binding.datasetRevision || !isLive(binding))
+      return { error: 'loaded-source-unavailable' };
+    const current = attached.loadedBinding;
+    const live = current && isLive(current);
+    if (live && (current.layerId !== binding.layerId || current.inputId !== binding.inputId))
+      return { error: 'source-bound-elsewhere' };
+    const fingerprint = attached.fingerprint;
+    if (fingerprint !== loaded.fingerprint || !/^(sha256:|exact-bytes:)/.test(fingerprint) || !equivalentGmiPhotoEvidence(attached, loaded))
+      return { error: 'source-evidence-mismatch' };
+    return { source: live && current.live ? attached : Object.freeze({ ...attached,
+      loadedBinding: Object.freeze({ ...binding, live: true }) }) };
+  }
+
+  const matchingGmiSources = (layer, fingerprint) => layer?.spatialSources.filter((source) =>
+    source.kind === 'gmi' && source.fingerprint === fingerprint) || [];
+
+  function replaceBoundGmiSource(layer, source) {
+    layers.set(layer.id, Object.freeze({ ...layer,
+      spatialSources: Object.freeze(layer.spatialSources.map((item) => item.id === source.id ? source : item)) }));
+  }
+
   function attachSource(source, photoIds) {
     const ledger = matchPhotoReferences(source.entries, assetPhotos(photoIds));
     for (const match of ledger.matches) {
@@ -272,9 +294,9 @@ export function createPhotoSession({
         const memberIds = layers.get(id).photoIds;
         if (review.source.kind === 'gmi') {
           const cached = gmiReviews.get(review.source);
-          const associationLedger = cached?.memberIds === memberIds ? cached.associationLedger
+          const associationLedger = review.rebinding ? review.source.associationLedger : cached?.memberIds === memberIds ? cached.associationLedger
             : reviewGmiPhotoSource(review.source, assetPhotos(memberIds));
-          gmiReviews.set(review.source, { memberIds, associationLedger });
+          if (!review.rebinding) gmiReviews.set(review.source, { memberIds, associationLedger });
           sourceReviews.set(id, Object.freeze({ ...review, memberIds, associationLedger }));
         } else sourceReviews.set(id, Object.freeze({ ...review,
           ...reviewPhotoSource(review.source, assetPhotos(memberIds).map((asset) => ({ ...asset,
@@ -536,7 +558,7 @@ export function createPhotoSession({
     },
     clearDraftGmiSource() { loadedImport = null; publish(); },
     clearDraftPositioningGml() { gmlRequest++; positioning = EMPTY_PHOTO_SNAPSHOT.positioning; publish(); },
-    async setDraftGmiSource({ binding = null, read, isLive = () => true, file }) {
+    async setDraftGmiSource({ binding = null, read, isLive = () => !binding, file }) {
       if (!isLive(binding)) return false;
       if (file) read = () => makeSource(file, 'gmi');
       const operation = { binding, isLive, state: 'pending', source: null, errorCode: null };
@@ -650,6 +672,15 @@ export function createPhotoSession({
       if (!loadedImport || (layerId && !layers.has(layerId))) return false;
       draftTargetLayerId = layerId; appendOverrideIds.clear(); publish(); return true;
     },
+    associateLoadedGmiSource(loaded, binding, isLive) {
+      const matches = [...layers.values()].flatMap((layer) => matchingGmiSources(layer, loaded.fingerprint).map((source) => ({ layer, source })));
+      if (matches.length !== 1) return false;
+      const [{ layer, source }] = matches;
+      const verified = verifiedGmiBinding(source, loaded, binding, isLive);
+      if (verified.error || verified.source === source) return false;
+      replaceBoundGmiSource(layer, verified.source);
+      publish(); return true;
+    },
     reconcileLoadedGmiBindings(isLive) {
       if (loadedImport?.binding && !isLive(loadedImport.binding)) {
         const binding = loadedImport.binding;
@@ -675,8 +706,14 @@ export function createPhotoSession({
       if (draftTargetLayerId && !target) return null;
       const eligibleIds = appendPolicy()?.appendableIds || importIds;
       const photos = assetPhotos([...(target?.photoIds || []), ...eligibleIds]);
-      const existing = target?.spatialSources.find((source) => source.kind === 'gmi' && source.fingerprint === loadedImport.source.fingerprint);
-      const source = existing ? Object.freeze({ ...existing, loadedBinding: loadedImport.source.loadedBinding }) : loadedImport.source;
+      const matches = matchingGmiSources(target, loadedImport.source.fingerprint);
+      if (matches.length > 1) return Object.freeze({ error: 'source-association-ambiguous' });
+      const existing = matches[0];
+      const verified = existing && loadedImport.binding
+        ? verifiedGmiBinding(existing, loadedImport.source, loadedImport.binding, loadedImport.isLive)
+        : { source: existing || loadedImport.source };
+      if (verified.error) return Object.freeze({ error: verified.error });
+      const { source } = verified;
       const associationLedger = reviewGmiPhotoSource(source, photos);
       // Ambiguous candidates are possibly referenced; excluding unrelated files must
       // never turn an ambiguous pair into an automatic single-file association.
@@ -752,7 +789,7 @@ export function createPhotoSession({
       if (!sourceWorkflowIsLive(ticket)) return { ok: false, error: 'membership-changed' };
       const review = sourceReviews.get(ticket.layerId), layer = layers.get(ticket.layerId);
       if (!review || review.state !== 'ready' || review.source !== expectedReview?.source
-        || review.recheck !== expectedReview.recheck) return { ok: false, error: 'source-changed' };
+        || review.recheck !== expectedReview.recheck || review.loadedInput !== expectedReview.loadedInput) return { ok: false, error: 'source-changed' };
       if (review.source.kind === 'gmi') return this.applyGmiAssociations(ticket.layerId, {
         confirmed: true, sourceId: review.source.id, memberIds: layer.photoIds,
         associationLedger: expectedReview.associationLedger,
@@ -1110,20 +1147,32 @@ export function createPhotoSession({
       sourceReviews.set(layerId, Object.freeze({ ...previous, state: 'pending', errorCode: null }));
       publish();
       try {
-        let source;
+        let source, loadedInput;
         if (typeof input?.read === 'function') {
-          const isLive = input.isLive || (() => true);
-          if (!isLive(input.binding)) throw Object.assign(new Error('loaded-source-unavailable'), { code: 'loaded-source-unavailable' });
+          const { binding, isLive } = input;
+          if (!binding?.layerId || !binding.inputId || !binding.datasetRevision || !isLive?.(binding))
+            throw Object.assign(new Error('loaded-source-unavailable'), { code: 'loaded-source-unavailable' });
           const parsed = await input.read();
-          if (!isLive(input.binding)) throw Object.assign(new Error('loaded-source-unavailable'), { code: 'loaded-source-unavailable' });
-          source = loadedGmiSource(parsed, input.binding);
+          if (!isLive(binding)) throw Object.assign(new Error('loaded-source-unavailable'), { code: 'loaded-source-unavailable' });
+          loadedInput = Object.freeze({ source: parsed, binding, isLive });
+          source = loadedGmiSource(parsed, binding);
         } else source = await makeSource(input, kind);
         if (generation !== ownerGeneration || !layers.has(layerId) || sourceRequests.get(layerId) !== request) return false;
-        const attached = layers.get(layerId).spatialSources.find((item) => item.fingerprint === source.fingerprint);
+        const layer = layers.get(layerId);
+        const attached = layer.spatialSources.find((item) => item.kind === source.kind && item.fingerprint === source.fingerprint);
+        if (loadedInput && attached) {
+          if (matchingGmiSources(layer, source.fingerprint).length !== 1)
+            throw Object.assign(new Error('source-association-ambiguous'), { code: 'source-association-ambiguous' });
+          const verified = verifiedGmiBinding(attached, loadedInput.source, loadedInput.binding, loadedInput.isLive);
+          if (verified.error) throw Object.assign(new Error(verified.error), { code: verified.error });
+          sourceReviews.set(layerId, Object.freeze({ state: 'ready', source: attached, errorCode: null, recheck: true,
+            loadedInput, rebinding: verified.source !== attached ? verified.source.loadedBinding : null }));
+          publish(); return true;
+        }
         if (attached) {
           throw Object.assign(new Error('duplicate-source'), { code: 'duplicate-source', attachedSourceId: attached.id });
         }
-        sourceReviews.set(layerId, Object.freeze({ state: 'ready', source, errorCode: null, recheck: false }));
+        sourceReviews.set(layerId, Object.freeze({ state: 'ready', source, errorCode: null, recheck: false, loadedInput }));
         publish(); return true;
       } catch (error) {
         if (generation !== ownerGeneration || !layers.has(layerId) || sourceRequests.get(layerId) !== request) return false;
@@ -1160,16 +1209,25 @@ export function createPhotoSession({
         || review.source.id !== sourceId || review.associationLedger !== associationLedger
         || !memberIds || memberIds.length !== layer.photoIds.length
         || memberIds.some((id, index) => id !== layer.photoIds[index])) return { ok: false, error: 'review-changed' };
-      if (review.recheck && !layer.spatialSources.some((source) => source.id === sourceId)) return { ok: false, error: 'source-removed' };
-      const source = Object.freeze({ ...review.source, associationLedger });
-      const existing = layer.spatialSources.some((item) => item.id === sourceId);
-      if (!existing && layer.spatialSources.some((item) => item.kind === 'gmi' && item.fingerprint === source.fingerprint))
-        return { ok: false, error: 'duplicate-source' };
-      let plan;
-      try { plan = planGmiAssociations(layer, source, associationLedger); }
-      catch { return { ok: false, error: 'invalid-source' }; }
-      commitGmiPlan(plan);
-      const { photoIds } = plan;
+      const current = layer.spatialSources.find((source) => source.id === sourceId);
+      if (review.recheck && !current) return { ok: false, error: 'source-removed' };
+      const loaded = review.loadedInput;
+      if (loaded && !loaded.isLive(loaded.binding)) return { ok: false, error: 'loaded-source-unavailable' };
+      if (review.recheck && current !== review.source) return { ok: false, error: 'review-changed' };
+      let photoIds = layer.photoIds;
+      if (review.rebinding) {
+        const verified = verifiedGmiBinding(current, loaded.source, loaded.binding, loaded.isLive);
+        if (verified.error) return { ok: false, error: verified.error };
+        replaceBoundGmiSource(layer, verified.source);
+      } else {
+        const source = Object.freeze({ ...review.source, associationLedger });
+        if (!current && matchingGmiSources(layer, source.fingerprint).length) return { ok: false, error: 'duplicate-source' };
+        let plan;
+        try { plan = planGmiAssociations(layer, source, associationLedger); }
+        catch { return { ok: false, error: 'invalid-source' }; }
+        commitGmiPlan(plan);
+        photoIds = plan.photoIds;
+      }
       const workflow = sourceWorkflows.get(layerId);
       if (workflow && workflowMembers.get(workflow) === layer.photoIds) workflowMembers.set(workflow, photoIds);
       sourceReviews.delete(layerId);

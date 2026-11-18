@@ -191,7 +191,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
     await photoSession.stageLayerSource(layer.id, input, sourceKind);
     if (ticketRef.current !== ticket || !photoSession.sourceWorkflowIsLive(ticket)) return;
     const result = photoSession.getSnapshot().sourceReviews[layer.id];
-    if (result?.errorCode === 'duplicate-source') photoSession.recheckLayerSource(layer.id, result.attachedSourceId);
+    if (!input.binding && result?.errorCode === 'duplicate-source') photoSession.recheckLayerSource(layer.id, result.attachedSourceId);
   };
   const readFile = (event) => {
     const file = event.target.files?.[0]; event.target.value = '';
@@ -215,7 +215,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
     const { key: _key, ...decision } = captureDecision;
     const result = photoSession.saveSourceWorkflowSource(ticketRef.current, review,
       review.source.kind === 'gml' ? { captureTime: { ...decision, plan: capturePlan } } : undefined);
-    if (!result.ok) { setError('Bildene eller kilden er endret. Kontroller kilden på nytt før du bekrefter.'); return; }
+    if (!result.ok) { setError(readErrors[result.error] || 'Bildene eller kilden er endret. Kontroller kilden på nytt før du bekrefter.'); return; }
     setSavedCaptureTimes(result.captureTimeCount || 0);
     setCaptureChoice({ key: null, ...EMPTY_GML_CAPTURE_DECISION });
     setSourceSaved(true); setNotice(savedMessage); setError('');
@@ -304,7 +304,8 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
             {review?.state === 'pending' && <p role="status">Analyserer kilden …</p>}
             {review?.state === 'error' && <p role="alert">{readErrors[review.errorCode] || 'Kilden kunne ikke leses. Forkast denne kontrollen og velg filen på nytt.'}</p>}
             {ready && <>
-              {review.recheck && <p>Kilden finnes i laget. Treffene kontrolleres på nytt.</p>}
+              {review.rebinding ? <p>Kilden kobles til GMI-laget «{review.rebinding.filename}».</p>
+                : review.recheck && <p>Kilden finnes i laget. Treffene kontrolleres på nytt.</p>}
               {review.source.kind === 'gmi' ? <><PhotoGmiSummary source={review.source} ledger={review.associationLedger} />
                 <p>Hvert punktobjekt gir en egen plassering som du kan bekrefte i neste steg. Linjer gir bare koblinger.</p><p>Kilden beholdes også uten treff. Flere bilder kan kobles ved en senere kontroll.</p></>
                 : <><PhotoGmlSummary source={review.source} ledger={review.ledger} />

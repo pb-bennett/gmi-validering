@@ -5,7 +5,7 @@ import { DownloadSimpleIcon, XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
-import { isLoadedGmiSurveyLayer } from '@/lib/photos/loadedGmiSource.mjs';
+import { isLoadedGmiSurveyLayer, loadedGmiSources } from '@/lib/photos/loadedGmiSource.mjs';
 import { parseSourceFilename, exportFilenamePreview } from '@/lib/photos/export/photoExportNaming.mjs';
 import { DEFAULT_PHOTO_EXPORT_CONFIG } from '@/lib/photos/photoExportConfig.mjs';
 import { photosBeingRead, photoReadingNote, photoCount, placementCount, photoCaptureTimeSchemaWarning } from '@/lib/photos/photoCompletion.mjs';
@@ -15,7 +15,7 @@ import { captureDeliverySnapshot, buildDeliveryPlan } from '@/lib/delivery/index
 import { DELIVERY_CHOICES, DELIVERY_STEPS, DELIVERY_WIZARD_START, deliveryWizardReducer, deliveryWizardStatus,
   deliveryDiagnostics, deliveryMessage, deliveryPackageFacts, deliveryReport, deliveryReviewStatus, deliveryReviewSummary,
   deliveryExclusionNote, deliveryExclusionLines,
-  initiateDeliveryDownload } from '@/lib/delivery/deliveryWizard.mjs';
+  deliverySurveySelection, initiateDeliveryDownload } from '@/lib/delivery/deliveryWizard.mjs';
 import DeliveryInventory from './DeliveryInventory';
 import usePhotoSession from '@/components/photos/usePhotoSession';
 import useGmiEditLayer from '@/components/gmi-edit/useGmiEditLayer';
@@ -32,12 +32,6 @@ const primary = 'gmi-primary-control gmi-focus-ring min-h-10 px-4';
 const HEADINGS = { building: 'Kontrollerer leveransen …', packaging: 'Lager leveransen …', blocked: 'Leveransen er blokkert',
   failed: 'Kontrollen kunne ikke fullføres', stale: 'Kontrollen er utdatert', ready: 'Eksportkontroll fullført',
   done: 'Nedlastingen er startet', 'download-failed': 'Nedlastingen kunne ikke startes' };
-function initialSurvey(photoId) {
-  const ids = [...new Set(photoSession.getLayer(photoId)?.spatialSources.filter((source) => source.kind === 'gmi' && source.loadedBinding?.live !== false)
-    .map((source) => source.loadedBinding?.layerId).filter(Boolean) ?? [])];
-  return ids.length === 1 ? ids[0] : '';
-}
-
 // Må rettes and Bør kontrolleres are always open; Informasjon is folded, since
 // nothing in it needs action. Every diagnostic stays in the DOM either way.
 function Diagnostics({ plan, snapshot }) {
@@ -116,16 +110,19 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
   const ref = useRef(null), id = useId(), work = useRef({ active: false, token: 0, busy: false }), urls = useRef(new Set());
   const [mode, setMode] = useState(initialMode);
   const [photoId, setPhotoId] = useState(initialPhotoLayerId || (() => photoSession.getSnapshot().photoLayers[0]?.id ?? ''));
-  const [surveyId, setSurveyId] = useState(() => initialSurveyLayerId || initialSurvey(initialPhotoLayerId));
+  const [selectedSurvey, setSelectedSurvey] = useState(initialMode === 'gmi-only' && !initialPhotoLayerId ? initialSurveyLayerId : null);
   const [localConfig, setLocalConfig] = useState(DEFAULT_PHOTO_EXPORT_CONFIG);
   const [excluded, setExcluded] = useState(null);
   const [reportError, setReportError] = useState(null);
   const [state, dispatch] = useReducer(deliveryWizardReducer, DELIVERY_WIZARD_START);
   const layers = useStore((store) => store.layers);
   const photos = usePhotoSession();
-  const gmi = useGmiEditLayer(surveyId, { autoOpen: mode !== 'photos-only' });
   const hasGmi = mode !== 'photos-only', hasPhoto = mode !== 'gmi-only';
   const photoLayer = photoSession.getLayer(photoId);
+  const surveyId = deliverySurveySelection({ sources: photoLayer?.spatialSources, explicit: selectedSurvey,
+    stored: initialSurveyLayerId, isSelectable: (layerId) => isLoadedGmiSurveyLayer(layers[layerId]),
+    isAvailable: loadedGmiSources.available, isLive: loadedGmiSources.isLive });
+  const gmi = useGmiEditLayer(surveyId, { autoOpen: hasGmi });
   const layerPhotos = photoLayer ? photoSession.getLayerPhotos(photoId) : [];
   const config = suppliedConfig && photoId === initialPhotoLayerId ? suppliedConfig : localConfig;
   // The descriptive text is the user's once edited; the revision always follows the live source and is never stored.
@@ -247,7 +244,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
             onChange={(value) => { setMode(value); setExcluded(null); onConfigChange?.({ deliveryMode: value }); }} />)}</fieldset>
         </section>
         <section className="delivery-settings">
-          {hasGmi && <label>GMI-kartlag<select className="gmi-focus-ring" aria-label="GMI-kartlag" value={surveyId} onChange={(event) => { setSurveyId(event.target.value); setExcluded(null); onConfigChange?.({ deliverySurveyId: event.target.value }); }}>
+          {hasGmi && <label>GMI-kartlag<select className="gmi-focus-ring" aria-label="GMI-kartlag" value={surveyId} onChange={(event) => { setSelectedSurvey(event.target.value); setExcluded(null); onConfigChange?.({ deliverySurveyId: event.target.value }); }}>
             <option value="">Velg GMI-kartlag</option>{Object.values(layers).filter(isLoadedGmiSurveyLayer).map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
           </select></label>}
           {hasPhoto && <label>Fotolag<select className="gmi-focus-ring" aria-label="Fotolag" value={photoId} onChange={(event) => { setPhotoId(event.target.value); setExcluded(null); }}>

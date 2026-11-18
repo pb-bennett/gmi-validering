@@ -11,7 +11,8 @@ export function createLoadedGmiSources({ getLayer = () => null } = {}) {
   let sequence = 0;
   const isLive = (binding) => {
     const input = inputs.get(binding?.layerId), layer = getLayer(binding?.layerId);
-    return Boolean(input && input.binding.inputId === binding.inputId && layer?.data === input.data && isLoadedGmiSurveyLayer(layer));
+    return Boolean(input && input.binding.inputId === binding.inputId && input.binding.datasetRevision === binding.datasetRevision
+      && layer?.data === input.data && isLoadedGmiSurveyLayer(layer));
   };
   return {
     register(layerId, data, file, evidence) {
@@ -36,6 +37,25 @@ export function createLoadedGmiSources({ getLayer = () => null } = {}) {
       const source = await input.pending;
       if (!isLive(ticket.binding)) throw new Error('stale-loaded-gmi');
       return source;
+    },
+    async associate(layerId, session) {
+      const ticket = this.begin(layerId);
+      if (!ticket || !session.getSnapshot().photoLayers.some((layer) => layer.spatialSources.some((source) =>
+        source.kind === 'gmi' && (!source.loadedBinding || !isLive(source.loadedBinding))))) return false;
+      const input = tickets.get(ticket);
+      // Equal files have equal lengths. Read all live peers of that size before deciding uniqueness.
+      const peers = () => [...inputs.values()].filter((entry) => entry.file.size === input.file.size && isLive(entry.binding));
+      while (isLive(ticket.binding)) {
+        const candidates = peers();
+        const evidence = await Promise.allSettled(candidates.map((entry) => this.read(this.begin(entry.binding.layerId))));
+        const current = peers();
+        if (current.length !== candidates.length || current.some((entry, index) => entry !== candidates[index])) continue;
+        if (evidence.some((result) => result.status === 'rejected')) return false;
+        const source = evidence[candidates.indexOf(input)]?.value;
+        if (!source || evidence.filter((result) => result.value.fingerprint === source.fingerprint).length !== 1) return false;
+        return session.associateLoadedGmiSource(source, ticket.binding, isLive);
+      }
+      return false;
     },
     // The exact imported bytes, for source-preserving GMI editing. Each call reads the captured File again and returns
     // a fresh buffer that nothing else holds, so callers can never reach shared state. Nothing is cached here: the
@@ -64,5 +84,9 @@ export function bindLoadedGmiSurveyStore(store, session) {
     if (state.layers === previous.layers) return;
     loadedGmiSources.reconcile();
     session.reconcileLoadedGmiBindings(loadedGmiSources.isLive);
+    // Registration precedes publication. Start only once the new dataset is live in the store.
+    for (const [id, layer] of Object.entries(state.layers)) {
+      if (layer.data !== previous.layers[id]?.data) void loadedGmiSources.associate(id, session);
+    }
   });
 }
