@@ -12,7 +12,7 @@ import { dragSelectedMarker, editArrow, enterEditMode, rotateSelected, saveEdits
 
 const app = process.env.PHOTO_UI_URL;
 const map = 'document.querySelector(".leaflet-container")';
-const zoom = 'Number(document.body.innerText.match(/Zoom: (\\d+)/)?.[1])';
+const zoom = 'Number(document.body.innerText.match(/Zoom: (\\d+(?:\\.\\d+)?)/)?.[1])';
 const row = (id) => `document.querySelector('.photo-workspace-list li[data-photo-id="${id}"]')`;
 const marker = (id) => `document.querySelector('.leaflet-photo-markers-pane .leaflet-marker-icon[data-photo-id="${id}"]')`;
 const settle = (browser) => browser.evaluate('new Promise(resolve => setTimeout(resolve, 450))');
@@ -49,7 +49,7 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`FOTO fit with a 
       return [${ids.map(marker).join(',')}].every(marker => {
         if (!marker) return false;
         const r = marker.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
-        return x >= bounds.left + 59 && x <= card.left - 23 && y >= bounds.top + 59 && y <= bounds.bottom - 59;
+        return x >= bounds.left + 31 && x <= card.left - 23 && y >= bounds.top + 31 && y <= bounds.bottom - 31;
       }); })()`;
     const shot = async (stage) => {
       const directory = process.env.PHOTO_SCREENSHOT_DIR;
@@ -83,13 +83,19 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`FOTO fit with a 
       const [first, anchor] = await importPhotos([west, east], true);
       await browser.waitFor(pointsAreClear([first, anchor]));
       assert((await viewportAt(anchor)).zoom <= 19);
+      const coverage = await browser.evaluate(`(() => {
+        const bounds = ${map}.getBoundingClientRect(), card = document.querySelector('.photo-map-display-card').getBoundingClientRect();
+        const a = ${marker(first)}.getBoundingClientRect(), b = ${marker(anchor)}.getBoundingClientRect();
+        return Math.abs((a.left + a.width / 2) - (b.left + b.width / 2)) / (card.left - 24 - bounds.left - 32);
+      })()`);
+      assert(coverage >= 0.8 && coverage <= 1.01, `photo extent uses the clear map width: ${coverage}`);
       assert.equal(await browser.evaluate(`${row(first)}.querySelector('.photo-delivery-pill').innerText`), 'GML');
       await shot('import');
 
       // Leave the fitted zoom so an accidental refit is observable even if all the markers still fit.
       const fittedZoom = await browser.evaluate(zoom);
       await browser.evaluate('document.querySelector(".leaflet-control-zoom-out").click()');
-      await browser.waitFor(`${zoom} === ${fittedZoom - 1}`);
+      await browser.waitFor(`${zoom} === ${Math.round(fittedZoom - 1)}`);
       await settle(browser);
       const beforeSelect = await viewportAt(anchor);
       await selectPhotoRow(browser, first);

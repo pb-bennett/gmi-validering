@@ -111,11 +111,11 @@ function LayerAnalysisButtons({
   const zAction = zValidationResults ? 'Åpne høydekontroll' : 'Kjør høydekontroll';
 
   return (
-    <div className="layer-analysis-actions flex items-center gap-1 flex-wrap">
+    <div className="layer-analysis-actions flex items-center gap-1.5 flex-wrap">
       {/* Layer highlight toggle */}
       <PhotoIconButton
         icon={HighlighterIcon}
-        size={14}
+        size={16}
         label="Marker alt i laget"
         tooltip={highlightAll ? 'Skru av laghighlight' : 'Marker alt i laget'}
         pressed={highlightAll}
@@ -126,7 +126,7 @@ function LayerAnalysisButtons({
       {/* Profilanalyse */}
       <PhotoIconButton
         icon={ChartLineIcon}
-        size={14}
+        size={16}
         label="Profilanalyse"
         tooltip={isKof ? 'Ikke tilgjengelig for KOF' : analysisResults.length > 0 ? 'Åpne profilanalyse' : 'Kjør profilanalyse'}
         unavailable={isKof}
@@ -146,7 +146,7 @@ function LayerAnalysisButtons({
       {/* Høydekontroll */}
       <PhotoIconButton
         icon={MountainsIcon}
-        size={14}
+        size={16}
         label="Høydekontroll"
         tooltip={zMissing > 0 ? `${zAction} · ${zMissing} ${zMissing === 1 ? 'objekt' : 'objekter'} mangler Z` : zAction}
         className="layer-card-icon-button"
@@ -168,7 +168,7 @@ function LayerAnalysisButtons({
       {/* Feltvalidering */}
       <PhotoIconButton
         icon={ClipboardTextIcon}
-        size={14}
+        size={16}
         label="Feltvalidering"
         tooltip={isKof ? 'Ikke tilgjengelig for KOF' : 'Feltvalidering'}
         unavailable={isKof}
@@ -179,7 +179,7 @@ function LayerAnalysisButtons({
       {/* Topplok kontroll */}
       <PhotoIconButton
         icon={CircleHalfIcon}
-        size={14}
+        size={16}
         label="Topplok"
         tooltip={isKof ? 'Ikke tilgjengelig for KOF' : hasTopplokResults ? (topplokOpen ? 'Skjul topplok' : 'Vis topplok') : 'Kjør topplok kontroll'}
         unavailable={isKof}

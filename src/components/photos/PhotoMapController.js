@@ -51,7 +51,15 @@ export default function PhotoMapController({ items, fitRequest, onFitHandled, lo
 function fitPhotoLayer(map, { bounds, zoom, maxZoom }) {
   const padding = photoOverlayPadding(map);
   if (zoom === undefined) {
-    map.fitBounds(bounds, { ...padding, maxZoom, animate: false });
+    // Whole-level rounding can leave almost half the usable map empty. Use finer
+    // steps for this fit only; keep the existing wheel/button navigation steps.
+    const zoomSnap = map.options.zoomSnap;
+    try {
+      map.options.zoomSnap = 0.25;
+      map.fitBounds(bounds, { ...padding, maxZoom, animate: false });
+    } finally {
+      map.options.zoomSnap = zoomSnap;
+    }
     return;
   }
   // Offset the fixed-zoom centre into the same usable area as a bounds fit.
@@ -72,9 +80,9 @@ function photoOverlayPadding(map, point = null) {
   const workspace = container.closest('.photo-workspace-primary');
   const bar = workspace?.querySelector('.photo-edit-command-bar')?.getBoundingClientRect();
   const card = workspace?.querySelector('.photo-map-display-card')?.getBoundingClientRect();
-  const margin = 60;
+  const margin = point ? 60 : 32;
   const x = box.left + (point?.x ?? 0), y = box.top + (point?.y ?? 0);
-  let top = bar && (!point || (x >= bar.left - 24 && x <= bar.right + 24)) ? Math.max(margin, Math.round(bar.bottom - box.top + 40)) : margin;
+  let top = bar && (!point || (x >= bar.left - 24 && x <= bar.right + 24)) ? Math.max(margin, Math.round(bar.bottom - box.top + (point ? 40 : 24))) : margin;
   const landedY = Math.min(Math.max(y, box.top + top), box.bottom - margin);
   let right = card && (!point || (landedY >= card.top - 24 && landedY <= card.bottom + 24)) ? Math.max(margin, Math.round(box.right - card.left + 24)) : margin;
   // On narrow maps a pan can still clear an overlay even when the remaining band is too small for a bounds fit.

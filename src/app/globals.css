@@ -58,6 +58,7 @@
 .layer-type-badge-wfs { background: #eef0fb; border-color: #4338ca; color: #3730a3; }
 /* Compact icon-only action inside layer-card headers; same footprint as the existing p-1 icon buttons. */
 .photo-icon-button.layer-card-icon-button { width: 22px; height: 22px; border-radius: 0.5rem; color: var(--gmi-text-subtle); }
+.layer-analysis-actions .photo-icon-button.layer-card-icon-button { color: var(--gmi-text-muted); }
 .photo-icon-button.layer-card-icon-button:hover:not(.photo-icon-button-unavailable) { color: var(--gmi-navy); }
 .photo-icon-button.layer-card-icon-button.gmi-selected-control { background: var(--gmi-border); color: var(--gmi-navy); }
 .photo-icon-button.layer-card-icon-button.gmi-selected-control:hover:not(.photo-icon-button-unavailable) { background: color-mix(in srgb, var(--gmi-border-strong) 35%, var(--gmi-border)); }

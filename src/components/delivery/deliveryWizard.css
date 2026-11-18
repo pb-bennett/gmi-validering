@@ -20,10 +20,10 @@
 .delivery-wizard .delivery-filename-description { position: relative; display: inline-grid; grid-template-columns: minmax(0, 1fr); min-width: 1ch; }
 .delivery-wizard .delivery-filename-description > * { grid-area: 1 / 1; }
 .delivery-wizard .delivery-filename-description > span { visibility: hidden; white-space: pre; overflow: hidden; padding-block: 4px; }
-.delivery-wizard .delivery-filename-description > input { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; padding: 4px 0; border: 0; background: transparent; color: var(--gmi-text); }
+.delivery-wizard .delivery-filename-description > input { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; padding: 4px 0; border: 0; background: var(--gmi-cyan-soft); color: var(--gmi-ink); }
 /* The wrapper's ring above replaces the input's own outline. */
 .delivery-wizard .delivery-filename-description > input[type='text']:focus-visible { outline: none; }
-.delivery-wizard .delivery-filename-affix { flex: none; white-space: nowrap; color: var(--gmi-text-muted); background: color-mix(in srgb, var(--gmi-surface-soft) 70%, var(--gmi-surface)); }
+.delivery-wizard .delivery-filename-affix { flex: none; white-space: nowrap; color: var(--gmi-text-subtle); background: var(--gmi-surface-soft); }
 .delivery-wizard .delivery-filename-options { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; }
 .delivery-wizard .delivery-filename-options label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .delivery-wizard .delivery-filename-options input { accent-color: var(--gmi-interactive); }

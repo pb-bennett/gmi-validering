@@ -254,6 +254,16 @@ test('filename editor: live sources, checkboxes, manual choices, reset, limits a
             rightAlignedCount: Math.abs(bounds(count).right - bounds(row).right) <= 1 };
           })()`);
         await screenshot(browser, `batch-b-filename-${width}x${height}`);
+        const colours = await browser.evaluate(`(() => {
+          const row = ${editor}.querySelector('.delivery-filename'), input = ${field};
+          return [input, row.firstElementChild, row.lastElementChild].map(e => [getComputedStyle(e).color, getComputedStyle(e).backgroundColor]);
+        })()`);
+        assert.deepEqual(colours, [['rgb(2, 6, 24)', 'rgb(206, 250, 254)'],
+          ['rgb(98, 116, 142)', 'rgb(248, 250, 252)'], ['rgb(98, 116, 142)', 'rgb(248, 250, 252)']]);
+        const luminance = (colour) => colour.match(/\d+/g).slice(0, 3).map(Number).map(v => {
+          const s = v / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        }).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+        for (const [foreground, background] of colours) assert((luminance(background) + 0.05) / (luminance(foreground) + 0.05) >= 4.5);
         const { inputWidth, textWidth, ...layout } = fit;
         assert(Math.abs(inputWidth - textWidth) <= 1, `input width ${inputWidth}, text width ${textWidth} at ${width}x${height}`);
         assert.deepEqual(layout, { overflow: 0, inside: true, height: fit.height, footer: true,

@@ -73,17 +73,23 @@ test('layer analysis matches card actions and retains results, keyboard tooltips
           const buttons = [${actions.map((name) => action(name)).join(',')}], header = ${card(gmi)}.querySelector('[data-gmi-edit-action]');
           const metrics = (button) => {
             const icon = button.querySelector('svg'), b = button.getBoundingClientRect(), i = icon.getBoundingClientRect();
-            return [b.width, b.height, i.width, i.height, getComputedStyle(button).color, icon.getAttribute('aria-hidden'), button.getAttribute('title')];
+            return [b.width, b.height, i.width, i.height, getComputedStyle(button).color, icon.getAttribute('aria-hidden'), button.getAttribute('title'),
+              Math.abs((b.left + b.right) / 2 - (i.left + i.right) / 2), Math.abs((b.top + b.bottom) / 2 - (i.top + i.bottom) / 2)];
           };
           const bounds = ${card(gmi)}.getBoundingClientRect();
           return { header: metrics(header), actions: buttons.map(metrics),
             row: new Set(buttons.map(b => b.getBoundingClientRect().top)).size,
+            gap: getComputedStyle(buttons[0].parentElement).columnGap,
             fits: buttons.every(b => b.getBoundingClientRect().right <= bounds.right && b.getBoundingClientRect().bottom <= innerHeight) };
         })()`);
         assert.deepEqual(parity.header.slice(0, 4), [22, 22, 14, 14]);
         assert.equal(parity.row, 1);
         assert(parity.fits);
-        for (const metrics of parity.actions) assert.deepEqual(metrics, parity.header);
+        assert.equal(parity.gap, '6px');
+        for (const metrics of parity.actions) {
+          assert.deepEqual(metrics.slice(0, 7), [22, 22, 16, 16, 'rgb(69, 85, 108)', 'true', null]);
+          assert(metrics[7] <= 0.5 && metrics[8] <= 0.5, 'icons are centred in their existing compact targets');
+        }
       }
 
       await hover(profile);

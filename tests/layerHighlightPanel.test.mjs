@@ -72,7 +72,7 @@ test('sidebar rows show each stored layer colour with a stable fallback and exis
 test('the analysis row uses shared layer-card actions and only Høydekontroll carries a status dot', () => {
   const row = layerPanel.slice(layerPanel.indexOf('function LayerAnalysisButtons'), layerPanel.indexOf('function LayerTopplokSection'));
   assert.doesNotMatch(row, /<svg\b|<button\b|\btitle=|errorCount|warningCount/);
-  assert.deepEqual([...row.matchAll(/<PhotoIconButton\s+icon=\{(\w+)\}\s+size=\{14\}/g)].map((match) => match[1]),
+  assert.deepEqual([...row.matchAll(/<PhotoIconButton\s+icon=\{(\w+)\}\s+size=\{16\}/g)].map((match) => match[1]),
     ['HighlighterIcon', 'ChartLineIcon', 'MountainsIcon', 'ClipboardTextIcon', 'CircleHalfIcon']);
   assert.equal((row.match(/layer-card-icon-button/g) || []).length, 5);
   assert.equal((row.match(/unavailable=\{isKof\}/g) || []).length, 3);
