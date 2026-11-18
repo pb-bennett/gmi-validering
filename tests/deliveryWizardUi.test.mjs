@@ -434,6 +434,15 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
       await clickGmiTableObject(browser, 'point:0');
       await browser.waitFor(`${inspector}?.querySelector('tr[data-field="Merknad"] input')`);
       await setValue(browser, `${inspector}.querySelector('tr[data-field="Merknad"] input')`, 'M10 corrected');
+      // Intermittent (unresolved): the editor was once absent here. Fail at once, as before, but record which
+      // owner lost it (document reload, workspace, inspector root, selected object or draft) for diagnosis.
+      const draftState = await browser.evaluate(`(() => { const aside = document.querySelector('.gmi-edit-inspector'), editor = ${inspector};
+        return { editor: Boolean(editor), object: editor?.dataset.gmiObject ?? null, merknad: editor?.querySelector('tr[data-field="Merknad"] input')?.value ?? null,
+          overwrite: Boolean(editor?.querySelector('.gmi-edit-confirm input')), workspace: Boolean(${workspace}), status: ${workspace}?.querySelector('[data-gmi-edit-status]')?.innerText ?? null,
+          inspectorRoot: Boolean(aside), emptyInspector: Boolean(aside?.querySelector('.gmi-edit-inspector-empty')), inspectorText: aside?.innerText.slice(0, 160) ?? null,
+          navigation: performance.getEntriesByType('navigation')[0]?.type ?? null, sinceNavigationMs: Math.round(performance.now()), url: location.pathname + location.search }; })()`);
+      assert(draftState.editor && draftState.object === 'point:0' && draftState.merknad === 'M10 corrected' && draftState.overwrite,
+        `Rettinger draft editor lost after input: ${JSON.stringify(draftState)}`);
       await browser.evaluate(`${inspector}.querySelector('.gmi-edit-confirm input').click()`);
       await t.test('unsubmitted Rettinger form values guard the export entry without losing the draft', async () => {
         await browser.evaluate(`${workspace}.querySelector('.gmi-edit-download').click()`);
