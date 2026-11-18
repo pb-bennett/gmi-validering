@@ -100,7 +100,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
       await t.test('discard and save keep GMI provenance; the shared sibling stays GMI; a hand placement is Manuell', async () => {
         await move(false); assert.equal(await sourceOfSelected(), 'gmi');
         await move(true); assert.equal(await sourceOfSelected(), 'gmi', 'a saved move keeps its original source');
-        assert.deepEqual(await browser.evaluate(`${markers}.filter(e=>e.title.includes('shared.png')).map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['gmi', 'gmi']);
+        assert.deepEqual(await browser.evaluate(`${markers}.filter(e=>${JSON.stringify(repeated.map((row) => row.id))}.includes(e.dataset.photoId)).map(e=>e.querySelector('.photo-camera-glyph').dataset.positionSource).sort()`), ['gmi', 'gmi']);
         assert.match(await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${repeated[1].id}"]').innerText`), /GMI · justert/);
         // The saved move away from its GMI point makes only this placement GML; the sibling keeps GMI.
         const pill = (id) => browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] .photo-delivery-pill').innerText`);
@@ -135,7 +135,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           assert(await browser.evaluate(`${markers}.some(marker => marker.querySelector('.photo-camera-glyph').dataset.positionSource === ${JSON.stringify(source.kind)} && !marker.querySelector('.photo-marker-delivery, .photo-marker-batch'))`));
         }
         assert.equal(await fillOf(repeated[0].id), GMI, 'GMI-linked placement: light blue');
-        assert.equal(await fillOf(exif.id), NEUTRAL, 'placed photo without a GMI reference, not included: neutral');
+        assert.equal(await fillOf(exif.id), GML, 'accepted EXIF placement defaults to GML');
         assert.deepEqual(await browser.evaluate(`Array.from(${legend}.querySelectorAll('li[data-legend-delivery]')).map(e => [e.dataset.legendDelivery, e.querySelector('.photo-camera-glyph path').getAttribute('fill'), e.innerText.trim()])`),
           [['gmi', GMI, 'Beholdes i GMI'], ['gml', GML, 'Til GML'], ['excluded', NEUTRAL, 'Ikke med i leveransen'], ['review', '#b06a08', 'Krever gjennomgang'], ['mixed', MIXED, 'Ulike leveringsvalg']]);
 
@@ -148,7 +148,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert.equal(await pillOf(repeated[0].id), 'GMI');
         await select(exif.id);
         await browser.waitFor(`${markerOf(exif.id)}.classList.contains('photo-camera-marker-selected')`);
-        assert.equal(await pillOf(exif.id), 'Ikke');
+        assert.equal(await pillOf(exif.id), 'GML');
         assert.equal(await pillOf(repeated[0].id), 'GMI');
         await select(repeated[0].id);
         await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=excluded]').click()`);
@@ -170,6 +170,10 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           assert.equal(await fillOf(repeated[1].id), GMI);
           assert.equal(await browser.evaluate(`Boolean(document.querySelector('.photo-delivery-map-popup'))`), false, 'no chooser for a single occurrence');
         }
+        // Explicitly exclude the accepted EXIF photo before checking its independent delivery cycle.
+        await select(exif.id);
+        await browser.evaluate(`document.querySelector('.photo-delivery-section [data-destination=excluded]').click()`);
+        await browser.waitFor(`${markerOf(exif.id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(NEUTRAL)}`);
         // An isolated photo without a GMI reference: «Ikke med» <-> GML, never GMI.
         await browser.evaluate(`${markerOf(exif.id)}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
         assert.equal(await pillOf(exif.id), 'Ikke', 'map navigation changes no destination');
@@ -188,9 +192,9 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         }
         await browser.evaluate(`document.querySelectorAll('.leaflet-tile').forEach(e=>e.src=${JSON.stringify(tile())})`);
         // Restore the defaults through the same one-click path, then leave planning.
-        await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${exif.id}"] .photo-delivery-row-button').click()`);
+        for (let i = 0; i < 2; i++) await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${exif.id}"] .photo-delivery-row-button').click()`);
         for (let i = 0; i < 2; i++) await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${repeated[0].id}"] .photo-delivery-row-button').click()`);
-        await browser.waitFor(`${markerOf(exif.id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(NEUTRAL)}
+        await browser.waitFor(`${markerOf(exif.id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GML)}
           && ${markerOf(repeated[0].id)}.querySelector('.photo-camera-glyph path').getAttribute('fill') === ${JSON.stringify(GMI)}`);
         await browser.waitFor('!document.querySelector(".photo-delivery-bar")');
         assert.equal(await browser.evaluate(`${colourSelect}.value`), 'delivery', 'leaving planning keeps the delivery colours');
@@ -210,14 +214,30 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
       });
       await t.test('selection, hover and accepted direction keep all four source fills', async () => {
+        await pressKey(browser, 'Escape', KEYS.Escape);
+        await browser.waitFor('!document.querySelector(".photo-workspace-preview-popup")');
         await setPhotoColourMode(browser, 'provenance'); // provenance palette checks choose Plasseringskilde explicitly
         for (const source of PHOTO_POSITION_SOURCES) {
           await select(idFor(source.kind)); assert.equal(await sourceOfSelected(), source.kind);
-          assert(await browser.evaluate(`${selected}.title.includes(${JSON.stringify(source.label)})`));
+          assert(await browser.evaluate(`${selected}.getAttribute('aria-label').includes(${JSON.stringify(source.label)})`));
+          assert.equal(await browser.evaluate(`${selected}.getAttribute('title')`), null);
           assert.equal(await browser.evaluate(`${selected}.querySelector('.photo-camera-glyph path').getAttribute('fill')`), source.color);
-          await browser.evaluate(`${selected}.dispatchEvent(new MouseEvent('mouseover',{bubbles:true}))`);
+          await browser.evaluate(`${selected}.dispatchEvent(new MouseEvent('mouseenter'))`);
+          await browser.waitFor('document.querySelector(".photo-thumb-preview-source")');
+          assert.equal(await browser.evaluate('document.querySelector(".photo-thumb-preview-source")?.textContent'), source.label, 'the visual hover preview retains accepted provenance');
+          await browser.evaluate(`${selected}.dispatchEvent(new MouseEvent('mouseleave'))`);
+          await browser.waitFor('!document.querySelector(".photo-thumb-preview")');
           assert.equal(await sourceOfSelected(), source.kind);
         }
+        const neighbour = `document.querySelector('.leaflet-photo-markers-pane [data-photo-id="${exif.id}"]')`;
+        await browser.evaluate(`${neighbour}.dispatchEvent(new MouseEvent('mouseenter'))`);
+        assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-thumb-preview"))'), false, 'a different asset starts with the established hover delay');
+        await browser.waitFor('document.querySelector(".photo-thumb-preview-name")?.textContent === "exif.png"');
+        assert.equal(await browser.evaluate('document.querySelector(".photo-thumb-preview-source").textContent'), 'EXIF');
+        await browser.evaluate(`${neighbour}.dispatchEvent(new MouseEvent('mouseleave')); ${neighbour}.focus()`);
+        assert.equal(await browser.evaluate('document.querySelector(".photo-thumb-preview-name")?.textContent'), 'exif.png', 'keyboard focus opens the current visual preview');
+        assert.equal(await sourceOfSelected(), 'manual', 'hover and focus never change the selected occurrence');
+        await browser.evaluate(`${neighbour}.blur()`);
         await enterEditMode(browser);
         assert.notEqual(await cursor(), 'crosshair');
         await browser.evaluate(`${commandBar}.querySelector('input[type=number]').focus()`);

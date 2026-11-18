@@ -121,7 +121,7 @@ browserTest('rendered M10 done screen: download initiation, filename, schema war
   assert.match(await browser.evaluate(`${done}.querySelector('[data-review-status]').innerText`), /^Kontroll fullført · [1-9]\d* merknad(er)?$/);
   assert.equal(await browser.evaluate(`${done}.querySelectorAll('ol, [data-export-guidance]').length`), 0, 'no numbered import steps');
   assert.doesNotMatch(await browser.evaluate(`${exportDialog}.innerText`), OLD_COPY);
-  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake', 'Last ned ZIP']);
+  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Last ned rapport', 'Lukk', 'Tilbake', 'Last ned ZIP']);
   await screenshot(browser, 'export-done');
   await clickSourceControl(browser, 'Last ned ZIP', exportDialog);
   await browser.waitFor(`window.__downloads.length === 2 && ${done}`);

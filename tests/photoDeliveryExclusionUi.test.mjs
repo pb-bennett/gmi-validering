@@ -71,9 +71,10 @@ test('Direct delivery cycle: equal badges, canonical inspector sync, shared plac
       await browser.evaluate(`${button(a)}.click()`); // restore excluded placement only
       await browser.waitFor(`${pill(a)}.innerText === 'GMI'`);
       assert.equal(await browser.evaluate(`${pill(b)}.innerText`), 'Ikke', 'sibling remains excluded');
-      assert.equal(await browser.evaluate(`document.querySelector('.photo-delivery-counts [data-destination=notSelected]').innerText.replace(/\\s+/g, ' ')`), 'Ikke valgt 3');
-      assert.equal(await browser.evaluate(`getComputedStyle(${pill(single)}).borderStyle`), 'dashed');
-      assert.equal(await browser.evaluate(`${pill(single)}.dataset.deliveryStatus`), 'not-selected');
+      assert.equal(await browser.evaluate(`document.querySelector('.photo-delivery-counts [data-destination=notSelected]').innerText.replace(/\\s+/g, ' ')`), 'Ikke valgt 1');
+      assert.equal(await browser.evaluate(`getComputedStyle(${pill(single)}).borderStyle`), 'solid');
+      assert.equal(await browser.evaluate(`${pill(single)}.dataset.deliveryStatus`), 'include', 'accepted EXIF placement defaults to GML (S4)');
+      assert.equal(await browser.evaluate(`${pill(single)}.innerText`), 'GML');
       for (const [width, height] of [[1280, 720], [1366, 768]]) {
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
         const styles = [];

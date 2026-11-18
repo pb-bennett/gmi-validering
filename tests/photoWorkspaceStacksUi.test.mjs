@@ -99,7 +99,9 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
       assert.deepEqual(Object.keys(ids).sort(), [...STACK, 'solo1', 'solo2'].sort());
 
       await t.test('counts: unique assets and placements', async () => {
-        assert.match(await browser.evaluate('document.querySelector(".photo-workspace-counts").innerText'), /^7 bilder · 8 plasseringer$/);
+        assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-counts > span:first-child").innerText'), '7 bilder · 8 plasseringer');
+        assert.deepEqual(await browser.evaluate('Array.from(document.querySelectorAll(".photo-delivery-counts [data-destination]")).map(e => [e.dataset.destination, e.innerText])'),
+          [['gmi', 'GMI 8'], ['gml', 'GML 0']]);
       });
       await t.test('shared sidebar, inspector and map fit without overflow', async () => {
         for (const [width, height] of [[1920, 1080], [1366, 768], [1280, 720]]) {

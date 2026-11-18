@@ -76,7 +76,8 @@ async function assertKeyboard(browser, label, expected) {
       const item = document.activeElement, dialog = ${exportDialog}, rect = item.getBoundingClientRect(), style = getComputedStyle(item);
       const area = item.closest('.delivery-body, .photo-export-choices, .photo-export-state, .photo-export-package')?.getBoundingClientRect() || { top: 0, bottom: innerHeight };
       const ring = item.closest('.delivery-filename');
-      return { name: item.getAttribute('aria-label') || (['checkbox', 'text'].includes(item.type) && item.labels?.[0]?.innerText.trim()) || item.value || item.innerText?.trim(), tag: item.tagName, inside: dialog.contains(item), visible: rect.top >= area.top - 1 && rect.bottom <= area.bottom + 1 && rect.bottom <= innerHeight,
+      const labelledBy = item.getAttribute('aria-labelledby')?.split(/\\s+/).map(id => document.getElementById(id)?.textContent.trim()).filter(Boolean).join(' ');
+      return { name: item.getAttribute('aria-label') || labelledBy || (['checkbox', 'text'].includes(item.type) && item.labels?.[0]?.innerText.trim()) || item.value || item.innerText?.trim(), tag: item.tagName, inside: dialog.contains(item), visible: rect.top >= area.top - 1 && rect.bottom <= area.bottom + 1 && rect.bottom <= innerHeight,
         marked: style.outlineStyle !== 'none' || style.boxShadow !== 'none' || Boolean(ring && getComputedStyle(ring).boxShadow !== 'none') };
     })()`);
     if (stop.tag === 'BODY') continue;

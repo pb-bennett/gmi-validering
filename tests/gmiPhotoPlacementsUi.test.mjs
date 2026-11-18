@@ -119,7 +119,10 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await select(rows.find((row) => row.filename === 'line.png').id);
       for (const row of repeated) {
         const label = row.id === a ? 'Kum A' : 'Kum B';
-        await browser.evaluate(`Array.from(document.querySelectorAll('.photo-camera-marker')).find(marker=>marker.title.includes(${JSON.stringify(label)})).click()`);
+        const marker = `document.querySelector('.leaflet-photo-markers-pane [data-photo-id="${row.id}"]')`;
+        assert.match(await browser.evaluate(`${marker}.getAttribute('aria-label')`), new RegExp(label));
+        assert.equal(await browser.evaluate(`${marker}.getAttribute('title')`), null);
+        await browser.evaluate(`${marker}.click()`);
         await browser.waitFor(`document.querySelector('.photo-workspace-active')?.dataset.photoId===${JSON.stringify(row.id)}`);
       }
       await select(a); await openProvenance();

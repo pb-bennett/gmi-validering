@@ -55,6 +55,7 @@ test('M5B production: configure, bounded review, exclusions, confirmation, histo
         await browser.evaluate(`${dialog}.querySelector('input[value="fill-missing"]').click()`);
         await input(`${dialog}.querySelector('[aria-label="Ny verdi"]')`, '11.0');
         assert.equal(await browser.evaluate(`(() => { const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; })()`), true);
+        if (!await browser.evaluate('Boolean(document.querySelector(\'button[aria-label="Nullstill og åpne ny fil"]\'))')) await click('Flere kartverktøy');
         await click('Nullstill og åpne ny fil');
         const navigationGuard = 'document.querySelector("dialog[open][data-gmi-confirm=workspace]")';
         await browser.waitFor(navigationGuard); await click('Avbryt', navigationGuard);
@@ -87,11 +88,16 @@ test('M5B production: configure, bounded review, exclusions, confirmation, histo
         await input(`${dialog}.querySelector('.gmi-batch-search input')`, '');
         await click('Neste side', dialog); assert.match(await text(), /51–100 av 123/);
         await click('Forrige side', dialog);
+        const layouts = [];
         for (const [width, height] of [[1366, 768], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await browser.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
           const box = await browser.evaluate(`({ footer: ${dialog}.querySelector('footer').getBoundingClientRect().toJSON(), width: document.documentElement.scrollWidth, dialogWidth: ${dialog}.clientWidth, scrollWidth: ${dialog}.scrollWidth })`);
-          assert(box.footer.bottom <= height && box.footer.top >= 0); assert(box.width <= width); assert(box.scrollWidth <= box.dialogWidth);
           await shot(`m5b-review-${width}x${height}`);
+          layouts.push({ width, height, box });
+        }
+        for (const { width, height, box } of layouts) {
+          assert(box.footer.bottom <= height && box.footer.top >= 0, `${width}x${height}: ${JSON.stringify(box)}`); assert(box.width <= width); assert(box.scrollWidth <= box.dialogWidth);
         }
       });
       await t.test('final summary and warnings, exactly one ChangeSet and Data Table modes', async () => {

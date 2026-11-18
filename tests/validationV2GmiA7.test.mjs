@@ -431,10 +431,10 @@ test('Validator exposes only the automatic V2 workflow', async () => {
   assert.doesNotMatch(source, /ValidationModeSelector|Validator 1\.0|Validator 2\.0/);
   assert.match(workspaceSource, /<h2[^>]*>Validator[^<]*\{datasetLabel\}<\/h2>/);
   assert.doesNotMatch(workspaceSource, />Kj.r<\/button>/);
-  assert.match(workspaceSource, /aria-label="Lukk Validator"/);
+  assert.match(workspaceSource, /<PhotoIconButton\b[^>]*\blabel="Lukk Validator"[^>]*\bonClick=\{closeValidator\}[^>]*\bdata-workspace-close="validator"/);
   assert.match(workspaceSource, /toggleFieldValidation\(false\)/);
   assert.doesNotMatch(workspaceSource, /resetAll|clearAll|setData\(/);
-  assert.match(workspaceSource, /useEffect\(\(\) => \{[\s\S]*?runValidation\(\);[\s\S]*?\}, \[selectedLayerId, selectedRevision, isGmi, referenceDate\]\)/);
+  assert.match(workspaceSource, /useEffect\(\(\) => \{[\s\S]*?controller\.run\(\{ \.\.\.input, referenceDate \}\)[\s\S]*?\}, \[selectedLayerId, selectedRevision, isGmi, referenceDate\]\)/);
   assert.doesNotMatch(workspaceSource, /\[.*activeGeometry.*selectedRevision.*\]/);
   assert.match(workspaceSource, /id="validation-v2-layer"/);
 });

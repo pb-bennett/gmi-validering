@@ -23,7 +23,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
   };
   const markerCount = 'document.querySelectorAll(".photo-camera-marker").length';
   const placementSource = `Array.from(document.querySelectorAll('.photo-workspace-inspector section[aria-label=Plassering] dt')).find(e=>e.textContent==='Kilde')?.nextElementSibling.textContent.trim()`;
-  const markerSource = (filename) => `Array.from(document.querySelectorAll('.photo-camera-marker')).find(e=>e.title.startsWith(${JSON.stringify(`Vis bilde: ${filename} `)}))?.querySelector('[data-position-source]').dataset.positionSource`;
+  const markerSource = (filename) => `Array.from(document.querySelectorAll('.photo-camera-marker')).find(e=>e.getAttribute("aria-label").startsWith(${JSON.stringify(`Vis bilde: ${filename} `)}))?.querySelector('[data-position-source]').dataset.positionSource`;
   const locateCurrent = () => browser.evaluate('document.querySelector(".photo-workspace-inspector .photo-inspector-locate").click()');
   const screenshot = async (name) => {
     if (!process.env.PHOTO_SCREENSHOT_DIR) return;
@@ -72,7 +72,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await browser.waitFor(`${markerCount} === 148`);
     checks.push('visibility hides/shows all markers without unmounting map or changing counts');
 
-    const markerTitle = await browser.evaluate('document.querySelector(".photo-camera-marker").title.replace(/^Vis bilde: /, "").split(" · ")[0]');
+    const markerTitle = await browser.evaluate('document.querySelector(".photo-camera-marker").getAttribute("aria-label").replace(/^Vis bilde: /, "").split(" · ")[0]');
     await browser.evaluate('document.querySelector(".photo-camera-marker").focus()');
     await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
     await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });

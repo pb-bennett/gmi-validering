@@ -92,6 +92,10 @@ test('workspace close family: geometry, tooltip, focus, hover, pressed and uncha
       await browser.waitFor('document.querySelector(".gmi-edit-workspace")');
       await check('Rettinger', '[data-workspace-close="rettinger"]');
       await feedback(browser, '[aria-label="Angre siste retting"]', { disabled: true });
+      if (!await browser.evaluate('Boolean(document.querySelector(\'[aria-label="Nullstill og åpne ny fil"]\'))')) {
+        await browser.evaluate('document.querySelector(\'[aria-label="Flere kartverktøy"]\').click()');
+        await browser.waitFor('document.querySelector(\'[aria-label="Nullstill og åpne ny fil"]\')');
+      }
       await feedback(browser, '[aria-label="Nullstill og åpne ny fil"]');
       await feedback(browser, '[aria-label="Kartoversikt"]', { selected: true });
       await browser.evaluate(`document.querySelector('[data-workspace-close="rettinger"]').click()`);

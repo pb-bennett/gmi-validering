@@ -135,7 +135,7 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   assert(done.includes(first.zip), 'the downloaded name');
   assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-review-status]').innerText`), /^Kontroll fullført · [1-9]\d* merknad(er)?/, 'the warning stays counted after initiation');
   assert(done.includes('Attachments/'), 'the reviewed inventory remains visible after initiation');
-  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Lukk', 'Tilbake', 'Last ned ZIP']);
+  assert.deepEqual(await browser.evaluate(`Array.from(${exportDialog}.querySelectorAll('.photo-import-footer button')).map((item) => item.innerText.trim())`), ['Last ned rapport', 'Lukk', 'Tilbake', 'Last ned ZIP']);
   assert.deepEqual(await previewNames(browser), { zip: first.zip, gml: first.gml });
 
   // Again: same plan, so the same name and the same bytes, identifiers included.
