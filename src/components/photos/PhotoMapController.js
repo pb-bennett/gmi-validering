@@ -69,6 +69,9 @@ function fitPhotoLayer(map, { bounds, zoom, maxZoom }) {
 }
 
 function panClearOfOverlays(map, lat, lng) {
+  // The overlay padding is measured from the live DOM, but Leaflet caches its size until the next frame after a
+  // resize. Sync it first (keeping the centre, as Leaflet's own resize handler would) so both agree.
+  map.invalidateSize({ animate: false });
   const location = [lat, lng];
   map.panInside(location, photoOverlayPadding(map, map.latLngToContainerPoint(location)));
 }

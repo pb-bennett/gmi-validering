@@ -334,7 +334,16 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
         // Selecting pans the marker clear of the map card; the marker click then opens the preview of that selection.
         await select('Kum 3');
-        await browser.waitFor(`(() => { const b = ${marker(kum3)}.getBoundingClientRect(); return document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('[data-photo-id]') === ${marker(kum3)}; })()`);
+        await browser.waitFor(`(() => { const b = ${marker(kum3)}.getBoundingClientRect(); return document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('[data-photo-id]') === ${marker(kum3)}; })()`)
+          .catch(async (error) => {
+            // Name what covers the marker, with the overlay and map geometry, instead of only the timed-out expression.
+            const state = await browser.evaluate(`(() => { const rect = (e) => e && Object.values(e.getBoundingClientRect().toJSON()).slice(0, 4).map(Math.round);
+              const b = ${marker(kum3)}.getBoundingClientRect(), top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+              return { cover: top && (top.tagName + '.' + String(top.className).trim().split(/\\s+/).join('.')), marker: rect(${marker(kum3)}),
+                map: rect(document.querySelector('.leaflet-container')), card: rect(document.querySelector('.photo-map-display-card')),
+                pane: document.querySelector('.leaflet-map-pane').style.transform, zoom: document.body.innerText.match(/Zoom: ([\\d.]+)/)?.[1] }; })()`).catch(() => null);
+            throw new Error(`Selected marker is not topmost at ${width}×${height}: ${JSON.stringify(state)}`, { cause: error });
+          });
         await mouseClick(marker(kum3));
         await browser.waitFor(`${preview}?.querySelector('.photo-delivery-row-button')`);
         assert(await noOverflow(), `no horizontal overflow at ${width}×${height}`);
