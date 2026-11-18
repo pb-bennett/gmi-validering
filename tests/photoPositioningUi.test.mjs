@@ -89,6 +89,7 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert.equal(await browser.evaluate(markerCount), 1, 'GML save retains evidence only');
       await click(browser, 'Neste');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '3 valgt');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-lead').textContent`), 'Entydige posisjoner er forhåndsvalgt. Manuelle posisjoner beholdes.');
       assert(await browser.evaluate(`${sourceWizard}.innerText.includes('GMI: koblet til 2 objekter')`));
       // A source difference is stated by its size, neutrally, and stays visible without opening anything.
       assert.match(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-comparison[data-sources-differ] summary .photo-positioning-separation').innerText`), /^ca\. .+ m mellom kildene$/);
@@ -129,11 +130,47 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert(await browser.evaluate(currentIs('Manuell')));
 
       // Per-source recheck lives in step 1 of Koble og posisjoner bilder.
+      const readWorkspace = () => browser.evaluate(`({ markers: ${markerCount},
+        rows: Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(row => [row.dataset.photoId, row.innerText]),
+        details: Array.from(${spatial}.querySelectorAll('section[aria-label]')).map(section => section.innerText) })`);
+      const beforeRecheck = await readWorkspace();
       await openPhotoSources(browser);
       await click(browser, 'Kontroller på nytt', `${sourceWizard}.querySelector('.photo-source-inventory section[data-source-id]')`);
       await browser.waitFor(`${sourceWizard}.innerText.includes('Kilden finnes i laget')`);
       await savePhotoSource(browser, 'gmi');
-      await closePhotoSources(browser);
+      const footer = `${sourceWizard}.querySelector('[data-positioning-footer]')`;
+      const primary = `${footer}.querySelector('.gmi-primary-control')`;
+      await click(browser, 'Behold alle gjeldende');
+      await browser.waitFor(`${primary}.innerText === 'Fullfør' && !${primary}.disabled`);
+      await browser.evaluate(`(() => {
+        const field = Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id] select'))
+          .find(select => select.options[0].textContent === 'La bildet være uplassert');
+        field.value = Array.from(field.options).find(option => option.text.startsWith('EXIF')).value;
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+      })()`);
+      await browser.waitFor(`${primary}.innerText === 'Neste' && !${primary}.disabled`);
+      assert.equal(await browser.evaluate(`${footer}.querySelector('[data-positioning-cancel]').innerText`), 'Lukk');
+      await click(browser, 'Behold alle gjeldende');
+      await browser.waitFor(`${primary}.innerText === 'Fullfør'`);
+      for (const [width, height] of [[1280, 720], [1366, 768]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        const geometry = await browser.evaluate(`(() => { const footer = ${footer}, primary = ${primary};
+          return { labels: Array.from(footer.querySelectorAll('button')).map(button => button.innerText),
+            primaries: footer.querySelectorAll('.gmi-primary-control').length, icon: Boolean(primary.querySelector('svg[aria-hidden=true]')),
+            buttons: Array.from(footer.querySelectorAll('button')).map(button => button.getBoundingClientRect().toJSON()) }; })()`);
+        assert.deepEqual(geometry.labels, ['Tilbake', 'Fullfør']);
+        assert.equal(geometry.primaries, 1);
+        assert(geometry.icon);
+        for (const button of geometry.buttons) assert(button.height === 40 && button.left >= 0 && button.right <= width && button.top >= 0 && button.bottom <= height);
+        if (process.env.PHOTO_SCREENSHOT_DIR) {
+          await mkdir(process.env.PHOTO_SCREENSHOT_DIR, { recursive: true });
+          const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+          await writeFile(path.join(process.env.PHOTO_SCREENSHOT_DIR, `connection-only-${width}x${height}.png`), Buffer.from(data, 'base64'));
+        }
+      }
+      await click(browser, 'Fullfør');
+      await browser.waitFor(`!${sourceWizard}`);
+      assert.deepEqual(await readWorkspace(), beforeRecheck, 'connection-only completion preserves links, positions, direction, metadata and delivery');
       assert.equal((await sourcesInfo(browser)).cards, 2, 'recheck does not duplicate sources');
       // The layer-wide Tools entry also reviews the still-unplaced second a.png occurrence.
       // The removed inspector entry restricted default proposals to the focused c.png.
@@ -142,6 +179,8 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '1 valgt');
       assert.deepEqual(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('li[data-action="place"]')).map(row => row.querySelector('.photo-positioning-filename strong').innerText)`), ['a.png']);
       assert.equal(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id]')).find(row => row.querySelector('.photo-positioning-filename strong').innerText === 'c.png').dataset.action`), 'keep', 'manual current is never proposed for replacement');
+      await click(browser, 'Behold alle gjeldende');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('footer [data-positioning-next]').disabled`), true, 'zero changes without a saved checkpoint keeps the original disabled Next');
       await click(browser, 'Tilbake');
       await click(browser, 'Fjern kilde');
       await click(browser, 'Fjern GMI-kilde');

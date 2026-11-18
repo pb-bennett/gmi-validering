@@ -7,7 +7,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { buildGmiText, latin1Bytes } from './helpers/gmiHyperlinkRemovalFixtures.mjs';
 import { gpsJpeg, gpsPng } from './helpers/photoGpsFixtures.mjs';
-import { setPhotoFiles, clickSourceControl, openPhotoSources, savePhotoSource, closePhotoSources, sourceWizard } from './helpers/photoSourceWorkflow.mjs';
+import { setPhotoFiles, clickSourceControl, openPhotoSources, savePhotoSource, sourceWizard } from './helpers/photoSourceWorkflow.mjs';
 import { chooseImportPlacement, clickImport, createLayerWithPlacement, importDialog, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { clickGmiTableObject } from './helpers/gmiTableNavigation.mjs';
 import { enterEditMode, editTarget, pressKey, KEYS } from './helpers/photoWorkspace.mjs';
@@ -314,12 +314,18 @@ test('FOTO-first combined export uses automatic and manual verified bindings and
 
       await loadVector(manualFile, 2);
       await addIndependent(manualFile);
+      const photoState = () => browser.evaluate(`({ markers: document.querySelectorAll('.photo-camera-marker').length,
+        photos: Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).map(row => [row.dataset.photoId, row.innerText]) })`);
+      await browser.waitFor('document.querySelector(".photo-camera-marker")');
+      const beforeRebind = await photoState();
       await openPhotoSources(browser);
       await browser.evaluate(`${sourceWizard}.querySelector('input[name=photo-external-source][value=gmi]').click()`);
       await click(browser, 'Bruk Manual S2.gmi', sourceWizard);
       await browser.waitFor(`${sourceWizard}.innerText.includes('Kilden kobles til GMI-laget «Manual S2.gmi».')`);
       await savePhotoSource(browser, 'gmi');
-      await closePhotoSources(browser);
+      await click(browser, 'Fullfør', sourceWizard);
+      await browser.waitFor(`!${sourceWizard}`);
+      assert.deepEqual(await photoState(), beforeRebind);
       await content();
       assert.equal(await selectedSurvey(), 'Manual S2.gmi');
       const photoB = await browser.evaluate(`${photoSelect}.value`);

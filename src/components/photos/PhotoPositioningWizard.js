@@ -152,6 +152,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   // eslint-disable-next-line react-hooks/exhaustive-deps -- The review identity is the session revision boundary.
   const capturePlan = useMemo(() => captureKey ? photoSession.planLayerSourceCaptureTimes(layer.id) : null, [captureKey, review, layer.id]);
   const selected = plan ? selectedPhotoSourcePositions(plan, choices) : [];
+  const connectionOnly = step === 3 && sourceSaved && selected.length === 0;
   const positionRows = !plan ? [] : !focusedPhotoId ? plan.rows : [
     ...plan.rows.filter((row) => row.photoId === focusedPhotoId), ...plan.rows.filter((row) => row.photoId !== focusedPhotoId),
   ];
@@ -319,7 +320,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
             </div>
           </section>}
           {step === 3 && plan && <section aria-label="Kontroller posisjoner">
-            <p className="photo-positioning-lead">GML-posisjoner er valgt der de er entydige, og manuelle posisjoner beholdes. Endre bare det som ikke stemmer.</p>
+            <p className="photo-positioning-lead">Entydige posisjoner er forhåndsvalgt. Manuelle posisjoner beholdes.</p>
             <p className="photo-positioning-note">Flere punktreferanser beholder hver sin plassering av samme bilde. Avstander er omtrentlige og sier ikke noe om kildepresisjon.</p>
             {focusedPhotoId && <p>Åpnet for {photos.find((photo) => photo.id === focusedPhotoId)?.originalFilename}. Valgene gjelder bare denne kontrollen.</p>}
             {newEvidence && <div role="status"><p>Nye posisjoner eller GPS-status er tilgjengelige. Oppdater kontrollen for å se dem; valgene utvides ikke automatisk.</p>
@@ -377,13 +378,15 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
       </div>
       <footer className="photo-import-footer border-t border-gmi-border" data-positioning-footer>
         <div className="mr-auto text-sm" role="status">{status}</div>
-        <button type="button" className={`${control} border border-gmi-border-strong px-3 py-2 text-gmi-text-muted`} onClick={requestClose} data-positioning-cancel>{saved ? 'Lukk' : 'Avbryt'}</button>
+        {!connectionOnly && <button type="button" className={`${control} border border-gmi-border-strong px-3 py-2 text-gmi-text-muted`} onClick={requestClose} data-positioning-cancel>{saved ? 'Lukk' : 'Avbryt'}</button>}
         {step > 1 && <button type="button" className={`${control} border border-gmi-border-strong bg-gmi-surface px-4 py-2`} onClick={() => goBack(steps[steps.findIndex(({ key }) => key === step) - 1].key)} data-positioning-back>Tilbake</button>}
         {step === 1 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} onClick={nextFromSources} data-positioning-next>Neste</button>}
         {step === 2 && (review ? <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary photo-positioning-final`} disabled={!ready} onClick={keepSource} data-positioning-save>
           <FloppyDiskIcon size={16} weight="regular" aria-hidden="true" />{review.source?.kind === 'gmi' ? review.recheck ? 'Oppdater koblinger' : 'Behold kilde og koblinger' : review.recheck ? 'Oppdater treff' : 'Behold GML-kilden'}</button>
           : <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} onClick={() => positions()} data-positioning-next>Neste</button>)}
-        {step === 3 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} disabled={!selected.length} onClick={() => setStep(4)} data-positioning-next>Neste</button>}
+        {step === 3 && (connectionOnly
+          ? <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary photo-positioning-final" onClick={onClose}><CheckIcon size={16} weight="regular" aria-hidden="true" />Fullfør</button>
+          : <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary" disabled={!selected.length} onClick={() => setStep(4)} data-positioning-next>Neste</button>)}
         {step === 4 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary photo-positioning-final`} disabled={!selected.length} onClick={apply} data-positioning-apply><CheckIcon size={16} weight="regular" aria-hidden="true" />Bruk valgte posisjoner for {selected.length} {selectionUnit}</button>}
       </footer>
     </div>

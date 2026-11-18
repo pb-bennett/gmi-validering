@@ -264,13 +264,16 @@ test('product UI has one source workflow and inspector has no direct source acce
   assert.match(wizard, /photo-collection-dialog photo-positioning-wizard/);
   assert.match(wizard, /Oppdater kontrollen/);
   assert.doesNotMatch(wizard, /acceptCandidates|applyPhotoPositioning\(/);
+  assert.match(wizard, /const connectionOnly = step === 3 && sourceSaved && selected\.length === 0/);
+  assert.match(wizard, /!connectionOnly && <button[^\n]+data-positioning-cancel/);
+  assert.match(wizard, /connectionOnly\s*\? <button[^\n]+onClick=\{onClose\}><CheckIcon[^\n]+weight="regular"[^\n]+Fullfør<\/button>/);
 });
 
 test('Pass 1B: a GMI layer already loaded in the app is a source-workflow source, with the same lifecycle as a file', async () => {
   const { parseGmiPhotoSource } = await import('../src/lib/photos/gmiPhotoSource.mjs');
   const { session, layer, ids } = await setup();
   const file = gmiFile([{ hyperlink: 'h:1(link:"a.jpg") ' }, { hyperlink: 'h:1(link:"b.jpg") ' }], 'loaded.gmi');
-  const binding = Object.freeze({ layerId: 'survey-1', inputId: 'input-1', filename: 'loaded.gmi' });
+  const binding = Object.freeze({ layerId: 'survey-1', inputId: 'input-1', datasetRevision: 'rev-1', filename: 'loaded.gmi' });
   let live = true, reads = 0;
   const loaded = { binding, isLive: () => live, read: async () => { reads++; return parseGmiPhotoSource(file); } };
   const before = ids.map((id) => session.getPhoto(id));
@@ -293,10 +296,13 @@ test('Pass 1B: a GMI layer already loaded in the app is a source-workflow source
   const plan = session.reviewSourceWorkflowPositions(ticket);
   assert(plan.rows.some((row) => row.options.some((option) => option.kind === 'gmi')), 'GMI positions are proposals only');
 
-  // The same layer again is detected as the attached source (the wizard then rechecks instead of duplicating).
-  assert.equal(await session.stageLayerSource(layer.id, loaded, 'gmi'), false);
-  assert.equal(session.getSnapshot().sourceReviews[layer.id].errorCode, 'duplicate-source');
-  assert.equal(session.getSnapshot().sourceReviews[layer.id].attachedSourceId, source.id);
+  // Selecting the same live layer opens a recheck of the attached source.
+  assert.equal(await session.stageLayerSource(layer.id, loaded, 'gmi'), true);
+  const recheck = session.getSnapshot().sourceReviews[layer.id];
+  assert.equal(recheck.state, 'ready');
+  assert.equal(recheck.recheck, true);
+  assert.strictEqual(recheck.source, source);
+  assert.equal(recheck.rebinding, null);
   session.cancelLayerSourceReview(layer.id);
 
   // A layer that is no longer live is rejected before and after the read; nothing is attached.
