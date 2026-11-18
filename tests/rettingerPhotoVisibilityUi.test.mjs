@@ -1,5 +1,5 @@
-// A5 browser test: Rettinger hides FOTO map markers for one visit, in the real app (production build at PHOTO_UI_URL),
-// driven through the visible UI. Synthetic fixtures only. Screenshots: set GMI_EDIT_SCREENSHOT_DIR.
+// Workspace suppression through visible controls against a production build at PHOTO_UI_URL.
+// Synthetic fixtures only. Screenshots: set GMI_EDIT_SCREENSHOT_DIR.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { copyFile, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
@@ -14,6 +14,7 @@ import { GMI_EDIT_FIXTURE_DIR } from './helpers/gmiEditFixtures.mjs';
 const app = process.env.PHOTO_UI_URL;
 const shots = process.env.GMI_EDIT_SCREENSHOT_DIR;
 const workspace = 'document.querySelector(".gmi-edit-workspace")';
+const validatorLayer = 'document.querySelector("#validation-v2-layer")';
 const toggle = 'document.querySelector("[data-rettinger-photo-toggle]")';
 const markerCount = 'document.querySelectorAll(".leaflet-marker-icon[data-photo-id]").length';
 const gmiFeatureCount = 'document.querySelectorAll(".leaflet-overlay-pane path.leaflet-interactive, .leaflet-marker-pane .leaflet-marker-icon:not([data-photo-id])").length';
@@ -41,6 +42,18 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
       await clickButton('Lukk Rettinger', workspace);
       await browser.waitFor(`!${workspace}`);
     };
+    const openValidator = async (name) => {
+      const title = `document.querySelector(${JSON.stringify(`[title="${name}.gmi"]`)})`;
+      const action = `${title}.closest('.py-1').querySelector('button[title=Feltvalidering]')`;
+      if (!await browser.evaluate(`Boolean(${action})`)) await browser.evaluate(`${title}.click()`);
+      await browser.waitFor(action);
+      await browser.evaluate(`${action}.click()`);
+      await browser.waitFor(`${validatorLayer}?.selectedOptions[0]?.textContent === ${JSON.stringify(`${name}.gmi`)}`);
+    };
+    const exitValidator = async () => {
+      await clickButton('Lukk Validator');
+      await browser.waitFor(`!${validatorLayer}`);
+    };
     // Persistent FOTO visibility as the layer card states it (the card is the Layer Manager's own control).
     const cardVisible = () => browser.evaluate(`Array.from(document.querySelectorAll('section[aria-label^="Fotokartlag"] input[type=checkbox]')).map((e) => e.checked)`);
     const toggleState = () => browser.evaluate(`(() => { const e = ${toggle}; if (!e) return null;
@@ -56,6 +69,15 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
       await mkdir(shots, { recursive: true });
       const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
       await writeFile(path.join(shots, `${name}.png`), Buffer.from(data, 'base64'));
+    };
+    const assertToolbarFit = async (width, height) => {
+      const box = await browser.evaluate(`(() => { const r = (e) => e.getBoundingClientRect(), b = r(${toggle}), bar = ${toggle}.closest('[role=toolbar]');
+        const apart = (o) => !o || b.right <= o.left || b.left >= o.right || b.bottom <= o.top || b.top >= o.bottom;
+        const tabs = r(bar.querySelector('[class*="left-1/2"]')), zoom = document.querySelector('.leaflet-control-zoom');
+        const right = Array.from(bar.querySelector('.right-0').children).map(r);
+        return { inside: b.left >= r(bar).left && b.top >= r(bar).top, clearOfSwitcher: apart(tabs), clearOfZoom: apart(zoom && r(zoom)),
+          clearOfRight: right.every(apart), w: b.width, h: b.height, scroll: document.documentElement.scrollWidth <= window.innerWidth }; })()`);
+      assert.deepEqual(box, { inside: true, clearOfSwitcher: true, clearOfZoom: true, clearOfRight: true, w: 36, h: 36, scroll: true }, `${width}×${height}`);
     };
     const deliverySummary = async () => {
       // FOTO workspace delivery pills: the visible form of photoSession delivery decisions.
@@ -94,9 +116,9 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
       const cardsBefore = await cardVisible();
       assert.deepEqual(cardsBefore, [true], 'FOTO layer is visible by its own setting');
 
-      await t.test('Validator/normal map: markers and legend photo modes as before; no toggle', async () => {
+      await t.test('normal map shows markers and legend photo modes without a visit toggle', async () => {
         assert.equal(await browser.evaluate(markerCount), 2);
-        assert.equal(await toggleState(), null, 'the override control exists only in Rettinger');
+        assert.equal(await toggleState(), null);
         const expanded = await browser.evaluate(`Array.from(document.querySelectorAll('button[aria-expanded]')).find((e) => e.innerText.includes('Tegnforklaring'))?.getAttribute('aria-expanded')`);
         if (expanded === 'false') await clickButton('Tegnforklaring');
         await browser.waitFor('document.querySelector("[data-legend-photos]")');
@@ -171,13 +193,17 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
         assert.deepEqual(await cardVisible(), cardsBefore);
       });
 
-      await t.test('a FOTO layer hidden by the user stays hidden in and after Rettinger; no toggle is offered', async () => {
+      await t.test('a user-hidden FOTO layer stays hidden through Rettinger and Validator visits', async () => {
         await browser.evaluate(`document.querySelector('section[aria-label^="Fotokartlag"] input[type=checkbox]').click()`);
         await browser.waitFor(`${markerCount} === 0`);
         await openRettinger('Syntetisk leveranse');
         assert.equal(await toggleState(), null, 'nothing to show: no control');
         assert.equal(await browser.evaluate(markerCount), 0);
         await exitRettinger();
+        await openValidator('Syntetisk leveranse');
+        assert.equal(await toggleState(), null, 'no eligible FOTO layer in Validator');
+        assert.equal(await browser.evaluate(markerCount), 0);
+        await exitValidator();
         assert.equal(await browser.evaluate(markerCount), 0, 'hidden layer remains hidden');
         assert.deepEqual(await cardVisible(), [false]);
         await browser.evaluate(`document.querySelector('section[aria-label^="Fotokartlag"] input[type=checkbox]').click()`);
@@ -197,28 +223,62 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
           await openRettinger('Syntetisk leveranse');
           await browser.waitFor(toggle);
           await new Promise((resolve) => setTimeout(resolve, 300));
-          const box = await browser.evaluate(`(() => { const r = (e) => e.getBoundingClientRect(), b = r(${toggle}), bar = ${toggle}.closest('[role=toolbar]');
-            const apart = (o) => !o || b.right <= o.left || b.left >= o.right || b.bottom <= o.top || b.top >= o.bottom;
-            const tabs = r(bar.querySelector('[class*="left-1/2"]')), zoom = document.querySelector('.leaflet-control-zoom');
-            const right = Array.from(bar.querySelector('.right-0').children).map(r);
-            return { inside: b.left >= r(bar).left && b.top >= r(bar).top, clearOfSwitcher: apart(tabs), clearOfZoom: apart(zoom && r(zoom)),
-              clearOfRight: right.every(apart), w: b.width, h: b.height, scroll: document.documentElement.scrollWidth <= window.innerWidth }; })()`);
-          assert.deepEqual(box, { inside: true, clearOfSwitcher: true, clearOfZoom: true, clearOfRight: true, w: 36, h: 36, scroll: true }, `${width}×${height}`);
+          await assertToolbarFit(width, height);
           await shot(`a5-rettinger-toolbar-${width}x${height}`);
           await exitRettinger();
         }
       });
 
-      await t.test('Rettinger → Validator: Validator field validation shows photos as before; no override control', async () => {
-        await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
-        await openRettinger('Syntetisk leveranse');
-        await browser.waitFor(`${markerCount} === 0`);
-        await clickButton('Vis bilder');
-        await browser.waitFor(`${markerCount} === 2`);
-        await clickButton('Åpne Validator', workspace);
-        await browser.waitFor(`!${workspace} && ${markerCount} === 2`);
-        assert.equal(await toggleState(), null);
-        await shot('a5-validator-after-rettinger-1366x768');
+      await t.test('Validator entry, reveal, survey layer switch and exit preserve visibility preferences at both sizes', async () => {
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await openValidator('Syntetisk leveranse');
+          await browser.waitFor(`${markerCount} === 0 && ${toggle}?.dataset.rettingerPhotoToggle === 'hidden'`);
+          assert.equal((await toggleState()).pressed, 'false');
+          assert(await browser.evaluate(gmiFeatureCount) > 0);
+          assert.equal(await browser.evaluate('Boolean(document.querySelector("[data-legend-photos]"))'), false);
+          await assertToolbarFit(width, height);
+          await clickButton('Vis bilder');
+          await browser.waitFor(`${markerCount} === 2`);
+          await browser.evaluate(`(() => { const select = ${validatorLayer};
+            select.value = Array.from(select.options).find(e => e.textContent.includes('Annen leveranse')).value;
+            select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+          await browser.waitFor(`${validatorLayer}.selectedOptions[0].textContent === 'Annen leveranse.gmi'`);
+          assert.equal((await toggleState()).pressed, 'true', 'same Validator visit keeps the reveal');
+          assert.equal(await browser.evaluate(markerCount), 2);
+          await shot(`batch-c-validator-photos-${width}x${height}`);
+          await clickButton('Vis bilder');
+          await browser.waitFor(`${markerCount} === 0`);
+          await exitValidator();
+          await browser.waitFor(`${markerCount} === 2 && !${toggle}`);
+          assert.deepEqual(await cardVisible(), cardsBefore);
+        }
+      });
+
+      await t.test('direct Rettinger ↔ Validator transitions start hidden in each destination', async () => {
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await openRettinger('Syntetisk leveranse');
+          await browser.waitFor(`${markerCount} === 0 && ${toggle}?.dataset.rettingerPhotoToggle === 'hidden'`);
+          await clickButton('Vis bilder');
+          await browser.waitFor(`${markerCount} === 2`);
+          await clickButton('Åpne Validator', workspace);
+          await browser.waitFor(`${validatorLayer} && !${workspace} && ${markerCount} === 0 && ${toggle}?.dataset.rettingerPhotoToggle === 'hidden'`);
+          await clickButton('Vis bilder');
+          await browser.waitFor(`${markerCount} === 2`);
+          await browser.evaluate(`Array.from(document.querySelectorAll('[aria-label=Geometri] [role=tab]')).find(e => e.innerText.startsWith('Ledninger')).click()`);
+          const rule = `document.querySelector('button[aria-label^="SDR:"]')`;
+          await browser.waitFor(rule);
+          await browser.evaluate(`${rule}.click()`);
+          await clickButton('Lag retting…');
+          await browser.waitFor(`${workspace} && !${validatorLayer} && ${markerCount} === 0 && ${toggle}?.dataset.rettingerPhotoToggle === 'hidden'`);
+          await exitRettinger();
+          await browser.waitFor(`${markerCount} === 2 && !${toggle}`);
+          assert.deepEqual(await cardVisible(), cardsBefore);
+        }
+        const after = await deliverySummary();
+        assert.deepEqual(after.pills, deliveryBefore, 'Validator visits leave delivery choices intact');
+        assert.equal(after.workspaceMarkers, 2);
       });
     } finally {
       await browser.close();

@@ -292,6 +292,10 @@ export function reduceValidationV2PresentationState(state, action) {
       };
     case 'SET_SORT':
       return { ...state, sortMode: action.sortMode };
+    case 'DATASET_CHANGED':
+      return action.expansionKeys.includes(state.expandedRuleKey)
+        ? state
+        : { ...state, expandedRuleKey: null };
     case 'SET_SEARCH':
     case 'SET_STATUS_FILTER': {
       const next = {
@@ -305,7 +309,6 @@ export function reduceValidationV2PresentationState(state, action) {
         : { ...next, expandedRuleKey: null };
     }
     case 'GEOMETRY_CHANGED':
-    case 'LAYER_CHANGED':
     case 'NEW_RESULT':
       return {
         ...state,
@@ -315,10 +318,9 @@ export function reduceValidationV2PresentationState(state, action) {
           : ValidationV2StatusFilter.ALL,
         expandedRuleKey: null,
       };
+    case 'LAYER_CHANGED':
     case 'RESET_PRESENTATION':
-      return {
-        ...createValidationV2PresentationState(),
-      };
+      return createValidationV2PresentationState();
     default:
       return state;
   }

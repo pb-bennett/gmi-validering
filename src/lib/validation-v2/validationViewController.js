@@ -28,6 +28,15 @@ export function createValidationV2ViewController(runValidation) {
       };
       return snapshot();
     },
+    selectDataset(layer, preferredGeometry) {
+      const objects = preferredGeometry === 'point' ? layer?.data?.points
+        : preferredGeometry === 'line' ? layer?.data?.lines : null;
+      state = {
+        geometryTab: objects?.length > 0 ? preferredGeometry : getDefaultValidationV2Geometry(layer),
+        result: null,
+      };
+      return snapshot();
+    },
     run(input) {
       state = { ...state, result: runValidation(input) };
       return snapshot();

@@ -2,57 +2,74 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
-  createRettingerPhotoOverride,
-  reconcileRettingerPhotoOverride,
-  rettingerPhotosSuppressed,
-  rettingerPhotoToggleAvailable,
-  toggleRettingerPhotoOverride,
+  createWorkspacePhotoOverride,
+  reconcileWorkspacePhotoOverride,
+  workspacePhotosSuppressed,
+  workspacePhotoToggleAvailable,
+  toggleWorkspacePhotoOverride,
 } from '../src/lib/workspace/rettingerPhotoVisibility.mjs';
 import { buildPhotoMapItems } from '../src/lib/photos/photoMapFeatures.mjs';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('A5: entering Rettinger hides photos; Vis/Skjul toggles; exit restores; re-entry hides again', () => {
-  let state = reconcileRettingerPhotoOverride(null, null);
-  assert.deepEqual(state, { layerId: null, shown: false });
-  assert.equal(rettingerPhotosSuppressed(state, false), false, 'Validator/normal map never suppresses');
+  let state = reconcileWorkspacePhotoOverride(null, null);
+  assert.deepEqual(state, { visitKey: null, shown: false });
+  assert.equal(workspacePhotosSuppressed(state), false, 'normal map never suppresses');
 
-  state = reconcileRettingerPhotoOverride(state, 'layer-a');
-  assert.deepEqual(state, { layerId: 'layer-a', shown: false });
-  assert.equal(rettingerPhotosSuppressed(state, true), true, 'entry hides photos');
+  state = reconcileWorkspacePhotoOverride(state, 'rettinger:layer-a');
+  assert.deepEqual(state, { visitKey: 'rettinger:layer-a', shown: false });
+  assert.equal(workspacePhotosSuppressed(state), true, 'entry hides photos');
 
-  state = toggleRettingerPhotoOverride(state);
+  state = toggleWorkspacePhotoOverride(state);
   assert.equal(state.shown, true);
-  assert.equal(rettingerPhotosSuppressed(state, true), false, '«Vis bilder» shows them');
-  assert.equal(reconcileRettingerPhotoOverride(state, 'layer-a'), state, 'same visit keeps the choice (identity-stable)');
+  assert.equal(workspacePhotosSuppressed(state), false, '«Vis bilder» shows them');
+  assert.equal(reconcileWorkspacePhotoOverride(state, 'rettinger:layer-a'), state, 'same visit keeps the choice (identity-stable)');
 
-  state = toggleRettingerPhotoOverride(state);
-  assert.equal(rettingerPhotosSuppressed(state, true), true, '«Skjul bilder» hides them again');
+  state = toggleWorkspacePhotoOverride(state);
+  assert.equal(workspacePhotosSuppressed(state), true, '«Skjul bilder» hides them again');
 
-  state = toggleRettingerPhotoOverride(state);
-  state = reconcileRettingerPhotoOverride(state, null);
-  assert.deepEqual(state, { layerId: null, shown: false }, 'exit clears the override');
-  assert.equal(rettingerPhotosSuppressed(state, false), false, 'exit restores the map');
+  state = toggleWorkspacePhotoOverride(state);
+  state = reconcileWorkspacePhotoOverride(state, null);
+  assert.deepEqual(state, { visitKey: null, shown: false }, 'exit clears the override');
+  assert.equal(workspacePhotosSuppressed(state), false, 'exit restores the map');
 
-  state = reconcileRettingerPhotoOverride(state, 'layer-a');
-  assert.equal(rettingerPhotosSuppressed(state, true), true, 're-entry hides again even after «Vis bilder»');
+  state = reconcileWorkspacePhotoOverride(state, 'rettinger:layer-a');
+  assert.equal(workspacePhotosSuppressed(state), true, 're-entry hides again even after «Vis bilder»');
 });
 
 test('A5: switching the Rettinger layer resets the override; FOTO workspace never suppresses', () => {
-  const shownOnA = toggleRettingerPhotoOverride(createRettingerPhotoOverride('layer-a'));
-  const onB = reconcileRettingerPhotoOverride(shownOnA, 'layer-b');
-  assert.deepEqual(onB, { layerId: 'layer-b', shown: false });
-  // gmiEditActive is false while the FOTO workspace owns the page, even if a Rettinger layer is still recorded.
-  assert.equal(rettingerPhotosSuppressed(onB, false), false);
-  assert.equal(toggleRettingerPhotoOverride(createRettingerPhotoOverride(null)).shown, false, 'no toggle outside Rettinger');
+  const shownOnA = toggleWorkspacePhotoOverride(createWorkspacePhotoOverride('rettinger:layer-a'));
+  const onB = reconcileWorkspacePhotoOverride(shownOnA, 'rettinger:layer-b');
+  assert.deepEqual(onB, { visitKey: 'rettinger:layer-b', shown: false });
+  const foto = reconcileWorkspacePhotoOverride(onB, null);
+  assert.equal(workspacePhotosSuppressed(foto), false);
+  assert.equal(toggleWorkspacePhotoOverride(foto), foto, 'no override outside the supported workspaces');
 });
 
-test('A5: control is offered only for visible FOTO layers with placed photos, and only in Rettinger', () => {
+test('Validator keeps its override within a visit and resets it on direct transitions and re-entry', () => {
+  let state = reconcileWorkspacePhotoOverride(null, 'validator');
+  assert.equal(workspacePhotosSuppressed(state), true);
+  state = toggleWorkspacePhotoOverride(state);
+  assert.equal(reconcileWorkspacePhotoOverride(state, 'validator'), state, 'Validator uses the same key across survey layers');
+  state = reconcileWorkspacePhotoOverride(state, 'rettinger:layer-a');
+  assert.equal(workspacePhotosSuppressed(state), true, 'Validator to Rettinger starts hidden');
+  state = reconcileWorkspacePhotoOverride(toggleWorkspacePhotoOverride(state), 'validator');
+  assert.equal(workspacePhotosSuppressed(state), true, 'Rettinger to Validator starts hidden');
+  state = reconcileWorkspacePhotoOverride(toggleWorkspacePhotoOverride(state), null);
+  assert.equal(workspacePhotosSuppressed(state), false);
+  assert.equal(workspacePhotosSuppressed(reconcileWorkspacePhotoOverride(state, 'validator')), true);
+});
+
+test('control is offered only for visible FOTO layers with placed photos during a supported visit', () => {
   const layers = [{ id: 'p1', visible: false, placedCount: 4 }, { id: 'p2', visible: true, placedCount: 0 }];
-  assert.equal(rettingerPhotoToggleAvailable(layers, true), false, 'hidden or empty layers offer nothing');
-  assert.equal(rettingerPhotoToggleAvailable([...layers, { id: 'p3', visible: true, placedCount: 1 }], true), true);
-  assert.equal(rettingerPhotoToggleAvailable([{ id: 'p3', visible: true, placedCount: 1 }], false), false);
-  assert.equal(rettingerPhotoToggleAvailable(null, true), false);
+  const visibleLayers = [...layers, { id: 'p3', visible: true, placedCount: 1 }];
+  for (const visitKey of ['validator', 'rettinger:layer-a']) {
+    assert.equal(workspacePhotoToggleAvailable(layers, visitKey), false, 'hidden or empty layers offer nothing');
+    assert.equal(workspacePhotoToggleAvailable(visibleLayers, visitKey), true);
+    assert.equal(workspacePhotoToggleAvailable(null, visitKey), false);
+  }
+  assert.equal(workspacePhotoToggleAvailable(visibleLayers, null), false);
 });
 
 test('A5: the override never mutates layer visibility, and initially hidden layers stay hidden when shown', () => {
@@ -75,13 +92,13 @@ test('A5 wiring: render-time override only; no photoSession visibility writes; l
     read('../src/lib/workspace/rettingerPhotoVisibility.mjs'),
   ]);
   assert.doesNotMatch(helper, /setLayerVisibility\(|^import |localStorage/m);
-  // A visit ends whenever Rettinger stops owning the workspace (exit, or a trip to FOTO), not only when the layer id clears.
-  assert.match(page, /const rettingerVisitLayerId = gmiEditActive \? gmiEditLayerId : null;/);
-  assert.match(page, /reconcileRettingerPhotoOverride\(rettingerPhotoState, rettingerVisitLayerId\)/);
-  assert.match(page, /rettingerPhotosSuppressed\(rettingerPhotos, gmiEditActive\)/);
-  assert.match(page, /suppressed: rettingerPhotosHidden/);
-  assert.match(page, /photoToggle=\{rettingerPhotoToggle\}/);
-  assert.doesNotMatch(page.split('rettingerPhotoToggle = ')[1].split('} : null;')[0], /setLayerVisibility/);
+  assert.match(page, /const validatorActive = !workspaceLayer && !gmiEditActive && fieldValidationOpen;/);
+  assert.match(page, /const photoVisitKey = gmiEditActive \? `rettinger:\$\{gmiEditLayerId\}` : validatorActive \? 'validator' : null;/);
+  assert.match(page, /reconcileWorkspacePhotoOverride\(workspacePhotoState, photoVisitKey\)/);
+  assert.match(page, /workspacePhotosSuppressed\(workspacePhotosOverride\)/);
+  assert.match(page, /suppressed: workspacePhotosHidden/);
+  assert.match(page, /photoToggle=\{workspacePhotoToggle\}/);
+  assert.doesNotMatch(page.split('workspacePhotoToggle = ')[1].split('} : null;')[0], /setLayerVisibility/);
   assert.match(mapInner, /photosSuppressed = Boolean\(photoDisplay\?\.suppressed\) && !workspaceLayerId/);
   assert.match(mapInner, /photosSuppressed \? \[\] : buildPhotoMapItems/);
   assert.match(legend, /!photoDisplay\.suppressed/);

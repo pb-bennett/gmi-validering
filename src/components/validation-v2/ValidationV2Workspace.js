@@ -22,6 +22,7 @@ import {
   ValidationV2StatusFilter,
   createValidationV2PresentationState,
   getValidationV2PresentationRules,
+  getValidationV2RulePresentations,
   getValidationV2SortModeLabel,
   reduceValidationV2PresentationState,
 } from '@/lib/validation-v2/resultPresentation';
@@ -83,7 +84,6 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   );
   const [requestedLayerId, setRequestedLayerId] = useState(initialLayerId);
   const [viewState, setViewState] = useState(() => controller.selectLayer(layers[initialLayerId]));
-  const [runState, setRunState] = useState('idle');
   const [runTarget, setRunTarget] = useState(null);
   const [runError, setRunError] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
@@ -136,7 +136,6 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   const workspaceIdentity = JSON.stringify({
     layer: selectedLayerId,
     geometry: activeGeometry,
-    revision: selectedRevision,
   });
   const dockedInspectorVisible = Boolean(
     canDockInspector && inspectorHost && selectedValidatorField &&
@@ -145,6 +144,7 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     selectedValidatorField.geometryScope === activeGeometry
   );
   const previousWorkspaceIdentityRef = useRef(workspaceIdentity);
+  const previousDatasetRef = useRef(null);
   const geometryView = result ? viewState.geometryView : null;
   const activeRuleResults = geometryView?.ruleResults || EMPTY_RULE_RESULTS;
   const geometrySummary = geometryView?.summary || null;
@@ -318,46 +318,63 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   }, [openObjectTable, selectedLayerId, selectedRevision, selectedValidatorField, result, selectedLayer, datasetKind, datasetLabel, editView]);
 
   const selectLayer = (event) => {
-    closeValidatorOwnedObjectTable();
-    const nextLayerId = event.target.value;
-    const nextLayer = layers[nextLayerId];
-    setRequestedLayerId(nextLayerId);
-    setViewState(controller.selectLayer(nextLayer));
-    setRunTarget(null);
-    setRunState('idle');
-    setRunError(false);
-    setSelectedValidatorField(null);
-    setActiveFieldTab('result');
-    dispatchPresentation({ type: 'LAYER_CHANGED' });
+    setRequestedLayerId(event.target.value);
   };
 
-  const runValidation = () => {
-    const input = createValidationV2Input(selectedLayer);
-    if (!input) return;
+  // Presentation updates do not trigger validation. A new revision within the
+  // same layer can reuse the view, but any object inspection needs new refs.
+  useEffect(() => {
+    const previousDataset = previousDatasetRef.current;
+    previousDatasetRef.current = { layerId: selectedLayerId, revision: selectedRevision };
+    const layerChanged = previousDataset?.layerId !== selectedLayerId;
+    const datasetChanged = !layerChanged && previousDataset.revision !== selectedRevision;
     closeValidatorOwnedObjectTable();
-    setRunState('running');
     setRunError(false);
+    if (datasetChanged) {
+      controller.selectDataset(selectedLayer, activeGeometry);
+    } else {
+      setViewState(controller.selectLayer(selectedLayer));
+      setSelectedValidatorField(null);
+      setActiveFieldTab('result');
+      dispatchPresentation({ type: layerChanged ? 'LAYER_CHANGED' : 'NEW_RESULT' });
+    }
+
+    const input = createValidationV2Input(selectedLayer);
+    if (!input) {
+      setRunTarget(null);
+      return;
+    }
     setRunTarget({ layerId: input.layerId, datasetRevision: input.datasetRevision });
-    setSelectedValidatorField(null);
-    setActiveFieldTab('result');
-    dispatchPresentation({ type: 'NEW_RESULT' });
     try {
-      setViewState(controller.run({ ...input, referenceDate }));
-      setRunState('success');
+      const nextView = controller.run({ ...input, referenceDate });
+      setViewState(nextView);
+      if (datasetChanged) {
+        const { geometryTab, geometryView } = nextView;
+        const presentations = getValidationV2RulePresentations(geometryView.ruleResults, geometryTab);
+        dispatchPresentation({ type: 'DATASET_CHANGED', expansionKeys: presentations.map(({ expansionKey }) => expansionKey) });
+        setSelectedValidatorField((selection) => {
+          if (selection?.layerId !== selectedLayerId || selection.geometryScope !== geometryTab) return null;
+          const { canonicalFieldId } = selection.field;
+          const rules = geometryView.ruleResults.map((entry) => entry.rule).filter((rule) => rule.canonicalFieldId === canonicalFieldId);
+          const rule = rules.find(({ ruleId }) => ruleId === selection.rule.ruleId);
+          return rule ? {
+            ...selection,
+            field: composeFieldInformation({ canonicalFieldId, geometryScope: geometryTab, rule }),
+            rule,
+            rules,
+            datasetRevision: input.datasetRevision,
+          } : null;
+        });
+      }
     } catch (error) {
       console.error('Validator could not run', error);
       setViewState(controller.clearResult());
-      setRunState('error');
       setRunError(true);
+      if (datasetChanged) {
+        dispatchPresentation({ type: 'DATASET_CHANGED', expansionKeys: [] });
+        setSelectedValidatorField(null);
+      }
     }
-  };
-
-  // Validation is derived from the selected layer and its immutable dataset
-  // revision. Presentation-only changes do not participate in this effect.
-  useEffect(() => {
-    if (!selectedLayer || !isGmi) return;
-    setViewState(controller.selectLayer(selectedLayer));
-    runValidation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLayerId, selectedRevision, isGmi, referenceDate]);
 
@@ -366,7 +383,6 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
   const changeDataset = (event) => {
     closeValidatorOwnedObjectTable();
     useStore.getState().setGmiValidatorDataset(selectedLayerId, event.target.value);
-    setSelectedValidatorField(null);
   };
   const correctable = (presentation) => Boolean(result && descriptor?.state !== 'read-only' && presentation.rules.some((rule) => CORRECTABLE_RULES[rule.ruleId]
     && result.schemaBinding.bindings.some((binding) => binding.geometryScope === 'line' && binding.canonicalFieldId === CORRECTABLE_RULES[rule.ruleId] && binding.state === 'BOUND')

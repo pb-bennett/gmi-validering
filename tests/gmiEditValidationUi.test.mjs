@@ -86,7 +86,13 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
       await browser.waitFor('document.querySelector("input[type=file]")');
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
-      await browser.evaluate('document.querySelector("[data-gmi-edit-action]").click()');
+      const otherFile = path.join(directory, 'Annet kontrollag.gmi');
+      await writeFile(otherFile, gmiEditValidationFixture());
+      await click('Legg til fil');
+      await browser.waitFor('document.querySelector("input[type=file]")');
+      await setPhotoFiles(browser, 'input[type=file]', [otherFile]);
+      await browser.waitFor('document.querySelectorAll("[data-gmi-edit-action]").length === 2');
+      await browser.evaluate(`Array.from(document.querySelectorAll('[data-gmi-edit-action]')).find(e => e.closest('.py-1').innerText.includes('Syntetisk M5A')).click()`);
       await browser.waitFor(`${workspace}?.querySelector('[data-gmi-edit-status]')?.innerText === 'Redigerbar'`);
       await select('line:0'); await checked();
 
@@ -207,6 +213,91 @@ test('M5A: shared Validator findings, effective drafts, severity tooltips, stagi
             await writeFile(path.join(process.env.GMI_EDIT_SCREENSHOT_DIR, `m5a-${width}.png`), Buffer.from(data, 'base64'));
           }
         }
+        assert.deepEqual(new Uint8Array(await readFile(file)), bytes);
+        assert.equal(browser.events.filter((event) => event.method === 'Runtime.exceptionThrown').length, 0);
+      });
+
+      await t.test('Validator preserves the line view across dataset revisions and resets it for another survey layer', async () => {
+        const dataset = 'document.querySelector("#validation-v2-dataset")';
+        const layer = 'document.querySelector("#validation-v2-layer")';
+        const panel = 'document.querySelector("#validation-v2-geometry-panel")';
+        const geometry = 'document.querySelector("[role=tablist][aria-label=Geometri]")';
+        const field = 'document.querySelector(\'button[aria-label^="Dimensjon:"]\')';
+        const search = 'document.querySelector(\'input[aria-label="Søk i kontroller"]\')';
+        const group = 'document.querySelector(\'[role=group][aria-label="Statusfilter"]\')';
+        const inspector = 'document.querySelector("#validation-v2-field-inspector-title")';
+        const modal = 'document.querySelector("#validation-v2-field-info-title")';
+        const table = 'document.querySelector("[data-table-geometry]")';
+        const setSelect = (selector, next) => browser.evaluate(`(() => { const e = ${selector}; e.value = ${JSON.stringify(next)};
+          e.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+        const changeDataset = async (next) => {
+          await setSelect(dataset, next);
+          await browser.waitFor(`${dataset}.value === '${next}' && ${panel}?.innerText.startsWith('${next === 'original' ? 'Original' : 'Foreslått'}')`);
+        };
+        const view = () => browser.evaluate(`({
+          geometry: ${geometry}.querySelector('[aria-selected=true]').innerText,
+          search: ${search}.value,
+          status: ${group}.querySelector('[aria-pressed=true]').innerText,
+          sort: document.querySelector('button[aria-controls=validation-v2-sort-menu]').getAttribute('aria-label'),
+          expanded: ${field}.getAttribute('aria-expanded'),
+        })`);
+        const openObjects = async () => {
+          const action = 'document.querySelector(\'button[aria-label*="objekter i tabell:"]\')';
+          await browser.waitFor(action);
+          await browser.evaluate(`${action}.click()`);
+          await browser.waitFor(`${table}?.dataset.tableGeometry === 'ledninger'`);
+        };
+        await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
+        await click('Åpne Validator', workspace);
+        await browser.waitFor(`${dataset}?.querySelector('[value=proposed]:enabled') && ${panel}`);
+        await changeDataset('original');
+        assert.match(await browser.evaluate(`${geometry}.querySelector('[aria-selected=true]').innerText`), /^Punkter/);
+        await browser.evaluate(`Array.from(${geometry}.querySelectorAll('button')).find(e => e.innerText.startsWith('Ledninger')).click()`);
+        await click('Sorter: Status – krever oppmerksomhet'); await click('Navn Å–A');
+        await click('Åpne filtre');
+        await browser.evaluate(`(() => { const e = ${search}; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(e, 'Dimensjon');
+          e.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+        await click('Feil', group);
+        await browser.evaluate(`${field}.click()`);
+        await click('Vis detaljer: Dimensjon');
+        await browser.waitFor(`${inspector}?.innerText === 'Original · Dimensjon'`);
+        const expected = { geometry: 'Ledninger 3', search: 'Dimensjon', status: 'Feil', sort: 'Sorter: Navn Å–A', expanded: 'true' };
+        assert.deepEqual(await view(), expected);
+        await openObjects();
+
+        await changeDataset('proposed');
+        await browser.waitFor(`${inspector}?.innerText === 'Foreslått · Dimensjon' && !${table}`);
+        assert.deepEqual(await view(), expected);
+        if (process.env.GMI_EDIT_SCREENSHOT_DIR) {
+          const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+          await writeFile(path.join(process.env.GMI_EDIT_SCREENSHOT_DIR, 'batch-c-dataset-1366x768.png'), Buffer.from(data, 'base64'));
+        }
+        await openObjects();
+        assert.match(await browser.evaluate(`${table}.innerText`), /Foreslått/);
+        await changeDataset('original');
+        await browser.waitFor(`${inspector}?.innerText === 'Original · Dimensjon' && !${table}`);
+        assert.deepEqual(await view(), expected);
+
+        await browser.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+        await browser.waitFor(`${modal}?.innerText === 'Original · Dimensjon'`);
+        await openObjects();
+        await browser.waitFor(`!${modal}`);
+        await changeDataset('proposed');
+        await browser.waitFor(`!${table}`);
+        assert.deepEqual(await view(), expected);
+        assert(await browser.evaluate('document.documentElement.scrollWidth <= innerWidth'));
+        if (process.env.GMI_EDIT_SCREENSHOT_DIR) {
+          const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+          await writeFile(path.join(process.env.GMI_EDIT_SCREENSHOT_DIR, 'batch-c-dataset-1280x720.png'), Buffer.from(data, 'base64'));
+        }
+        const otherLayer = await browser.evaluate(`Array.from(${layer}.options).find(e => e.textContent.includes('Annet kontrollag')).value`);
+        await setSelect(layer, otherLayer);
+        await browser.waitFor(`${panel}?.innerText.startsWith('Original · 1 punkter')`);
+        assert.equal(await browser.evaluate(`${search}.value`), '');
+        assert.match(await browser.evaluate(`${group}.querySelector('[aria-pressed=true]').innerText`), /^Alle /);
+        assert.equal(await browser.evaluate('document.querySelector("button[aria-controls=validation-v2-sort-menu]").getAttribute("aria-label")'), 'Sorter: Status – krever oppmerksomhet');
+        assert.equal(await browser.evaluate(`Boolean(${panel}.querySelector('button[aria-label*=":"][aria-expanded=true]'))`), false);
+        assert.equal(await browser.evaluate(`Boolean(${table} || ${inspector} || ${modal})`), false);
         assert.deepEqual(new Uint8Array(await readFile(file)), bytes);
         assert.equal(browser.events.filter((event) => event.method === 'Runtime.exceptionThrown').length, 0);
       });

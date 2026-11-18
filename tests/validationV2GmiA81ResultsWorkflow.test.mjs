@@ -6,6 +6,38 @@ register('./esmJsLoader.mjs', import.meta.url);
 const api = await import('../src/lib/validation-v2/index.js');
 const { createValidationV2ViewController } = await import('../src/lib/validation-v2/validationViewController.js');
 const { getValidationV2GeometryView } = await import('../src/lib/validation-v2/uiIntegration.js');
+
+test('dataset selection preserves a populated geometry and invalidates the controller result', () => {
+  const mixed = { data: { points: [{}], lines: [{}] } };
+  const pointOnly = { data: { points: [{}], lines: [] } };
+  const lineOnly = { data: { points: [], lines: [{}] } };
+  let runs = 0;
+  const controller = createValidationV2ViewController((input) => {
+    runs++;
+    return { ...input, summary: { evaluatedPointCount: 1, evaluatedLineCount: 1 }, ruleResults: [] };
+  });
+  controller.selectLayer(mixed);
+  controller.selectGeometry('line');
+  controller.run({ datasetRevision: 'original' });
+  assert.deepEqual(controller.selectDataset(mixed, 'line'), { geometryTab: 'line', result: null, geometryView: null });
+  assert.equal(runs, 1);
+  assert.equal(controller.run({ datasetRevision: 'proposed' }).geometryView.result.datasetRevision, 'proposed');
+  assert.equal(controller.selectDataset(pointOnly, 'line').geometryTab, 'point');
+  assert.equal(controller.selectDataset(lineOnly, 'point').geometryTab, 'line');
+  assert.equal(controller.selectLayer(mixed).geometryTab, 'point');
+});
+
+test('DATASET_CHANGED preserves presentation and only drops expansions missing in the new scope', () => {
+  const reduce = api.reduceValidationV2PresentationState;
+  const state = Object.freeze({ searchQuery: 'Material', statusFilter: api.ValidationV2StatusFilter.CHECK,
+    sortMode: api.ValidationV2SortMode.NAME_DESC, expandedRuleKey: 'line:material' });
+  assert.deepEqual(reduce(state, { type: 'DATASET_CHANGED', expansionKeys: ['line:material'] }), state);
+  for (const expansionKeys of [[], ['point:material'], ['line:pipeShape']]) {
+    assert.deepEqual(reduce(state, { type: 'DATASET_CHANGED', expansionKeys }), { ...state, expandedRuleKey: null });
+  }
+  assert.deepEqual(reduce(state, { type: 'LAYER_CHANGED' }), api.createValidationV2PresentationState());
+});
+
 const counts = ({ passCount = 0, checkCount = 0, failCount = 0, notEvaluatedCount = 0, dependencyReviewCount = 0 } = {}) => ({ evaluatedCount: passCount + checkCount + failCount + notEvaluatedCount, passCount, checkCount, failCount, notEvaluatedCount, dependencyReviewCount, indeterminateCount: 0 });
 test('aggregate result semantics are Pass, Sjekk, Feil with failure precedence', () => { for (const [input, expected, label] of [[{ passCount: 1 }, 'PASS', 'Pass'], [{ checkCount: 1 }, 'CHECK', 'Sjekk'], [{ passCount: 1, checkCount: 1 }, 'CHECK', 'Sjekk'], [{ passCount: 1, checkCount: 1, failCount: 1 }, 'FAIL', 'Feil']]) { const status = api.getValidationV2AggregateStatus(counts(input)); assert.equal(status.enum, expected); assert.equal(status.label, label); } });
 test('suppressed outcomes do not create a visible owner status, while genuine dependencies do', () => {

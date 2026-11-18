@@ -183,6 +183,9 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await shot('m5c-proposed-object-inspection');
         await choose(dataset, 'original');
         await browser.waitFor('document.querySelector("#validation-v2-geometry-panel")?.innerText.startsWith("Original")');
+        assert.equal(await browser.evaluate(`document.querySelector('button[aria-label^="SDR:"]').getAttribute('aria-expanded')`), 'true', 'dataset change keeps the expanded field');
+        assert.equal(await browser.evaluate('Boolean(document.querySelector("[data-table-geometry]"))'), false, 'old inspection closes');
+        await openSdr(); // Collapse only for comparison with the original, unexpanded list.
         assert.equal(await browser.evaluate('document.querySelector("#validation-v2-geometry-panel").innerText'), original);
         await choose(dataset, 'proposed');
         await browser.waitFor('document.querySelector("#validation-v2-geometry-panel")?.innerText.startsWith("Foreslått")');
