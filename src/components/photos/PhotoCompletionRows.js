@@ -32,7 +32,7 @@ function RowBody({ row, children }) {
     <div className="photo-completion-row-body">
       <p className="photo-completion-filename">{row.filename}{row.occurrence && <small> · {row.occurrence}</small>}</p>
       {row.acceptedText && <p data-accepted-value>{row.origin === 'default' ? 'Standard' : 'Godtatt'}: {row.acceptedText}</p>}
-      {row.note && <p className="photo-completion-row-note">{row.note}</p>}
+      {row.note && <p className="photo-completion-row-note" data-validation-tone={row.noteTone}>{row.note}</p>}
       {row.sources?.length > 0 && <details className="photo-completion-sources"><summary>Kildeverdier ({row.sources.length})</summary>
         {row.sources.map((source) => <p key={source.key} data-source-value>{source.text}</p>)}
       </details>}

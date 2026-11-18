@@ -1,3 +1,17 @@
+import { fullCaptureTime } from './exportContract.mjs';
+
+// Shared by readiness and the byte-reading plan. Scope is supplied by the existing
+// delivery selection; count originals once, regardless of their occurrence count.
+export function filenameCaptureTimeAdvisory(items) {
+  const affected = [...new Map(items.filter(({ captureTime }) => captureTime?.provenance?.kind === 'filename')
+    .map((item) => [item.assetId, item])).values()];
+  if (!affected.length) return null;
+  return { code: 'capture-time-filename', count: affected.length, assetIds: affected.map((item) => item.assetId),
+    completeAssetIds: affected.filter((item) => fullCaptureTime(item.captureTime)).map((item) => item.assetId),
+    incompleteAssetIds: affected.filter((item) => !fullCaptureTime(item.captureTime)).map((item) => item.assetId),
+    message: `${affected.length} bilder har godtatt opptakstid fra filnavnet, ikke fra opptaksmetadata. GML-eksporten tar ikke med kildeopplysningen.` };
+}
+
 // Codes are stable: tests and data-diagnostic-code depend on them. Only the wording here may change.
 const labels = {
   'invalid-profile': 'Eksportprofil mangler',
@@ -30,6 +44,7 @@ const labels = {
   'capture-time-implausible': 'Usannsynlig dato',
   'capture-time-bulk': 'Samme manuelle opptakstid',
   'capture-time-estimated': 'Anslått opptaksdato',
+  'capture-time-filename': 'Opptakstid fra filnavn',
   'capture-time-in-source': 'Opptakstid finnes i kilde',
   'capture-time-sources-differ': 'Ulik opptakstid i kildene',
   'direction-defaulted': 'Standardretning',

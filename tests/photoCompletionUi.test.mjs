@@ -12,7 +12,7 @@ import { exportedTimes } from './helpers/photoEvidenceFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
 import { buildPreview, canAdvance, closeExport, downloadZip, exportDialog, openExport, selectedFormat } from './helpers/photoExportWizard.mjs';
 import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
-import { addImportFiles, clickImport, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace, waitForThumbnails } from './helpers/photoImportWizard.mjs';
+import { addImportFiles, chooseImportPlacement, clickImport, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, savePhotoSource, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { KEYS, commandBar, elementCentre, enterEditMode, openTool, pressKey, rotateSelected } from './helpers/photoWorkspace.mjs';
 
@@ -178,7 +178,8 @@ layerTest('capture time: source values in place, the warning, corrections, neste
   assert.doesNotMatch(await browser.evaluate(`${rowOf('match.jpg')}.innerText`), /EXIF: /, 'source values start folded');
   assert.match(await rowText(browser, 'match.jpg'), /EXIF: 12\.05\.2026 14:33:02,012 · tidssone ukjent/);
   assert.match(await rowText(browser, 'match.jpg'), /GML · kilde\.gml: 12\.05\.2026 14:33:02 · tidssone ukjent/, 'the GML value stays evidence');
-  assert.match(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /Kildene oppgir ulike tider\. Den prioriterte kilden er brukt\./);
+  assert.match(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /Kildene oppgir ulike tider\./);
+  assert.doesNotMatch(await browser.evaluate(`${rowOf('conflict.jpg')}.innerText`), /prioriterte/);
 
   // A correction goes through the per-photo dialog; Escape closes only that dialog.
   const choose = `Array.from(${rowOf('conflict.jpg')}.querySelectorAll('button')).find((item) => item.innerText === 'Rediger…')`;
@@ -531,6 +532,110 @@ layerTest('constrained screens: no horizontal scroll, header and footer stay in 
     return browser.evaluate(`(() => { const box = ${nested}.getBoundingClientRect(); return { fits: box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight }; })()`);
   };
   assert.deepEqual(await nestedLayout(), { fits: true });
+});
+
+test('M4 filename provenance, unaccepted GML evidence and explicit adoption at laptop sizes', { skip: !chromePath || !app, timeout: 180000 }, async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'photo-m4-ui-'));
+  const browser = await openTestChrome();
+  const names = ['20261014_143302.jpg', '20261015_1433.jpg', '20261016.jpg', 'waiting.jpg', 'exif.jpg'];
+  try {
+    await openApp(browser, { width: 1280, height: 720 });
+    const files = await Promise.all(names.map(async (name) => {
+      const file = path.join(directory, name);
+      await writeFile(file, gpsJpeg({ noLocation: true, ...(name === 'exif.jpg' ? { captureTime: '2026:05:12 14:33:02' } : {}) }));
+      return file;
+    }));
+    await clickSourceControl(browser, 'Bilder', 'document');
+    await browser.waitFor(importDialog);
+    await addImportFiles(browser, files);
+    await waitForThumbnails(browser);
+    await browser.waitFor(`${importDialog}.dataset.exifPending === '0'`);
+    await chooseImportPlacement(browser, 'none');
+    await browser.evaluate(`Array.from(${importDialog}.querySelectorAll('.photo-import-capture label input')).forEach(e => { if (!e.checked) e.click(); })`);
+    assert.equal(await browser.evaluate(`${importDialog}.querySelectorAll('.photo-import-capture input:checked').length`), 2);
+    await clickImport(browser, await browser.evaluate(`${importDialog}.querySelector('.photo-import-footer .gmi-primary-control').textContent`));
+    await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+    const gml = path.join(directory, 'M4-kilde.gml');
+    await writeFile(gml, completionGmlText(names.map((name) => ({ name, ...(name === 'waiting.jpg' ? { time: '2026-05-12T14:40:00' }
+      : name === 'exif.jpg' ? { time: '2026-05-12T15:00:00' } : {}) }))));
+    await stagePhotoSource(browser, gml, 'gml');
+    assert.equal(await browser.evaluate(`document.querySelectorAll('[data-gml-capture] input[type=checkbox]').length`), 1);
+    assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('[data-gml-capture] input[type=checkbox]')).some(e => e.checked)`), false);
+    await savePhotoSource(browser, 'gml');
+    await applyPhotoSourcePositions(browser, 'gml');
+    await openHub(browser);
+    await showTask(browser, 'captureTime');
+    assert.equal(await countOf(browser, 'captureTime', 'filename'), '3');
+    assert.equal(await countOf(browser, 'captureTime', 'source'), '1');
+    assert.match(await rowText(browser, 'waiting.jpg'), /GML-verdien er ikke godtatt/);
+    assert(await browser.evaluate(`(() => { const note = ${rowOf('waiting.jpg')}.querySelector('.photo-completion-row-note'), probe = document.createElement('span');
+      probe.style.color = 'var(--gmi-validation-compact-warning-text)'; note.append(probe);
+      const matches = note.dataset.validationTone === 'warning' && getComputedStyle(note).color === getComputedStyle(probe).color;
+      probe.remove(); return matches; })()`));
+    assert.doesNotMatch(await rowText(browser, 'waiting.jpg'), /Fjernet av deg/);
+    assert.match(await rowText(browser, '20261015_1433.jpg'), /uten sekunder.*Filnavn/);
+    assert.match(await rowText(browser, '20261016.jpg'), /bare dato.*Filnavn/);
+    await openGroup(browser, 'captureTime', 'done');
+    assert.match(await browser.evaluate(`${rowOf('exif.jpg')}.innerText`), /Godtatt:.*EXIF DateTimeOriginal/);
+    for (const [width, height] of [[1280, 720], [1366, 768]]) {
+      await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      await browser.evaluate(`(${panel('captureTime')}).closest('.photo-completion-panel').scrollTop = 0`);
+      assert(await browser.evaluate(`(() => { const r = ${hub}.getBoundingClientRect(), footer = ${hub}.querySelector('.photo-import-footer').getBoundingClientRect();
+        return r.left >= 0 && r.right <= innerWidth && footer.bottom <= innerHeight && ${hub}.scrollWidth <= ${hub}.clientWidth; })()`));
+      await screenshot(browser, `m4-completion-${width}x${height}`);
+      await browser.evaluate(`${panel('captureTime')}.querySelector('[data-group="partial"]').scrollIntoView({ block: 'start' })`);
+      await screenshot(browser, `m4-completion-values-${width}x${height}`);
+    }
+    await realClick(browser, `Array.from(${rowOf('20261015_1433.jpg')}.querySelectorAll('button')).find(e => e.innerText === 'Rediger…')`);
+    await browser.waitFor(nested);
+    assert.match(await browser.evaluate(`${nested}.querySelector('.photo-metadata-current').innerText`), /uten sekunder.*Filnavn/);
+    for (const [width, height] of [[1280, 720], [1366, 768]]) {
+      await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      await screenshot(browser, `m4-filename-dialog-${width}x${height}`);
+    }
+    await pressKey(browser, 'Escape', KEYS.Escape);
+    await browser.waitFor(`!${nested}`);
+    await realClick(browser, `Array.from(${rowOf('waiting.jpg')}.querySelectorAll('button')).find(e => e.innerText === 'Rediger…')`);
+    await browser.waitFor(nested);
+    assert.match(await browser.evaluate(`${nested}.innerText`), /Ingen kildeverdi er godtatt/);
+    assert.equal(await browser.evaluate(`${nested}.querySelector('input[value^="evidence:"]').checked`), false);
+    for (const [width, height] of [[1280, 720], [1366, 768]]) {
+      await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      await screenshot(browser, `m4-unaccepted-gml-${width}x${height}`);
+    }
+    await browser.evaluate(`${nested}.querySelector('input[value^="evidence:"]').click()`);
+    await clickSourceControl(browser, 'Lagre', nested);
+    await browser.waitFor(`!${nested}`);
+    await openGroup(browser, 'captureTime', 'done');
+    assert.match(await browser.evaluate(`${rowOf('waiting.jpg')}.innerText`), /Godtatt:.*14:40:00.*GML/);
+    assert.doesNotMatch(await browser.evaluate(`${rowOf('waiting.jpg')}.innerText`), /ikke godtatt/);
+    await pressKey(browser, 'Escape', KEYS.Escape);
+    await browser.waitFor(`!${hub}`);
+    await openExport(browser);
+    await browser.evaluate(`${exportDialog}.querySelector('[data-export-advance]').click()`);
+    await browser.waitFor(`${exportDialog}.dataset.exportPhase === 'ready'`);
+    const warning = `${exportDialog}.querySelector('[data-diagnostic-code="capture-time-filename"]')`;
+    await browser.waitFor(warning);
+    await browser.evaluate(`${warning}.open = true; ${warning}.scrollIntoView({ block: 'center' })`);
+    assert.match(await browser.evaluate(`${warning}.innerText`), /3 bilder.*filnavnet.*ikke fra opptaksmetadata/);
+    for (const [width, height] of [[1280, 720], [1366, 768]]) {
+      await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      await browser.evaluate(`${warning}.scrollIntoView({ block: 'center' })`);
+      await screenshot(browser, `m4-export-advisory-${width}x${height}`);
+    }
+    await closeExport(browser);
+    const photoRow = `Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).find(e => e.innerText.includes('20261015_1433.jpg'))`;
+    await browser.evaluate(`${photoRow}.querySelector('.photo-workspace-row').click()`);
+    await browser.waitFor('document.querySelector(".photo-workspace-inspector-body")?.innerText.includes("20261015_1433.jpg")');
+    await browser.evaluate('document.querySelector("[data-disclosure=capture-evidence]").open = true');
+    assert.match(await browser.evaluate('document.querySelector(".photo-inspector-capture").innerText'), /uten sekunder/);
+    assert.match(await browser.evaluate('document.querySelector("[data-disclosure=capture-evidence]").innerText'), /Filnavn/);
+    for (const [width, height] of [[1280, 720], [1366, 768]]) {
+      await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      await browser.evaluate('document.querySelector(".photo-inspector-capture").scrollIntoView({ block: "start" })');
+      await screenshot(browser, `m4-inspector-${width}x${height}`);
+    }
+  } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
 test('estimated date without known dates: manual entry fills the whole layer including unplaced photos, and undo restores the empty state', { skip: !chromePath || !app, timeout: 180000 }, async () => {

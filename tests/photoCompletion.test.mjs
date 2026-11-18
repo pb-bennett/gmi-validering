@@ -75,8 +75,7 @@ test('capture time: sources that really differ keep EXIF by default, use GML onl
   const item = model.captureTime.done[0];
   assert.equal(item.accepted.provenance.kind, 'exif', 'the conflict default is «Behold gjeldende», even with both options on');
   assert.equal(item.accepted.acceptance, 'auto');
-  // The note text predates M3 (it still names "den prioriterte kilden"); its wording belongs to M4 presentation.
-  assert.equal(item.note, 'Kildene oppgir ulike tider. Den prioriterte kilden er brukt.');
+  assert.equal(item.note, 'Kildene oppgir ulike tider.');
   assert.equal(item.sources.length, 2);
   assert.deepEqual(completionRecommendations(readiness, 'captureTime').map(({ code }) => code), ['capture-time-sources-differ']);
   const evidenceId = session.getPhoto(id).metadataEvidence.find((source) => source.kind === 'exif').id;
@@ -99,8 +98,8 @@ test('capture time: every remaining state has a row, and accepted values can onl
   const { captureTime } = completionView(session, layerId).model;
   assert.deepEqual(captureTime.groups.map(({ state, rows }) => [state, rows.length]), [['none', 1], ['partial', 2], ['unusable', 1]]);
   assert.deepEqual(captureTime.done.map(({ filename }) => filename), ['full.jpg']);
-  assert.equal(row(captureTime.rows, 'minute.jpg').note, 'Har tid uten sekunder');
-  assert.equal(row(captureTime.rows, 'accepted-minute.jpg').note, 'Har tid uten sekunder · Erstatter godtatt verdi');
+  assert.equal(row(captureTime.rows, 'minute.jpg').note, 'GML-verdien er ikke godtatt.');
+  assert.equal(row(captureTime.rows, 'accepted-minute.jpg').note, null);
   assert.match(row(captureTime.rows, 'accepted-minute.jpg').acceptedText, /14:33 · uten sekunder/);
   assert.match(row(captureTime.rows, 'garbled.jpg').sources[0].text, /not a time \(kan ikke tolkes sikkert\)/);
   assert.equal(row(captureTime.rows, 'blank.jpg').note, 'Ingen kildeverdi');

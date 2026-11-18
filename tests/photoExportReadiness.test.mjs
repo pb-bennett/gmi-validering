@@ -194,9 +194,9 @@ test('capture-time task counts every state once per asset', () => {
 
 test('available evidence is stated plainly, naming the source', () => {
   const note = (photos, configuration = gemini) => photoExportReadiness(photos, configuration).notes.find((item) => item.code === 'capture-time-in-source')?.message;
-  assert.equal(note([photo('a', { metadataEvidence: [exifTime()] }), photo('b', { metadataEvidence: [exifTime(), gmlTime('2026-05-12T14:33:02')] })]), '2 bilder mangler opptakstid, men tiden finnes i EXIF.');
-  assert.equal(note([photo('a', { metadataEvidence: [gmlTime('2026-05-12T14:33:02')] })], legacy), '1 bilder mangler opptakstid, men tiden finnes i GML.');
-  assert.equal(note([photo('a', { metadataEvidence: [exifTime()] }), photo('b', { metadataEvidence: [gmlTime('2026-05-12T14:33:02')] })]), '2 bilder mangler opptakstid, men tiden finnes i kildene.');
+  assert.equal(note([photo('a', { metadataEvidence: [exifTime()] }), photo('b', { metadataEvidence: [exifTime(), gmlTime('2026-05-12T14:33:02')] })]), '2 bilder har opptakstid i EXIF som ikke er godtatt.');
+  assert.equal(note([photo('a', { metadataEvidence: [gmlTime('2026-05-12T14:33:02')] })], legacy), '1 bilder har opptakstid i GML som ikke er godtatt.');
+  assert.equal(note([photo('a', { metadataEvidence: [exifTime()] }), photo('b', { metadataEvidence: [gmlTime('2026-05-12T14:33:02')] })]), '2 bilder har opptakstid i kildene som ikke er godtatt.');
   assert.equal(note([photo('a')]), undefined);
   assert.equal(note([photo('a', { metadataEvidence: [exifTime()], placed: false })]), undefined, 'scope follows the plan');
 });

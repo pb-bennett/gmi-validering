@@ -61,6 +61,7 @@
 .photo-completion-filename { font-size: 13px; font-weight: 500; color: var(--gmi-text); }
 .photo-completion-filename small { font-weight: 400; color: var(--gmi-text-muted); }
 .photo-completion-row-note { color: #245d41; }
+.photo-completion-dialog [data-completion-panel='captureTime'] .photo-completion-row-note[data-validation-tone='warning'] { color: var(--gmi-validation-compact-warning-text); }
 .photo-completion-rows > li[data-state='conflict'] .photo-completion-row-note, .photo-completion-rows > li[data-state='partial'] .photo-completion-row-note { color: #875400; }
 .photo-completion-row-action { flex: none; }
 .photo-completion-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }

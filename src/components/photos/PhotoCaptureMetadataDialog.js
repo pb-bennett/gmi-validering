@@ -10,7 +10,7 @@ import PhotoCaptureTimeField from './PhotoCaptureTimeField';
 import './photoTheme.css';
 
 const button = 'gmi-compact-button gmi-focus-ring min-h-9 border px-3 py-1.5 text-sm font-medium';
-const timeText = (value) => formatPhotoCaptureTime(value)?.text || value?.iso || '';
+const timeText = (value) => { const formatted = formatPhotoCaptureTime(value); return formatted ? [formatted.text, ...formatted.notes].join(' · ') : value?.iso || ''; };
 
 // The initial choice reflects the accepted value: the matching evidence, or "Annen verdi" for a manual value. With nothing
 // accepted and no usable source value, "Annen verdi" is the only way to supply one, so its fields are open from the start.
@@ -112,7 +112,7 @@ export default function PhotoCaptureMetadataDialog({ photo, layerId, occurrenceC
           <legend>Opptakstid</legend>
           <p className="photo-metadata-current">Godtatt: {accepted.captureTime ? `${timeText(accepted.captureTime.value)} · ${photoMetadataSourceLabel('captureTime', accepted.captureTime.provenance)}` : 'Ikke angitt'}</p>
           {timeMissing && <p className="photo-metadata-missing" data-metadata-missing="captureTime">{usableTimeEvidence
-            ? 'Mangler. Velg en kildeverdi nedenfor, eller angi tiden selv under «Annen verdi».'
+            ? 'Ingen kildeverdi er godtatt. Velg en verdi nedenfor, eller angi tiden under «Annen verdi».'
             : 'Mangler, og ingen kilde har en brukbar tid. Angi en presis opptakstid eller velg «Anslått dato», og trykk Lagre.'}</p>}
           {timeEvidence.map((evidence) => <Choice key={evidence.id} name={`${id}-time`} value={`evidence:${evidence.id}`} checked={timeChoice === `evidence:${evidence.id}`}
             onChange={touch('captureTime', setTimeChoice)} disabled={!evidence.value}>

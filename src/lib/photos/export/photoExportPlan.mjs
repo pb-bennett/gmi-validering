@@ -5,6 +5,7 @@ import { fullCaptureTime, freezeExportData } from './exportContract.mjs';
 import { compareExportKeys, digestHex, exportGuid, foldAttachmentPath, isSafeAttachmentFilename, planAttachmentNames } from './attachmentNames.mjs';
 import { evaluatePhotoExportRules, normalizeExportContext } from './photoExportRules.mjs';
 import { photoExportNames, exportFilenameOptions } from './photoExportNaming.mjs';
+import { filenameCaptureTimeAdvisory } from './photoExportDiagnostics.mjs';
 
 const issuedPlans = new WeakSet();
 
@@ -125,6 +126,8 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   if (profile === 'asbuilt52') warnings.push({ code: 'experimental-2d', message: 'Eksperimentell 2D AsBuilt-fotogeometri uten Z. Gemini-aksept er ukjent.' });
   const missingTimestampCount = occurrences.filter((row) => !fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime)).length;
   const estimatedCount = assets.filter((asset) => asset.metadata?.captureTime?.provenance?.estimated).length;
+  const filenameAdvisory = filenameCaptureTimeAdvisory(assets.map((asset) => ({ assetId: asset.assetId, captureTime: asset.metadata?.captureTime })));
+  if (filenameAdvisory) warnings.push(filenameAdvisory);
   if (estimatedCount) warnings.push({ code: 'capture-time-estimated', message: `${estimatedCount} bilder har anslått dato. 12:00:00 eksporteres som teknisk standard, ikke målt opptakstid. Merkingen «Anslått» beholdes i appen. Denne GML-eksporten tar ikke med selve merkingen.` });
   const timezoneTransformCount = occurrences.filter((row) => /(?:Z|[+-]\d{2}:\d{2})$/.test(fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime) || '')).length;
   if (gemini) {

@@ -2,11 +2,11 @@ import { PHOTO_EXPORT_PROFILE_METADATA } from './export/photoExportRules.mjs';
 import { photoDirectionLabel } from './photoDirection.mjs';
 import { evidenceEligibility } from './photoEvidenceAdoption.mjs';
 import { photoEstimatedDateModel } from './photoEstimatedDates.mjs';
-import { formatPhotoCaptureTime, photoDirectionEvidenceText, photoDirectionSourceLabel, photoMetadataSourceLabel, photoSourceLabel } from './photoPresentation.mjs';
+import { formatPhotoCaptureTime, photoDirectionEvidenceText, photoDirectionSourceLabel, photoMetadataOrigin, photoMetadataSourceLabel, photoSourceLabel } from './photoPresentation.mjs';
 
 // Presentation over photoExportReadiness. States come from readiness and every write goes through the session,
-// so nothing here decides what blocks an export or what counts as accepted. Source values are accepted by the
-// session on its own, which leaves this tool with what is missing and with optional corrections.
+// so nothing here decides what blocks an export or what counts as accepted. GML evidence remains available
+// for explicit adoption through the existing per-photo dialog.
 
 export const PHOTO_COMPLETION_TARGETS = Object.freeze([
   ['gemini-legacy2019', 'Gemini VA'], ['legacy2019', 'Skråfoto 2019 (standard)'], ['asbuilt52', 'Norsk Vann AsBuilt 5.2'],
@@ -40,11 +40,12 @@ function photoRow(photo) {
 // Selection is for rows a bulk action can write. Accepted values and rows still waiting for EXIF are left out;
 // a default direction counts as missing, because a manual value may replace it.
 const selectable = (row) => (!row.accepted || row.state === 'defaulted') && row.state !== 'pending' && !row.sourcePending;
-const originOf = (accepted, basis) => !accepted ? null : basis?.estimated ? 'estimated' : basis?.kind === 'default' ? 'default' : basis?.kind === 'manual' ? 'manual' : 'source';
 
 function captureNote(item) {
-  if (item.sourcesDiffer) return 'Kildene oppgir ulike tider. Den prioriterte kilden er brukt.';
-  if (item.state === 'partial') return item.replacesAccepted ? 'Har tid uten sekunder · Erstatter godtatt verdi' : 'Har tid uten sekunder';
+  if (item.sourcesDiffer) return 'Kildene oppgir ulike tider.';
+  if (item.cleared) return 'Fjernet av deg.';
+  if (!item.accepted && item.evidence.some((source) => source.kind === 'gml' && source.value)) return 'GML-verdien er ikke godtatt.';
+  if (item.state === 'partial' && !item.accepted) return 'Har tid uten sekunder';
   if (item.state === 'pending') return 'Leser bildedata …';
   if (item.state === 'none') return 'Ingen kildeverdi';
   return null;
@@ -55,7 +56,8 @@ function captureRow(item, photo) {
     `${sourceName(source)}: ${source.value ? timeText(source.value) : `${rawText(source.raw)} (kan ikke tolkes sikkert)`}`)),
   acceptedText: item.accepted ? `${timeText(item.accepted.value)} · ${photoMetadataSourceLabel('captureTime', item.accepted.provenance)}` : null,
   note: item.accepted?.provenance?.estimated ? '12:00:00 er teknisk standard, ikke målt opptakstid.' : captureNote(item),
-  origin: originOf(item.accepted, item.accepted?.provenance) };
+  noteTone: item.sourcesDiffer || (!item.accepted && item.evidence.some((source) => source.kind === 'gml' && source.value)) ? 'warning' : undefined,
+  origin: item.origin };
   return Object.freeze({ ...row, selectable: selectable(row) });
 }
 
@@ -72,7 +74,7 @@ function directionRow(item, photo) {
   const row = { ...item, ...photoRow(photo), key: item.occurrenceId, photoId: item.occurrenceId, sources: evidence.map((source) => line(source.id, photoDirectionEvidenceText(source))),
     // The group says why a default is there, so each row need not repeat it.
     acceptedText: !item.accepted ? null : item.state === 'defaulted' ? photoDirectionLabel(item.accepted.degrees) : `${photoDirectionLabel(item.accepted.degrees)} · ${photoDirectionSourceLabel(item.accepted)}`, note: directionNote(item),
-    origin: originOf(item.accepted, item.accepted?.basis) };
+    origin: photoMetadataOrigin(item.accepted, item.accepted?.basis) };
   return Object.freeze({ ...row, selectable: selectable(row) });
 }
 
@@ -100,7 +102,7 @@ function missingTimeHint(requirement, schemaName) {
 const CAPTURE_GROUPS = Object.freeze([
   ['none', 'Mangler opptakstid', ({ requirement, schemaName }) => missingTimeHint(requirement, schemaName)],
   ['partial', 'Tid uten sekunder', 'Oppgi sekunder, eller bekreft at de er 00.'], ['unusable', 'Kan ikke tolkes'],
-  ['conflict', 'Ulike kildeverdier', 'Velg verdi for hvert bilde.'], ['adoptable', 'Fjernet av deg', 'Kilden har en verdi, men den hentes ikke inn igjen av seg selv.'],
+  ['conflict', 'Ulike kildeverdier', 'Velg verdi for hvert bilde.'], ['adoptable', 'Opptakstid i kilde', 'Velg verdi med «Rediger…».'],
   ['pending', 'Leser bildedata', 'Oppdateres av seg selv når lesingen er ferdig.'],
 ]);
 const DIRECTION_GROUPS = Object.freeze([
@@ -241,6 +243,7 @@ export function completionCounts({ rows, done }, selected, eligible) {
 // Where the values came from. Each row counts once; "Valgt" cuts across and only shows with a selection.
 export function completionSummary({ rows }, selected) {
   return [['source', 'Fra kilde', rows.filter((row) => row.origin === 'source').length], ['manual', 'Manuelt', rows.filter((row) => row.origin === 'manual').length],
+    ['filename', 'Filnavn', rows.filter((row) => row.origin === 'filename').length],
     ['estimated', 'Anslått', rows.filter((row) => row.origin === 'estimated').length],
     ['default', 'Standardverdi', rows.filter((row) => row.origin === 'default').length], ['missing', 'Mangler', rows.filter((row) => !row.origin).length], ['selected', 'Valgt', selected.length]]
     .filter(([, , count]) => count > 0).map(([key, label, count]) => Object.freeze({ key, label, count }));

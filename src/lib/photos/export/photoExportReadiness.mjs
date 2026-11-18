@@ -1,5 +1,6 @@
 import { fullCaptureTime } from './exportContract.mjs';
-import { photoExportDiagnosticLabel } from './photoExportDiagnostics.mjs';
+import { filenameCaptureTimeAdvisory, photoExportDiagnosticLabel } from './photoExportDiagnostics.mjs';
+import { photoMetadataOrigin } from '../photoPresentation.mjs';
 import { PHOTO_EXPORT_IMPORT_EVIDENCE, PHOTO_EXPORT_REQUIREMENTS, PHOTO_EXPORT_SCHEMA_REQUIREMENTS, evaluatePhotoExportRules, isValidExportDirection } from './photoExportRules.mjs';
 import { evidenceEligibility, evidenceValuesConflict } from '../photoEvidenceAdoption.mjs';
 import { isDefaultPhotoDirection } from '../photoDirection.mjs';
@@ -27,6 +28,7 @@ export function classifyCaptureTime(photo, requirement = 'recommended') {
   const evidence = (photo.metadataEvidence || []).filter((item) => item.field === 'captureTime');
   const usable = evidence.filter((item) => item.value);
   const result = (state, details = {}) => ({ state, requirement, blocking: requirement === 'required' && state !== 'accepted', accepted,
+    origin: photoMetadataOrigin(accepted), cleared: Boolean(photo.captureMetadata?.captureTimeCleared),
     evidence: evidence.map(sourceValue), adoptableKinds: [], sourcePending: readingExif(photo), replacesAccepted: false, ...details });
   if (fullCaptureTime(accepted)) return result('accepted', { sourcesDiffer: sourcesDiffer(accepted, evidence, 'captureTime') });
   if (accepted) return result('partial', { replacesAccepted: true });
@@ -91,12 +93,14 @@ function recommendationsFor({ profile, placed, assets, nowMs, captureItems, dire
   add('capture-time-implausible', implausible.length, `${implausible.length} bilder har en usannsynlig dato.`, { assetIds: implausible.map((photo) => photo.assetId) });
   const bulkTimes = repeatedBulkValues(assets, (photo) => timeOf(photo)?.provenance, (photo) => timeOf(photo).value.iso);
   const estimated = assets.filter((photo) => timeOf(photo)?.provenance?.estimated);
+  const filenameAdvisory = filenameCaptureTimeAdvisory(assets.map((photo) => ({ assetId: photo.assetId, captureTime: timeOf(photo) })));
+  if (filenameAdvisory) recommendations.push({ ...filenameAdvisory, label: photoExportDiagnosticLabel(filenameAdvisory.code) });
   add('capture-time-estimated', estimated.length, `${estimated.length} bilder har anslått dato. 12:00:00 er teknisk standard, ikke målt opptakstid.`, { assetIds: estimated.map((photo) => photo.assetId) });
   const bulkTimeCount = bulkTimes.reduce((total, group) => total + group.count, 0);
   add('capture-time-bulk', bulkTimeCount, `${bulkTimeCount} bilder har samme manuelt angitte tid.`, { groups: bulkTimes });
 
   const differingTimes = captureItems.filter((item) => item.sourcesDiffer);
-  add('capture-time-sources-differ', differingTimes.length, `${differingTimes.length} bilder har ulik opptakstid i kildene. Den prioriterte kilden er brukt.`, { assetIds: differingTimes.map((item) => item.assetId) });
+  add('capture-time-sources-differ', differingTimes.length, `${differingTimes.length} bilder har ulik opptakstid i kildene. Godtatt opptakstid er brukt.`, { assetIds: differingTimes.map((item) => item.assetId) });
 
   const differingDirections = directionItems.filter((item) => item.sourcesDiffer);
   add('direction-sources-differ', differingDirections.length, `${differingDirections.length} plasseringer har ulik retning i kildene. GML er brukt.`, { occurrenceIds: differingDirections.map((item) => item.occurrenceId) });
@@ -116,9 +120,10 @@ function notesFor({ profile, requirement, placed, assets, captureItems, directio
 
   const defaulted = directionItems.filter((item) => item.state === 'defaulted').length;
   add('direction-defaulted', defaulted, `${defaulted} plasseringer har standardretning 0°, fordi ingen kilde oppgir retning.`);
-  const adoptable = captureItems.filter((item) => item.state === 'adoptable');
-  const source = adoptable.every((item) => item.adoptableKinds.includes('exif')) ? 'EXIF' : adoptable.every((item) => item.adoptableKinds.includes('gml')) ? 'GML' : 'kildene';
-  add('capture-time-in-source', adoptable.length, `${adoptable.length} bilder mangler opptakstid, men tiden finnes i ${source}.`);
+  const available = captureItems.filter((item) => !item.accepted && item.evidence.some((source) => source.value));
+  const has = (item, kind) => item.evidence.some((source) => source.kind === kind && source.value);
+  const source = available.every((item) => has(item, 'exif')) ? 'EXIF' : available.every((item) => has(item, 'gml')) ? 'GML' : 'kildene';
+  add('capture-time-in-source', available.length, `${available.length} bilder har opptakstid i ${source} som ikke er godtatt.`);
 
   if (gemini) {
     add('compatibility-z', placed.length, `${placed.length} punkter får Z=0 som plassholder, ikke målt høyde.`);

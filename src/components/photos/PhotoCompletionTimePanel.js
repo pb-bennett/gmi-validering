@@ -68,7 +68,7 @@ function SameTimeForm({ rows, layerId, onStatus }) {
   </details>;
 }
 
-// Source times are already in use. What is left is what no source has, and corrections through the per-photo dialog.
+// Unaccepted source times and corrections use the existing per-photo metadata dialog.
 export default function PhotoCompletionTimePanel({ task, title, requirementLabel, note, recommendations, readiness, reading, excluded, layerId, selected, scope, onSelection, onEdit, onStatus, dateUndo, onDateUndo }) {
   const heldBack = task.rows.filter(isHeldBack).length;
   const rowAction = (row) => row.state === 'pending' ? null

@@ -2,6 +2,8 @@ import { evidenceValuesConflict } from './photoEvidenceAdoption.mjs';
 import { isEstimatedCaptureTime } from './photoEstimatedDates.mjs';
 
 export const photoSourceLabel = (kind) => ({ gml: 'GML', exif: 'EXIF', manual: 'Manuell', gmi: 'GMI', filename: 'Filnavn' })[kind] || kind || 'Ukjent';
+export const photoMetadataOrigin = (accepted, basis = accepted?.provenance) => !accepted ? null : basis?.estimated ? 'estimated'
+  : basis?.kind === 'default' ? 'default' : basis?.kind === 'manual' ? 'manual' : basis?.kind === 'filename' ? 'filename' : 'source';
 export function photoCurrentSource(photo) {
   const current = photo.spatial.current;
   const basis = photo.spatial.candidates.find((candidate) => candidate.id === current?.basis?.candidateId);
