@@ -78,6 +78,7 @@
   .photo-edit-direction-field { margin-left: 0; }
 }
 @container (max-width: 350px) {
+  .photo-edit-command-bar { gap: 6px; }
   .photo-edit-status { flex-basis: calc(100% - 84px); }
   .photo-edit-commit-actions { margin-left: auto; padding-left: 0; border-left: 0; }
 }

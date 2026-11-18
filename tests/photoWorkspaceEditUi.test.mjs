@@ -72,7 +72,8 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert.match(await browser.evaluate('document.querySelector(".photo-workspace-toast").innerText'), /Fotolaget er opprettet/);
         const listTop = await browser.evaluate(`document.querySelector('.photo-workspace-list').getBoundingClientRect().top - document.querySelector('.photo-workspace-collection').getBoundingClientRect().top`);
         assert(listTop < 150, `list starts ${listTop}px below the pane top`);
-        assert.equal(await browser.evaluate('Math.round(document.querySelector(".workspace-left").getBoundingClientRect().width)'), 316);
+        assert(await browser.evaluate(`(() => { const sidebar = document.querySelector('.workspace-left');
+          return sidebar.getBoundingClientRect().width === parseFloat(sidebar.style.width); })()`), 'FOTO uses the shared shell width');
         await screenshot('01-workspace-1920');
         await browser.waitFor('!document.querySelector(".photo-workspace-toast")', 9000);
       });
@@ -529,12 +530,21 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await browser.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         await browser.waitFor(`${row(ids.IMG_2)}.querySelector('button').getAttribute('aria-pressed') === 'true'`);
         await browser.send('Emulation.setTouchEmulationEnabled', { enabled: false });
-        for (let i = 0; i < 3; i++) { await browser.evaluate('document.querySelector(".leaflet-control-zoom-out").click()'); await wait(350); }
+        const zoom = 'Number(document.body.innerText.match(/Zoom: (\\d+)/)?.[1])';
+        const thumbnailZoom = await browser.evaluate(zoom);
+        assert(thumbnailZoom >= 16);
+        for (let level = thumbnailZoom - 1; level >= 15; level--) {
+          await browser.evaluate('document.querySelector(".leaflet-control-zoom-out").click()');
+          await browser.waitFor(`${zoom} === ${level}`);
+        }
         await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length === 0 && document.querySelectorAll(".photo-camera-marker[data-photo-id]").length === 2');
         assert.match(await browser.evaluate('document.querySelector(".photo-map-display-card").innerText'), /Miniatyrer vises fra zoom 16/);
         assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll(".photo-camera-marker[data-photo-id]")).filter((e) => ${arrowOf('e')}?.closest('[data-direction-mode=markers]')).length`), 2, 'arrows remain in the marker fallback, with marker geometry');
         assert.equal(await browser.evaluate('document.querySelectorAll(".leaflet-photo-directions-pane .photo-direction-marker").length'), 2, 'one arrow per photo, none left from thumbnail mode');
-        for (let i = 0; i < 3; i++) { await browser.evaluate('document.querySelector(".leaflet-control-zoom-in").click()'); await wait(350); }
+        for (let level = 16; level <= thumbnailZoom; level++) {
+          await browser.evaluate('document.querySelector(".leaflet-control-zoom-in").click()');
+          await browser.waitFor(`${zoom} === ${level}`);
+        }
         await browser.waitFor('document.querySelectorAll(".photo-thumb-marker").length === 2');
       });
 
@@ -575,9 +585,10 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
           const overlaps = controls.filter((e) => hits(bar, box(e))).map((e) => e.className || e.innerText);
           const toast = document.querySelector('.photo-workspace-toast');
           const toastOverlaps = toast ? controls.filter((e) => !toast.contains(e) && hits(box(toast), box(e))).map((e) => e.className || e.innerText) : [];
-          return { left: Math.round(box(document.querySelector('.workspace-left')).width), inspector: Math.round(box(document.querySelector('.photo-workspace-inspector')).width),
+          const sidebar = document.querySelector('.workspace-left');
+          return { left: box(sidebar).width, shared: parseFloat(sidebar.style.width), inspector: Math.round(box(document.querySelector('.photo-workspace-inspector')).width),
             inside: bar.left >= map.left && bar.right <= map.right, overlaps, toastOverlaps, scroll: document.documentElement.scrollWidth > innerWidth }; })()`);
-        assert(layout.left >= 292 && layout.left <= 300, String(layout.left));
+        assert.equal(layout.left, layout.shared);
         assert(layout.inspector >= 380 && layout.inspector <= 400, String(layout.inspector));
         assert(layout.inside && !layout.overlaps.length && !layout.toastOverlaps.length && !layout.scroll, JSON.stringify(layout));
         await screenshot('07-edit-1280');

@@ -16,7 +16,7 @@ import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSo
 import { equivalentGmiPhotoEvidence, gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { planPhotoSourcePositions } from './photoPositioning.mjs';
 import { PHOTO_DELIVERY_INTENTS, buildPhotoDeliverySnapshot, photoDeliveryEntry, photoLayerDelivery } from './photoDeliveryIntent.mjs';
-import { photoGmlPositionSetsDelivery, photoMoveProposesTransfer, planPhotoExclusion } from './photoDeliveryChoice.mjs';
+import { photoPositionDefaultsToGml, photoMoveProposesTransfer, planPhotoExclusion } from './photoDeliveryChoice.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
   photos: Object.freeze([]), selectedId: null, batchSelectedIds: Object.freeze([]),
@@ -98,10 +98,10 @@ export function createPhotoSession({
     return deliveryChoiceIds.size !== before;
   };
   const layerDelivery = (layer) => photoLayerDelivery(layer, records, deliveryDecisions, deliveryChoiceIds);
-  // Occurrences among validated GML position requests whose untouched «Ikke valgt» default becomes GML.
-  const gmlDeliveryDefaults = (layer, requests) => {
+  // Accepted GML and EXIF positions can replace the untouched «Ikke valgt» default.
+  const gmlDeliveryDefaults = (layer, photoIds) => {
     const delivery = layerDelivery(layer);
-    return requests.map((request) => request.photoId).filter((id) => photoGmlPositionSetsDelivery(delivery.byPhotoId[id]));
+    return [...photoIds].filter((id) => photoPositionDefaultsToGml(delivery.byPhotoId[id]));
   };
   const includeAsGml = (ids) => { for (const id of ids) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true })); };
 
@@ -831,6 +831,7 @@ export function createPhotoSession({
         || sourceReviews.has(ticket.layerId)) return { ok: false, error: 'review-changed' };
       if (!requests?.length) return { ok: false, error: 'invalid-selection' };
       const seen = new Set();
+      const gmlDefaultCandidates = [];
       for (const request of requests) {
         const row = plan.rows.find((item) => item.photoId === request.photoId);
         const live = records.get(request.photoId);
@@ -841,10 +842,10 @@ export function createPhotoSession({
           || (['gml', 'gmi'].includes(candidate.kind) && !layer.spatialSources.some((source) => source.kind === candidate.kind && source.id === candidate.sourceId)))
           return { ok: false, error: 'review-changed' };
         seen.add(request.photoId);
+        if (candidate.kind === 'gml' || candidate.kind === 'exif') gmlDefaultCandidates.push(request.photoId);
       }
       // Every request is validated; positions and their GML delivery default are committed together, published once.
-      const deliveryIds = gmlDeliveryDefaults(layer, requests.filter((request) =>
-        plan.rows.find((item) => item.photoId === request.photoId).options.find((item) => item.id === request.candidateId).kind === 'gml'));
+      const deliveryIds = gmlDeliveryDefaults(layer, gmlDefaultCandidates);
       const acceptedAt = Date.now();
       for (const request of requests) updateRecord(request.photoId, (live) => ({
         spatial: acceptPhotoCandidate(live.spatial, request.candidateId, 'explicit-candidate', acceptedAt),
@@ -1276,7 +1277,7 @@ export function createPhotoSession({
         if (candidate?.id !== request.candidateId || candidate?.status !== 'viable' || !isPhotoPosition(candidate.position)) return fail('review-changed');
         seen.add(request.photoId);
       }
-      const deliveryIds = kind === 'gml' ? gmlDeliveryDefaults(layer, requests) : [];
+      const deliveryIds = gmlDeliveryDefaults(layer, seen);
       if (kind === 'gml') {
         const source = attachSource(review.source, layer.photoIds);
         const existing = layer.spatialSources.some((item) => item.id === source.id);

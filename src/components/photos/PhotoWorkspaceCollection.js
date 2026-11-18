@@ -139,7 +139,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
         <PhotoIconButton icon={XIcon} size={18} label="Lukk FOTO" onClick={onExit} className="gmi-workspace-close" data-workspace-close="photo" />
       </div>
       {/* Unique assets first; placements only when an asset is used more than once; unplaced only when there are any. */}
-      <p className="photo-workspace-counts">
+      <p className="photo-workspace-counts" data-has-repeats={repeats || undefined}>
         <span>{plural(assetCount, 'bilde', 'bilder')}{repeats ? ` · ${plural(layer.photoCount, 'plassering', 'plasseringer')}` : ''}</span>
         {view.counts.unplaced > 0 && <span className="photo-workspace-unplaced-count">{view.counts.unplaced} uplassert</span>}
         {delivery && <span className="photo-delivery-counts" aria-label="Plasseringer per leveringsvalg">{photoDestinationCounts(delivery).map(({ key, label, count }) => <span key={key} data-destination={key}>{label} {count}</span>)}</span>}

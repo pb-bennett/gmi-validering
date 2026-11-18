@@ -168,8 +168,16 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
           await writeFile(path.join(process.env.PHOTO_SCREENSHOT_DIR, `connection-only-${width}x${height}.png`), Buffer.from(data, 'base64'));
         }
       }
+      const viewport = () => browser.evaluate(`({ zoom: Number(document.body.innerText.match(/Zoom: (\\d+)/)?.[1]),
+        offset: document.querySelector('.leaflet-map-pane').style.transform,
+        markers: Array.from(document.querySelectorAll('.leaflet-photo-markers-pane .leaflet-marker-icon'),
+          (marker) => [marker.dataset.photoId, marker.style.transform]).sort() })`);
+      await browser.evaluate('new Promise(resolve => setTimeout(resolve, 350))');
+      const beforeCompletion = await viewport();
       await click(browser, 'Fullfør');
       await browser.waitFor(`!${sourceWizard}`);
+      await browser.evaluate('new Promise(resolve => setTimeout(resolve, 350))');
+      assert.deepEqual(await viewport(), beforeCompletion, 'connection-only completion preserves the viewport');
       assert.deepEqual(await readWorkspace(), beforeRecheck, 'connection-only completion preserves links, positions, direction, metadata and delivery');
       assert.equal((await sourcesInfo(browser)).cards, 2, 'recheck does not duplicate sources');
       // The layer-wide Tools entry also reviews the still-unplaced second a.png occurrence.

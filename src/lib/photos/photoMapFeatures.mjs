@@ -1,4 +1,5 @@
 import { isPhotoPosition } from './photoSpatial.mjs';
+import { photoPositionDistance } from './photoPositioning.mjs';
 
 // One pass per visible layer. photosByLayer supplies already-derived (e.g. staged/effective) photos,
 // so the map never re-reads the session per marker. include restricts one layer to the workspace view.
@@ -20,6 +21,23 @@ export function buildPhotoMapItems(layers, getLayerPhotos, { photosByLayer = nul
 
 export function buildPhotoMapFeatures(layers, getLayerPhotos, options) {
   return buildPhotoMapItems(layers, getLayerPhotos, options).map((item) => item.feature);
+}
+
+export function photoLayerMapFit(photos) {
+  const southWest = { crs: 'EPSG:4326', latitude: Infinity, longitude: Infinity };
+  const northEast = { crs: 'EPSG:4326', latitude: -Infinity, longitude: -Infinity };
+  for (const photo of photos) {
+    const position = photo.spatial?.current?.position;
+    if (!isPhotoPosition(position)) continue;
+    southWest.latitude = Math.min(southWest.latitude, position.latitude);
+    southWest.longitude = Math.min(southWest.longitude, position.longitude);
+    northEast.latitude = Math.max(northEast.latitude, position.latitude);
+    northEast.longitude = Math.max(northEast.longitude, position.longitude);
+  }
+  const span = photoPositionDistance(southWest, northEast);
+  if (span === null) return null;
+  const bounds = [[southWest.latitude, southWest.longitude], [northEast.latitude, northEast.longitude]];
+  return span < 10 ? { bounds, zoom: 18 } : { bounds, maxZoom: 19 };
 }
 
 export function resolvePhotoLocate(session, request) {

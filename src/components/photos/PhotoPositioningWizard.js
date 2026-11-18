@@ -131,7 +131,7 @@ function PositioningSummary({ plan, selected, selectionUnit, repeats, optionLabe
 // frame, step list and source cards as the import wizard; the lifecycle stays this workflow's own ticket:
 // sources and links are kept explicitly, positions only change after explicit selection and confirmation,
 // and cancelling leaves the layer as it was (a kept source stays, positions do not change).
-export default function PhotoPositioningWizard({ layer, photos, review, initialSourceId, focusedPhotoId, loadedSources = [], loadedSourceInput, onClose }) {
+export default function PhotoPositioningWizard({ layer, photos, review, initialSourceId, focusedPhotoId, loadedSources = [], loadedSourceInput, onApplied, onClose }) {
   const dialogRef = useRef(null), inputRef = useRef(null), ticketRef = useRef(null), heading = useRef(null), content = useRef(null);
   const editedIds = useRef(new Set());
   const [step, setStep] = useState(initialSourceId ? 2 : 1);
@@ -229,9 +229,13 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
     setPlan(next); setStep(3); setError(''); setRemoveSourceId(null);
   };
   const apply = () => {
+    const initialPlacement = !photoSession.getLayerPhotos(layer.id).some((photo) => photo.spatial.current);
     const result = photoSession.applySourceWorkflowPositions(ticketRef.current, plan,
       selected.map((row) => ({ photoId: row.photoId, candidateId: row.proposal.id })));
-    if (result.ok) onClose();
+    if (result.ok) {
+      onApplied?.({ ...result, layerId: layer.id, initialPlacement });
+      onClose();
+    }
     else { setError('Bildene, kildene eller posisjonene er endret. Oppdater kontrollen før du bekrefter på nytt.'); setStep(3); }
   };
   const optionLabel = (candidate) => candidate.kind === 'exif' ? 'EXIF GPS' : candidate.kind === 'gmi' ? 'GMI – objektposisjon' :

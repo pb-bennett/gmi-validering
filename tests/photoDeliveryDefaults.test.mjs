@@ -11,8 +11,8 @@ import { createPhotoEditState, effectivePhoto, photoEditReducer } from '../src/l
 import { serializePhotoExport } from '../src/lib/photos/export/photoExportXml.mjs';
 import { exportFixture } from './helpers/photoExportFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
-import { gpsPng } from './helpers/photoGpsFixtures.mjs';
-import { parseRealGml } from './helpers/photoEvidenceFixtures.mjs';
+import { gpsPng, noGpsPng } from './helpers/photoGpsFixtures.mjs';
+import { parseRealGml, readRealExif } from './helpers/photoEvidenceFixtures.mjs';
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const names = Array.from({ length: 14 }, (_, index) => `foto-${String(index + 1).padStart(2, '0')}.png`);
@@ -70,6 +70,67 @@ function reviewPositions({ session, layer }, ticket = session.beginSourceWorkflo
   const selected = selectedPhotoSourcePositions(plan, choices);
   return { ticket, plan, requests: selected.map((row) => ({ photoId: row.photoId, candidateId: row.proposal.id })), selected };
 }
+
+async function importExifDraft(names) {
+  const session = createPhotoSession({ yieldJob: tick, extractGps: readRealExif,
+    createThumbnail: async () => ({ dimensions: { width: 1, height: 1 }, thumbnailBlob: new Blob(['thumb']) }) });
+  session.beginImport();
+  session.importFiles(names.map((name) => new File([name === 'no-gps.png' ? noGpsPng() : gpsPng()], name, { type: 'image/png' })));
+  for (let count = 0; count < 100 && session.getSnapshot().photos.some((photo) => photo.spatial.exifRead.state === 'pending'); count++) await tick();
+  assert(session.getSnapshot().photos.every((photo) => photo.spatial.exifRead.state !== 'pending'));
+  return session;
+}
+
+test('import defaults to GML only for photos actually placed from EXIF', async () => {
+  const session = await importExifDraft(['gps.png', 'no-gps.png']);
+  const placement = { kind: 'exif' };
+  const result = session.completeImport({ placement, preview: session.previewImport({ placement }) });
+  assert(result.ok);
+  assert.deepEqual(result.outcome, { total: 2, placed: 1, unplaced: 1 });
+  const delivery = session.getLayerDelivery(result.layer.id);
+  for (const photo of session.getLayerPhotos(result.layer.id)) {
+    assert.equal(delivery.byPhotoId[photo.id].status, photo.originalFilename === 'gps.png' ? 'include' : 'not-selected');
+  }
+  session.clear();
+});
+
+for (const workflow of ['source wizard', 'direct positioning']) test(`${workflow}: EXIF GML default respects GMI links and explicit Ikke`, async () => {
+  const session = await importExifDraft(['gps.png', 'linked.png', 'line.png', 'excluded.png', 'no-gps.png']);
+  const layer = session.createLayer();
+  const ticket = session.beginSourceWorkflow(layer.id);
+  assert(await session.stageLayerSource(layer.id, gmiFile([
+    { hyperlink: 'h:1(link:"linked.png") ' },
+    { scope: 'line', tema: 'VL', guid: guid(8), hyperlink: 'h:1(link:"line.png") ' },
+  ]), 'gmi'));
+  assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  const photos = session.getLayerPhotos(layer.id);
+  const id = (name) => photos.find((photo) => photo.originalFilename === name).id;
+  const excluded = id('excluded.png');
+  // Explicitly return to Ikke before accepting the EXIF candidate.
+  assert(togglePhotoDelivery(session, layer.id, excluded).ok);
+  assert(togglePhotoDelivery(session, layer.id, excluded).ok);
+  assert(session.getLayerDelivery(layer.id).byPhotoId[excluded].userChosen);
+  const requests = photos.flatMap((photo) => {
+    const candidate = photo.spatial.candidates.find((item) => item.kind === 'exif' && item.status === 'viable');
+    return candidate ? [{ photoId: photo.id, candidateId: candidate.id, expectedCurrent: photo.spatial.current }] : [];
+  });
+  assert.equal(requests.length, 4);
+  const result = workflow === 'source wizard'
+    ? session.applySourceWorkflowPositions(ticket, session.reviewSourceWorkflowPositions(ticket), requests)
+    : session.applyPhotoPositioning(layer.id, { kind: 'exif', memberIds: photos.map((photo) => photo.id), requests });
+  assert(result.ok);
+  assert.deepEqual(result.deliveryIds, [id('gps.png')]);
+  const entries = session.getLayerDelivery(layer.id).byPhotoId;
+  assert.equal(entries[id('gps.png')].status, 'include');
+  assert.equal(entries[id('linked.png')].status, 'keep-link');
+  assert.equal(entries[id('line.png')].status, 'keep-link');
+  assert.equal(entries[id('line.png')].canInclude, false);
+  assert.equal(entries[excluded].status, 'not-selected');
+  assert.equal(entries[id('no-gps.png')].status, 'not-selected');
+  for (const request of requests) assert.equal(session.getPhoto(request.photoId).spatial.current.basis.candidateId, request.candidateId);
+  assert.equal(session.getPhoto(id('no-gps.png')).spatial.current, null);
+  session.clear();
+});
 
 test('round trip: exported Skråfoto GML positions the nine unplaced photos and assigns GML; the five GMI placements stay GMI', async () => {
   const context = await setup();

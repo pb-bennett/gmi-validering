@@ -148,8 +148,8 @@ export function photoStackDeliverySummary(members, entries) {
 // Automatic delivery defaults. They only ever replace an untouched default state: an occurrence with a stored decision
 // (GML, Ikke, an inclusion) or one whose current state the user chose explicitly (`userChosen`) is never changed.
 
-/** An unlinked occurrence in its default «Ikke valgt» state that adopts a GML position becomes a GML inclusion. */
-export const photoGmlPositionSetsDelivery = (entry) => Boolean(entry) && !entry.linked && entry.status === 'not-selected'
+/** An unlinked occurrence in its default «Ikke valgt» state that adopts a GML or EXIF position becomes a GML inclusion. */
+export const photoPositionDefaultsToGml = (entry) => Boolean(entry) && !entry.linked && entry.status === 'not-selected'
   && !entry.explicit && !entry.userChosen && entry.canInclude;
 
 /** The GMI object position this occurrence was placed from (its provenance), or null. */

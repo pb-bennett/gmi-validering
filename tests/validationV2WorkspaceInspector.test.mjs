@@ -4,20 +4,24 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('normal sidebar width is preserved and shared by the Validator and docked inspector', async () => {
-  const [page, shell, sidebar, validatorSidebar, inspector] = await Promise.all([
+test('all workspaces use the shared sidebar width, with FOTO stacked on narrow screens', async () => {
+  const [page, shell, sidebar, validatorSidebar, inspector, photoStyles] = await Promise.all([
     read('../src/app/page.js'),
     read('../src/components/WorkspaceShell.js'),
     read('../src/components/Sidebar.js'),
     read('../src/components/FieldValidationSidebar.js'),
     read('../src/components/validation-v2/ValidationV2FieldInspector.js'),
+    read('../src/components/photos/photoWorkspace.css'),
   ]);
   assert.match(sidebar, /onWidthChange\(newWidth\)/);
   assert.match(sidebar, /width: `\$\{width\}px`/);
   assert.match(page, /const \[sidebarWidth, setSidebarWidth\] = useState\(380\)/);
   assert.match(page, /width=\{sidebarWidth\}[\s\S]*?onWidthChange=\{setSidebarWidth\}/);
   assert.match(page, /: fieldValidationOpen \? \([\s\S]*?<FieldValidationSidebar[\s\S]*?canDockInspector=\{canDockInspector\}/);
-  assert.match(page, /sidebarWidth=\{workspaceLayer \? 316 : sidebarWidth\}/);
+  assert.match(page, /<WorkspaceShell\s+sidebarWidth=\{sidebarWidth\}/);
+  const fotoSidebarWidths = [...photoStyles.matchAll(/\.photo-workspace-shell \.workspace-left\s*\{\s*width: ([^;]+);/g)];
+  assert.deepEqual(fotoSidebarWidths.map((rule) => rule[1]), ['100% !important']);
+  assert.match(photoStyles, /@media \(max-width: 700px\)\s*\{[^]*?\.photo-workspace-shell \.workspace-left \{ width: 100% !important;/);
   assert.match(shell, /style=\{\{ width: `\$\{sidebarWidth\}px` \}\}/);
   assert.match(inspector, /style=\{\{ width: VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH \}\}/);
   assert.match(validatorSidebar, /ValidationV2Workspace[\s\S]*sidebarWidth=\{sidebarWidth\}/);

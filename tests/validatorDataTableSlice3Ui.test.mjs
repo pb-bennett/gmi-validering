@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { assertTableRowFill } from './helpers/layerTableStateAssertions.mjs';
-import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
+import { clickSourceControl, setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
+import { noGpsPng } from './helpers/photoGpsFixtures.mjs';
+import { createLayerWithoutPlacement, importDialog } from './helpers/photoImportWizard.mjs';
+import { enterEditMode } from './helpers/photoWorkspace.mjs';
 import { encodeSingleByte } from './helpers/gmiEditFixtures.mjs';
 
 const app = process.env.PHOTO_UI_URL;
@@ -203,6 +206,45 @@ test('Slice 3 production: LOK/TOP Byggemetode, blocked VertikalDimensjon navigat
         }
         await click('Lukk Rettinger');
         await browser.waitFor('!document.querySelector(".gmi-edit-workspace")');
+      });
+
+      await t.test('FOTO shares the sidebar width and map edge at both laptop sizes', async () => {
+        if (await browser.evaluate('Boolean(document.querySelector("#validation-v2-layer"))')) await click('Lukk Validator');
+        await browser.waitFor('document.querySelector(".layer-manager-add-actions")');
+        const photo = path.join(directory, 'synthetic.png');
+        await writeFile(photo, noGpsPng());
+        await clickSourceControl(browser, 'Bilder', 'document');
+        await browser.waitFor(importDialog);
+        await setPhotoFiles(browser, 'input[aria-label="Velg bildefiler"]', [photo]);
+        await createLayerWithoutPlacement(browser);
+        await enterEditMode(browser);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          assert.deepEqual(await sidebarFacts(), sharedSidebar.get(width), 'FOTO shares Lagbehandling, Validator and Rettinger width and map edge');
+          const layout = await browser.evaluate(`(() => {
+            const map = document.querySelector('.leaflet-container').getBoundingClientRect();
+            const inspector = document.querySelector('.photo-workspace-inspector').getBoundingClientRect();
+            const overlays = ['.photo-map-display-card', '.photo-edit-command-bar'].map((selector) => document.querySelector(selector));
+            const overlaysFit = overlays.every((element) => { const rect = element.getBoundingClientRect();
+              return rect.left >= map.left && rect.right <= map.right && rect.top >= map.top && rect.bottom <= map.bottom && element.scrollWidth <= element.clientWidth + 1; });
+            const list = document.querySelector('.photo-workspace-list');
+            return { map: map.width, inspector: inspector.width, overlaysFit, listFits: list.scrollWidth <= list.clientWidth + 1 }; })()`);
+          assert.equal(Math.round(layout.map), Math.round(width - sharedSidebar.get(width)[0] - width * 0.30));
+          assert(Math.abs(layout.inspector - width * 0.30) < 1);
+          assert(layout.overlaysFit && layout.listFits, JSON.stringify(layout));
+          await shot(`batch-a-shared-sidebar-edit-${width}x${height}`);
+        }
+        await click('Avslutt redigering');
+        await browser.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 700, deviceScaleFactor: 1, mobile: false });
+        await browser.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        const narrow = await browser.evaluate(`(() => { const shell = document.querySelector('.photo-workspace-shell');
+          const sidebar = document.querySelector('.workspace-left').getBoundingClientRect();
+          const map = document.querySelector('.leaflet-container').getBoundingClientRect();
+          const inspector = document.querySelector('.photo-workspace-inspector').getBoundingClientRect();
+          return { sidebar: sidebar.width, available: shell.clientWidth, mapTop: map.top, sidebarBottom: sidebar.bottom,
+            inspectorTop: inspector.top, mapBottom: map.bottom }; })()`);
+        assert(narrow.sidebar === narrow.available && narrow.mapTop >= narrow.sidebarBottom - 1 && narrow.inspectorTop >= narrow.mapBottom - 1,
+          `FOTO remains stacked on narrow screens: ${JSON.stringify(narrow)}`);
       });
     } finally {
       await browser.close();

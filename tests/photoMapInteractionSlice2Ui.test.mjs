@@ -89,6 +89,14 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
       assert(contrast(gmiFill, gmiInk) >= 4.5 && gmiEdge !== gmiFill, 'readable ink and a derived edge');
       assert.equal(await browser.evaluate(`document.querySelector('[data-legend-delivery="gmi"] .photo-camera-glyph path').getAttribute('fill')`), HEX.gmi);
 
+      // Establish separation for the two marker clicks while a preview is open.
+      const zoom = 'Number(document.body.innerText.match(/Zoom: (\\d+)/)?.[1])';
+      await browser.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+      await browser.waitFor(`${zoom} >= 15 && !document.querySelector('.leaflet-zoom-anim')`);
+      for (let level = await browser.evaluate(zoom); level < 18; level++) {
+        await browser.evaluate('document.querySelector(".leaflet-control-zoom-in").click()');
+        await browser.waitFor(`${zoom} === ${level + 1}`);
+      }
       await select('Kum 1');
       // 2. A marker click selects the occurrence and opens the persistent preview; it does not change delivery.
       await mouseClick(marker(kum1));
@@ -137,9 +145,9 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
       })()`);
       const positionForPreview = async () => {
         for (let attempt = 0; attempt < 8; attempt++) {
-          const zoom = await browser.evaluate(`Number(document.body.innerText.match(/Zoom: (\\d+)/)?.[1])`);
-          if (zoom === 17) break;
-          await browser.evaluate(`document.querySelector('.leaflet-control-zoom-${zoom > 17 ? 'out' : 'in'}').click()`);
+          const level = await browser.evaluate(zoom);
+          if (level === 17) break;
+          await browser.evaluate(`document.querySelector('.leaflet-control-zoom-${level > 17 ? 'out' : 'in'}').click()`);
           await new Promise((resolve) => setTimeout(resolve, 350));
         }
         await select('Kum 1');
@@ -230,12 +238,18 @@ test('FOTO Slice 2: delivery colours everywhere, provenance through editing, cli
         await positionForPreview();
         await mouseClick(marker(kum1));
         await browser.waitFor(`${preview}?.querySelector('.photo-delivery-row-button')`);
-        const top = await browser.evaluate('document.querySelector(".photo-workspace-list").getBoundingClientRect().top');
+        const listLayout = () => browser.evaluate(`(() => { const list = document.querySelector('.photo-workspace-list');
+          const counts = document.querySelector('.photo-workspace-counts');
+          return { top: list.getBoundingClientRect().top, counts: counts.innerText, countsHeight: counts.getBoundingClientRect().height }; })()`);
+        const layoutBeforeCycling = await listLayout();
         for (const label of ['GML', 'Ikke', 'GMI']) {
           const before = await browser.evaluate(`[${marker(kum1)}.dataset.lat, ${marker(kum1)}.dataset.lng]`);
+          const layoutBeforeChoice = await listLayout();
           await browser.evaluate(`${preview}.querySelector('.photo-delivery-row-button').click()`);
           await browser.waitFor(`${preview}.querySelector('.photo-delivery-pill').innerText === '${label}'`);
-          assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-list").getBoundingClientRect().top'), top, 'delivery cycling keeps list position');
+          const layoutAfterCycling = await listLayout();
+          assert.equal(layoutAfterCycling.top, layoutBeforeCycling.top,
+            `delivery cycling keeps list position at ${width}×${height} (${label}): ${JSON.stringify([layoutBeforeCycling, layoutBeforeChoice, layoutAfterCycling])}`);
           const edit = `${preview}.querySelector('[aria-label="Juster plassering og retning"]')`;
           await pressKey(browser, 'Tab', { code: 'Tab', keyCode: 9 });
           await browser.evaluate(`${edit}.focus()`);

@@ -193,6 +193,12 @@ export default function Home() {
   const [photoAnnouncement, setPhotoAnnouncement] = useState('');
   const [photoDeliveryAnnouncement, setPhotoDeliveryAnnouncement] = useState('');
   const [photoPanRequest, setPhotoPanRequest] = useState(null);
+  const [photoFitRequest, setPhotoFitRequest] = useState(null);
+  const photoFitSerial = useRef(0);
+  const requestPhotoFit = (layerId) => setPhotoFitRequest({ layerId, token: ++photoFitSerial.current });
+  const onPhotoFitHandled = useCallback((token) => {
+    setPhotoFitRequest((request) => request?.token === token ? null : request);
+  }, []);
   const notifyPhoto = (text, tone = 'success', action = null) => setPhotoNotice({ id: `${Date.now()}-${Math.random()}`, text, tone, action });
   const dismissPhotoNotice = (id) => setPhotoNotice((notice) => notice?.id === id ? null : notice);
   const workspaceLayer = photoLayers.find((layer) => layer.id === photoWorkspace.layerId);
@@ -382,7 +388,7 @@ export default function Home() {
     void photoSession.beginLoadedGmiImport({ binding: ticket.binding,
       read: () => loadedGmiSources.read(ticket), isLive: loadedGmiSources.isLive });
   };
-  const enterPhotoLayer = (id, opener, photoId) => {
+  const enterPhotoLayer = (id, opener, photoId, { fit = false } = {}) => {
     const layer = photoSession.getLayer(id);
     if (!layer) return;
     if (opener) photoTriggerRef.current = opener;
@@ -393,13 +399,16 @@ export default function Home() {
     setPhotoExportReturn(null);
     dispatchPhotoWorkspace({ type: 'enter', layerId: id, photoId, photoIds: layer.photoIds });
     useStore.getState().setActiveViewTab('map');
+    if (fit) requestPhotoFit(id);
+    else setPhotoFitRequest(null);
   };
-  const openPhotoLayer = (id, opener, photoId = null) => guardGmiEditDraft(() => {
-    if (id !== photoWorkspace.layerId) requestWorkspaceAction(() => enterPhotoLayer(id, opener, photoId));
-    else enterPhotoLayer(id, opener, photoId);
+  const openPhotoLayer = (id, opener, photoId = null, options) => guardGmiEditDraft(() => {
+    if (id !== photoWorkspace.layerId) requestWorkspaceAction(() => enterPhotoLayer(id, opener, photoId, options));
+    else enterPhotoLayer(id, opener, photoId, options);
   });
   const exitPhotoWorkspace = () => requestWorkspaceAction(() => {
     setPhotoSourceWorkflow(null);
+    setPhotoFitRequest(null);
     setPhotoDialog(null);
     setPhotoExportReturn(null);
     setPhotoNotice(null);
@@ -461,6 +470,7 @@ export default function Home() {
   };
   const locatePhoto = (request) => {
     if (!photoSession.getLayer(request.layerId)?.photoIds.includes(request.photoId)) return;
+    setPhotoFitRequest(null);
     setPhotoLocateRequest({ ...request, kind: 'photo' });
     useStore.getState().setActiveViewTab('map');
   };
@@ -469,6 +479,7 @@ export default function Home() {
     if (photoExportFlowRef.current && !photoExportFlowIsLive(photoExportFlowRef.current, photoSession.getSnapshot().photoLayers)) onPhotoFlowInvalid();
     setPhotoExportReturn((trip) => trip && !photoSession.getLayer(trip.layerId) ? null : trip);
     setPhotoLocateRequest((request) => request && !photoSession.getLayer(request.layerId)?.photoIds.includes(request.photoId) ? null : request);
+    setPhotoFitRequest((request) => request && !photoSession.getLayer(request.layerId) ? null : request);
     setPhotoSourceWorkflow((workflow) => workflow && !photoSession.getLayer(workflow.layerId) ? null : workflow);
     dispatchPhotoWorkspace({ type: 'reconcile', layers: photoSession.getSnapshot().photoLayers });
     setPhotoExportConfigs((configs) => reconcilePhotoExportConfig(configs, photoSession.getSnapshot().photoLayers.map((layer) => layer.id)));
@@ -495,10 +506,13 @@ export default function Home() {
     const append = Boolean(result.append);
     setPhotoImport(null);
     useStore.getState().toggleFieldValidation(false);
-    openPhotoLayer(result.layer.id);
+    openPhotoLayer(result.layer.id, null, null, { fit: !append && result.outcome.placed > 0 });
     if (result.placementError) notifyPhoto('Bildene er lagt til, men posisjonene ble ikke brukt. Kontroller kildene i fotolaget.', 'error',
       { label: 'Koble og posisjoner bilder…', run: () => setPhotoSourceWorkflow({ layerId: result.layer.id }) });
     else notifyPhoto(`${append ? `${result.addedCount} bilder er lagt til.` : 'Fotolaget er opprettet.'} ${result.outcome.placed} av ${result.outcome.total} bilder er plassert.`);
+  };
+  const onPhotoPositionsApplied = ({ layerId, initialPlacement, acceptedIds }) => {
+    if (layerId === workspaceLayer?.id && initialPlacement && acceptedIds.length) requestPhotoFit(layerId);
   };
   // Edit mode keyboard: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y; Escape after tooltips, gestures and menus.
   const onPhotoWorkspaceKey = useEffectEvent((event) => {
@@ -708,6 +722,7 @@ export default function Home() {
     setResetConfirm(null);
     setPhotoImport(null);
     setPhotoLocateRequest(null);
+    setPhotoFitRequest(null);
     // An explicit global reset: staged edits are lost with the whole photo session.
     if (photoEditTicketRef.current) endPhotoEditSession();
     changePhotoExportFlow(null);
@@ -737,7 +752,7 @@ export default function Home() {
       {sourceWorkflowLayer && !photoImport && <PhotoPositioningWizard layer={sourceWorkflowLayer}
         photos={photoSession.getLayerPhotos(sourceWorkflowLayer.id)} review={sourceReviews[sourceWorkflowLayer.id]}
         initialSourceId={photoSourceWorkflow.sourceId} focusedPhotoId={photoSourceWorkflow.photoId}
-        loadedSources={loadedGmiLayers} loadedSourceInput={loadedGmiInput} onClose={closePhotoSources} />}
+        loadedSources={loadedGmiLayers} loadedSourceInput={loadedGmiInput} onApplied={onPhotoPositionsApplied} onClose={closePhotoSources} />}
       {workspaceLayer && !photoImport && photoDialog === 'info' && <PhotoSourcesInfoDialog layer={workspaceLayer} photos={workspacePhotos}
         onClose={() => setPhotoDialog(null)} onOpenSources={() => { setPhotoDialog(null); openPhotoSources(); }} />}
       {workspaceLayer && !photoImport && photoDialog === 'export' && <PhotoExportWizard key={workspaceLayer.id} layer={workspaceLayer} photos={workspacePhotos}
@@ -942,7 +957,7 @@ export default function Home() {
           <TerrainFetcher />
 
           <WorkspaceShell
-            sidebarWidth={workspaceLayer ? 316 : sidebarWidth}
+            sidebarWidth={sidebarWidth}
             photoWorkspace={Boolean(workspaceLayer)}
             onOpenAppInfo={(event) => openAppInfo('about', event.currentTarget)}
             appInfoTriggerRef={appInfoTriggerRef}
@@ -1007,6 +1022,7 @@ export default function Home() {
                       onEditPlacement: () => runWorkspaceTool('edit'),
                       zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null } : null}
                     onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
+                    photoFitRequest={photoFitRequest?.layerId === workspaceLayer?.id ? photoFitRequest : null} onPhotoFitHandled={onPhotoFitHandled}
                     photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,
                       onAnnounce: setPhotoAnnouncement, centerRef: photoMapCenterRef, stackIds: photoEditStackIds,
                       clickMove: photoClickMove, onClickMoveEnd: () => setPhotoClickMoveId(null) } : null}

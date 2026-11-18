@@ -98,14 +98,20 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
       }
       assert.deepEqual(Object.keys(ids).sort(), [...STACK, 'solo1', 'solo2'].sort());
 
-      await t.test('counts: unique assets and placements; wider left pane without overflow', async () => {
+      await t.test('counts: unique assets and placements', async () => {
         assert.match(await browser.evaluate('document.querySelector(".photo-workspace-counts").innerText'), /^7 bilder · 8 plasseringer$/);
-        for (const [width, height, min, max] of [[1920, 1080, 316, 316], [1366, 768, 310, 316], [1280, 720, 292, 300]]) {
+      });
+      await t.test('shared sidebar, inspector and map fit without overflow', async () => {
+        for (const [width, height] of [[1920, 1080], [1366, 768], [1280, 720]]) {
           await setViewport(width, height);
-          const layout = await browser.evaluate(`({ left: Math.round(document.querySelector('.workspace-left').getBoundingClientRect().width),
-            map: Math.round(document.querySelector('.leaflet-container').getBoundingClientRect().width), scroll: document.documentElement.scrollWidth > innerWidth,
-            wrapped: document.querySelector('.photo-workspace-title-row').getBoundingClientRect().height > 40 })`);
-          assert(layout.left >= min && layout.left <= max && layout.map >= 520 && !layout.scroll && !layout.wrapped, `${width}: ${JSON.stringify(layout)}`);
+          const layout = await browser.evaluate(`(() => { const sidebar = document.querySelector('.workspace-left'); return {
+            left: sidebar.getBoundingClientRect().width, shared: parseFloat(sidebar.style.width),
+            map: document.querySelector('.leaflet-container').getBoundingClientRect().width,
+            right: ${inspector}.getBoundingClientRect().width, scroll: document.documentElement.scrollWidth > innerWidth,
+            wrapped: document.querySelector('.photo-workspace-title-row').getBoundingClientRect().height > 40 }; })()`);
+          assert.equal(layout.left, layout.shared);
+          assert(Math.abs(layout.right - Math.min(560, Math.max(380, width * 0.30))) < 1);
+          assert(Math.abs(layout.map - (width - layout.left - layout.right)) < 1 && !layout.scroll && !layout.wrapped, `${width}: ${JSON.stringify(layout)}`);
         }
         await setViewport(1920, 1080);
       });

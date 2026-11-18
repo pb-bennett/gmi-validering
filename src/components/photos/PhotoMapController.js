@@ -4,20 +4,20 @@ import { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
-import { resolvePhotoLocate } from '@/lib/photos/photoMapFeatures.mjs';
+import { photoLayerMapFit, resolvePhotoLocate } from '@/lib/photos/photoMapFeatures.mjs';
 
-export default function PhotoMapController({ items, hasSurveyData, locateRequest, onLocateHandled, panRequest }) {
+export default function PhotoMapController({ items, fitRequest, onFitHandled, locateRequest, onLocateHandled, panRequest }) {
   const map = useMap();
-  const initialFitDone = useRef(false);
   useEffect(() => {
-    if (hasSurveyData || locateRequest) { initialFitDone.current = true; return; }
-    if (initialFitDone.current || !items.length) return;
-    initialFitDone.current = true;
-    // A first manual placement is already in the user's chosen map view.
-    if (items.every((item) => item.photo.spatial.current?.basis.kind === 'manual')) return;
-    const bounds = L.latLngBounds(items.map((item) => [item.feature.geometry.coordinates[1], item.feature.geometry.coordinates[0]]));
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
-  }, [map, items, hasSurveyData, locateRequest]);
+    if (!fitRequest) return;
+    map.invalidateSize({ animate: false, pan: false });
+    const frame = requestAnimationFrame(() => {
+      const target = photoLayerMapFit(photoSession.getLayerPhotos(fitRequest.layerId));
+      if (target) fitPhotoLayer(map, target);
+      onFitHandled(fitRequest.token);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [map, fitRequest, onFitHandled]);
 
   useEffect(() => {
     if (!locateRequest) return;
@@ -48,18 +48,38 @@ export default function PhotoMapController({ items, hasSurveyData, locateRequest
   return null;
 }
 
-// Keep the selected photo clear of the overlays floating on the map: the Edit command bar (top band) and the
-// display card (right). On a small map a padding is dropped rather than leaving no usable area.
+function fitPhotoLayer(map, { bounds, zoom, maxZoom }) {
+  const padding = photoOverlayPadding(map);
+  if (zoom === undefined) {
+    map.fitBounds(bounds, { ...padding, maxZoom, animate: false });
+    return;
+  }
+  // Offset the fixed-zoom centre into the same usable area as a bounds fit.
+  const centre = map.project(L.latLngBounds(bounds).getCenter(), zoom);
+  const offset = L.point(padding.paddingBottomRight).subtract(L.point(padding.paddingTopLeft)).divideBy(2);
+  map.setView(map.unproject(centre.add(offset), zoom), zoom, { animate: false });
+}
+
 function panClearOfOverlays(map, lat, lng) {
-  const box = map.getContainer().getBoundingClientRect();
-  const bar = document.querySelector('.photo-edit-command-bar')?.getBoundingClientRect();
-  const card = document.querySelector('.photo-map-display-card')?.getBoundingClientRect();
-  const point = map.latLngToContainerPoint([lat, lng]), x = box.left + point.x, y = box.top + point.y;
-  // Each overlay only matters for photos in its own band, so large maps are not panned needlessly.
-  let top = bar && x >= bar.left - 24 && x <= bar.right + 24 ? Math.max(60, Math.round(bar.bottom - box.top + 40)) : 60;
-  const landedY = Math.min(Math.max(y, box.top + top), box.bottom - 60);
-  let right = card && landedY >= card.top - 24 && landedY <= card.bottom + 24 ? Math.max(60, Math.round(box.right - card.left + 24)) : 60;
-  if (box.height - top - 60 < 80) top = 60;
-  if (box.width - right - 60 < 80) right = 60;
-  map.panInside([lat, lng], { paddingTopLeft: [60, top], paddingBottomRight: [right, 60] });
+  const location = [lat, lng];
+  map.panInside(location, photoOverlayPadding(map, map.latLngToContainerPoint(location)));
+}
+
+// A fit reserves both overlay bands. A selection pan only reserves the band containing the selected point.
+function photoOverlayPadding(map, point = null) {
+  const container = map.getContainer();
+  const box = container.getBoundingClientRect();
+  const workspace = container.closest('.photo-workspace-primary');
+  const bar = workspace?.querySelector('.photo-edit-command-bar')?.getBoundingClientRect();
+  const card = workspace?.querySelector('.photo-map-display-card')?.getBoundingClientRect();
+  const margin = 60;
+  const x = box.left + (point?.x ?? 0), y = box.top + (point?.y ?? 0);
+  let top = bar && (!point || (x >= bar.left - 24 && x <= bar.right + 24)) ? Math.max(margin, Math.round(bar.bottom - box.top + 40)) : margin;
+  const landedY = Math.min(Math.max(y, box.top + top), box.bottom - margin);
+  let right = card && (!point || (landedY >= card.top - 24 && landedY <= card.bottom + 24)) ? Math.max(margin, Math.round(box.right - card.left + 24)) : margin;
+  // On narrow maps a pan can still clear an overlay even when the remaining band is too small for a bounds fit.
+  const minimumSpan = point ? 1 : 80;
+  if (box.height - top - margin < minimumSpan) top = margin;
+  if (box.width - right - margin < minimumSpan) right = margin;
+  return { paddingTopLeft: [margin, top], paddingBottomRight: [right, margin] };
 }

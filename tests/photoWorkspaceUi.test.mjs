@@ -119,6 +119,8 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       const layout = await browser.evaluate(`(() => { const box = s => document.querySelector(s).getBoundingClientRect().toJSON(); return {
         shell: box('.photo-workspace-shell'), left: box('.workspace-left'), map: box('.leaflet-container'), right: box('.photo-workspace-inspector'),
         scrollWidth: document.querySelector('.photo-workspace-shell').scrollWidth,
+        clientWidth: document.querySelector('.photo-workspace-shell').clientWidth,
+        sharedSidebarWidth: parseFloat(document.querySelector('.workspace-left').style.width),
       }; })()`);
       assert.equal(layout.shell.width, width); assert(layout.scrollWidth <= width + 1, JSON.stringify(layout));
       // Pass 1B: the shared header is branding + app info only; new photo imports start from the layer list.
@@ -127,11 +129,13 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       if (width > 700) {
         assert(Math.abs(layout.left.right - layout.map.left) < 2);
         assert(Math.abs(layout.map.right - layout.right.left) < 2);
-        assert(layout.map.width > layout.left.width && layout.map.width > layout.right.width);
+        assert.equal(layout.left.width, layout.sharedSidebarWidth);
+        assert(Math.abs(layout.map.width - (width - layout.left.width - layout.right.width)) < 2);
         assert(layout.right.right <= width + 1);
-        // Pass 1B widths: left pane clamp(292px, 23vw, 316px); inspector clamp(380px, 30vw, 560px).
-        if (width === 1680) { assert(layout.right.width >= 380 && layout.right.width <= 560, JSON.stringify(layout.right)); assert.equal(layout.left.width, 316); }
+        const expectedInspectorWidth = width <= 1200 ? 340 : Math.min(560, Math.max(380, width * 0.30));
+        assert(Math.abs(layout.right.width - expectedInspectorWidth) < 1, JSON.stringify(layout.right));
       } else {
+        assert.equal(layout.left.width, layout.clientWidth);
         assert(layout.map.top >= layout.left.bottom - 1); assert(layout.right.top >= layout.map.bottom - 1);
         await browser.evaluate(`${inspector}.scrollIntoView({block:'start'})`);
         assert(await browser.evaluate(`${inspector}.getBoundingClientRect().top < innerHeight`));

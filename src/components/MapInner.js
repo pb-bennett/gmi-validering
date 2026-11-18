@@ -1130,7 +1130,8 @@ function FeatureHoverTooltip({ controllerRef, resetKey }) {
   return null;
 }
 
-export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspace, onSelectPhoto, photoPanRequest, photoEdit, photoDisplay }) {
+export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspace, onSelectPhoto, photoPanRequest,
+  photoFitRequest, onPhotoFitHandled, photoEdit, photoDisplay }) {
   // photoLayers is a new array on every session publish, so this is one presentation pass per snapshot
   // (or workspace view change); markers never re-read the session per feature.
   const { photoLayers } = usePhotoSession();
@@ -2345,7 +2346,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       <FeatureHighlighter geoJsonData={geoJsonData} />
       <FieldValidationZoomHandler geoJsonData={geoJsonData} />
       {onZoomChange && <ZoomHandler onZoomChange={onZoomChange} />}
-      <PhotoMapController items={photoItems} hasSurveyData={Boolean(data) || layerOrder.length > 0}
+      <PhotoMapController items={photoItems} fitRequest={photoFitRequest} onFitHandled={onPhotoFitHandled}
         locateRequest={photoLocateRequest} onLocateHandled={onPhotoLocateHandled} panRequest={photoPanRequest} />
       <MapSizeInvalidator />
       <ZoomToFeatureHandler />

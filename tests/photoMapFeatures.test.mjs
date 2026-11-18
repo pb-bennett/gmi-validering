@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPhotoMapFeatures, resolvePhotoLocate } from '../src/lib/photos/photoMapFeatures.mjs';
+import { readFile } from 'node:fs/promises';
+import { buildPhotoMapFeatures, photoLayerMapFit, resolvePhotoLocate } from '../src/lib/photos/photoMapFeatures.mjs';
 const position = { crs: 'EPSG:4326', longitude: 10, latitude: 59 };
 test('visible current positions only; stable photo identities, geographic order, no co-location deduplication', () => {
   const layers = [{ id: 'l', visible: true }];
@@ -24,4 +25,32 @@ test('photo locate uses owner-scoped geography regardless of visibility and neve
   assert.equal(resolvePhotoLocate(session, { ...request, layerId: 'deleted' }), null);
   assert.equal(resolvePhotoLocate(session, { ...request, photoId: 'other' }), null);
   assert.equal(resolvePhotoLocate(session, { ...request, candidateId: 'missing' }), null);
+});
+
+test('FOTO fit uses only valid accepted positions, with zoom 18 for a point or a cluster under 10 metres', () => {
+  const placed = (coordinates) => ({ spatial: { current: { position: { ...position, ...coordinates } } } });
+  const unplaced = { spatial: { current: null, candidates: [{ position }] } };
+  const invalid = placed({ latitude: Infinity });
+  assert.equal(photoLayerMapFit([unplaced, invalid]), null);
+  assert.deepEqual(photoLayerMapFit([placed({}), unplaced]), { bounds: [[59, 10], [59, 10]], zoom: 18 });
+  assert.deepEqual(photoLayerMapFit([placed({}), placed({}), invalid]), { bounds: [[59, 10], [59, 10]], zoom: 18 });
+  assert.deepEqual(photoLayerMapFit([placed({ latitude: 59.00008 }), placed({})]), { bounds: [[59, 10], [59.00008, 10]], zoom: 18 });
+  assert.deepEqual(photoLayerMapFit([placed({ longitude: 10.001 }), placed({ latitude: 59.0001 })]),
+    { bounds: [[59, 10], [59.0001, 10.001]], maxZoom: 19 });
+});
+
+test('automatic FOTO fit is wired only to positioned creation and successful initial source placement', async () => {
+  const read = (path) => readFile(new URL(`../src/${path}`, import.meta.url), 'utf8');
+  const [page, wizard, controller] = await Promise.all(['app/page.js', 'components/photos/PhotoPositioningWizard.js', 'components/photos/PhotoMapController.js'].map(read));
+  assert.match(page, /openPhotoLayer\(result\.layer\.id, null, null, \{ fit: !append && result\.outcome\.placed > 0 \}\)/);
+  assert.match(page, /if \(fit\) requestPhotoFit\(id\)/);
+  assert.match(page, /if \(layerId === workspaceLayer\?\.id && initialPlacement && acceptedIds\.length\) requestPhotoFit\(layerId\)/);
+  assert.equal([...page.matchAll(/requestPhotoFit\(/g)].length, 2);
+  assert.match(wizard, /const initialPlacement = !photoSession\.getLayerPhotos\(layer\.id\)\.some\(\(photo\) => photo\.spatial\.current\)/);
+  assert.match(wizard, /if \(result\.ok\) \{\s*onApplied\?\.\(\{ \.\.\.result, layerId: layer\.id, initialPlacement \}\)/);
+  assert.equal([...wizard.matchAll(/onApplied\?\.\(/g)].length, 1, 'connection-only completion never reports positions applied');
+  assert.match(controller, /\[map, fitRequest, onFitHandled\]/);
+  assert.match(controller, /\[map, panRequest\]/);
+  assert.match(controller, /map\.panInside\(/);
+  assert.doesNotMatch(controller, /initialFitDone|hasSurveyData/);
 });
