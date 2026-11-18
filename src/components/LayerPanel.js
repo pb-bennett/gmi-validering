@@ -19,7 +19,12 @@ import {
   ArrowCounterClockwiseIcon,
   CameraPlusIcon,
   CaretDownIcon,
+  ChartLineIcon,
+  CircleHalfIcon,
+  ClipboardTextIcon,
   CornersOutIcon,
+  HighlighterIcon,
+  MountainsIcon,
   PencilSimpleLineIcon,
   TableIcon,
   TrashIcon,
@@ -77,7 +82,7 @@ function LayerAnalysisButtons({
   const isKof = data?.format === 'KOF';
   const analysisResults = layer?.analysis?.results || [];
   const zValidationResults = layer?.zValidation?.results;
-  const highlightAll = layer?.highlightAll;
+  const highlightAll = Boolean(layer?.highlightAll);
 
   const runInclineAnalysis = () => {
     if (!data) return;
@@ -100,43 +105,32 @@ function LayerAnalysisButtons({
     toggleZValidationModal(true);
   };
 
-  const errorCount = analysisResults.filter(
-    (r) => r.status === 'error',
-  ).length;
-  const warningCount = analysisResults.filter(
-    (r) => r.status === 'warning',
-  ).length;
   const zMissing =
     (zValidationResults?.summary?.missingPointObjects || 0) +
     (zValidationResults?.summary?.missingLineObjects || 0);
+  const zAction = zValidationResults ? 'Åpne høydekontroll' : 'Kjør høydekontroll';
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div className="layer-analysis-actions flex items-center gap-1 flex-wrap">
       {/* Layer highlight toggle */}
-      <button
+      <PhotoIconButton
+        icon={HighlighterIcon}
+        size={14}
+        label="Marker alt i laget"
+        tooltip={highlightAll ? 'Skru av laghighlight' : 'Marker alt i laget'}
+        pressed={highlightAll}
+        className={`layer-card-icon-button${highlightAll ? ' gmi-selected-control' : ''}`}
         onClick={() => toggleLayerHighlightAll(layerId)}
-        className={`gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy ${highlightAll ? 'gmi-selected-control' : ''}`}
-        title={
-          highlightAll ? 'Skru av laghighlight' : 'Marker alt i laget'
-        }
-      >
-        <svg
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 3l2.09 6.26L20.5 9.27l-5.2 3.78 1.98 6.1L12 15.77 6.72 19.15l1.98-6.1-5.2-3.78 6.41-.01L12 3z"
-          />
-        </svg>
-      </button>
+      />
 
       {/* Profilanalyse */}
-      <button
+      <PhotoIconButton
+        icon={ChartLineIcon}
+        size={14}
+        label="Profilanalyse"
+        tooltip={isKof ? 'Ikke tilgjengelig for KOF' : analysisResults.length > 0 ? 'Åpne profilanalyse' : 'Kjør profilanalyse'}
+        unavailable={isKof}
+        className="layer-card-icon-button"
         onClick={
           analysisResults.length > 0
             ? () => {
@@ -147,39 +141,15 @@ function LayerAnalysisButtons({
               }
             : runInclineAnalysis
         }
-        className="gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={isKof}
-        title={
-          isKof
-            ? 'Ikke tilgjengelig for KOF'
-            : analysisResults.length > 0
-              ? 'Åpne profilanalyse'
-              : 'Kjør profilanalyse'
-        }
-      >
-        <svg
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-          />
-        </svg>
-        {analysisResults.length > 0 &&
-          (errorCount > 0 || warningCount > 0) && (
-            <span
-              className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${errorCount > 0 ? 'bg-red-500' : 'bg-yellow-500'}`}
-            />
-          )}
-      </button>
+      />
 
       {/* Høydekontroll */}
-      <button
+      <PhotoIconButton
+        icon={MountainsIcon}
+        size={14}
+        label="Høydekontroll"
+        tooltip={zMissing > 0 ? `${zAction} · ${zMissing} ${zMissing === 1 ? 'objekt' : 'objekter'} mangler Z` : zAction}
+        className="layer-card-icon-button"
         onClick={
           zValidationResults
             ? () => {
@@ -189,80 +159,34 @@ function LayerAnalysisButtons({
               }
             : runZValidation
         }
-        className="gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
-        title={
-          zValidationResults
-            ? 'Åpne høydekontroll'
-            : 'Kjør høydekontroll'
-        }
       >
-        <svg
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-          />
-        </svg>
         {zMissing > 0 && (
-          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
+          <span aria-hidden="true" className="gmi-validation-dot absolute -top-1 -right-1 size-2 rounded-full" data-validation-tone="error" />
         )}
-      </button>
+      </PhotoIconButton>
 
       {/* Feltvalidering */}
-      <button
+      <PhotoIconButton
+        icon={ClipboardTextIcon}
+        size={14}
+        label="Feltvalidering"
+        tooltip={isKof ? 'Ikke tilgjengelig for KOF' : 'Feltvalidering'}
+        unavailable={isKof}
+        className="layer-card-icon-button"
         onClick={() => toggleFieldValidation(true)}
-        className="gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={isKof}
-        title={isKof ? 'Ikke tilgjengelig for KOF' : 'Feltvalidering'}
-      >
-        <svg
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-          />
-        </svg>
-      </button>
+      />
 
       {/* Topplok kontroll */}
-      <button
+      <PhotoIconButton
+        icon={CircleHalfIcon}
+        size={14}
+        label="Topplok"
+        tooltip={isKof ? 'Ikke tilgjengelig for KOF' : hasTopplokResults ? (topplokOpen ? 'Skjul topplok' : 'Vis topplok') : 'Kjør topplok kontroll'}
+        unavailable={isKof}
+        pressed={topplokOpen}
+        className={`layer-card-icon-button${topplokOpen ? ' gmi-selected-control' : ''}`}
         onClick={onTopplokClick}
-        className={`gmi-focus-ring relative rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy disabled:cursor-not-allowed disabled:opacity-50 ${topplokOpen ? 'gmi-selected-control' : ''}`}
-        disabled={isKof}
-        title={
-          isKof
-            ? 'Ikke tilgjengelig for KOF'
-            : hasTopplokResults
-              ? 'Vis/skjul topplok'
-              : 'Kjør topplok kontroll'
-        }
-      >
-        <svg
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 12h16M6 12l6-7 6 7M6 12l6 7 6-7"
-          />
-        </svg>
-      </button>
+      />
     </div>
   );
 }

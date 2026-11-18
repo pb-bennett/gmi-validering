@@ -32,10 +32,13 @@
 .photo-import-capture-title { display:flex; align-items:center; gap:.375rem; }
 .photo-import-capture-choice { display:flex; align-items:center; gap:.5rem; width:fit-content; color:var(--gmi-text); cursor:pointer; }
 .photo-import-capture details { margin:0; color:var(--gmi-text); }
-.photo-import-capture-list { max-height:12rem; overflow:auto; margin-top:.375rem; }
-.photo-import-capture-list li { display:flex; flex-wrap:wrap; gap:.25rem 1rem; padding:.125rem 0; }
-.photo-import-capture-file { overflow-wrap:anywhere; }
-.photo-import-capture-time { color:var(--gmi-text-muted); font-variant-numeric:tabular-nums; }
+.photo-import-wizard .photo-import-capture-list { display:grid; grid-template-columns:minmax(0, 1fr) max-content; column-gap:1rem; max-height:12rem; overflow:auto; margin-top:.375rem; }
+.photo-import-wizard .photo-import-capture-list li { display:grid; grid-column:1 / -1; grid-template-columns:subgrid; padding:.125rem 0; }
+.photo-import-wizard .photo-import-capture-file { overflow-wrap:anywhere; }
+.photo-import-wizard .photo-import-capture-time { color:var(--gmi-text-muted); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+@media (max-width:600px) {
+  .photo-import-wizard .photo-import-capture-list { grid-template-columns:minmax(0, 1fr) minmax(0, 60%); column-gap:.5rem; }
+}
 /* GML capture-time choices (M3): positioning wizard Koblinger and import Kontroll. Tokens only. */
 .photo-gml-capture { display:grid; gap:.375rem; margin:.75rem 0; font-size:.875rem; }
 .photo-import-review .photo-gml-capture { max-width:1000px; margin:1rem auto; }

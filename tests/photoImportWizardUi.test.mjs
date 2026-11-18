@@ -66,10 +66,51 @@ test('filename capture-time suggestions: final step, default off, persistence, s
  const browser=await openTestChrome();
  const click=(label)=>clickSourceControl(browser,label,'document');
  const noTime=gpsPng({}).toString('base64'),withTime=gpsPng({captureTime:'2026:10:16 12:00:00'}).toString('base64');
- const names=[['20261014_143302.png',noTime],['KUM12_20261015.png',noTime],['20261013_0915.png',noTime],['IMG_1234.png',noTime],['20261016_120000.png',withTime],['IMG_20261012_101010.png',noTime]];
+ const longName='SyntetiskRegistreringNordvestVedProsjektgrenseOgInnmalingAvNySpillvannsforbindelseLangsHeleAnleggsomradetMedKummerOgTilkoblingerFraMidlertidigArbeidsveiTilEndeligLeveranse_20261012_101010.png';
+ const names=[['20261014_143302.png',noTime],['KUM12_20261015.png',noTime],['20261013_0915.png',noTime],['IMG_1234.png',noTime],['20261016_120000.png',withTime],[longName,noTime]];
  const panel=`${importDialog}?.querySelector('.photo-import-capture')`;
  const box=(label)=>`Array.from(${importDialog}.querySelectorAll('.photo-import-capture-choice')).find(l=>l.textContent.startsWith(${JSON.stringify(label)}))?.querySelector('input')`;
- const layout=async(name)=>{await mkdir(screenshotRoot,{recursive:true});for(const [width,height]of [[1280,720],[1366,768]]){await browser.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await browser.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');const g=await browser.evaluate(`(()=>{const d=${importDialog},b=d.querySelector('.photo-import-footer .gmi-primary-control').getBoundingClientRect(),p=d.querySelector('.photo-import-capture').getBoundingClientRect(),body=d.querySelector('.photo-import-step-body');return {overflow:d.scrollWidth>d.clientWidth||body.scrollWidth>body.clientWidth,right:b.right,bottom:b.bottom,panelRight:p.right,frame:d.getBoundingClientRect().right};})()`);assert(!g.overflow,name);assert(g.right<=width&&g.bottom<=height,name);assert(g.panelRight<=g.frame,name);const {data}=await browser.send('Page.captureScreenshot',{format:'png'});await writeFile(path.join(screenshotRoot,`capture-${name}-${width}x${height}.png`),Buffer.from(data,'base64'));}};
+ const list=`${panel}.querySelector('.photo-import-capture-list')`;
+ const assertColumns=async(width)=>{
+  const measurements=await browser.evaluate(`(() => {
+    const list=${list}, bounds=list.getBoundingClientRect(), style=getComputedStyle(list);
+    const rows=Array.from(list.children, (row) => {
+      const [file,time]=row.children, f=file.getBoundingClientRect(), t=time.getBoundingClientRect();
+      return { file:f.left, time:t.left, separated:f.right<=t.left, fits:t.right<=bounds.right+1,
+        tabular:getComputedStyle(time).fontVariantNumeric==='tabular-nums' };
+    });
+    const long=Array.from(list.querySelectorAll('.photo-import-capture-file')).find(e=>e.textContent===${JSON.stringify(longName)});
+    const range=document.createRange(); range.selectNodeContents(long);
+    return { rows, wraps:range.getClientRects().length>1, overflow:list.scrollWidth>list.clientWidth+1,
+      maxHeight:parseFloat(style.maxHeight)/parseFloat(getComputedStyle(document.documentElement).fontSize),
+      overflowY:style.overflowY };
+  })()`);
+  assert.equal(measurements.rows.length,4);
+  assert.equal(new Set(measurements.rows.map(row=>row.file)).size,1,`filename column at ${width}`);
+  assert.equal(new Set(measurements.rows.map(row=>row.time)).size,1,`timestamp column at ${width}`);
+  assert(measurements.rows.every(row=>row.separated&&row.fits&&row.tabular),JSON.stringify(measurements));
+  assert(measurements.wraps&& !measurements.overflow,JSON.stringify(measurements));
+  assert.deepEqual([measurements.maxHeight,measurements.overflowY],[12,'auto']);
+ };
+ const layout=async(name)=>{
+  await mkdir(screenshotRoot,{recursive:true});
+  await browser.evaluate(`(() => { const details=${panel}.querySelector('details');
+    if (!details.open) details.querySelector('summary').click(); })()`);
+  for(const [width,height]of [[1280,720],[1366,768]]){
+   await browser.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
+   await browser.evaluate(`${list}.scrollIntoView({block:'nearest'});new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
+   await assertColumns(width);
+   const geometry=await browser.evaluate(`(() => {
+     const d=${importDialog}, b=d.querySelector('.photo-import-footer .gmi-primary-control').getBoundingClientRect();
+     const p=${panel}.getBoundingClientRect(), body=d.querySelector('.photo-import-step-body');
+     return { overflow:d.scrollWidth>d.clientWidth||body.scrollWidth>body.clientWidth,
+       right:b.right,bottom:b.bottom,panelRight:p.right,frame:d.getBoundingClientRect().right };
+   })()`);
+   assert(!geometry.overflow,name);assert(geometry.right<=width&&geometry.bottom<=height,name);assert(geometry.panelRight<=geometry.frame,name);
+   const {data}=await browser.send('Page.captureScreenshot',{format:'png'});
+   await writeFile(path.join(screenshotRoot,`capture-${name}-${width}x${height}.png`),Buffer.from(data,'base64'));
+  }
+ };
  try{
  await browser.send('Page.navigate',{url:app+'?testmodus=1'});await browser.waitFor('document.querySelector("button[aria-label=Lukk]")');await browser.evaluate('document.querySelector("button[aria-label=Lukk]").click()');
  await click('Bilder');await browser.waitFor(`${importDialog}?.open`);
@@ -84,9 +125,18 @@ test('filename capture-time suggestions: final step, default off, persistence, s
   [['Bruk dato og klokkeslett fra filnavn (3)',false,'rgb(0, 117, 149)'],['Bruk kun dato fra filnavn (1)',false,'rgb(0, 117, 149)']]);
  await browser.evaluate(`${panel}.querySelector('summary').click()`);
  assert.equal(await browser.evaluate(`${panel}.querySelector('summary').textContent`),'Vis forslag (4)');
- const rows=await browser.evaluate(`Array.from(${panel}.querySelectorAll('li')).map(li=>li.innerText.replace(/\\s+/g,' ').trim())`);
- assert.deepEqual(rows,['20261014_143302.png 14.10.2026 14:33:02 · tidssone ukjent','20261013_0915.png 13.10.2026 09:15 · uten sekunder · tidssone ukjent','IMG_20261012_101010.png 12.10.2026 10:10:10 · tidssone ukjent','KUM12_20261015.png 15.10.2026 · bare dato']);
+ const rows=await browser.evaluate(`Array.from(${list}.children, li=>Array.from(li.children, cell=>cell.textContent))`);
+ assert.deepEqual(rows,[['20261014_143302.png','14.10.2026 14:33:02 · tidssone ukjent'],
+  ['20261013_0915.png','13.10.2026 09:15 · uten sekunder · tidssone ukjent'],
+  [longName,'12.10.2026 10:10:10 · tidssone ukjent'],['KUM12_20261015.png','15.10.2026 · bare dato']]);
  await layout('placement-final');
+ await browser.send('Emulation.setDeviceMetricsOverride',{width:390,height:720,deviceScaleFactor:1,mobile:false});
+ await assertColumns(390);
+ const scroll=await browser.evaluate(`(() => { const list=${list}; list.scrollTop=list.scrollHeight;
+   return { local:list.scrollTop>0, height:list.clientHeight }; })()`);
+ assert(scroll.local,'long names stay in the scrollable list at narrow widths');
+ assert(scroll.height<=192);
+ await browser.send('Emulation.setDeviceMetricsOverride',{width:1366,height:768,deviceScaleFactor:1,mobile:false});
  await browser.evaluate(`${box('Bruk kun dato fra filnavn')}.click()`);
  // Kontroll becomes the final step: the section moves there and the choice survives the placement change and back navigation.
  await chooseImportPlacement(browser,'exif');assert.equal(await browser.evaluate(`${panel}`),null);

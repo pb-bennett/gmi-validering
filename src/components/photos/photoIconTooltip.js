@@ -44,6 +44,7 @@ export function attachPhotoIconTooltip(element) {
     if (!tip) {
       tip = document.createElement('div');
       tip.id = id; tip.className = 'photo-icon-tooltip';
+      if (element.closest('.layer-analysis-actions')) tip.classList.add('layer-analysis-tooltip');
       tip.addEventListener('pointerenter', () => clearTimeout(hideTimer));
       tip.addEventListener('pointerleave', scheduleHide);
     }

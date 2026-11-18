@@ -135,8 +135,8 @@ test('Slice 3 production: LOK/TOP Byggemetode, blocked VertikalDimensjon navigat
       });
 
       await t.test('Byggemetode: missing on LOK/TOP gives neither Feil nor Sjekk; KUM still does', async () => {
-        await browser.waitFor('document.querySelector("button[title=Feltvalidering]")');
-        await browser.evaluate(`document.querySelector('button[title=Feltvalidering]').click()`);
+        await browser.waitFor('document.querySelector("button[aria-label=Feltvalidering]")');
+        await browser.evaluate(`document.querySelector('button[aria-label=Feltvalidering]').click()`);
         await browser.waitFor('document.querySelector("#validation-v2-layer")');
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });

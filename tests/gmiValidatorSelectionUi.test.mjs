@@ -85,8 +85,8 @@ test('H2 production: Validator checkbox hosts, persistence, map halos, lifecycle
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
       await browser.evaluate(`document.querySelector('[title="Synthetic H2.gmi"]').click()`);
-      await browser.waitFor('document.querySelector("button[title=Feltvalidering]")');
-      await browser.evaluate(`document.querySelector('button[title=Feltvalidering]').click()`);
+      await browser.waitFor('document.querySelector("button[aria-label=Feltvalidering]")');
+      await browser.evaluate(`document.querySelector('button[aria-label=Feltvalidering]').click()`);
       await browser.waitFor('document.querySelector("#validation-v2-layer")'); await geometry('Ledninger');
       const resultSummary = await browser.evaluate('document.querySelector("#validation-v2-geometry-panel").innerText.split(String.fromCharCode(10))[0]');
 
@@ -170,7 +170,7 @@ test('H2 production: Validator checkbox hosts, persistence, map halos, lifecycle
         await geometry('Ledninger'); await selectFirst(); await click('Lukk datatabell'); await browser.waitFor(`!${table}`); await noSelection();
         await diagnostic(); await browser.waitFor(header); assert.deepEqual(await checked(), []);
         await browser.evaluate(`${box(0)}.click()`); await click('Lukk Validator'); await browser.waitFor(`!${table}`); await noSelection();
-        await browser.evaluate(`document.querySelector('button[title=Feltvalidering]').click()`); await geometry('Ledninger');
+        await browser.evaluate(`document.querySelector('button[aria-label=Feltvalidering]').click()`); await geometry('Ledninger');
       });
 
       await t.test('Original/Foreslått changes clear the host and proposed inspection remains source-bound', async () => {
@@ -190,8 +190,8 @@ test('H2 production: Validator checkbox hosts, persistence, map halos, lifecycle
         await addFile(other); await addFile(readOnly); await addFile(unreadable);
         await browser.waitFor('document.querySelectorAll("[data-gmi-edit-action]").length === 4');
         await browser.evaluate(`document.querySelector('[title="Synthetic H2.gmi"]').click()`);
-        await browser.waitFor('document.querySelector("button[title=Feltvalidering]")');
-        await browser.evaluate(`document.querySelector('button[title=Feltvalidering]').click()`); await geometry('Ledninger');
+        await browser.waitFor('document.querySelector("button[aria-label=Feltvalidering]")');
+        await browser.evaluate(`document.querySelector('button[aria-label=Feltvalidering]').click()`); await geometry('Ledninger');
         const layers = await browser.evaluate('Array.from(document.querySelector("#validation-v2-layer").options).map(e => [e.textContent,e.value])');
         const idOf = (name) => layers.find(([label]) => label === name)[1];
         await choose('document.querySelector("#validation-v2-layer")', idOf('Synthetic H2.gmi')); await geometry('Ledninger'); await selectFirst();

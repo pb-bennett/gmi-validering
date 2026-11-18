@@ -58,8 +58,8 @@ test('H4 production: return to the originating Validator rule, guard cancellatio
     // Validator from the main sidebar; the dataset menu is never touched here (no explicit choice).
     const openSdrInspection = async () => {
       if (await browser.evaluate(`!${datasetMenu}`)) {
-        await browser.waitFor('document.querySelector("button[title=Feltvalidering]")');
-        await browser.evaluate('document.querySelector("button[title=Feltvalidering]").click()');
+        await browser.waitFor('document.querySelector("button[aria-label=Feltvalidering]")');
+        await browser.evaluate('document.querySelector("button[aria-label=Feltvalidering]").click()');
         await browser.waitFor(datasetMenu);
       }
       await browser.evaluate(`Array.from(document.querySelector('[role=tablist][aria-label=Geometri]').querySelectorAll('button')).find(e=>e.innerText.startsWith('Ledninger')).click()`);

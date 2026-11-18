@@ -59,6 +59,8 @@
 /* Compact icon-only action inside layer-card headers; same footprint as the existing p-1 icon buttons. */
 .photo-icon-button.layer-card-icon-button { width: 22px; height: 22px; border-radius: 0.5rem; color: var(--gmi-text-subtle); }
 .photo-icon-button.layer-card-icon-button:hover:not(.photo-icon-button-unavailable) { color: var(--gmi-navy); }
+.photo-icon-button.layer-card-icon-button.gmi-selected-control { background: var(--gmi-border); color: var(--gmi-navy); }
+.photo-icon-button.layer-card-icon-button.gmi-selected-control:hover:not(.photo-icon-button-unavailable) { background: color-mix(in srgb, var(--gmi-border-strong) 35%, var(--gmi-border)); }
 /* Workspace exits share Validator's compact 32px X footprint. */
 .photo-icon-button.gmi-workspace-close { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--gmi-text-muted); }
 .photo-icon-button.gmi-workspace-close:hover:not(:disabled) { background: var(--gmi-surface-soft); color: var(--gmi-navy); }
@@ -72,6 +74,8 @@
 /* Shared icon tooltip (hover after a delay, keyboard focus immediately); used inside and outside the FOTO workspace. */
 .photo-icon-tooltip { position: fixed; z-index: 1400; max-width: 16rem; padding: 4px 8px; border-radius: .5rem; background: var(--gmi-ink, #020618); color: var(--gmi-text-on-dark, #cbd5e1); font-size: 12px; line-height: 16px; font-weight: 400; white-space: normal; box-shadow: 0 4px 12px #02061833; pointer-events: auto; }
 .photo-icon-tooltip[data-validation-tone] { background: var(--validation-bg); color: var(--validation-text); border: 1px solid var(--validation-border); white-space: pre-line; }
+/* Analysis actions live in the sidebar's stacking layer. */
+.photo-icon-tooltip.layer-analysis-tooltip { z-index: 10000; }
 .photo-collection-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.75rem 1rem; flex: none; }
 .photo-collection-rejections { max-height: 5rem; overflow: auto; }
 .photo-collection-body { display: grid; grid-template-columns: minmax(0, 42fr) minmax(0, 58fr); flex: 1; min-height: 0; }
