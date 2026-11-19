@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { estimatedCaptureTime, midpointCaptureDate, photoEstimatedDateModel } from '../src/lib/photos/photoEstimatedDates.mjs';
+import { captureDateSpreadDays, estimatedCaptureTime, estimatedDateReviewSignature, medianCaptureDate, photoEstimatedDateModel } from '../src/lib/photos/photoEstimatedDates.mjs';
 import { formatPhotoCaptureTime, photoCaptureTimeStatus, photoMetadataSourceLabel } from '../src/lib/photos/photoPresentation.mjs';
 import { completionSummary, photoCaptureTimeSchemaWarning } from '../src/lib/photos/photoCompletion.mjs';
 import { serializePhotoExport } from '../src/lib/photos/export/photoExportXml.mjs';
@@ -10,32 +10,33 @@ import { capturePhotoExportSnapshot, buildPhotoExportPlan } from '../src/lib/pho
 import { unzipSync, strFromU8 } from 'fflate';
 import { completionLayer, completionView, jpeg, sharedOriginalLayer } from './helpers/photoCompletionFixtures.mjs';
 
-for (const [first, last, expected] of [
-  ['2026-01-30', '2026-02-03', '2026-02-01'],
-  ['2025-12-30', '2026-01-03', '2026-01-01'],
-  ['2024-02-28', '2024-03-01', '2024-02-29'],
-  ['2026-03-28', '2026-03-30', '2026-03-29'],
-  ['2026-10-24', '2026-10-26', '2026-10-25'],
-  ['2026-01-01', '2026-01-02', '2026-01-01'],
-  ['2026-01-01', '2026-01-01', '2026-01-01'],
-  ['0099-12-31', '0100-01-02', '0100-01-01'],
-]) test(`calendar midpoint ${first} – ${last}: ${expected}, independent of endpoint order`, () => {
-  assert.equal(midpointCaptureDate(first, last), expected);
-  assert.equal(midpointCaptureDate(last, first), expected);
+// C3 (DC2): the estimate is the median of the known dates; an even count takes the lower middle date.
+for (const [dates, expected] of [
+  [['2026-01-30', '2026-02-03'], '2026-01-30'],
+  [['2026-02-03', '2026-01-30', '2026-02-01'], '2026-02-01'],
+  [['2026-10-06', '2026-10-07', '2026-10-07', '2026-10-09'], '2026-10-07'],
+  [['2026-10-09', '2026-10-06', '2026-10-08', '2026-10-07', '2026-10-07'], '2026-10-07'],
+  [['2026-01-01'], '2026-01-01'],
+  [['0100-01-02', '0099-12-31', '0100-01-01'], '0100-01-01'],
+]) test(`calendar median of ${dates.join(', ')}: ${expected}, independent of order`, () => {
+  assert.equal(medianCaptureDate(dates), expected);
+  assert.equal(medianCaptureDate([...dates].reverse()), expected);
 });
 
-test('calendar midpoint and noon are identical in every host timezone', () => {
-  const script = `import {midpointCaptureDate,estimatedCaptureTime} from './src/lib/photos/photoEstimatedDates.mjs'; console.log(JSON.stringify([midpointCaptureDate('2025-12-30','2026-01-03'),estimatedCaptureTime('2026-03-29')]));`;
+test('calendar median, spread and noon are identical in every host timezone', () => {
+  const script = `import {medianCaptureDate,captureDateSpreadDays,estimatedCaptureTime} from './src/lib/photos/photoEstimatedDates.mjs'; console.log(JSON.stringify([medianCaptureDate(['2025-12-30','2026-01-03','2026-01-01']),captureDateSpreadDays('2026-03-28','2026-03-30'),estimatedCaptureTime('2026-03-29')]));`;
   const outputs = ['UTC', 'Europe/Oslo', 'America/Los_Angeles', 'Pacific/Kiritimati'].map((TZ) => {
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, TZ }, encoding: 'utf8', windowsHide: true });
     assert.equal(result.status, 0, result.stderr);
     return result.stdout;
   });
   assert.equal(new Set(outputs).size, 1);
-  assert.equal(JSON.parse(outputs[0])[1].iso, '2026-03-29T12:00:00');
+  assert.deepEqual(JSON.parse(outputs[0]).slice(0, 2), ['2026-01-01', 2], 'the spread over the DST change is two calendar days');
+  assert.equal(JSON.parse(outputs[0])[2].iso, '2026-03-29T12:00:00');
+  assert.equal(captureDateSpreadDays('2025-12-30', '2026-01-03'), 4);
   for (const invalid of ['', '2026-02-29', '2026-01-01T13:00:00', null]) {
     assert.equal(estimatedCaptureTime(invalid), null);
-    assert.equal(midpointCaptureDate(invalid, '2026-01-01'), null);
+    assert.equal(medianCaptureDate([invalid, '2026-01-01']), null);
   }
 });
 
@@ -55,14 +56,16 @@ test('one click fills every missing original, preserves known clocks/EXIF/files,
   try {
     const before = f.ids.map((id) => ({ time: time(f, id), file: s.getFile(id), evidence: s.getPhoto(id).metadataEvidence }));
     const bytes = await Promise.all(before.map((item) => item.file.arrayBuffer()));
-    assert.deepEqual(model(f), { first: '2025-12-30', last: '2026-01-03', suggestedDate: '2026-01-01', missing: 2 });
+    // Two known dates for four photos are too few for a proposal (DC2); a date can still be entered by hand.
+    assert.deepEqual({ ...model(f), targetIds: model(f).targetIds.length }, { basis: 2, unique: 4, first: '2025-12-30', last: '2026-01-03', spreadDays: 4,
+      median: '2025-12-30', proposal: null, reason: 'insufficient', suggestedDate: null, missing: 2, targetIds: 2 });
     let published = 0;
     const unsubscribe = s.subscribe(() => published++);
-    const result = fill(f, model(f).suggestedDate);
+    const result = fill(f, '2026-01-01');
     assert.equal(result.counts.adopted, 2);
     assert.equal(published, 1);
     assert.equal(model(f).missing, 0);
-    assert.equal(model(f).suggestedDate, '2026-01-01');
+    assert.equal(model(f).basis, 2, 'estimated dates never join the basis');
     for (const id of f.ids.slice(2)) {
       assert.equal(time(f, id).value.iso, '2026-01-01T12:00:00');
       assert.deepEqual(time(f, id).provenance, { kind: 'manual', mode: 'bulk', estimated: true });
@@ -80,12 +83,12 @@ test('one click fills every missing original, preserves known clocks/EXIF/files,
   } finally { s.clear(); }
 });
 
-test('three-photo package with one known date proposes that calendar date for both missing photographs', async () => {
+test('one known date is too few for a proposal; a chosen date still fills both photos without date evidence', async () => {
   const f = await completionLayer([jpeg('known.jpg', { captureTime: '2026:10:25 00:30:01', offsetTime: '+02:00' }), jpeg('a.jpg'), jpeg('b.jpg')]);
   try {
-    assert.deepEqual(model(f), { first: '2026-10-25', last: '2026-10-25', suggestedDate: '2026-10-25', missing: 2 });
+    assert.deepEqual([model(f).basis, model(f).proposal, model(f).reason, model(f).suggestedDate, model(f).missing], [1, null, 'insufficient', null, 2]);
     const known = time(f, f.ids[0]);
-    assert.equal(fill(f, model(f).suggestedDate).counts.adopted, 2);
+    assert.equal(fill(f, '2026-10-25').counts.adopted, 2);
     assert.strictEqual(time(f, f.ids[0]), known);
     assert.equal(time(f, f.ids[1]).value.iso, '2026-10-25T12:00:00');
     assert.equal(time(f, f.ids[2]).value.iso, '2026-10-25T12:00:00');
@@ -129,30 +132,40 @@ test('missing-date action preserves accepted date-only values; invalid dates are
   } finally { s.clear(); }
 });
 
-test('undo restores clear decisions, deduplicates shared originals, and rejects removed/reset sessions', async () => {
+test('a removal by the user is never estimated; undo deduplicates shared originals and rejects removed/reset sessions', async () => {
   const f = await sharedOriginalLayer(jpeg('shared.jpg')), s = f.session;
   try {
     s.setCaptureMetadata(f.layerId, f.ids, 'captureTime', null);
-    const result = fill(f, '2026-05-01');
-    assert.equal(result.counts.adopted, 1);
-    assert.strictEqual(time(f, f.ids[0]), time(f, f.ids[1]));
-    assert.equal(s.getPhoto(f.ids[0]).captureMetadata.captureTimeCleared, undefined);
-    assert.equal(s.undoCaptureTimeFill(result.undoToken).restored, 1);
+    // C3: an explicitly cleared value is protected from the estimate.
+    const cleared = fill(f, '2026-05-01');
+    assert.equal(cleared.counts.adopted, 0);
+    assert.equal(time(f, f.ids[0]), null);
     assert.equal(s.getPhoto(f.ids[0]).captureMetadata.captureTimeCleared, true);
-    const removed = fill(f, '2026-05-01');
-    s.removeLayerPhotos(f.layerId, f.ids, { confirmed: true });
-    assert.equal(s.undoCaptureTimeFill(removed.undoToken).restored, 0);
-    s.clear();
-    assert.equal(s.undoCaptureTimeFill(removed.undoToken).ok, false);
+    s.setCaptureMetadata(f.layerId, f.ids, 'captureTime', '2026-04-30T10:00:00');
+    s.setCaptureMetadata(f.layerId, f.ids, 'captureTime', null);
+    assert.equal(fill(f, '2026-05-01').counts.adopted, 0, 'still a removal');
   } finally { s.clear(); }
+  const g = await sharedOriginalLayer(jpeg('shared.jpg')), t = g.session;
+  try {
+    const result = fill(g, '2026-05-01');
+    assert.equal(result.counts.adopted, 1);
+    assert.strictEqual(time(g, g.ids[0]), time(g, g.ids[1]));
+    assert.equal(t.undoCaptureTimeFill(result.undoToken).restored, 1);
+    assert.equal(time(g, g.ids[0]), null);
+    const removed = fill(g, '2026-05-01');
+    t.removeLayerPhotos(g.layerId, g.ids, { confirmed: true });
+    assert.equal(t.undoCaptureTimeFill(removed.undoToken).restored, 0);
+    t.clear();
+    assert.equal(t.undoCaptureTimeFill(removed.undoToken).ok, false);
+  } finally { t.clear(); }
 });
 
-test('one reliable original supplies both endpoints; estimates and conflicting auto sources do not feed suggestions', async () => {
+test('repeated occurrences count once; estimates and conflicting auto sources never feed the basis', async () => {
   const f = await sharedOriginalLayer(jpeg('shared.jpg', { captureTime: '2026:01:01 10:00:00' }));
   try {
-    assert.equal(model(f).suggestedDate, '2026-01-01', 'one reliable original defines a zero-width range');
+    assert.deepEqual([model(f).basis, model(f).unique, model(f).median], [1, 1, '2026-01-01'], 'two occurrences of one original are one date');
     f.session.setCaptureMetadata(f.layerId, f.ids, 'captureTime', '2099-01-01', { estimated: true });
-    assert.equal(model(f).suggestedDate, null);
+    assert.deepEqual([model(f).basis, model(f).suggestedDate], [0, null]);
   } finally { f.session.clear(); }
   const g = await completionLayer([jpeg('a.jpg', { captureTime: '2026:01:01 10:00:00' }), jpeg('b.jpg'), jpeg('c.jpg')], {
     gml: [{ name: 'a.jpg', time: '2025-01-01T10:00:00' }],
@@ -162,6 +175,21 @@ test('one reliable original supplies both endpoints; estimates and conflicting a
     assert.equal(fill(g, '2026-05-01').counts.adopted, 2, 'manual entry is available without a range');
     assert.equal(model(g).suggestedDate, null, 'estimated dates cannot become anchors');
   } finally { g.session.clear(); }
+});
+
+test('estimated fill refuses a stale reviewed target set and preserves a later removal', async () => {
+  const f = await layer(), s = f.session;
+  try {
+    const reviewed = model(f), target = reviewed.targetIds[0];
+    s.setCaptureMetadata(f.layerId, [target], 'captureTime', null);
+    const apply = (model) => s.fillMissingPhotoValues(f.layerId, 'captureTime', '2026-01-01', null,
+      { estimated: true, expectedEstimate: estimatedDateReviewSignature(model) });
+    assert.deepEqual(apply(reviewed), { ok: false, error: 'review-changed' });
+    assert.equal(time(f, reviewed.targetIds[1]), null);
+    assert.equal(apply(model(f)).counts.adopted, 1);
+    assert.equal(s.getPhoto(target).captureMetadata.captureTimeCleared, true);
+    assert.equal(time(f, target), null);
+  } finally { s.clear(); }
 });
 
 test('readiness, warnings, completion counts and real Gemini GML/ZIP update immediately and reverse on undo', async () => {

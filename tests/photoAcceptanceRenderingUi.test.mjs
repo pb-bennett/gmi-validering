@@ -8,7 +8,7 @@ import { completionGmlText } from './helpers/photoCompletionFixtures.mjs';
 import { buildPreview, canAdvance, canDownload, downloadZip, exportDialog, openCompletionFromExport, openExport, showReview, toPackage } from './helpers/photoExportWizard.mjs';
 import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
-import { applyPhotoSourcePositions, clickSourceControl, savePhotoSource, sourceWizard, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
+import { applyPhotoSourcePositions, clickSourceControl, includePhotoSource, savePhotoSource, sourceWizard, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { openTool } from './helpers/photoWorkspace.mjs';
 
 // Browser acceptance found two corrections apparently missing from the rendered UI. These tests read the text the browser
@@ -112,7 +112,7 @@ browserTest('rendered M10 done screen: download initiation, filename, schema war
   await buildPreview(browser);
   // A4: the schema warning is stated on Kontroll; Pakke counts it and links back.
   await showReview(browser);
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), '1 bilde mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.');
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), '1 bilde mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet. Gemini VA har importert bilder uten opptakstid i et testet oppsett (november 2026).');
   await toPackage(browser);
   const first = await downloadZip(browser, directory);
   const done = `${exportDialog}.querySelector('[data-package-state="done"]')`;
@@ -140,7 +140,7 @@ browserTest('rendered Kontroll: each review reason explains itself, and the comp
   assert.notEqual(text, completionGmlText([{ name: 'far.jpg', direction: '10' }, { name: 'near.jpg', direction: '20' }]));
   await writeFile(gml, text);
   await stagePhotoSource(browser, gml, 'gml');
-  await savePhotoSource(browser, 'gml');
+  await includePhotoSource(browser, 'gml');
   await clickSourceControl(browser, 'Neste');
   await browser.waitFor(`${sourceWizard}.querySelector('section[aria-label="Kontroller posisjoner"]')`);
   const rowAction = (name) => browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id]')).find((row) => row.querySelector('.photo-positioning-filename strong').innerText === ${JSON.stringify(name)}).dataset.action`);
@@ -166,8 +166,11 @@ browserTest('rendered Kontroll: each review reason explains itself, and the comp
   assert.equal(await browser.evaluate(`Boolean(${review('move')} || ${review('zero')})`), false, 'no other reasons apply');
   await screenshot(browser, 'positioning-kontroll-review');
   // The confirmation is unchanged: both GML positions are applied, none.jpg stays unplaced.
-  assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('footer .photo-positioning-primary').innerText`), 'Bruk valgte posisjoner for 2 bilder');
-  await clickSourceControl(browser, 'Bruk valgte posisjoner for 2 bilder');
+  assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('footer .photo-positioning-primary').innerText`), 'Lagre endringer');
+  assert.match(await browser.evaluate(`${sourceWizard}.querySelector('[data-kontroll="positions"]').innerText`), /2 bilder valgt/);
+  await clickSourceControl(browser, 'Lagre endringer');
+  await browser.waitFor(`${sourceWizard}?.dataset.saved`);
+  await clickSourceControl(browser, 'Lukk');
   await browser.waitFor(`!${sourceWizard}`);
   await browser.waitFor(`document.querySelectorAll(".photo-camera-marker").length === 2`, 30000);
   await delay(200);

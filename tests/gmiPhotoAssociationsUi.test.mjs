@@ -8,7 +8,7 @@ import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiFile, realGrammarFamilies, sharedGuids, sharedFilename, sevenGuid } from './helpers/gmiPhotoFixtures.mjs';
 import { extractHyperlinkFilenames } from '../src/lib/hyperlinkFilenames.mjs';
-import { stagePhotoSource, savePhotoSource, closePhotoSources, openPhotoSources, applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
+import { stagePhotoSource, savePhotoSource, closePhotoSources, openPhotoSources, applyPhotoSourcePositions, clickSourceControl, saveSourceWizardChanges } from './helpers/photoSourceWorkflow.mjs';
 import { KEYS, commandBar, dragSelectedMarker, editArrow, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL, corpus = process.env.GMI_PHOTO_CORPUS;
@@ -187,9 +187,12 @@ test('GMI association workflow: confirmation/cancel, many-to-many, invalid/unmat
       await select(sharedFilename); await showAssociations();
       assert.equal(await browser.evaluate(linkCount), 4);
       assert((await browser.evaluate(`${inspector}.innerText`)).includes('revision.gmi'));
-      await openPhotoSources(browser); await click('Fjern kilde', dialog); await click('Fjern GMI-kilde', dialog); await closePhotoSources(browser);
+      // B: a staged removal is applied by «Lagre endringer»; closing without saving would discard it.
+      await openPhotoSources(browser); await click('Fjern kilde', dialog); await click('Fjern GMI-kilde', dialog);
+      await saveSourceWizardChanges(browser, { keepPositions: true }); await closePhotoSources(browser);
       await showAssociations(); assert.equal(await browser.evaluate(linkCount), 2);
-      await openPhotoSources(browser); await click('Fjern kilde', dialog); await click('Fjern GMI-kilde', dialog); await closePhotoSources(browser);
+      await openPhotoSources(browser); await click('Fjern kilde', dialog); await click('Fjern GMI-kilde', dialog);
+      await saveSourceWizardChanges(browser, { keepPositions: true }); await closePhotoSources(browser);
       await browser.waitFor(`${linkCount} === 0`);
       console.log(JSON.stringify({ gmiBrowserAcceptance:'synthetic images with pinned real reference evidence', layouts:['1680x900','1366x768','1280x720','1024x768','1440x600'],
         checks:'analysis/summary, explicit confirmation/cancel, 2-object photo, 7-photo object, Unicode, invalid directory, unmatched/ambiguous, unchanged positions/direction/preview, GML/EXIF/manual, lightbox, append/recheck, duplicate source, revisions, removal, no GMI map layer' }));

@@ -10,6 +10,7 @@ import { validateDeliveryGml } from '../src/lib/delivery/deliveryGml.mjs';
 import { planAttachmentNames } from '../src/lib/photos/export/attachmentNames.mjs';
 import { exportFixture } from './helpers/photoExportFixtures.mjs';
 import { deliveryReport } from '../src/lib/delivery/deliveryWizard.mjs';
+import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 const archive = async (plan) => unzipSync(new Uint8Array(await (await buildDeliveryPackage(plan)).arrayBuffer()));
 const ready = (plan) => assert.equal(plan.status, 'ready', JSON.stringify(plan.errors));
@@ -170,7 +171,7 @@ test('foreign-source transfer decisions block the one-GMI delivery atomically', 
     const foreignFile = new File([strFromU8(f.bytes).replace('Punkt 1', 'Foreign synthetic note')], 'foreign-synthetic.gmi');
     const ticket = f.session.beginSourceWorkflow(f.layerId);
     assert(await f.session.stageLayerSource(f.layerId, foreignFile, 'gmi'));
-    assert(f.session.saveSourceWorkflowSource(ticket, f.session.getSnapshot().sourceReviews[f.layerId]).ok);
+    assert(saveStagedSource(f.session, ticket, f.session.getSnapshot().sourceReviews[f.layerId]).ok);
     f.session.endSourceWorkflow(ticket);
     const foreign = f.photos().find((photo) => photo.occurrence && photo.occurrence.sourceFingerprint !== f.handle.fingerprint);
     assert(foreign);

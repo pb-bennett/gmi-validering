@@ -6,6 +6,7 @@ import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { assertPhotoDialogLayout } from './helpers/photoDialogLayout.mjs';
 import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
+import { confirmSessionReset, reloadAcceptedSession } from './helpers/sessionReset.mjs';
 
 // Opt-in production UI acceptance; private originals stay outside the repository.
 const applicationUrl = process.env.PHOTO_UI_URL;
@@ -156,6 +157,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
 
     await click('Nullstill og åpne ny fil');
+    await confirmSessionReset(browser);
     await browser.waitFor(`!document.querySelector('section[aria-label^="Fotokartlag"]') && !document.querySelector('.leaflet-container')`);
     assert.equal(await browser.evaluate(markerCount), 0);
     checks.push('application reset releases FOTO/map state and returns to upload');
@@ -165,7 +167,7 @@ test('production FOTO UI: real corpus markers, provenance, locate, visibility, o
     assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 1,
       'the new layer opens in the workspace after reset');
 
-    await browser.send('Page.reload');
+    await reloadAcceptedSession(browser);
     await browser.waitFor(`document.body.innerText.includes('Bilder') && !document.querySelector('section[aria-label^="Fotokartlag"]')`);
     assert.equal(await browser.evaluate(markerCount), 0);
     checks.push('hard reload restores no FOTO layer, marker or spatial state');

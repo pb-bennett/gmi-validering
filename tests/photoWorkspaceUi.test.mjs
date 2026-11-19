@@ -1,4 +1,5 @@
 import { createLayerWithoutPlacement, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
+import { reloadAcceptedSession } from './helpers/sessionReset.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdir, mkdir, writeFile } from 'node:fs/promises';
@@ -331,7 +332,7 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       checks.push('final member removal retains empty FOTO layer and map; separate layer deletion');
       await click('Bilder'); await browser.waitFor('document.querySelector("dialog[open]")'); await inputFiles('input[aria-label="Velg bildefiler"]', [photos[0]]);
       await createLayerWithoutPlacement(browser); await browser.waitFor('!document.querySelector("dialog[open]")');
-      await browser.waitFor('document.querySelector(".photo-workspace-shell")'); await browser.send('Page.reload');
+      await browser.waitFor('document.querySelector(".photo-workspace-shell")'); await reloadAcceptedSession(browser);
       await browser.waitFor('document.body.innerText.includes("Bilder") && !document.querySelector(".photo-workspace-shell, section[aria-label^=Fotokartlag]")');
       assert.equal(await browser.evaluate(markerCount), 0); assert.equal(await browser.evaluate(originalCount), 0);
       checks.push('hard reload restores no layer, spatial state, workspace selection or original preview');

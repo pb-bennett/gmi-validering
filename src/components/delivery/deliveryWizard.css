@@ -29,6 +29,9 @@
 .delivery-wizard .delivery-filename-options input { accent-color: var(--gmi-interactive); }
 .delivery-wizard .delivery-filename-options button { margin-left: auto; }
 .delivery-wizard .delivery-filename-message { font-size: 12px; color: var(--gmi-validation-error-text); }
+/* Empty descriptive part: the placeholder is not part of the name; muted text keeps ≥4.5:1 on the cyan field. */
+.delivery-wizard .delivery-filename-description > input::placeholder { color: var(--gmi-text-muted); opacity: 1; }
+.delivery-wizard .delivery-filename-recommendation { font-size: 12px; color: var(--gmi-validation-compact-warning-text); }
 .delivery-summary.photo-export-summary > div { grid-template-columns: 7rem minmax(0, 1fr); }
 .delivery-diagnostics { padding: 10px 12px; border: 1px solid var(--gmi-border); border-radius: 6px; overflow-wrap: anywhere; }
 .delivery-diagnostics h4, .delivery-inventory h4 { font-weight: 600; }

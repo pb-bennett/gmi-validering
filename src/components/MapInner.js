@@ -28,6 +28,7 @@ import usePhotoSession from './photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { buildPhotoMapItems } from '@/lib/photos/photoMapFeatures.mjs';
 import PhotoMarkersLayer from './photos/PhotoMarkersLayer';
+import StreetViewControl from './StreetViewControl';
 import GeminiReferenceLayer from './gemini-wfs/GeminiReferenceLayer';
 import PhotoEditLayer from './photos/PhotoEditLayer';
 import PhotoMapController from './photos/PhotoMapController';
@@ -1262,7 +1263,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
     (state) =>
       state.ui.mapOverlayVisibility || {
         geminiWms: true,
-        eiendomsgrenser: true,
+        eiendomsgrenser: false,
       },
   );
   const setMapBaseLayer = useStore((state) => state.setMapBaseLayer);
@@ -2277,7 +2278,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
         </LayersControl.BaseLayer>
 
         <LayersControl.Overlay
-          checked={mapOverlayVisibility.eiendomsgrenser !== false}
+          checked={mapOverlayVisibility.eiendomsgrenser === true}
           name="Eiendomsgrenser"
         >
           <WMSTileLayer
@@ -2354,6 +2355,8 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       <MapClickHandler />
       <MeasureTool />
       <MeasureToolButton />
+      {/* Batch F: every map-based workspace shares this map, so Street View is available in all of them. */}
+      <StreetViewControl />
       <AnalysisPointsLayer />
       <AnalysisZoomHandler />
     </MapContainer>

@@ -15,6 +15,7 @@ import {
 } from '../src/lib/gmi-edit/index.mjs';
 import { GMIParser } from '../src/lib/parsing/gmiParser.js';
 import { decodeGmiBytes } from '../src/lib/parsing/gmiDecoding.js';
+import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const point = (longitude = 10) => ({ crs: 'EPSG:4326', longitude, latitude: 60 });
@@ -44,7 +45,7 @@ async function setup({ names = ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg'], objects = D
   const ticket = session.beginSourceWorkflow(layer.id);
   const input = loaded ? { binding, read: () => parseGmiPhotoSource(gmi), isLive: () => live } : gmi;
   assert(await session.stageLayerSource(layer.id, input, 'gmi'));
-  assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
   session.endSourceWorkflow(ticket);
   const photos = () => session.getLayerPhotos(layer.id);
   const byObject = (guid) => photos().find((photo) => photo.occurrence?.object.guid === guid);
@@ -219,7 +220,7 @@ test('an inclusion on a photo that later gains a GMI link needs review; ambiguou
   session.setCombinedDeliveryInclusion(layer.id, [d.id], true);
   const ticket = session.beginSourceWorkflow(layer.id);
   assert(await session.stageLayerSource(layer.id, gmiFile([{ guid: KUM3, label: 'Kum 4', hyperlink: 'h:1(link:"d.jpg") ', xyz: '582000 6566000 1' }], 'second.gmi'), 'gmi'));
-  assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
   session.endSourceWorkflow(ticket);
   assert(session.getPhoto(d.id).occurrence, 'the record became a GMI occurrence');
   assert.equal(status(d), 'review');

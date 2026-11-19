@@ -44,6 +44,7 @@ const labels = {
   'capture-time-implausible': 'Usannsynlig dato',
   'capture-time-bulk': 'Samme manuelle opptakstid',
   'capture-time-estimated': 'Anslått opptaksdato',
+  'capture-time-technical': 'Teknisk utfylt tid',
   'capture-time-filename': 'Opptakstid fra filnavn',
   'capture-time-in-source': 'Opptakstid finnes i kilde',
   'capture-time-sources-differ': 'Ulik opptakstid i kildene',

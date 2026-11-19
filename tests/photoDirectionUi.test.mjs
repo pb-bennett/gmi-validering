@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { applyPhotoSourcePositions, clickSourceControl } from './helpers/photoSourceWorkflow.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
+import { reloadAcceptedSession } from './helpers/sessionReset.mjs';
 import { KEYS, arrowOf, commandBar, discardEdits, dragSelectedMarker, editKnob, editTarget, elementCentre, enterEditMode, pressKey, rotateSelected, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL;
@@ -185,7 +186,7 @@ test('FOTO direction in Edit mode: unknown is not north, N/Ø/S/V geometry, stag
       await browser.waitFor('document.querySelector(".photo-collection-dialog[open]")');
       await click('Avbryt', 'document.querySelector(".photo-collection-dialog")');
       assert.equal(await accepted(), '90° Ø');
-      await enterEditMode(browser); await number(180); await browser.send('Page.reload');
+      await enterEditMode(browser); await number(180); await reloadAcceptedSession(browser);
       await browser.waitFor('!document.querySelector(".photo-workspace-shell") && !document.querySelector(".photo-direction-indicator") && !document.querySelector(".photo-direction-marker")');
       console.log(JSON.stringify({ fixture: 'synthetic', photos: files.photos.length,
         checks: 'unknown/ghost, N/Ø/S/V geometry, staged dashed vs accepted solid, discard/save, knob drag/keyboard, numeric, move independence, source independence, occurrence independence, zoom/pan, boundary, reload', screenshots }));

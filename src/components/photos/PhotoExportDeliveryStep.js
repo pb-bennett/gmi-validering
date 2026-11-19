@@ -3,11 +3,12 @@
 import { useId, useState } from 'react';
 import { WarningIcon } from '@phosphor-icons/react';
 import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRules.mjs';
-import { exportFilenamePreview, EXPORT_FILENAME_NOTICE_LENGTH, EXPORT_FILENAME_ADVISORY_LENGTH } from '@/lib/photos/export/photoExportNaming.mjs';
+import { exportFilenamePreview, sanitizeExportDescriptive, EXPORT_FILENAME_NOTICE_LENGTH, EXPORT_FILENAME_ADVISORY_LENGTH } from '@/lib/photos/export/photoExportNaming.mjs';
 import PhotoExportStatus, { PhotoExportDiagnostics, PhotoExportTone } from './PhotoExportStatus';
 import PhotoSourceOption, { photoSourceButton } from './PhotoSourceOption';
 
 const TONES = Object.freeze({ reading: 'wait', blocked: 'stop', 'schema-gap': 'caution', recommendations: 'info', ready: 'good' });
+const FILENAME_PLACEHOLDER = 'beskrivende navn';
 const formats = (tier) => Object.entries(PHOTO_EXPORT_PROFILE_METADATA).filter(([, card]) => card.tier === tier);
 
 function FormatCard({ profile, card, config, onConfigChange }) {
@@ -33,8 +34,10 @@ export function ExportFilenameEditor({ filename, onConfigChange }) {
   const threshold = preview.length > EXPORT_FILENAME_ADVISORY_LENGTH ? EXPORT_FILENAME_ADVISORY_LENGTH
     : preview.length > EXPORT_FILENAME_NOTICE_LENGTH ? EXPORT_FILENAME_NOTICE_LENGTH : null;
   const countTone = threshold === EXPORT_FILENAME_ADVISORY_LENGTH ? 'error' : threshold ? 'warning' : undefined;
+  // A timestamp-only name is valid; recommend a description without blocking (A3). A blocking issue states its own error.
+  const recommendDescription = !preview.issue && timestamp && !sanitizeExportDescriptive(descriptive);
   const describedBy = [preview.prefix && `${id}-prefix`, `${id}-suffix`, `${id}-count`,
-    threshold && `${id}-advisory`, preview.issue && `${id}-message`].filter(Boolean).join(' ');
+    threshold && `${id}-advisory`, preview.issue && `${id}-message`, recommendDescription && `${id}-recommendation`].filter(Boolean).join(' ');
   return <div className="delivery-filename-field" data-export-filename-editor>
     <label htmlFor={`${id}-input`} className="delivery-filename-control">
       <span className="delivery-filename-heading">
@@ -47,8 +50,9 @@ export function ExportFilenameEditor({ filename, onConfigChange }) {
       <span className="delivery-filename" data-validation-tone={preview.issue ? 'error' : undefined}>
         {preview.prefix && <span id={`${id}-prefix`} className="delivery-filename-affix" data-export-filename-prefix>{preview.prefix}</span>}
         <span className="delivery-filename-description">
-          <span aria-hidden="true">{descriptive}</span>
-          <input id={`${id}-input`} type="text" autoComplete="off" spellCheck={false} value={descriptive}
+          {/* The sizer mirrors the placeholder while empty, so the editable area stays visible at the placeholder's width. */}
+          <span aria-hidden="true" data-export-filename-sizer>{descriptive || FILENAME_PLACEHOLDER}</span>
+          <input id={`${id}-input`} type="text" autoComplete="off" spellCheck={false} value={descriptive} placeholder={FILENAME_PLACEHOLDER}
             aria-labelledby={`${id}-label`} aria-describedby={describedBy} aria-invalid={preview.issue ? 'true' : undefined}
             onChange={(event) => onConfigChange({ label: event.target.value })} />
         </span>
@@ -63,6 +67,8 @@ export function ExportFilenameEditor({ filename, onConfigChange }) {
       {onUseSuggestion && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive px-2 py-1" onClick={onUseSuggestion}>Bruk forslag</button>}
     </div>
     {preview.issue && <p id={`${id}-message`} className="delivery-filename-message" data-export-filename-message={preview.issue}>{issueText}</p>}
+    {recommendDescription && <p id={`${id}-recommendation`} className="delivery-filename-recommendation" data-export-filename-recommendation>
+      Filnavnet har ingen beskrivende del. Vi anbefaler et navn som beskriver leveransen.</p>}
   </div>;
 }
 

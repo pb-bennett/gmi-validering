@@ -5,6 +5,7 @@ import { ImageIcon, TrashIcon } from '@phosphor-icons/react';
 import PhotoIconButton from './PhotoIconButton';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import LayerTypeBadge from '../LayerTypeBadge';
+import GmiConfirmDialog from '../gmi-edit/GmiConfirmDialog';
 
 export default function PhotoLayerCard({ layer, onOpen }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -22,17 +23,15 @@ export default function PhotoLayerCard({ layer, onOpen }) {
         {/* Compact icon action like the other layer-card actions; the card's own label names the layer. */}
         <PhotoIconButton icon={ImageIcon} size={14} label="Åpne FOTO" tooltip="Åpne bildemodul" data-photo-layer-open={layer.id}
           className="layer-card-icon-button" onClick={(event) => onOpen(layer.id, event.currentTarget)} />
-        <button type="button" onClick={() => setConfirmRemove(true)} aria-label={`Fjern fotokartlag ${layer.name}`} className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle hover:bg-red-100 hover:text-red-600"><TrashIcon size={14} aria-hidden="true" /></button>
+        <PhotoIconButton icon={TrashIcon} size={14} label={`Fjern fotokartlag ${layer.name}`} tooltip="Fjern fotokartlag"
+          aria-haspopup="dialog" className="layer-card-icon-button layer-card-icon-button-destructive"
+          onClick={() => { if ((layer.assetCount ?? layer.photoCount) > 0) setConfirmRemove(true); else photoSession.deleteLayer(layer.id); }} />
       </div>
-      {confirmRemove && (
-        <div className="mx-2 mb-2 rounded-lg border border-gmi-border bg-gmi-surface-soft p-2 text-xs">
-          <p>Fjerne «{layer.name}» og {layer.assetCount ?? layer.photoCount} {(layer.assetCount ?? layer.photoCount) === 1 ? 'bilde' : 'bilder'}{layer.assetCount < layer.photoCount ? ` med ${layer.photoCount} plasseringer` : ''} fra økten? Originalfilene på disken beholdes.</p>
-          <div className="mt-2 flex justify-end gap-2">
-            <button type="button" onClick={() => setConfirmRemove(false)} className="gmi-compact-button gmi-focus-ring px-2 py-1">Avbryt</button>
-            <button type="button" onClick={() => photoSession.deleteLayer(layer.id)} className="gmi-focus-ring rounded-lg bg-red-600 px-2 py-1 text-white">Fjern</button>
-          </div>
-        </div>
-      )}
+      {/* DD2: a FOTO layer with photographs is removed only after the application's confirmation dialog. */}
+      {confirmRemove && <GmiConfirmDialog title="Fjerne fotolaget?" confirmLabel="Fjern" testId="photo-layer-remove"
+        onCancel={() => setConfirmRemove(false)} onConfirm={() => { setConfirmRemove(false); photoSession.deleteLayer(layer.id); }}>
+        <p>Fjerne «{layer.name}» og {layer.assetCount ?? layer.photoCount} {(layer.assetCount ?? layer.photoCount) === 1 ? 'bilde' : 'bilder'}{layer.assetCount < layer.photoCount ? ` med ${layer.photoCount} plasseringer` : ''} fra økten? Posisjoner, opptakstider og andre opplysninger i laget forsvinner. Originalfilene på disken beholdes.</p>
+      </GmiConfirmDialog>}
     </section>
   );
 }

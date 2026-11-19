@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { evidenceSession, readRealExif, settleExif, tick } from './helpers/photoEvidenceFixtures.mjs';
 import { completionGml, completionLayer, jpeg } from './helpers/photoCompletionFixtures.mjs';
 import { EMPTY_GML_CAPTURE_DECISION } from '../src/lib/photos/photoGmlCaptureReconciliation.mjs';
+import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 // M3 of the FOTO capture-time plan: GML capture time is adopted only through the explicit decision made in the
 // positioning wizard (Koblinger) or the import wizard (Kontroll with «Fra GML-fil»). Synthetic files only.
@@ -11,14 +12,14 @@ const decision = (overrides = {}) => ({ ...EMPTY_GML_CAPTURE_DECISION, ...overri
 const byName = (session, layerId) => Object.fromEntries(session.getLayerPhotos(layerId).map((photo) => [photo.originalFilename, photo]));
 const timeOf = (photo) => photo.captureMetadata.captureTime;
 
-// The wizard route: one ticket, a staged review, the plan the step rendered and the decision sent with «Behold GML-kilden».
+// The wizard route: one ticket, a staged review, the plan the step rendered and the decision staged with «Ta med kilden» and saved with «Lagre endringer».
 async function koblinger(session, layerId, features, filename = 'kilde.gml') {
   const ticket = session.beginSourceWorkflow(layerId);
   assert(await session.stageLayerSource(layerId, completionGml(features, filename)));
   const review = session.getSnapshot().sourceReviews[layerId];
   const plan = session.planLayerSourceCaptureTimes(layerId);
   return { ticket, review, plan, save: (choice = EMPTY_GML_CAPTURE_DECISION, usedPlan = plan) =>
-    session.saveSourceWorkflowSource(ticket, review, { captureTime: { ...choice, plan: usedPlan } }) };
+    saveStagedSource(session, ticket, review, { captureTime: { ...choice, plan: usedPlan } }) };
 }
 const layerOf = (files) => completionLayer(files, { place: false });
 
@@ -166,7 +167,7 @@ test('positioning: stale or foreign plans are refused with review-changed and no
     assert.equal(session.getLayer(layerId).spatialSources.length, 0, 'the source is not saved either');
     assert.equal(timeOf(session.getPhoto(a)), null);
     // A decision without the plan it was made from, or a plan for another review, is refused too.
-    assert.deepEqual(session.saveSourceWorkflowSource(step.ticket, step.review, { captureTime: decision({ complete: true }) }), { ok: false, error: 'review-changed' });
+    assert.deepEqual(saveStagedSource(session, step.ticket, step.review, { captureTime: decision({ complete: true }) }), { ok: false, error: 'review-changed' });
     const forged = { ...step.plan };
     assert.deepEqual(step.save(decision({ complete: true }), forged), { ok: false, error: 'review-changed' });
     session.cancelLayerSourceReview(layerId); session.endSourceWorkflow(step.ticket);
@@ -190,7 +191,7 @@ test('positioning: repeated saves and rechecks are idempotent, and original byte
       assert(session.recheckLayerSource(layerId, session.getLayer(layerId).spatialSources[0].id));
       const plan = session.planLayerSourceCaptureTimes(layerId);
       assert.deepEqual(plan.unchanged.map((row) => row.reason), ['already-accepted']);
-      assert.deepEqual(session.saveSourceWorkflowSource(step.ticket, session.getSnapshot().sourceReviews[layerId],
+      assert.deepEqual(saveStagedSource(session, step.ticket, session.getSnapshot().sourceReviews[layerId],
         { captureTime: { ...decision({ complete: true, partial: true, conflicts: 'gml' }), plan } }), { ok: true, captureTimeCount: 0 });
       assert.strictEqual(session.getPhoto(a).captureMetadata, accepted);
     }

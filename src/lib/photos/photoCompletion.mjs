@@ -1,7 +1,7 @@
 import { PHOTO_EXPORT_PROFILE_METADATA } from './export/photoExportRules.mjs';
 import { photoDirectionLabel } from './photoDirection.mjs';
 import { evidenceEligibility } from './photoEvidenceAdoption.mjs';
-import { photoEstimatedDateModel } from './photoEstimatedDates.mjs';
+import { planCaptureCompletion } from './photoCaptureCompletion.mjs';
 import { formatPhotoCaptureTime, photoDirectionEvidenceText, photoDirectionSourceLabel, photoMetadataOrigin, photoMetadataSourceLabel, photoSourceLabel } from './photoPresentation.mjs';
 
 // Presentation over photoExportReadiness. States come from readiness and every write goes through the session,
@@ -29,7 +29,8 @@ export const singularCopy = (text) => text.replace(PLURAL_AFTER_ONE, (_, plural)
 const line = (key, text) => Object.freeze({ key, text });
 const sourceName = ({ kind, sourceFilename }) => `${photoSourceLabel(kind)}${sourceFilename ? ` · ${sourceFilename}` : ''}`;
 const rawText = (raw) => typeof raw === 'string' ? raw : JSON.stringify(raw);
-const timeText = (value) => { const format = formatPhotoCaptureTime(value); return format ? [format.text, ...format.notes].join(' · ') : value?.iso ?? ''; };
+// A technically completed value always carries its note (M5); other provenance is named by the source label.
+const timeText = (value, provenance = null) => { const format = formatPhotoCaptureTime(value, provenance?.technical ? provenance : null); return format ? [format.text, ...format.notes].join(' · ') : value?.iso ?? ''; };
 
 function photoRow(photo) {
   const { occurrenceCount = 1, occurrenceIndex = 1 } = photo.repeatGroup || {};
@@ -54,7 +55,7 @@ function captureNote(item) {
 function captureRow(item, photo) {
   const row = { ...item, ...photoRow(photo), key: item.assetId, sources: item.evidence.map((source) => line(source.id,
     `${sourceName(source)}: ${source.value ? timeText(source.value) : `${rawText(source.raw)} (kan ikke tolkes sikkert)`}`)),
-  acceptedText: item.accepted ? `${timeText(item.accepted.value)} · ${photoMetadataSourceLabel('captureTime', item.accepted.provenance)}` : null,
+  acceptedText: item.accepted ? `${timeText(item.accepted.value, item.accepted.provenance)} · ${photoMetadataSourceLabel('captureTime', item.accepted.provenance)}` : null,
   note: item.accepted?.provenance?.estimated ? '12:00:00 er teknisk standard, ikke målt opptakstid.' : captureNote(item),
   noteTone: item.sourcesDiffer || (!item.accepted && item.evidence.some((source) => source.kind === 'gml' && source.value)) ? 'warning' : undefined,
   origin: item.origin };
@@ -137,7 +138,9 @@ export function photoCompletionModel(photos, readiness) {
   const { captureTime, direction, photographer, placement, context } = readiness.tasks;
   const capturePanel = panel(captureTime.items.map((item) => captureRow(item, byId.get(item.photoId))), CAPTURE_GROUPS,
     { requirement: captureTime.requirement, schemaName: readiness.levels.schema.name });
-  capturePanel.estimatedDates = photoEstimatedDateModel(photos);
+  // M5: the batch completion steps (source, filename, technical, estimate), each applied by its own button.
+  capturePanel.completion = planCaptureCompletion(photos);
+  capturePanel.estimatedDates = capturePanel.completion.estimate;
   const directionPanel = panel(direction.items.map((item) => directionRow(item, byId.get(item.occurrenceId))), DIRECTION_GROUPS);
   const photographerPanel = panel(captureTime.items.map((item) => photographerRow(item, byId.get(item.photoId))), PHOTOGRAPHER_GROUPS);
   const unplaced = placement.occurrenceIds.map((id) => Object.freeze({ key: id, photoId: id, ...photoRow(byId.get(id)) }));
@@ -200,10 +203,10 @@ export const photoExportAwaitingSource = ({ recommendations }) => recommendation
 export function photoCaptureTimeSchemaWarning({ levels, tasks }) {
   const gap = levels.schema.gaps.find((item) => item.field === 'captureTime');
   if (!gap || tasks.captureTime.requirement === 'required') return null;
-  return singularCopy(`${gap.count} bilder mangler full opptakstid, så GML-filen oppfyller ikke ${levels.schema.name}-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.`);
+  return singularCopy(`${gap.count} bilder mangler full opptakstid, så GML-filen oppfyller ikke ${levels.schema.name}-skjemaet. Gemini VA har importert bilder uten opptakstid i et testet oppsett (november 2026).`);
 }
 
-const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-estimated', 'capture-time-sources-differ']);
+const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-estimated', 'capture-time-technical', 'capture-time-sources-differ']);
 const DIRECTION_RECOMMENDATIONS = Object.freeze(['direction-defaulted', 'direction-sources-differ', 'direction-bulk']);
 export const completionRecommendations = (readiness, task) => [...readiness.recommendations, ...readiness.notes]
   .filter((item) => (task === 'direction' ? DIRECTION_RECOMMENDATIONS : CAPTURE_RECOMMENDATIONS).includes(item.code))

@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
+import { completionGml } from './helpers/photoCompletionFixtures.mjs';
+import { evidenceSession } from './helpers/photoEvidenceFixtures.mjs';
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const position = { crs: 'EPSG:4326', latitude: 60, longitude: 10 };
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
@@ -86,11 +88,138 @@ test('append preserves already placed occurrences and applies positions only to 
   assert(result.ok); assert(result.append); assert.equal(result.outcome.placed, preview.outcome.placed);
   assert.equal(session.getLayerPhotos(first.layer.id)[0].spatial.current, current); session.clear();
 });
-test('safe position refusal retains valid imported layer', async () => {
-  const session = await setup(), placement = { kind: 'exif' };
-  session.applySourceWorkflowPositions = () => ({ ok: false, error: 'review-changed' });
-  const result = session.completeImport({ placement, preview: session.previewImport({ placement }) });
-  assert(result.ok); assert(result.placementError); assert.equal(result.outcome.placed, 0); assert(session.getLayer(result.layer.id)); session.clear();
+test('GML import rolls back at every write, then publishes selected times, direction, positions and delivery together', async () => {
+  let failAt = 0, reached = 0;
+  const session = evidenceSession({ commitFault(index) { reached = index; if (index === failAt) throw new Error('injected fault'); } });
+  const names = ['a.jpg', '20260513_101010.jpg'];
+  session.beginImport();
+  const files = names.map((name) => new File(['synthetic'], name, { type: 'image/jpeg' }));
+  const { acceptedIds: ids } = session.importFiles(files);
+  try {
+    await session.importPositioningGml(completionGml([{ name: names[0], time: '2026-05-12T10:10:11', direction: 45 }]));
+    await waitForExif(session);
+    const placement = { kind: 'gml' }, preview = session.previewImport({ placement });
+    const request = { placement, preview, captureSuggestions: { complete: true }, gmlCaptureTime: { complete: true } };
+    const before = session.getSnapshot();
+    const published = [];
+    const unsubscribe = session.subscribe(() => published.push(session.getSnapshot()));
+    for (failAt = 1; ; failAt++) {
+      reached = 0;
+      const result = session.completeImport(request);
+      if (result.ok) {
+        assert.equal(reached, failAt - 1);
+        assert(reached >= 5, 'layer, assets, record and delivery writes were faulted');
+        assert.deepEqual(published, [session.getSnapshot()]);
+        assert.deepEqual(result.outcome, { total: 2, placed: 1, unplaced: 1 });
+        assert.equal(result.layer.spatialSources[0].kind, 'gml');
+        assert.equal(result.layer.placedCount, 1);
+        assert.deepEqual(session.getLayerPhotos(result.layer.id).map((photo) => photo.captureMetadata.captureTime.provenance.kind), ['gml', 'filename']);
+        assert.equal(session.getPhoto(ids[0]).direction.current.degrees, 45);
+        assert.equal(session.getLayerDelivery(result.layer.id).byPhotoId[ids[0]].status, 'include');
+        assert.equal(session.getSnapshot().photos.length, 0);
+        assert.equal(session.getFile(ids[0]), files[0]);
+        break;
+      }
+      assert.equal(result.error, 'commit-failed');
+      assert.equal(reached, failAt);
+      assert.equal(published.length, 0);
+      assert.strictEqual(session.getSnapshot(), before);
+      for (const [index, id] of ids.entries()) {
+        assert.strictEqual(session.getFile(id), files[index]);
+        assert.strictEqual(session.getPhoto(id).spatial, before.photos[index].spatial);
+        assert.strictEqual(session.getPhoto(id).captureMetadata, before.photos[index].captureMetadata);
+        assert.strictEqual(session.getPhoto(id).direction, before.photos[index].direction);
+      }
+    }
+    unsubscribe();
+  } finally { session.clear(); }
+});
+
+async function waitForExif(session) {
+  for (let i = 0; i < 100 && session.getSnapshot().photos.some((photo) => photo.spatial.exifRead.state === 'pending'); i++) await tick();
+  assert(session.getSnapshot().photos.every((photo) => photo.spatial.exifRead.state !== 'pending'));
+}
+
+test('GMI append rolls back association, occurrence and discarded file writes without touching an accepted layer', async () => {
+  const revoked = [];
+  let failAt = 0, reached = 0;
+  const session = await setup({ commitFault(index) { reached = index; if (index === failAt) throw new Error('injected fault'); },
+    urls: { createObjectURL: URL.createObjectURL, revokeObjectURL(url) { revoked.push(url); URL.revokeObjectURL(url); } } });
+  try {
+    const existing = session.createLayer(), [id] = existing.photoIds;
+    assert(session.setCombinedDeliveryInclusion(existing.id, [id], false).ok);
+    session.beginImport(existing.id);
+    const files = ['a.jpg', 'b.jpg'].map((name) => new File(['synthetic'], name, { type: 'image/jpeg' }));
+    const { acceptedIds: [duplicate, incoming] } = session.importFiles(files);
+    await session.setDraftGmiSource({ file: gmiFile([
+      { hyperlink: 'h:1(link:"a.jpg") ' }, { hyperlink: 'h:1(link:"b.jpg") ' }, { hyperlink: 'h:1(link:"b.jpg") ' },
+    ]) });
+    await waitForExif(session);
+    while (session.getSnapshot().photos.some((photo) => photo.preview.state === 'pending')) await tick();
+    const placement = { kind: 'gmi' };
+    const loadedReview = session.reviewLoadedGmiImport();
+    const preview = session.previewImport({ loadedReview, placement });
+    const before = session.getSnapshot(), beforeLayer = session.getLayer(existing.id);
+    const beforePhoto = session.getPhoto(id), beforeDelivery = session.getLayerDelivery(existing.id);
+    const excludedUrl = session.getPhoto(duplicate).preview.thumbnailUrl;
+    let publications = 0;
+    const unsubscribe = session.subscribe(() => publications++);
+    for (failAt = 1; ; failAt++) {
+      reached = 0;
+      const result = session.completeImport({ loadedReview, placement, preview });
+      if (result.ok) {
+        assert.equal(reached, failAt - 1);
+        assert.equal(publications, 1);
+        assert.deepEqual(result.outcome, { total: 2, placed: 2, unplaced: 0 });
+        assert.equal(result.layer.spatialSources[0].kind, 'gmi');
+        assert.equal(result.layer.photoIds.length, 3);
+        assert(session.getLayerPhotos(existing.id).every((photo) => photo.occurrence && photo.spatial.current));
+        assert.equal(session.getGmiPhotoAssociations(existing.id, id).length, 1);
+        assert.equal(session.getFile(duplicate), null);
+        assert.equal(session.getFile(incoming), files[1]);
+        assert.deepEqual(revoked, [excludedUrl]);
+        break;
+      }
+      assert.equal(result.error, 'commit-failed');
+      assert.equal(reached, failAt);
+      assert.equal(publications, 0);
+      assert.strictEqual(session.getSnapshot(), before);
+      assert.strictEqual(session.getLayer(existing.id), beforeLayer);
+      assert.strictEqual(session.getPhoto(id).spatial, beforePhoto.spatial);
+      assert.strictEqual(session.getPhoto(id).captureMetadata, beforePhoto.captureMetadata);
+      assert.deepEqual(session.getLayerDelivery(existing.id), beforeDelivery);
+      assert.equal(session.getFile(duplicate), files[0]);
+      assert.equal(session.getFile(incoming), files[1]);
+      assert.deepEqual(revoked, []);
+    }
+    unsubscribe();
+  } finally { session.clear(); }
+});
+
+test('cancelled and replaced GMI reviews leave an existing layer intact and a fresh review can publish', async () => {
+  const session = await setup();
+  try {
+    const existing = session.createLayer(), [id] = existing.photoIds;
+    const addDraft = async () => {
+      session.beginImport(existing.id);
+      session.importFiles([new File(['b'], 'b.jpg', { type: 'image/jpeg' })]);
+      await session.setDraftGmiSource({ file: gmiFile([{ hyperlink: 'h:1(link:"b.jpg") ' }]) });
+      await waitForExif(session);
+    };
+    await addDraft();
+    const placement = { kind: 'gmi' };
+    const loadedReview = session.reviewLoadedGmiImport();
+    const preview = session.previewImport({ loadedReview, placement });
+    const confirm = (review, plan) => session.completeImport({ loadedReview: review, placement, preview: plan });
+    assert.equal(confirm(session.reviewLoadedGmiImport(), preview).error, 'review-changed');
+    session.cancelImport();
+    assert.equal(confirm(loadedReview, preview).error, 'review-changed');
+    assert.strictEqual(session.getLayer(existing.id), existing);
+    assert.equal(session.getPhoto(id).spatial.current, null);
+    await addDraft();
+    const refreshed = session.reviewLoadedGmiImport();
+    assert(confirm(refreshed, session.previewImport({ loadedReview: refreshed, placement })).ok);
+  } finally { session.clear(); }
 });
 test('loaded GMI append recheck with all draft collisions can commit without adding assets', async () => {
  const session=await setup();const placement={kind:'gmi'};const file=gmiFile([{hyperlink:'h:1(link:"a.jpg") '}]);

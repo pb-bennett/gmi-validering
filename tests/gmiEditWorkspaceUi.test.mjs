@@ -114,7 +114,9 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         await browser.waitFor('document.querySelector(".gmi-edit-table-modes")');
         assert.equal(await browser.evaluate('document.querySelector(".gmi-edit-table-modes").dataset.gmiTableView'), 'original');
         assert.equal((await u.buttonState('Last ned revidert GMI', workspace)).disabled, false);
-        assert.equal(await u.unloadBlocked(), false, 'nothing to lose yet');
+        // DD1: a loaded file alone is meaningful, so the session guard asks before unload; Rettinger has nothing staged.
+        assert.equal(await u.unloadBlocked(), true, 'a loaded file alone guards unload (DD1)');
+        assert.notEqual(await browser.evaluate(`document.querySelector('.gmi-edit-workspace [data-download-state]')?.dataset.downloadState ?? null`), 'unsaved', 'no Rettinger changes yet');
         await u.shot('m4-rettinger-open');
       });
 
@@ -288,7 +290,8 @@ test('Rettinger workspace: inspect, correct, review, stage, table modes, history
         downloaded = filename;
         await u.clickButton('Lukk', exportDialog);
         await browser.waitFor(`${workspace}.querySelector('[data-download-state]')?.dataset.downloadState === 'downloaded'`);
-        assert.equal(await u.unloadBlocked(), false, 'downloaded revision: no unload prompt');
+        assert.equal(await browser.evaluate(`document.querySelector('.gmi-edit-workspace [data-download-state]')?.dataset.downloadState ?? null`), 'downloaded', 'downloaded revision: no unsaved Rettinger');
+        assert.equal(await u.unloadBlocked(), true, 'the loaded file itself still guards unload (DD1)');
       });
 
       await t.test('reset with unsaved corrections: cancel keeps GMI, FOTO and page state; confirm discards', async () => {

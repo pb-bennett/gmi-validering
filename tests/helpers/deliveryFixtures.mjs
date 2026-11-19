@@ -7,6 +7,7 @@ import { createGmiPhotoSource } from '../../src/lib/photos/gmiPhotoSource.mjs';
 import { createLoadedGmiSources } from '../../src/lib/photos/loadedGmiSource.mjs';
 import { createGmiEditSessions, createGmiObjectCorrection } from '../../src/lib/gmi-edit/index.mjs';
 import { captureDeliverySnapshot, buildDeliveryPlan } from '../../src/lib/delivery/index.mjs';
+import { saveStagedSource } from './photoSourceDraft.mjs';
 
 export const DATE = new Date('2026-11-13T11:12:13Z');
 export async function deliveryFixture({ names = ['shared.png', 'only.png'],
@@ -26,7 +27,7 @@ export async function deliveryFixture({ names = ['shared.png', 'only.png'],
   const sourceTicket = sources.begin('survey');
   assert(await f.session.stageLayerSource(f.layerId, { binding: sourceTicket.binding,
     read: () => sources.read(sourceTicket), isLive: () => sources.isLive(sourceTicket.binding) }, 'gmi'));
-  assert(f.session.saveSourceWorkflowSource(ticket, f.session.getSnapshot().sourceReviews[f.layerId]).ok);
+  assert(saveStagedSource(f.session, ticket, f.session.getSnapshot().sourceReviews[f.layerId]).ok);
   f.session.endSourceWorkflow(ticket);
   const photos = () => f.session.getLayerPhotos(f.layerId);
   // Source association can create additional occurrences. Accept each synthetic

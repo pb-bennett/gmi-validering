@@ -196,7 +196,7 @@ const PhotoMarker = memo(function PhotoMarker({ markerKey, layerId, photoId, lat
 // inside the map), or an empty-map click. React Leaflet re-adds the same popup when it follows another marker, so
 // explicit removal leaves it off the map; the open state then follows. Survey popups may coexist;
 // their feature-click flag exempts them from map dismissal. WFS clicks still dismiss through the map handler.
-function WorkspacePreviewPopup({ photo, lat, lng, mode, width, maxHeight, deliveryEntry, onCycleDelivery, onEditPlacement, onClose }) {
+function WorkspacePreviewPopup({ photo, lat, lng, mode, width, maxHeight, deliveryEntry, onCycleDelivery, onEditPlacement, onClose, autoPan = true }) {
   const map = useMap();
   const popupRef = useRef(null);
   const latest = useRef(onClose);
@@ -222,7 +222,7 @@ function WorkspacePreviewPopup({ photo, lat, lng, mode, width, maxHeight, delive
   }, [map, close]);
   return <Popup ref={popupRef} position={position} pane="popupPane" className="photo-workspace-preview-popup" minWidth={width} maxWidth={width}
     maxHeight={maxHeight} offset={[0, mode === 'thumbnails' ? -20 : -6]} closeButton={false} autoClose={false} closeOnClick={false} closeOnEscapeKey={false}
-    autoPanPadding={[24, 24]} eventHandlers={events}>
+    autoPan={autoPan} autoPanPadding={[24, 24]} eventHandlers={events}>
     <PhotoWorkspaceMapPreview photo={photo} deliveryEntry={deliveryEntry} onCycleDelivery={(id) => onCycleDelivery?.(id)}
       onEditPlacement={onEditPlacement} onClose={() => close(true)} onLayout={() => popupRef.current?.update()} />
   </Popup>;
@@ -252,7 +252,11 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
   const [previewOpen, setPreviewOpen] = useState(false);
   const previewModel = workspace && !workspace.editing && workspace.photoId
     ? models.find((model) => model.inWorkspace && model.photoId === workspace.photoId) || null : null;
-  if (previewOpen && !previewModel) setPreviewOpen(false);
+  // A8: hiding the photos (eye control) only hides the preview with them; it returns, unmoved, when they are shown again.
+  if (previewOpen && !previewModel && !workspace?.hidden) setPreviewOpen(false);
+  // A preview restored by showing the photos again never pans the map; one opened by a marker click still may.
+  const [previewRestored, setPreviewRestored] = useState(false);
+  if (previewOpen && workspace?.hidden && !previewRestored) setPreviewRestored(true);
   const previewPhoto = previewOpen && previewModel ? workspace.photos?.find((photo) => photo.id === previewModel.photoId) || null : null;
   const preview = useRef({ tooltip: null, timer: null, element: null, request: null });
 
@@ -288,7 +292,7 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
         const index = members.indexOf(workspace?.photoId);
         onSelectPhoto?.(index >= 0 ? members[(index + 1) % members.length] : photoId);
         // As with the main-map popups, the transient hover thumbnail gives way to the opened preview.
-        if (withPreview && !workspace?.editing) { actions.current.clearPreview(); setPreviewOpen(true); }
+        if (withPreview && !workspace?.editing) { actions.current.clearPreview(); setPreviewOpen(true); setPreviewRestored(false); }
       },
       openPhoto: (layerId, photoId) => { map.closePopup(); onOpenPhoto?.(layerId, photoId); },
       schedulePreview: (target) => { clearTimeout(state.timer); state.timer = setTimeout(() => open(target), PREVIEW_DELAY_MS); },
@@ -323,7 +327,7 @@ export default function PhotoMarkersLayer({ items, workspace = null, displayMode
       {previewPhoto && <WorkspacePreviewPopup photo={previewPhoto} lat={previewModel.lat} lng={previewModel.lng} mode={previewModel.mode}
         width={Math.min(320, Math.max(160, mapSize.x - 64))} maxHeight={Math.max(160, mapSize.y - 80)}
         deliveryEntry={workspace.delivery?.byPhotoId[previewPhoto.id] || null} onCycleDelivery={workspace.onToggleDelivery} onEditPlacement={workspace.onEditPlacement}
-        onClose={() => setPreviewOpen(false)} />}
+        autoPan={!previewRestored} onClose={() => setPreviewOpen(false)} />}
     </>
   );
 }

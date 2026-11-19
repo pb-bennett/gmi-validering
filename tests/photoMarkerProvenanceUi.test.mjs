@@ -10,6 +10,7 @@ import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, setPhotoColourMode, setPhotoFiles, stagePhotoSource, savePhotoSource, closePhotoSources } from './helpers/photoSourceWorkflow.mjs';
 import { PHOTO_POSITION_SOURCES } from '../src/lib/photos/photoMarkerPresentation.mjs';
 import { KEYS, arrowOf, commandBar, discardEdits, dragSelectedMarker, editArrow, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
+import { confirmSessionReset } from './helpers/sessionReset.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, display card lifecycle and rendered layouts',
@@ -349,6 +350,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
         await browser.waitFor('document.querySelector("button[aria-label=\\\"Nullstill og åpne ny fil\\\"]")');
         await browser.evaluate('document.querySelector("button[aria-label=\\\"Nullstill og åpne ny fil\\\"]").click()');
+        await confirmSessionReset(browser);
         await browser.waitFor(`!${legend} && !document.querySelector('.photo-workspace-shell') && ${markers}.length===0`);
         assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-edit-mode, .photo-edit-placing"))'), false);
         if (await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))')) assert.notEqual(await cursor(), 'crosshair');

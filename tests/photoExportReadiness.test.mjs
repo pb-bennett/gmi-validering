@@ -50,7 +50,8 @@ test('critical: Gemini without capture times stays possible to generate and repo
   assert.deepEqual(result.blocking, []);
   assert.equal(result.levels.schema.met, false);
   assert.deepEqual(result.levels.schema.gaps, [{ field: 'captureTime', count: 2, missing: 2, insufficientPrecision: 0 }]);
-  assert.deepEqual(result.levels.importEvidence.deviations, [{ field: 'captureTime', state: 'unconfirmed', count: 2, referenceOnly: true }]);
+  // A6: omitted capture time was imported into Gemini VA (2026-11-19), so it is no longer an import deviation.
+  assert.deepEqual(result.levels.importEvidence.deviations, []);
   assert.equal(result.counts.readyOccurrences, 2);
 });
 
@@ -141,7 +142,7 @@ test('no profile chosen: blocked, with no requirement or evidence invented for i
 });
 
 test('the evidence table records only what real imports showed', () => {
-  assert.deepEqual(PHOTO_EXPORT_IMPORT_EVIDENCE['gemini-legacy2019'], { profile: 'imported', missingCaptureTime: 'unconfirmed', missingDirection: 'untested', renamedGml: 'untested', referenceOnly: ['missingCaptureTime'] });
+  assert.deepEqual(PHOTO_EXPORT_IMPORT_EVIDENCE['gemini-legacy2019'], { profile: 'imported', missingCaptureTime: 'imported', missingDirection: 'untested', renamedGml: 'untested', referenceOnly: [] });
   assert.deepEqual(PHOTO_EXPORT_IMPORT_EVIDENCE.legacy2019, { profile: 'none' });
   assert.deepEqual(PHOTO_EXPORT_IMPORT_EVIDENCE.asbuilt52, { profile: 'none' });
   assert.equal(photoExportReadiness([complete('a')], gemini).levels.importEvidence.recorded.renamedGml, 'untested');

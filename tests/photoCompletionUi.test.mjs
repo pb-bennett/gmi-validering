@@ -15,6 +15,7 @@ import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, chooseImportPlacement, clickImport, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, savePhotoSource, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { KEYS, commandBar, elementCentre, enterEditMode, openTool, pressKey, rotateSelected } from './helpers/photoWorkspace.mjs';
+import { confirmSessionReset } from './helpers/sessionReset.mjs';
 
 // Fullfør opplysninger in the real app: File objects, chunked exifr, the browser XML parser, native dialogs and real input.
 const app = process.env.PHOTO_UI_URL, corpus = process.env.PHOTO_GML_FIXTURE;
@@ -121,6 +122,8 @@ layerTest('the tool opens on its own from Verktøy, shows every task, and return
   await openHub(browser);
   assert.equal(await browser.evaluate(`Boolean(document.querySelector('.photo-tools-popup'))`), false, 'the menu closes');
   assert.equal(await browser.evaluate(`${hub}.querySelector('h2').innerText`), 'Fullfør opplysninger');
+  // B6: a task hub states its save semantics once.
+  assert.deepEqual(await browser.evaluate(`Array.from(${hub}.querySelectorAll('[data-completion-save-semantics]')).map((e) => e.innerText)`), ['Endringer lagres i fotolaget med en gang.']);
   assert.equal(await browser.evaluate(`${hub}.querySelector('.photo-completion-target select').value`), 'gemini-legacy2019');
   assert.deepEqual(await browser.evaluate(`Array.from(${hub}.querySelectorAll('[data-task]')).map((item) => item.dataset.task)`), ['captureTime', 'direction', 'placement', 'photographer']);
   assert.equal(await browser.evaluate(exportDialog), null, 'independent of the export dialog');
@@ -165,9 +168,9 @@ layerTest('capture time: source values in place, the warning, corrections, neste
   assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[data-adopt]'))`), false, 'source values need no adoption step');
   assert.deepEqual([await countOf(browser, 'captureTime', 'source'), await countOf(browser, 'captureTime', 'missing')], ['3', '2']);
   assert.equal(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-export-warning="capture-time-schema"]').innerText`),
-    '2 bilder mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet. Det er ikke verifisert at Gemini VA godtar en slik pakke.');
+    '2 bilder mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet. Gemini VA har importert bilder uten opptakstid i et testet oppsett (november 2026).');
   assert.deepEqual(await browser.evaluate(`Array.from(${panel('captureTime')}.querySelectorAll('[data-export-level]')).map((item) => item.querySelector('dd').innerText)`),
-    ['Kan lages', 'Oppfylles ikke: opptakstid mangler for 2 bilder. XSD-validering er ikke kjørt.', 'Ikke verifisert for denne pakken. Må testes manuelt.']);
+    ['Kan lages', 'Oppfylles ikke: opptakstid mangler for 2 bilder. XSD-validering er ikke kjørt.', 'Profilen er importert tidligere, men denne pakken er ikke testet.']);
   assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-recommendation="capture-time-sources-differ"]').innerText`), /1 bilde har ulik opptakstid i kildene/);
 
   // Details are folded away, but still there.
@@ -246,25 +249,47 @@ layerTest('capture time: source values in place, the warning, corrections, neste
   assert.equal(await outstanding(browser, 'captureTime'), 'done');
 });
 
-layerTest('estimated dates: one click ignores row selection, manual dates and individual corrections stay reversible, noon reaches Gemini GML', async (browser, directory) => {
+// M5 (Batch C): the ordered Opptakstid steps. minute.jpg has an unaccepted GML time without seconds, so it is completed
+// from that evidence (step 1) and technically (step 3), never estimated; blank.jpg has no date evidence at all.
+layerTest('capture-date completion: source minute value, technical seconds and the median estimate, each explicit and undoable, reach Gemini GML', async (browser, directory) => {
   await openHub(browser);
   await showTask(browser, 'captureTime');
+  const step = (key) => `${panel('captureTime')}.querySelector('[data-capture-step="${key}"]')`;
+  const tick = (key, group) => browser.evaluate(`${step(key)}.querySelector('[data-capture-group="${group}"] input').click()`);
+  assert.deepEqual(await browser.evaluate(`Array.from(${panel('captureTime')}.querySelectorAll('[data-capture-step]')).map((e) => e.dataset.captureStep)`), ['source'], 'steps with nothing to offer are hidden');
+  assert.equal(await browser.evaluate(`${step('source')}.querySelector('[data-capture-group="minute"]').innerText.trim()`), 'Klokkeslett uten sekunder (1)');
+  assert.equal(await browser.evaluate(`${step('source')}.querySelector('[data-capture-apply]').disabled`), true, 'nothing is chosen by default');
+  await browser.evaluate(`${step('source')}.querySelector('summary').click()`);
+  assert.match(await browser.evaluate(`${step('source')}.querySelector('details li').innerText`), /^minute\.jpg · 12\.05\.2026 14:33 · uten sekunder/);
+  await screenshot(browser, '12-capture-steps-before');
+  await tick('source', 'minute');
+  await clickSourceControl(browser, 'Bruk valgte kildeverdier', step('source'));
+  await browser.waitFor(`${step('technical')}`);
+  assert.match(await message(browser), /brukt for 1 bilde/);
+  assert.equal(await browser.evaluate(`${step('technical')}.querySelector('[data-capture-group="seconds"]').innerText.trim()`), 'Fyll ut 00 sekunder for 1 bilde med klokkeslett uten sekunder.');
+  await tick('technical', 'seconds');
+  await clickSourceControl(browser, 'Fyll ut', step('technical'));
+  await browser.waitFor(`${step('technical')}.querySelector('[data-capture-undo]')`);
+  await openGroup(browser, 'captureTime', 'done');
+  assert.match(await rowText(browser, 'minute.jpg'), /12\.05\.2026 14:33:00 · Sekunder teknisk utfylt.*teknisk utfylt/);
+  // The estimate: the median of 4 known dates (minute.jpg's completed date counts; conflict.jpg's disagreeing sources do not), prefilled within 7 days.
   const form = `${panel('captureTime')}.querySelector('[data-estimated-dates]')`;
   const date = `${form}.querySelector('input[type=date]')`;
   assert.equal(await browser.evaluate(`${date}.value`), '2026-05-12');
   assert.equal(await browser.evaluate(`${form}.querySelectorAll('input[type=time],select').length`), 0);
-  assert.match(await browser.evaluate(`${form}.innerText`), /2 bilder uten opptaksdato i hele FOTO-laget får 12\.05\.2026/);
+  assert.equal(await browser.evaluate(`${form}.querySelector('[data-estimate-basis]').innerText`), 'Forslag: 12.05.2026 — median av 4 kjente opptaksdatoer i fotolaget (12.05.2026). Gjelder 1 bilde uten datobevis. Lagres som anslått dato med kl. 12:00:00 som teknisk standard.');
   await screenshot(browser, '12-estimated-before');
-  // The one-click action always fills all missing photos, even with only one row selected.
-  await browser.evaluate(`${rowOf('blank.jpg')}.querySelector('input[type=checkbox]').click()`);
-  await clickSourceControl(browser, 'Bruk foreslått dato på 2 bilder', form);
+  // The one-click action fills every photo without date evidence, even with only one row selected.
+  await browser.evaluate(`${rowOf('blank.jpg')}.querySelector('input[type=checkbox]')?.click()`);
+  await clickSourceControl(browser, 'Bruk foreslått dato på 1 bilde', form);
   await browser.waitFor(`${taskButton('captureTime')}.querySelector('.photo-completion-task-done')`);
   assert.equal(await browser.evaluate(`Boolean(${nested})`), false, 'no confirmation dialog');
   assert.equal(await countOf(browser, 'captureTime', 'missing'), '0');
   assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[data-export-warning="capture-time-schema"]'))`), false);
-  assert.match(await panelText(browser, 'captureTime'), /2 bilder har anslått dato/);
+  assert.match(await panelText(browser, 'captureTime'), /1 bilde har anslått dato/);
+  assert.match(await panelText(browser, 'captureTime'), /1 bilde har teknisk utfylt tid\. Den er ikke målt\./);
   await openGroup(browser, 'captureTime', 'done');
-  for (const name of ['minute.jpg', 'blank.jpg']) assert.match(await rowText(browser, name), /12\.05\.2026 12:00:00.*Anslått/);
+  assert.match(await rowText(browser, 'blank.jpg'), /12\.05\.2026 12:00:00.*Anslått/);
   assert.match(await rowText(browser, 'heading.jpg'), /15:00:10/);
   await screenshot(browser, '13-estimated-applied');
   // Undo remains available after switching completion tasks.
@@ -272,9 +297,9 @@ layerTest('estimated dates: one click ignores row selection, manual dates and in
   await showTask(browser, 'captureTime');
   await clickSourceControl(browser, 'Angre anslått dato', form);
   await browser.waitFor(`${form}.querySelector('button[type=submit]')`);
-  assert.equal(await countOf(browser, 'captureTime', 'missing'), '2');
+  assert.equal(await countOf(browser, 'captureTime', 'missing'), '1');
   await setValue(browser, date, '2024-02-29');
-  await clickSourceControl(browser, 'Bruk valgt dato på 2 bilder', form);
+  await clickSourceControl(browser, 'Bruk valgt dato på 1 bilde', form);
   await browser.waitFor(`${taskButton('captureTime')}.querySelector('.photo-completion-task-done')`);
   await openGroup(browser, 'captureTime', 'done');
   // An existing estimate opens in date-only mode. Adjusting it cannot request or retain another time.
@@ -287,22 +312,16 @@ layerTest('estimated dates: one click ignores row selection, manual dates and in
   await clickSourceControl(browser, 'Lagre', nested);
   await browser.waitFor(`!${nested}`);
   await clickSourceControl(browser, 'Angre anslått dato', form);
-  await browser.waitFor(`${form}.querySelector('button[type=submit]')`);
-  assert.equal(await countOf(browser, 'captureTime', 'missing'), '1');
-  assert.match(await rowText(browser, 'blank.jpg'), /31\.12\.2025 12:00:00.*Anslått/);
+  await browser.waitFor(`!${form} || !${form}.querySelector('[data-undo-estimated-dates]')`);
   assert.match(await message(browser), /senere endringer/);
-  assert.match(await browser.evaluate(`${form}.innerText`), /Forslag: 12\.05\.2026/, 'an estimated date cannot change the range');
-  // Adjust the remaining group date, then check the actual download.
-  await setValue(browser, date, '2026-01-01');
-  await clickSourceControl(browser, 'Bruk valgt dato på 1 bilde', form);
-  await browser.waitFor(`${taskButton('captureTime')}.querySelector('.photo-completion-task-done')`);
+  assert.match(await rowText(browser, 'blank.jpg'), /31\.12\.2025 12:00:00.*Anslått/, 'the individual correction survives the undo');
   await closeHub(browser);
   await openExport(browser);
   await buildPreview(browser);
   const { gml, entries } = await downloadZip(browser, directory);
   const xml = strFromU8(entries[gml]);
   const times = exportedTimes(xml);
-  assert.equal(times.get('minute.jpg'), '2026-01-01T12:00:00');
+  assert.equal(times.get('minute.jpg'), '2026-05-12T14:33:00', 'the technically completed value is written in full');
   assert.equal(times.get('blank.jpg'), '2025-12-31T12:00:00');
   assert.equal(times.get('heading.jpg'), '2026-05-12T15:00:10');
 });
@@ -445,6 +464,7 @@ layerTest('layer deletion and session reset clear the transient configuration', 
   await clickSourceControl(browser, 'Lukk FOTO', 'document');
   await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
   await browser.evaluate(`document.querySelector('[aria-label="Nullstill og åpne ny fil"]').click()`);
+  await confirmSessionReset(browser);
   await browser.waitFor(`!document.querySelector('section[aria-label^="Fotokartlag"]')`);
   await clickSourceControl(browser, 'Bilder', 'document');
   await browser.waitFor(importDialog);
@@ -658,7 +678,7 @@ test('estimated date without known dates: manual entry fills the whole layer inc
     const date = `${form}.querySelector('input[type=date]')`;
     assert.equal(await browser.evaluate(`${date}.value`), '');
     assert.equal(await browser.evaluate(`${form}.querySelector('button[type=submit]').disabled`), true);
-    assert.match(await browser.evaluate(`${form}.innerText`), /Ingen sikker datoperiode/);
+    assert.match(await browser.evaluate(`${form}.innerText`), /For få kjente datoer til å foreslå en dato\./);
     await setValue(browser, date, '2026-04-01');
     await clickSourceControl(browser, 'Bruk valgt dato på 2 bilder', form);
     await browser.waitFor(`${form}.querySelector('[data-undo-estimated-dates]')`);
@@ -666,7 +686,7 @@ test('estimated date without known dates: manual entry fills the whole layer inc
     await clickSourceControl(browser, 'Angre anslått dato', form);
     await browser.waitFor(`${form}.querySelector('button[type=submit]')`);
     assert.match(await browser.evaluate(`${form}.innerText`), /2 bilder uten opptaksdato i hele FOTO-laget/);
-    assert.match(await browser.evaluate(`${form}.innerText`), /Ingen sikker datoperiode/);
+    assert.match(await browser.evaluate(`${form}.innerText`), /For få kjente datoer til å foreslå en dato\./);
   } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); }
 });
 

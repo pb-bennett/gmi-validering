@@ -10,6 +10,7 @@ import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, savePhotoSource, sourceWizard, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { KEYS, commandBar, elementCentre, openTool, pressKey } from './helpers/photoWorkspace.mjs';
+import { confirmSessionReset } from './helpers/sessionReset.mjs';
 
 // Export wizard → Fullfør opplysninger → map or positioning wizard → Fullfør opplysninger → export wizard, in the real app:
 // native dialogs, trusted mouse and keyboard, and every way of leaving the journey.
@@ -806,6 +807,7 @@ layerTest('leaving FOTO, removing the layer and resetting the session clear the 
   await exit();
   await browser.waitFor(`!${shell}`);
   await browser.evaluate(`document.querySelector('[aria-label="Nullstill og åpne ny fil"]').click()`);
+  await confirmSessionReset(browser);
   await browser.waitFor(`!document.querySelector('button[aria-label^="Fjern fotokartlag"]')`);
   await nothingOpen('reset');
   assert.notEqual(kept, 'Nullstill');
@@ -831,6 +833,9 @@ for (const where of ['hub', 'map', 'positioning wizard']) for (const how of ['re
     await browser.waitFor(`Array.from(document.querySelectorAll('button')).some((item) => item.innerText.trim() === 'Fjern')`);
     await capture(`Array.from(document.querySelectorAll('button')).find((item) => item.innerText.trim() === 'Fjern')`, '__remove');
     await capture(`document.querySelector('[aria-label="Nullstill og åpne ny fil"]')`, '__reset');
+    // DD2: the removal confirmation is a modal dialog; close it once its confirm handler is captured.
+    await browser.evaluate(`Array.from(document.querySelector('dialog[open][data-gmi-confirm=photo-layer-remove]').querySelectorAll('button')).find((b) => b.innerText.trim() === 'Avbryt').click()`);
+    await browser.waitFor(`!document.querySelector('dialog[open][data-gmi-confirm=photo-layer-remove]')`);
     await browser.evaluate(`document.querySelector('button[aria-label="Åpne FOTO"]').click()`);
     await browser.waitFor(shell);
 
@@ -845,6 +850,7 @@ for (const where of ['hub', 'map', 'positioning wizard']) for (const how of ['re
     }
 
     await browser.evaluate(`window.${how === 'remove' ? '__remove' : '__reset'}(); undefined`);
+    if (how === 'reset') await confirmSessionReset(browser);
     await browser.waitFor(`!${shell}`);
     await delay(800);
     assert.equal(await openDialogs(browser), 0, 'nothing is left open');

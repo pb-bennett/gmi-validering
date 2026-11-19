@@ -123,7 +123,7 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   const text = await reviewText(browser);
   for (const expected of ['Gemini-kompatibel Skråfoto 2019', '2 bilder · 2 plasseringer i GML-filen', '1 plassering uten posisjon utelatt']) assert(text.includes(expected), expected);
   assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-format]').textContent`), /Importert i Gemini VA\/GeoFoto i testet oppsett/, 'a past import in a tested setup, under Tekniske detaljer');
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="import"] dd').innerText`), /Ikke verifisert for denne pakken/, 'which says nothing about this package');
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="import"] dd').innerText`), /denne pakken/, 'which says nothing about this package');
   assert(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]'))`), 'the warning is on Kontroll');
   await toPackage(browser);
   assert.deepEqual(await previewNames(browser), names, 'the same reviewed plan');

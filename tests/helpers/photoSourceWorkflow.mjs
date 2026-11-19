@@ -46,26 +46,52 @@ export async function openPhotoSources(browser) {
   await browser.waitFor(`${sourceWizard}?.open`);
 }
 
+// Closes the wizard: after «Lagre endringer» it closes at once; before it, a draft is discarded through the guard.
 export async function closePhotoSources(browser) {
   await browser.evaluate(`${sourceWizard}.querySelector('header button').click()`);
-  if (await browser.evaluate('Boolean(document.querySelector("dialog[open][data-gmi-confirm=positioning-draft]"))')) await browser.evaluate("Array.from(document.querySelector('[data-gmi-confirm=positioning-draft]').querySelectorAll('button')).find(e=>e.innerText==='Forkast posisjonsvalg').click()");
+  if (await browser.evaluate('Boolean(document.querySelector("dialog[open][data-gmi-confirm=positioning-draft]"))')) await browser.evaluate("Array.from(document.querySelector('[data-gmi-confirm=positioning-draft]').querySelectorAll('button')).find(e=>e.innerText==='Forkast endringer').click()");
   await browser.waitFor(`!${sourceWizard}`);
 }
 
-export async function stagePhotoSource(browser, file, kind = 'gml') {
+// A wizard left open on «Endringer lagret» is closed and opened again, so the next transaction starts fresh.
+async function freshPhotoSources(browser) {
+  if (await browser.evaluate(`Boolean(${sourceWizard}?.dataset.saved)`)) await closePhotoSources(browser);
   if (!await browser.evaluate(`Boolean(${sourceWizard})`)) await openPhotoSources(browser);
+}
+
+export async function stagePhotoSource(browser, file, kind = 'gml') {
+  await freshPhotoSources(browser);
   while (await browser.evaluate(`${sourceWizard}.dataset.step !== '1'`)) await clickSourceControl(browser, 'Tilbake');
   await browser.evaluate(`${sourceWizard}.querySelector('input[name=photo-external-source][value=${kind}]').click()`);
   await setPhotoFiles(browser, `input[aria-label="Velg ${kind.toUpperCase()}-kilde"]`, [file]);
   await browser.waitFor(`${sourceWizard}.querySelector('section[aria-label="Kontroller koblinger"]') && !${sourceWizard}.innerText.includes('Analyserer kilden')`);
 }
 
-export async function savePhotoSource(browser, kind = 'gml') {
-  const labels = kind === 'gmi' ? ['Behold kilde og koblinger', 'Oppdater koblinger'] : ['Behold GML-kilden', 'Oppdater treff'];
-  const label = await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('button')).map(button=>button.innerText.trim()).find(label=>${JSON.stringify(labels)}.includes(label))`);
-  assert(label, 'source checkpoint action');
+// B: «Ta med kilden» / «Ta med kilde og koblinger» stage the reviewed source in the wizard draft. Nothing is saved.
+export async function includePhotoSource(browser, kind = 'gml') {
+  const label = kind === 'gmi' ? 'Ta med kilde og koblinger' : 'Ta med kilden';
   await clickSourceControl(browser, label);
-  await browser.waitFor(`${sourceWizard}?.querySelector('.photo-source-saved') && !${sourceWizard}.innerText.includes('Forkast kilde som ikke er lagret')`);
+  await browser.waitFor(`!${sourceWizard}?.querySelector('[data-positioning-stage]') && !${sourceWizard}.innerText.includes('Forkast kilden')`);
+}
+
+// Kontroll → «Lagre endringer» → the wizard stays open on «Endringer lagret» with its receipt.
+export async function saveSourceWizardChanges(browser, { keepPositions = false } = {}) {
+  if (await browser.evaluate(`${sourceWizard}.dataset.step !== '4'`)) {
+    for (let i = 0; i < 4 && await browser.evaluate(`${sourceWizard}.dataset.step !== '3'`); i++) await clickSourceControl(browser, 'Neste');
+    await browser.waitFor(`${sourceWizard}.dataset.step === '3'`);
+    if (keepPositions) await clickSourceControl(browser, 'Behold alle gjeldende');
+    await clickSourceControl(browser, 'Neste');
+    await browser.waitFor(`${sourceWizard}.dataset.step === '4'`);
+  }
+  await clickSourceControl(browser, 'Lagre endringer');
+  await browser.waitFor(`${sourceWizard}?.dataset.saved && ${sourceWizard}.querySelector('[data-positioning-receipt]')`);
+}
+
+// A source saved on its own, as a connection-only (or metadata-only) transaction: include it, keep every current
+// position, and save. The wizard is left open on its receipt.
+export async function savePhotoSource(browser, kind = 'gml') {
+  await includePhotoSource(browser, kind);
+  await saveSourceWizardChanges(browser, { keepPositions: true });
 }
 
 // Existing regression suites explicitly establish the accepted baseline they test.
@@ -76,7 +102,7 @@ export async function applyPhotoSourcePositions(browser, kind = 'gml', { photoId
     await clickSourceControl(browser, 'Åpne FOTO', 'document');
     await browser.waitFor('document.querySelector(".photo-workspace-shell")');
   }
-  if (!await browser.evaluate(`Boolean(${sourceWizard})`)) await openPhotoSources(browser);
+  await freshPhotoSources(browser);
   if (!await browser.evaluate(`Boolean(${sourceWizard}.querySelector('section[aria-label="Kontroller posisjoner"]'))`))
     while (await browser.evaluate(`${sourceWizard}.dataset.step !== '3'`)) await clickSourceControl(browser, 'Neste');
   await browser.waitFor(`${sourceWizard}.querySelector('section[aria-label="Kontroller posisjoner"]')`);
@@ -98,9 +124,10 @@ export async function applyPhotoSourcePositions(browser, kind = 'gml', { photoId
       select.value=${JSON.stringify(target.value)}; select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   } else await clickSourceControl(browser, `Foreslå ${kind.toUpperCase()} for viste`);
   await clickSourceControl(browser, 'Neste');
-  const label = await browser.evaluate(`${sourceWizard}.querySelector('footer .photo-positioning-primary').innerText`);
-  assert.match(label, /^Bruk valgte posisjoner for [1-9]/);
-  await clickSourceControl(browser, label);
+  assert.match(await browser.evaluate(`${sourceWizard}.querySelector('[data-kontroll="positions"]').innerText`), /[1-9]d* (bilde|bilder|plassering|plasseringer) valgt/);
+  await clickSourceControl(browser, 'Lagre endringer');
+  await browser.waitFor(`${sourceWizard}?.dataset.saved`);
+  await clickSourceControl(browser, 'Lukk');
   await browser.waitFor(`!${sourceWizard}`);
   if (entered) {
     await clickSourceControl(browser, 'Lukk FOTO', 'document');

@@ -492,32 +492,18 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
                 onClick={(event) => { event.stopPropagation(); onAddGmiPhotos?.(layerId, event); }} />;
             })()}
             {/* Zoom to layer */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setLayerFitBoundsTarget(layerId);
-              }}
-              className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
-              title="Zoom til lag"
-              aria-label="Zoom til lag"
-            >
-              <CornersOutIcon size={14} weight="regular" aria-hidden="true" />
-            </button>
+            <PhotoIconButton icon={CornersOutIcon} size={14} label="Zoom til lag" className="layer-card-icon-button"
+              onClick={(event) => { event.stopPropagation(); setLayerFitBoundsTarget(layerId); }} />
 
-            {/* Remove button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
+            {/* Remove: muted at rest like its neighbours; the destructive red treatment shows on hover (DA2a). */}
+            <PhotoIconButton icon={TrashIcon} size={14} label="Fjern lag" aria-haspopup="dialog"
+              className="layer-card-icon-button layer-card-icon-button-destructive"
+              onClick={(event) => {
+                event.stopPropagation();
                 const unsaved = gmiEditSessions.unsavedLayers([layerId]);
                 setRemoveWarning(unsaved.length ? unsaved : null);
                 setShowRemoveConfirm(true);
-              }}
-              className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle transition-colors hover:bg-red-100 hover:text-red-600"
-              title="Fjern lag"
-              aria-label="Fjern lag"
-            >
-              <TrashIcon size={14} weight="regular" aria-hidden="true" />
-            </button>
+              }} />
 
             {/* Expand indicator */}
             <CaretDownIcon
@@ -591,22 +577,10 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
                 Analyse
               </span>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => resetLayerFilters(layerId)}
-                  className="gmi-focus-ring rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface hover:text-gmi-navy"
-                  title="Nullstill filtre"
-                  aria-label="Nullstill filtre"
-                >
-                  <ArrowCounterClockwiseIcon size={16} weight="regular" aria-hidden="true" />
-                </button>
-                <button
-                  onClick={() => openLayerDataTable(layerId)}
-                  className="gmi-focus-ring rounded-lg p-1.5 text-gmi-interactive transition-colors hover:bg-gmi-surface hover:text-gmi-navy"
-                  title="Åpne datatabell"
-                  aria-label="Åpne datatabell"
-                >
-                  <TableIcon size={16} weight="regular" aria-hidden="true" />
-                </button>
+                <PhotoIconButton icon={ArrowCounterClockwiseIcon} size={16} label="Nullstill filtre" className="layer-card-icon-button"
+                  onClick={() => resetLayerFilters(layerId)} />
+                <PhotoIconButton icon={TableIcon} size={16} label="Åpne datatabell" className="layer-card-icon-button"
+                  onClick={() => openLayerDataTable(layerId)} />
                 <LayerAnalysisButtons
                   layerId={layerId}
                   layer={layer}

@@ -96,6 +96,9 @@ function recommendationsFor({ profile, placed, assets, nowMs, captureItems, dire
   const filenameAdvisory = filenameCaptureTimeAdvisory(assets.map((photo) => ({ assetId: photo.assetId, captureTime: timeOf(photo) })));
   if (filenameAdvisory) recommendations.push({ ...filenameAdvisory, label: photoExportDiagnosticLabel(filenameAdvisory.code) });
   add('capture-time-estimated', estimated.length, `${estimated.length} bilder har anslått dato. 12:00:00 er teknisk standard, ikke målt opptakstid.`, { assetIds: estimated.map((photo) => photo.assetId) });
+  // M5 (C2): a technically completed time is complete for export, but its completed part was never measured.
+  const technical = assets.filter((photo) => timeOf(photo)?.provenance?.technical);
+  add('capture-time-technical', technical.length, `${technical.length} bilder har teknisk utfylt tid. Den er ikke målt.`, { assetIds: technical.map((photo) => photo.assetId) });
   const bulkTimeCount = bulkTimes.reduce((total, group) => total + group.count, 0);
   add('capture-time-bulk', bulkTimeCount, `${bulkTimeCount} bilder har samme manuelt angitte tid.`, { groups: bulkTimes });
 
@@ -168,8 +171,9 @@ export function photoExportReadiness(photos, { profile, crs, context, now } = {}
   const assessed = Boolean(schema && placed.length);
 
   const deviations = [];
-  if (evidence?.missingCaptureTime && withoutFullTime.length) deviations.push({ field: 'captureTime', state: evidence.missingCaptureTime, count: withoutFullTime.length, referenceOnly: evidence.referenceOnly.includes('missingCaptureTime') });
-  if (evidence?.missingDirection && withoutDirection) deviations.push({ field: 'direction', state: evidence.missingDirection, count: withoutDirection, referenceOnly: evidence.referenceOnly.includes('missingDirection') });
+  // A state confirmed by a real import (A6) is not a deviation; any other recorded state is.
+  if (evidence?.missingCaptureTime && evidence.missingCaptureTime !== 'imported' && withoutFullTime.length) deviations.push({ field: 'captureTime', state: evidence.missingCaptureTime, count: withoutFullTime.length, referenceOnly: evidence.referenceOnly.includes('missingCaptureTime') });
+  if (evidence?.missingDirection && evidence.missingDirection !== 'imported' && withoutDirection) deviations.push({ field: 'direction', state: evidence.missingDirection, count: withoutDirection, referenceOnly: evidence.referenceOnly.includes('missingDirection') });
 
   const nowMs = now === undefined || now === null ? Number.NaN : new Date(now).getTime();
   const recommendations = recommendationsFor({ profile, placed, assets, nowMs, captureItems, directionItems });

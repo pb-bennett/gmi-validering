@@ -39,6 +39,7 @@ import FieldValidationSidebar from '@/components/FieldValidationSidebar';
 import GmiEditWorkspace, { GMI_EDIT_INSPECTOR_ROOT_ID } from '@/components/gmi-edit/GmiEditWorkspace';
 import GmiConfirmDialog, { UnsavedGmiLayers } from '@/components/gmi-edit/GmiConfirmDialog';
 import { gmiEditRemovalBlock } from '@/lib/gmiEditSessions.mjs';
+import { createSessionLossGuard, sessionLossState } from '@/lib/sessionLoss.mjs';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
@@ -97,7 +98,7 @@ const Viewer3D = dynamic(() => import('@/components/3D/Viewer3D'), {
 });
 
 export default function Home() {
-  const { photoLayers, sourceReviews } = usePhotoSession();
+  const { photoLayers, sourceReviews, sourceWorkflowDrafts, photos: importDraftPhotos } = usePhotoSession();
   const hasPhotoLayers = photoLayers.length > 0;
   const hasSurveyData = useStore((state) => Boolean(state.data) || state.layerOrder.length > 0);
   const parsingStatus = useStore((state) => state.parsing.status);
@@ -228,6 +229,21 @@ export default function Home() {
   const effectiveWorkspacePhotos = useMemo(() => photoEditing ? workspacePhotos.map((photo) => effectivePhoto(photo, photoEdit)) : workspacePhotos,
     [photoEditing, workspacePhotos, photoEdit]);
   const changedIds = useMemo(() => new Set(photoEditing ? changedPhotoIds(photoEdit) : []), [photoEditing, photoEdit]);
+  // Roadmap D: one consolidated answer to «would a reload or reset lose work?», from the existing owners.
+  const gmiEditStatuses = useStore((state) => state.gmiEditStatus);
+  const sessionLoss = useMemo(() => sessionLossState({
+    surveyLayers: Object.keys(surveyLayers || {}).length, photoLayers, importPhotos: importDraftPhotos.length,
+    wizardChanges: Object.values(sourceWorkflowDrafts || {}).reduce((sum, draft) => sum + draft.ops.length, 0),
+    photoEdits: changedIds.size, rettingerLayers: Object.values(gmiEditStatuses || {}).filter((status) => status?.unsaved).length,
+  }), [surveyLayers, photoLayers, importDraftPhotos, sourceWorkflowDrafts, changedIds, gmiEditStatuses]);
+  // The native warning on reload and tab close, attached only while the session holds something meaningful.
+  const sessionLossGuard = useRef(null);
+  useEffect(() => {
+    const guard = createSessionLossGuard(window);
+    sessionLossGuard.current = guard;
+    return () => { guard.dispose(); sessionLossGuard.current = null; };
+  }, []);
+  useEffect(() => { sessionLossGuard.current?.update(sessionLoss.meaningful); }, [sessionLoss.meaningful]);
   // Combined-delivery decisions (M8) are read from the session like the photos, on every publish.
   const workspaceDelivery = useMemo(() => photoLayers.some((layer) => layer.id === photoWorkspace.layerId)
     ? photoSession.getLayerDelivery(photoWorkspace.layerId) : null, [photoLayers, photoWorkspace.layerId]);
@@ -507,9 +523,7 @@ export default function Home() {
     setPhotoImport(null);
     useStore.getState().toggleFieldValidation(false);
     openPhotoLayer(result.layer.id, null, null, { fit: !append && result.outcome.placed > 0 });
-    if (result.placementError) notifyPhoto('Bildene er lagt til, men posisjonene ble ikke brukt. Kontroller kildene i fotolaget.', 'error',
-      { label: 'Koble og posisjoner bilder…', run: () => setPhotoSourceWorkflow({ layerId: result.layer.id }) });
-    else notifyPhoto(`${append ? `${result.addedCount} bilder er lagt til.` : 'Fotolaget er opprettet.'} ${result.outcome.placed} av ${result.outcome.total} bilder er plassert.`);
+    notifyPhoto(`${append ? `${result.addedCount} bilder er lagt til.` : 'Fotolaget er opprettet.'} ${result.outcome.placed} av ${result.outcome.total} bilder er plassert.`);
   };
   const onPhotoPositionsApplied = ({ layerId, initialPlacement, acceptedIds }) => {
     if (layerId === workspaceLayer?.id && initialPlacement && acceptedIds.length) requestPhotoFit(layerId);
@@ -715,7 +729,13 @@ export default function Home() {
   // The GMI decision comes first: a reset that would discard unsaved corrections is refused before any FOTO or page
   // state is touched, so cancelling leaves everything exactly as it was. Only an explicit confirmation discards.
   // User-initiated reset: unsubmitted Rettinger form values are decided first, then staged corrections (handleReset).
-  const requestReset = () => guardGmiEditDraft(() => handleReset());
+  // D: an empty session resets at once; otherwise one confirmation lists what would be lost. Staged Rettinger keep their
+  // stronger discard path inside the same dialog. Cancelling leaves everything exactly as it was.
+  const requestReset = () => guardGmiEditDraft(() => {
+    const blocked = gmiEditRemovalBlock(null);
+    if (blocked || sessionLoss.meaningful) { setResetConfirm({ layers: blocked?.layers || [], items: sessionLoss.items }); return; }
+    handleReset();
+  });
   const handleReset = ({ discardGmiEdits = false } = {}) => {
     const blocked = gmiEditRemovalBlock(null, { discardGmiEdits });
     if (blocked) { setResetConfirm({ layers: blocked.layers }); return; }
@@ -750,7 +770,7 @@ export default function Home() {
       {photoImport && <PhotoImportWizard context={photoImport} onClose={closePhotos} onComplete={completePhotoImport} openerRef={photoTriggerRef}
         loadedSources={loadedGmiLayers} onLoadedSource={attachLoadedGmi} />}
       {sourceWorkflowLayer && !photoImport && <PhotoPositioningWizard layer={sourceWorkflowLayer}
-        photos={photoSession.getLayerPhotos(sourceWorkflowLayer.id)} review={sourceReviews[sourceWorkflowLayer.id]}
+        photos={photoSession.getLayerPhotos(sourceWorkflowLayer.id)} review={sourceReviews[sourceWorkflowLayer.id]} draft={sourceWorkflowDrafts?.[sourceWorkflowLayer.id] || null}
         initialSourceId={photoSourceWorkflow.sourceId} focusedPhotoId={photoSourceWorkflow.photoId}
         loadedSources={loadedGmiLayers} loadedSourceInput={loadedGmiInput} onApplied={onPhotoPositionsApplied} onClose={closePhotoSources} />}
       {workspaceLayer && !photoImport && photoDialog === 'info' && <PhotoSourcesInfoDialog layer={workspaceLayer} photos={workspacePhotos}
@@ -787,11 +807,15 @@ export default function Home() {
             else abandonPhotoEdits(ticket);
           } else savePhotoEdits(photoBoundary.then);
         }} />}
-      {resetConfirm && <GmiConfirmDialog title="Nullstille og forkaste rettinger?" confirmLabel="Forkast rettinger og nullstill" testId="reset"
-        onCancel={() => setResetConfirm(null)} onConfirm={() => handleReset({ discardGmiEdits: true })}>
-        <p>Disse GMI-lagene har rettinger som ikke er lastet ned som revidert GMI:</p>
-        <UnsavedGmiLayers layers={resetConfirm.layers} names={Object.fromEntries(Object.values(surveyLayers).map((layer) => [layer.id, layer.name]))} />
-        <p>Nullstiller du, fjernes alle lag og rettingene forkastes. Velg «Avbryt» for å beholde alt og laste ned først.</p>
+      {resetConfirm && <GmiConfirmDialog title={resetConfirm.layers.length ? 'Nullstille og forkaste rettinger?' : 'Nullstille økten?'}
+        confirmLabel={resetConfirm.layers.length ? 'Forkast rettinger og nullstill' : 'Nullstill'} testId="reset"
+        onCancel={() => setResetConfirm(null)} onConfirm={() => handleReset({ discardGmiEdits: resetConfirm.layers.length > 0 })}>
+        {resetConfirm.items?.length > 0 && <p data-reset-loss>Dette forsvinner fra økten: {resetConfirm.items.map((item) => item.text).join(' · ')}.</p>}
+        {resetConfirm.layers.length > 0 ? <>
+          <p>Disse GMI-lagene har rettinger som ikke er lastet ned som revidert GMI:</p>
+          <UnsavedGmiLayers layers={resetConfirm.layers} names={Object.fromEntries(Object.values(surveyLayers).map((layer) => [layer.id, layer.name]))} />
+          <p>Nullstiller du, fjernes alle lag og rettingene forkastes. Velg «Avbryt» for å beholde alt og laste ned først.</p>
+        </> : <p>Originalfilene på disken beholdes, men må lastes inn på nytt.</p>}
       </GmiConfirmDialog>}
       {/* Floating Stats Button */}
       {!workspaceLayer && !(layerDataTableOpen || dockedInspectorOpen || analysisOpen) && (
@@ -1020,7 +1044,9 @@ export default function Home() {
                       colourMode: photoWorkspace.colourMode, onColourModeChange: (value) => dispatchPhotoWorkspace({ type: 'map-colour', value }),
                       delivery: shownDelivery, onToggleDelivery: toggleWorkspaceDelivery,
                       onEditPlacement: () => runWorkspaceTool('edit'),
-                      zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null } : null}
+                      zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null,
+                      // A8: photos hidden with the eye control; the selection and an open preview survive until shown again.
+                      hidden: !workspaceLayer.visible } : null}
                     onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
                     photoFitRequest={photoFitRequest?.layerId === workspaceLayer?.id ? photoFitRequest : null} onPhotoFitHandled={onPhotoFitHandled}
                     photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,

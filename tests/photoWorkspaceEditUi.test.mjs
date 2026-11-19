@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { reloadAcceptedSession } from './helpers/sessionReset.mjs';
 import test from 'node:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -606,7 +607,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await clickText(browser, 'Lagre endringer', 'document.querySelector(".photo-edit-boundary")');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         assert.equal(exceptions().length, 0, JSON.stringify(exceptions().map((event) => event.params.exceptionDetails.text)));
-        await browser.send('Page.reload');
+        await reloadAcceptedSession(browser);
         await browser.waitFor('document.readyState === "complete"');
         assert.equal(await browser.evaluate('localStorage.getItem("gmi-photo-map-display")'), 'thumbnails');
       });

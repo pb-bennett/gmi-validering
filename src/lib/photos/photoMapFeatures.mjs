@@ -37,7 +37,7 @@ export function photoLayerMapFit(photos) {
   const span = photoPositionDistance(southWest, northEast);
   if (span === null) return null;
   const bounds = [[southWest.latitude, southWest.longitude], [northEast.latitude, northEast.longitude]];
-  return span < 10 ? { bounds, zoom: 18 } : { bounds, maxZoom: 19 };
+  return span < 10 ? { bounds, zoom: 18 } : { bounds, maxZoom: 20 };
 }
 
 export function resolvePhotoLocate(session, request) {

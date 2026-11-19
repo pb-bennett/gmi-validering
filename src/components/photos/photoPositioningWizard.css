@@ -2,7 +2,6 @@
    .photo-import-heading, .photo-import-step-body, .photo-import-footer) and source cards (.photo-import-source).
    Only the content specific to linking and position review is styled here. */
 .photo-positioning-wizard [role="alert"] { color: #9b2c23; }
-.photo-positioning-wizard .photo-source-saved { margin: 0; padding: .4rem 1rem; border-bottom: 1px solid var(--gmi-border); background: var(--gmi-surface-soft); color: var(--gmi-text-muted); flex-shrink: 0; font-size: 12px; }
 .photo-positioning-step { max-width: 1040px; font-size: 13px; }
 .photo-positioning-step > section > p, .photo-positioning-step > p { margin: 10px 0; }
 .photo-positioning-subheading { margin: 18px 0 8px; font-size: 14px; font-weight: 600; color: var(--gmi-navy); }
@@ -66,16 +65,6 @@
 /* Koblinger: what the source gives, then the two separate commitments. */
 .photo-positioning-links { display: grid; gap: 14px; align-content: start; }
 .photo-positioning-step > .photo-positioning-links > p { margin: 0; }
-.photo-positioning-stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
-.photo-positioning-stages > li { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--gmi-border-strong); border-radius: 10px; background: var(--gmi-surface); }
-.photo-positioning-stages > li[data-stage-state='current'] { border-color: var(--gmi-interactive); background: var(--gmi-cyan-soft); box-shadow: inset 3px 0 0 var(--gmi-interactive); }
-.photo-positioning-stages > li[data-stage-state='next'] { color: var(--gmi-text-muted); background: var(--gmi-surface-soft); border-style: dashed; }
-.photo-positioning-stages strong { display: block; font-size: 14px; font-weight: 600; color: var(--gmi-navy); }
-.photo-positioning-stages > li[data-stage-state='next'] strong { color: var(--gmi-text-muted); }
-.photo-positioning-stages p { margin: 2px 0 0; font-size: 12.5px; }
-.photo-positioning-stage-marker { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; border: 1.5px solid currentColor; font-size: 12px; font-weight: 700; color: var(--gmi-text-muted); }
-.photo-positioning-stages > li[data-stage-state='current'] > .photo-positioning-stage-marker { border-color: var(--gmi-interactive); background: var(--gmi-interactive); color: #fff; }
-.photo-positioning-stages > li[data-stage-state='done'] > .photo-positioning-stage-marker { border: 0; color: #245d41; }
 .photo-source-inventory { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; margin: 8px 0 0; }
 .photo-source-inventory > .photo-import-source { min-width: 0; margin-bottom: 0; }
 .photo-source-filename, .photo-source-removal { overflow-wrap: anywhere; }
@@ -111,3 +100,15 @@
 .photo-positioning-wizard.photo-collection-dialog .gmi-compact-button.gmi-edit-destructive:hover:not(:disabled):not([aria-disabled='true']) { color: var(--gmi-validation-error-text); background: var(--gmi-validation-error-bg); }
 .photo-positioning-wizard .gmi-edit-confirm-dialog { border-color: var(--gmi-border-strong); border-radius: 16px; background: var(--gmi-surface); color: var(--gmi-text); }
 .photo-positioning-wizard .gmi-edit-confirm-dialog::backdrop { background: color-mix(in srgb, var(--gmi-ink) 40%, transparent); }
+
+/* B3: staged changes in Kilder, the Kontroll sections and the saved receipt. Neutral: none of it is a status. */
+.photo-source-staged-tag { display: inline-block; margin-left: 8px; padding: 0 8px; border: 1px solid var(--gmi-interactive); border-radius: 999px; background: var(--gmi-cyan-soft); color: var(--gmi-navy); font-size: 11.5px; font-weight: 600; }
+.photo-positioning-stage-note { color: var(--gmi-text-muted); }
+.photo-positioning-kontroll { display: grid; gap: 12px; }
+.photo-positioning-kontroll-section { display: grid; gap: 4px; padding: 10px 14px; border: 1px solid var(--gmi-border); border-radius: 12px; background: var(--gmi-surface); }
+.photo-positioning-kontroll-section h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--gmi-navy); }
+.photo-positioning-kontroll-section p, .photo-positioning-kontroll-section ul { margin: 0; }
+.photo-positioning-kontroll-section li strong { font-weight: 600; overflow-wrap: anywhere; }
+.photo-positioning-receipt { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.photo-positioning-receipt li { display: flex; align-items: flex-start; gap: 6px; overflow-wrap: anywhere; }
+.photo-positioning-receipt svg { flex: none; margin-top: 2px; color: var(--gmi-interactive); }

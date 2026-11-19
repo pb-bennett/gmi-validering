@@ -36,7 +36,9 @@ test('FOTO fit uses only valid accepted positions, with zoom 18 for a point or a
   assert.deepEqual(photoLayerMapFit([placed({}), placed({}), invalid]), { bounds: [[59, 10], [59, 10]], zoom: 18 });
   assert.deepEqual(photoLayerMapFit([placed({ latitude: 59.00008 }), placed({})]), { bounds: [[59, 10], [59.00008, 10]], zoom: 18 });
   assert.deepEqual(photoLayerMapFit([placed({ longitude: 10.001 }), placed({ latitude: 59.0001 })]),
-    { bounds: [[59, 10], [59.0001, 10.001]], maxZoom: 19 });
+    { bounds: [[59, 10], [59.0001, 10.001]], maxZoom: 20 });
+  // Just above the 10 m boundary (≈10.6 m) the general cap applies instead of the fixed point zoom.
+  assert.deepEqual(photoLayerMapFit([placed({ latitude: 59.000095 }), placed({})]), { bounds: [[59, 10], [59.000095, 10]], maxZoom: 20 });
 });
 
 test('automatic FOTO fit is wired only to positioned creation and successful initial source placement', async () => {
@@ -47,8 +49,10 @@ test('automatic FOTO fit is wired only to positioned creation and successful ini
   assert.match(page, /if \(layerId === workspaceLayer\?\.id && initialPlacement && acceptedIds\.length\) requestPhotoFit\(layerId\)/);
   assert.equal([...page.matchAll(/requestPhotoFit\(/g)].length, 2);
   assert.match(wizard, /const initialPlacement = !photoSession\.getLayerPhotos\(layer\.id\)\.some\(\(photo\) => photo\.spatial\.current\)/);
-  assert.match(wizard, /if \(result\.ok\) \{\s*onApplied\?\.\(\{ \.\.\.result, layerId: layer\.id, initialPlacement \}\)/);
-  assert.equal([...wizard.matchAll(/onApplied\?\.\(/g)].length, 1, 'connection-only completion never reports positions applied');
+  // B3: the saved transaction's result drives the fit when the wizard is closed from «Endringer lagret».
+  assert.match(wizard, /setSaved\(\{ \.\.\.result, layerId: layer\.id, initialPlacement \}\)/);
+  assert.match(wizard, /const close = \(\) => \{\s*if \(saved\) onApplied\?\.\(saved\);/);
+  assert.equal([...wizard.matchAll(/onApplied\?\.\(/g)].length, 1, 'only a saved transaction is reported; connection-only has no accepted ids, so no fit');
   assert.match(controller, /\[map, fitRequest, onFitHandled\]/);
   assert.match(controller, /\[map, panRequest\]/);
   assert.match(controller, /map\.panInside\(/);

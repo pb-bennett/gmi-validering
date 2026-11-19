@@ -413,7 +413,24 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         await browser.evaluate('document.querySelector(".gmi-workspace-close").click()');
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
         for (const [key, occurrence] of [['solo1', '1 av 2'], ['solo2', '2 av 2']]) {
-          await click(await elementCentre(browser, `document.querySelector('.leaflet-marker-icon[data-photo-id="${ids[key]}"]')`));
+          const marker = `document.querySelector('.leaflet-marker-icon[data-photo-id="${ids[key]}"]')`;
+          await browser.waitFor(marker);
+          // Paging and resizing the stack popup can pan a different placement partly out of the viewport.
+          // Use the main-map zoom control to bring it into view before exercising the real marker hit target.
+          const point = await elementCentre(browser, marker);
+          if (await hitAt(point) !== ids[key]) {
+            await browser.evaluate('document.querySelector(".leaflet-control-zoom-out").click()');
+            await browser.waitFor(`(() => {
+              const icon = ${marker};
+              const r = icon?.getBoundingClientRect();
+              return r && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('.leaflet-marker-icon') === icon
+                && !document.querySelector('.leaflet-zoom-anim');
+            })()`);
+          }
+          const visiblePoint = await elementCentre(browser, marker);
+          assert.equal(await hitAt(visiblePoint), ids[key], `${key} is a clickable thumbnail on the main map`);
+          assert(await browser.evaluate(`${marker}.classList.contains('photo-thumb-marker')`));
+          await click(visiblePoint);
           await browser.waitFor(`document.querySelector('.photo-map-popup')?.dataset.photoId === ${JSON.stringify(ids[key])}`);
           assert.match(await browser.evaluate('document.querySelector(".photo-map-popup .photo-occurrence-context").innerText'), /Flere plasseringer.*Samme bilde/);
           assert((await browser.evaluate('document.querySelector(".photo-map-popup .photo-occurrence-context").innerText')).includes(occurrence));

@@ -213,8 +213,25 @@ test('filename editor: live sources, checkboxes, manual choices, reset, limits a
       await browser.waitFor(`${editor}.querySelector('[data-export-filename-message]')?.textContent === 'Filnavnet er reservert i Windows.'`);
       assert.equal(await advance(), true);
       assert.equal(await browser.evaluate(`${field}.getAttribute('aria-invalid')`), 'true');
-      await click(browser, 'Bruk forslag');
+      // A3: a timestamp-only name is valid. The empty field stays visible with its placeholder, and a
+      // non-blocking recommendation (not aria-invalid) asks for a descriptive part.
       await toggle('Tidsstempel', true);
+      await setValue(browser, field, '');
+      await browser.waitFor(`${editor}.querySelector('[data-export-filename-recommendation]')`);
+      const empty = await browser.evaluate(`(() => { const input = ${field}; const style = getComputedStyle(input, '::placeholder');
+        return { invalid: input.getAttribute('aria-invalid'), placeholder: input.placeholder, width: input.getBoundingClientRect().width,
+          message: Boolean(${editor}.querySelector('[data-export-filename-message]')), placeholderColor: style.color,
+          recommendation: ${editor}.querySelector('[data-export-filename-recommendation]').textContent.trim() }; })()`);
+      assert.equal(empty.invalid, null);
+      assert.equal(empty.message, false);
+      assert.equal(empty.placeholder, 'beskrivende navn');
+      assert(empty.width > 60, `the empty field keeps the placeholder's width (${empty.width}px)`);
+      assert.equal(empty.placeholderColor, 'rgb(69, 85, 108)', 'placeholder uses --gmi-text-muted (≥4.5:1 on the cyan field)');
+      assert.equal(empty.recommendation, 'Filnavnet har ingen beskrivende del. Vi anbefaler et navn som beskriver leveransen.');
+      assert((await description()).includes(empty.recommendation));
+      assert.equal(await advance(), false, 'the recommendation does not block');
+      await click(browser, 'Bruk forslag');
+      assert.equal(await browser.evaluate(`Boolean(${editor}.querySelector('[data-export-filename-recommendation]'))`), false);
       await review(browser); assert.equal(await status(browser), 'ready'); await click(browser, 'Neste');
       assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-filename]').textContent`), /^\d{8}-\d{4}-Syntetisk M10\.gmi$/);
       await back(browser);
@@ -381,8 +398,10 @@ test('FOTO-first combined export uses automatic and manual verified bindings and
       await browser.evaluate(`${sourceWizard}.querySelector('input[name=photo-external-source][value=gmi]').click()`);
       await click(browser, 'Bruk Manual S2.gmi', sourceWizard);
       await browser.waitFor(`${sourceWizard}.innerText.includes('Kilden kobles til GMI-laget «Manual S2.gmi».')`);
+      // B: a rebinding alone is a connection-only transaction: saved with «Lagre endringer», then closed from its receipt.
       await savePhotoSource(browser, 'gmi');
-      await click(browser, 'Fullfør', sourceWizard);
+      assert.match(await browser.evaluate(`${sourceWizard}.querySelector('[data-positioning-receipt]').innerText`), /Koblet til lastet GMI-lag: Manual S2.gmi/);
+      await click(browser, 'Lukk', sourceWizard);
       await browser.waitFor(`!${sourceWizard}`);
       assert.deepEqual(await photoState(), beforeRebind);
       await content();
@@ -799,7 +818,9 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         const entries = unzipSync(output.bytes), gmi = Object.keys(entries).find((name) => name.endsWith('.gmi'));
         assert.equal(strFromU8(entries[gmi]), strFromU8(original).replace('h:1(link:"Attachments\\shared.jpg") ', '').replace('Punkt 1', 'M10 corrected'));
         assert.equal(Object.keys(entries).length, 3); assert(!Object.keys(entries).some((name) => /rapport|manifest/.test(name)));
-        assert.equal(await browser.evaluate(`(() => {const event=new Event('beforeunload',{cancelable:true});window.dispatchEvent(event);return event.defaultPrevented;})()`), false, 'successful combined handoff clears only the exported field state');
+        // DD1: the loaded files themselves keep unload guarded, so the Rettinger-specific release after the combined
+        // handoff is covered by the gmiEditSessions unit tests rather than this unload probe.
+        assert.equal(await browser.evaluate(`(() => {const event=new Event('beforeunload',{cancelable:true});window.dispatchEvent(event);return event.defaultPrevented;})()`), true, 'loaded files still guard unload (DD1)');
         await back(browser);
       });
 

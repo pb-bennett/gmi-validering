@@ -10,6 +10,7 @@ const timeText = (value, provenance) => {
   const time = formatPhotoCaptureTime(value, provenance);
   return time ? `${time.text}${time.notes.length ? ` · ${time.notes.join(' · ')}` : ''}` : 'Ingen';
 };
+const proposalTag = (row) => row.option === 'complete' ? 'Fullstendig' : row.proposedValue?.precision === 'date' ? 'Kun dato' : 'Ufullstendig';
 const byAsset = (a, b) => (a.assetId < b.assetId ? -1 : a.assetId > b.assetId ? 1 : 0);
 
 // GML capture-time choices for one M2 reconciliation plan, shared by the positioning wizard (Koblinger) and the import
@@ -20,6 +21,8 @@ export default function PhotoGmlCaptureTimeChoices({ plan, choices, onChange, th
   if (!plan) return null;
   const review = [...plan.conflicts, ...plan.reviewRows].sort(byAsset);
   const { complete, partial, partialHasMinute } = plan.options;
+  // A5: the compatible rows behind the two options, listed for inspection only. Each row's tag names the option covering it.
+  const proposals = [...plan.fill, ...plan.fillPartial, ...plan.completions].sort(byAsset);
   const pending = showPending && plan.pending.length > 0;
   if (!complete && !partial && !review.length && !pending) return null;
   const option = (key, label, count) => count > 0 && <label className="photo-gml-capture-choice">
@@ -35,6 +38,21 @@ export default function PhotoGmlCaptureTimeChoices({ plan, choices, onChange, th
     {pending && <p role="status">Leser opptakstid fra bildene …</p>}
     {option('complete', 'Bruk opptakstid fra GML', complete)}
     {option('partial', partialHasMinute ? 'Bruk ufullstendig opptakstid fra GML' : 'Bruk kun dato fra GML', partial)}
+    {proposals.length > 0 && <details className="photo-gml-capture-proposals" data-gml-capture-proposals={proposals.length}>
+      <summary>Vis forslag ({proposals.length})</summary>
+      <ul className="photo-gml-capture-list">{proposals.map((row) => {
+        const thumbnail = thumbnailFor(row.assetId);
+        return <li key={row.assetId} data-gml-capture-proposal={row.assetId} data-gml-capture-option={row.option}>
+          {thumbnail ? <img src={thumbnail} alt="" loading="lazy" /> : <span className="photo-gml-capture-thumbnail" aria-hidden="true" />}
+          <div>
+            <strong className="photo-gml-capture-file">{row.filename}</strong>
+            <span>Gjeldende: {timeText(row.current.value, row.current.provenance)}</span>
+            <span>GML: {timeText(row.proposedValue)}</span>
+            <span className="photo-gml-capture-tag">{proposalTag(row)}</span>
+          </div>
+        </li>;
+      })}</ul>
+    </details>}
     {review.length > 0 && <div className="photo-gml-capture-review gmi-validation-panel" data-validation-tone="warning" data-gml-capture-review={review.length}>
       <p className="photo-gml-capture-title"><WarningIcon size={16} weight="regular" aria-hidden="true" className="gmi-validation-accent" />
         <span><strong>SJEKK</strong> {title}</span></p>

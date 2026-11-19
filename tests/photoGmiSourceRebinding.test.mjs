@@ -8,6 +8,7 @@ import { createGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
 import { createLoadedGmiSources } from '../src/lib/photos/loadedGmiSource.mjs';
 import { buildGmiText, latin1Bytes } from './helpers/gmiHyperlinkRemovalFixtures.mjs';
 import { exportFixture, syntheticContext } from './helpers/photoExportFixtures.mjs';
+import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 const hyperlink = 'h:1(link:"Attachments\\shared.png") ';
 const text = buildGmiText({ points: [{ hyperlink }, { hyperlink }, { hyperlink }] });
@@ -23,7 +24,7 @@ async function setup() {
   const source = () => session.getLayer(layerId).spatialSources[0];
   const workflow = session.beginSourceWorkflow(layerId);
   assert(await session.stageLayerSource(layerId, file, 'gmi'));
-  assert(session.saveSourceWorkflowSource(workflow, review()).ok);
+  assert(saveStagedSource(session, workflow, review()).ok);
   session.endSourceWorkflow(workflow);
 
   const add = async (id, original = file, alter = (evidence) => evidence) => {
@@ -124,7 +125,7 @@ test('overlapping registrations with matching bytes stay ambiguous until a user 
   assert.deepEqual(reviewed.rebinding, { ...first, live: true });
   assert.strictEqual(f.source(), prior);
   const before = f.session.getLayerPhotos(f.layerId);
-  assert(f.session.saveSourceWorkflowSource(ticket, reviewed).ok);
+  assert(saveStagedSource(f.session, ticket, reviewed).ok);
   assert.deepEqual(f.source(), { ...prior, loadedBinding: { ...first, live: true } });
   assert.strictEqual(f.source().associationLedger, prior.associationLedger);
   assert.deepEqual(f.session.getLayerPhotos(f.layerId), before);
@@ -168,7 +169,7 @@ test('removed and replaced identities are refused at save, and a fresh import ca
   f.remove('survey');
   const third = await f.add('survey');
   assert.notEqual(third.inputId, second.inputId);
-  assert.deepEqual(f.session.saveSourceWorkflowSource(staged.ticket, staged.reviewed), { ok: false, error: 'loaded-source-unavailable' });
+  assert.deepEqual(saveStagedSource(f.session, staged.ticket, staged.reviewed), { ok: false, error: 'loaded-source-unavailable' });
   assert.deepEqual(f.source().loadedBinding, { ...first, live: false });
   assert(await f.associate('survey'));
   assert.deepEqual(f.source().loadedBinding, { ...third, live: true });

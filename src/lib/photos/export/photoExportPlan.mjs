@@ -128,6 +128,8 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   const estimatedCount = assets.filter((asset) => asset.metadata?.captureTime?.provenance?.estimated).length;
   const filenameAdvisory = filenameCaptureTimeAdvisory(assets.map((asset) => ({ assetId: asset.assetId, captureTime: asset.metadata?.captureTime })));
   if (filenameAdvisory) warnings.push(filenameAdvisory);
+  const technicalCount = assets.filter((asset) => asset.metadata?.captureTime?.provenance?.technical).length;
+  if (technicalCount) warnings.push({ code: 'capture-time-technical', message: `${technicalCount} bilder har teknisk utfylt tid. Den er ikke målt. Merkingen beholdes i appen; GML-filen tar ikke med selve merkingen.` });
   if (estimatedCount) warnings.push({ code: 'capture-time-estimated', message: `${estimatedCount} bilder har anslått dato. 12:00:00 eksporteres som teknisk standard, ikke målt opptakstid. Merkingen «Anslått» beholdes i appen. Denne GML-eksporten tar ikke med selve merkingen.` });
   const timezoneTransformCount = occurrences.filter((row) => /(?:Z|[+-]\d{2}:\d{2})$/.test(fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime) || '')).length;
   if (gemini) {

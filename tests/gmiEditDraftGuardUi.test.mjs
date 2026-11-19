@@ -133,7 +133,7 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
         await browser.waitFor(draftDialog);
         await u.clickButton('Forkast skjemaet', draftDialog);
         await browser.waitFor('document.querySelector(".photo-workspace-shell")');
-        assert.equal(await u.unloadBlocked(), false, 'nothing unsaved remains after the confirmed discard');
+        assert.equal(await u.unloadBlocked(), true, 'the loaded files and photos still guard unload (DD1); the discarded draft is checked below');
         // Back from FOTO: Rettinger resumes for the same layer, the discarded draft is gone, nothing was staged.
         await u.clickButton('Lukk FOTO');
         await browser.waitFor(`${workspace}?.querySelector('[data-gmi-edit-status]')?.innerText === 'Redigerbar'`);
@@ -217,9 +217,13 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
         await u.reset();
         await browser.waitFor(draftDialog);
         await u.clickButton('Forkast skjemaet', draftDialog);
+        // D: no staged corrections, so the second question is the ordinary session confirmation (DD1: loaded files count).
+        await browser.waitFor(resetDialog);
+        assert.equal(await browser.evaluate(`${resetDialog}.querySelector('h2').innerText`), 'Nullstille økten?');
+        assert.match(await browser.evaluate(`${resetDialog}.innerText`), /Dette forsvinner fra økten: 1 kartlag/);
+        await u.clickButton('Nullstill', resetDialog);
         await browser.waitFor('document.querySelector("input[type=file]") && !document.querySelector("[data-gmi-edit-action]")');
-        assert.equal(await browser.evaluate(`Boolean(${resetDialog})`), false, 'no staged edits: no second dialog');
-        assert.equal(await u.unloadBlocked(), false);
+        assert.equal(await u.unloadBlocked(), false, 'an empty session never warns');
       });
 
       await t.test('confirming both decisions resets only after the staged-corrections confirmation', async () => {

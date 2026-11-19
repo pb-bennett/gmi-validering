@@ -28,9 +28,12 @@ export const PHOTO_EXPORT_SCHEMA_REQUIREMENTS = freeze({
 });
 
 // Updated only by real imports, never by reasoning about them. referenceOnly marks a state seen in the
-// contractor file and not in app output: missing time worked there, which does not confirm it for this exporter.
+// contractor file and not in app output.
+// missingCaptureTime 'imported': 2026-11-19, a package from this exporter (preview at 0472c72) with 5 photos, 4 of them
+// with fotograferingstidspunkt omitted, imported into a real Gemini VA database in a tested setup (user report; GML not
+// patched). One database and one setup: GeoFoto was not part of this test, and missing direction and a renamed GML stay untested.
 export const PHOTO_EXPORT_IMPORT_EVIDENCE = freeze({
-  'gemini-legacy2019': { profile: 'imported', missingCaptureTime: 'unconfirmed', missingDirection: 'untested', renamedGml: 'untested', referenceOnly: Object.freeze(['missingCaptureTime']) },
+  'gemini-legacy2019': { profile: 'imported', missingCaptureTime: 'imported', missingDirection: 'untested', renamedGml: 'untested', referenceOnly: Object.freeze([]) },
   legacy2019: { profile: 'none' },
   asbuilt52: { profile: 'none' },
 });

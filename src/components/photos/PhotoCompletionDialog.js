@@ -39,7 +39,8 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
   const [focusOnArrival] = useState(Boolean(entry) || fromExport);
   const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState('');
-  const [dateUndo, setDateUndo] = useState(null);
+  // One undo per Opptakstid step (source, filename, technical, estimate), kept while the hub is open.
+  const [captureUndos, setCaptureUndos] = useState({});
 
   useEffect(() => {
     const dialog = ref.current, opener = openerRef?.current || document.activeElement;
@@ -81,7 +82,9 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
       onClose={(event) => { if (live.current && !event.currentTarget.open) onClose(); }}>
       <div className="photo-collection-frame">
         <header className="photo-collection-header border-b border-gmi-border">
-          <div className="min-w-0"><h2 id={`${id}-title`}>Fullfør opplysninger</h2><p className="truncate text-sm text-gmi-text-muted">{layer.name}</p></div>
+          {/* B6: a task hub, not a wizard; each action saves at once, so its save semantics are stated once here. */}
+          <div className="min-w-0"><h2 id={`${id}-title`}>Fullfør opplysninger</h2><p className="truncate text-sm text-gmi-text-muted">{layer.name}</p>
+            <p className="text-sm text-gmi-text-muted" data-completion-save-semantics>Endringer lagres i fotolaget med en gang.</p></div>
           <label className="photo-completion-target">Mål
             <select className="gmi-focus-ring" value={config.profile} onChange={(event) => { setMessage(''); onConfigChange({ profile: event.target.value }); }}>
               {PHOTO_COMPLETION_TARGETS.filter((target) => target.tier === 'primary').map((target) => <option key={target.value} value={target.value}>{target.label}</option>)}
@@ -98,7 +101,7 @@ export default function PhotoCompletionDialog({ layer, photos, config, onConfigC
             </div>)}
           </nav>
           <div className="photo-completion-panel">
-            {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} dateUndo={dateUndo} onDateUndo={setDateUndo} recommendations={completionRecommendations(readiness, 'captureTime')} readiness={readiness} reading={reading > 0} onEdit={setEditingId} />}
+            {task.key === 'captureTime' && <PhotoCompletionTimePanel {...panelProps('captureTime')} undos={captureUndos} onUndo={(step, token) => setCaptureUndos((previous) => ({ ...previous, [step]: token }))} recommendations={completionRecommendations(readiness, 'captureTime')} readiness={readiness} reading={reading > 0} onEdit={setEditingId} />}
             {task.key === 'direction' && <PhotoCompletionDirectionPanel {...panelProps('direction')} recommendations={completionRecommendations(readiness, 'direction')} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} />}
             {task.key === 'photographer' && <PhotoCompletionPhotographerPanel {...panelProps('photographer')} onEdit={setEditingId} />}
             {task.key === 'placement' && <PhotoCompletionPlacementPanel task={model.placement} title={task.label} requirementLabel={task.requirementLabel} placed={readiness.counts.placed} onOpenMap={(handoff) => onOpenMap({ ...handoff, selections })} onOpenSources={() => onOpenSources({ selections })} />}

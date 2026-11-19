@@ -7,6 +7,7 @@ import { gmiFile, gmiText, realGrammarFamilies, sevenGuid, sharedFilename, share
 import { gmiPointPosition, parseGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
 import { projectCoordinateToWgs84 } from '../src/lib/map/coordinateProjection.js';
 import { photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '../src/lib/photos/photoPositioning.mjs';
+import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const point = (longitude = 10) => ({ crs: 'EPSG:4326', longitude, latitude: 60 });
@@ -31,7 +32,7 @@ async function save(context, file = gmiFile(objects(2)), kind = 'gmi', ticket = 
   const { session, layer } = context;
   assert(await session.stageLayerSource(layer.id, file, kind));
   const review = session.getSnapshot().sourceReviews[layer.id];
-  assert(session.saveSourceWorkflowSource(ticket, review).ok);
+  assert(saveStagedSource(session, ticket, review).ok);
   return ticket;
 }
 function apply(context, ticket, kind = 'gmi') {
@@ -118,7 +119,7 @@ for (const kind of ['manual', 'exif', 'gml', 'gmi']) test(`accepted ${kind} curr
   const current = session.getPhoto(ids[0]).spatial.current;
   if (kind === 'gmi') {
     session.recheckLayerSource(layer.id, session.getLayer(layer.id).spatialSources[0].id);
-    assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+    assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
   } else await save(context, gmiFile(objects(1)), 'gmi', ticket);
   assert.strictEqual(session.getPhoto(ids[0]).spatial.current, current);
   assert.equal(session.reviewSourceWorkflowPositions(ticket).rows[0].defaultChoice, '');
@@ -143,7 +144,7 @@ test('EXIF arrival, GML attachment and recheck preserve reviewed GMI and deliber
   choices[plan.rows[0].photoId] = plan.rows[0].options.find((option) => option.kind === 'exif').id;
   choices[plan.rows[1].photoId] = '';
   session.recheckLayerSource(layer.id, session.getLayer(layer.id).spatialSources[0].id);
-  assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
   next = session.reviewSourceWorkflowPositions(ticket);
   assert.deepEqual(photoSourcePositionChoices(next, plan, choices), choices);
   assert(session.getLayerPhotos(layer.id).every((photo) => photo.spatial.current === null));
@@ -288,13 +289,13 @@ test('rechecks keep occurrence IDs; removal is not silently undone by recheck', 
   const source = session.getLayer(layer.id).spatialSources[0], before = session.getLayer(layer.id).photoIds;
   for (let count = 0; count < 3; count++) {
     session.recheckLayerSource(layer.id, source.id);
-    assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+    assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
     assert.strictEqual(session.getLayer(layer.id).photoIds, before);
   }
   session.removeLayerPhotos(layer.id, [before[0]], { confirmed: true });
   const next = session.beginSourceWorkflow(layer.id);
   session.recheckLayerSource(layer.id, source.id);
-  assert(session.saveSourceWorkflowSource(next, session.getSnapshot().sourceReviews[layer.id]).ok);
+  assert(saveStagedSource(session, next, session.getSnapshot().sourceReviews[layer.id]).ok);
   assert.deepEqual(session.getLayer(layer.id).photoIds, [before[1]]);
   session.clear();
 });
@@ -330,7 +331,7 @@ test('stale source checkpoint with repeated references retains neither source no
   const review = session.getSnapshot().sourceReviews[layer.id];
   session.beginImport(layer.id);
   session.importFiles([new File(['other'], 'b.jpg')]); session.appendImport();
-  assert.equal(session.saveSourceWorkflowSource(ticket, review).ok, false);
+  assert.equal(saveStagedSource(session, ticket, review).ok, false);
   assert.equal(session.getLayer(layer.id).photoCount, 2);
   assert.equal(session.getLayer(layer.id).spatialSources.length, 0);
   assert.equal(session.getPhoto(ids[0]).occurrence, null);

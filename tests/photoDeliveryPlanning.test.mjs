@@ -9,6 +9,7 @@ import { PHOTO_DELIVERY_COLOURS, PHOTO_DELIVERY_INK, PHOTO_POSITION_SOURCES, pho
 import { applyPhotoDeliveryChoice, photoDeliveryDestination, photoDeliveryDestinationCounts, photoDeliveryOptions, photoDeliveryShortLabel,
   photoDeliveryToggleTarget, photoDeliveryUnavailableReason, photoStackDeliverySummary, togglePhotoDelivery } from '../src/lib/photos/photoDeliveryChoice.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
+import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const point = (longitude = 10) => ({ crs: 'EPSG:4326', longitude, latitude: 60 });
@@ -34,7 +35,7 @@ async function setup() {
   const binding = { layerId: 'survey-1', datasetRevision: 'rev-1', inputId: 'input-1', filename: 'leveranse.gmi' };
   const ticket = session.beginSourceWorkflow(layer.id);
   assert(await session.stageLayerSource(layer.id, { binding, read: () => parseGmiPhotoSource(gmi), isLive: () => live }, 'gmi'));
-  assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
   session.endSourceWorkflow(ticket);
   const photos = () => session.getLayerPhotos(layer.id);
   const byObject = (guid) => photos().find((photo) => photo.occurrence?.object.guid === guid);

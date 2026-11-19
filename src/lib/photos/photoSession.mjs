@@ -9,12 +9,13 @@ import { acceptManualPhotoDirection, acceptEvidencePhotoDirection, emptyDirectio
 import { planEvidenceAdoption } from './photoEvidenceAdoption.mjs';
 import { planAutoCaptureTime, planAutoDirection, planAutoPhotographer } from './photoAutoMetadata.mjs';
 import { MANUAL_FILL_FIELDS, normalizeManualPhotoFill, planManualPhotoFill } from './photoManualFill.mjs';
-import { estimatedCaptureTime } from './photoEstimatedDates.mjs';
+import { estimatedCaptureTime, estimatedDateReviewSignature, photoEstimatedDateModel } from './photoEstimatedDates.mjs';
+import { captureCompletionSignature, planCaptureCompletion, selectedCaptureCompletionRows } from './photoCaptureCompletion.mjs';
 import { localCalendarDate, planFilenameCaptureSuggestions, selectedFilenameCaptureWrites } from './photoFilenameCaptureTime.mjs';
 import { gmlCaptureDecisionWrites, gmlCapturePlanSignature, planGmlCaptureTimeReconciliation, selectedGmlCaptureRows } from './photoGmlCaptureReconciliation.mjs';
 import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSource } from './photoPositionSources.mjs';
 import { equivalentGmiPhotoEvidence, gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
-import { planPhotoSourcePositions } from './photoPositioning.mjs';
+import { photoSourceEvidenceSignature, planPhotoSourcePositions, selectedPhotoSourcePositions } from './photoPositioning.mjs';
 import { PHOTO_DELIVERY_INTENTS, buildPhotoDeliverySnapshot, photoDeliveryEntry, photoLayerDelivery } from './photoDeliveryIntent.mjs';
 import { photoPositionDefaultsToGml, photoMoveProposesTransfer, planPhotoExclusion } from './photoDeliveryChoice.mjs';
 
@@ -22,10 +23,35 @@ export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
   photos: Object.freeze([]), selectedId: null, batchSelectedIds: Object.freeze([]),
   photoLayers: Object.freeze([]), lastImport: null,
   draftTargetLayerId: null, appendStatus: null, duplicateNames: Object.freeze([]), sourceReviews: Object.freeze({}),
-  loadedImport: null,
+  sourceWorkflowDrafts: Object.freeze({}), loadedImport: null,
   positioning: Object.freeze({ state: 'empty', source: null, errorCode: null, ledger: null }),
 });
 let fallbackId = 0;
+
+// B2: copy-on-write accepted data for a source-workflow draft. A draft runs the very cores a final save runs, against
+// these copies; `touched` records every key a core wrote, so the commit can swap exactly those keys and nothing else.
+class DraftMap extends Map {
+  constructor(base) {
+    super();
+    for (const [key, value] of base) super.set(key, value);
+    this.touched = new Set();
+  }
+  set(key, value) { this.touched?.add(key); return super.set(key, value); }
+  delete(key) { this.touched?.add(key); return super.delete(key); }
+}
+const ACCEPTED_MAPS = Object.freeze(['layers', 'assets', 'records', 'deliveryDecisions']);
+const commitFailed = () => ({ ok: false, error: 'commit-failed', message: 'Endringene kunne ikke lagres. Ingenting er endret.' });
+
+// A GMI occurrence can have a temporary photo id in the preview. Its association key is stable across both plans.
+const importPlacementPlan = (plan, placement) => {
+  const requests = importPlacementRequests(plan, placement);
+  const byId = new Map(plan.rows.map((row) => [row.photoId, row]));
+  const signature = JSON.stringify(requests.map(({ photoId, candidateId }) => {
+    const row = byId.get(photoId);
+    return [row.occurrence?.key ?? row.assetId, candidateId];
+  }));
+  return { requests, signature };
+};
 
 export function createPhotoSession({
   createThumbnail = createPhotoThumbnail,
@@ -40,12 +66,14 @@ export function createPhotoSession({
   yieldJob = () => new Promise((resolve) => setTimeout(resolve, 0)),
   sourceAdapters = {},
   today = () => localCalendarDate(),
+  // Test seam (B2a): called after each write of an atomic commit; a throw there must roll every write back.
+  commitFault = null,
 } = {}) {
   // Originals and browser resources deliberately live outside Zustand/React snapshots.
-  const records = new Map();
+  let records = new Map();
   // Assets own File, preview and shared EXIF/GML evidence. Records are occurrences:
   // current position, direction and exact referring point, with shared metadata views.
-  const assets = new Map();
+  let assets = new Map();
   // Map inspection previews: same decoder as thumbnails, bigger output, owned and released here with the asset.
   const displayPreviews = createDisplayPreviewCache({ urls, createPreview: (file, { signal }) => createThumbnail(file, {
     maxEdge: DISPLAY_PREVIEW_MAX_EDGE, quality: DISPLAY_PREVIEW_JPEG_QUALITY, signal }) });
@@ -56,7 +84,7 @@ export function createPhotoSession({
   let editSerial = 0;
   // Each asset has exactly one owner: the current import or one created FOTO layer.
   // Transfer changes membership, never copies the File or invalidates thumbnail work.
-  const layers = new Map();
+  let layers = new Map();
   let importIds = [];
   let batchSelectedIds = new Set();
   const listeners = new Set();
@@ -88,7 +116,7 @@ export function createPhotoSession({
   // writers are the two automatic defaults (GML positions adopted in the source workflow, a saved move away from the
   // originating GMI point), which are committed together with their position and never replace a stored decision
   // or an explicit choice.
-  const deliveryDecisions = new Map();
+  let deliveryDecisions = new Map();
   // Occurrences whose current delivery state the user chose explicitly, including a default state (GMI, Ikke valgt).
   // Presentation input for automatic defaults only; never part of the export snapshot.
   const deliveryChoiceIds = new Set();
@@ -104,6 +132,57 @@ export function createPhotoSession({
     return [...photoIds].filter((id) => photoPositionDefaultsToGml(delivery.byPhotoId[id]));
   };
   const includeAsGml = (ids) => { for (const id of ids) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true })); };
+  const failed = (error) => ({ ok: false, error });
+
+  // Runs fn against copies of the accepted data (seeded from `seed`, the live maps by default). Synchronous by
+  // contract: every closure reads these bindings, and the live maps are restored before anything else can run.
+  function inDraft(fn, seed = null) {
+    const live = { layers, records, assets, deliveryDecisions }, from = seed || live;
+    const state = Object.fromEntries(ACCEPTED_MAPS.map((name) => [name, new DraftMap(from[name])]));
+    ({ layers, records, assets, deliveryDecisions } = state);
+    try { return { result: fn(), state }; }
+    finally { ({ layers, records, assets, deliveryDecisions } = live); }
+  }
+  // Reads a draft state through the ordinary readers; never used to write.
+  function readDraft(state, fn) {
+    const live = { layers, records, assets, deliveryDecisions };
+    ({ layers, records, assets, deliveryDecisions } = state);
+    try { return fn(); } finally { ({ layers, records, assets, deliveryDecisions } = live); }
+  }
+
+  function commitDraftMaps(state, base = state, before = null) {
+    const maps = { layers, records, assets, deliveryDecisions };
+    const writes = ACCEPTED_MAPS.flatMap((name) => [...new Set([...base[name].touched, ...state[name].touched])].map((key) => {
+      const map = maps[name];
+      const baseline = before ? base[name] : map;
+      const [had, value] = before?.[name].get(key) ?? [baseline.has(key), baseline.get(key)];
+      return { map, key, had, value, has: state[name].has(key), after: state[name].get(key) };
+    }));
+    if (writes.some(({ map, key, had, value }) => map.has(key) !== had || map.get(key) !== value)) return failed('review-changed');
+    const done = [];
+    try {
+      for (const write of writes) {
+        done.push(write);
+        if (write.has) write.map.set(write.key, write.after); else write.map.delete(write.key);
+        commitFault?.(done.length);
+      }
+    } catch {
+      for (const { map, key, had, value } of done.reverse()) {
+        if (had) map.set(key, value); else map.delete(key);
+      }
+      return commitFailed();
+    }
+    return { ok: true };
+  }
+  // One candidate object per source entry (and per GMI association), so a draft re-derived from newer data offers the
+  // very candidates it reviewed and the existing identity checks keep their meaning.
+  const sourceCandidates = new WeakMap();
+  function cachedSourceValue(owner, key, create) {
+    let cache = sourceCandidates.get(owner);
+    if (!cache) sourceCandidates.set(owner, cache = new Map());
+    if (!cache.has(key)) cache.set(key, create());
+    return cache.get(key);
+  }
 
   function sourceWorkflowIsLive(ticket) {
     return Boolean(ticket && ticket.generation === generation && sourceWorkflows.get(ticket.layerId) === ticket
@@ -189,8 +268,8 @@ export function createPhotoSession({
     for (const match of ledger.matches) {
       if (match.status !== 'matched') continue;
       const entry = source.entries.find((item) => item.id === match.entryId);
-      const candidate = createPhotoCandidate({ ...entry, id: `${source.id}:${entry.id}`, kind: entry.kind || source.kind,
-        sourceId: source.id, sourceFilename: source.filename, sourceEntryId: entry.id });
+      const candidate = cachedSourceValue(source, entry.id, () => createPhotoCandidate({ ...entry, id: `${source.id}:${entry.id}`,
+        kind: entry.kind || source.kind, sourceId: source.id, sourceFilename: source.filename, sourceEntryId: entry.id }));
       updateAsset(match.photoId, (live) => {
         if (live.spatial.candidates.some((item) => item.sourceId === source.id && item.sourceEntryId === entry.id)) return {};
         const spatial = Object.freeze({ ...live.spatial, candidates: Object.freeze([...live.spatial.candidates, candidate]) });
@@ -242,10 +321,11 @@ export function createPhotoSession({
   // The one place metadata is accepted automatically. It runs before every publication, so no route that brings in
   // a source, a photo or an occurrence can miss it. An open Edit session owns its layer: its Save and Discard compare
   // against a fixed baseline, so the layer waits and catches up when the session ends.
-  function autoAcceptMetadata() {
+  function autoAcceptMetadata(onlyLayerId = null) {
     const acceptedAt = Date.now();
     let changed = false;
-    for (const [layerId, layer] of layers) {
+    const scope = onlyLayerId === null ? layers : [[onlyLayerId, layers.get(onlyLayerId)]];
+    for (const [layerId, layer] of scope) {
       if (editSessions.has(layerId)) continue;
       for (const id of layer.photoIds) {
         const record = records.get(id), asset = assets.get(record.assetId);
@@ -264,6 +344,11 @@ export function createPhotoSession({
   const appendPolicy = () => draftTargetLayerId ? photoAppendPolicy(importIds.map((id) => records.get(id)),
     assetPhotos(layers.get(draftTargetLayerId)?.photoIds || []), appendOverrideIds) : null;
   const skippedSpatial = () => immutable({ ...emptySpatial(), exifRead: { state: 'skipped-duplicate', errorCode: null } });
+  function refreshLayerCounts(layer) {
+    const counts = { ...photoSpatialCounts(layer.photoIds.map((id) => records.get(id))),
+      assetCount: assetIds(layer.photoIds).length };
+    if (Object.keys(counts).some((key) => counts[key] !== layer[key])) layers.set(layer.id, Object.freeze({ ...layer, ...counts }));
+  }
   const publish = () => {
     autoAcceptMetadata();
     const appendStatus = appendPolicy();
@@ -284,11 +369,7 @@ export function createPhotoSession({
     }
     if (positioning.source) positioning = Object.freeze({ ...positioning, ledger: matchPhotoReferences(positioning.source.entries,
       (appendStatus?.appendableIds || importIds).map((id) => records.get(id))) });
-    for (const [id, layer] of layers) {
-      const counts = { ...photoSpatialCounts(layer.photoIds.map((photoId) => records.get(photoId))),
-        assetCount: assetIds(layer.photoIds).length };
-      if (Object.keys(counts).some((key) => counts[key] !== layer[key])) layers.set(id, Object.freeze({ ...layer, ...counts }));
-    }
+    for (const layer of layers.values()) refreshLayerCounts(layer);
     for (const [id, review] of sourceReviews) {
       if (review.source && layers.has(id)) {
         const memberIds = layers.get(id).photoIds;
@@ -317,6 +398,10 @@ export function createPhotoSession({
       appendStatus,
       duplicateNames: duplicatePhotoNames(importIds.map((id) => records.get(id))),
       sourceReviews: Object.freeze(Object.fromEntries(sourceReviews)),
+      sourceWorkflowDrafts: Object.freeze(Object.fromEntries([...sourceWorkflows].flatMap(([layerId, ticket]) => {
+        const draft = sourceWorkflowDrafts.get(ticket);
+        return draft ? [[layerId, Object.freeze({ version: draft.version, ops: Object.freeze(draft.ops.map((op) => draftOpSummary(op))) })]] : [];
+      }))),
     });
     for (const listener of listeners) listener();
     if (resumedMetadata) void drainMetadata();
@@ -393,22 +478,28 @@ export function createPhotoSession({
     }
   }
 
-  function release(ids) {
+  function detachRecords(ids) {
     const candidates = assetIds(ids);
-    for (const id of ids) { records.delete(id); appendOverrideIds.delete(id); deliveryDecisions.delete(id); deliveryChoiceIds.delete(id); }
+    for (const id of ids) { records.delete(id); deliveryDecisions.delete(id); }
     const live = new Set([...records.values()].map((record) => record.assetId));
-    const removed = new Set(candidates.filter((id) => !live.has(id)));
+    const removed = new Map(candidates.filter((id) => !live.has(id)).map((id) => [id, assets.get(id)]));
+    for (const id of removed.keys()) assets.delete(id);
+    return removed;
+  }
+
+  function releaseResources(ids, removed) {
+    for (const id of ids) { appendOverrideIds.delete(id); deliveryChoiceIds.delete(id); }
     queue = queue.filter((job) => !removed.has(job.id));
     metadataQueue = metadataQueue.filter((job) => !removed.has(job.id));
     if (removed.has(activeMetadata?.id)) activeMetadata.cancelled = true;
     if (removed.has(activeJob?.id)) activeJob.controller.abort();
-    for (const id of removed) {
-      const record = assets.get(id);
-      if (record?.preview.thumbnailUrl) urls.revokeObjectURL(record.preview.thumbnailUrl);
+    for (const [id, asset] of removed) {
+      if (asset?.preview.thumbnailUrl) urls.revokeObjectURL(asset.preview.thumbnailUrl);
       displayPreviews.drop(id);
-      assets.delete(id);
     }
   }
+
+  function release(ids) { releaseResources(ids, detachRecords(ids)); }
 
   function clearImport() {
     loadedImport = null;
@@ -443,13 +534,15 @@ export function createPhotoSession({
         let record = peers.find((item) => item.occurrence?.key === key);
         if (record?.occurrence.sourceId === sourceId) continue;
         record = record || peers.find((item) => !item.occurrence) || makeOccurrence(assetId, occurrenceId(assetId, key));
-        const occurrence = immutable({ key, assetId, sourceId, sourceFingerprint: source.fingerprint,
-          sourceFilename: source.filename, objectKey: object.objectKey, object,
-          referenceIds: association.referenceIds, references: source.references.filter((ref) => association.referenceIds.includes(ref.id)),
-          matchMethods: association.matchMethods, ownerLayerId: layerId });
-        const candidate = createPhotoCandidate({ id: `gmi-position:${key}`, kind: 'gmi', sourceId,
-          sourceFilename: source.filename, sourceEntryId: association.id, ...position,
-          raw: { geometry: object.rawGeometry }, provenance: occurrence });
+        const { occurrence, candidate } = cachedSourceValue(associationLedger, `${layerId}|${sourceId}|${key}`, () => {
+          const occurrence = immutable({ key, assetId, sourceId, sourceFingerprint: source.fingerprint,
+            sourceFilename: source.filename, objectKey: object.objectKey, object,
+            referenceIds: association.referenceIds, references: source.references.filter((ref) => association.referenceIds.includes(ref.id)),
+            matchMethods: association.matchMethods, ownerLayerId: layerId });
+          return { occurrence, candidate: createPhotoCandidate({ id: `gmi-position:${key}`, kind: 'gmi', sourceId,
+            sourceFilename: source.filename, sourceEntryId: association.id, ...position,
+            raw: { geometry: object.rawGeometry }, provenance: occurrence }) };
+        });
         const updated = { ...record, occurrence, spatial: Object.freeze({ ...record.spatial,
           candidates: Object.freeze([...record.spatial.candidates.filter((item) => item.provenance?.key !== key), candidate]) }) };
         if (records.has(record.id)) replacements.set(record.id, updated);
@@ -518,36 +611,252 @@ export function createPhotoSession({
     }
     return written;
   }
-  // Saving a GML source in the positioning wizard: the reviewed plan and decision are revalidated against the live
-  // source and assets, then the source, its evidence and the chosen capture times are committed and published once.
-  // Without a plan nothing is adopted, which is also what declining every option means.
-  function commitLayerSource(layerId, captureTime = null) {
-    const layer = layers.get(layerId), review = sourceReviews.get(layerId);
-    if (!layer || review?.state !== 'ready' || review.source.kind === 'gmi') return { ok: false, error: 'source-changed' };
+  // The GML source save, shared by the positioning draft and the direct session API: every check runs before the
+  // first write, then the source, its evidence and the chosen capture times are written. The capture rows are
+  // re-planned here and must match the reviewed plan's signature. No publication and no review bookkeeping.
+  function attachGmlSourceCore(layerId, review, captureDecision = null, capturePlanSignature = null) {
+    const layer = layers.get(layerId);
+    // Any position source other than GMI (GML, or a registered future adapter) attaches its entries as candidates.
+    if (!layer || !review?.source || review.source.kind === 'gmi') return failed('source-changed');
+    if (review.recheck && !layer.spatialSources.includes(review.source)) return failed('source-removed');
+    if (!review.recheck && layer.spatialSources.some((source) => source.fingerprint === review.source.fingerprint)) return failed('duplicate-source');
+    try {
+      for (const match of matchPhotoReferences(review.source.entries, assetPhotos(layer.photoIds)).matches) {
+        if (match.status !== 'matched') continue;
+        const entry = review.source.entries.find((item) => item.id === match.entryId);
+        createPhotoCandidate({ ...entry, id: `${review.source.id}:${entry.id}`, kind: 'gml' });
+      }
+    } catch { return failed('invalid-source'); }
     let rows = [];
-    if (captureTime?.plan) {
-      const guard = captureTimePlans.get(captureTime.plan);
-      if (!guard || guard.layerId !== layerId || guard.source !== review.source || guard.recheck !== review.recheck
-        || guard.memberIds !== layer.photoIds || !sameCaptureStates(guard.states, captureStates(layer.photoIds))) return { ok: false, error: 'review-changed' };
+    if (capturePlanSignature) {
       const live = planGmlCaptureTimeReconciliation(assetPhotos(layer.photoIds), review.source);
-      if (gmlCapturePlanSignature(live) !== gmlCapturePlanSignature(captureTime.plan)) return { ok: false, error: 'review-changed' };
-      rows = selectedGmlCaptureRows(live, captureTime);
-    } else if (gmlCaptureDecisionWrites(captureTime)) return { ok: false, error: 'review-changed' };
+      if (gmlCapturePlanSignature(live) !== capturePlanSignature) return failed('review-changed');
+      rows = selectedGmlCaptureRows(live, captureDecision || undefined);
+    } else if (gmlCaptureDecisionWrites(captureDecision)) return failed('review-changed');
     const source = attachSource(review.source, layer.photoIds);
     const existing = layer.spatialSources.some((item) => item.id === source.id);
-    const sources = existing ? layer.spatialSources.map((item) => item.id === source.id ? source : item)
-      : [...layer.spatialSources, source];
-    layers.set(layerId, Object.freeze({ ...layer, spatialSources: Object.freeze(sources) }));
-    const captureTimeCount = applyGmlCaptureTimeRows(rows, layer.photoIds, 'positioning-wizard');
+    layers.set(layerId, Object.freeze({ ...layer, spatialSources: Object.freeze(existing
+      ? layer.spatialSources.map((item) => item.id === source.id ? source : item) : [...layer.spatialSources, source]) }));
+    return { ok: true, captureTimeCount: applyGmlCaptureTimeRows(rows, layer.photoIds, 'positioning-wizard') };
+  }
+  // Direct (non-wizard) GML save: the reviewed plan must still be the live one, then the core writes and one publication.
+  function commitLayerSource(layerId, captureTime = null) {
+    const layer = layers.get(layerId), review = sourceReviews.get(layerId);
+    if (!layer || review?.state !== 'ready' || review.source.kind === 'gmi') return failed('source-changed');
+    const { plan = null, ...decision } = captureTime || {};
+    if (plan) {
+      const guard = captureTimePlans.get(plan);
+      if (!guard || guard.layerId !== layerId || guard.source !== review.source || guard.recheck !== review.recheck
+        || guard.memberIds !== layer.photoIds || !sameCaptureStates(guard.states, captureStates(layer.photoIds))) return failed('review-changed');
+    }
+    const result = attachGmlSourceCore(layerId, review, captureTime ? decision : null, plan ? gmlCapturePlanSignature(plan) : null);
+    if (!result.ok) return result;
     sourceReviews.delete(layerId);
     sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
-    publish(); return { ok: true, captureTimeCount };
+    publish(); return result;
+  }
+
+  // The GMI source save (new source, recheck or verified rebinding), shared by the draft and the direct API.
+  function gmiAssociationsCore(layerId, review, associationLedger, occurrenceId = undefined) {
+    const layer = layers.get(layerId);
+    if (!layer || review?.source?.kind !== 'gmi') return failed('review-changed');
+    const current = layer.spatialSources.find((source) => source.id === review.source.id);
+    if (review.recheck && !current) return failed('source-removed');
+    const loaded = review.loadedInput;
+    if (loaded && !loaded.isLive(loaded.binding)) return failed('loaded-source-unavailable');
+    if (review.recheck && current !== review.source) return failed('review-changed');
+    if (review.rebinding) {
+      const verified = verifiedGmiBinding(current, loaded.source, loaded.binding, loaded.isLive);
+      if (verified.error) return failed(verified.error);
+      replaceBoundGmiSource(layer, verified.source);
+      return { ok: true, added: 0, updated: 0, objects: 0 };
+    }
+    const source = Object.freeze({ ...review.source, associationLedger });
+    if (!current && matchingGmiSources(layer, source.fingerprint).length) return failed('duplicate-source');
+    let plan;
+    try { plan = planGmiAssociations(layer, source, associationLedger, occurrenceId); }
+    catch { return failed('invalid-source'); }
+    commitGmiPlan(plan);
+    const objects = new Set([...plan.additions, ...plan.replacements.values()].map((record) => record.occurrence?.objectKey).filter(Boolean));
+    return { ok: true, added: plan.additions.length, updated: plan.replacements.size, objects: objects.size };
+  }
+  function removeGmiSourceCore(layerId, sourceId) {
+    const layer = layers.get(layerId);
+    if (!layer?.spatialSources.some((source) => source.id === sourceId && source.kind === 'gmi')) return failed('source-removed');
+    layers.set(layerId, Object.freeze({ ...layer,
+      spatialSources: Object.freeze(layer.spatialSources.filter((source) => source.id !== sourceId)) }));
+    return { ok: true };
+  }
+  // Explicitly selected source positions and their GML delivery default. Every request is checked against the state
+  // the plan was made from before the first write.
+  function acceptSourcePositionsCore(layerId, plan, requests) {
+    const layer = layers.get(layerId);
+    const seen = new Set(), gmlDefaultCandidates = [];
+    for (const request of requests) {
+      const row = plan.rows.find((item) => item.photoId === request.photoId);
+      const live = records.get(request.photoId);
+      const candidate = row?.options.find((item) => item.id === request.candidateId);
+      if (seen.has(request.photoId) || !live || !row || live.spatial.current !== row.current
+        || !candidate || !live.spatial.candidates.includes(candidate)
+        || candidate.status !== 'viable' || !isPhotoPosition(candidate.position)
+        || (['gml', 'gmi'].includes(candidate.kind) && !layer.spatialSources.some((source) => source.kind === candidate.kind && source.id === candidate.sourceId)))
+        return failed('review-changed');
+      seen.add(request.photoId);
+      if (candidate.kind === 'gml' || candidate.kind === 'exif') gmlDefaultCandidates.push(request.photoId);
+    }
+    const deliveryIds = gmlDeliveryDefaults(layer, gmlDefaultCandidates);
+    const acceptedAt = Date.now();
+    for (const request of requests) updateRecord(request.photoId, (live) => ({
+      spatial: acceptPhotoCandidate(live.spatial, request.candidateId, 'explicit-candidate', acceptedAt),
+    }));
+    includeAsGml(deliveryIds);
+    return { ok: true, acceptedIds: [...seen], deliveryIds };
+  }
+
+  // B2: the positioning wizard's draft, owned by its workflow ticket. Ops are declarative and replayed in order on
+  // copies of the live data; nothing accepted changes before commitSourceWorkflow. Closing the ticket discards it.
+  const sourceWorkflowDrafts = new WeakMap();
+  let draftOpSerial = 0;
+  function draftOf(ticket) {
+    let draft = sourceWorkflowDrafts.get(ticket);
+    if (!draft) sourceWorkflowDrafts.set(ticket, draft = { ops: [], version: 0, view: null });
+    return draft;
+  }
+  function runDraftOp(layerId, op) {
+    if (op.kind === 'gml') return attachGmlSourceCore(layerId, op.review, op.captureDecision, op.capturePlanSignature);
+    if (op.kind === 'gmi') return gmiAssociationsCore(layerId, op.review, op.associationLedger, op.occurrenceId);
+    if (op.kind === 'remove-gmi') return removeGmiSourceCore(layerId, op.sourceId);
+    return failed('unsupported-source');
+  }
+  function replayDraft(layerId, ops) {
+    const outcomes = [];
+    for (const op of ops) {
+      const outcome = runDraftOp(layerId, op);
+      if (!outcome.ok) return { ok: false, error: outcome.error, opId: op.id, outcomes };
+      outcomes.push(Object.freeze({ id: op.id, ...outcome }));
+    }
+    return { ok: true, outcomes };
+  }
+  // The live identities a draft view was derived from: its layer, each member occurrence and asset, and their delivery state.
+  function draftLiveKey(layerId) {
+    const layer = layers.get(layerId);
+    return [generation, layer, ...(layer?.photoIds || []).flatMap((id) => {
+      const record = records.get(id);
+      return [record, assets.get(record?.assetId), deliveryDecisions.get(id), deliveryChoiceIds.has(id)];
+    })];
+  }
+  const sameIdentities = (a, b) => a.length === b.length && a.every((item, index) => item === b[index]);
+  // The draft applied to copies of the current live data, re-derived only when the ops or those identities change.
+  function draftView(ticket) {
+    const draft = draftOf(ticket);
+    // Survey-layer binding liveness can change without a photo map changing.
+    const bindings = draft.ops.flatMap(({ review }) => {
+      const loaded = review?.loadedInput;
+      if (!loaded) return [];
+      const retained = review.source.loadedBinding;
+      return [loaded.isLive(loaded.binding), Boolean(retained && loaded.isLive(retained))];
+    });
+    const key = [...draftLiveKey(ticket.layerId), ...bindings];
+    if (draft.view && draft.view.version === draft.version && sameIdentities(draft.view.key, key)) return draft.view;
+    const live = { layers, records, assets, deliveryDecisions };
+    const { result, state } = inDraft(() => replayDraft(ticket.layerId, draft.ops));
+    // What every key the draft wrote held when the view was made; the commit swaps only these keys, and only if unchanged.
+    const before = Object.fromEntries(ACCEPTED_MAPS.map((name) => [name,
+      new Map([...state[name].touched].map((key) => [key, [live[name].has(key), live[name].get(key)]]))]));
+    draft.view = Object.freeze({ version: draft.version, key, state, before, outcome: result });
+    return draft.view;
+  }
+  const draftOpSummary = (op, outcome = null) => Object.freeze({ id: op.id, kind: op.kind, sourceKind: op.sourceKind, sourceId: op.sourceId,
+    filename: op.filename, recheck: Boolean(op.review?.recheck), rebinding: op.review?.rebinding || null,
+    captureDecision: op.captureDecision || null, captureTimeCount: outcome?.captureTimeCount || 0,
+    added: outcome?.added || 0, updated: outcome?.updated || 0, objects: outcome?.objects || 0 });
+  // GML direction evidence the draft brings that the automatic pass will adopt at publication (presentation count).
+  function draftDirectionAdoptions(view, layerId) {
+    return readDraft(view.state, () => (layers.get(layerId)?.photoIds || []).filter((id) => {
+      const record = records.get(id), asset = assets.get(record.assetId);
+      if (!view.state.assets.touched.has(record.assetId)) return false;
+      const planned = planAutoDirection(record.direction, asset.directionEvidence, { exifPending: asset.spatial.exifRead.state === 'pending', acceptedAt: 0 });
+      return Boolean(planned?.current?.basis?.evidenceId);
+    }).length);
   }
 
   function commitGmiPlan(plan) {
     for (const [id, record] of plan.replacements) records.set(id, record);
     for (const record of plan.additions) records.set(record.id, record);
     layers.set(plan.layer.id, plan.layer);
+  }
+
+  function applyLoadedGmiImportCore(review, { captureTimeWrites = [], gmlCaptureRows = [] } = {}) {
+    const guard = loadedPlans.get(review), target = layers.get(draftTargetLayerId);
+    const same = (a, b) => a.length === b.length && a.every((id, index) => id === b[index]);
+    if (!guard || guard.operation !== loadedImport || loadedImport?.state !== 'ready'
+      || !loadedImport.isLive(loadedImport.binding) || guard.positioning !== positioning
+      || review.targetLayerId !== draftTargetLayerId
+      || !same(guard.draftIds, importIds) || !same(guard.eligibleIds, appendPolicy()?.appendableIds || importIds)
+      || (draftTargetLayerId && (!target || target.photoIds !== guard.members || target.spatialSources !== guard.sources)))
+      return { ok: false, error: 'review-changed' };
+    if (!target && !review.includedIds.length) return { ok: false, error: 'empty-import' };
+    let name = 'Bilder', suffix = 1;
+    while ([...layers.values()].some((layer) => layer.name === name)) name = `Bilder (${++suffix})`;
+    const ids = Object.freeze([...(target?.photoIds || []), ...review.includedIds]);
+    const base = target || { id: `photo-layer-${createId()}`, type: 'FOTO', name, visible: true, createdAt: Date.now(), spatialSources: [] };
+    const layer = Object.freeze({ ...base, photoIds: ids, photoCount: ids.length });
+    let plan;
+    try {
+      // GML import is optional and remains candidate-only, as in ordinary import.
+      if (positioning.source) for (const match of matchPhotoReferences(positioning.source.entries, assetPhotos(review.includedIds)).matches) {
+        if (match.status === 'matched') createPhotoCandidate({ ...positioning.source.entries.find((entry) => entry.id === match.entryId), id: `preflight:${match.entryId}`, kind: 'gml' });
+      }
+      plan = planGmiAssociations(layer, Object.freeze({ ...review.source, associationLedger: review.associationLedger }), review.associationLedger);
+    } catch { return { ok: false, error: 'invalid-source' }; }
+    commitGmiPlan(plan);
+    if (positioning.source) {
+      const gml = attachSource(positioning.source, review.includedIds);
+      const committed = layers.get(layer.id);
+      layers.set(layer.id, Object.freeze({ ...committed, spatialSources: Object.freeze([...committed.spatialSources, gml]) }));
+    }
+    applyCaptureTimeWrites(captureTimeWrites, review.includedIds);
+    if (positioning.source) applyGmlCaptureTimeRows(gmlCaptureRows, review.includedIds, 'import-wizard');
+    return { ok: true, layer: layers.get(layer.id), sourceId: review.source.id };
+  }
+
+  function createLayerCore({ captureTimeWrites = [], gmlCaptureRows = [] } = {}) {
+    if (loadedImport || draftTargetLayerId || !importIds.length || ['pending', 'error'].includes(positioning.state)) return null;
+    const source = positioning.source;
+    const attached = source ? attachSource(source, importIds) : null;
+    let suffix = 1;
+    let name = 'Bilder';
+    const names = new Set(Array.from(layers.values(), (layer) => layer.name));
+    while (names.has(name)) name = `Bilder (${++suffix})`;
+    const layer = Object.freeze({
+      id: `photo-layer-${createId()}`, type: 'FOTO', name,
+      photoIds: Object.freeze([...importIds]), photoCount: importIds.length, assetCount: importIds.length,
+      assetIdsByPhotoId: Object.freeze(Object.fromEntries(importIds.map((id) => [id, records.get(id).assetId]))),
+      visible: true, createdAt: Date.now(),
+      spatialSources: Object.freeze(attached ? [attached] : []),
+      ...photoSpatialCounts(importIds.map((id) => records.get(id))),
+    });
+    applyCaptureTimeWrites(captureTimeWrites, importIds);
+    if (attached) applyGmlCaptureTimeRows(gmlCaptureRows, importIds, 'import-wizard');
+    layers.set(layer.id, layer);
+    return layer;
+  }
+
+  function appendImportCore({ captureTimeWrites = [], gmlCaptureRows = [] } = {}) {
+    const layer = layers.get(draftTargetLayerId);
+    const policy = appendPolicy();
+    if (loadedImport || !layer || !policy.appendableIds.length || ['pending', 'error'].includes(positioning.state)) return null;
+    // Import retains evidence only for new curated assets; acceptance is separate.
+    const source = positioning.source ? attachSource(positioning.source, policy.appendableIds) : null;
+    const updated = Object.freeze({ ...layer, photoIds: Object.freeze([...layer.photoIds, ...policy.appendableIds]),
+      photoCount: layer.photoIds.length + policy.appendableIds.length,
+      assetIdsByPhotoId: Object.freeze({ ...layer.assetIdsByPhotoId, ...Object.fromEntries(policy.appendableIds.map((id) => [id, records.get(id).assetId])) }),
+      spatialSources: Object.freeze([...layer.spatialSources, ...(source ? [source] : [])]),
+    });
+    applyCaptureTimeWrites(captureTimeWrites, policy.appendableIds);
+    if (source) applyGmlCaptureTimeRows(gmlCaptureRows, policy.appendableIds, 'import-wizard');
+    layers.set(layer.id, updated);
+    return updated;
   }
 
   return {
@@ -611,17 +920,17 @@ export function createPhotoSession({
       const rows = previewImportPlacement({ plan, placement, gmiReview: loadedReview, excludedPhotos });
       const preview = { rows, outcome: summarizeImportOutcome(rows, loadedReview), captureSuggestions: draftCaptureSuggestions(incoming),
         gmlCaptureTimes: draftGmlCapturePlan(incoming) };
-      importPreviews.set(preview, { generation, ids: [...importIds], positioning, loadedImport, target, eligible: [...incoming],
+      importPreviews.set(preview, { draftToken, ids: [...importIds], positioning, loadedImport, loadedReview, target, eligible: [...incoming],
         records: [...(target?.photoIds || []), ...importIds].map((id) => [id, records.get(id).spatial]), placement: JSON.stringify(placement),
-        capture: captureIdentity(incoming) });
+        capture: captureIdentity(incoming), positions: importPlacementPlan(plan, placement).signature });
       return preview;
     },
     completeImport({ loadedReview = null, placement, preview, captureSuggestions = null, gmlCaptureTime = null }) {
       const guard = importPreviews.get(preview);
       const incoming = loadedReview?.includedIds || appendPolicy()?.appendableIds || importIds;
-      if (!guard || guard.generation !== generation || guard.positioning !== positioning || guard.loadedImport !== loadedImport
+      if (!guard || guard.draftToken !== draftToken || guard.positioning !== positioning || guard.loadedImport !== loadedImport || guard.loadedReview !== loadedReview
         || guard.target !== (layers.get(draftTargetLayerId) || null) || guard.placement !== JSON.stringify(placement)
-        || JSON.stringify(guard.eligible) !== JSON.stringify(loadedReview?.includedIds || appendPolicy()?.appendableIds || importIds)
+        || !sameIdentities(guard.eligible, incoming)
         || guard.ids.length !== importIds.length || guard.ids.some((id, index) => id !== importIds[index])
         || guard.records.some(([id, spatial]) => records.get(id)?.spatial !== spatial)
         || captureIdentity(incoming).some(([id, metadata, evidence], index) => guard.capture[index]?.[0] !== id
@@ -646,27 +955,41 @@ export function createPhotoSession({
         if (gmlCaptureRows.some((row) => filenameIds.has(row.assetId))) return { ok: false, error: 'review-changed' };
       }
       const appended = Boolean(draftTargetLayerId);
-      const addedCount = loadedReview?.includedIds.length ?? appendPolicy()?.appendableIds.length ?? importIds.length;
-      const commit = { captureTimeWrites, gmlCaptureRows };
-      const result = loadedImport ? this.applyLoadedGmiImport(loadedReview, commit) : { ok: true, layer: draftTargetLayerId ? this.appendImport(commit) : this.createLayer(commit) };
-      if (!result.ok || !result.layer) return { ok: false, error: result.error || 'import-refused' };
-      let placementError = false;
-      if (placement.kind !== 'none') {
-        const ticket = this.beginSourceWorkflow(result.layer.id);
-        try {
-          const plan = this.reviewSourceWorkflowPositions(ticket);
-          if (!plan) placementError = true;
-          else {
-            const requests = importPlacementRequests(plan, placement);
-            if (requests.length) placementError = !this.applySourceWorkflowPositions(ticket, plan, requests).ok;
+      const selected = new Set(incoming);
+      const discarded = importIds.filter((id) => !selected.has(id));
+      let planned;
+      try {
+        planned = inDraft(() => {
+          const choices = { captureTimeWrites, gmlCaptureRows };
+          const result = loadedImport ? applyLoadedGmiImportCore(loadedReview, choices)
+            : { ok: true, layer: appended ? appendImportCore(choices) : createLayerCore(choices) };
+          if (!result.ok || !result.layer) return failed(result.error || 'import-refused');
+          const { id, photoIds, spatialSources } = result.layer;
+          const plan = planPhotoSourcePositions(photoIds.map((photoId) => records.get(photoId)), spatialSources);
+          const { requests, signature } = importPlacementPlan(plan, placement);
+          if (signature !== guard.positions) return failed('placement-changed');
+          if (requests.length) {
+            const applied = acceptSourcePositionsCore(id, plan, requests);
+            if (!applied.ok) return failed('placement-changed');
           }
-        } catch { placementError = true; }
-        finally { this.endSourceWorkflow(ticket); }
-      }
-      const photos = this.getLayerPhotos(result.layer.id);
-      const groups = Map.groupBy(photos, (photo) => photo.assetId);
-      const placed = [...groups.values()].filter((group) => group.every((photo) => photo.spatial.current)).length;
-      return { ok: true, append: appended, addedCount, layer: this.getLayer(result.layer.id), outcome: { total: groups.size, placed, unplaced: groups.size - placed }, placementError };
+          const removed = discarded.length ? detachRecords(discarded) : null;
+          autoAcceptMetadata(id);
+          refreshLayerCounts(layers.get(id));
+          const groups = Map.groupBy(photoIds.map((photoId) => records.get(photoId)), (photo) => photo.assetId);
+          const placed = [...groups.values()].filter((group) => group.every((photo) => photo.spatial.current)).length;
+          return { ok: true, id, removed, outcome: { total: groups.size, placed, unplaced: groups.size - placed } };
+        });
+      } catch { return commitFailed(); }
+      if (!planned.result.ok) return planned.result;
+      const committed = commitDraftMaps(planned.state);
+      if (!committed.ok) return committed;
+      const { id, outcome, removed } = planned.result;
+      // Draft files and their browser resources stay available until all accepted writes have succeeded.
+      transferDraft();
+      loadedPlans.delete(loadedReview);
+      if (removed) releaseResources(discarded, removed);
+      publish();
+      return { ok: true, append: appended, addedCount: incoming.length, layer: layers.get(id), outcome };
     },
     setLoadedGmiTarget(layerId = null) {
       if (!loadedImport || (layerId && !layers.has(layerId))) return false;
@@ -732,40 +1055,12 @@ export function createPhotoSession({
     },
     // One checkpoint/publication for ownership + links + occurrence evidence.
     // Every preflight completes before assets or retained sources change.
-    applyLoadedGmiImport(review, { captureTimeWrites = [], gmlCaptureRows = [] } = {}) {
-      const guard = loadedPlans.get(review), target = layers.get(draftTargetLayerId);
-      const same = (a, b) => a.length === b.length && a.every((id, index) => id === b[index]);
-      if (!guard || guard.operation !== loadedImport || loadedImport?.state !== 'ready'
-        || !loadedImport.isLive(loadedImport.binding) || guard.positioning !== positioning
-        || review.targetLayerId !== draftTargetLayerId
-        || !same(guard.draftIds, importIds) || !same(guard.eligibleIds, appendPolicy()?.appendableIds || importIds)
-        || (draftTargetLayerId && (!target || target.photoIds !== guard.members || target.spatialSources !== guard.sources)))
-        return { ok: false, error: 'review-changed' };
-      if (!target && !review.includedIds.length) return { ok: false, error: 'empty-import' };
-      let name = 'Bilder', suffix = 1;
-      while ([...layers.values()].some((layer) => layer.name === name)) name = `Bilder (${++suffix})`;
-      const ids = Object.freeze([...(target?.photoIds || []), ...review.includedIds]);
-      const base = target || { id: `photo-layer-${createId()}`, type: 'FOTO', name, visible: true, createdAt: Date.now(), spatialSources: [] };
-      const layer = Object.freeze({ ...base, photoIds: ids, photoCount: ids.length });
-      let plan;
-      try {
-        // GML import is optional and remains candidate-only, as in ordinary import.
-        if (positioning.source) for (const match of matchPhotoReferences(positioning.source.entries, assetPhotos(review.includedIds)).matches) {
-          if (match.status === 'matched') createPhotoCandidate({ ...positioning.source.entries.find((entry) => entry.id === match.entryId), id: `preflight:${match.entryId}`, kind: 'gml' });
-        }
-        plan = planGmiAssociations(layer, Object.freeze({ ...review.source, associationLedger: review.associationLedger }), review.associationLedger);
-      } catch { return { ok: false, error: 'invalid-source' }; }
-      commitGmiPlan(plan);
-      if (positioning.source) {
-        const gml = attachSource(positioning.source, review.includedIds);
-        const committed = layers.get(layer.id);
-        layers.set(layer.id, Object.freeze({ ...committed, spatialSources: Object.freeze([...committed.spatialSources, gml]) }));
-      }
-      applyCaptureTimeWrites(captureTimeWrites, review.includedIds);
-      if (positioning.source) applyGmlCaptureTimeRows(gmlCaptureRows, review.includedIds, 'import-wizard');
+    applyLoadedGmiImport(review, choices) {
+      const result = applyLoadedGmiImportCore(review, choices);
+      if (!result.ok) return result;
       release(importIds.filter((id) => !review.includedIds.includes(id)));
       transferDraft(); loadedPlans.delete(review); publish();
-      return { ok: true, layer: layers.get(layer.id), sourceId: review.source.id };
+      return { ...result, layer: layers.get(result.layer.id) };
     },
     beginSourceWorkflow(layerId) {
       const layer = layers.get(layerId);
@@ -785,75 +1080,183 @@ export function createPhotoSession({
       sourceReviews.delete(ticket.layerId);
       publish();
     },
-    saveSourceWorkflowSource(ticket, expectedReview, { captureTime = null } = {}) {
-      if (!sourceWorkflowIsLive(ticket)) return { ok: false, error: 'membership-changed' };
-      const review = sourceReviews.get(ticket.layerId), layer = layers.get(ticket.layerId);
+    // B2: «Ta med kilden»/«Ta med kilde og koblinger». Validated exactly as the final save will be (the whole draft is
+    // replayed with this change on copies), then recorded in the draft. Accepted data is not changed.
+    stageSourceWorkflowSource(ticket, expectedReview, { captureTime = null } = {}) {
+      if (!sourceWorkflowIsLive(ticket)) return failed('membership-changed');
+      const review = sourceReviews.get(ticket.layerId);
       if (!review || review.state !== 'ready' || review.source !== expectedReview?.source
-        || review.recheck !== expectedReview.recheck || review.loadedInput !== expectedReview.loadedInput) return { ok: false, error: 'source-changed' };
-      if (review.source.kind === 'gmi') return this.applyGmiAssociations(ticket.layerId, {
-        confirmed: true, sourceId: review.source.id, memberIds: layer.photoIds,
-        associationLedger: expectedReview.associationLedger,
-      });
-      if (review.source.kind !== 'gml') return { ok: false, error: 'unsupported-source' };
-      if (review.recheck && !layer.spatialSources.includes(review.source)) return { ok: false, error: 'source-removed' };
-      if (!review.recheck && layer.spatialSources.some((source) => source.fingerprint === review.source.fingerprint))
-        return { ok: false, error: 'duplicate-source' };
-      // Validate every attachment before the first record write.
-      try {
-        for (const match of matchPhotoReferences(review.source.entries, assetPhotos(layer.photoIds)).matches) {
-          if (match.status !== 'matched') continue;
-          const entry = review.source.entries.find((item) => item.id === match.entryId);
-          createPhotoCandidate({ ...entry, id: `${review.source.id}:${entry.id}`, kind: 'gml' });
+        || review.recheck !== expectedReview.recheck || review.loadedInput !== expectedReview.loadedInput) return failed('source-changed');
+      if (!['gml', 'gmi'].includes(review.source.kind)) return failed('unsupported-source');
+      const draft = draftOf(ticket);
+      if (draft.ops.some((op) => op.sourceId === review.source.id || (op.kind !== 'remove-gmi' && op.fingerprint === review.source.fingerprint)))
+        return failed('source-staged');
+      let op;
+      if (review.source.kind === 'gml') {
+        const { plan = null, ...decision } = captureTime || {};
+        const writes = gmlCaptureDecisionWrites(decision);
+        if (plan || writes) {
+          const guard = captureTimePlans.get(plan);
+          if (!guard || guard.layerId !== ticket.layerId || guard.source !== review.source || guard.recheck !== review.recheck
+            || guard.view !== draftView(ticket)) return failed('review-changed');
         }
-      } catch { return { ok: false, error: 'invalid-source' }; }
-      return commitLayerSource(ticket.layerId, captureTime);
+        op = { kind: 'gml', review: Object.freeze({ source: review.source, recheck: review.recheck }),
+          captureDecision: writes ? Object.freeze({ complete: Boolean(decision.complete), partial: Boolean(decision.partial), conflicts: decision.conflicts === 'gml' ? 'gml' : 'keep' }) : null,
+          capturePlanSignature: plan ? gmlCapturePlanSignature(plan) : null };
+      } else {
+        if (expectedReview.associationLedger !== review.associationLedger) return failed('review-changed');
+        const occurrenceIds = new Map();
+        op = { kind: 'gmi', review: Object.freeze({ source: review.source, recheck: review.recheck, loadedInput: review.loadedInput, rebinding: review.rebinding || null }),
+          associationLedger: review.associationLedger,
+          // Stable across replays, so the reviewed positions keep naming the same new occurrences.
+          occurrenceId: (_assetId, key) => { if (!occurrenceIds.has(key)) occurrenceIds.set(key, createId()); return occurrenceIds.get(key); } };
+      }
+      op = Object.freeze({ ...op, id: `op-${++draftOpSerial}`, sourceId: review.source.id, fingerprint: review.source.fingerprint,
+        filename: review.source.filename, sourceKind: review.source.kind });
+      const trial = inDraft(() => replayDraft(ticket.layerId, [...draft.ops, op])).result;
+      if (!trial.ok) return failed(trial.error);
+      draft.ops = [...draft.ops, op]; draft.version++;
+      sourceReviews.delete(ticket.layerId);
+      sourceRequests.set(ticket.layerId, (sourceRequests.get(ticket.layerId) || 0) + 1);
+      publish();
+      return { ok: true, opId: op.id, captureTimeCount: trial.outcomes.at(-1).captureTimeCount || 0 };
     },
-    // The GML capture-time proposal for the source under review, registered for the commit guard. Pure: nothing is
-    // attached or written until the source is saved.
+    // «Fjern GMI-kilde» inside the wizard: a source only staged in this draft is simply taken out again; a saved one is
+    // marked for removal when the changes are saved.
+    stageSourceWorkflowRemoval(ticket, sourceId) {
+      if (!sourceWorkflowIsLive(ticket) || sourceReviews.has(ticket.layerId)) return failed('review-changed');
+      const draft = draftOf(ticket);
+      const staged = draft.ops.find((op) => op.sourceId === sourceId);
+      if (staged && staged.kind !== 'remove-gmi' && !staged.review.recheck) return this.unstageSourceWorkflowOp(ticket, staged.id);
+      if (staged?.kind === 'remove-gmi') return { ok: true, opId: staged.id };
+      const source = layers.get(ticket.layerId).spatialSources.find((item) => item.id === sourceId && item.kind === 'gmi');
+      if (!source) return failed('source-removed');
+      const op = Object.freeze({ kind: 'remove-gmi', id: `op-${++draftOpSerial}`, sourceId, fingerprint: source.fingerprint,
+        filename: source.filename, sourceKind: 'gmi' });
+      const ops = [...draft.ops.filter((item) => item !== staged), op];
+      const trial = inDraft(() => replayDraft(ticket.layerId, ops)).result;
+      if (!trial.ok) return failed(trial.error);
+      draft.ops = ops; draft.version++;
+      publish();
+      return { ok: true, opId: op.id };
+    },
+    unstageSourceWorkflowOp(ticket, opId) {
+      if (!sourceWorkflowIsLive(ticket)) return failed('membership-changed');
+      const draft = draftOf(ticket);
+      const ops = draft.ops.filter((op) => op.id !== opId);
+      if (ops.length === draft.ops.length) return failed('review-changed');
+      draft.ops = ops; draft.version++;
+      publish();
+      return { ok: true };
+    },
+    // What the draft would change, from the current live data. Presentation; nothing is written.
+    reviewSourceWorkflowDraft(ticket) {
+      if (!sourceWorkflowIsLive(ticket)) return null;
+      const draft = draftOf(ticket), view = draftView(ticket);
+      const outcomes = new Map((view.outcome.outcomes || []).map((outcome) => [outcome.id, outcome]));
+      const live = layers.get(ticket.layerId), staged = view.state.layers.get(ticket.layerId);
+      return Object.freeze({ version: draft.version, ok: view.outcome.ok, error: view.outcome.error || null, failedOpId: view.outcome.opId || null,
+        ops: Object.freeze(draft.ops.map((op) => draftOpSummary(op, outcomes.get(op.id)))),
+        evidenceSignature: view.outcome.ok ? photoSourceEvidenceSignature(staged.photoIds.map((id) => view.state.records.get(id))) : null,
+        occurrencesAdded: view.outcome.ok ? staged.photoIds.length - live.photoIds.length : 0,
+        captureTimes: [...outcomes.values()].reduce((sum, outcome) => sum + (outcome.captureTimeCount || 0), 0),
+        directions: view.outcome.ok ? draftDirectionAdoptions(view, ticket.layerId) : 0,
+        sources: Object.freeze(view.outcome.ok ? staged.spatialSources : live.spatialSources) });
+    },
+    // The same review for the layer's open workflow, for presentation code that holds no ticket.
+    reviewLayerSourceDraft(layerId) {
+      const ticket = sourceWorkflows.get(layerId);
+      return ticket ? this.reviewSourceWorkflowDraft(ticket) : null;
+    },
+    // The GML capture-time proposal for the source under review, against the wizard's draft when one is open (so an
+    // earlier staged source is taken into account). Registered for the stage guard; pure.
     planLayerSourceCaptureTimes(layerId) {
       const layer = layers.get(layerId), review = sourceReviews.get(layerId);
       if (!layer || review?.state !== 'ready' || review.source?.kind !== 'gml') return null;
-      const plan = planGmlCaptureTimeReconciliation(assetPhotos(layer.photoIds), review.source);
+      const ticket = sourceWorkflows.get(layerId);
+      const view = sourceWorkflowIsLive(ticket) ? draftView(ticket) : null;
+      if (view && !view.outcome.ok) return null;
+      const plan = view ? readDraft(view.state, () => planGmlCaptureTimeReconciliation(assetPhotos(layers.get(layerId).photoIds), review.source))
+        : planGmlCaptureTimeReconciliation(assetPhotos(layer.photoIds), review.source);
       captureTimePlans.set(plan, { layerId, source: review.source, recheck: review.recheck, memberIds: layer.photoIds,
-        states: captureStates(layer.photoIds) });
+        states: captureStates(layer.photoIds), view });
       return plan;
     },
+    // Positions offered from the draft view: staged sources and new occurrences included, removed sources excluded.
     reviewSourceWorkflowPositions(ticket) {
       if (!sourceWorkflowIsLive(ticket) || sourceReviews.has(ticket.layerId)) return null;
-      const layer = layers.get(ticket.layerId);
-      const plan = planPhotoSourcePositions(layer.photoIds.map((id) => records.get(id)), layer.spatialSources);
-      workflowReviews.set(plan, { ticket, sources: layer.spatialSources });
+      const view = draftView(ticket);
+      if (!view.outcome.ok) return null;
+      const plan = readDraft(view.state, () => {
+        const layer = layers.get(ticket.layerId);
+        return planPhotoSourcePositions(layer.photoIds.map((id) => records.get(id)), layer.spatialSources);
+      });
+      // Any change to the sources the plan was made from makes it stale, as before.
+      workflowReviews.set(plan, { ticket, view, sources: view.state.layers.get(ticket.layerId).spatialSources });
       return plan;
     },
-    applySourceWorkflowPositions(ticket, plan, requests) {
-      const reviewed = workflowReviews.get(plan), layer = layers.get(ticket?.layerId);
-      if (!sourceWorkflowIsLive(ticket) || reviewed?.ticket !== ticket || reviewed.sources !== layer.spatialSources
-        || sourceReviews.has(ticket.layerId)) return { ok: false, error: 'review-changed' };
-      if (!requests?.length) return { ok: false, error: 'invalid-selection' };
-      const seen = new Set();
-      const gmlDefaultCandidates = [];
-      for (const request of requests) {
-        const row = plan.rows.find((item) => item.photoId === request.photoId);
-        const live = records.get(request.photoId);
-        const candidate = row?.options.find((item) => item.id === request.candidateId);
-        if (seen.has(request.photoId) || !live || !row || live.spatial.current !== row.current
-          || !candidate || !live.spatial.candidates.includes(candidate)
-          || candidate.status !== 'viable' || !isPhotoPosition(candidate.position)
-          || (['gml', 'gmi'].includes(candidate.kind) && !layer.spatialSources.some((source) => source.kind === candidate.kind && source.id === candidate.sourceId)))
-          return { ok: false, error: 'review-changed' };
-        seen.add(request.photoId);
-        if (candidate.kind === 'gml' || candidate.kind === 'exif') gmlDefaultCandidates.push(request.photoId);
-      }
-      // Every request is validated; positions and their GML delivery default are committed together, published once.
-      const deliveryIds = gmlDeliveryDefaults(layer, gmlDefaultCandidates);
-      const acceptedAt = Date.now();
-      for (const request of requests) updateRecord(request.photoId, (live) => ({
-        spatial: acceptPhotoCandidate(live.spatial, request.candidateId, 'explicit-candidate', acceptedAt),
-      }));
-      includeAsGml(deliveryIds);
+    // B2/B2a: the wizard's single save. The complete next state (draft and selected positions) is planned on copies;
+    // then every key it changes is checked against what the review saw, swapped in with rollback on any failure,
+    // and published once. The receipt states what was actually saved.
+    commitSourceWorkflow(ticket, { plan = null, requests = [], version = null } = {}) {
+      if (!sourceWorkflowIsLive(ticket) || sourceReviews.has(ticket.layerId)) return failed('review-changed');
+      const draft = draftOf(ticket);
+      if (version !== null && version !== draft.version) return failed('review-changed');
+      const reviewed = workflowReviews.get(plan);
+      if ((plan || requests.length) && reviewed?.ticket !== ticket) return failed('review-changed');
+      if (!draft.ops.length && !requests.length) return failed('invalid-selection');
+      const view = draftView(ticket), layerId = ticket.layerId;
+      if (!view.outcome.ok) return failed(view.outcome.error);
+      if (reviewed && ((draft.ops.length && reviewed.view !== view)
+        || reviewed.sources !== view.state.layers.get(layerId).spatialSources)) return failed('review-changed');
+      let planned;
+      try {
+        planned = inDraft(() => {
+          const result = requests.length ? acceptSourcePositionsCore(layerId, plan, requests)
+            : { ok: true, acceptedIds: [], deliveryIds: [] };
+          if (result.ok) {
+            autoAcceptMetadata(layerId);
+            refreshLayerCounts(layers.get(layerId));
+          }
+          return result;
+        }, view.state);
+      } catch { return failed('review-changed'); }
+      if (!planned.result.ok) return planned.result;
+      const previous = layers.get(layerId);
+      const directionsBefore = new Map(previous.photoIds.map((id) => [id, records.get(id)?.direction.current]));
+      const saved = commitDraftMaps(planned.state, view.state, view.before);
+      if (!saved.ok) return saved;
+      const committed = layers.get(layerId);
+      if (workflowMembers.get(ticket) === previous.photoIds) workflowMembers.set(ticket, committed.photoIds);
+      const outcomes = new Map(view.outcome.outcomes.map((outcome) => [outcome.id, outcome]));
+      const ops = draft.ops.map((op) => draftOpSummary(op, outcomes.get(op.id)));
+      draft.ops = []; draft.version++; draft.view = null;
       workflowReviews.delete(plan);
+      sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
       publish();
-      return { ok: true, acceptedIds: [...seen], deliveryIds };
+      const actions = plan && requests.length ? selectedPhotoSourcePositions(plan, Object.fromEntries(requests.map((request) => [request.photoId, request.candidateId]))) : [];
+      const count = (action) => actions.filter((row) => row.action === action).length;
+      const receipt = Object.freeze({
+        added: Object.freeze(ops.filter((op) => op.kind !== 'remove-gmi' && !op.recheck)),
+        rechecked: Object.freeze(ops.filter((op) => op.kind !== 'remove-gmi' && op.recheck && !op.rebinding)),
+        rebound: Object.freeze(ops.filter((op) => op.kind === 'gmi' && op.rebinding)),
+        removed: Object.freeze(ops.filter((op) => op.kind === 'remove-gmi')),
+        occurrencesAdded: committed.photoIds.length - previous.photoIds.length,
+        captureTimes: ops.reduce((sum, op) => sum + op.captureTimeCount, 0),
+        directions: committed.photoIds.filter((id) => directionsBefore.has(id) && records.get(id)?.direction.current !== directionsBefore.get(id)
+          && records.get(id)?.direction.current?.basis?.evidenceId).length,
+        placed: count('place'), moved: count('move'), same: count('same'),
+        gmlDelivery: planned.result.deliveryIds.length,
+      });
+      return { ok: true, receipt, acceptedIds: planned.result.acceptedIds, deliveryIds: planned.result.deliveryIds };
+    },
+    // Positions only, with no staged sources: the same atomic commit.
+    applySourceWorkflowPositions(ticket, plan, requests) {
+      if (!sourceWorkflowIsLive(ticket) || workflowReviews.get(plan)?.ticket !== ticket || sourceReviews.has(ticket.layerId)
+        || sourceWorkflowDrafts.get(ticket)?.ops.length) return failed('review-changed');
+      if (!requests?.length) return failed('invalid-selection');
+      const result = this.commitSourceWorkflow(ticket, { plan, requests });
+      return result.ok ? { ok: true, acceptedIds: result.acceptedIds, deliveryIds: result.deliveryIds } : result;
     },
     beginPhotoEdits(layerId) {
       const layer = layers.get(layerId);
@@ -938,15 +1341,20 @@ export function createPhotoSession({
       if (changes.length) publish();
       return { ok: true, assetIds: ids };
     },
-    fillMissingPhotoValues(layerId, field, input, photoIds = null, { estimated = false } = {}) {
+    fillMissingPhotoValues(layerId, field, input, photoIds = null, { estimated = false, expectedEstimate = null } = {}) {
       if (!MANUAL_FILL_FIELDS.includes(field)) return { ok: false, error: 'invalid-field' };
       if (estimated && field !== 'captureTime') return { ok: false, error: 'invalid-field' };
       const members = layers.get(layerId)?.photoIds || [];
       const photos = members.map((id) => {
-        const record = records.get(id);
-        return { ...record, captureMetadata: assets.get(record.assetId).captureMetadata };
+        const record = records.get(id), asset = assets.get(record.assetId);
+        return { ...record, captureMetadata: asset.captureMetadata, metadataEvidence: asset.metadataEvidence };
       });
-      const plan = planManualPhotoFill(photos, field, photoIds ?? members);
+      // C3: an estimated date reaches only photos with no date evidence in any source and no removal by the user;
+      // photos with usable but unaccepted source dates are completed from that evidence instead.
+      const estimate = estimated ? photoEstimatedDateModel(photos, { today: today() }) : null;
+      if (estimate && expectedEstimate !== null && estimatedDateReviewSignature(estimate) !== expectedEstimate) return failed('review-changed');
+      const estimateTargets = estimate ? new Set(estimate.targetIds) : null;
+      const plan = planManualPhotoFill(photos, field, (photoIds ?? members).filter((id) => !estimateTargets || estimateTargets.has(id)));
       const value = estimated ? estimatedCaptureTime(input) : normalizeManualPhotoFill(field, input);
       if (value === null) return { ok: false, error: 'invalid-value', ...plan, counts: { ...plan.counts, adopted: 0, invalidInput: 1 } };
       const acceptedAt = Date.now();
@@ -968,6 +1376,34 @@ export function createPhotoSession({
       if (undoToken) captureTimeUndos.set(undoToken, { layerId, generation, entries: undoEntries });
       if (plan.targets.length) publish();
       return { ok: true, ...plan, ...(estimated ? { undoToken } : {}), counts: { ...plan.counts, adopted: plan.targets.length, invalidInput: 0 } };
+    },
+    // M5 (C-2): one explicit batch step of the Opptakstid task. The rows are re-planned from the live layer and must be
+    // exactly the reviewed ones; every value is prepared before the first write, written in one pass and published
+    // once. Accepted and removed values are never written. The undo restores each value if it is unchanged since.
+    completeCaptureTimes(layerId, { step, groups = [], expected = null } = {}) {
+      const layer = layers.get(layerId);
+      if (!layer || !['source', 'filename', 'technical'].includes(step)) return failed('invalid-field');
+      const photos = this.getLayerPhotos(layerId);
+      const rows = selectedCaptureCompletionRows(planCaptureCompletion(photos, { today: today() }), { step, groups });
+      if (!rows.length) return failed('nothing-selected');
+      if (expected !== null && captureCompletionSignature(rows) !== expected) return failed('review-changed');
+      const acceptedAt = Date.now();
+      const writes = rows.map((item) => {
+        const asset = assets.get(item.assetId), before = asset.captureMetadata;
+        const protectedValue = step === 'technical' ? before.captureTime?.value?.iso !== item.provenance.technical.from.iso
+          : Boolean(before.captureTime || before.captureTimeCleared);
+        if (protectedValue) return null;
+        const captureTime = immutable({ value: item.value, provenance: item.provenance, acceptedAt });
+        return { assetId: item.assetId, asset, before, next: { ...asset, captureMetadata: Object.freeze({ ...before, captureTime }) } };
+      });
+      if (writes.some((write) => !write)) return failed('review-changed');
+      for (const write of writes) assets.set(write.assetId, write.next);
+      const undoToken = Object.freeze({});
+      captureTimeUndos.set(undoToken, { layerId, generation, entries: writes.map((write) => ({ assetId: write.assetId, before: write.before,
+        after: assets.get(write.assetId).captureMetadata.captureTime })) });
+      publish();
+      return { ok: true, count: writes.length, undoToken,
+        counts: Object.fromEntries(['complete', 'minute', 'date', 'noon', 'seconds'].map((key) => [key, rows.filter((item) => item.group === key || item.kind === key).length])) };
     },
     undoCaptureTimeFill(token) {
       const undo = token && captureTimeUndos.get(token);
@@ -1209,26 +1645,10 @@ export function createPhotoSession({
       if (!confirmed || !layer || review?.state !== 'ready' || review.source?.kind !== 'gmi'
         || review.source.id !== sourceId || review.associationLedger !== associationLedger
         || !memberIds || memberIds.length !== layer.photoIds.length
-        || memberIds.some((id, index) => id !== layer.photoIds[index])) return { ok: false, error: 'review-changed' };
-      const current = layer.spatialSources.find((source) => source.id === sourceId);
-      if (review.recheck && !current) return { ok: false, error: 'source-removed' };
-      const loaded = review.loadedInput;
-      if (loaded && !loaded.isLive(loaded.binding)) return { ok: false, error: 'loaded-source-unavailable' };
-      if (review.recheck && current !== review.source) return { ok: false, error: 'review-changed' };
-      let photoIds = layer.photoIds;
-      if (review.rebinding) {
-        const verified = verifiedGmiBinding(current, loaded.source, loaded.binding, loaded.isLive);
-        if (verified.error) return { ok: false, error: verified.error };
-        replaceBoundGmiSource(layer, verified.source);
-      } else {
-        const source = Object.freeze({ ...review.source, associationLedger });
-        if (!current && matchingGmiSources(layer, source.fingerprint).length) return { ok: false, error: 'duplicate-source' };
-        let plan;
-        try { plan = planGmiAssociations(layer, source, associationLedger); }
-        catch { return { ok: false, error: 'invalid-source' }; }
-        commitGmiPlan(plan);
-        photoIds = plan.photoIds;
-      }
+        || memberIds.some((id, index) => id !== layer.photoIds[index])) return failed('review-changed');
+      const result = gmiAssociationsCore(layerId, review, associationLedger);
+      if (!result.ok) return result;
+      const photoIds = layers.get(layerId).photoIds;
       const workflow = sourceWorkflows.get(layerId);
       if (workflow && workflowMembers.get(workflow) === layer.photoIds) workflowMembers.set(workflow, photoIds);
       sourceReviews.delete(layerId);
@@ -1236,10 +1656,7 @@ export function createPhotoSession({
       publish(); return { ok: true };
     },
     removeGmiSource(layerId, sourceId, { confirmed = false } = {}) {
-      const layer = layers.get(layerId);
-      if (!confirmed || !layer?.spatialSources.some((source) => source.id === sourceId && source.kind === 'gmi')) return false;
-      layers.set(layerId, Object.freeze({ ...layer,
-        spatialSources: Object.freeze(layer.spatialSources.filter((source) => source.id !== sourceId)) }));
+      if (!confirmed || !removeGmiSourceCore(layerId, sourceId).ok) return false;
       sourceReviews.delete(layerId);
       sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
       publish(); return true;
@@ -1394,43 +1811,18 @@ export function createPhotoSession({
       clearImport(); draftTargetLayerId = targetLayerId; publish(); return true;
     },
     cancelImport: clearImport,
-    createLayer({ captureTimeWrites = [], gmlCaptureRows = [] } = {}) {
-      if (loadedImport || draftTargetLayerId || !importIds.length || ['pending', 'error'].includes(positioning.state)) return null;
-      const source = positioning.source;
-      const attached = source ? attachSource(source, importIds) : null;
-      let suffix = 1;
-      let name = 'Bilder';
-      const names = new Set(Array.from(layers.values(), (layer) => layer.name));
-      while (names.has(name)) name = `Bilder (${++suffix})`;
-      const layer = Object.freeze({
-        id: `photo-layer-${createId()}`, type: 'FOTO', name,
-        photoIds: Object.freeze([...importIds]), photoCount: importIds.length, assetCount: importIds.length,
-        assetIdsByPhotoId: Object.freeze(Object.fromEntries(importIds.map((id) => [id, records.get(id).assetId]))),
-        visible: true, createdAt: Date.now(),
-        spatialSources: Object.freeze(attached ? [attached] : []),
-        ...photoSpatialCounts(importIds.map((id) => records.get(id))),
-      });
-      applyCaptureTimeWrites(captureTimeWrites, importIds);
-      if (attached) applyGmlCaptureTimeRows(gmlCaptureRows, importIds, 'import-wizard');
-      layers.set(layer.id, layer);
-      transferDraft();
-      publish();
+    createLayer(choices) {
+      const layer = createLayerCore(choices);
+      if (!layer) return null;
+      transferDraft(); publish();
       return layer;
     },
-    appendImport({ captureTimeWrites = [], gmlCaptureRows = [] } = {}) {
-      const layer = layers.get(draftTargetLayerId);
-      const policy = appendPolicy();
-      if (loadedImport || !layer || !policy.appendableIds.length || ['pending', 'error'].includes(positioning.state)) return null;
-      // Import retains evidence only for new curated assets; acceptance is separate.
-      const source = positioning.source ? attachSource(positioning.source, policy.appendableIds) : null;
-      const updated = Object.freeze({ ...layer, photoIds: Object.freeze([...layer.photoIds, ...policy.appendableIds]),
-        photoCount: layer.photoIds.length + policy.appendableIds.length,
-        assetIdsByPhotoId: Object.freeze({ ...layer.assetIdsByPhotoId, ...Object.fromEntries(policy.appendableIds.map((id) => [id, records.get(id).assetId])) }),
-        spatialSources: Object.freeze([...layer.spatialSources, ...(source ? [source] : [])]),
-      });
-      applyCaptureTimeWrites(captureTimeWrites, policy.appendableIds);
-      if (source) applyGmlCaptureTimeRows(gmlCaptureRows, policy.appendableIds, 'import-wizard');
-      layers.set(layer.id, updated); release(policy.skippedIds); transferDraft(); publish(); return layers.get(layer.id);
+    appendImport(choices) {
+      const skipped = appendPolicy()?.skippedIds;
+      const layer = appendImportCore(choices);
+      if (!layer) return null;
+      release(skipped); transferDraft(); publish();
+      return layers.get(layer.id);
     },
     setLayerVisibility(id, visible) {
       const layer = layers.get(id);

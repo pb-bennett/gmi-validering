@@ -18,7 +18,8 @@ const KNOB_DISTANCE = 56;
 const DRAG_THRESHOLD = 3;
 const CLICK_AFTER_DRAG_MS = 250;
 const positionFrom = (latlng) => ({ crs: 'EPSG:4326', longitude: latlng.wrap().lng, latitude: latlng.lat });
-const OVERLAY_SELECTOR = '.leaflet-control, .photo-edit-knob, .leaflet-photo-markers-pane .leaflet-marker-icon, .leaflet-photo-placement-pane .leaflet-marker-icon';
+const OVERLAY_CONTROLS = '.leaflet-control, .gmi-street-view, .photo-edit-knob';
+const OVERLAY_SELECTOR = `${OVERLAY_CONTROLS}, .leaflet-photo-markers-pane .leaflet-marker-icon, .leaflet-photo-placement-pane .leaflet-marker-icon`;
 
 // Unplaced selected photo: one click (never a pan) stages its position. Enter on the focused map uses the centre.
 // throughMarkers (explicit «Flytt med klikk» for a placed photo): photo markers no longer catch the click, so a
@@ -30,7 +31,7 @@ function PlacementCapture({ active, throughMarkers = false, onPlace, onCancel })
   useEffect(() => {
     if (!active) return undefined;
     const container = map.getContainer();
-    const overlay = throughMarkers ? '.leaflet-control, .photo-edit-knob' : OVERLAY_SELECTOR;
+    const overlay = throughMarkers ? OVERLAY_CONTROLS : OVERLAY_SELECTOR;
     map.closePopup();
     container.classList.add('photo-edit-placing');
     if (throughMarkers) container.classList.add('photo-edit-click-move');

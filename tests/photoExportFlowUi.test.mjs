@@ -11,6 +11,7 @@ import { gpsJpeg } from './helpers/photoGpsFixtures.mjs';
 import { addImportFiles, createLayerWithoutPlacement, importDialog, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, savePhotoSource, sourceWizard, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { KEYS, commandBar, elementCentre, enterEditMode, openTool, pressKey, rotateSelected } from './helpers/photoWorkspace.mjs';
+import { confirmSessionReset } from './helpers/sessionReset.mjs';
 
 // Fullfør opplysninger to the map or the positioning wizard and back, in the real app: native dialogs, real mouse and keyboard.
 const app = process.env.PHOTO_UI_URL, corpus = process.env.PHOTO_GML_FIXTURE;
@@ -395,7 +396,7 @@ layerTest('going to another tool leaves the handoff only after the boundary, and
   assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
   await buildPreview(browser); await showReview(browser);
   assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="direction-required"]'))`), false, 'defaults satisfy the direction requirement');
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /Det er ikke verifisert at Gemini VA godtar en slik pakke/);
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /Gemini VA har importert bilder uten opptakstid i et testet oppsett \(november 2026\)/);
   await closeExport(browser);
   await settle();
   assert.equal(await browser.evaluate(`Boolean(${hub})`), false, 'closing export does not revive the handoff');
@@ -470,6 +471,7 @@ layerTest('layer switching, deletion and reset end the handoff without reopening
   await exit();
   await browser.waitFor(`!${shell}`);
   await browser.evaluate(`document.querySelector('[aria-label="Nullstill og åpne ny fil"]').click()`);
+  await confirmSessionReset(browser);
   await browser.waitFor(`!document.querySelector('button[aria-label^="Fjern fotokartlag"]')`);
   await settle();
   assert.equal(await browser.evaluate(`Boolean(document.querySelector('.photo-completion-dialog')) || Boolean(${commandBar})`), false);

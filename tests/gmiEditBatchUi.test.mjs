@@ -6,6 +6,7 @@ import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
 import { BATCH_ROWS, gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
+import { confirmSessionReset } from './helpers/sessionReset.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 const workspace = 'document.querySelector(".gmi-edit-workspace")';
@@ -226,6 +227,7 @@ test('M5B production: configure, bounded review, exclusions, confirmation, histo
         const loadFresh = async (name, options) => {
           if (!await browser.evaluate(`Boolean(document.querySelector('button[aria-label="Nullstill og åpne ny fil"]'))`)) await click('Flere kartverktøy');
           await click('Nullstill og åpne ny fil');
+          await confirmSessionReset(browser);
           await browser.waitFor('document.querySelector("input[type=file]")');
           const nextFile = path.join(directory, `${name}.gmi`); await writeFile(nextFile, gmiEditBatchFixture(options));
           await setPhotoFiles(browser, 'input[type=file]', [nextFile]);

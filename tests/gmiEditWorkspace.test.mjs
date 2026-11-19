@@ -560,9 +560,10 @@ test('callers: removal and reset inspect the result; discarding is only reachabl
   for (const cleanup of ['setPhotoImport(null)', 'endPhotoEditSession()', "dispatchPhotoWorkspace({ type: 'exit' })", 'closeDataInspector()', 'resetAll(']) {
     assert(reset.indexOf(cleanup) > block, `${cleanup} runs only after the GMI decision`);
   }
+  assert.match(reset, /discardGmiEdits = false/);
   assert.match(reset, /if \(blocked\) \{ setResetConfirm\(\{ layers: blocked\.layers \}\); return; \}/);
-  assert.match(page, /onConfirm=\{\(\) => handleReset\(\{ discardGmiEdits: true \}\)\}/);
-  assert.equal((page.match(/discardGmiEdits: true/g) || []).length, 1, 'one confirmed discard path in the page');
+  assert.match(page, /onCancel=\{\(\) => setResetConfirm\(null\)\} onConfirm=\{\(\) => handleReset\(\{ discardGmiEdits: resetConfirm\.layers\.length > 0 \}\)\}/);
+  assert.equal((page.match(/\bdiscardGmiEdits\s*:/g) || []).length, 1, 'one confirmed discard path in the page');
 
   const panel = await source('src/components/LayerPanel.js');
   assert.match(panel, /removeLayer\(layerId, removeWarning \? \{ discardGmiEdits: true \} : undefined\)/);
@@ -581,7 +582,7 @@ test('callers: removal and reset inspect the result; discarding is only reachabl
   await walk(path.resolve('src'));
   const callers = [];
   const code = (text) => text.split('\n').filter((line) => !/^\s*(\/\/|\*)/.test(line)).join('\n');
-  for (const file of files) if (code(await readFile(file, 'utf8')).includes('discardGmiEdits: true')) callers.push(path.relative(path.resolve('.'), file).replaceAll('\\', '/'));
+  for (const file of files) if (/\bdiscardGmiEdits\s*:/.test(code(await readFile(file, 'utf8')))) callers.push(path.relative(path.resolve('.'), file).replaceAll('\\', '/'));
   assert.deepEqual(callers.sort(), ['src/app/page.js', 'src/components/LayerPanel.js']);
 });
 

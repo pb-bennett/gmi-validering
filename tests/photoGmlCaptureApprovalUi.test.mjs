@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
-import { clickSourceControl, closePhotoSources, openPhotoSources, setPhotoFiles, sourceWizard, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
+import { clickSourceControl, closePhotoSources, includePhotoSource, openPhotoSources, saveSourceWizardChanges, setPhotoFiles, sourceWizard, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { chooseImportPlacement, clickImport, createLayerWithoutPlacement, importDialog, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 
 // M3: GML capture time is an explicit, unchecked-by-default choice in Koblinger and in import Kontroll («Fra GML-fil»).
@@ -76,10 +76,10 @@ test('positioning wizard: GML capture-time choices in Koblinger are unchecked, s
       assert.equal(await browser.evaluate(`${review}.querySelector('li').innerText.replace(/\\s+/g,' ').trim()`),
         'a.png Gjeldende: 12.05.2026 14:33:02 · tidssone ukjent · EXIF DateTimeOriginal GML: 12.05.2026 15:00:00 · tidssone ukjent Annen opptakstid');
       assert(!await browser.evaluate(`${choices}.innerText.includes('e.png')`), 'ambiguous references are not offered');
-      assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Lagrer filen og treffene. Ingen posisjoner endres.')`));
+      assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Kilden tas med i endringene. Ingenting lagres før du velger Lagre endringer.')`));
       await layout(browser, sourceWizard, '.photo-positioning-content', 'koblinger');
 
-      // Staged only: navigation keeps the choice and nothing is written before «Behold GML-kilden».
+      // Staged only: navigation keeps the choice and nothing is written before «Lagre endringer» (B).
       await browser.evaluate(toggle(sourceWizard, 'Bruk opptakstid fra GML'));
       await click('Tilbake'); await browser.waitFor(`${sourceWizard}.dataset.step === '1'`);
       await click('Neste'); await browser.waitFor(choices);
@@ -92,9 +92,15 @@ test('positioning wizard: GML capture-time choices in Koblinger are unchecked, s
         await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode: key === 'ArrowRight' ? 39 : 37 });
       }
       assert.equal(await browser.evaluate(`${review}.querySelector('input[type=radio]:checked').parentElement.textContent`), 'Behold gjeldende');
-      await click('Behold GML-kilden');
-      await browser.waitFor(`${sourceWizard}?.querySelector('.photo-source-saved')`);
-      assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Opptakstid er brukt for 1 bilde.')`));
+      await includePhotoSource(browser);
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('[data-positioning-staged]').innerText`), '«times.gml» er tatt med i endringene.');
+      assert.equal((await inspect(browser, 'b.png')).time, null, 'including the source wrote nothing');
+      await click('Neste'); await browser.waitFor(`${sourceWizard}.dataset.step === '3'`);
+      await click('Behold alle gjeldende'); await click('Neste'); await browser.waitFor(`${sourceWizard}.dataset.step === '4'`);
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('[data-kontroll="capture"] li').innerText`), '1 bilde får opptakstid fra times.gml (fullstendig).');
+      assert.equal((await inspect(browser, 'b.png')).time, null, 'Kontroll wrote nothing');
+      await saveSourceWizardChanges(browser);
+      assert.match(await browser.evaluate(`${sourceWizard}.querySelector('[data-positioning-receipt]').innerText`), /Opptakstid lagret for 1 bilde/);
       await closePhotoSources(browser);
       assert.deepEqual(await inspect(browser, 'a.png'), { time: '12.05.2026 14:33:02 · tidssone ukjent', source: 'EXIF DateTimeOriginal' }, 'the conflict kept EXIF');
       const b = await inspect(browser, 'b.png');
@@ -109,8 +115,8 @@ test('positioning wizard: GML capture-time choices in Koblinger are unchecked, s
       assert.deepEqual((await browser.evaluate(choicesIn(sourceWizard))).map(([label, checked]) => [label, checked]),
         [['Bruk kun dato fra GML (1)', false], ['Behold gjeldende', true], ['Bruk GML', false]], 'the accepted value is not offered again');
       await browser.evaluate(`Array.from(${review}.querySelectorAll('input[type=radio]')).find(i=>i.value==='gml').click()`);
-      await click('Oppdater treff');
-      await browser.waitFor(`${sourceWizard}?.querySelector('.photo-source-saved') && !${sourceWizard}.querySelector('[data-gml-capture]')`);
+      await includePhotoSource(browser);
+      await saveSourceWizardChanges(browser, { keepPositions: true });
       await closePhotoSources(browser);
       const a = await inspect(browser, 'a.png');
       assert.equal(a.time, '12.05.2026 15:00:00 · tidssone ukjent'); assert.match(a.source, /^GML/);

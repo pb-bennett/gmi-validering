@@ -82,7 +82,7 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`FOTO fit with a 
 
       const [first, anchor] = await importPhotos([west, east], true);
       await browser.waitFor(pointsAreClear([first, anchor]));
-      assert((await viewportAt(anchor)).zoom <= 19);
+      assert((await viewportAt(anchor)).zoom <= 20, "A1: general automatic fit cap is z20");
       const coverage = await browser.evaluate(`(() => {
         const bounds = ${map}.getBoundingClientRect(), card = document.querySelector('.photo-map-display-card').getBoundingClientRect();
         const a = ${marker(first)}.getBoundingClientRect(), b = ${marker(anchor)}.getBoundingClientRect();
@@ -129,7 +129,8 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`FOTO fit with a 
 
       await closeFoto();
       const closeIds = await importPhotos([closeWest, closeEast], true);
-      await browser.waitFor(`${zoom} === 19 && ${pointsAreClear(closeIds)}`);
+      // A1: a cluster just over 10 m (≈16 m here) fits at the general cap, z20.
+      await browser.waitFor(`${zoom} === 20 && ${pointsAreClear(closeIds)}`);
       await shot('cluster-cap');
     } finally {
       await browser.close();

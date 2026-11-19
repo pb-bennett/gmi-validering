@@ -31,7 +31,8 @@ export function formatPhotoCaptureTime(value, provenance) {
   const [, year, month, day, hour, minute, second, fraction, zone] = match;
   if (provenance?.estimated) return { text: `${day}.${month}.${year} · Anslått`, notes: ['12:00:00 er teknisk standard, ikke målt opptakstid'] };
   const time = hour === undefined ? '' : ` ${hour}:${minute}${second === undefined ? '' : `:${second}${fraction ? fraction.replace('.', ',') : ''}`}`;
-  const notes = [];
+  // M5 (C2): never shown as measured.
+  const notes = provenance?.technical ? [provenance.technical.kind === 'noon' ? 'Klokkeslett teknisk utfylt' : 'Sekunder teknisk utfylt'] : [];
   if (value.precision === 'date') notes.push('bare dato');
   else if (value.precision === 'minute') notes.push('uten sekunder');
   if (hour !== undefined && !zone) notes.push('tidssone ukjent');
@@ -41,6 +42,7 @@ export function formatPhotoCaptureTime(value, provenance) {
 export function photoMetadataSourceLabel(field, provenance) {
   if (!provenance) return null;
   if (provenance.estimated) return 'Anslått';
+  if (provenance.technical) return `${photoMetadataSourceLabel(field, { ...provenance, technical: undefined })} · teknisk utfylt`;
   if (provenance.kind === 'manual') return provenance.mode === 'bulk' ? 'Manuell (samme verdi for flere)' : 'Manuell';
   if (provenance.kind === 'exif') return field === 'captureTime' ? 'EXIF DateTimeOriginal' : 'EXIF Artist';
   if (provenance.kind === 'gml') return `GML${provenance.sourceFilename ? ` · ${provenance.sourceFilename}` : ''}`;

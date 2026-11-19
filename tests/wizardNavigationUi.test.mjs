@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { createWorkspaceFixtures, openWorkspace } from './helpers/photoWorkspaceFixtures.mjs';
-import { clickSourceControl as click, openPhotoSources, sourceWizard as wizard, stagePhotoSource, savePhotoSource } from './helpers/photoSourceWorkflow.mjs';
+import { clickSourceControl as click, openPhotoSources, sourceWizard as wizard, stagePhotoSource, includePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 
 const app = process.env.PHOTO_UI_URL;
 const draft = 'document.querySelector("dialog[open][data-gmi-confirm=positioning-draft]")';
@@ -50,32 +50,34 @@ test('positioning navigation: conditional numbering, adjacent steps, preserved m
       await click(browser, 'Tilbake'); assert.equal(await browser.evaluate(`${wizard}.dataset.step`), '1');
       await click(browser, 'Neste'); assert.deepEqual(await browser.evaluate(choices), before);
       await click(browser, 'Neste'); assert.equal(await browser.evaluate(`${wizard}.dataset.step`), '4');
-      const applyLabel = await browser.evaluate(`${wizard}.querySelector('[data-positioning-apply]').innerText`);
-      await layout(browser, 'control', ['Avbryt', 'Tilbake', applyLabel], true);
+      assert.equal(await browser.evaluate(`${wizard}.querySelector('[data-positioning-apply]').innerText`), 'Lagre endringer');
+      await layout(browser, 'control', ['Avbryt', 'Tilbake', 'Lagre endringer'], true);
       await click(browser, 'Tilbake'); assert.deepEqual(await browser.evaluate(choices), before);
       await browser.evaluate(`${wizard}.querySelector('[data-positioning-cancel]').focus()`);
       await key(browser, 'Escape', 27); await browser.waitFor(draft);
-      assert.equal(await browser.evaluate('document.activeElement.innerText'), 'Fortsett posisjonering');
+      assert.equal(await browser.evaluate('document.activeElement.innerText'), 'Fortsett');
       await key(browser, 'Escape', 27); await browser.waitFor(`!${draft}`);
       assert.deepEqual(await browser.evaluate(choices), before);
       assert(await browser.evaluate(`${wizard}.open`), 'nested Escape must keep the parent modal open');
       await browser.waitFor(`document.activeElement === ${wizard}.querySelector('[data-positioning-cancel]')`);
       await browser.evaluate(`${wizard}.querySelector('header button').click()`); await browser.waitFor(draft);
-      await click(browser, 'Fortsett posisjonering', draft); assert.deepEqual(await browser.evaluate(choices), before);
+      await click(browser, 'Fortsett', draft); assert.deepEqual(await browser.evaluate(choices), before);
       await click(browser, 'Avbryt'); await browser.waitFor(draft);
-      await click(browser, 'Forkast posisjonsvalg', draft); await browser.waitFor(`!${wizard}`);
-      // Source save remains explicit, does not apply positions and stays committed on Close.
+      await click(browser, 'Forkast endringer', draft); await browser.waitFor(`!${wizard}`);
+      // B: including a source is explicit, applies no positions and saves nothing; cancelling discards it.
       await stagePhotoSource(browser, fixtures.gmi, 'gmi');
       assert.deepEqual(await browser.evaluate(steps), ['1. Kilder', '2. Koblinger', '3. Plassering', '4. Kontroll']);
-      await layout(browser, 'source-review', ['Avbryt', 'Tilbake', 'Oppdater koblinger'], true);
+      // Including a source commits nothing, so it is the ordinary primary, without the final save treatment.
+      await layout(browser, 'source-review', ['Avbryt', 'Tilbake', 'Ta med kilde og koblinger']);
       await click(browser, 'Tilbake'); assert.equal(await browser.evaluate(`${wizard}.dataset.step`), '1');
       await click(browser, 'Neste'); assert.equal(await browser.evaluate(`${wizard}.dataset.step`), '2');
       const markerCount = await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length');
-      await savePhotoSource(browser, 'gmi'); assert.equal(await browser.evaluate(`${wizard}.dataset.step`), '3');
+      await includePhotoSource(browser, 'gmi'); assert.equal(await browser.evaluate(`${wizard}.dataset.step`), '3');
       assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'), markerCount);
       await click(browser, 'Tilbake'); assert.equal(await browser.evaluate(`${wizard}.dataset.step`), '2');
-      await layout(browser, 'saved-source', ['Lukk', 'Tilbake', 'Neste']);
-      await click(browser, 'Lukk'); await browser.waitFor(`!${wizard}`);
+      await layout(browser, 'staged-source', ['Avbryt', 'Tilbake', 'Neste']);
+      await click(browser, 'Avbryt'); await browser.waitFor(draft);
+      await click(browser, 'Forkast endringer', draft); await browser.waitFor(`!${wizard}`);
       await openPhotoSources(browser);
       assert.equal(await browser.evaluate(`${wizard}.querySelectorAll('.photo-source-inventory [data-source-id]').length`), 1);
       await click(browser, 'Fjern kilde');

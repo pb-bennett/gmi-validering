@@ -99,3 +99,11 @@
 .photo-completion-done-state svg { flex: none; color: #245d41; }
 .photo-completion-task[aria-current='true'] { box-shadow: inset 3px 0 0 var(--gmi-interactive); }
 .photo-completion-group > summary { padding: 2px 4px; }
+/* M5 (C1): the ordered Opptakstid steps. Neutral frames; the estimate keeps its teal frame as the last, optional step. */
+.photo-capture-steps { display: grid; gap: 10px; }
+.photo-completion-estimated.photo-capture-step { border-color: var(--gmi-border-strong); background: var(--gmi-surface); }
+.photo-capture-step-options { display: grid; gap: 4px; margin: 0; padding: 0; border: 0; }
+.photo-capture-step-proposals { width: 100%; font-size: 12px; }
+.photo-capture-step-proposals ul { display: grid; gap: 2px; max-height: 12rem; overflow: auto; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.photo-capture-step-proposals strong { font-weight: 500; overflow-wrap: anywhere; }
+.photo-capture-step-actions { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -158,7 +158,7 @@ const useStore = create(
             mapBaseLayer: 'Kartverket Topo',
             mapOverlayVisibility: {
                 geminiWms: true,
-              eiendomsgrenser: true,
+              eiendomsgrenser: false,
             },
             measureMode: false,
             measurePoints: [],
@@ -1200,9 +1200,10 @@ const useStore = create(
           selectedObject3D: null, // Currently selected 3D object { type, index, data }
           mapCenterTarget: null, // { coordinates, zoom, featureId } - Target for map centering
           mapBaseLayer: 'Kartverket Topo', // Selected background map in LayersControl
+          // Eiendomsgrenser starts off on every app load (DA7); the choice is kept within the session only.
           mapOverlayVisibility: {
             geminiWms: true,
-            eiendomsgrenser: true,
+            eiendomsgrenser: false,
           },
           layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
           layerFitBoundsTarget: null, // { layerId, nonce } - Target layer for fit bounds
@@ -3287,6 +3288,9 @@ const useStore = create(
           settings: state.settings,
           ui: {
             ...state.ui,
+            // DA7: Eiendomsgrenser is a session choice; every app load starts with it off.
+            mapOverlayVisibility: Object.fromEntries(Object.entries(state.ui.mapOverlayVisibility || {})
+              .filter(([key]) => key !== 'eiendomsgrenser')),
             // A persisted open table cannot safely recreate an exact runtime
             // scope after reload. Preserve preferences but never reopen it.
             layerDataTable: {
@@ -3378,7 +3382,7 @@ const useStore = create(
               if (state.ui.mapOverlayVisibility === undefined) {
                 state.ui.mapOverlayVisibility = {
                   geminiWms: true,
-                  eiendomsgrenser: true,
+                  eiendomsgrenser: false,
                 };
               } else {
                 if (
@@ -3387,12 +3391,8 @@ const useStore = create(
                 ) {
                   state.ui.mapOverlayVisibility.geminiWms = true;
                 }
-                if (
-                  state.ui.mapOverlayVisibility.eiendomsgrenser ===
-                  undefined
-                ) {
-                  state.ui.mapOverlayVisibility.eiendomsgrenser = true;
-                }
+                // DA7: never restored from storage, including a value stored before it stopped being persisted.
+                state.ui.mapOverlayVisibility.eiendomsgrenser = false;
               }
               if (state.ui.hiddenCodes === undefined) {
                 state.ui.hiddenCodes = [];

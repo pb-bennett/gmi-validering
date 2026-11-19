@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { photoSourceEvidenceSignature, selectedPhotoSourcePositions } from '../src/lib/photos/photoPositioning.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
+import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 const point = (longitude = 10) => ({ crs: 'EPSG:4326', longitude, latitude: 60 });
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -24,7 +25,7 @@ async function setup(options = {}, names = ['a.jpg', 'b.jpg', 'c.jpg']) {
 async function save(session, layer, ticket, file, kind = 'gml') {
   await session.stageLayerSource(layer.id, file, kind);
   const review = session.getSnapshot().sourceReviews[layer.id];
-  assert.equal(session.saveSourceWorkflowSource(ticket, review).ok, true);
+  assert.equal(saveStagedSource(session, ticket, review).ok, true);
   return session.getLayer(layer.id).spatialSources.at(-1);
 }
 
@@ -127,7 +128,7 @@ for (const phase of ['before-source-save', 'after-source-save', 'position-review
   const { session, layer } = await setup();
   const ticket = session.beginSourceWorkflow(layer.id);
   await session.stageLayerSource(layer.id, gml());
-  if (phase !== 'before-source-save') assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  if (phase !== 'before-source-save') assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
   if (['position-review', 'summary'].includes(phase)) assert(session.reviewSourceWorkflowPositions(ticket));
   session.endSourceWorkflow(ticket);
   assert.equal(session.getLayer(layer.id).spatialSources.length, phase === 'before-source-save' ? 0 : 1);
@@ -189,7 +190,7 @@ test('ambiguous GML never offers a position; GMI associations remain independent
   session.removeLayerPhotos(layer.id, [ids[1]], { confirmed: true });
   const next = session.beginSourceWorkflow(layer.id);
   session.recheckLayerSource(layer.id, source.id);
-  assert(session.saveSourceWorkflowSource(next, session.getSnapshot().sourceReviews[layer.id]).ok);
+  assert(saveStagedSource(session, next, session.getSnapshot().sourceReviews[layer.id]).ok);
   assert.equal(session.getGmiPhotoAssociations(layer.id, ids[0]).length, 1);
   assert.equal(session.getPhoto(ids[0]).spatial.current, null);
   session.clear();
@@ -202,7 +203,7 @@ test('source save rejects a replaced review and late source work cannot survive 
   await session.stageLayerSource(layer.id, gml());
   const previous = session.getSnapshot().sourceReviews[layer.id];
   await session.stageLayerSource(layer.id, gml(['a.jpg'], 13));
-  assert.equal(session.saveSourceWorkflowSource(ticket, previous).ok, false);
+  assert.equal(saveStagedSource(session, ticket, previous).ok, false);
   assert.equal(session.getLayer(layer.id).spatialSources.length, 0);
   session.endSourceWorkflow(ticket);
   const deferred = await setup({ parseGml: () => new Promise((resolve) => { finish = resolve; }) });
@@ -223,7 +224,7 @@ test('a new workflow invalidates the previous operation and removes its staged r
   const current = session.beginSourceWorkflow(layer.id);
   assert.equal(session.sourceWorkflowIsLive(previous), false);
   assert.equal(session.getSnapshot().sourceReviews[layer.id], undefined);
-  assert.equal(session.saveSourceWorkflowSource(previous, stale).ok, false);
+  assert.equal(saveStagedSource(session, previous, stale).ok, false);
   assert(session.reviewSourceWorkflowPositions(current));
   session.endSourceWorkflow(previous);
   assert(session.sourceWorkflowIsLive(current), 'old cleanup cannot cancel the current operation');
@@ -237,7 +238,7 @@ test('an invalid later GML entry aborts the source checkpoint before any candida
   parsed.entries[1].position.latitude = 901;
   await session.stageLayerSource(layer.id, new File([JSON.stringify(parsed)], 'invalid.gml'));
   const before = ids.map((id) => session.getPhoto(id));
-  assert.equal(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok, false);
+  assert.equal(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok, false);
   assert.equal(session.getLayer(layer.id).spatialSources.length, 0);
   ids.forEach((id, index) => {
     assert.strictEqual(session.getPhoto(id).spatial, before[index].spatial);
@@ -264,9 +265,16 @@ test('product UI has one source workflow and inspector has no direct source acce
   assert.match(wizard, /photo-collection-dialog photo-positioning-wizard/);
   assert.match(wizard, /Oppdater kontrollen/);
   assert.doesNotMatch(wizard, /acceptCandidates|applyPhotoPositioning\(/);
-  assert.match(wizard, /const connectionOnly = step === 3 && sourceSaved && selected\.length === 0/);
-  assert.match(wizard, /!connectionOnly && <button[^\n]+data-positioning-cancel/);
-  assert.match(wizard, /connectionOnly\s*\? <button[^\n]+onClick=\{onClose\}><CheckIcon[^\n]+weight="regular"[^\n]+Fullfør<\/button>/);
+  // B-4: no intermediate save remains. Sources are staged; one «Lagre endringer» commits the whole draft; the S3
+  // «Fullfør» shortcut is gone (connection-only reaches Kontroll), and the wizard closes from its receipt with «Lukk».
+  assert.doesNotMatch(wizard, /saveSourceWorkflowSource|removeGmiSource\(|applySourceWorkflowPositions|connectionOnly|Fullfør<\/button>|FloppyDiskIcon/);
+  assert.match(wizard, /photoSession\.stageSourceWorkflowSource\(/);
+  assert.match(wizard, /photoSession\.stageSourceWorkflowRemoval\(/);
+  assert.equal([...wizard.matchAll(/photoSession\.commitSourceWorkflow\(/g)].length, 1, 'one commit');
+  assert.match(wizard, /'Ta med kilde og koblinger' : 'Ta med kilden'/);
+  assert.match(wizard, /saving \? 'Lagrer …' : 'Lagre endringer'/);
+  assert.match(wizard, /disabled=\{!selected\.length && !ops\.length\}/, 'Plassering is optional once a change is staged');
+  assert.match(wizard, /done \? <button type="button" className=\{primary\} onClick=\{close\} data-positioning-close>Lukk<\/button>/);
 });
 
 test('Pass 1B: a GMI layer already loaded in the app is a source-workflow source, with the same lifecycle as a file', async () => {
@@ -289,7 +297,7 @@ test('Pass 1B: a GMI layer already loaded in the app is a source-workflow source
   ids.forEach((id, index) => assert.strictEqual(session.getPhoto(id).spatial, before[index].spatial));
 
   // Keeping it attaches the source and links; positions still need explicit acceptance.
-  assert.equal(session.saveSourceWorkflowSource(ticket, review).ok, true);
+  assert.equal(saveStagedSource(session, ticket, review).ok, true);
   const [source] = session.getLayer(layer.id).spatialSources;
   assert.equal(source.kind, 'gmi'); assert.equal(source.fingerprint, (await parseGmiPhotoSource(file)).fingerprint);
   ids.forEach((id, index) => assert.strictEqual(session.getPhoto(id).spatial.current, before[index].spatial.current));

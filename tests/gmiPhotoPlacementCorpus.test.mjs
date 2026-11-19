@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { gmiPointPosition, parseGmiPhotoSource } from '../src/lib/photos/gmiPhotoSource.mjs';
 import { photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '../src/lib/photos/photoPositioning.mjs';
+import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 async function inventory(directory) {
   const files = [];
@@ -64,7 +65,7 @@ for (const [label, directory] of [['corpus', process.env.GMI_PHOTO_CORPUS], ['Ek
               objects: edges.map((edge) => ({ objectKey: edge.objectKey, guid: parsed.objectsByKey[edge.objectKey].guid })) });
           }
         }
-        assert(session.saveSourceWorkflowSource(ticket, review).ok);
+        assert(saveStagedSource(session, ticket, review).ok);
         const photos = session.getLayerPhotos(layer.id);
         assert(photos.every((photo) => photo.spatial.current === null));
         for (const [assetId, points] of expected) {
@@ -88,7 +89,7 @@ for (const [label, directory] of [['corpus', process.env.GMI_PHOTO_CORPUS], ['Ek
         if (requests.length) assert(session.applySourceWorkflowPositions(ticket, plan, requests).ok);
         const ids = session.getLayer(layer.id).photoIds;
         session.recheckLayerSource(layer.id, review.source.id);
-        assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+        assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
         assert.strictEqual(session.getLayer(layer.id).photoIds, ids);
         findings.sources++; findings.assets += imported.length; findings.pointPlacements += pointCount;
         session.clear();

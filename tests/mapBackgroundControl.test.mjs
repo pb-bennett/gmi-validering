@@ -27,7 +27,7 @@ test('existing right-edge Leaflet picker keeps four radio backgrounds and one bo
     ['Kartverket Topo', 'Kartverket Gråtone', 'OpenStreetMap', 'Ingen']);
   assert.deepEqual([...control.matchAll(/<LayersControl.Overlay[\s\S]*?name="([^"]+)"/g)].map((m) => m[1]), ['Eiendomsgrenser']);
   assert.match(control, /position="topright"/);
-  assert.match(control, /checked=\{mapOverlayVisibility.eiendomsgrenser !== false\}/);
+  assert.match(control, /checked=\{mapOverlayVisibility.eiendomsgrenser === true\}/);
   assert.match(map, /map.on\('baselayerchange', handleBaseLayerChange\)/);
   assert.match(map, /map.on\('overlayadd', handleOverlayAdd\)/);
   assert.match(map, /map.on\('overlayremove', handleOverlayRemove\)/);
@@ -61,25 +61,30 @@ test('semantic GeoJSON and casing render outside the picker under sidebar layer 
   assert.equal(useStore.getState().layers[id].data, data);
 });
 
-test('fresh and legacy missing boundary preferences resolve ON; explicit booleans survive hydration', async () => {
-  assert.equal(useStore.getState().ui.mapOverlayVisibility.eiendomsgrenser, true);
+// DA7: Eiendomsgrenser is off on every app load, whatever an older version stored; Gemini WMS keeps its default.
+test('every app load starts with Eiendomsgrenser off, including legacy stored ON values', async () => {
+  assert.equal(useStore.getState().ui.mapOverlayVisibility.eiendomsgrenser, false);
+  assert.match(control, /checked=\{mapOverlayVisibility.eiendomsgrenser === true\}/, 'a missing value means off');
   for (const overlay of [undefined, {}, { eiendomsgrenser: true }, { eiendomsgrenser: false }]) {
     values.set('gmi-validator-storage', JSON.stringify({ version: 3, state: { ui: { mapOverlayVisibility: overlay } } }));
     await useStore.persist.rehydrate();
-    assert.equal(useStore.getState().ui.mapOverlayVisibility.eiendomsgrenser, overlay?.eiendomsgrenser !== false);
+    assert.equal(useStore.getState().ui.mapOverlayVisibility.eiendomsgrenser, false);
+    assert.equal(useStore.getState().ui.mapOverlayVisibility.geminiWms, true);
   }
 });
 
-test('OFF and ON toggles persist and reload without persisting uploaded layers; basemap persistence survives', async () => {
-  for (const visible of [false, true]) {
+test('toggles hold within the session and are never persisted; uploaded layers are not persisted; basemap persistence survives', async () => {
+  for (const visible of [true, false, true]) {
     useStore.getState().setMapOverlayVisibility('eiendomsgrenser', visible);
-    assert.equal(persisted().ui.mapOverlayVisibility.eiendomsgrenser, visible);
-    await useStore.persist.rehydrate();
-    assert.equal(useStore.getState().ui.mapOverlayVisibility.eiendomsgrenser, visible);
-    assert.equal(persisted().layers, undefined);
-    assert.equal(persisted().layerOrder, undefined);
-    assert.equal(persisted().data, undefined);
+    assert.equal(useStore.getState().ui.mapOverlayVisibility.eiendomsgrenser, visible, 'one shared value for every workspace map');
+    assert.equal(Object.hasOwn(persisted().ui.mapOverlayVisibility, 'eiendomsgrenser'), false);
+    assert.equal(persisted().ui.mapOverlayVisibility.geminiWms, true);
   }
+  await useStore.persist.rehydrate();
+  assert.equal(useStore.getState().ui.mapOverlayVisibility.eiendomsgrenser, false, 'a reload starts with it off');
+  assert.equal(persisted().layers, undefined);
+  assert.equal(persisted().layerOrder, undefined);
+  assert.equal(persisted().data, undefined);
   useStore.getState().setMapBaseLayer('Ingen');
   assert.equal(persisted().ui.mapBaseLayer, 'Ingen');
   await useStore.persist.rehydrate();

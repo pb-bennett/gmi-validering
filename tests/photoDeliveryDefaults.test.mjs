@@ -13,6 +13,7 @@ import { exportFixture } from './helpers/photoExportFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
 import { gpsPng, noGpsPng } from './helpers/photoGpsFixtures.mjs';
 import { parseRealGml, readRealExif } from './helpers/photoEvidenceFixtures.mjs';
+import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const names = Array.from({ length: 14 }, (_, index) => `foto-${String(index + 1).padStart(2, '0')}.png`);
@@ -40,7 +41,7 @@ async function setup({ shared = false } = {}) {
   if (shared) objects.push({ guid: guid(9), label: 'Kum 10', hyperlink: `h:1(link:"Attachments\\${GMI_NAMES[0]}") `, xyz: '582100 6566200 1' });
   const ticket = session.beginSourceWorkflow(layer.id);
   assert(await session.stageLayerSource(layer.id, gmiFile(objects, 'revidert.gmi'), 'gmi'));
-  assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
   // Accept every GMI object position, as the import does.
   const plan = session.reviewSourceWorkflowPositions(ticket);
   const requests = plan.rows.flatMap((row) => { const option = row.options.find((item) => item.kind === 'gmi'); return option ? [{ photoId: row.photoId, candidateId: option.id }] : []; });
@@ -59,7 +60,7 @@ async function stageGml(context, file) {
   const { session, layer } = context;
   const ticket = session.beginSourceWorkflow(layer.id);
   assert(await session.stageLayerSource(layer.id, file, 'gml'));
-  assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
   return reviewPositions(context, ticket);
 }
 
@@ -102,7 +103,7 @@ for (const workflow of ['source wizard', 'direct positioning']) test(`${workflow
     { hyperlink: 'h:1(link:"linked.png") ' },
     { scope: 'line', tema: 'VL', guid: guid(8), hyperlink: 'h:1(link:"line.png") ' },
   ]), 'gmi'));
-  assert(session.saveSourceWorkflowSource(ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
+  assert(saveStagedSource(session, ticket, session.getSnapshot().sourceReviews[layer.id]).ok);
   const photos = session.getLayerPhotos(layer.id);
   const id = (name) => photos.find((photo) => photo.originalFilename === name).id;
   const excluded = id('excluded.png');

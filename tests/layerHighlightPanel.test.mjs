@@ -52,8 +52,10 @@ test('sidebar rows show each stored layer colour with a stable fallback and exis
   assert.match(layerPanel, /<input[\s\S]*?checked=\{layer\.visible\}/);
   assert.match(layerPanel, /truncate text-xs font-medium text-gmi-text/);
   assert.match(layerPanel, /\{pointCount\} punkt, \{lineCount\} ledn\./);
-  assert.match(layerPanel, /title="Zoom til lag"/);
-  assert.match(layerPanel, /title="Fjern lag"/);
+  // A2: the shared icon control names them (aria-label + tooltip); no native title.
+  assert.match(layerPanel, /<PhotoIconButton icon=\{CornersOutIcon\} size=\{14\} label="Zoom til lag" className="layer-card-icon-button"/);
+  assert.match(layerPanel, /<PhotoIconButton icon=\{TrashIcon\} size=\{14\} label="Fjern lag"/);
+  assert.doesNotMatch(layerPanel, /title="(Zoom til lag|Fjern lag|Nullstill filtre|Åpne datatabell)"/);
 
   const first = { highlightAll: false, highlightStyle: { color: '#123ABC' } };
   const second = { highlightAll: true, highlightStyle: { color: '#45ABCD' } };

@@ -7,6 +7,7 @@
 .photo-import-steps [aria-current] { font-weight:700; text-decoration:underline; text-underline-offset:5px; }
 .photo-import-steps li { display:flex; align-items:center; }
 .photo-import-steps button { text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.photo-import-steps .photo-import-step-done { margin-right:.25rem; color:var(--gmi-interactive); }
 .photo-import-heading { padding:.5rem 1rem; font-weight:600; flex:none; }
 .photo-import-step-body { flex:1; min-height:0; overflow:auto; padding:1rem; }
 .photo-import-empty { display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; gap:1rem; text-align:center; padding:2rem; }
@@ -55,6 +56,10 @@
 .photo-gml-capture-list li > div { display:grid; min-width:0; font-variant-numeric:tabular-nums; }
 .photo-gml-capture-file { overflow-wrap:anywhere; font-weight:500; }
 .photo-gml-capture-reason { color:var(--gmi-text-muted); }
+/* A5: neutral list of compatible proposals, outside the SJEKK panel. */
+.photo-gml-capture-proposals { margin:0; color:var(--gmi-text); }
+.photo-gml-capture-proposals summary { width:fit-content; cursor:pointer; }
+.photo-gml-capture-tag { width:fit-content; padding:0 .375rem; border:1px solid var(--gmi-border-strong); border-radius:999px; color:var(--gmi-text-muted); font-size:.75rem; }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) { overflow:auto; }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) .photo-collection-original { min-height:120px; position:relative; }
 .photo-collection-inspector:not(:has(.photo-spatial-inspector)) .photo-collection-facts { max-height:none; overflow:visible; overflow-wrap:anywhere; }

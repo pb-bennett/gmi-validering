@@ -7,7 +7,7 @@ import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
-import { sourceWizard, clickSourceControl as click, setPhotoFiles, openPhotoSources, closePhotoSources, stagePhotoSource, savePhotoSource, applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
+import { sourceWizard, clickSourceControl as click, setPhotoFiles, openPhotoSources, closePhotoSources, stagePhotoSource, includePhotoSource, applyPhotoSourcePositions } from './helpers/photoSourceWorkflow.mjs';
 
 const app = process.env.PHOTO_UI_URL, realGml = process.env.PHOTO_GML_FIXTURE;
 async function start(browser) {
@@ -74,19 +74,24 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert.equal((await sourcesInfo(browser)).cards, 0, 'pre-checkpoint cancellation');
       await stagePhotoSource(browser, gmi, 'gmi');
       await browser.evaluate('void (window.__unifiedDialog = document.querySelector(".photo-positioning-wizard"))');
-      await savePhotoSource(browser, 'gmi');
+      // B: «Ta med kilde og koblinger» stages the source; nothing is saved before «Lagre endringer».
+      await includePhotoSource(browser, 'gmi');
       assert(await browser.evaluate(`${sourceWizard}===window.__unifiedDialog`));
-      assert.equal(await browser.evaluate(markerCount), 1, 'GMI save creates zero positions');
-      assert.equal(await browser.evaluate(`${spatial}.querySelector('section[aria-label=Plassering]').innerText`), manual, 'GMI save changes neither current nor direction');
+      assert.equal(await browser.evaluate(markerCount), 1, 'including GMI creates zero positions');
+      assert.equal(await browser.evaluate(`${spatial}.querySelector('section[aria-label=Plassering]').innerText`), manual, 'including GMI changes neither current nor direction');
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 3, 'no GMI occurrence is added before saving');
       await stagePhotoSource(browser, gml);
       // M3: GML capture time is an explicit, unchecked choice committed with the source.
       const gmlTimeChoice = `Array.from(${sourceWizard}.querySelectorAll('[data-gml-capture] .photo-gml-capture-choice')).find(l=>l.textContent.trim()==='Bruk opptakstid fra GML (2)').querySelector('input')`;
       assert.equal(await browser.evaluate(`${gmlTimeChoice}.checked`), false);
       await browser.evaluate(`${gmlTimeChoice}.click()`);
-      await savePhotoSource(browser);
-      assert(await browser.evaluate(`${sourceWizard}.innerText.includes('Opptakstid er brukt for 2 bilder.')`));
+      await includePhotoSource(browser);
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('[data-positioning-staged]').innerText`), '«positions.gml» er tatt med i endringene.');
       assert(await browser.evaluate(`${sourceWizard}===window.__unifiedDialog`));
-      assert.equal(await browser.evaluate(markerCount), 1, 'GML save retains evidence only');
+      assert.equal(await browser.evaluate(markerCount), 1, 'including GML writes nothing');
+      // Kilder lists both staged sources with «Ny» and «Angre».
+      await click(browser, 'Tilbake');
+      assert.deepEqual(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('[data-staged-op="new"]')).map(e => e.closest('section').querySelector('.photo-source-filename').firstChild.textContent)`), ['objects.gmi', 'positions.gml']);
       await click(browser, 'Neste');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '3 valgt');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-lead').textContent`), 'Entydige posisjoner er forhåndsvalgt. Manuelle posisjoner beholdes.');
@@ -113,7 +118,37 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
         select.dispatchEvent(new Event('change',{bubbles:true}));
       })()`);
       await click(browser, 'Neste');
-      await click(browser, 'Bruk valgte posisjoner for 2 plasseringer');
+      // Kontroll summarises the whole transaction; nothing has been written yet.
+      const kontroll = (key) => browser.evaluate(`${sourceWizard}.querySelector('[data-kontroll="${key}"]')?.innerText.replace(/\\s+/g, ' ').trim() ?? null`);
+      assert.match(await kontroll('sources'), /^Kilder \(2\) objects\.gmi · Legges til positions\.gml · Legges til$/);
+      assert.match(await kontroll('links'), /^Koblinger 1 ny plassering/);
+      assert.equal(await kontroll('capture'), 'Opptakstid 2 bilder får opptakstid fra positions.gml (fullstendig).');
+      assert.match(await kontroll('positions'), /2 plasseringer valgt/);
+      assert.equal(await browser.evaluate(markerCount), 1, 'Kontroll writes nothing');
+      // Cancel guard: Escape asks before discarding the draft; «Fortsett» keeps everything.
+      await browser.evaluate(`${sourceWizard}.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`);
+      await browser.waitFor('document.querySelector("dialog[open][data-gmi-confirm=positioning-draft]")');
+      assert.match(await browser.evaluate('document.querySelector("[data-gmi-confirm=positioning-draft]").innerText'), /Forkaste endringene\?[\s\S]*Kilder, koblinger, opptakstider og posisjonsvalg i denne kontrollen lagres ikke\. Fotolaget beholdes som før\./);
+      await click(browser, 'Fortsett', 'document.querySelector("[data-gmi-confirm=positioning-draft]")');
+      await browser.waitFor(`!document.querySelector("dialog[open][data-gmi-confirm=positioning-draft]") && ${sourceWizard}.dataset.step === '4'`);
+      await click(browser, 'Lagre endringer');
+      await browser.waitFor(`${sourceWizard}?.dataset.saved`);
+      assert.equal(await browser.evaluate('document.activeElement.innerText'), 'Endringer lagret', 'the completion heading takes focus');
+      const receipt = await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('[data-positioning-receipt] li')).map(li => li.innerText.trim())`);
+      assert.deepEqual(receipt, ['Kilder lagt til: objects.gmi, positions.gml', '1 ny plassering fra GMI-koblinger', 'Opptakstid lagret for 2 bilder',
+        'Posisjoner: 2 plassert'], 'GMI-linked photos keep their GMI delivery default, so no GML line');
+      assert.deepEqual(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('footer button')).map(b => b.innerText)`), ['Lukk']);
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('header button').getAttribute('aria-label')`), 'Lukk kildekontroll');
+      for (const [width, height] of [[1280, 720], [1366, 768]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        if (process.env.PHOTO_SCREENSHOT_DIR) {
+          await mkdir(process.env.PHOTO_SCREENSHOT_DIR, { recursive: true });
+          const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+          await writeFile(path.join(process.env.PHOTO_SCREENSHOT_DIR, `b3-saved-receipt-${width}x${height}.png`), Buffer.from(data, 'base64'));
+        }
+      }
+      await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
+      await click(browser, 'Lukk');
       await browser.waitFor(`!${sourceWizard}`);
       assert.equal(await browser.evaluate(markerCount), 3);
       await selectPhoto(browser, 'a.png');
@@ -137,28 +172,23 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       await openPhotoSources(browser);
       await click(browser, 'Kontroller på nytt', `${sourceWizard}.querySelector('.photo-source-inventory section[data-source-id]')`);
       await browser.waitFor(`${sourceWizard}.innerText.includes('Kilden finnes i laget')`);
-      await savePhotoSource(browser, 'gmi');
+      // Connection-only (B3): Plassering is optional once a change is staged; Kontroll saves it with «Lagre endringer».
+      await includePhotoSource(browser, 'gmi');
       const footer = `${sourceWizard}.querySelector('[data-positioning-footer]')`;
       const primary = `${footer}.querySelector('.gmi-primary-control')`;
       await click(browser, 'Behold alle gjeldende');
-      await browser.waitFor(`${primary}.innerText === 'Fullfør' && !${primary}.disabled`);
-      await browser.evaluate(`(() => {
-        const field = Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id] select'))
-          .find(select => select.options[0].textContent === 'La bildet være uplassert');
-        field.value = Array.from(field.options).find(option => option.text.startsWith('EXIF')).value;
-        field.dispatchEvent(new Event('change', { bubbles: true }));
-      })()`);
       await browser.waitFor(`${primary}.innerText === 'Neste' && !${primary}.disabled`);
-      assert.equal(await browser.evaluate(`${footer}.querySelector('[data-positioning-cancel]').innerText`), 'Lukk');
-      await click(browser, 'Behold alle gjeldende');
-      await browser.waitFor(`${primary}.innerText === 'Fullfør'`);
+      assert.equal(await browser.evaluate(`${footer}.querySelector('[data-positioning-cancel]').innerText`), 'Avbryt');
+      await click(browser, 'Neste');
+      await browser.waitFor(`${sourceWizard}.dataset.step === '4' && ${primary}.innerText === 'Lagre endringer'`);
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('[data-kontroll="positions"]').innerText`), 'Ingen posisjoner endres.');
       for (const [width, height] of [[1280, 720], [1366, 768]]) {
         await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
         const geometry = await browser.evaluate(`(() => { const footer = ${footer}, primary = ${primary};
           return { labels: Array.from(footer.querySelectorAll('button')).map(button => button.innerText),
             primaries: footer.querySelectorAll('.gmi-primary-control').length, icon: Boolean(primary.querySelector('svg[aria-hidden=true]')),
             buttons: Array.from(footer.querySelectorAll('button')).map(button => button.getBoundingClientRect().toJSON()) }; })()`);
-        assert.deepEqual(geometry.labels, ['Tilbake', 'Fullfør']);
+        assert.deepEqual(geometry.labels, ['Avbryt', 'Tilbake', 'Lagre endringer']);
         assert.equal(geometry.primaries, 1);
         assert(geometry.icon);
         for (const button of geometry.buttons) assert(button.height === 40 && button.left >= 0 && button.right <= width && button.top >= 0 && button.bottom <= height);
@@ -174,7 +204,10 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
           (marker) => [marker.dataset.photoId, marker.style.transform]).sort() })`);
       await browser.evaluate('new Promise(resolve => setTimeout(resolve, 350))');
       const beforeCompletion = await viewport();
-      await click(browser, 'Fullfør');
+      await click(browser, 'Lagre endringer');
+      await browser.waitFor(`${sourceWizard}?.dataset.saved`);
+      assert.deepEqual(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('[data-positioning-receipt] li')).map(li => li.innerText.trim())`), ['Kontrollert på nytt: objects.gmi']);
+      await click(browser, 'Lukk');
       await browser.waitFor(`!${sourceWizard}`);
       await browser.evaluate('new Promise(resolve => setTimeout(resolve, 350))');
       assert.deepEqual(await viewport(), beforeCompletion, 'connection-only completion preserves the viewport');
@@ -192,6 +225,14 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       await click(browser, 'Tilbake');
       await click(browser, 'Fjern kilde');
       await click(browser, 'Fjern GMI-kilde');
+      // B3: the removal is staged, tagged «Fjernes» with «Angre», and applied only with «Lagre endringer».
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('[data-staged-op="remove-gmi"]').innerText`), 'Fjernes');
+      assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('[data-staged-removal]').innerText`), 'objects.gmi fjernes når du lagrer endringene.');
+      await click(browser, 'Neste'); await click(browser, 'Behold alle gjeldende'); await click(browser, 'Neste');
+      assert.match(await browser.evaluate(`${sourceWizard}.querySelector('[data-kontroll="sources"]').innerText`), /objects\.gmi · Fjernes/);
+      await click(browser, 'Lagre endringer');
+      await browser.waitFor(`${sourceWizard}?.dataset.saved`);
+      assert.deepEqual(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('[data-positioning-receipt] li')).map(li => li.innerText.trim())`), ['Kilder fjernet: objects.gmi']);
       await closePhotoSources(browser);
       assert.equal((await sourcesInfo(browser)).cards, 1);
       assert.equal(await browser.evaluate(markerCount), 3);

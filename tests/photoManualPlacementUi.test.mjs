@@ -1,4 +1,5 @@
 import { createLayerWithoutPlacement, retainGmlInWorkspace } from './helpers/photoImportWizard.mjs';
+import { reloadAcceptedSession } from './helpers/sessionReset.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdir, mkdir, writeFile } from 'node:fs/promises';
@@ -214,7 +215,7 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
       }
       await click('Åpne i bildemodul'); await browser.waitFor('document.querySelector(".photo-workspace-shell")');
       await enterEditMode(browser); await dragSelectedMarker(browser, 30, 30); await browser.waitFor(`${editCount}===1`);
-      await browser.send('Page.reload'); await browser.waitFor('!document.querySelector(".photo-workspace-shell") && !document.querySelector(".photo-edit-command-bar")');
+      await reloadAcceptedSession(browser); await browser.waitFor('!document.querySelector(".photo-workspace-shell") && !document.querySelector(".photo-edit-command-bar")');
       assert.equal(await browser.evaluate('window.__originalUrls.size'),0);
       console.log(JSON.stringify({ realPhotos:148, initialGmlMarkers:148, distinctCoordinates:136, changedMarkers:1,
         checks:'click/pan/keyboard placement, drag, discard/save, staged-only canonical state, boundaries, sources/wizard, removal, popups, URL reuse, layouts, reload',screenshots }));

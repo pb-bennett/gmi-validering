@@ -7,7 +7,7 @@ import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
-import { sourceWizard, clickSourceControl as click, setPhotoFiles, openPhotoSources, closePhotoSources, stagePhotoSource, savePhotoSource } from './helpers/photoSourceWorkflow.mjs';
+import { sourceWizard, clickSourceControl as click, setPhotoFiles, openPhotoSources, closePhotoSources, stagePhotoSource, includePhotoSource, savePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { KEYS, arrowOf, commandBar, dragSelectedMarker, editArrow, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
 
 const app = process.env.PHOTO_UI_URL;
@@ -71,9 +71,10 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await click(browser, 'Neste');
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '3 valgt');
       await stagePhotoSource(browser, sourceFile, 'gmi');
-      await savePhotoSource(browser, 'gmi');
+      // B: the GMI source and its new occurrence are staged; Plassering already offers the draft's four placements.
+      await includePhotoSource(browser, 'gmi');
       assert.equal(await browser.evaluate(markers), 0);
-      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 4);
+      assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'), 3, 'no occurrence is added before Lagre endringer');
       await browser.waitFor(`${sourceWizard}.querySelector('section[aria-label="Kontroller posisjoner"]')`);
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('.photo-positioning-selection strong').innerText`), '4 valgt');
       assert(!await browser.evaluate(`${sourceWizard}.innerText.includes('Foreslå GML for viste')`));
@@ -95,7 +96,11 @@ test('GMI point placements: two checkpoints, shared image/resource, exact object
       await browser.evaluate(`(() => {const row=Array.from(${sourceWizard}.querySelectorAll('li[data-photo-id]')).find(row=>row.querySelector('strong').innerText==='line.png');const select=row.querySelector('select');select.value='';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
       await click(browser, 'Neste');
       assert.equal(await browser.evaluate(markers), 0, 'summary still writes no accepted positions');
-      await click(browser, 'Bruk valgte posisjoner for 3 plasseringer');
+      assert.match(await browser.evaluate(`${sourceWizard}.querySelector('[data-kontroll="positions"]').innerText`), /3 plasseringer valgt/);
+      await click(browser, 'Lagre endringer');
+      await browser.waitFor(`${sourceWizard}?.dataset.saved`);
+      assert.match(await browser.evaluate(`${sourceWizard}.querySelector('[data-positioning-receipt]').innerText`), /Posisjoner: 3 plassert/);
+      await click(browser, 'Lukk');
       await browser.waitFor(`!${sourceWizard}`);
       assert.equal(await browser.evaluate(markers), 3);
       await click(browser, 'Lukk FOTO', 'document');

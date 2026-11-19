@@ -57,15 +57,28 @@
 .layer-type-badge-photo { background: var(--gmi-cyan-soft); border-color: var(--gmi-interactive); color: var(--gmi-interactive); }
 .layer-type-badge-wfs { background: #eef0fb; border-color: #4338ca; color: #3730a3; }
 /* Compact icon-only action inside layer-card headers; same footprint as the existing p-1 icon buttons. */
-.photo-icon-button.layer-card-icon-button { width: 22px; height: 22px; border-radius: 0.5rem; color: var(--gmi-text-subtle); }
-.layer-analysis-actions .photo-icon-button.layer-card-icon-button { color: var(--gmi-text-muted); }
+/* One muted grey for both layer-card action rows (header and Analyse); hover is navy. */
+.photo-icon-button.layer-card-icon-button { width: 22px; height: 22px; border-radius: 0.5rem; color: var(--gmi-text-muted); }
 .photo-icon-button.layer-card-icon-button:hover:not(.photo-icon-button-unavailable) { color: var(--gmi-navy); }
+/* «Fjern lag» keeps the destructive red on hover only (DA2a); at rest it matches its neighbours. */
+.photo-icon-button.layer-card-icon-button.layer-card-icon-button-destructive:hover:not(.photo-icon-button-unavailable) { background: var(--gmi-validation-error-bg); color: var(--gmi-validation-error-text); }
 .photo-icon-button.layer-card-icon-button.gmi-selected-control { background: var(--gmi-border); color: var(--gmi-navy); }
 .photo-icon-button.layer-card-icon-button.gmi-selected-control:hover:not(.photo-icon-button-unavailable) { background: color-mix(in srgb, var(--gmi-border-strong) 35%, var(--gmi-border)); }
 /* Workspace exits share Validator's compact 32px X footprint. */
 .photo-icon-button.gmi-workspace-close { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--gmi-text-muted); }
 .photo-icon-button.gmi-workspace-close:hover:not(:disabled) { background: var(--gmi-surface-soft); color: var(--gmi-navy); }
 .photo-icon-button.gmi-workspace-close:active:not(:disabled) { background: color-mix(in srgb, var(--gmi-border-strong) 35%, var(--gmi-surface)); }
+/* Batch F: Google Street View, beside the measure tool in the shared map's left control stack. */
+/* Above the «Lagmarkering» chip (1200) so an open panel is never covered; below the map toolbar menus (1300). */
+.gmi-street-view { position: absolute; top: 79px; left: 50px; z-index: 1210; display: flex; align-items: flex-start; gap: 6px; }
+.gmi-street-view .photo-icon-button.gmi-street-view-button { cursor: grab; touch-action: none; }
+.gmi-street-view[data-street-view='dragging'] .photo-icon-button.gmi-street-view-button { cursor: grabbing; }
+.gmi-street-view-panel { display: grid; gap: 6px; max-width: 16rem; padding: 8px 10px; border-radius: 8px; background: var(--gmi-surface); color: var(--gmi-text); font-size: 12px; }
+.gmi-street-view-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gmi-street-view-actions .gmi-compact-button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; border: 1px solid var(--gmi-border-strong); border-radius: 8px; color: var(--gmi-text); }
+.gmi-street-view .photo-icon-button.gmi-street-view-close { width: 28px; height: 28px; border-radius: 8px; color: var(--gmi-text-muted); }
+.gmi-street-view-ghost { position: fixed; z-index: 2000; pointer-events: none; transform: translate(-50%, -100%); color: var(--gmi-interactive); filter: drop-shadow(0 1px 1px rgb(2 6 24 / 35%)); }
+.leaflet-container.gmi-street-view-picking, .leaflet-container.gmi-street-view-dragging { cursor: crosshair; }
 /* Rettinger «Vis bilder» in the map toolbar: same 36px height and 8px radius as its toolbar neighbours. */
 .photo-icon-button.gmi-map-toolbar-icon-button { width: 36px; height: 36px; flex: none; border-radius: 0.5rem; border-color: var(--gmi-border-strong); background: color-mix(in srgb, var(--gmi-surface) 95%, transparent); color: var(--gmi-text); }
 .photo-icon-button.gmi-map-toolbar-icon-button:hover:not(.photo-icon-button-unavailable) { background: var(--gmi-surface-soft); color: var(--gmi-navy); }

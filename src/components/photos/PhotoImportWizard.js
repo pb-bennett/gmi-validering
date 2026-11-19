@@ -137,7 +137,11 @@ export default function PhotoImportWizard({ context, onClose, onComplete, opener
           const { sourceId: _sourceId, ...gmlCaptureTime } = gmlDecision;
           const result = photoSession.completeImport({ loadedReview: review, placement: state.placement, preview, captureSuggestions: state.captureSuggestions,
             gmlCaptureTime: gmlSourceId ? gmlCaptureTime : null });
-          if (result.ok) onComplete(result); else setError('Bildene eller kilden er endret. Kontrollen er oppdatert – se over før du fortsetter.');
+          if (result.ok) onComplete(result);
+          else if (result.error === 'pending-exif') setError('Vent til bildeopplysningene er lest, og prøv igjen.');
+          else if (result.error === 'review-changed') setError('Bildene eller kilden er endret. Se over kontrollen før du prøver igjen.');
+          else if (result.error === 'placement-changed') setError('De kontrollerte posisjonene kunne ikke brukes. Gå tilbake og kontroller plasseringen. Ingen endringer er lagret.');
+          else setError('Importen kunne ikke lagres. Ingen endringer er lagret. Kontroller valgene og prøv igjen.');
         }}>{final && <CheckIcon size={16} weight="regular" aria-hidden="true" />}{primary}</button>
       </footer>
     </div>

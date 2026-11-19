@@ -389,7 +389,8 @@ test('format cards: the import claim follows the evidence table and promises not
       assert.match(card.compatibility, /^Importert .* i testet oppsett\. Kontroller resultatet etter import\.$/);
     } else assert.equal(card.compatibility, 'Ikke testet med import i Gemini VA.');
   }
-  assert.equal(PHOTO_EXPORT_IMPORT_EVIDENCE['gemini-legacy2019'].missingCaptureTime, 'unconfirmed', 'V1 has not happened: update this only from a real import');
+  assert.equal(PHOTO_EXPORT_IMPORT_EVIDENCE['gemini-legacy2019'].missingCaptureTime, 'imported', 'A6: real Gemini VA import 2026-11-19; update only from a real import');
+  assert.equal(PHOTO_EXPORT_IMPORT_EVIDENCE['gemini-legacy2019'].missingDirection, 'untested');
   assert.equal(PHOTO_EXPORT_IMPORT_EVIDENCE['gemini-legacy2019'].renamedGml, 'untested');
 });
 

@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- Reuses session-owned thumbnail URLs only. */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircleIcon, CheckIcon, FloppyDiskIcon, XIcon } from '@phosphor-icons/react';
+import { CheckIcon, CircleNotchIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPositionDistance, PHOTO_POSITION_TOLERANCE_METRES, photoSourceEvidenceSignature, photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '@/lib/photos/photoPositioning.mjs';
 import { photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
@@ -39,24 +39,62 @@ const sourceLabels = { gmi: 'GMI – objektenes bildereferanser', gml: 'GML – 
 // Same wording as the import wizard's placement step.
 const addLabels = { gmi: 'Fra GMI', gml: 'Fra GML-fil' };
 const STEPS = Object.freeze(['Kilder', 'Koblinger', 'Plassering', 'Kontroll']);
-const savedMessage = 'Kilder og koblinger er lagret. Posisjoner er ikke endret.';
+// The completion state after «Lagre endringer»: not a step, and not navigable.
+const SAVED = 5;
+const stageText = 'Kilden tas med i endringene. Ingenting lagres før du velger Lagre endringer.';
+const draftErrors = {
+  'source-staged': 'Kilden er allerede tatt med i endringene.',
+  'duplicate-source': 'Kilden finnes allerede i fotolaget.',
+  'source-removed': 'Kilden er fjernet fra fotolaget. Angre endringen som gjelder den.',
+  'review-changed': 'Bildene, kildene eller posisjonene er endret. Oppdater kontrollen før du lagrer.',
+  'commit-failed': 'Endringene kunne ikke lagres. Ingenting er endret.',
+};
+const errorText = (code) => draftErrors[code] || readErrors[code] || 'Bildene eller kilden er endret. Kontroller kilden på nytt.';
+const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+// How a staged source change is named, on its card (tag) and in Kontroll and the receipt.
+const opTag = (op) => op.kind === 'remove-gmi' ? 'Fjernes' : op.rebinding ? `Kobles til lag «${op.rebinding.filename}»` : op.recheck ? 'Kontrolleres på nytt' : 'Ny';
+const captureOptionText = (decision) => [decision?.complete && 'fullstendig', decision?.partial && 'ufullstendig eller kun dato', decision?.conflicts === 'gml' && 'avvik erstattes']
+  .filter(Boolean).join(', ');
 
-// Saving a source and applying its positions are two separate commitments, so the step shows both and where the user is.
-// Saving a GML source can also adopt its directions (automatic policy) and the capture times chosen in this step.
-function SourceStages({ saved, kind, captureTimeCount = 0 }) {
-  const name = kind === 'gmi' ? 'GMI-kilden og koblingene' : kind === 'gml' ? 'GML-kilden' : 'kilden';
-  return <ol className="photo-positioning-stages" aria-label="To trinn">
-    <li data-stage-state={saved ? 'done' : 'current'}>
-      <span className="photo-positioning-stage-marker" aria-hidden="true">{saved ? <CheckCircleIcon size={22} weight="regular" /> : '1'}</span>
-      <div><strong>{saved ? 'Kilden er lagret i fotolaget' : `Lagre ${name} i fotolaget`}</strong>
-        <p>{saved ? `Filen og treffene er beholdt. Ingen posisjoner er endret.${captureTimeCount ? ` Opptakstid er brukt for ${captureTimeCount} ${captureTimeCount === 1 ? 'bilde' : 'bilder'}.` : ''}` : 'Lagrer filen og treffene. Ingen posisjoner endres.'}</p></div>
-    </li>
-    <li data-stage-state={saved ? 'current' : 'next'}>
-      <span className="photo-positioning-stage-marker" aria-hidden="true">2</span>
-      <div><strong>Velg posisjoner</strong>
-        <p>{saved ? 'Kontroller hvilke posisjoner som skal brukes. Ingenting endres før du bekrefter i Kontroll.' : 'Etterpå velger du hvilke posisjoner som skal brukes, og bekrefter dem i Kontroll.'}</p></div>
-    </li>
-  </ol>;
+// Kontroll: the whole transaction, one section per kind of change; empty sections are left out.
+function DraftSummary({ draft }) {
+  if (!draft?.ops.length) return null;
+  const linked = draft.ops.filter((op) => op.kind === 'gmi' && !op.rebinding);
+  const capture = draft.ops.filter((op) => op.captureTimeCount > 0);
+  return <>
+    <section className="photo-positioning-kontroll-section" data-kontroll="sources" aria-label="Kilder">
+      <h4>Kilder ({draft.ops.length})</h4>
+      <ul>{draft.ops.map((op) => <li key={op.id} data-kontroll-op={op.kind}><strong>{op.filename}</strong> · {opTag(op) === 'Ny' ? 'Legges til' : opTag(op)}</li>)}</ul>
+    </section>
+    {linked.length > 0 && <section className="photo-positioning-kontroll-section" data-kontroll="links" aria-label="Koblinger">
+      <h4>Koblinger</h4>
+      <p>{plural(draft.occurrencesAdded, 'ny plassering', 'nye plasseringer')} · {plural(linked.reduce((sum, op) => sum + op.updated, 0), 'oppdatert plassering', 'oppdaterte plasseringer')} · {plural(linked.reduce((sum, op) => sum + op.objects, 0), 'objekt', 'objekter')} med punktposisjon</p>
+    </section>}
+    {capture.length > 0 && <section className="photo-positioning-kontroll-section" data-kontroll="capture" aria-label="Opptakstid">
+      <h4>Opptakstid</h4>
+      <ul>{capture.map((op) => <li key={op.id}>{plural(op.captureTimeCount, 'bilde', 'bilder')} får opptakstid fra {op.filename} ({captureOptionText(op.captureDecision)}).</li>)}</ul>
+    </section>}
+    {draft.directions > 0 && <section className="photo-positioning-kontroll-section" data-kontroll="direction" aria-label="Retning">
+      <h4>Retning</h4>
+      <p>{plural(draft.directions, 'bilde', 'bilder')} får retning fra GML automatisk.</p>
+    </section>}
+  </>;
+}
+
+// What «Lagre endringer» actually saved, from the commit receipt. Only non-zero lines.
+function receiptLines(receipt) {
+  const names = (ops) => ops.map((op) => op.filename).join(', ');
+  return [
+    receipt.added.length && `Kilder lagt til: ${names(receipt.added)}`,
+    receipt.rechecked.length && `Kontrollert på nytt: ${names(receipt.rechecked)}`,
+    receipt.rebound.length && `Koblet til lastet GMI-lag: ${names(receipt.rebound)}`,
+    receipt.removed.length && `Kilder fjernet: ${names(receipt.removed)}`,
+    receipt.occurrencesAdded && `${plural(receipt.occurrencesAdded, 'ny plassering', 'nye plasseringer')} fra GMI-koblinger`,
+    receipt.captureTimes && `Opptakstid lagret for ${plural(receipt.captureTimes, 'bilde', 'bilder')}`,
+    receipt.directions && `Retning fra GML for ${plural(receipt.directions, 'bilde', 'bilder')}`,
+    (receipt.placed || receipt.moved || receipt.same) && `Posisjoner: ${[receipt.placed && `${receipt.placed} plassert`, receipt.moved && `${receipt.moved} flyttet`, receipt.same && `${receipt.same} samme posisjon`].filter(Boolean).join(' · ')}`,
+    receipt.gmlDelivery && `${plural(receipt.gmlDelivery, 'plassering', 'plasseringer')} satt til GML i leveransen`,
+  ].filter(Boolean);
 }
 
 // The two sources that lie furthest apart on a row, with their distance. Presentation only.
@@ -127,43 +165,49 @@ function PositioningSummary({ plan, selected, selectionUnit, repeats, optionLabe
   </section>;
 }
 
-// Works on the photos already in the FOTO layer: no new import, no photo selection. Presented in the same
-// frame, step list and source cards as the import wizard; the lifecycle stays this workflow's own ticket:
-// sources and links are kept explicitly, positions only change after explicit selection and confirmation,
-// and cancelling leaves the layer as it was (a kept source stays, positions do not change).
-export default function PhotoPositioningWizard({ layer, photos, review, initialSourceId, focusedPhotoId, loadedSources = [], loadedSourceInput, onApplied, onClose }) {
+// Works on the photos already in the FOTO layer: no new import, no photo selection. Presented in the same frame, step
+// list and source cards as the import wizard. One transaction (B): sources, removals, links, capture times and position
+// choices are staged in the session-owned draft of this workflow's ticket. Only «Lagre endringer» writes, atomically;
+// the wizard then shows what was saved. Cancel or close before that discards the draft and leaves the layer as it was.
+export default function PhotoPositioningWizard({ layer, photos, review, draft = null, initialSourceId, focusedPhotoId, loadedSources = [], loadedSourceInput, onApplied, onClose }) {
   const dialogRef = useRef(null), inputRef = useRef(null), ticketRef = useRef(null), heading = useRef(null), content = useRef(null);
   const editedIds = useRef(new Set());
   const [step, setStep] = useState(initialSourceId ? 2 : 1);
-  const [kind, setKind] = useState('gml');
+  // A4: no external source is pre-chosen; the sources already in the layer are enough to continue.
+  const [kind, setKind] = useState(null);
   const [plan, setPlan] = useState(null), [choices, setChoices] = useState({});
-  const [notice, setNotice] = useState(''), [error, setError] = useState('');
+  const [error, setError] = useState(''), [stagedNotice, setStagedNotice] = useState('');
   const [removeSourceId, setRemoveSourceId] = useState(null);
   const [confirmClose, setConfirmClose] = useState(false);
-  const [sourceSaved, setSourceSaved] = useState(false);
-  const [savedCaptureTimes, setSavedCaptureTimes] = useState(0);
+  const [saving, setSaving] = useState(false), [saved, setSaved] = useState(null);
   const ready = review?.state === 'ready';
-  // GML capture-time choices are staged here and committed only with «Behold GML-kilden». They belong to one staged
-  // review: navigation keeps them, and another source or a recheck starts again from the unchecked defaults.
+  // GML capture-time choices belong to one review: navigation keeps them; another source or a recheck starts again
+  // from the unchecked defaults. They are sent with «Ta med kilden» and saved only with «Lagre endringer».
   const captureKey = ready && review.source.kind === 'gml' ? `${review.source.id}:${review.recheck ? 'recheck' : 'new'}` : null;
   const [captureChoice, setCaptureChoice] = useState({ key: null, ...EMPTY_GML_CAPTURE_DECISION });
   const captureDecision = captureChoice.key === captureKey ? captureChoice : { key: captureKey, ...EMPTY_GML_CAPTURE_DECISION };
-  // The session revision re-freezes the review, so the plan always reflects the live assets it will be checked against.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- The review identity is the session revision boundary.
-  const capturePlan = useMemo(() => captureKey ? photoSession.planLayerSourceCaptureTimes(layer.id) : null, [captureKey, review, layer.id]);
+  // The draft summary (from the session snapshot) changes identity on every relevant publication; the review and the
+  // capture plan are re-derived from the draft and the live photos it was made from.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- draft and photos are the session revision boundary.
+  const draftReview = useMemo(() => photoSession.reviewLayerSourceDraft(layer.id), [layer.id, draft, photos]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- The review identity and draft version are the revision boundary.
+  const capturePlan = useMemo(() => captureKey ? photoSession.planLayerSourceCaptureTimes(layer.id) : null, [captureKey, review, layer.id, draft?.version]);
+  const ops = draftReview?.ops || [];
+  const opsBySource = new Map(ops.map((op) => [op.sourceId, op]));
+  const newOps = ops.filter((op) => op.kind !== 'remove-gmi' && !op.recheck);
   const selected = plan ? selectedPhotoSourcePositions(plan, choices) : [];
-  const connectionOnly = step === 3 && sourceSaved && selected.length === 0;
   const positionRows = !plan ? [] : !focusedPhotoId ? plan.rows : [
     ...plan.rows.filter((row) => row.photoId === focusedPhotoId), ...plan.rows.filter((row) => row.photoId !== focusedPhotoId),
   ];
   const assets = [...new Map(photos.map((photo) => [photo.assetId || photo.id, photo])).values()];
-  const repeats = photos.length > assets.length;
+  const repeats = (plan?.rows.length ?? photos.length) > assets.length;
   const selectionUnit = repeats ? selected.length === 1 ? 'plassering' : 'plasseringer' : selected.length === 1 ? 'bilde' : 'bilder';
   const pendingExif = assets.filter((photo) => photo.spatial.exifRead.state === 'pending').length;
   const viableExif = assets.filter((photo) => photo.spatial.candidates.some((candidate) => candidate.kind === 'exif' && candidate.status === 'viable')).length;
-  const newEvidence = plan && plan.evidenceSignature !== photoSourceEvidenceSignature(photos);
-  const saved = Boolean(notice);
-  const steps = STEPS.map((label, index) => ({ key: index + 1, label })).filter(({ key }) => key !== 2 || review || sourceSaved || step === 2);
+  const newEvidence = plan && plan.evidenceSignature !== (draftReview?.evidenceSignature ?? photoSourceEvidenceSignature(photos));
+  const done = step === SAVED;
+  const steps = STEPS.map((label, index) => ({ key: index + 1, label })).filter(({ key }) => key !== 2 || review || ops.length || step === 2 || done);
+  const canSave = !saving && (ops.length > 0 || selected.length > 0) && draftReview?.ok !== false;
 
   useEffect(() => {
     const dialog = dialogRef.current, opener = document.activeElement;
@@ -188,7 +232,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const stage = async (input, sourceKind) => {
     const ticket = ticketRef.current;
     if (!input || review || !photoSession.sourceWorkflowIsLive(ticket)) return;
-    setError(''); setStep(2); setRemoveSourceId(null);
+    setError(''); setStagedNotice(''); setStep(2); setRemoveSourceId(null);
     await photoSession.stageLayerSource(layer.id, input, sourceKind);
     if (ticketRef.current !== ticket || !photoSession.sourceWorkflowIsLive(ticket)) return;
     const result = photoSession.getSnapshot().sourceReviews[layer.id];
@@ -206,44 +250,68 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
   const recheck = (sourceId) => {
     if (review || !photoSession.sourceWorkflowIsLive(ticketRef.current)) return;
     photoSession.recheckLayerSource(layer.id, sourceId);
-    setStep(2); setError(''); setRemoveSourceId(null);
+    setStep(2); setError(''); setStagedNotice(''); setRemoveSourceId(null);
   };
   const discard = () => {
     photoSession.cancelLayerSourceReview(layer.id);
     setStep(1); setError('');
   };
-  const keepSource = () => {
+  // «Ta med kilden»: the review joins the draft. Nothing is saved.
+  const includeSource = () => {
     const { key: _key, ...decision } = captureDecision;
-    const result = photoSession.saveSourceWorkflowSource(ticketRef.current, review,
-      review.source.kind === 'gml' ? { captureTime: { ...decision, plan: capturePlan } } : undefined);
-    if (!result.ok) { setError(readErrors[result.error] || 'Bildene eller kilden er endret. Kontroller kilden på nytt før du bekrefter.'); return; }
-    setSavedCaptureTimes(result.captureTimeCount || 0);
+    const kindOfSource = review.source.kind;
+    const result = photoSession.stageSourceWorkflowSource(ticketRef.current, review,
+      kindOfSource === 'gml' ? { captureTime: { ...decision, plan: capturePlan } } : undefined);
+    if (!result.ok) { setError(errorText(result.error)); return; }
     setCaptureChoice({ key: null, ...EMPTY_GML_CAPTURE_DECISION });
-    setSourceSaved(true); setNotice(savedMessage); setError('');
-    if (review.source.kind === 'gmi') positions(review.source.id);
+    setError(''); setStagedNotice(`«${review.source.filename}» er tatt med i endringene.`);
+    if (kindOfSource === 'gmi') positions(review.source.id);
+  };
+  const undoOp = (opId) => {
+    const result = photoSession.unstageSourceWorkflowOp(ticketRef.current, opId);
+    if (!result.ok) setError(errorText(result.error));
+    else { setError(''); setPlan(null); }
   };
   const positions = (newGmiSourceId = null) => {
     const next = photoSession.reviewSourceWorkflowPositions(ticketRef.current);
-    if (!next) { setError('Behold eller forkast kilden som ikke er lagret før du kontrollerer posisjoner.'); return; }
+    if (!next) {
+      const current = photoSession.reviewLayerSourceDraft(layer.id);
+      setError(current && !current.ok ? errorText(current.error) : 'Ta med eller forkast kilden som er valgt før du kontrollerer posisjoner.');
+      return;
+    }
     setChoices(photoSourcePositionChoices(next, plan, choices, focusedPhotoId, { newGmiSourceId, editedIds: editedIds.current }));
     setPlan(next); setStep(3); setError(''); setRemoveSourceId(null);
   };
-  const apply = () => {
+  const save = () => {
+    if (!canSave) return;
+    setSaving(true); setError('');
+    const ticket = ticketRef.current;
     const initialPlacement = !photoSession.getLayerPhotos(layer.id).some((photo) => photo.spatial.current);
-    const result = photoSession.applySourceWorkflowPositions(ticketRef.current, plan,
-      selected.map((row) => ({ photoId: row.photoId, candidateId: row.proposal.id })));
-    if (result.ok) {
-      onApplied?.({ ...result, layerId: layer.id, initialPlacement });
-      onClose();
-    }
-    else { setError('Bildene, kildene eller posisjonene er endret. Oppdater kontrollen før du bekrefter på nytt.'); setStep(3); }
+    // Let «Lagrer …» render before the synchronous commit.
+    requestAnimationFrame(() => {
+      const result = photoSession.commitSourceWorkflow(ticket, { plan, version: draftReview?.version ?? null,
+        requests: selected.map((row) => ({ photoId: row.photoId, candidateId: row.proposal.id })) });
+      setSaving(false);
+      if (!result.ok) { setError(result.message || errorText(result.error)); return; }
+      editedIds.current.clear();
+      setSaved({ ...result, layerId: layer.id, initialPlacement }); setStep(SAVED);
+    });
+  };
+  const close = () => {
+    if (saved) onApplied?.(saved);
+    onClose();
   };
   const optionLabel = (candidate) => candidate.kind === 'exif' ? 'EXIF GPS' : candidate.kind === 'gmi' ? 'GMI – objektposisjon' :
-    `GML: ${candidate.sourceFilename || layer.spatialSources.find((source) => source.id === candidate.sourceId)?.filename} (${layer.spatialSources.findIndex((source) => source.id === candidate.sourceId) + 1})`;
+    `GML: ${candidate.sourceFilename || layer.spatialSources.find((source) => source.id === candidate.sourceId)?.filename} (${(draftReview?.sources || layer.spatialSources).findIndex((source) => source.id === candidate.sourceId) + 1})`;
   const goBack = (target) => { setStep(target); setError(''); };
-  const requestClose = () => { if (editedIds.current.size) setConfirmClose(true); else onClose(); };
-  const nextFromSources = () => { if (steps.some(({ key }) => key === 2)) goBack(2); else positions(); };
-  const status = step >= 3 && plan ? `${selected.length} ${selectionUnit} valgt` : '';
+  const requestClose = () => {
+    if (saving) return;
+    if (!done && (ops.length || editedIds.current.size)) setConfirmClose(true); else close();
+  };
+  const nextFromSources = () => { if (review) goBack(2); else positions(); };
+  const status = step >= 3 && !done && plan ? `${selected.length} ${selectionUnit} valgt` : '';
+  const receipt = saved ? receiptLines(saved.receipt) : [];
+  const primary = 'gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary';
 
   return <dialog ref={dialogRef} className="photo-collection-dialog photo-positioning-wizard bg-gmi-surface text-gmi-text shadow-2xl" aria-labelledby="photo-positioning-title"
     onKeyDown={(event) => {
@@ -251,16 +319,15 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
         event.preventDefault(); event.stopPropagation(); requestClose();
       }
     }}
-    data-step={step} onCancel={(event) => { if (event.target !== event.currentTarget) return; event.preventDefault(); requestClose(); }}>
+    data-step={step} data-saved={done || undefined} onCancel={(event) => { if (event.target !== event.currentTarget) return; event.preventDefault(); requestClose(); }}>
     <div className="photo-collection-frame">
       <header className="photo-collection-header"><div><h2 id="photo-positioning-title">Koble og posisjoner bilder</h2>
-        <p className="text-sm text-gmi-text-muted">{layer.name} · {assets.length} bilder{repeats ? ` · ${photos.length} plasseringer` : ''}</p></div>
-        <button type="button" className="gmi-focus-ring" aria-label={saved ? 'Lukk kildekontroll' : 'Avbryt kildekontroll'} onClick={requestClose}><XIcon size={22} aria-hidden="true" /></button>
+        <p className="text-sm text-gmi-text-muted">{layer.name} · {assets.length} bilder{photos.length > assets.length ? ` · ${photos.length} plasseringer` : ''}</p></div>
+        <button type="button" className="gmi-focus-ring disabled:pointer-events-none disabled:opacity-50" aria-label={done ? 'Lukk kildekontroll' : 'Avbryt kildekontroll'} disabled={saving} onClick={requestClose}><XIcon size={22} aria-hidden="true" /></button>
       </header>
-      <PhotoWizardSteps label="Steg i kildekontroll" steps={steps} current={step}
-        canGoBack={(target) => target < step && (target !== 3 || Boolean(plan))} onBack={goBack} />
-      <h3 ref={heading} tabIndex={-1} className="photo-import-heading">{STEPS[step - 1]}</h3>
-      {notice && <p className="photo-source-saved" role="status">{notice}</p>}
+      <PhotoWizardSteps label="Steg i kildekontroll" steps={steps} current={done ? null : step} done={done}
+        canGoBack={(target) => !done && !saving && target < step && (target !== 3 || Boolean(plan))} onBack={goBack} />
+      <h3 ref={heading} tabIndex={-1} className="photo-import-heading">{done ? 'Endringer lagret' : STEPS[step - 1]}</h3>
       <div ref={content} className="photo-import-step-body photo-positioning-content">
         <div className="photo-positioning-step">
           {error && <p role="alert">{error}</p>}
@@ -271,27 +338,40 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
                 hint={`${viableExif} bilder: Posisjon tilgjengelig · ${assets.length - viableExif - pendingExif} uten brukbar GPS`}>
                 {pendingExif > 0 && <p role="status">Leser GPS … {pendingExif} bilder. Nye posisjoner velges ikke automatisk.</p>}
               </PhotoSourceOption>
-              {layer.spatialSources.map((source, index) => <PhotoSourceOption as="section" key={source.id} sourceId={source.id} value={source.kind}
-                label={`${index + 1}. ${sourceLabels[source.kind]}`}>
-                <p className="photo-source-filename">{source.filename}</p>
-                <details><summary>Kildedetaljer</summary>{source.kind === 'gmi' ? <PhotoGmiSummary source={source} /> : <PhotoGmlSummary source={source} ledger={source.ledger} />}</details>
+              {layer.spatialSources.map((source, index) => {
+                const op = opsBySource.get(source.id);
+                return <PhotoSourceOption as="section" key={source.id} sourceId={source.id} value={source.kind}
+                  label={`${index + 1}. ${sourceLabels[source.kind]}`}>
+                  <p className="photo-source-filename">{source.filename}{op && <span className="photo-source-staged-tag" data-staged-op={op.kind}>{opTag(op)}</span>}</p>
+                  {op?.kind === 'remove-gmi' && <p data-staged-removal>{source.filename} fjernes når du lagrer endringene.</p>}
+                  <details><summary>Kildedetaljer</summary>{source.kind === 'gmi' ? <PhotoGmiSummary source={source} /> : <PhotoGmlSummary source={source} ledger={source.ledger} />}</details>
+                  <div className="photo-import-source-actions flex flex-wrap gap-2">
+                    {op ? <button type="button" className={photoSourceButton} onClick={() => undoOp(op.id)}>Angre</button> : <>
+                      <button type="button" className={photoSourceButton} disabled={Boolean(review)} onClick={() => recheck(source.id)}>Kontroller på nytt</button>
+                      {source.kind === 'gmi' && <button type="button" className={photoSourceButton} disabled={Boolean(review)} onClick={() => setRemoveSourceId(source.id)}>Fjern kilde</button>}
+                    </>}
+                  </div>
+                  {removeSourceId === source.id && !op && <div className="photo-source-removal"><p>Fjerne {source.filename} og GMI-koblingene fra laget når du lagrer endringene? Bilder, posisjoner og retning beholdes.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className={photoSourceButton} onClick={() => setRemoveSourceId(null)}>Avbryt fjerning</button>
+                      <button type="button" className={`${photoSourceButton} gmi-edit-destructive`} onClick={() => {
+                        const result = photoSession.stageSourceWorkflowRemoval(ticketRef.current, source.id);
+                        if (!result.ok) setError(errorText(result.error)); else setPlan(null);
+                        setRemoveSourceId(null);
+                      }}>Fjern GMI-kilde</button>
+                    </div></div>}
+                </PhotoSourceOption>;
+              })}
+              {newOps.map((op) => <PhotoSourceOption as="section" key={op.id} sourceId={op.sourceId} value={op.sourceKind}
+                label={`${layer.spatialSources.length + newOps.indexOf(op) + 1}. ${sourceLabels[op.sourceKind]}`}>
+                <p className="photo-source-filename">{op.filename}<span className="photo-source-staged-tag" data-staged-op="new">Ny</span></p>
                 <div className="photo-import-source-actions flex flex-wrap gap-2">
-                  <button type="button" className={photoSourceButton} disabled={Boolean(review)} onClick={() => recheck(source.id)}>Kontroller på nytt</button>
-                  {source.kind === 'gmi' && <button type="button" className={photoSourceButton} disabled={Boolean(review)} onClick={() => setRemoveSourceId(source.id)}>Fjern kilde</button>}
+                  <button type="button" className={photoSourceButton} onClick={() => undoOp(op.id)}>Angre</button>
                 </div>
-                {removeSourceId === source.id && <div className="photo-source-removal"><p>Fjern {source.filename} og GMI-koblingene fra laget? Bilder, posisjoner og retning beholdes.</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" className={photoSourceButton} onClick={() => setRemoveSourceId(null)}>Avbryt fjerning</button>
-                    <button type="button" className={`${photoSourceButton} gmi-edit-destructive`} onClick={() => {
-                      if (photoSession.sourceWorkflowIsLive(ticketRef.current) && photoSession.removeGmiSource(layer.id, source.id, { confirmed: true })) {
-                        setNotice('GMI-kilden og koblingene er fjernet. Posisjoner er ikke endret.');
-                      }
-                      setRemoveSourceId(null);
-                    }}>Fjern GMI-kilde</button>
-                  </div></div>}
               </PhotoSourceOption>)}
             </div>
-            <h4 className="photo-positioning-subheading">Legg til en kilde</h4>
+            <h4 className="photo-positioning-subheading">Legg til en kilde (valgfritt)</h4>
+            {(layer.spatialSources.length > 0 || newOps.length > 0 || viableExif > 0) && <p className="photo-positioning-note" data-positioning-optional-source>Du kan gå videre med kildene som allerede finnes.</p>}
             <fieldset className="photo-positioning-add" disabled={Boolean(review)}><legend className="sr-only">Hva vil du hente?</legend>
               {['gmi', 'gml'].map((value) => <PhotoSourceOption key={value} name="photo-external-source" value={value} label={addLabels[value]}
                 hint={value === 'gmi' ? 'Kobler bilder til objekter og gir posisjoner fra punktobjekter. Linjer gir bare koblinger.' : 'Bildeposisjoner fra en Terrain GML-fil.'}
@@ -302,8 +382,8 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
                 </div>}
               </PhotoSourceOption>)}
             </fieldset>
-            <input ref={inputRef} type="file" accept={`.${kind}`} hidden aria-label={`Velg ${kind.toUpperCase()}-kilde`} onChange={readFile} />
-            {review && <p>En kilde er ikke lagret.</p>}
+            {kind && <input ref={inputRef} type="file" accept={`.${kind}`} hidden aria-label={`Velg ${kind.toUpperCase()}-kilde`} onChange={readFile} />}
+            {review && <p>En valgt kilde venter i Koblinger.</p>}
           </section>}
           {step === 2 && <section aria-label="Kontroller koblinger" className="photo-positioning-links">
             {review?.state === 'pending' && <p role="status">Analyserer kilden …</p>}
@@ -316,11 +396,12 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
                 : <><PhotoGmlSummary source={review.source} ledger={review.ledger} />
                   <PhotoGmlCaptureTimeChoices plan={capturePlan} choices={captureDecision} onChange={(patch) => setCaptureChoice({ ...captureDecision, ...patch })}
                     thumbnailFor={(assetId) => photos.find((photo) => (photo.assetId || photo.id) === assetId)?.preview?.thumbnailUrl || null} /></>}
+              <p className="photo-positioning-stage-note" data-positioning-stage-note>{stageText}</p>
             </>}
-            {!review && !saved && <p>Ingen ekstern kilde er valgt. EXIF GPS trenger ingen filkobling.</p>}
-            {(review || saved) && <SourceStages saved={saved && !review} kind={review?.source?.kind} captureTimeCount={review ? 0 : savedCaptureTimes} />}
+            {!review && stagedNotice && <p role="status" data-positioning-staged>{stagedNotice}</p>}
+            {!review && !stagedNotice && <p>Ingen ekstern kilde er valgt. EXIF GPS trenger ingen filkobling.</p>}
             <div className="flex flex-wrap gap-2">
-              {review && <button type="button" className={photoSourceButton} onClick={discard}>Forkast kilde som ikke er lagret</button>}
+              {review && <button type="button" className={photoSourceButton} onClick={discard}>Forkast kilden</button>}
             </div>
           </section>}
           {step === 3 && plan && <section aria-label="Kontroller posisjoner">
@@ -377,29 +458,39 @@ export default function PhotoPositioningWizard({ layer, photos, review, initialS
               </li>;
             })}</ul>
           </section>}
-          {step === 4 && plan && <PositioningSummary plan={plan} selected={selected} selectionUnit={selectionUnit} repeats={repeats} optionLabel={optionLabel} newEvidence={newEvidence} />}
+          {step === 4 && <section aria-label="Kontroller endringene" className="photo-positioning-kontroll" data-positioning-kontroll>
+            {draftReview && !draftReview.ok && <p role="alert">{errorText(draftReview.error)}</p>}
+            <DraftSummary draft={draftReview} />
+            {plan && selected.length > 0 ? <section aria-label="Posisjoner" data-kontroll="positions"><h4 className="photo-positioning-subheading">Posisjoner</h4>
+              <PositioningSummary plan={plan} selected={selected} selectionUnit={selectionUnit} repeats={repeats} optionLabel={optionLabel} newEvidence={newEvidence} /></section>
+              : <p className="photo-positioning-note" data-kontroll="positions">Ingen posisjoner endres.</p>}
+          </section>}
+          {done && <section aria-label="Lagret" data-positioning-receipt>
+            <ul className="photo-positioning-receipt">{receipt.map((line) => <li key={line}><CheckIcon size={16} weight="regular" aria-hidden="true" />{line}</li>)}</ul>
+          </section>}
         </div>
       </div>
       <footer className="photo-import-footer border-t border-gmi-border" data-positioning-footer>
         <div className="mr-auto text-sm" role="status">{status}</div>
-        {!connectionOnly && <button type="button" className={`${control} border border-gmi-border-strong px-3 py-2 text-gmi-text-muted`} onClick={requestClose} data-positioning-cancel>{saved ? 'Lukk' : 'Avbryt'}</button>}
-        {step > 1 && <button type="button" className={`${control} border border-gmi-border-strong bg-gmi-surface px-4 py-2`} onClick={() => goBack(steps[steps.findIndex(({ key }) => key === step) - 1].key)} data-positioning-back>Tilbake</button>}
-        {step === 1 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} onClick={nextFromSources} data-positioning-next>Neste</button>}
-        {step === 2 && (review ? <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary photo-positioning-final`} disabled={!ready} onClick={keepSource} data-positioning-save>
-          <FloppyDiskIcon size={16} weight="regular" aria-hidden="true" />{review.source?.kind === 'gmi' ? review.recheck ? 'Oppdater koblinger' : 'Behold kilde og koblinger' : review.recheck ? 'Oppdater treff' : 'Behold GML-kilden'}</button>
-          : <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary`} onClick={() => positions()} data-positioning-next>Neste</button>)}
-        {step === 3 && (connectionOnly
-          ? <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary photo-positioning-final" onClick={onClose}><CheckIcon size={16} weight="regular" aria-hidden="true" />Fullfør</button>
-          : <button type="button" className="gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary" disabled={!selected.length} onClick={() => setStep(4)} data-positioning-next>Neste</button>)}
-        {step === 4 && <button type="button" className={`gmi-primary-control gmi-focus-ring min-h-10 px-4 photo-positioning-primary photo-positioning-final`} disabled={!selected.length} onClick={apply} data-positioning-apply><CheckIcon size={16} weight="regular" aria-hidden="true" />Bruk valgte posisjoner for {selected.length} {selectionUnit}</button>}
+        {done ? <button type="button" className={primary} onClick={close} data-positioning-close>Lukk</button> : <>
+          <button type="button" className={`${control} border border-gmi-border-strong px-3 py-2 text-gmi-text-muted`} onClick={requestClose} disabled={saving} data-positioning-cancel>Avbryt</button>
+          {step > 1 && <button type="button" className={`${control} border border-gmi-border-strong bg-gmi-surface px-4 py-2`} disabled={saving} onClick={() => goBack(steps[steps.findIndex(({ key }) => key === step) - 1].key)} data-positioning-back>Tilbake</button>}
+          {step === 1 && <button type="button" className={primary} onClick={nextFromSources} data-positioning-next>Neste</button>}
+          {step === 2 && (review ? <button type="button" className={primary} disabled={!ready} onClick={includeSource} data-positioning-stage>
+            {review.source?.kind === 'gmi' ? 'Ta med kilde og koblinger' : 'Ta med kilden'}</button>
+            : <button type="button" className={primary} onClick={() => positions()} data-positioning-next>Neste</button>)}
+          {step === 3 && <button type="button" className={primary} disabled={!selected.length && !ops.length} onClick={() => setStep(4)} data-positioning-next>Neste</button>}
+          {step === 4 && <button type="button" className={`${primary} photo-positioning-final`} disabled={!canSave} aria-busy={saving || undefined} onClick={save} data-positioning-apply>
+            {saving ? <CircleNotchIcon size={16} weight="regular" aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : <CheckIcon size={16} weight="regular" aria-hidden="true" />}{saving ? 'Lagrer …' : 'Lagre endringer'}</button>}
+        </>}
       </footer>
     </div>
     {confirmClose && <div onKeyDown={(event) => {
       // Consume the nested modal's Escape before native dialog dismissal reaches the parent.
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setConfirmClose(false); }
-    }}><GmiConfirmDialog testId="positioning-draft" title="Forkaste posisjonsvalgene?" confirmLabel="Forkast posisjonsvalg" cancelLabel="Fortsett posisjonering"
+    }}><GmiConfirmDialog testId="positioning-draft" title="Forkaste endringene?" confirmLabel="Forkast endringer" cancelLabel="Fortsett"
       onCancel={() => setConfirmClose(false)} onConfirm={onClose}>
-      <p>Posisjonsvalgene i denne kontrollen forkastes. Lagrede kilder, koblinger og gjeldende posisjoner beholdes.</p>
+      <p>Kilder, koblinger, opptakstider og posisjonsvalg i denne kontrollen lagres ikke. Fotolaget beholdes som før.</p>
     </GmiConfirmDialog></div>}
   </dialog>;
 }
