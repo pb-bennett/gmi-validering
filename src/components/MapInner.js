@@ -486,8 +486,15 @@ function ZoomHandler({ onZoomChange }) {
   return null;
 }
 
-// Clear highlighted feature when clicking on empty map space
-function MapClickHandler() {
+// The shared feature highlight id that selectAnalysisPipe sets for the profile's selected pipe.
+function analysisPipeFeatureId(index, layerId) {
+  if (index === null || index === undefined) return null;
+  return layerId ? `ledninger-${layerId}-${index}` : `ledninger-${index}`;
+}
+
+// Clear highlighted feature when clicking on empty map space. preservedFeatureId: a suspended profile analysis keeps its
+// selected pipe for the return to the main map (B1.2).
+function MapClickHandler({ preservedFeatureId = null }) {
   const setHighlightedFeature = useStore(
     (state) => state.setHighlightedFeature,
   );
@@ -502,7 +509,7 @@ function MapClickHandler() {
       if (measureMode) return;
 
       // Only clear if there's a highlighted feature and click wasn't on a layer
-      if (highlightedFeatureId && !e.originalEvent._featureClicked) {
+      if (highlightedFeatureId && highlightedFeatureId !== preservedFeatureId && !e.originalEvent._featureClicked) {
         setHighlightedFeature(null);
       }
     },
@@ -1132,16 +1139,18 @@ function FeatureHoverTooltip({ controllerRef, resetKey }) {
 }
 
 export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest, onPhotoLocateHandled, photoWorkspace, onSelectPhoto, photoPanRequest,
-  photoFitRequest, onPhotoFitHandled, photoEdit, photoDisplay }) {
+  photoFitRequest, onPhotoFitHandled, photoEdit, photoDisplay, analysisSuspended = false }) {
   // photoLayers is a new array on every session publish, so this is one presentation pass per snapshot
   // (or workspace view change); markers never re-read the session per feature.
   const { photoLayers } = usePhotoSession();
   const workspacePhotos = photoWorkspace?.photos, workspaceVisibleIds = photoWorkspace?.visibleIds, workspaceLayerId = photoWorkspace?.layerId;
-  // Rettinger's temporary override: no photo markers at all, while each layer's own visible flag stays untouched.
-  // Unmounting the markers also closes their popups and hover previews, so no invisible photo stays active.
-  const photosSuppressed = Boolean(photoDisplay?.suppressed) && !workspaceLayerId;
+  // A8.1: the shared «Vis bilder» state (global choice, or the Validator/Rettinger visit override) removes every photo
+  // marker, while each layer's own visible flag stays untouched. Unmounting the markers also closes their popups and
+  // hover previews, so no invisible photo stays active. FOTO editing always shows its photos. FOTO always shows the layer
+  // it opened, whatever that layer's own flag in the Layer Manager.
+  const photosSuppressed = Boolean(photoDisplay?.suppressed) && !photoWorkspace?.editing;
   const photoItems = useMemo(() => photosSuppressed ? [] : buildPhotoMapItems(photoLayers, photoSession.getLayerPhotos, workspaceLayerId ? {
-    photosByLayer: new Map([[workspaceLayerId, workspacePhotos]]), include: { layerId: workspaceLayerId, ids: workspaceVisibleIds },
+    photosByLayer: new Map([[workspaceLayerId, workspacePhotos]]), include: { layerId: workspaceLayerId, ids: workspaceVisibleIds, visible: true },
   } : {}), [photosSuppressed, photoLayers, workspaceLayerId, workspacePhotos, workspaceVisibleIds]);
   const hoverControllerRef = useRef(null);
   const data = useStore((state) => state.data);
@@ -1198,11 +1207,15 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
     return map;
   }, [layers, paintOrder]);
   // Narrow selectors for analysis state to avoid re-renders on unrelated changes
-  const analysisIsOpen = useStore((state) => state.analysis.isOpen);
+  const analysisStateOpen = useStore((state) => state.analysis.isOpen);
   const analysisSelectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
   const analysisLayerId = useStore((state) => state.analysis.layerId);
+  // B1.2: FOTO, Validator and Rettinger suspend the main-map analysis presentation. The store keeps it for the return.
+  const analysisIsOpen = analysisStateOpen && !analysisSuspended;
+  const suspendedAnalysisFeatureId = analysisStateOpen && analysisSuspended
+    ? analysisPipeFeatureId(analysisSelectedPipeIndex, analysisLayerId) : null;
   const measureMode = useStore((state) => state.ui.measureMode);
   const addMeasurePoint = useStore((state) => state.addMeasurePoint);
   const highlightedCode = useStore(
@@ -1216,9 +1229,12 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
     (state) => state.ui.highlightedTypeContext,
   );
   const hiddenTypes = useStore((state) => state.ui.hiddenTypes);
-  const highlightedFeatureId = useStore(
+  const storedHighlightedFeatureId = useStore(
     (state) => state.ui.highlightedFeatureId,
   );
+  // The profile's selected pipe is highlighted through the shared feature highlight; a suspended analysis does not show it.
+  const highlightedFeatureId = storedHighlightedFeatureId && storedHighlightedFeatureId === suspendedAnalysisFeatureId
+    ? null : storedHighlightedFeatureId;
   const highlightedFeatureIds = useStore(
     (state) => state.ui.highlightedFeatureIds,
   );
@@ -2352,12 +2368,12 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       <MapSizeInvalidator />
       <ZoomToFeatureHandler />
       <MapCenterHandler />
-      <MapClickHandler />
+      <MapClickHandler preservedFeatureId={suspendedAnalysisFeatureId} />
       <MeasureTool />
       <MeasureToolButton />
       {/* Batch F: every map-based workspace shares this map, so Street View is available in all of them. */}
       <StreetViewControl />
-      <AnalysisPointsLayer />
+      {!analysisSuspended && <AnalysisPointsLayer />}
       <AnalysisZoomHandler />
     </MapContainer>
   );

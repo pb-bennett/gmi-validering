@@ -43,7 +43,7 @@ test('approving contractor filename times commits the same Filnavn minutes indiv
         const accepted = photos[name].captureMetadata.captureTime;
         assert.deepEqual(accepted.value, { iso, precision: 'minute', timezoneKnown: false, offset: null }, name);
         assert.equal(accepted.provenance.pattern, 'ymd-hm-compact-seq');
-        assert.equal(photoMetadataSourceLabel('captureTime', accepted.provenance), 'Filnavn');
+        assert.equal(photoMetadataSourceLabel('captureTime', accepted.provenance), 'Tolket fra filnavn');
       }
     } finally {
       session.clear();
@@ -198,8 +198,8 @@ test('repeated GMI occurrences share one filename write per asset', async () => 
 });
 
 test('presentation names the filename source and keeps the precision notes', () => {
-  assert.equal(photoSourceLabel('filename'), 'Filnavn');
-  assert.equal(photoMetadataSourceLabel('captureTime', { kind: 'filename', raw: '20261014.jpg' }), 'Filnavn');
+  assert.equal(photoSourceLabel('filename'), 'Tolket fra filnavn');
+  assert.equal(photoMetadataSourceLabel('captureTime', { kind: 'filename', raw: '20261014.jpg' }), 'Tolket fra filnavn');
   assert.deepEqual(formatPhotoCaptureTime({ iso: '2026-10-14', precision: 'date' }), { text: '14.10.2026', notes: ['bare dato'] });
   assert.deepEqual(formatPhotoCaptureTime({ iso: '2026-10-14T14:33', precision: 'minute' }), { text: '14.10.2026 14:33', notes: ['uten sekunder', 'tidssone ukjent'] });
 });

@@ -96,8 +96,12 @@ test('capture time: every remaining state has a row, and accepted values can onl
     captureTime: { complete: true } });
   session.setCaptureMetadata(layerId, [acceptedMinute], 'captureTime', '2026-05-12T14:33');
   const { captureTime } = completionView(session, layerId).model;
-  assert.deepEqual(captureTime.groups.map(({ state, rows }) => [state, rows.length]), [['none', 1], ['partial', 2], ['unusable', 1]]);
-  assert.deepEqual(captureTime.done.map(({ filename }) => filename), ['full.jpg']);
+  // C1.4 (approved contract change): an accepted value without seconds has a known date, so for Gemini it is done;
+  // its actual precision is kept on the row. The unaccepted GML minute value still needs a decision.
+  assert.deepEqual(captureTime.groups.map(({ state, rows }) => [state, rows.length]), [['none', 1], ['partial', 1], ['unusable', 1]]);
+  assert.deepEqual(captureTime.done.map(({ filename }) => filename).sort(), ['accepted-minute.jpg', 'full.jpg']);
+  assert.equal(row(captureTime.rows, 'accepted-minute.jpg').precisionState, 'partial');
+  assert.equal(captureTime.outstanding, 3, 'only photos without a usable accepted date are outstanding');
   assert.equal(row(captureTime.rows, 'minute.jpg').note, 'GML-verdien er ikke godtatt.');
   assert.equal(row(captureTime.rows, 'accepted-minute.jpg').note, null);
   assert.match(row(captureTime.rows, 'accepted-minute.jpg').acceptedText, /14:33 · uten sekunder/);
@@ -301,9 +305,9 @@ test('missing time: the warning is specific, and generation, schema and import a
 test('missing time: the group hint follows the chosen target, and only Gemini lets it through', async () => {
   const { session, layerId } = await completionLayer([jpeg('a.jpg'), jpeg('b.jpg', exifTime())]);
   const hint = (configuration) => completionView(session, layerId, configuration).model.captureTime.groups.find((group) => group.state === 'none').hint;
-  assert.equal(hint({}), 'Ingen kilde har en brukbar tid. Eksporten kan lages uten, men GML-filen følger da ikke Skråfoto 2019-skjemaet.');
-  assert.equal(hint(LEGACY), 'Ingen kilde har en brukbar tid. Opptakstid med sekunder kreves for Skråfoto 2019, og må fylles ut før eksport.');
-  assert.equal(hint(ASBUILT), 'Ingen kilde har en brukbar tid. Opptakstid med sekunder kreves for AsBuilt 5.2, og må fylles ut før eksport.');
+  assert.equal(hint({}), 'Ingen kilde har en brukbar dato. Eksporten kan lages uten, men GML-filen følger da ikke Skråfoto 2019-skjemaet.');
+  assert.equal(hint(LEGACY), 'Ingen kilde har en brukbar dato. Opptakstid med sekunder kreves for Skråfoto 2019, og må fylles ut før eksport.');
+  assert.equal(hint(ASBUILT), 'Ingen kilde har en brukbar dato. Opptakstid med sekunder kreves for AsBuilt 5.2, og må fylles ut før eksport.');
   for (const configuration of [LEGACY, ASBUILT]) {
     const { model, readiness } = completionView(session, layerId, configuration);
     assert.doesNotMatch(JSON.stringify(model.captureTime.groups.map((group) => group.hint)), /Gemini|valgfritt/, configuration.profile);

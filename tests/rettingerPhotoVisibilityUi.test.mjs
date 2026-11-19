@@ -116,9 +116,10 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
       const cardsBefore = await cardVisible();
       assert.deepEqual(cardsBefore, [true], 'FOTO layer is visible by its own setting');
 
-      await t.test('normal map shows markers and legend photo modes without a visit toggle', async () => {
+      await t.test('normal map shows markers, legend photo modes and the shared toggle in its shown state', async () => {
         assert.equal(await browser.evaluate(markerCount), 2);
-        assert.equal(await toggleState(), null);
+        // A8.1: the same control is offered in the main map; pressed = photos shown.
+        assert.deepEqual(await toggleState(), { label: 'Vis bilder', pressed: 'true', tooltip: 'Skjul bilder', state: 'shown', title: null, inToolbar: true });
         const expanded = await browser.evaluate(`Array.from(document.querySelectorAll('button[aria-expanded]')).find((e) => e.innerText.includes('Tegnforklaring'))?.getAttribute('aria-expanded')`);
         if (expanded === 'false') await clickButton('Tegnforklaring');
         await browser.waitFor('document.querySelector("[data-legend-photos]")');
@@ -179,7 +180,7 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
 
       await t.test('leaving restores markers exactly; re-entering hides again even after «Vis bilder»', async () => {
         await browser.waitFor(`${markerCount} === 2`);
-        assert.equal(await toggleState(), null);
+        assert.equal((await toggleState()).state, 'shown', 'the main map global choice applies again');
         assert.equal(await browser.evaluate(gmiFeatureCount), gmiFeaturesBefore, 'GMI map unchanged after the visit');
         await openRettinger('Syntetisk leveranse');
         await browser.waitFor(`${markerCount} === 0`);
@@ -250,7 +251,7 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
           await clickButton('Vis bilder');
           await browser.waitFor(`${markerCount} === 0`);
           await exitValidator();
-          await browser.waitFor(`${markerCount} === 2 && !${toggle}`);
+          await browser.waitFor(`${markerCount} === 2 && ${toggle}?.dataset.rettingerPhotoToggle === 'shown'`);
           assert.deepEqual(await cardVisible(), cardsBefore);
         }
       });
@@ -273,7 +274,7 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
           await clickButton('Lag retting…');
           await browser.waitFor(`${workspace} && !${validatorLayer} && ${markerCount} === 0 && ${toggle}?.dataset.rettingerPhotoToggle === 'hidden'`);
           await exitRettinger();
-          await browser.waitFor(`${markerCount} === 2 && !${toggle}`);
+          await browser.waitFor(`${markerCount} === 2 && ${toggle}?.dataset.rettingerPhotoToggle === 'shown'`);
           assert.deepEqual(await cardVisible(), cardsBefore);
         }
         const after = await deliverySummary();

@@ -31,13 +31,15 @@ test('M4: filename provenance is separate in completion/readiness, and partial p
   const { session, layerId } = await filenameLayer(['20261014_143302.jpg', '20261015_1433.jpg', '20261016.jpg']);
   try {
     const { model, readiness } = completionView(session, layerId);
-    assert.deepEqual(completionSummary(model.captureTime, []), [{ key: 'filename', label: 'Filnavn', count: 3 }]);
+    assert.deepEqual(completionSummary(model.captureTime, []), [{ key: 'filename', label: 'Tolket fra filnavn', count: 3 }]);
     assert(readiness.tasks.captureTime.items.every((item) => item.origin === 'filename'));
-    assert(model.captureTime.rows.every((item) => item.origin === 'filename' && item.acceptedText.endsWith('Filnavn')));
+    assert(model.captureTime.rows.every((item) => item.origin === 'filename' && item.acceptedText.endsWith('Tolket fra filnavn')));
     assert.match(model.captureTime.rows[1].acceptedText, /uten sekunder/);
     assert.match(model.captureTime.rows[2].acceptedText, /bare dato/);
     assert.equal(model.captureTime.rows[1].note, null, 'precision is already stated in the accepted value');
-    const warning = advisory(readiness.recommendations);
+    // C1.5: accepted filename dates are listed as information.
+    const warning = advisory(readiness.notes);
+    assert.equal(advisory(readiness.recommendations), undefined);
     assert.equal(warning.count, 3);
     assert.equal(warning.completeAssetIds.length, 1);
     assert.equal(warning.incompleteAssetIds.length, 2);
@@ -99,7 +101,8 @@ test('M4: unique delivered assets only; advisory leaves serialized time and orig
     const plan = await buildPhotoExportPlan(snapshot, { ...configuration, profile: 'legacy2019' });
     assert.equal(plan.occurrences.length, 2);
     assert.equal(advisory(plan.warnings).count, 1);
-    assert.equal(advisory(completionView(session, layerId).readiness.recommendations).count, 1);
+    // C1.5: an accepted filename date is information, not a recommendation.
+    assert.equal(advisory(completionView(session, layerId).readiness.notes).count, 1);
     const manualSnapshot = { ...snapshot, assets: snapshot.assets.map((asset) => ({ ...asset,
       metadata: { ...asset.metadata, captureTime: { ...asset.metadata.captureTime, provenance: { kind: 'manual' } } } })) };
     const manualPlan = await buildPhotoExportPlan(manualSnapshot, { ...configuration, profile: 'legacy2019' });

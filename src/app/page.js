@@ -15,7 +15,7 @@ import { canRedoPhotoEdit, canUndoPhotoEdit, changedPhotoIds, effectivePhoto, em
   photoEditReducer } from '@/lib/photos/photoEditSession.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
 import { photoStackMembers } from '@/lib/photos/photoStacks.mjs';
-import { applyPhotoDeliveryChoice, photoDeliveryStatusText, photoDeliveryToggleTarget, photoDeliveryWithProposals, photoMoveProposesTransfer, togglePhotoDelivery } from '@/lib/photos/photoDeliveryChoice.mjs';
+import { applyPhotoDeliveryChoice, photoDeliveryStatusText, photoDeliveryToggleTarget, photoDeliveryWithProposals, photoPositionDeliveryEffect, togglePhotoDelivery } from '@/lib/photos/photoDeliveryChoice.mjs';
 import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
 import { photoExportConfigFor, reconcilePhotoExportConfig, updatePhotoExportConfig } from '@/lib/photos/photoExportConfig.mjs';
 import { createPhotoExportFlow, photoExportFlowFilter, photoExportFlowIsLive, photoExportFlowProgress } from '@/lib/photos/photoExportFlow.mjs';
@@ -43,9 +43,9 @@ import { createSessionLossGuard, sessionLossState } from '@/lib/sessionLoss.mjs'
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
 import LayerDataTable from '@/components/LayerDataTable';
-import MapPaneToolbar from '@/components/MapPaneToolbar';
+import MapPaneToolbar, { MapPhotoToggleBar } from '@/components/MapPaneToolbar';
 import { MapPanePresentationProvider } from '@/components/MapPanePresentationProvider';
-import { reconcileWorkspacePhotoOverride, workspacePhotosSuppressed, workspacePhotoToggleAvailable, toggleWorkspacePhotoOverride } from '@/lib/workspace/rettingerPhotoVisibility.mjs';
+import { forgetPhotoVisibilityWithoutPhotos, reconcileWorkspacePhotoOverride, workspacePhotosSuppressed, workspacePhotoToggleAvailable, toggleWorkspacePhotoOverride } from '@/lib/workspace/rettingerPhotoVisibility.mjs';
 import TerrainFetcher from '@/components/TerrainFetcher';
 import WmsLayerModal from '@/components/WmsLayerModal';
 import GeminiConnectionButton from '@/components/gemini-wfs/GeminiConnectionButton';
@@ -67,8 +67,10 @@ const DEV_RUNTIME_SNAPSHOTS_KEY = 'gmi:dev:runtime:snapshots';
 const DEV_RUNTIME_EVENTS_KEY = 'gmi:dev:runtime:events';
 const DEV_RUNTIME_MAX_ITEMS = 120;
 // Saved FOTO edits that moved GMI placements away from their GMI point and so now go to GML.
-const photoTransferNote = (result) => result?.transferIds?.length
-  ? ` · ${result.transferIds.length} ${result.transferIds.length === 1 ? 'plassering' : 'plasseringer'} overføres til GML` : '';
+const photoTransferNote = (result) => [
+  result?.transferIds?.length && ` · ${result.transferIds.length} ${result.transferIds.length === 1 ? 'plassering' : 'plasseringer'} overføres til GML`,
+  result?.restoredIds?.length && ` · ${result.restoredIds.length} ${result.restoredIds.length === 1 ? 'plassering' : 'plasseringer'} leveres i GMI igjen`,
+].filter(Boolean).join('');
 const PUBLIC_REPO_URL =
   'https://github.com/pb-bennett/gmi-validering';
 
@@ -107,7 +109,7 @@ export default function Home() {
   const updateLastActive = useStore(
     (state) => state.updateLastActive,
   );
-  const analysisOpen = useStore((state) => state.analysis.isOpen);
+  const analysisStateOpen = useStore((state) => state.analysis.isOpen);
   const layerDataTableOpen = useStore(
     (state) => state.ui.layerDataTable?.isOpen,
   );
@@ -126,9 +128,6 @@ export default function Home() {
     (state) => state.closeDataInspector,
   );
   const [zoomLevel, setZoomLevel] = useState(13);
-  const primaryViewHeight = analysisOpen
-    ? 'var(--profile-map-height, 55%)'
-    : '100%';
   const inspectorWidthPx = VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH_REM * 16;
   const canDockInspector =
     viewportWidth - sidebarWidth >= 480 + inspectorWidthPx;
@@ -206,15 +205,23 @@ export default function Home() {
   // Rettinger (GMI field corrections) is a sibling of the FOTO and Validator workspaces; FOTO wins if both are requested.
   const gmiEditActive = !workspaceLayer && Boolean(gmiEditLayerId && surveyLayers[gmiEditLayerId]);
   const validatorActive = !workspaceLayer && !gmiEditActive && fieldValidationOpen;
+  // B1.2: main-map analysis (Profilanalyse: modal, split map, selected-pipe styling, profile points and zoom) is
+  // suspended in FOTO, Validator and Rettinger. Its store state is kept, so it returns with the main map.
+  const mainMapAnalysisSuspended = Boolean(workspaceLayer) || gmiEditActive || validatorActive;
+  const analysisOpen = analysisStateOpen && !mainMapAnalysisSuspended;
+  const primaryViewHeight = analysisOpen
+    ? 'var(--profile-map-height, 55%)'
+    : '100%';
   // Rettinger visits are tied to the edited layer. A Validator visit spans
   // survey layer changes. Reconcile during render so entry starts hidden.
   const photoVisitKey = gmiEditActive ? `rettinger:${gmiEditLayerId}` : validatorActive ? 'validator' : null;
+  // A8.1: one visibility state for the map toolbar «Vis bilder» control in the main map, Validator, Rettinger and FOTO.
   const [workspacePhotoState, setWorkspacePhotoState] = useState(() => reconcileWorkspacePhotoOverride(null, photoVisitKey));
-  const workspacePhotosOverride = reconcileWorkspacePhotoOverride(workspacePhotoState, photoVisitKey);
+  const workspacePhotosOverride = forgetPhotoVisibilityWithoutPhotos(reconcileWorkspacePhotoOverride(workspacePhotoState, photoVisitKey), photoLayers);
   if (workspacePhotosOverride !== workspacePhotoState) setWorkspacePhotoState(workspacePhotosOverride);
   const workspacePhotosHidden = workspacePhotosSuppressed(workspacePhotosOverride);
-  const workspacePhotoToggle = workspacePhotoToggleAvailable(photoLayers, photoVisitKey) ? {
-    shown: workspacePhotosOverride.shown,
+  const workspacePhotoToggle = workspacePhotoToggleAvailable(photoLayers, workspaceLayer?.id) ? {
+    shown: !workspacePhotosHidden,
     onToggle: () => setWorkspacePhotoState((state) => toggleWorkspacePhotoOverride(reconcileWorkspacePhotoOverride(state, photoVisitKey))),
   } : null;
   // Runs `action` now, or after the Rettinger draft dialog when unsubmitted form values exist. Cancel = nothing happens.
@@ -251,10 +258,18 @@ export default function Home() {
     [effectiveWorkspacePhotos, photoWorkspace, changedIds, workspaceDelivery]);
   // Unsaved moves away from the originating GMI point propose GML. Shown on pills, markers and the inspector, and
   // committed only by Save together with the position (the session re-derives it); filters use saved choices.
-  const shownDelivery = useMemo(() => photoEditing && workspaceDelivery ? photoDeliveryWithProposals(workspaceDelivery,
-    new Set(effectiveWorkspacePhotos.filter((photo) => photo.staged?.position
-      && photoMoveProposesTransfer(photo, workspaceDelivery.byPhotoId[photo.id], photo.spatial.current?.position)).map((photo) => photo.id)))
-    : workspaceDelivery, [photoEditing, workspaceDelivery, effectiveWorkspacePhotos]);
+  // B1.1: a move back to the GMI object proposes the GMI default again for an automatic GML transfer.
+  const shownDelivery = useMemo(() => {
+    if (!photoEditing || !workspaceDelivery) return workspaceDelivery;
+    const proposed = new Set(), restored = new Set();
+    for (const photo of effectiveWorkspacePhotos) {
+      if (!photo.staged?.position) continue;
+      const effect = photoPositionDeliveryEffect(photo, workspaceDelivery.byPhotoId[photo.id], photo.spatial.current?.position);
+      if (effect === 'transfer') proposed.add(photo.id);
+      else if (effect === 'restore') restored.add(photo.id);
+    }
+    return photoDeliveryWithProposals(workspaceDelivery, proposed, restored);
+  }, [photoEditing, workspaceDelivery, effectiveWorkspacePhotos]);
   const activeWorkspacePhoto = effectiveWorkspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
   const activeSiblings = activeWorkspacePhoto ? effectiveWorkspacePhotos.filter((photo) => photo.assetId === activeWorkspacePhoto.assetId) : [];
   // List delivery pills and the inspector toggle: every change is one occurrence's M8 decision,
@@ -308,8 +323,8 @@ export default function Home() {
   };
   const enterPhotoEditMode = (photoId = photoWorkspace.activePhotoId) => {
     if (!workspaceLayer || photoWorkspace.mode === 'edit') return false;
-    const hidden = !workspaceLayer.visible;
-    if (hidden) photoSession.setLayerVisibility(workspaceLayer.id, true);
+    // A8.1: editing always shows the photos; the global «Vis bilder» choice is kept and applies again afterwards.
+    const hidden = workspacePhotosHidden;
     const ticket = photoSession.beginPhotoEdits(workspaceLayer.id);
     if (!ticket) return false;
     photoEditTicketRef.current = ticket;
@@ -318,7 +333,7 @@ export default function Home() {
     dispatchPhotoWorkspace({ type: 'mode', mode: 'edit' });
     // The command bar appears over the map: make sure the selected photo is not hidden underneath it.
     if (photoId) setPhotoPanRequest({ layerId: workspaceLayer.id, photoId, at: Date.now() });
-    if (hidden) notifyPhoto('Laget vises mens du redigerer', 'info');
+    if (hidden) notifyPhoto('Bildene vises mens du redigerer', 'info');
     return true;
   };
   // A commit that failed, other than by conflict. `ticket` may still be registered, as after an invalid change, and the
@@ -1026,6 +1041,7 @@ export default function Home() {
                   showShare={parsingStatus === 'done'}
                   photoToggle={workspacePhotoToggle}
                 />}
+                {workspaceLayer && workspacePhotoToggle && <MapPhotoToggleBar photoToggle={workspacePhotoToggle} editing={photoEditing} />}
                 <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
             {/* Show Map view when activeViewTab is 'map' or 3D viewer is not open */}
             {(workspaceLayer || !viewer3DOpen || activeViewTab === 'map') && (
@@ -1045,14 +1061,16 @@ export default function Home() {
                       delivery: shownDelivery, onToggleDelivery: toggleWorkspaceDelivery,
                       onEditPlacement: () => runWorkspaceTool('edit'),
                       zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null,
-                      // A8: photos hidden with the eye control; the selection and an open preview survive until shown again.
-                      hidden: !workspaceLayer.visible } : null}
+                      // A8/A8.1: photos hidden with the map toolbar «Vis bilder» control; the selection and an open preview
+                      // survive until shown again. Editing always shows them.
+                      hidden: workspacePhotosHidden && !photoEditing } : null}
                     onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
                     photoFitRequest={photoFitRequest?.layerId === workspaceLayer?.id ? photoFitRequest : null} onPhotoFitHandled={onPhotoFitHandled}
                     photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,
                       onAnnounce: setPhotoAnnouncement, centerRef: photoMapCenterRef, stackIds: photoEditStackIds,
                       clickMove: photoClickMove, onClickMoveEnd: () => setPhotoClickMoveId(null) } : null}
                     photoDisplay={{ mode: photoMapDisplay, onChange: setPhotoMapDisplay, zoom: zoomLevel, suppressed: workspacePhotosHidden }}
+                    analysisSuspended={mainMapAnalysisSuspended}
                     photoLocateRequest={photoLocateRequest} onPhotoLocateHandled={() => setPhotoLocateRequest(null)} />
                   {photoEditing && <div className="photo-edit-command-anchor">
                     <PhotoEditCommandBar photo={activeWorkspacePhoto || null} siblingCount={activeSiblings.length} changedCount={changedIds.size}
@@ -1144,7 +1162,7 @@ export default function Home() {
             )}
 
             {/* Profile analysis modal - overlays both 2D and 3D views */}
-            {!workspaceLayer && <InclineAnalysisModal />}
+            {!mainMapAnalysisSuspended && <InclineAnalysisModal />}
           </div>
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">

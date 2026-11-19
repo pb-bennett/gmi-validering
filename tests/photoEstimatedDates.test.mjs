@@ -205,7 +205,9 @@ test('readiness, warnings, completion counts and real Gemini GML/ZIP update imme
     assert.equal(view.model.captureTime.outstanding, 0);
     assert.equal(view.readiness.levels.schema.met, true);
     assert.equal(photoCaptureTimeSchemaWarning(view.readiness), null);
-    assert.equal(view.readiness.recommendations.find((item) => item.code === 'capture-time-estimated').count, 2);
+    // C1.5: an estimated date is the user's decision: information, not a recommendation.
+    assert.equal(view.readiness.notes.find((item) => item.code === 'capture-time-estimated').count, 2);
+    assert(!view.readiness.recommendations.some((item) => item.code === 'capture-time-estimated'));
     assert(!view.readiness.recommendations.some((item) => item.code === 'capture-time-bulk'), 'estimated dates have their own precise explanation');
     assert.equal(completionSummary(view.model.captureTime, []).find((item) => item.key === 'estimated').count, 2);
     const photo = s.getPhoto(f.ids[2]), accepted = time(f, f.ids[2]);
@@ -232,6 +234,6 @@ test('readiness, warnings, completion counts and real Gemini GML/ZIP update imme
     const undone = completionView(s, f.layerId);
     assert.equal(undone.model.captureTime.outstanding, 2);
     assert(photoCaptureTimeSchemaWarning(undone.readiness));
-    assert(!undone.readiness.recommendations.some((item) => item.code === 'capture-time-estimated'));
+    assert(!undone.readiness.notes.some((item) => item.code === 'capture-time-estimated'));
   } finally { s.clear(); }
 });

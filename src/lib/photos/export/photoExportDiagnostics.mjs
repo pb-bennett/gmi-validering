@@ -9,7 +9,7 @@ export function filenameCaptureTimeAdvisory(items) {
   return { code: 'capture-time-filename', count: affected.length, assetIds: affected.map((item) => item.assetId),
     completeAssetIds: affected.filter((item) => fullCaptureTime(item.captureTime)).map((item) => item.assetId),
     incompleteAssetIds: affected.filter((item) => !fullCaptureTime(item.captureTime)).map((item) => item.assetId),
-    message: `${affected.length} bilder har godtatt opptakstid fra filnavnet, ikke fra opptaksmetadata. GML-eksporten tar ikke med kildeopplysningen.` };
+    message: `${affected.length} bilder har godtatt opptaksdato tolket fra filnavnet, ikke fra opptaksmetadata. GML-filen tar ikke med at verdien er tolket.` };
 }
 
 // Codes are stable: tests and data-diagnostic-code depend on them. Only the wording here may change.
@@ -45,7 +45,7 @@ const labels = {
   'capture-time-bulk': 'Samme manuelle opptakstid',
   'capture-time-estimated': 'Anslått opptaksdato',
   'capture-time-technical': 'Teknisk utfylt tid',
-  'capture-time-filename': 'Opptakstid fra filnavn',
+  'capture-time-filename': 'Opptaksdato tolket fra filnavn',
   'capture-time-in-source': 'Opptakstid finnes i kilde',
   'capture-time-sources-differ': 'Ulik opptakstid i kildene',
   'direction-defaulted': 'Standardretning',

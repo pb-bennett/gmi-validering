@@ -3,7 +3,8 @@
 // Pure derivation. The photo session stores one explicit decision per
 // occurrence (record id) in its own map, outside the records, so no
 // positioning, metadata or edit action can touch it:
-//   { kind: 'gmi', occurrenceKey, intent: 'transfer' | 'exclude' }   GMI-linked occurrence
+//   { kind: 'gmi', occurrenceKey, intent: 'transfer' | 'exclude', automatic? }   GMI-linked occurrence
+//     (automatic: true marks a transfer written by the position default, B1.1)
 //   { kind: 'unlinked', include: true }                   occurrence without a GMI link
 // The absence of a decision is the default: 'keep-link' for a GMI-linked
 // occurrence, not included for an unlinked one.
@@ -149,6 +150,9 @@ export function photoDeliveryEntry(layer, record, decision = null, { userChosen 
     include,
     explicit: Boolean(decision),
     userChosen: Boolean(userChosen),
+    // B1.1: a GML transfer written by the automatic position default, not by the user; a later accepted position at the
+    // GMI object may restore the GMI default. Not part of the export snapshot.
+    automatic: decision?.automatic === true,
     canTransfer: linked && association.state === 'confident',
     canInclude: !linked && !evidence.confident,
     linkedWithoutOccurrence: !linked && evidence.confident,

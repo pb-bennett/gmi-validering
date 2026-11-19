@@ -9,11 +9,11 @@ import { createLayerWithPlacement, importDialog, waitForThumbnails } from './hel
 import { clickSourceControl, setPhotoFiles } from './helpers/photoSourceWorkflow.mjs';
 import { selectPhotoRow } from './helpers/photoWorkspace.mjs';
 
-// A8: the FOTO header eye hides the workspace photos on the map (markers, miniatures, direction arrows, previews) and
+// A8/A8.1: the shared map toolbar «Vis bilder» control (the FOTO header eye is gone) hides the workspace photos on the map (markers, miniatures, direction arrows, previews) and
 // shows them again exactly as they were. Selection, inspector, list position, map extent and display mode are kept, and
 // toggling never fits or pans the map.
 const app = process.env.PHOTO_UI_URL;
-const eye = 'document.querySelector(".photo-workspace-visibility")';
+const eye = 'document.querySelector("[data-photo-visibility-toggle]")';
 const markers = 'document.querySelectorAll(".leaflet-photo-markers-pane .leaflet-marker-icon[data-photo-id]")';
 const arrows = 'document.querySelectorAll(".leaflet-photo-directions-pane .leaflet-marker-icon")';
 const preview = 'document.querySelector(".photo-workspace-map-preview")';
@@ -76,7 +76,10 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`FOTO photo visib
       assert(before.arrows > 0, 'direction arrows are drawn before hiding');
       assert.equal(before.preview, ids[1]);
       assert.equal(before.selected, ids[1]);
-      assert.equal(before.pressed, 'false');
+      assert.equal(before.pressed, 'true');
+      assert.equal(before.label, 'Vis bilder');
+      assert.equal(await browser.evaluate('document.querySelectorAll("[data-photo-visibility-toggle]").length'), 1, 'one control');
+      assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-workspace-header [aria-pressed]"))'), false, 'no FOTO header eye');
       await shot('shown');
 
       await browser.evaluate(`${eye}.click()`);
@@ -90,8 +93,8 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`FOTO photo visib
       assert.equal(hidden.zoom, before.zoom, 'no fit or zoom');
       assert.equal(hidden.mode, before.mode, 'display mode is kept');
       assert.equal(hidden.listTop, before.listTop, 'list position is kept');
-      assert.equal(hidden.pressed, 'true');
-      assert.match(hidden.label, /^Vis fotolaget /);
+      assert.equal(hidden.pressed, 'false');
+      assert.equal(hidden.label, 'Vis bilder');
       await shot('hidden');
 
       await browser.evaluate(`${eye}.click()`);
@@ -111,6 +114,29 @@ for (const [width, height] of [[1280, 720], [1366, 768]]) test(`FOTO photo visib
       await browser.evaluate(`${eye}.click()`);
       await browser.waitFor(`${markers}.length === ${thumbs}`);
       await shot('restored');
+
+      // A8.1: one global choice. Hidden in FOTO stays hidden in the main map and back again, and the Layer Manager
+      // checkbox (the layer's own preference) is never changed by it.
+      const layerCheckbox = 'document.querySelector(\'section[aria-label^="Fotokartlag"] input[type=checkbox]\')';
+      await browser.evaluate(`${eye}.click()`);
+      await browser.waitFor(`${markers}.length === 0`);
+      await click('Lukk FOTO');
+      await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+      await browser.waitFor(`${eye}?.getAttribute('aria-pressed') === 'false'`);
+      assert.equal(await browser.evaluate(`${markers}.length`), 0, 'main map keeps the global choice');
+      assert.equal(await browser.evaluate(`${layerCheckbox}?.checked`), true, 'layer preference unchanged');
+      await shot('main-hidden');
+      await browser.evaluate(`${eye}.click()`);
+      await browser.waitFor(`${markers}.length === 3 && ${eye}.getAttribute('aria-pressed') === 'true'`);
+      await browser.evaluate(`${eye}.click()`);
+      await browser.waitFor(`${markers}.length === 0`);
+      await click('Åpne FOTO');
+      await browser.waitFor('document.querySelector(".photo-workspace-shell")');
+      await browser.evaluate('new Promise(resolve => setTimeout(resolve, 400))');
+      assert.equal(await browser.evaluate(`${markers}.length`), 0, 'FOTO opens with the global choice');
+      assert.equal(await browser.evaluate(`${eye}.getAttribute('aria-pressed')`), 'false');
+      await browser.evaluate(`${eye}.click()`);
+      await browser.waitFor(`${markers}.length > 0`);
     } finally {
       await browser.close();
       await rm(directory, { recursive: true, force: true });

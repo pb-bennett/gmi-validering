@@ -65,7 +65,9 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(page, /<StatsModal/);
   assert.match(page, /<StatsModal[\s\S]*?isOpen=\{showStats\}[\s\S]*?onClose=\{\(\) => setShowStats\(false\)\}/);
   assert.match(page, /const \[dockedInspectorOpen, setDockedInspectorOpen\] = useState\(false\)/);
-  assert.match(page, /const analysisOpen = useStore\(\(state\) => state\.analysis\.isOpen\)/);
+  assert.match(page, /const analysisStateOpen = useStore\(\(state\) => state\.analysis\.isOpen\)/);
+  // B1.2: the main-map profile analysis is hidden (not closed) while FOTO, Validator or Rettinger is open.
+  assert.match(page, /const analysisOpen = analysisStateOpen && !mainMapAnalysisSuspended;/);
   assert.match(
     page,
     /\{!workspaceLayer && !\(layerDataTableOpen \|\| dockedInspectorOpen \|\| analysisOpen\) && \(\s*<button[\s\S]*?aria-label="Vis bruksstatistikk"/,

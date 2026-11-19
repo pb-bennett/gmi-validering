@@ -31,7 +31,32 @@ const ToolbarButton = forwardRef(function ToolbarButton({ children, className = 
   );
 });
 
-// photoToggle: Rettinger's temporary «Vis bilder» override ({ shown, onToggle }), or null when not offered.
+// A8.1: the one «Vis bilder» control for photo visibility on every map (main map, Validator, Rettinger and FOTO).
+// photoToggle: { shown, onToggle } from the shared visibility state in page.js, or null when no placed photos are loaded.
+// Left of the centred switcher, just right of Leaflet's zoom control (10px + 34px): the right cluster is already full at
+// laptop widths in Rettinger, so this map-display control sits with the other map controls instead.
+function PhotoVisibilityToggle({ photoToggle, editing = false }) {
+  return (
+    <div className="pointer-events-auto absolute left-11 top-0">
+      <PhotoIconButton icon={ImagesIcon} label="Vis bilder" pressed={editing || photoToggle.shown}
+        tooltip={editing ? 'Bildene vises mens du redigerer' : photoToggle.shown ? 'Skjul bilder' : 'Vis bilder'}
+        unavailable={editing} onClick={editing ? undefined : photoToggle.onToggle}
+        data-photo-visibility-toggle={photoToggle.shown ? 'shown' : 'hidden'}
+        data-rettinger-photo-toggle={photoToggle.shown ? 'shown' : 'hidden'}
+        className="gmi-map-toolbar-icon-button gmi-elevated-surface" />
+    </div>
+  );
+}
+
+// FOTO has no map pane toolbar; the same control sits at the same place over its map.
+export function MapPhotoToggleBar({ photoToggle, editing = false }) {
+  return (
+    <div className="absolute inset-x-2 top-2 z-[1200] pointer-events-none" role="toolbar" aria-label="Kartverktøy">
+      <div className="relative min-h-9"><PhotoVisibilityToggle photoToggle={photoToggle} editing={editing} /></div>
+    </div>
+  );
+}
+
 export default function MapPaneToolbar({ onReset, onShare, showShare, photoToggle = null }) {
   const toolbarRef = useRef(null);
   const overflowTriggerRef = useRef(null);
@@ -88,16 +113,7 @@ export default function MapPaneToolbar({ onReset, onShare, showShare, photoToggl
       aria-label="Kartverktøy"
     >
       <div className="relative min-h-9">
-        {photoToggle && (
-          // Left of the centred switcher, just right of Leaflet's zoom control (10px + 34px): the right cluster is already
-          // full at laptop widths in Rettinger, so this map-display control sits with the other map controls instead.
-          <div className="pointer-events-auto absolute left-11 top-0">
-            <PhotoIconButton icon={ImagesIcon} label="Vis bilder" pressed={photoToggle.shown}
-              tooltip={photoToggle.shown ? 'Skjul bilder' : 'Vis bilder'} onClick={photoToggle.onToggle}
-              data-rettinger-photo-toggle={photoToggle.shown ? 'shown' : 'hidden'}
-              className="gmi-map-toolbar-icon-button gmi-elevated-surface" />
-          </div>
-        )}
+        {photoToggle && <PhotoVisibilityToggle photoToggle={photoToggle} />}
         <div className="pointer-events-auto absolute left-1/2 top-0 min-w-0 -translate-x-1/2">
           <TabSwitcher compact={compact} />
         </div>

@@ -83,8 +83,13 @@ export async function saveSourceWizardChanges(browser, { keepPositions = false }
     await clickSourceControl(browser, 'Neste');
     await browser.waitFor(`${sourceWizard}.dataset.step === '4'`);
   }
+  const stepLabels = `Array.from(${sourceWizard}.querySelectorAll('.photo-import-steps > li')).map((li) => li.innerText.replace(/\\s+/g, ' ').trim())`;
+  const before = await browser.evaluate(stepLabels);
   await clickSourceControl(browser, 'Lagre endringer');
   await browser.waitFor(`${sourceWizard}?.dataset.saved && ${sourceWizard}.querySelector('[data-positioning-receipt]')`);
+  // B1.3: Endringer lagret shows the steps the saved workflow had; a skipped Koblinger step does not reappear.
+  const after = await browser.evaluate(stepLabels);
+  if (after.length !== before.length) throw new Error(`Receipt steps ${JSON.stringify(after)} differ from the workflow's ${JSON.stringify(before)}`);
 }
 
 // A source saved on its own, as a connection-only (or metadata-only) transaction: include it, keep every current
@@ -125,8 +130,7 @@ export async function applyPhotoSourcePositions(browser, kind = 'gml', { photoId
   } else await clickSourceControl(browser, `Foreslå ${kind.toUpperCase()} for viste`);
   await clickSourceControl(browser, 'Neste');
   assert.match(await browser.evaluate(`${sourceWizard}.querySelector('[data-kontroll="positions"]').innerText`), /[1-9]d* (bilde|bilder|plassering|plasseringer) valgt/);
-  await clickSourceControl(browser, 'Lagre endringer');
-  await browser.waitFor(`${sourceWizard}?.dataset.saved`);
+  await saveSourceWizardChanges(browser);
   await clickSourceControl(browser, 'Lukk');
   await browser.waitFor(`!${sourceWizard}`);
   if (entered) {

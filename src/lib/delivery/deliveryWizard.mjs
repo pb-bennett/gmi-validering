@@ -90,8 +90,10 @@ export function deliveryMessage(item) {
   if (typeof item?.message === 'string' && photoExportDiagnosticLabel(code) !== code) return item.message;
   return gmiEditMessage(code, 'Leveransen kunne ikke kontrolleres sikkert. Kontroller kildefilen, koblingene og fotoopplysningene, og prøv igjen.');
 }
+// C1.5: accepted filename-derived, estimated and technically completed capture times are the user's decisions: Informasjon.
 const informational = new Set(['experimental-mapping', 'compatibility-import', 'compatibility-z', 'compatibility-time', 'compatibility-metadata',
-  'associations-omitted', 'shared-attachments', 'path-convention', 'retained-path-outside-attachments', 'gemini-va-tested-import']);
+  'associations-omitted', 'shared-attachments', 'path-convention', 'retained-path-outside-attachments', 'gemini-va-tested-import',
+  'capture-time-filename', 'capture-time-estimated', 'capture-time-technical']);
 export function deliveryDiagnostics(plan) {
   const groups = { errors: [], warnings: [], info: [] };
   for (const item of plan.errors) groups.errors.push({ ...item, text: deliveryMessage(item) });

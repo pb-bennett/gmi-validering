@@ -6,11 +6,12 @@ export const ESTIMATED_DATE_HELP = 'Anslått dato. Kl. 12:00:00 lagres og ekspor
 export const isEstimatedCaptureTime = (accepted) => accepted?.provenance?.estimated === true;
 
 // DC2 (approved 2026-11-19): a proposal needs at least 3 known dates covering at least 25 % of the layer's unique
-// photos. A spread of up to 7 days is prefilled; 8–31 days is shown but must be chosen explicitly; more gives none.
+// photos. A spread of up to 7 days is prefilled; a longer spread is shown but must be chosen explicitly.
+// C1.3 (2026-11-19 evening): there is no maximum spread. Infrastructure projects can last months or years, so the
+// median is offered whenever the evidence is sufficient, whatever the spread.
 export const ESTIMATE_MIN_BASIS = 3;
 export const ESTIMATE_MIN_SHARE = 0.25;
 export const ESTIMATE_PREFILL_DAYS = 7;
-export const ESTIMATE_MAX_DAYS = 31;
 
 export function estimatedCaptureTime(date) {
   const value = normalizeCaptureTime(date);
@@ -56,10 +57,10 @@ export function photoEstimatedDateModel(photos, { today = localCalendarDate() } 
   const first = known[0] ?? null, last = known.at(-1) ?? null;
   const spreadDays = first ? captureDateSpreadDays(first, last) : null;
   const enough = known.length >= ESTIMATE_MIN_BASIS && known.length >= ESTIMATE_MIN_SHARE * unique.length;
-  const proposal = !enough ? null : spreadDays <= ESTIMATE_PREFILL_DAYS ? 'prefill' : spreadDays <= ESTIMATE_MAX_DAYS ? 'confirm' : null;
+  const proposal = !enough ? null : spreadDays <= ESTIMATE_PREFILL_DAYS ? 'prefill' : 'confirm';
   const median = medianCaptureDate(known);
   return Object.freeze({ basis: known.length, unique: unique.length, first, last, spreadDays, median, proposal,
-    reason: !enough ? 'insufficient' : proposal ? null : 'spread', suggestedDate: proposal ? median : null,
+    reason: !enough ? 'insufficient' : null, suggestedDate: proposal ? median : null,
     missing: targets.length, targetIds: Object.freeze(targets.map((photo) => photo.id)) });
 }
 

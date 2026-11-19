@@ -151,8 +151,8 @@ test('filename capture-time suggestions: final step, default off, persistence, s
  assert.equal(await browser.evaluate(`${box('Bruk dato og klokkeslett fra filnavn')}.checked`),true);
  await clickImport(browser,'Opprett fotolag');await browser.waitFor('!document.querySelector(".photo-collection-dialog[open]") && document.querySelector(".photo-workspace-shell")');
  const inspect=async(name)=>{await browser.evaluate(`Array.from(document.querySelectorAll('.photo-workspace-list li[data-photo-id]')).find(li=>li.textContent.includes(${JSON.stringify(name)})).querySelector('.photo-workspace-row').click()`);await new Promise(resolve=>setTimeout(resolve,150));return browser.evaluate(`(()=>{const d=document.querySelector('[data-disclosure="capture-evidence"]');return {source:d?.textContent||'',text:document.body.textContent};})()`);};
- const dateOnly=await inspect('KUM12_20261015.png');assert(dateOnly.source.includes('Opptakstid fra') && dateOnly.source.includes('Filnavn'));assert(dateOnly.text.includes('15.10.2026') && dateOnly.text.includes('bare dato'));
- const complete=await inspect('20261013_0915.png');assert(complete.source.includes('Filnavn'));assert(complete.text.includes('13.10.2026 09:15') && complete.text.includes('uten sekunder'));
+ const dateOnly=await inspect('KUM12_20261015.png');assert(dateOnly.source.includes('Opptakstid fra') && dateOnly.source.includes('Tolket fra filnavn'));assert(dateOnly.text.includes('15.10.2026') && dateOnly.text.includes('bare dato'));
+ const complete=await inspect('20261013_0915.png');assert(complete.source.includes('Tolket fra filnavn'));assert(complete.text.includes('13.10.2026 09:15') && complete.text.includes('uten sekunder'));
  const exif=await inspect('20261016_120000.png');assert(exif.source.includes('EXIF DateTimeOriginal'));
  // Cancel leaves nothing behind.
  await click('Legg til bilder');await browser.waitFor(`${importDialog}?.open`);await clickImport(browser,'Avbryt');await browser.waitFor('!document.querySelector(".photo-collection-dialog[open]")');

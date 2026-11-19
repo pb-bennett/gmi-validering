@@ -92,13 +92,6 @@ function recommendationsFor({ profile, placed, assets, nowMs, captureItems, dire
   const implausible = assets.filter((photo) => timeOf(photo) && implausibleCaptureTime(timeOf(photo).value, nowMs));
   add('capture-time-implausible', implausible.length, `${implausible.length} bilder har en usannsynlig dato.`, { assetIds: implausible.map((photo) => photo.assetId) });
   const bulkTimes = repeatedBulkValues(assets, (photo) => timeOf(photo)?.provenance, (photo) => timeOf(photo).value.iso);
-  const estimated = assets.filter((photo) => timeOf(photo)?.provenance?.estimated);
-  const filenameAdvisory = filenameCaptureTimeAdvisory(assets.map((photo) => ({ assetId: photo.assetId, captureTime: timeOf(photo) })));
-  if (filenameAdvisory) recommendations.push({ ...filenameAdvisory, label: photoExportDiagnosticLabel(filenameAdvisory.code) });
-  add('capture-time-estimated', estimated.length, `${estimated.length} bilder har anslått dato. 12:00:00 er teknisk standard, ikke målt opptakstid.`, { assetIds: estimated.map((photo) => photo.assetId) });
-  // M5 (C2): a technically completed time is complete for export, but its completed part was never measured.
-  const technical = assets.filter((photo) => timeOf(photo)?.provenance?.technical);
-  add('capture-time-technical', technical.length, `${technical.length} bilder har teknisk utfylt tid. Den er ikke målt.`, { assetIds: technical.map((photo) => photo.assetId) });
   const bulkTimeCount = bulkTimes.reduce((total, group) => total + group.count, 0);
   add('capture-time-bulk', bulkTimeCount, `${bulkTimeCount} bilder har samme manuelt angitte tid.`, { groups: bulkTimes });
 
@@ -118,8 +111,19 @@ function recommendationsFor({ profile, placed, assets, nowMs, captureItems, dire
 
 function notesFor({ profile, requirement, placed, assets, captureItems, directionItems }) {
   const notes = [];
-  const add = (code, count, message) => { if (count) notes.push({ code, label: photoExportDiagnosticLabel(code), count, message }); };
+  const add = (code, count, message, details = {}) => { if (count) notes.push({ code, label: photoExportDiagnosticLabel(code), count, message, ...details }); };
   const gemini = profile === 'gemini-legacy2019';
+  const timeOf = (photo) => photo.captureMetadata?.captureTime || null;
+
+  // C1.5: dates interpreted from filenames, estimated dates and technical completion are the user's own accepted
+  // decisions. They are information, never something to check, and never decide the overall status on their own.
+  const filenameAdvisory = filenameCaptureTimeAdvisory(assets.map((photo) => ({ assetId: photo.assetId, captureTime: timeOf(photo) })));
+  if (filenameAdvisory) notes.push({ ...filenameAdvisory, label: photoExportDiagnosticLabel(filenameAdvisory.code) });
+  const estimated = assets.filter((photo) => timeOf(photo)?.provenance?.estimated);
+  add('capture-time-estimated', estimated.length, `${estimated.length} bilder har anslått dato. 12:00:00 er teknisk standard, ikke målt opptakstid. Merkingen er ikke med i GML-filen.`, { assetIds: estimated.map((photo) => photo.assetId) });
+  // M5 (C2): a technically completed time is complete for export, but its completed part was never measured.
+  const technical = assets.filter((photo) => timeOf(photo)?.provenance?.technical);
+  add('capture-time-technical', technical.length, `${technical.length} bilder har teknisk utfylt klokkeslett eller sekunder. De utfylte delene er ikke målt, og merkingen er ikke med i GML-filen.`, { assetIds: technical.map((photo) => photo.assetId) });
 
   const defaulted = directionItems.filter((item) => item.state === 'defaulted').length;
   add('direction-defaulted', defaulted, `${defaulted} plasseringer har standardretning 0°, fordi ingen kilde oppgir retning.`);

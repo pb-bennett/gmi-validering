@@ -119,18 +119,19 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         assert.equal(await browser.evaluate('document.querySelector(".photo-icon-tooltip").getAttribute("aria-hidden")'), 'true');
         assert.equal(await browser.evaluate('document.querySelector(".gmi-workspace-close").hasAttribute("aria-describedby")'), false);
         await unhover(); await browser.waitFor('!document.querySelector(".photo-icon-tooltip")');
-        const eye = 'document.querySelector(".photo-workspace-visibility")';
+        const eye = 'document.querySelector("[data-photo-visibility-toggle]")';
         await keyboardFocus(eye);
-        assert.equal(await tooltipText(), 'Skjul fotolag', 'keyboard focus shows the tooltip immediately');
-        assert.match(await browser.evaluate(`${eye}.getAttribute('aria-label')`), /^Skjul fotolaget Bilder på kartet$/);
+        assert.equal(await tooltipText(), 'Skjul bilder', 'keyboard focus shows the tooltip immediately');
+        assert.equal(await browser.evaluate(`${eye}.getAttribute('aria-label')`), 'Vis bilder');
+        assert.equal(await browser.evaluate(`${eye}.getAttribute('aria-pressed')`), 'true');
         await pressKey(browser, 'Escape', KEYS.Escape);
         assert.equal(await tooltipText(), null, 'Escape dismisses only the tooltip');
         await browser.evaluate(`${eye}.click()`);
-        await browser.waitFor(`${eye}.getAttribute('aria-label').startsWith('Vis fotolaget')`);
-        assert.equal(await browser.evaluate(`${eye}.dataset.iconTooltip`), 'Vis fotolag');
+        await browser.waitFor(`${eye}.getAttribute('aria-pressed') === 'false'`);
+        assert.equal(await browser.evaluate(`${eye}.dataset.iconTooltip`), 'Vis bilder');
         assert.equal(await browser.evaluate('document.querySelectorAll(".leaflet-marker-icon[data-photo-id]").length'), 0);
         await browser.evaluate(`${eye}.click()`);
-        await browser.waitFor(`${eye}.getAttribute('aria-label').startsWith('Skjul fotolaget')`);
+        await browser.waitFor(`${eye}.getAttribute('aria-pressed') === 'true'`);
         await blur();
         await hover('document.querySelector(".photo-tools-trigger")');
         await browser.waitFor('document.querySelector(".photo-icon-tooltip")');
@@ -281,8 +282,8 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
         await enterEditMode(browser);
         assert(await browser.evaluate('document.querySelector(".leaflet-container").classList.contains("photo-edit-mode")'));
         assert(await browser.evaluate('Boolean(document.querySelector(".photo-workspace-editing-pill"))'));
-        assert.deepEqual(await browser.evaluate(`({ disabled: document.querySelector('.photo-workspace-visibility').getAttribute('aria-disabled'), tip: document.querySelector('.photo-workspace-visibility').dataset.iconTooltip })`),
-          { disabled: 'true', tip: 'Fotolaget vises mens du redigerer' });
+        assert.deepEqual(await browser.evaluate(`({ disabled: document.querySelector('[data-photo-visibility-toggle]').getAttribute('aria-disabled'), tip: document.querySelector('[data-photo-visibility-toggle]').dataset.iconTooltip })`),
+          { disabled: 'true', tip: 'Bildene vises mens du redigerer' });
         assert.equal(await browser.evaluate(`${commandBar}.querySelector('[role=toolbar]').getAttribute('aria-label')`), 'Juster plassering og retning');
         assert.match(await browser.evaluate(`${commandBar}.innerText`), /Avslutt redigering/);
         assert.deepEqual(await browser.evaluate(`Array.from(${commandBar}.querySelectorAll('.photo-edit-icon')).map((b) => [b.getAttribute('aria-label'), b.getAttribute('aria-disabled'), b.dataset.iconTooltip, b.getAttribute('aria-keyshortcuts')])`),

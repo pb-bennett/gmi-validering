@@ -107,3 +107,17 @@
 .photo-capture-step-proposals ul { display: grid; gap: 2px; max-height: 12rem; overflow: auto; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .photo-capture-step-proposals strong { font-weight: 500; overflow-wrap: anywhere; }
 .photo-capture-step-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* C1.2: a batch step's outcome stays beside its undo; icon and label share the compact button's alignment. */
+.photo-capture-result { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+.photo-capture-result p { flex: 1 1 16rem; min-width: 0; margin: 0; color: var(--gmi-text); }
+.photo-capture-result button, .photo-capture-step-actions button { display: inline-flex; align-items: center; gap: 6px; }
+/* C1.4: optional technical completion is folded into a compact section. */
+.photo-capture-step-compact { width: 100%; }
+.photo-capture-step-compact > summary { cursor: pointer; border-radius: 6px; }
+.photo-capture-step-compact > summary:hover h4 { color: var(--gmi-interactive); }
+.photo-capture-step-compact > summary:focus-visible { outline: 2px solid var(--gmi-interactive); outline-offset: 2px; }
+.photo-capture-step-compact > summary h4 { display: inline; }
+.photo-capture-step-count { margin-left: 8px; font-size: 12px; color: var(--gmi-text-muted); }
+.photo-capture-step-body { display: grid; gap: 8px; justify-items: start; margin-top: 8px; }
+/* C1.3: a long date range is explained neutrally; the median still has to be chosen. */
+.photo-capture-estimate-spread { display: grid; gap: 6px; justify-items: start; }

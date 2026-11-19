@@ -135,7 +135,7 @@ test('manual FOTO placement in Edit mode: real corpus, click/drag/keyboard, stag
         assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-collection-dialog[open], .photo-positioning-wizard[open]"))'),false);
         await click('Fortsett redigering','document.querySelector(".photo-edit-boundary")'); await browser.waitFor(`!${boundary}`);
       }
-      assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-visibility").getAttribute("aria-disabled")'),'true');
+      assert.equal(await browser.evaluate('document.querySelector("[data-photo-visibility-toggle]").getAttribute("aria-disabled")'),'true');
       await click('Lukk FOTO'); await browser.waitFor(boundary);
       await click('Forkast endringer','document.querySelector(".photo-edit-boundary")');
       await browser.waitFor('!document.querySelector(".photo-workspace-shell")');

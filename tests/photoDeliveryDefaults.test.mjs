@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { photoSourcePositionChoices, selectedPhotoSourcePositions } from '../src/lib/photos/photoPositioning.mjs';
-import { photoDeliveryWithProposals, photoMoveProposesTransfer, photoOriginGmiPosition, togglePhotoDelivery } from '../src/lib/photos/photoDeliveryChoice.mjs';
+import { photoDeliveryWithProposals, photoMoveProposesTransfer, photoOriginGmiPosition, photoPositionDeliveryEffect, togglePhotoDelivery } from '../src/lib/photos/photoDeliveryChoice.mjs';
 import { photoWorkspaceView } from '../src/lib/photos/photoWorkspaceView.mjs';
 import { DEFAULT_PHOTO_FILTER } from '../src/lib/photos/photoWorkspaceState.mjs';
 import { createPhotoEditState, effectivePhoto, photoEditReducer } from '../src/lib/photos/photoEditSession.mjs';
@@ -120,10 +120,14 @@ for (const workflow of ['source wizard', 'direct positioning']) test(`${workflow
     ? session.applySourceWorkflowPositions(ticket, session.reviewSourceWorkflowPositions(ticket), requests)
     : session.applyPhotoPositioning(layer.id, { kind: 'exif', memberIds: photos.map((photo) => photo.id), requests });
   assert(result.ok);
-  assert.deepEqual(result.deliveryIds, [id('gps.png')]);
+  // B1.1 (approved contract change): the GMI-linked photo accepts an EXIF position away from its GMI object, so its
+  // untouched GMI default becomes an automatic GML transfer that preserves the accepted position.
+  assert.deepEqual(new Set(result.deliveryIds), new Set([id('gps.png'), id('linked.png')]));
+  assert.deepEqual({ gml: result.delivery.gml, gmi: result.delivery.gmi, keptExplicit: result.delivery.keptExplicit }, { gml: 2, gmi: 0, keptExplicit: 0 });
   const entries = session.getLayerDelivery(layer.id).byPhotoId;
   assert.equal(entries[id('gps.png')].status, 'include');
-  assert.equal(entries[id('linked.png')].status, 'keep-link');
+  assert.equal(entries[id('linked.png')].status, 'transfer');
+  assert.equal(entries[id('linked.png')].automatic, true);
   assert.equal(entries[id('line.png')].status, 'keep-link');
   assert.equal(entries[id('line.png')].canInclude, false);
   assert.equal(entries[excluded].status, 'not-selected');
@@ -321,4 +325,74 @@ test('delivery filters drop a selected photograph that no longer matches, from t
   const placement = photoWorkspaceView(photos(), { activePhotoId: kum1.id, filter: { ...DEFAULT_PHOTO_FILTER, placement: 'unplaced' } }, { delivery: delivery() });
   assert.equal(placement.pinned?.id, kum1.id);
   assert.equal(delivery().byPhotoId[kum1.id].status, 'transfer', 'delivery state untouched by the view');
+});
+
+// B1.1: accepted positions recalculate automatic delivery decisions in every positioning workflow, with the shared
+// tolerance, per occurrence, and never over an explicit choice.
+test('B1.1: wizard positions restore an automatic GML transfer at the GMI object; explicit choices are kept and reported', async () => {
+  const context = await setup({ shared: true });
+  const { session, layer, status, byObject } = context;
+  const [k1, k2, k3] = [0, 1, 2].map((index) => byObject(guid(index)));
+  const sibling = byObject(guid(9));
+  const away = (photo) => ({ ...photoOriginGmiPosition(photo), longitude: photoOriginGmiPosition(photo).longitude + 0.001 });
+  const moved = session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [k1, k2, k3].map((photo) => ({ photoId: photo.id, position: away(photo) })));
+  assert.deepEqual([...moved.transferIds].sort(), [k1.id, k2.id, k3.id].sort());
+  assert.equal(moved.delivery.gml, 3);
+  assert(session.getLayerDelivery(layer.id).byPhotoId[k1.id].automatic, 'written by the position default');
+  assert.equal(status(sibling), 'keep-link', 'the other placement of the repeated photograph is decided on its own');
+  assert(session.setDeliveryIntent(layer.id, [k2.id], 'transfer').ok, 'the user confirms GML for k2');
+
+  // The wizard returns all three to their GMI object positions.
+  const ticket = session.beginSourceWorkflow(layer.id);
+  const plan = session.reviewSourceWorkflowPositions(ticket);
+  const requests = [k1, k2, k3].map((photo) => ({ photoId: photo.id, candidateId: plan.rows.find((row) => row.photoId === photo.id).options.find((item) => item.kind === 'gmi').id }));
+  const keyBefore = session.getPhotoDeliverySnapshot(layer.id).stateKey;
+  const preview = session.previewSourceWorkflowDelivery(ticket, { plan, requests });
+  assert.equal(session.getPhotoDeliverySnapshot(layer.id).stateKey, keyBefore, 'the Kontroll preview writes nothing');
+  assert.deepEqual({ gml: preview.gml, gmi: preview.gmi, keptExplicit: preview.keptExplicit }, { gml: 0, gmi: 2, keptExplicit: 0 });
+  const result = session.commitSourceWorkflow(ticket, { plan, requests });
+  assert(result.ok);
+  session.endSourceWorkflow(ticket);
+  assert.equal(result.receipt.gmiDelivery, preview.gmi, 'Kontroll and Endringer lagret agree');
+  assert.deepEqual([status(k1), status(k2), status(k3)], ['keep-link', 'transfer', 'keep-link'], 'the explicit GML choice is kept');
+
+  // An explicit GMI choice moved away is kept and identified for review.
+  assert(session.setDeliveryIntent(layer.id, [k1.id], 'keep-link').ok);
+  const kept = session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: k1.id, position: away(k1) }]);
+  assert.deepEqual(kept.transferIds, []);
+  assert.equal(kept.delivery.keptExplicit, 1);
+  assert.equal(status(k1), 'keep-link');
+});
+
+test('B1.1: a cancelled wizard and a refused commit change no delivery decision', async () => {
+  const context = await setup();
+  const { session, layer, byObject } = context;
+  const k1 = byObject(guid(0));
+  const away = { ...photoOriginGmiPosition(k1), longitude: photoOriginGmiPosition(k1).longitude + 0.001 };
+  assert(session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: k1.id, position: away }]).ok);
+  const keyBefore = session.getPhotoDeliverySnapshot(layer.id).stateKey;
+  const ticket = session.beginSourceWorkflow(layer.id);
+  const plan = session.reviewSourceWorkflowPositions(ticket);
+  const requests = [{ photoId: k1.id, candidateId: plan.rows.find((row) => row.photoId === k1.id).options.find((item) => item.kind === 'gmi').id }];
+  assert.equal(session.previewSourceWorkflowDelivery(ticket, { plan, requests }).gmi, 1);
+  session.endSourceWorkflow(ticket);
+  assert.equal(session.getPhotoDeliverySnapshot(layer.id).stateKey, keyBefore, 'cancel keeps the automatic GML transfer');
+  assert.equal(session.previewSourceWorkflowDelivery(ticket, { plan, requests }), null, 'no preview for an ended workflow');
+});
+
+test('B1.1: only distance counts — a new source at a compatible position, or a rotation, changes no delivery', () => {
+  const origin = { crs: 'EPSG:4326', latitude: 59.9, longitude: 10.7 };
+  const photo = { occurrence: { key: 'k', sourceId: 's' }, spatial: { candidates: [{ kind: 'gmi', sourceId: 's', provenance: { key: 'k' }, position: origin }] } };
+  const entry = (patch = {}) => ({ linked: true, status: 'keep-link', explicit: false, userChosen: false, canTransfer: true, automatic: false, ...patch });
+  assert.equal(photoPositionDeliveryEffect(photo, entry(), { ...origin, longitude: origin.longitude + 1e-8 }), null, 'within the shared tolerance');
+  assert.equal(photoPositionDeliveryEffect(photo, entry(), { ...origin, longitude: origin.longitude + 0.001 }), 'transfer');
+  assert.equal(photoPositionDeliveryEffect(photo, entry({ status: 'transfer', explicit: true, automatic: true }), origin), 'restore');
+  assert.equal(photoPositionDeliveryEffect(photo, entry({ status: 'transfer', explicit: true }), origin), null, 'an explicit GML choice stays');
+  assert.equal(photoPositionDeliveryEffect(photo, entry({ status: 'transfer', explicit: true, automatic: true, userChosen: true }), origin), null);
+  assert.equal(photoPositionDeliveryEffect(photo, entry({ userChosen: true }), { ...origin, longitude: origin.longitude + 0.001 }), 'kept-explicit');
+  assert.equal(photoPositionDeliveryEffect(photo, entry({ canTransfer: false }), { ...origin, longitude: origin.longitude + 0.001 }), 'kept-unavailable');
+  assert.equal(photoPositionDeliveryEffect(photo, entry({ status: 'exclude', explicit: true }), { ...origin, longitude: origin.longitude + 0.001 }), null, 'Ikke stays Ikke');
+  const unlinked = { linked: false, status: 'not-selected', explicit: false, userChosen: false, canInclude: true };
+  assert.equal(photoPositionDeliveryEffect({}, unlinked, origin, { includeUnlinked: true }), 'include');
+  assert.equal(photoPositionDeliveryEffect({}, unlinked, origin), null, 'manual placement of an unlinked photo keeps Ikke valgt, as before');
 });

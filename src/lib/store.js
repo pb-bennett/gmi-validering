@@ -1586,11 +1586,14 @@ const useStore = create(
                 },
               };
 
-              // If this is a pipe and profilanalyse is open, also select it in analysis
+              // If this is a pipe and profilanalyse is open, also select it in analysis. Validator and Rettinger
+              // suspend the main-map analysis (B1.2), so their table and inspector never change its selected pipe.
               if (
                 options.objectType === 'pipe' &&
                 options.lineIndex !== undefined &&
-                state.analysis.isOpen
+                state.analysis.isOpen &&
+                !state.ui.fieldValidationOpen &&
+                !state.gmiEditWorkspace
               ) {
                 newState.analysis = {
                   ...state.analysis,

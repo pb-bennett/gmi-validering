@@ -2,9 +2,10 @@ import { isPhotoPosition } from './photoSpatial.mjs';
 import { photoPositionDistance } from './photoPositioning.mjs';
 
 // One pass per visible layer. photosByLayer supplies already-derived (e.g. staged/effective) photos,
-// so the map never re-reads the session per marker. include restricts one layer to the workspace view.
+// so the map never re-reads the session per marker. include restricts one layer to the workspace view; include.visible
+// draws that layer even when its own visible flag is off (FOTO shows the layer it opened).
 export function buildPhotoMapItems(layers, getLayerPhotos, { photosByLayer = null, include = null } = {}) {
-  return layers.filter((layer) => layer.visible).flatMap((layer) => {
+  return layers.filter((layer) => layer.visible || (include?.visible && include.layerId === layer.id)).flatMap((layer) => {
     const photos = photosByLayer?.get(layer.id) ?? getLayerPhotos(layer.id);
     const allowed = include?.layerId === layer.id ? include.ids : null;
     return photos.flatMap((photo) => {

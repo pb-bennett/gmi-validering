@@ -17,7 +17,7 @@ import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSo
 import { equivalentGmiPhotoEvidence, gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { photoSourceEvidenceSignature, planPhotoSourcePositions, selectedPhotoSourcePositions } from './photoPositioning.mjs';
 import { PHOTO_DELIVERY_INTENTS, buildPhotoDeliverySnapshot, photoDeliveryEntry, photoLayerDelivery } from './photoDeliveryIntent.mjs';
-import { photoPositionDefaultsToGml, photoMoveProposesTransfer, planPhotoExclusion } from './photoDeliveryChoice.mjs';
+import { photoPositionDeliveryEffect, planPhotoExclusion } from './photoDeliveryChoice.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
   photos: Object.freeze([]), selectedId: null, batchSelectedIds: Object.freeze([]),
@@ -126,12 +126,29 @@ export function createPhotoSession({
     return deliveryChoiceIds.size !== before;
   };
   const layerDelivery = (layer) => photoLayerDelivery(layer, records, deliveryDecisions, deliveryChoiceIds);
-  // Accepted GML and EXIF positions can replace the untouched «Ikke valgt» default.
-  const gmlDeliveryDefaults = (layer, photoIds) => {
-    const delivery = layerDelivery(layer);
-    return [...photoIds].filter((id) => photoPositionDefaultsToGml(delivery.byPhotoId[id]));
-  };
   const includeAsGml = (ids) => { for (const id of ids) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true })); };
+  // B1.1: the automatic delivery consequences of accepted positions, planned from the state before the writes.
+  // `changes`: [{ photoId, position, includeUnlinked }]. Explicit choices are kept and reported for review.
+  const positionDeliveryEffects = (layer, changes) => {
+    const delivery = layerDelivery(layer);
+    const effects = { transfer: [], restore: [], include: [], keptExplicit: [], keptUnavailable: [] };
+    const keys = { transfer: 'transfer', restore: 'restore', include: 'include', 'kept-explicit': 'keptExplicit', 'kept-unavailable': 'keptUnavailable' };
+    for (const { photoId, position, includeUnlinked = false } of changes) {
+      const effect = photoPositionDeliveryEffect(records.get(photoId), delivery.byPhotoId[photoId], position, { includeUnlinked });
+      if (effect) effects[keys[effect]].push(photoId);
+    }
+    return effects;
+  };
+  const applyPositionDeliveryEffects = (effects) => {
+    includeAsGml(effects.include);
+    for (const id of effects.transfer) deliveryDecisions.set(id, Object.freeze({ kind: 'gmi', occurrenceKey: records.get(id).occurrence.key,
+      intent: PHOTO_DELIVERY_INTENTS.TRANSFER, automatic: true }));
+    for (const id of effects.restore) deliveryDecisions.delete(id);
+  };
+  const deliveryEffectIds = (effects) => [...effects.include, ...effects.transfer, ...effects.restore];
+  const deliveryEffectSummary = (effects) => Object.freeze({ gml: effects.include.length + effects.transfer.length,
+    gmi: effects.restore.length, keptExplicit: effects.keptExplicit.length, keptUnavailable: effects.keptUnavailable.length,
+    ids: Object.freeze({ ...effects }) });
   const failed = (error) => ({ ok: false, error });
 
   // Runs fn against copies of the accepted data (seeded from `seed`, the live maps by default). Synchronous by
@@ -691,7 +708,7 @@ export function createPhotoSession({
   // the plan was made from before the first write.
   function acceptSourcePositionsCore(layerId, plan, requests) {
     const layer = layers.get(layerId);
-    const seen = new Set(), gmlDefaultCandidates = [];
+    const seen = new Set(), changes = [];
     for (const request of requests) {
       const row = plan.rows.find((item) => item.photoId === request.photoId);
       const live = records.get(request.photoId);
@@ -702,15 +719,15 @@ export function createPhotoSession({
         || (['gml', 'gmi'].includes(candidate.kind) && !layer.spatialSources.some((source) => source.kind === candidate.kind && source.id === candidate.sourceId)))
         return failed('review-changed');
       seen.add(request.photoId);
-      if (candidate.kind === 'gml' || candidate.kind === 'exif') gmlDefaultCandidates.push(request.photoId);
+      changes.push({ photoId: request.photoId, position: candidate.position, includeUnlinked: candidate.kind === 'gml' || candidate.kind === 'exif' });
     }
-    const deliveryIds = gmlDeliveryDefaults(layer, gmlDefaultCandidates);
+    const effects = positionDeliveryEffects(layer, changes);
     const acceptedAt = Date.now();
     for (const request of requests) updateRecord(request.photoId, (live) => ({
       spatial: acceptPhotoCandidate(live.spatial, request.candidateId, 'explicit-candidate', acceptedAt),
     }));
-    includeAsGml(deliveryIds);
-    return { ok: true, acceptedIds: [...seen], deliveryIds };
+    applyPositionDeliveryEffects(effects);
+    return { ok: true, acceptedIds: [...seen], deliveryIds: deliveryEffectIds(effects), delivery: deliveryEffectSummary(effects) };
   }
 
   // B2: the positioning wizard's draft, owned by its workflow ticket. Ops are declarative and replayed in order on
@@ -1213,7 +1230,7 @@ export function createPhotoSession({
       try {
         planned = inDraft(() => {
           const result = requests.length ? acceptSourcePositionsCore(layerId, plan, requests)
-            : { ok: true, acceptedIds: [], deliveryIds: [] };
+            : { ok: true, acceptedIds: [], deliveryIds: [], delivery: null };
           if (result.ok) {
             autoAcceptMetadata(layerId);
             refreshLayerCounts(layers.get(layerId));
@@ -1246,9 +1263,25 @@ export function createPhotoSession({
         directions: committed.photoIds.filter((id) => directionsBefore.has(id) && records.get(id)?.direction.current !== directionsBefore.get(id)
           && records.get(id)?.direction.current?.basis?.evidenceId).length,
         placed: count('place'), moved: count('move'), same: count('same'),
-        gmlDelivery: planned.result.deliveryIds.length,
+        gmlDelivery: planned.result.delivery?.gml || 0,
+        gmiDelivery: planned.result.delivery?.gmi || 0,
+        deliveryKeptExplicit: planned.result.delivery?.keptExplicit || 0,
+        deliveryKeptUnavailable: planned.result.delivery?.keptUnavailable || 0,
       });
-      return { ok: true, receipt, acceptedIds: planned.result.acceptedIds, deliveryIds: planned.result.deliveryIds };
+      return { ok: true, receipt, acceptedIds: planned.result.acceptedIds, deliveryIds: planned.result.deliveryIds, delivery: planned.result.delivery };
+    },
+    // B1.1: Kontroll's read-only preview of the delivery consequences of the selected positions. It runs the same
+    // planning core as commitSourceWorkflow on draft copies, so Kontroll and the receipt state the same rule; nothing
+    // accepted changes. Null when there is nothing to preview or the review is no longer current.
+    previewSourceWorkflowDelivery(ticket, { plan = null, requests = [] } = {}) {
+      if (!requests.length || !sourceWorkflowIsLive(ticket) || sourceReviews.has(ticket.layerId)
+        || workflowReviews.get(plan)?.ticket !== ticket) return null;
+      const view = draftView(ticket);
+      if (!view.outcome.ok) return null;
+      try {
+        const { result } = inDraft(() => acceptSourcePositionsCore(ticket.layerId, plan, requests), view.state);
+        return result.ok ? result.delivery : null;
+      } catch { return null; }
     },
     // Positions only, with no staged sources: the same atomic commit.
     applySourceWorkflowPositions(ticket, plan, requests) {
@@ -1256,7 +1289,7 @@ export function createPhotoSession({
         || sourceWorkflowDrafts.get(ticket)?.ops.length) return failed('review-changed');
       if (!requests?.length) return failed('invalid-selection');
       const result = this.commitSourceWorkflow(ticket, { plan, requests });
-      return result.ok ? { ok: true, acceptedIds: result.acceptedIds, deliveryIds: result.deliveryIds } : result;
+      return result.ok ? { ok: true, acceptedIds: result.acceptedIds, deliveryIds: result.deliveryIds, delivery: result.delivery } : result;
     },
     beginPhotoEdits(layerId) {
       const layer = layers.get(layerId);
@@ -1296,21 +1329,21 @@ export function createPhotoSession({
         writes.push({ photoId, position: hasPosition ? change.position : null, degrees });
       }
       if (staleIds.length) return { ok: false, error: 'edit-conflict', staleIds };
-      // A move away from the originating GMI point turns an untouched GMI default into GML, in the same commit.
-      // Rotation alone never does; the occurrence (GMI object relationship) and the GMI file are left as they are.
-      const delivery = layerDelivery(layer);
-      const transferIds = writes.filter(({ photoId, position }) => position
-        && photoMoveProposesTransfer(records.get(photoId), delivery.byPhotoId[photoId], position)).map((write) => write.photoId);
+      // A move away from the originating GMI point turns an untouched GMI default into GML, in the same commit, and a
+      // move back restores an automatic transfer (B1.1, the same rule as the positioning wizard). Rotation alone never
+      // does; the occurrence (GMI object relationship) and the GMI file are left as they are.
+      const effects = positionDeliveryEffects(layer, writes.filter((write) => write.position)
+        .map(({ photoId, position }) => ({ photoId, position })));
       const acceptedAt = Date.now();
       for (const { photoId, position, degrees } of writes) updateRecord(photoId, (live) => ({
         ...(position ? { spatial: acceptManualPhotoPosition(live.spatial, position, acceptedAt) } : {}),
         ...(degrees !== null ? { direction: acceptManualPhotoDirection(degrees, acceptedAt) } : {}),
       }));
-      for (const id of transferIds) deliveryDecisions.set(id, Object.freeze({ kind: 'gmi', occurrenceKey: records.get(id).occurrence.key,
-        intent: PHOTO_DELIVERY_INTENTS.TRANSFER }));
+      applyPositionDeliveryEffects(effects);
       editSessions.delete(ticket.layerId);
       if (autoAcceptMetadata() || writes.length) publish();
-      return { ok: true, changedIds: writes.map((write) => write.photoId), transferIds };
+      return { ok: true, changedIds: writes.map((write) => write.photoId), transferIds: effects.transfer, restoredIds: effects.restore,
+        delivery: deliveryEffectSummary(effects) };
     },
     // Owner-scoped, deduplicated asset writes. Stale occurrences are ignored;
     // invalid values and stale evidence fail before any write.
@@ -1403,7 +1436,9 @@ export function createPhotoSession({
         after: assets.get(write.assetId).captureMetadata.captureTime })) });
       publish();
       return { ok: true, count: writes.length, undoToken,
-        counts: Object.fromEntries(['complete', 'minute', 'date', 'noon', 'seconds'].map((key) => [key, rows.filter((item) => item.group === key || item.kind === key).length])) };
+        counts: Object.fromEntries(['complete', 'minute', 'date', 'noon', 'seconds'].map((key) => [key, rows.filter((item) => item.group === key || item.kind === key).length])),
+        // C1.2: where the written values came from (for a technical step, the completed value's original source).
+        kinds: Object.fromEntries([...Map.groupBy(rows, (item) => item.provenance?.kind || 'unknown')].map(([kind, items]) => [kind, items.length])) };
     },
     undoCaptureTimeFill(token) {
       const undo = token && captureTimeUndos.get(token);
@@ -1684,7 +1719,7 @@ export function createPhotoSession({
           }
         } catch { return fail('invalid-source'); }
       }
-      const seen = new Set();
+      const seen = new Set(), changes = [];
       for (const request of requests) {
         const live = records.get(request.photoId);
         if (!layer.photoIds.includes(request.photoId) || seen.has(request.photoId)
@@ -1693,8 +1728,9 @@ export function createPhotoSession({
           : live.spatial.candidates.find((item) => item.id === request.candidateId && item.kind === 'exif');
         if (candidate?.id !== request.candidateId || candidate?.status !== 'viable' || !isPhotoPosition(candidate.position)) return fail('review-changed');
         seen.add(request.photoId);
+        changes.push({ photoId: request.photoId, position: candidate.position, includeUnlinked: true });
       }
-      const deliveryIds = gmlDeliveryDefaults(layer, seen);
+      const effects = positionDeliveryEffects(layer, changes);
       if (kind === 'gml') {
         const source = attachSource(review.source, layer.photoIds);
         const existing = layer.spatialSources.some((item) => item.id === source.id);
@@ -1707,9 +1743,9 @@ export function createPhotoSession({
       for (const request of requests) updateRecord(request.photoId, (live) => ({
         spatial: acceptPhotoCandidate(live.spatial, request.candidateId, 'explicit-candidate', acceptedAt),
       }));
-      includeAsGml(deliveryIds);
+      applyPositionDeliveryEffects(effects);
       publish();
-      return { ok: true, acceptedIds: [...seen], deliveryIds };
+      return { ok: true, acceptedIds: [...seen], deliveryIds: deliveryEffectIds(effects), delivery: deliveryEffectSummary(effects) };
     },
     removeLayerPhotos(layerId, photoIds, { confirmed = false } = {}) {
       const layer = layers.get(layerId);

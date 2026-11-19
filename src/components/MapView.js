@@ -54,7 +54,8 @@ export default function MapView(props) {
         zoom={props.photoWorkspace.zoom} editing={props.photoWorkspace.editing} /> : <MapLegend photoDisplay={props.photoDisplay} />}
       <LayerHighlightPanel />
 
-      {outlierPromptOpen &&
+      {/* B1.2: the main-map analysis prompts wait while FOTO, Validator or Rettinger is open. */}
+      {!props.analysisSuspended && outlierPromptOpen &&
         outlierResults &&
         outlierResults.outliers &&
         outlierResults.outliers.length > 0 && (
@@ -108,7 +109,7 @@ export default function MapView(props) {
           </div>
         )}
 
-      {zValidationPromptOpen && zValidationResults && (
+      {!props.analysisSuspended && zValidationPromptOpen && zValidationResults && (
         <div
           className={`absolute left-1/2 transform -translate-x-1/2 z-1100 bg-white px-4 py-3 rounded-xl shadow-lg border border-amber-200 flex items-center gap-3 ${
             outlierPromptOpen ? 'top-74' : 'top-48'

@@ -52,7 +52,14 @@ function captureNote(item) {
   return null;
 }
 
-function captureRow(item, photo) {
+// C1.4: a known, accepted date is sufficient for the user-facing task: date-only, minute-precision and estimated values
+// count as done. Hours, minutes and seconds are supplementary. Only a target that requires a complete time (Legacy,
+// AsBuilt) keeps an accepted incomplete value as work left, because its export contract blocks on it. The actual
+// precision and provenance are kept on the row (`precisionState`).
+const dateSufficient = (item, requirement) => item.state === 'partial' && Boolean(item.accepted) && requirement !== 'required';
+
+function captureRow(source, photo, requirement) {
+  const item = dateSufficient(source, requirement) ? { ...source, state: 'accepted', precisionState: 'partial' } : source;
   const row = { ...item, ...photoRow(photo), key: item.assetId, sources: item.evidence.map((source) => line(source.id,
     `${sourceName(source)}: ${source.value ? timeText(source.value) : `${rawText(source.raw)} (kan ikke tolkes sikkert)`}`)),
   acceptedText: item.accepted ? `${timeText(item.accepted.value, item.accepted.provenance)} · ${photoMetadataSourceLabel('captureTime', item.accepted.provenance)}` : null,
@@ -94,15 +101,18 @@ function photographerRow(item, photo) {
 // The hint follows the target's own rule, so it never names Gemini VA when another target is chosen. The rule itself is
 // readiness's: a required time blocks, a recommended one is let through with the schema gap shown.
 function missingTimeHint(requirement, schemaName) {
-  const none = 'Ingen kilde har en brukbar tid.';
+  const none = 'Ingen kilde har en brukbar dato.';
   if (requirement === 'required') return `${none} Opptakstid med sekunder kreves${schemaName ? ` for ${schemaName}` : ''}, og må fylles ut før eksport.`;
   if (requirement === 'recommended') return `${none} Eksporten kan lages uten, men GML-filen følger da ikke ${schemaName || 'skjemaet'}-skjemaet.`;
   if (requirement === 'optional') return `${none} Du kan fylle den ut, men det er valgfritt.`;
   return none;
 }
 const CAPTURE_GROUPS = Object.freeze([
-  ['none', 'Mangler opptakstid', ({ requirement, schemaName }) => missingTimeHint(requirement, schemaName)],
-  ['partial', 'Tid uten sekunder', 'Oppgi sekunder, eller bekreft at de er 00.'], ['unusable', 'Kan ikke tolkes'],
+  ['none', 'Mangler opptaksdato', ({ requirement, schemaName }) => missingTimeHint(requirement, schemaName)],
+  // Only a target that requires a complete time lists accepted incomplete values here (C1.4).
+  ['partial', 'Dato uten fullstendig klokkeslett', ({ requirement, schemaName }) => requirement === 'required'
+    ? `${schemaName || 'Dette målet'} krever klokkeslett med sekunder. Bruk «Teknisk utfylling», eller rediger tiden.` : 'Godta eller rediger verdien med «Rediger…».'],
+  ['unusable', 'Kan ikke tolkes'],
   ['conflict', 'Ulike kildeverdier', 'Velg verdi for hvert bilde.'], ['adoptable', 'Opptakstid i kilde', 'Velg verdi med «Rediger…».'],
   ['pending', 'Leser bildedata', 'Oppdateres av seg selv når lesingen er ferdig.'],
 ]);
@@ -136,7 +146,7 @@ function requirementFor(key, requirement, outstanding, empty = false) {
 export function photoCompletionModel(photos, readiness) {
   const byId = new Map(photos.map((photo) => [photo.id, photo]));
   const { captureTime, direction, photographer, placement, context } = readiness.tasks;
-  const capturePanel = panel(captureTime.items.map((item) => captureRow(item, byId.get(item.photoId))), CAPTURE_GROUPS,
+  const capturePanel = panel(captureTime.items.map((item) => captureRow(item, byId.get(item.photoId), captureTime.requirement)), CAPTURE_GROUPS,
     { requirement: captureTime.requirement, schemaName: readiness.levels.schema.name });
   // M5: the batch completion steps (source, filename, technical, estimate), each applied by its own button.
   capturePanel.completion = planCaptureCompletion(photos);
@@ -206,11 +216,12 @@ export function photoCaptureTimeSchemaWarning({ levels, tasks }) {
   return singularCopy(`${gap.count} bilder mangler full opptakstid, så GML-filen oppfyller ikke ${levels.schema.name}-skjemaet. Gemini VA har importert bilder uten opptakstid i et testet oppsett (november 2026).`);
 }
 
-const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-estimated', 'capture-time-technical', 'capture-time-sources-differ']);
+const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-filename', 'capture-time-estimated', 'capture-time-technical', 'capture-time-sources-differ']);
 const DIRECTION_RECOMMENDATIONS = Object.freeze(['direction-defaulted', 'direction-sources-differ', 'direction-bulk']);
-export const completionRecommendations = (readiness, task) => [...readiness.recommendations, ...readiness.notes]
-  .filter((item) => (task === 'direction' ? DIRECTION_RECOMMENDATIONS : CAPTURE_RECOMMENDATIONS).includes(item.code))
-  .map((item) => Object.freeze({ code: item.code, text: singularCopy(item.message) }));
+// C1.5: in Opptakstid, readiness notes are information (`info`) and recommendations are «Bør kontrolleres». Retning is unchanged.
+export const completionRecommendations = (readiness, task) => [...readiness.recommendations.map((item) => [item, false]), ...readiness.notes.map((item) => [item, task !== 'direction'])]
+  .filter(([item]) => (task === 'direction' ? DIRECTION_RECOMMENDATIONS : CAPTURE_RECOMMENDATIONS).includes(item.code))
+  .map(([item, info]) => Object.freeze({ code: item.code, text: singularCopy(item.message), info }));
 
 // Selections can outlive the rows they name: an accepted or removed row simply stops being selected.
 export const liveSelection = (rows, selected = []) => { const keys = new Set(selected); return rows.filter((row) => row.selectable && keys.has(row.key)).map((row) => row.key); };
@@ -246,11 +257,41 @@ export function completionCounts({ rows, done }, selected, eligible) {
 // Where the values came from. Each row counts once; "Valgt" cuts across and only shows with a selection.
 export function completionSummary({ rows }, selected) {
   return [['source', 'Fra kilde', rows.filter((row) => row.origin === 'source').length], ['manual', 'Manuelt', rows.filter((row) => row.origin === 'manual').length],
-    ['filename', 'Filnavn', rows.filter((row) => row.origin === 'filename').length],
+    ['filename', 'Tolket fra filnavn', rows.filter((row) => row.origin === 'filename').length],
     ['estimated', 'Anslått', rows.filter((row) => row.origin === 'estimated').length],
-    ['default', 'Standardverdi', rows.filter((row) => row.origin === 'default').length], ['missing', 'Mangler', rows.filter((row) => !row.origin).length], ['selected', 'Valgt', selected.length]]
+    ['default', 'Standardverdi', rows.filter((row) => row.origin === 'default').length], ['missing', 'Mangler dato', rows.filter((row) => !row.origin).length], ['selected', 'Valgt', selected.length]]
     .filter(([, , count]) => count > 0).map(([key, label, count]) => Object.freeze({ key, label, count }));
 }
 
 // Names used in this layer, offered as suggestions and never filled in.
 export const photographerSuggestions = ({ rows }) => [...new Set(rows.map((row) => row.accepted?.value).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nb'));
+
+// C1.1: where the accepted dates offered for technical completion came from, from each row's own provenance; it is never
+// assumed that an incomplete value came from a filename.
+const ORIGIN_TEXT = Object.freeze({ filename: 'tolket fra filnavn', exif: 'fra EXIF', gml: 'fra GML', manual: 'angitt manuelt' });
+const originBreakdown = (rows) => [...Map.groupBy(rows, (row) => ORIGIN_TEXT[row.provenance?.kind] ? row.provenance.kind : 'other')]
+  .map(([kind, items]) => `${items.length} ${ORIGIN_TEXT[kind] || 'fra andre kilder'}`).join(', ');
+
+// C1.1: which components are known, from which sources, and what technical completion adds for the chosen target.
+export function technicalCompletionExplanation(rows, requirement, schemaName = null) {
+  const dates = rows.filter((row) => row.kind === 'noon').length, minutes = rows.length - dates;
+  const known = [dates && `${photoCount(dates)} har bare dato`, minutes && `${photoCount(minutes)} har dato og klokkeslett uten sekunder`].filter(Boolean).join(', og ');
+  const schema = schemaName ? `${schemaName}-skjemaet` : 'Skjemaet';
+  const target = requirement === 'required'
+    ? `${schemaName || 'Dette målet'} krever klokkeslett med sekunder, så disse bildene må fullføres før eksport.`
+    : `Datoen er nok for leveransen. ${schema} krever likevel klokkeslett med sekunder, så uten utfylling får disse bildene ikke opptakstid i GML-filen.`;
+  return singularCopy(`${known.charAt(0).toUpperCase()}${known.slice(1)} (${originBreakdown(rows)}). ${target} Teknisk utfylling legger bare til de manglende delene; dato og kjente klokkeslett beholdes, og de utfylte delene er ikke målt.`);
+}
+
+// C1.2: the outcome of one batch step, from the counts the session actually wrote. Interpreted (filename), measured
+// (EXIF), source (GML) and technically completed values are named as such.
+export function captureStepResultText(step, { count = 0, counts = {}, kinds = {} } = {}) {
+  const parts = [counts.complete && `${counts.complete} med dato og klokkeslett`, counts.minute && `${counts.minute} uten sekunder`, counts.date && `${counts.date} med kun dato`].filter(Boolean).join(', ');
+  if (step === 'source') {
+    const sources = [kinds.exif && `${kinds.exif} fra EXIF, målt av kameraet`, kinds.gml && `${kinds.gml} fra GML`].filter(Boolean).join(', ');
+    return `Godtatt for ${photoCount(count)}: ${parts}${sources ? ` (${sources})` : ''}. Godtatte og fjernede verdier er beholdt.`;
+  }
+  if (step === 'filename') return `Tolket fra filnavn og godtatt for ${photoCount(count)}: ${parts}. Verdiene er tolket, ikke målt. Godtatte og fjernede verdier er beholdt.`;
+  const added = [counts.noon && `${counts.noon} fikk kl. 12:00:00`, counts.seconds && `${counts.seconds} fikk 00 sekunder`].filter(Boolean).join(', ');
+  return `Teknisk utfylt for ${photoCount(count)}: ${added}. Dato og kjente klokkeslett er beholdt, og de utfylte delene er ikke målt.`;
+}

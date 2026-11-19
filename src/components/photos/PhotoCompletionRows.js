@@ -20,10 +20,17 @@ export function CompletionCounts({ counts }) {
   </dl>;
 }
 
+// C1.5: «Bør kontrolleres» for what may need a decision; «Informasjon» for accepted decisions the delivery should explain.
 export function CompletionNotes({ items }) {
-  return items.length > 0 && <ul className="photo-completion-notes" aria-label="Bør kontrolleres">
-    {items.map(({ code, text }) => <li key={code} data-recommendation={code}>{text}</li>)}
-  </ul>;
+  const checks = items.filter((item) => !item.info), info = items.filter((item) => item.info);
+  return <>
+    {checks.length > 0 && <ul className="photo-completion-notes" aria-label="Bør kontrolleres">
+      {checks.map(({ code, text }) => <li key={code} data-recommendation={code}>{text}</li>)}
+    </ul>}
+    {info.length > 0 && <ul className="photo-completion-notes" aria-label="Informasjon" data-completion-info>
+      {info.map(({ code, text }) => <li key={code} data-recommendation={code} data-information>{text}</li>)}
+    </ul>}
+  </>;
 }
 
 function RowBody({ row, children }) {

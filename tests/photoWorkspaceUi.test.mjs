@@ -301,9 +301,9 @@ test('real FOTO workspace: popup, selection, append/remove, late sources, batch,
       await applyPhotoSourcePositions(browser, 'exif'); await browser.waitFor(current('EXIF'));
       await applyPhotoSourcePositions(browser, 'gml', { sourceFilename: path.basename(gmlPath) }); await browser.waitFor(current('GML'));
       assert.equal(await browser.evaluate(markerCount), 148);
-      await browser.evaluate(`document.querySelector('.photo-workspace-visibility').click()`); await browser.waitFor(`${markerCount} === 0`);
+      await browser.evaluate(`document.querySelector('[data-photo-visibility-toggle]').click()`); await browser.waitFor(`${markerCount} === 0`);
       assert(await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))'));
-      await browser.evaluate(`document.querySelector('.photo-workspace-visibility').click()`); await browser.waitFor(`${markerCount} === 148`);
+      await browser.evaluate(`document.querySelector('[data-photo-visibility-toggle]').click()`); await browser.waitFor(`${markerCount} === 148`);
       await screenshot('photo-workspace-dense-selection');
       checks.push('duplicate GML diagnosed; changed source requires explicit wizard confirmation; reversible 148-photo GML/EXIF and visibility');
       await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")'); await deleteLayer();

@@ -265,11 +265,19 @@ layerTest('capture-date completion: source minute value, technical seconds and t
   await tick('source', 'minute');
   await clickSourceControl(browser, 'Bruk valgte kildeverdier', step('source'));
   await browser.waitFor(`${step('technical')}`);
-  assert.match(await message(browser), /brukt for 1 bilde/);
+  // C1.2: the outcome stays beside «Angre» in the step, with the actual count; the footer does not repeat it.
+  assert.match(await browser.evaluate(`${step('source')}.querySelector('[data-capture-result] [role=status]').innerText`), /^Godtatt for 1 bilde: 1 uten sekunder \(1 fra GML\)\./);
+  assert.equal(await message(browser), '');
+  // C1.4: optional technical completion is compact (folded) for Gemini, and explains itself from the eligible rows.
+  assert.equal(await browser.evaluate(`${step('technical')}.querySelector('[data-capture-compact]').open`), false);
+  await browser.evaluate(`${step('technical')}.querySelector('[data-capture-compact] > summary').click()`);
   assert.equal(await browser.evaluate(`${step('technical')}.querySelector('[data-capture-group="seconds"]').innerText.trim()`), 'Fyll ut 00 sekunder for 1 bilde med klokkeslett uten sekunder.');
+  assert.match(await browser.evaluate(`${step('technical')}.querySelector('[data-capture-explanation]').innerText`), /^1 bilde har dato og klokkeslett uten sekunder \(1 fra GML\)\. Datoen er nok for leveransen\./);
   await tick('technical', 'seconds');
   await clickSourceControl(browser, 'Fyll ut', step('technical'));
   await browser.waitFor(`${step('technical')}.querySelector('[data-capture-undo]')`);
+  assert.match(await browser.evaluate(`${step('technical')}.querySelector('[data-capture-result] [role=status]').innerText`), /^Teknisk utfylt for 1 bilde: 1 fikk 00 sekunder\./);
+  await screenshot(browser, '12-technical-result');
   await openGroup(browser, 'captureTime', 'done');
   assert.match(await rowText(browser, 'minute.jpg'), /12\.05\.2026 14:33:00 · Sekunder teknisk utfylt.*teknisk utfylt/);
   // The estimate: the median of 4 known dates (minute.jpg's completed date counts; conflict.jpg's disagreeing sources do not), prefilled within 7 days.
@@ -287,7 +295,11 @@ layerTest('capture-date completion: source minute value, technical seconds and t
   assert.equal(await countOf(browser, 'captureTime', 'missing'), '0');
   assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[data-export-warning="capture-time-schema"]'))`), false);
   assert.match(await panelText(browser, 'captureTime'), /1 bilde har anslått dato/);
-  assert.match(await panelText(browser, 'captureTime'), /1 bilde har teknisk utfylt tid\. Den er ikke målt\./);
+  assert.match(await panelText(browser, 'captureTime'), /1 bilde har teknisk utfylt klokkeslett eller sekunder\. De utfylte delene er ikke målt/);
+  // C1.5: user decisions are listed under Informasjon, not «Bør kontrolleres».
+  assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[data-completion-info] [data-recommendation="capture-time-technical"]'))`), true);
+  assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[aria-label="Bør kontrolleres"] [data-recommendation="capture-time-estimated"]'))`), false);
+  assert.match(await browser.evaluate(`${form}.querySelector('[data-capture-result="estimate"] [role=status]').innerText`), /^Anslått dato 12\.05\.2026 er brukt på 1 bilde uten datobevis\./);
   await openGroup(browser, 'captureTime', 'done');
   assert.match(await rowText(browser, 'blank.jpg'), /12\.05\.2026 12:00:00.*Anslått/);
   assert.match(await rowText(browser, 'heading.jpg'), /15:00:10/);
@@ -593,9 +605,10 @@ test('M4 filename provenance, unaccepted GML evidence and explicit adoption at l
       const matches = note.dataset.validationTone === 'warning' && getComputedStyle(note).color === getComputedStyle(probe).color;
       probe.remove(); return matches; })()`));
     assert.doesNotMatch(await rowText(browser, 'waiting.jpg'), /Fjernet av deg/);
-    assert.match(await rowText(browser, '20261015_1433.jpg'), /uten sekunder.*Filnavn/);
-    assert.match(await rowText(browser, '20261016.jpg'), /bare dato.*Filnavn/);
+    // C1.4: accepted filename dates (without seconds, or date only) are done; their precision stays visible.
     await openGroup(browser, 'captureTime', 'done');
+    assert.match(await rowText(browser, '20261015_1433.jpg'), /uten sekunder.*Tolket fra filnavn/);
+    assert.match(await rowText(browser, '20261016.jpg'), /bare dato.*Tolket fra filnavn/);
     assert.match(await browser.evaluate(`${rowOf('exif.jpg')}.innerText`), /Godtatt:.*EXIF DateTimeOriginal/);
     for (const [width, height] of [[1280, 720], [1366, 768]]) {
       await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
@@ -603,12 +616,13 @@ test('M4 filename provenance, unaccepted GML evidence and explicit adoption at l
       assert(await browser.evaluate(`(() => { const r = ${hub}.getBoundingClientRect(), footer = ${hub}.querySelector('.photo-import-footer').getBoundingClientRect();
         return r.left >= 0 && r.right <= innerWidth && footer.bottom <= innerHeight && ${hub}.scrollWidth <= ${hub}.clientWidth; })()`));
       await screenshot(browser, `m4-completion-${width}x${height}`);
-      await browser.evaluate(`${panel('captureTime')}.querySelector('[data-group="partial"]').scrollIntoView({ block: 'start' })`);
+      // C1.4: accepted filename dates (date-only and without seconds) are done, not a problem list.
+      await browser.evaluate(`${panel('captureTime')}.querySelector('[data-group="done"]').scrollIntoView({ block: 'start' })`);
       await screenshot(browser, `m4-completion-values-${width}x${height}`);
     }
     await realClick(browser, `Array.from(${rowOf('20261015_1433.jpg')}.querySelectorAll('button')).find(e => e.innerText === 'Rediger…')`);
     await browser.waitFor(nested);
-    assert.match(await browser.evaluate(`${nested}.querySelector('.photo-metadata-current').innerText`), /uten sekunder.*Filnavn/);
+    assert.match(await browser.evaluate(`${nested}.querySelector('.photo-metadata-current').innerText`), /uten sekunder.*Tolket fra filnavn/);
     for (const [width, height] of [[1280, 720], [1366, 768]]) {
       await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
       await screenshot(browser, `m4-filename-dialog-${width}x${height}`);
@@ -636,7 +650,7 @@ test('M4 filename provenance, unaccepted GML evidence and explicit adoption at l
     await browser.waitFor(`${exportDialog}.dataset.exportPhase === 'ready'`);
     const warning = `${exportDialog}.querySelector('[data-diagnostic-code="capture-time-filename"]')`;
     await browser.waitFor(warning);
-    await browser.evaluate(`${warning}.open = true; ${warning}.scrollIntoView({ block: 'center' })`);
+    await browser.evaluate(`${warning}.closest('details:not(.photo-export-diagnostic)')?.setAttribute('open', ''); ${warning}.open = true; ${warning}.scrollIntoView({ block: 'center' })`);
     assert.match(await browser.evaluate(`${warning}.innerText`), /3 bilder.*filnavnet.*ikke fra opptaksmetadata/);
     for (const [width, height] of [[1280, 720], [1366, 768]]) {
       await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
@@ -649,7 +663,7 @@ test('M4 filename provenance, unaccepted GML evidence and explicit adoption at l
     await browser.waitFor('document.querySelector(".photo-workspace-inspector-body")?.innerText.includes("20261015_1433.jpg")');
     await browser.evaluate('document.querySelector("[data-disclosure=capture-evidence]").open = true');
     assert.match(await browser.evaluate('document.querySelector(".photo-inspector-capture").innerText'), /uten sekunder/);
-    assert.match(await browser.evaluate('document.querySelector("[data-disclosure=capture-evidence]").innerText'), /Filnavn/);
+    assert.match(await browser.evaluate('document.querySelector("[data-disclosure=capture-evidence]").innerText'), /Tolket fra filnavn/);
     for (const [width, height] of [[1280, 720], [1366, 768]]) {
       await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
       await browser.evaluate('document.querySelector(".photo-inspector-capture").scrollIntoView({ block: "start" })');
@@ -682,7 +696,7 @@ test('estimated date without known dates: manual entry fills the whole layer inc
     await setValue(browser, date, '2026-04-01');
     await clickSourceControl(browser, 'Bruk valgt dato på 2 bilder', form);
     await browser.waitFor(`${form}.querySelector('[data-undo-estimated-dates]')`);
-    assert.match(await message(browser), /Anslått dato er brukt på 2 bilder/);
+    assert.match(await browser.evaluate(`${form}.querySelector('[data-capture-result="estimate"] [role=status]').innerText`), /^Anslått dato 01\.04\.2026 er brukt på 2 bilder uten datobevis\./);
     await clickSourceControl(browser, 'Angre anslått dato', form);
     await browser.waitFor(`${form}.querySelector('button[type=submit]')`);
     assert.match(await browser.evaluate(`${form}.innerText`), /2 bilder uten opptaksdato i hele FOTO-laget/);

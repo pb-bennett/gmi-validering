@@ -69,9 +69,9 @@ const showTimeTask = async (browser) => {
 browserTest('rendered hub: the missing-time explanation follows Mål, and Standard never calls the time optional', async (browser, directory) => {
   await timeLayer(browser, directory);
   const expected = {
-    'gemini-legacy2019': 'Ingen kilde har en brukbar tid. Eksporten kan lages uten, men GML-filen følger da ikke Skråfoto 2019-skjemaet.',
-    legacy2019: 'Ingen kilde har en brukbar tid. Opptakstid med sekunder kreves for Skråfoto 2019, og må fylles ut før eksport.',
-    asbuilt52: 'Ingen kilde har en brukbar tid. Opptakstid med sekunder kreves for AsBuilt 5.2, og må fylles ut før eksport.',
+    'gemini-legacy2019': 'Ingen kilde har en brukbar dato. Eksporten kan lages uten, men GML-filen følger da ikke Skråfoto 2019-skjemaet.',
+    legacy2019: 'Ingen kilde har en brukbar dato. Opptakstid med sekunder kreves for Skråfoto 2019, og må fylles ut før eksport.',
+    asbuilt52: 'Ingen kilde har en brukbar dato. Opptakstid med sekunder kreves for AsBuilt 5.2, og må fylles ut før eksport.',
   };
   // The route from acceptance: the hub opened from export.
   await openExport(browser);

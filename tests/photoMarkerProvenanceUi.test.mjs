@@ -323,7 +323,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await select(repeated[1].id); // The moved (manually adjusted) GMI occurrence, for the replacement check below.
       });
       await t.test('hidden layer, repeated workspace exits/entries, manual to GMI replacement and reset have no stale display card', async () => {
-        const visibility = 'document.querySelector(".photo-workspace-visibility")';
+        const visibility = 'document.querySelector("[data-photo-visibility-toggle]")';
         await enterEditMode(browser);
         assert.equal(await browser.evaluate(`${visibility}.getAttribute('aria-disabled')`), 'true', 'Edit mode keeps the layer visible');
         await browser.evaluate(`${visibility}.click()`);

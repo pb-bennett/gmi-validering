@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- Session thumbnail Blob URLs are already derived and browser-owned. */
 import { useEffect, useId, useRef, useState } from 'react';
-import { ArrowCounterClockwiseIcon, ArrowsDownUpIcon, EyeIcon, EyeSlashIcon, FunnelIcon, XIcon } from '@phosphor-icons/react';
+import { ArrowCounterClockwiseIcon, ArrowsDownUpIcon, FunnelIcon, XIcon } from '@phosphor-icons/react';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { normalizePhotoDirection, photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
 import { photoPositionAdjusted, photoPositionProvenanceKind, photoPositionSourcePresentation } from '@/lib/photos/photoMarkerPresentation.mjs';
@@ -132,10 +132,6 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
     <header className="photo-workspace-header">
       <div className="photo-workspace-title-row">
         <h1 title={layer.name}>{layer.name}</h1>
-        <PhotoIconButton icon={layer.visible ? EyeIcon : EyeSlashIcon} size={18} pressed={!layer.visible}
-          label={layer.visible ? `Skjul fotolaget ${layer.name} på kartet` : `Vis fotolaget ${layer.name} på kartet`}
-          tooltip={editing ? 'Fotolaget vises mens du redigerer' : layer.visible ? 'Skjul fotolag' : 'Vis fotolag'}
-          unavailable={editing} onClick={() => photoSession.setLayerVisibility(layer.id, !layer.visible)} className="photo-workspace-visibility" />
         <PhotoIconButton icon={XIcon} size={18} label="Lukk FOTO" onClick={onExit} className="gmi-workspace-close" data-workspace-close="photo" />
       </div>
       {/* Unique assets first; placements only when an asset is used more than once; unplaced only when there are any. */}

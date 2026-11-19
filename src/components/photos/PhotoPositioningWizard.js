@@ -81,6 +81,26 @@ function DraftSummary({ draft }) {
   </>;
 }
 
+// B1.1: the delivery consequences of the selected positions. The same lines are shown in Kontroll (from the session's
+// read-only preview) and in Endringer lagret (from the commit receipt). Explicit GMI choices are kept, but listed for review.
+function deliveryLines({ gml = 0, gmi = 0, keptExplicit = 0, keptUnavailable = 0 }, saved = false) {
+  return [
+    gml && { key: 'gml', text: `${plural(gml, 'plassering', 'plasseringer')} ${saved ? 'satt til' : 'settes til'} GML i leveransen, slik at den godkjente posisjonen leveres` },
+    gmi && { key: 'gmi', text: `${plural(gmi, 'plassering', 'plasseringer')} leveres i GMI igjen fordi posisjonen er tilbake ved GMI-objektet` },
+    keptExplicit && { key: 'kept-explicit', review: true, text: `${plural(keptExplicit, 'plassering', 'plasseringer')} flyttes bort fra GMI-objektet, men beholder GMI fordi du har valgt det. Kontroller leveringsvalget i FOTO.` },
+    keptUnavailable && { key: 'kept-unavailable', review: true, text: `${plural(keptUnavailable, 'plassering', 'plasseringer')} flyttes bort fra GMI-objektet, men GMI-koblingen kan ikke overføres til GML nå. Kontroller leveringsvalget i FOTO.` },
+  ].filter(Boolean);
+}
+
+function DeliverySummary({ effects }) {
+  const lines = effects ? deliveryLines(effects) : [];
+  if (!lines.length) return null;
+  return <section className="photo-positioning-kontroll-section" data-kontroll="delivery" aria-label="Levering">
+    <h4>Levering</h4>
+    <ul>{lines.map((line) => <li key={line.key} data-kontroll-delivery={line.key}>{line.text}</li>)}</ul>
+  </section>;
+}
+
 // What «Lagre endringer» actually saved, from the commit receipt. Only non-zero lines.
 function receiptLines(receipt) {
   const names = (ops) => ops.map((op) => op.filename).join(', ');
@@ -93,7 +113,8 @@ function receiptLines(receipt) {
     receipt.captureTimes && `Opptakstid lagret for ${plural(receipt.captureTimes, 'bilde', 'bilder')}`,
     receipt.directions && `Retning fra GML for ${plural(receipt.directions, 'bilde', 'bilder')}`,
     (receipt.placed || receipt.moved || receipt.same) && `Posisjoner: ${[receipt.placed && `${receipt.placed} plassert`, receipt.moved && `${receipt.moved} flyttet`, receipt.same && `${receipt.same} samme posisjon`].filter(Boolean).join(' · ')}`,
-    receipt.gmlDelivery && `${plural(receipt.gmlDelivery, 'plassering', 'plasseringer')} satt til GML i leveransen`,
+    ...deliveryLines({ gml: receipt.gmlDelivery, gmi: receipt.gmiDelivery, keptExplicit: receipt.deliveryKeptExplicit,
+      keptUnavailable: receipt.deliveryKeptUnavailable }, true).map((line) => line.text),
   ].filter(Boolean);
 }
 
@@ -206,8 +227,15 @@ export default function PhotoPositioningWizard({ layer, photos, review, draft = 
   const viableExif = assets.filter((photo) => photo.spatial.candidates.some((candidate) => candidate.kind === 'exif' && candidate.status === 'viable')).length;
   const newEvidence = plan && plan.evidenceSignature !== (draftReview?.evidenceSignature ?? photoSourceEvidenceSignature(photos));
   const done = step === SAVED;
-  const steps = STEPS.map((label, index) => ({ key: index + 1, label })).filter(({ key }) => key !== 2 || review || ops.length || step === 2 || done);
+  // B1.3: Endringer lagret shows the steps the saved workflow actually had (Koblinger only when it was used).
+  const steps = STEPS.map((label, index) => ({ key: index + 1, label }))
+    .filter(({ key }) => done && saved?.stepKeys ? saved.stepKeys.includes(key) : key !== 2 || review || ops.length || step === 2);
   const canSave = !saving && (ops.length > 0 || selected.length > 0) && draftReview?.ok !== false;
+  // B1.1: Kontroll's delivery consequences, from the session's read-only preview of the same commit planning.
+  const previewDelivery = () => step === 4 && plan && selected.length ? photoSession.previewSourceWorkflowDelivery(ticketRef.current,
+    { plan, requests: selected.map((row) => ({ photoId: row.photoId, candidateId: row.proposal.id })) }) : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- plan, choices and the draft review are the revision boundary.
+  const deliveryPreview = useMemo(previewDelivery, [step, plan, choices, draftReview]);
 
   useEffect(() => {
     const dialog = dialogRef.current, opener = document.activeElement;
@@ -294,7 +322,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, draft = 
       setSaving(false);
       if (!result.ok) { setError(result.message || errorText(result.error)); return; }
       editedIds.current.clear();
-      setSaved({ ...result, layerId: layer.id, initialPlacement }); setStep(SAVED);
+      setSaved({ ...result, layerId: layer.id, initialPlacement, stepKeys: steps.map(({ key }) => key) }); setStep(SAVED);
     });
   };
   const close = () => {
@@ -464,6 +492,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, draft = 
             {plan && selected.length > 0 ? <section aria-label="Posisjoner" data-kontroll="positions"><h4 className="photo-positioning-subheading">Posisjoner</h4>
               <PositioningSummary plan={plan} selected={selected} selectionUnit={selectionUnit} repeats={repeats} optionLabel={optionLabel} newEvidence={newEvidence} /></section>
               : <p className="photo-positioning-note" data-kontroll="positions">Ingen posisjoner endres.</p>}
+            <DeliverySummary effects={deliveryPreview} />
           </section>}
           {done && <section aria-label="Lagret" data-positioning-receipt>
             <ul className="photo-positioning-receipt">{receipt.map((line) => <li key={line}><CheckIcon size={16} weight="regular" aria-hidden="true" />{line}</li>)}</ul>

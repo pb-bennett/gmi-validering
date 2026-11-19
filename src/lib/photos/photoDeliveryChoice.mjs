@@ -172,11 +172,37 @@ export function photoMoveProposesTransfer(photo, entry, position) {
   return distance !== null && distance > PHOTO_POSITION_TOLERANCE_METRES;
 }
 
-/** Presentation overlay for unsaved move proposals: the proposed entries read as GML, marked `proposed`. */
-export function photoDeliveryWithProposals(delivery, proposedIds) {
-  if (!delivery || !proposedIds?.size) return delivery;
+/**
+ * B1.1: the automatic delivery consequence of accepting `position` for one occurrence, under the same tolerance and the
+ * same «never replace a stored or explicit choice» rule as the defaults above. Every occurrence is judged against its
+ * own originating GMI point, so repeated photographs are decided per placement. Only the distance counts: a new
+ * coordinate source at a compatible position changes nothing.
+ * - 'transfer': an untouched GMI default moves away from its GMI object and becomes GML (automatic).
+ * - 'restore': an automatic GML transfer comes back to its GMI object and returns to the GMI default.
+ * - 'include': an untouched unlinked «Ikke valgt» occurrence adopts a GML or EXIF position (`includeUnlinked`).
+ * - 'kept-explicit': the user chose GMI explicitly; the choice is kept, but the photo is moved away (review).
+ * - 'kept-unavailable': moved away, but the GMI link cannot be transferred now (review).
+ * - null: nothing to change.
+ */
+export function photoPositionDeliveryEffect(photo, entry, position, { includeUnlinked = false } = {}) {
+  if (!entry || !isPhotoPosition(position)) return null;
+  if (!entry.linked) return includeUnlinked && photoPositionDefaultsToGml(entry) ? 'include' : null;
+  const origin = photoOriginGmiPosition(photo);
+  const distance = origin ? photoPositionDistance(origin, position) : null;
+  if (distance === null) return null;
+  const away = distance > PHOTO_POSITION_TOLERANCE_METRES;
+  if (!away) return entry.status === 'transfer' && entry.automatic && !entry.userChosen ? 'restore' : null;
+  if (photoMoveProposesTransfer(photo, entry, position)) return 'transfer';
+  if (entry.status !== 'keep-link') return null;
+  return entry.userChosen || entry.explicit ? 'kept-explicit' : !entry.canTransfer ? 'kept-unavailable' : null;
+}
+
+/** Presentation overlay for unsaved move proposals: the proposed entries read as GML (or GMI again, `restoredIds`), marked `proposed`. */
+export function photoDeliveryWithProposals(delivery, proposedIds, restoredIds = null) {
+  if (!delivery || (!proposedIds?.size && !restoredIds?.size)) return delivery;
   const byPhotoId = { ...delivery.byPhotoId };
-  for (const id of proposedIds) if (byPhotoId[id]) byPhotoId[id] = Object.freeze({ ...byPhotoId[id], status: 'transfer', intent: 'transfer', proposed: true });
+  for (const id of proposedIds || []) if (byPhotoId[id]) byPhotoId[id] = Object.freeze({ ...byPhotoId[id], status: 'transfer', intent: 'transfer', proposed: true });
+  for (const id of restoredIds || []) if (byPhotoId[id]) byPhotoId[id] = Object.freeze({ ...byPhotoId[id], status: 'keep-link', intent: 'keep-link', proposed: true });
   return Object.freeze({ ...delivery, byPhotoId: Object.freeze(byPhotoId), summary: summarizePhotoDelivery(Object.values(byPhotoId)) });
 }
 

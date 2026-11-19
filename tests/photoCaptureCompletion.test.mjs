@@ -30,12 +30,16 @@ test('DC2 sufficiency: at least 3 known dates covering at least 25 % of the uniq
   assert.deepEqual([at(3, 10).proposal, at(3, 10).reason], [null, 'insufficient'], '3 of 13 is under 25 %');
 });
 
-test('DC2 spread: ≤ 7 days prefilled, 8–31 days only on request, > 31 days no proposal', () => {
+test('DC2/C1.3 spread: ≤ 7 days prefilled; any longer spread, even years, is offered on request', () => {
   const spread = (last) => photoEstimatedDateModel(['2026-10-01', '2026-10-02', last].map((date) => synthetic(date)).concat(empty(1)), { today: TODAY });
   assert.deepEqual([spread('2026-10-08').spreadDays, spread('2026-10-08').proposal, spread('2026-10-08').suggestedDate], [7, 'prefill', '2026-10-02']);
   assert.deepEqual([spread('2026-10-09').spreadDays, spread('2026-10-09').proposal], [8, 'confirm']);
   assert.deepEqual([spread('2026-11-01').spreadDays, spread('2026-11-01').proposal], [31, 'confirm']);
-  assert.deepEqual([spread('2026-11-02').spreadDays, spread('2026-11-02').proposal, spread('2026-11-02').reason, spread('2026-11-02').suggestedDate], [32, null, 'spread', null]);
+  // C1.3 (approved contract change): no maximum project duration; the median is still offered and must be chosen.
+  assert.deepEqual([spread('2026-11-02').spreadDays, spread('2026-11-02').proposal, spread('2026-11-02').reason, spread('2026-11-02').suggestedDate], [32, 'confirm', null, '2026-10-02']);
+  const years = photoEstimatedDateModel(['2023-03-01', '2024-06-15', '2025-09-30', '2026-10-01'].map((date) => synthetic(date)).concat(empty(2)), { today: TODAY });
+  assert.deepEqual([years.spreadDays > 1000, years.proposal, years.suggestedDate, years.first, years.last, years.basis, years.missing],
+    [true, 'confirm', '2024-06-15', '2023-03-01', '2026-10-01', 4, 2], 'lower-middle median over several years');
 });
 
 test('median: odd and even counts, unique originals, and any precision of accepted date', () => {
@@ -124,7 +128,9 @@ test('technical completion: noon for a date, 00 seconds for a minute; known comp
     assert.equal(technicalCaptureCompletion(date), null, 'never completed twice');
     // Readiness states it once, and Gemini export now carries the full value.
     const readiness = completionView(session, layerId).readiness;
-    assert.match(readiness.notes.concat(readiness.recommendations).find((item) => item.code === 'capture-time-technical').message, /^2 bilder har teknisk utfylt tid\. Den er ikke målt\.$/);
+    assert.match(readiness.notes.concat(readiness.recommendations).find((item) => item.code === 'capture-time-technical').message, /^2 bilder har teknisk utfylt klokkeslett eller sekunder\. De utfylte delene er ikke målt, og merkingen er ikke med i GML-filen\.$/);
+    // C1.5: a user decision is information, never something to check, and never sets the overall status by itself.
+    assert.equal(readiness.recommendations.some((item) => item.code === 'capture-time-technical'), false);
     for (const name of ['second.jpg', 'estimated.jpg', 'cleared.jpg']) assert.strictEqual(timeOf(after[name]), timeOf(before[name]));
     // Undo restores the original value exactly, unless it was changed since.
     session.setCaptureMetadata(layerId, [ids[1]], 'captureTime', '2026-10-07T09:47:00');
@@ -162,4 +168,72 @@ test('a changed plan between review and button refuses with review-changed and w
     assert.deepEqual(session.completeCaptureTimes(layerId, { step: 'source', groups: ['complete'], expected }), { ok: false, error: 'review-changed' });
     assert.strictEqual(timeOf(byName(session, layerId)['a.jpg']), timeOf(before['a.jpg']));
   } finally { session.clear(); }
+});
+
+// ---- Evening acceptance corrections (C1.1–C1.5) ----
+test('C1.4: a known date is sufficient for Gemini; strict targets keep incomplete times as work left; schema stays accurate', async () => {
+  const { session, layerId, ids } = await completionLayer([jpeg('date.jpg'), jpeg('minute.jpg'), jpeg('full.jpg'), jpeg('blank.jpg')]);
+  try {
+    session.setCaptureMetadata(layerId, [ids[0]], 'captureTime', '2026-10-07');
+    session.setCaptureMetadata(layerId, [ids[1]], 'captureTime', '2026-10-07T09:46');
+    session.setCaptureMetadata(layerId, [ids[2]], 'captureTime', '2026-10-07T09:46:33');
+    const gemini = completionView(session, layerId);
+    assert.equal(gemini.model.captureTime.outstanding, 1, 'only blank.jpg lacks a usable accepted date');
+    assert.deepEqual(gemini.model.captureTime.groups.map((group) => group.state), ['none'], 'no incomplete-time problem list');
+    assert.deepEqual(gemini.model.captureTime.done.map((row) => [row.filename, row.precisionState ?? null]).sort(),
+      [['date.jpg', 'partial'], ['full.jpg', null], ['minute.jpg', 'partial']]);
+    assert.equal(gemini.readiness.levels.schema.met, false, 'the formal Skråfoto 2019 assessment is unchanged');
+    assert.deepEqual(gemini.readiness.levels.schema.gaps.find((gap) => gap.field === 'captureTime'), { field: 'captureTime', count: 3, missing: 1, insufficientPrecision: 2 });
+    for (const profile of ['legacy2019', 'asbuilt52']) {
+      const strict = completionView(session, layerId, { profile, context: {} });
+      assert.equal(strict.model.captureTime.outstanding, 3, `${profile}: the strict contract still needs complete times`);
+      assert.equal(strict.readiness.blocking.some((item) => item.code === 'capture-time-precision'), true, `${profile} still blocks`);
+      assert.match(strict.model.captureTime.groups.find((group) => group.state === 'partial').hint, /krever klokkeslett med sekunder/);
+    }
+  } finally { session.clear(); }
+});
+
+test('C1.5: interpreted, estimated and technically completed dates are information and never set the status on their own', async () => {
+  const { session, layerId, ids } = await completionLayer([jpeg('a.jpg'), jpeg('b.jpg'), jpeg('c.jpg')]);
+  try {
+    session.setCaptureMetadata(layerId, [ids[0]], 'captureTime', '2026-10-07T09:46:33');
+    session.setCaptureMetadata(layerId, [ids[1]], 'captureTime', '2026-10-07', { estimated: true });
+    session.setCaptureMetadata(layerId, [ids[2]], 'captureTime', '2026-10-07T09:46');
+    assert(session.completeCaptureTimes(layerId, { step: 'technical', groups: ['seconds'] }).ok);
+    const { readiness } = completionView(session, layerId);
+    const codes = (items) => items.map((item) => item.code);
+    assert.deepEqual(codes(readiness.recommendations).filter((code) => code.startsWith('capture-time')), []);
+    assert(codes(readiness.notes).includes('capture-time-estimated') && codes(readiness.notes).includes('capture-time-technical'));
+    assert.equal(readiness.status, 'ready', 'no «Kan eksporteres, men noe bør kontrolleres» from user decisions');
+  } finally { session.clear(); }
+});
+
+test('C1.1/C1.2: explanations and results come from the actual rows, provenance and write counts', async () => {
+  const { technicalCompletionExplanation, captureStepResultText } = await import('../src/lib/photos/photoCompletion.mjs');
+  const rows = [{ kind: 'seconds', provenance: { kind: 'filename' } }, { kind: 'seconds', provenance: { kind: 'filename' } }, { kind: 'noon', provenance: { kind: 'exif' } }];
+  const gemini = technicalCompletionExplanation(rows, 'recommended', 'Skråfoto 2019');
+  assert.match(gemini, /^1 bilde har bare dato, og 2 bilder har dato og klokkeslett uten sekunder \(2 tolket fra filnavn, 1 fra EXIF\)\./);
+  assert.match(gemini, /Datoen er nok for leveransen\. Skråfoto 2019-skjemaet krever likevel klokkeslett med sekunder/);
+  assert.match(gemini, /de utfylte delene er ikke målt/);
+  assert.match(technicalCompletionExplanation(rows.slice(2), 'required', 'Skråfoto 2019'), /^1 bilde har bare dato \(1 fra EXIF\)\. Skråfoto 2019 krever klokkeslett med sekunder, så disse bildene må fullføres før eksport\./);
+  assert.equal(captureStepResultText('technical', { count: 66, counts: { noon: 0, seconds: 66 } }),
+    'Teknisk utfylt for 66 bilder: 66 fikk 00 sekunder. Dato og kjente klokkeslett er beholdt, og de utfylte delene er ikke målt.');
+  assert.equal(captureStepResultText('filename', { count: 2, counts: { complete: 1, date: 1 } }),
+    'Tolket fra filnavn og godtatt for 2 bilder: 1 med dato og klokkeslett, 1 med kun dato. Verdiene er tolket, ikke målt. Godtatte og fjernede verdier er beholdt.');
+  assert.equal(captureStepResultText('source', { count: 3, counts: { complete: 3 }, kinds: { exif: 2, gml: 1 } }),
+    'Godtatt for 3 bilder: 3 med dato og klokkeslett (2 fra EXIF, målt av kameraet, 1 fra GML). Godtatte og fjernede verdier er beholdt.');
+  const { session, layerId, ids } = await completionLayer([jpeg('a.jpg'), jpeg('b.jpg')]);
+  try {
+    session.setCaptureMetadata(layerId, ids, 'captureTime', '2026-10-07T09:46');
+    const result = session.completeCaptureTimes(layerId, { step: 'technical', groups: ['seconds'] });
+    assert.deepEqual([result.count, result.counts.seconds, result.kinds], [2, 2, { manual: 2 }], 'actual written count and original source');
+  } finally { session.clear(); }
+});
+
+test('C1.5: the delivery report lists capture-time decisions under Informasjon and does not count them as notes', async () => {
+  const { deliveryDiagnostics, deliveryReviewStatus } = await import('../src/lib/delivery/deliveryWizard.mjs');
+  const plan = { errors: [], warnings: ['capture-time-filename', 'capture-time-estimated', 'capture-time-technical'].map((code) => ({ code, message: `${code} text` })) };
+  const groups = deliveryDiagnostics(plan);
+  assert.deepEqual([groups.warnings.length, groups.info.map((item) => item.code)], [0, ['capture-time-filename', 'capture-time-estimated', 'capture-time-technical']]);
+  assert.equal(deliveryReviewStatus(plan), 'Kontroll fullført · ingen merknader');
 });

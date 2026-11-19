@@ -112,6 +112,20 @@ test('layer analysis matches card actions and retains results, keyboard tooltips
       assert.equal(await browser.evaluate(`${profile}.children.length`), 1, 'profile findings stay inside the analysis');
       await browser.evaluate(`${profile}.click()`);
       await browser.waitFor(profileWarning);
+      // B1.2: an open main-map profile analysis does not leak into Validator: its panel, split map and pipe styling are
+      // suspended there, and the analysis returns unchanged with the main map.
+      const thinLines = `Array.from(document.querySelectorAll('.leaflet-overlay-pane path')).filter((e) => e.getAttribute('stroke-width') === '8').length`;
+      const analysisLines = await browser.evaluate(thinLines);
+      assert(analysisLines > 0, 'the selected pipe is drawn thicker in the main map');
+      await browser.evaluate(`${action('Feltvalidering')}.click()`);
+      await browser.waitFor(`${validator} && !${profilePanel}`);
+      await browser.evaluate('new Promise(resolve => setTimeout(resolve, 300))');
+      assert.equal(await browser.evaluate(thinLines), 0, 'no selected-pipe analysis styling in Validator');
+      assert.equal(await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))'), true);
+      await shot('b1-2-validator-without-profile');
+      await click('Lukk Validator');
+      await browser.waitFor(`!${validator} && ${profileWarning}`);
+      assert.equal(await browser.evaluate(thinLines), analysisLines, 'the analysis styling returns with the main map');
       await click('Lukk analyse');
 
       await browser.evaluate(`${height}.click()`);

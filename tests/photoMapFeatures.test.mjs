@@ -50,7 +50,7 @@ test('automatic FOTO fit is wired only to positioned creation and successful ini
   assert.equal([...page.matchAll(/requestPhotoFit\(/g)].length, 2);
   assert.match(wizard, /const initialPlacement = !photoSession\.getLayerPhotos\(layer\.id\)\.some\(\(photo\) => photo\.spatial\.current\)/);
   // B3: the saved transaction's result drives the fit when the wizard is closed from «Endringer lagret».
-  assert.match(wizard, /setSaved\(\{ \.\.\.result, layerId: layer\.id, initialPlacement \}\)/);
+  assert.match(wizard, /setSaved\(\{ \.\.\.result, layerId: layer\.id, initialPlacement, stepKeys: steps\.map\(\(\{ key \}\) => key\) \}\)/);
   assert.match(wizard, /const close = \(\) => \{\s*if \(saved\) onApplied\?\.\(saved\);/);
   assert.equal([...wizard.matchAll(/onApplied\?\.\(/g)].length, 1, 'only a saved transaction is reported; connection-only has no accepted ids, so no fit');
   assert.match(controller, /\[map, fitRequest, onFitHandled\]/);

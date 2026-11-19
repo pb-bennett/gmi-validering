@@ -105,7 +105,8 @@ test('one atomic commit equals the former two-phase result', async () => {
   assert.equal(publications, 1, 'published once');
   assert.equal(normalise(one.session, one.layerId), normalise(two.session, two.layerId));
   assert.deepEqual({ ...result.receipt, added: result.receipt.added.map((op) => op.filename) }, { added: ['positions.gml'], rechecked: [], rebound: [], removed: [],
-    occurrencesAdded: 0, captureTimes: 2, directions: 2, placed: 2, moved: 0, same: 0, gmlDelivery: 2 });
+    occurrencesAdded: 0, captureTimes: 2, directions: 2, placed: 2, moved: 0, same: 0, gmlDelivery: 2,
+    gmiDelivery: 0, deliveryKeptExplicit: 0, deliveryKeptUnavailable: 0 });
   two.session.clear(); one.session.clear();
 });
 

@@ -124,6 +124,8 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert.match(await kontroll('links'), /^Koblinger 1 ny plassering/);
       assert.equal(await kontroll('capture'), 'Opptakstid 2 bilder får opptakstid fra positions.gml (fullstendig).');
       assert.match(await kontroll('positions'), /2 plasseringer valgt/);
+      // B1.1: the GMI-linked a.png takes its EXIF position away from its GMI object, so Kontroll states the GML delivery.
+      assert.equal(await kontroll('delivery'), 'Levering 1 plassering settes til GML i leveransen, slik at den godkjente posisjonen leveres');
       assert.equal(await browser.evaluate(markerCount), 1, 'Kontroll writes nothing');
       // Cancel guard: Escape asks before discarding the draft; «Fortsett» keeps everything.
       await browser.evaluate(`${sourceWizard}.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`);
@@ -136,7 +138,8 @@ test('unified source workflow: GMI/GML checkpoints, mixed positions, manual curr
       assert.equal(await browser.evaluate('document.activeElement.innerText'), 'Endringer lagret', 'the completion heading takes focus');
       const receipt = await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('[data-positioning-receipt] li')).map(li => li.innerText.trim())`);
       assert.deepEqual(receipt, ['Kilder lagt til: objects.gmi, positions.gml', '1 ny plassering fra GMI-koblinger', 'Opptakstid lagret for 2 bilder',
-        'Posisjoner: 2 plassert'], 'GMI-linked photos keep their GMI delivery default, so no GML line');
+        'Posisjoner: 2 plassert', '1 plassering satt til GML i leveransen, slik at den godkjente posisjonen leveres'],
+        'B1.1 (approved contract change): a GMI-linked photo moved away from its GMI object is delivered through GML');
       assert.deepEqual(await browser.evaluate(`Array.from(${sourceWizard}.querySelectorAll('footer button')).map(b => b.innerText)`), ['Lukk']);
       assert.equal(await browser.evaluate(`${sourceWizard}.querySelector('header button').getAttribute('aria-label')`), 'Lukk kildekontroll');
       for (const [width, height] of [[1280, 720], [1366, 768]]) {

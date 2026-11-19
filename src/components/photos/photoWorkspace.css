@@ -2,7 +2,8 @@
 
 /* Header: layer name, visibility, close, counts, tools/filter/sort. */
 .photo-workspace-header { flex-shrink: 0; padding: 8px 10px 8px; border-bottom: 1px solid #dce3ea; display: grid; gap: 6px; }
-.photo-workspace-title-row { display: grid; grid-template-columns: minmax(0, 1fr) 32px 32px; align-items: center; gap: 4px; }
+/* A8.1: photo visibility moved to the shared map toolbar control, so the row is the title and the close control. */
+.photo-workspace-title-row { display: grid; grid-template-columns: minmax(0, 1fr) 32px; align-items: center; gap: 4px; }
 .photo-workspace-collection h1 { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--gmi-navy); }
 .photo-workspace-counts { margin: 0; color: var(--gmi-text-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .photo-workspace-unplaced-count { color: #8a5a00; }
