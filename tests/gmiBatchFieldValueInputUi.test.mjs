@@ -55,6 +55,8 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
       }
       if (await browser.evaluate(`Boolean(${bar})`)) await click('Fjern utvalg', bar);
       await click(scope, `document.querySelector('[data-table-geometry]')`);
+      await browser.waitFor(`document.querySelector('[data-table-geometry]')?.dataset.tableGeometry === '${scope === 'Punkter' ? 'punkter' : 'ledninger'}'`);
+      for (const index of indices) await browser.waitFor(`document.querySelector('[data-table-row="${index}"] input[type=checkbox]')`);
       for (const index of indices) await browser.evaluate(`document.querySelector('[data-table-row="${index}"] input[type=checkbox]').click()`);
       await click(`Rediger valgte (${indices.length})`, bar); await browser.waitFor(inspector);
     };
@@ -69,6 +71,7 @@ test('G5 D3 production: explicit fields, shared point/line domains, searchable o
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
       await browser.evaluate('document.querySelector("[data-gmi-edit-action]").click()');
+      await browser.waitFor('document.querySelector("[data-table-geometry]")');
 
       await t.test('no default field/value; choosing a field or opening its list leaves the draft guard clean', async () => {
         await select('Punkter', [0, 1]);

@@ -51,11 +51,18 @@ export async function openTestChrome() {
     };
     const waitFor = async (expression, timeoutMs = 30000) => {
       const until = Date.now() + timeoutMs;
+      let missingParent = null;
       while (Date.now() < until) {
-        if (await evaluate(`Boolean(${expression})`)) return;
+        // Catch the absent-parent read inside the predicate so it is not reported as
+        // an application runtime exception. Other errors and the deadline are unchanged.
+        const observed = await evaluate(`(() => { try { return { ready: Boolean(${expression}) }; }
+          catch (error) { if (error instanceof TypeError && /Cannot read properties of (?:null|undefined) \\(reading 'querySelector(?:All)?'\\)/.test(error.message))
+            return { ready: false, missingParent: error.stack || error.message }; throw error; } })()`);
+        if (observed.ready) return;
+        if (observed.missingParent) missingParent = observed.missingParent;
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      throw new Error(`Browser condition did not become true: ${expression}`);
+      throw new Error(`Browser condition did not become true: ${expression}${missingParent ? `\nLast missing-parent selector: ${missingParent}` : ''}`);
     };
     await send('Runtime.enable'); await send('Page.enable');
     return { send, evaluate, waitFor, events, close };

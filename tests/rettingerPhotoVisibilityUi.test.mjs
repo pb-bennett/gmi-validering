@@ -157,7 +157,9 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
         assert.deepEqual(await toggleState(), { label: 'Vis bilder', pressed: 'true', tooltip: 'Skjul bilder', state: 'shown', title: null, inToolbar: true });
         await browser.waitFor('document.querySelector("[data-legend-photos]")');
         // transition-colors (150 ms) from .gmi-compact-button: read the settled pressed colours.
-        await browser.waitFor(`getComputedStyle(${toggle}).backgroundColor === 'rgb(206, 250, 254)'`, 3000).catch(() => {});
+        // Background, colour and border transition together but round to their final values on different frames:
+        // wait for the element's own CSS transitions to finish rather than for one property.
+        await browser.evaluate(`Promise.all(${toggle}.getAnimations().map((animation) => animation.finished.catch(() => null)))`);
         const pressedStyle = await browser.evaluate(`(() => { const s = getComputedStyle(${toggle}); return { bg: s.backgroundColor, color: s.color, border: s.borderTopColor, w: s.width, h: s.height }; })()`);
         assert.deepEqual(pressedStyle, { bg: 'rgb(206, 250, 254)', color: 'rgb(0, 117, 149)', border: 'rgb(0, 117, 149)', w: '36px', h: '36px' });
         await shot('a5-rettinger-shown-1366x768');

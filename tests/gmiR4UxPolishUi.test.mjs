@@ -83,12 +83,14 @@ test('R4 UX polish production: accurate review, object numbers, focus, severity,
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
       await browser.evaluate(`document.querySelector('[title="Synthetic R4 UX.gmi"]').click()`);
-      await click('Åpne datatabell'); await click('Ledninger', `document.querySelector('[data-table-geometry]')`);
+      await browser.waitFor(`Array.from(document.querySelectorAll('button')).some(e => e.getAttribute('aria-label') === 'Åpne datatabell' || e.innerText.trim() === 'Åpne datatabell')`);
+      await click('Åpne datatabell'); await browser.waitFor('document.querySelector("[data-table-geometry]")'); await click('Ledninger', `document.querySelector('[data-table-geometry]')`);
       await browser.waitFor(`${grid}?.getAttribute('aria-rowcount') === '49'`);
       // Slice 3 (2026-11-16): the ordinary table shows original GMI object numbers once; Rettinger-only controls stay out.
       assert.equal((await headers()).filter((header) => header === 'Nr.').length, 1, 'the ordinary GMI table shows one Nr. column');
       assert.equal(await browser.evaluate(`Boolean(document.querySelector('[data-gmi-table-size]'))`), false);
       await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
+      await browser.waitFor('document.querySelector(".gmi-edit-workspace")');
       await browser.waitFor(box(0));
 
       await t.test('object numbers come from source identity through sorting, search and virtualization', async () => {

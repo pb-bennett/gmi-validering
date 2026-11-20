@@ -28,6 +28,8 @@ export default function ValidationV2RuleList({
   onInfo,
   canCorrect,
   onCorrect,
+  canReviewPhotoLinks,
+  onReviewPhotoLinks,
 }) {
   // Share the widest value across the list so every category stays aligned,
   // including datasets with counts larger than three digits.
@@ -108,6 +110,8 @@ export default function ValidationV2RuleList({
                   </button>
                 </div>
                 {canCorrect?.(presentation) && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive text-[11px]" onClick={() => onCorrect(presentation)}>Lag retting…</button>}
+                {canReviewPhotoLinks?.(presentation) && <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-gmi-interactive text-[11px]"
+                  onClick={() => onReviewPhotoLinks(presentation)}>Gjennomgå i FOTO</button>}
               </section>
             )}
           </div>

@@ -5,10 +5,13 @@ import { createPortal } from 'react-dom';
 import { XIcon, FunnelIcon, ArrowsDownUpIcon, ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import useStore from '@/lib/store';
+import { loadedGmiSources } from '@/lib/photos/loadedGmiSource.mjs';
+import { preparePhotoLinkReviewHandoff } from '@/lib/photos/photoHyperlinkReview.mjs';
 import { validateGmiDataset } from '@/lib/gmi-edit/index.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import useGmiEditLayer from '@/components/gmi-edit/useGmiEditLayer';
-import { CORRECTABLE_RULES, isCorrectableMissingFinding, prepareValidatorCorrection } from '@/lib/gmiValidatorEditing.mjs';
+import { CORRECTABLE_RULES, VALIDATOR_CORRECTION_BASIS_CHANGED, isCorrectableMissingFinding, prepareValidatorCorrection,
+  validatorCorrectionBasisCurrent } from '@/lib/gmiValidatorEditing.mjs';
 import { getDatasetRevision } from '@/lib/validation-v2/datasetRevision';
 import { createValidationV2ViewController } from '@/lib/validation-v2/validationViewController';
 import {
@@ -388,12 +391,29 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     && result.schemaBinding.bindings.some((binding) => binding.geometryScope === 'line' && binding.canonicalFieldId === CORRECTABLE_RULES[rule.ruleId] && binding.state === 'BOUND')
     && result.ruleResults.find((entry) => entry.rule.ruleId === rule.ruleId)?.findings.some((finding) =>
       isCorrectableMissingFinding(finding))));
+  const photoLinkHandoff = (presentation) => {
+    const ticket = loadedGmiSources.begin(selectedLayerId);
+    return preparePhotoLinkReviewHandoff({ layer: importedLayer, binding: ticket?.binding,
+      dataset: selectedLayer.data, datasetKind, run: result, ruleIds: presentation.rules.map((rule) => rule.ruleId),
+      session: datasetKind === 'proposed' ? editView?.session : null });
+  };
+  const canReviewPhotoLinks = (presentation) => activeGeometry === 'point' && presentation.rules.some((rule) => rule.canonicalFieldId === 'attachmentLink')
+    && result?.ruleResults.some((entry) => presentation.rules.some((rule) => rule.ruleId === entry.rule.ruleId)
+      && entry.findings.some((finding) => finding.reasonCode === 'APPLICABILITY_UNEXPECTED_VALUE' && finding.objectRef?.geometryScope === 'point'));
+  const reviewPhotoLinks = (presentation) => {
+    const handoff = photoLinkHandoff(presentation);
+    if (!handoff.ok) { setCorrectionError(handoff.message); return; }
+    useStore.setState({ gmiPhotoReviewRequest: handoff.request });
+  };
   const startCorrection = async (presentation) => {
     setCorrectionError(null);
     try {
       const opened = await gmiEditSessions.open(selectedLayerId);
-      if (currentCorrectionSource.current.layer !== importedLayer || currentCorrectionSource.current.result !== result || currentCorrectionSource.current.referenceDate !== referenceDate
-        || useStore.getState().layers[selectedLayerId] !== importedLayer) return;
+      const store = useStore.getState();
+      if (!validatorCorrectionBasisCurrent({ layer: importedLayer, result, referenceDate },
+        { ...currentCorrectionSource.current, storeLayer: store.layers[selectedLayerId], storeReferenceDate: store.gmiValidatorReferenceDate })) {
+        throw new Error(VALIDATOR_CORRECTION_BASIS_CHANGED);
+      }
       if (!opened.ok) throw new Error('Rettinger er utilgjengelig for dette kildegrunnlaget.');
       const handle = gmiEditSessions.getHandle(selectedLayerId);
       const resolved = gmiEditSessions.resolve(handle);
@@ -609,6 +629,8 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                   onInfo={openFieldInfo}
                   canCorrect={correctable}
                   onCorrect={startCorrection}
+                  canReviewPhotoLinks={canReviewPhotoLinks}
+                  onReviewPhotoLinks={reviewPhotoLinks}
                 />
                 <UnknownFields diagnostics={result.sourceFieldDiagnostics} />
               </div>

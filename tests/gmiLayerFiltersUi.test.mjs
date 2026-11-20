@@ -55,6 +55,7 @@ test('R6A production: shared Tema/Felt hosts, geometry, selection, preview, prop
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
       if (!await browser.evaluate(`Boolean(${tema})`)) await browser.evaluate(`document.querySelector('[title="R6A filters.gmi"]').click()`);
+      await browser.waitFor(`Array.from(document.querySelectorAll('button')).some(e => e.getAttribute('aria-label') === 'Åpne datatabell' || e.innerText.trim() === 'Åpne datatabell')`);
       await click('Åpne datatabell'); await browser.waitFor(table); await click('Ledninger', table); await count(3);
 
       const legend = `Array.from(document.querySelectorAll('button')).find(e => e.textContent.trim() === 'Tegnforklaring')`;

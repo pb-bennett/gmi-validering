@@ -9,7 +9,7 @@ import { solidPng } from './helpers/photoImageFixtures.mjs';
 import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { applyPhotoSourcePositions, closePhotoSources, savePhotoSource, setPhotoFiles, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { chooseImportPlacement, createLayerWithPlacement, importDialog, waitForThumbnails } from './helpers/photoImportWizard.mjs';
-import { KEYS, clickText, commandBar, discardEdits, editTarget, elementCentre, enterEditMode, mouseDrag, pressKey, saveEdits, selectPhotoRow, waitForStableEditTarget } from './helpers/photoWorkspace.mjs';
+import { KEYS, clickText, commandBar, discardEdits, editTarget, elementCentre, enterEditMode, mouseDrag, pressKey, saveEdits, selectPhotoRow, waitForStableEditTarget, waitForStableMap } from './helpers/photoWorkspace.mjs';
 
 // Pass 1B acceptance: six photos referenced by one GMI object share exactly one position, plus one photo
 // used by two other objects. Synthetic, non-customer fixtures with real portrait/landscape dimensions.
@@ -415,6 +415,8 @@ test('Pass 1B: stacked photos in Edit mode, photo-first inspector, full-screen n
         for (const [key, occurrence] of [['solo1', '1 av 2'], ['solo2', '2 av 2']]) {
           const marker = `document.querySelector('.leaflet-marker-icon[data-photo-id="${ids[key]}"]')`;
           await browser.waitFor(marker);
+          // A popup autoPan started just before «Åpne i bildemodul» finishes after FOTO closes; measure the hit point at rest.
+          await waitForStableMap(browser);
           // Paging and resizing the stack popup can pan a different placement partly out of the viewport.
           // Use the main-map zoom control to bring it into view before exercising the real marker hit target.
           const point = await elementCentre(browser, marker);

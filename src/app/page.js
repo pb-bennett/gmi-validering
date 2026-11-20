@@ -26,6 +26,7 @@ import PhotoWorkspaceInspector from '@/components/photos/PhotoWorkspaceInspector
 import PhotoWorkspaceViewer from '@/components/photos/PhotoWorkspaceViewer';
 import PhotoCaptureMetadataDialog from '@/components/photos/PhotoCaptureMetadataDialog';
 import PhotoSourcesInfoDialog from '@/components/photos/PhotoSourcesInfoDialog';
+import PhotoHyperlinkReviewDialog from '@/components/photos/PhotoHyperlinkReviewDialog';
 import PhotoExportWizard from '@/components/photos/PhotoExportWizard';
 import PhotoCompletionDialog from '@/components/photos/PhotoCompletionDialog';
 import PhotoWorkspaceToast from '@/components/photos/PhotoWorkspaceToast';
@@ -165,6 +166,8 @@ export default function Home() {
   const registerGmiEditGuard = useCallback((guard) => { gmiEditGuardRef.current = guard; }, []);
   const [gmiEditDraft, setGmiEditDraft] = useState(false);
   const [photoWorkspace, dispatchPhotoWorkspace] = useReducer(photoWorkspaceReducer, emptyPhotoWorkspace);
+  const photoLinkReviewRequest = useStore((state) => state.gmiPhotoReviewRequest);
+  const closePhotoLinkReview = useCallback(() => useStore.setState({ gmiPhotoReviewRequest: null }), []);
   // Staged Edit-mode values and undo/redo live here, never in photoSession; the session only holds the ticket.
   const [photoEdit, dispatchPhotoEdit] = useReducer(photoEditReducer, emptyPhotoEditState);
   const photoEditTicketRef = useRef(null);
@@ -205,6 +208,8 @@ export default function Home() {
   // Rettinger (GMI field corrections) is a sibling of the FOTO and Validator workspaces; FOTO wins if both are requested.
   const gmiEditActive = !workspaceLayer && Boolean(gmiEditLayerId && surveyLayers[gmiEditLayerId]);
   const validatorActive = !workspaceLayer && !gmiEditActive && fieldValidationOpen;
+  // Navigation ends the read-only review and discards its component-local proposals.
+  useEffect(() => { closePhotoLinkReview(); }, [photoWorkspace.layerId, gmiEditLayerId, fieldValidationOpen, activeViewTab, closePhotoLinkReview]);
   // B1.2: main-map analysis (Profilanalyse: modal, split map, selected-pipe styling, profile points and zoom) is
   // suspended in FOTO, Validator and Rettinger. Its store state is kept, so it returns with the main map.
   const mainMapAnalysisSuspended = Boolean(workspaceLayer) || gmiEditActive || validatorActive;
@@ -490,6 +495,10 @@ export default function Home() {
     else if (tool === 'edit') { if (photoWorkspace.mode !== 'edit') requestWorkspaceAction(enterPhotoEditMode); }
     else if (tool === 'sources') openPhotoSources();
     else if (tool === 'info') requestWorkspaceAction(() => setPhotoDialog('info'));
+    else if (tool === 'hyperlink-review') requestWorkspaceAction(() => {
+      photoToolOpenerRef.current = opener;
+      useStore.setState({ gmiPhotoReviewRequest: { kind: 'foto-photo-links', photoLayerId: workspaceLayer.id } });
+    });
     // During a handoff this is the way back, so the task it came from is not lost.
     else if (tool === 'complete') { if (photoExportFlow) leavePhotoEditMode(); else openCompletePhotoDetails(opener); }
     else if (tool === 'export') requestWorkspaceAction(() => { photoToolOpenerRef.current = opener; setPhotoExportReturn(null); setPhotoExportResumed(false); setPhotoDialog('export'); });
@@ -780,8 +789,10 @@ export default function Home() {
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gmi-surface-soft">
       {/* A window drop starts parsing, which unmounts the workspace: refused while a Rettinger form has unsubmitted values. */}
-      <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !photoImport && !workspaceLayer && !(gmiEditActive && gmiEditDraft)} />
+      <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !photoImport && !photoLinkReviewRequest && !workspaceLayer && !(gmiEditActive && gmiEditDraft)} />
       <TestModeActivation />
+      {photoLinkReviewRequest && <PhotoHyperlinkReviewDialog request={photoLinkReviewRequest} onClose={closePhotoLinkReview}
+        openerRef={photoLinkReviewRequest.kind === 'foto-photo-links' ? photoToolOpenerRef : undefined} />}
       {photoImport && <PhotoImportWizard context={photoImport} onClose={closePhotos} onComplete={completePhotoImport} openerRef={photoTriggerRef}
         loadedSources={loadedGmiLayers} onLoadedSource={attachLoadedGmi} />}
       {sourceWorkflowLayer && !photoImport && <PhotoPositioningWizard layer={sourceWorkflowLayer}

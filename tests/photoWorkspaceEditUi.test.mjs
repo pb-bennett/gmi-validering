@@ -89,7 +89,7 @@ test('FOTO workspace: tools, tooltips, filters, inspector, metadata dialog, tran
             focused: document.activeElement?.dataset.tool }; })()`);
         assert.deepEqual(menu.groups, ['Bilder', 'Posisjoner og kilder', 'Eksport', 'Fjerning']);
         assert.equal(menu.separators, 3);
-        assert.deepEqual(menu.items.map((item) => item.label), ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Fullfør opplysninger…', 'Eksporter…', 'Fjern bilder fra laget…']);
+        assert.deepEqual(menu.items.map((item) => item.label), ['Legg til bilder…', 'Juster plassering og retning', 'Koble og posisjoner bilder…', 'Kilder og koblinger', 'Gjennomgå bildelenker på LOK/TOP…', 'Fullfør opplysninger…', 'Eksporter…', 'Fjern bilder fra laget…']);
         assert(menu.items.every((item) => item.svg && item.disabled === null && item.tip === null), 'every item: icon, enabled, no tooltip');
         assert.equal(new Set(menu.items.map((item) => item.className)).size, 1, 'Fullfør opplysninger… is styled exactly like every other item');
         assert(!menu.items.some((item) => /opptaksdata/i.test(item.label)));

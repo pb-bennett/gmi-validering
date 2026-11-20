@@ -47,11 +47,14 @@ test('R3 production: source-bound snapshot selection, full filtered model, teal 
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
       await browser.evaluate(`document.querySelector('[title="Synthetic selection.gmi"]').click()`);
-      await click('Åpne datatabell'); await click('Ledninger', `document.querySelector('[data-table-geometry]')`);
+      await browser.waitFor(`Array.from(document.querySelectorAll('button')).some(e => e.getAttribute('aria-label') === 'Åpne datatabell' || e.innerText.trim() === 'Åpne datatabell')`);
+      await click('Åpne datatabell'); await browser.waitFor('document.querySelector("[data-table-geometry]")'); await click('Ledninger', `document.querySelector('[data-table-geometry]')`);
+      await browser.waitFor(grid);
       assert.equal(await browser.evaluate(`${grid}.querySelectorAll('[data-table-row] input').length`), 0, 'base table has no selection controls');
       await click('Felt', 'document', true); await click('Material', 'document', true);
       await browser.evaluate(`Array.from(document.querySelectorAll('tr')).find(e => e.innerText.includes('PVC')).click()`);
       await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
+      await browser.waitFor(workspace);
       await browser.waitFor(header);
       await browser.waitFor(`${grid}.getAttribute('aria-rowcount') === '41'`);
 

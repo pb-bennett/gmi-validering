@@ -66,9 +66,25 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await value(`document.getElementById('validation-v2-date')`, date);
       });
       const original = await browser.evaluate('document.querySelector("#validation-v2-geometry-panel")?.innerText');
+      // «Lag retting…» awaits the session open. Work done in the same task as the click always lands inside that await:
+      // a deterministic race without CPU load or readiness delays. Map-only layer updates are covered by the unit predicate.
+      const startCorrectionWith = (during) => browser.evaluate(`(() => {
+        const button = Array.from(document.querySelectorAll('button')).find(e => e.innerText.trim() === 'Lag retting…');
+        if (!button || button.disabled) throw new Error('Unavailable: Lag retting…');
+        button.click(); ${during}
+      })()`);
       await t.test('defaults to Original; proposed unavailable without matching session; allow-list action only', async () => {
         assert.equal(await browser.evaluate(`${dataset}.value`), 'original');
         assert.equal(await browser.evaluate(`${dataset}.querySelector('[value=proposed]').disabled`), true);
+        await openSdr();
+        // A genuine basis change (reference date) during the session open fails closed with an explanation.
+        const date = await browser.evaluate(`document.getElementById('validation-v2-date').value`);
+        await startCorrectionWith(`const e = document.getElementById('validation-v2-date');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(e, '2025-01-02'); e.dispatchEvent(new Event('input', { bubbles: true }));`);
+        await browser.waitFor(`Array.from(document.querySelectorAll('[role=alert]')).some(e => /Validator-grunnlaget endret seg/.test(e.innerText))`);
+        assert.equal(await browser.evaluate(`Boolean(${dialog})`), false, 'no Rettinger batch inspector opens on a stale basis');
+        assert.equal(await browser.evaluate(`Boolean(document.getElementById('validation-v2-date'))`), true, 'the Validator stays open');
+        await value(`document.getElementById('validation-v2-date')`, date);
         await openSdr();
         await click('Lag retting…');
         await browser.waitFor(`${dialog}?.dataset.batchStep === '1'`);

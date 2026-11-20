@@ -51,6 +51,20 @@ export async function waitForStableEditTarget(browser, timeoutMs = 5000) {
   throw new Error('The selected marker kept moving');
 }
 
+// Leaflet selection pans and popup autoPan animate the map pane (0.25 s) and can still be running after a workspace
+// transition. Marker rects and hit points read mid-pan are fractional and stale, so wait until the pane stops moving.
+export async function waitForStableMap(browser, timeoutMs = 5000) {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    const stable = await browser.evaluate(`(async () => { const read = () => document.querySelector('.leaflet-map-pane')?.style.transform ?? null;
+      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      const first = read(); await frame(); await frame(); await new Promise((resolve) => setTimeout(resolve, 300)); await frame();
+      return first !== null && first === read(); })()`);
+    if (stable) return;
+  }
+  throw new Error('The map kept moving');
+}
+
 export async function dragSelectedMarker(browser, dx, dy, options) {
   await browser.waitFor(editTarget);
   await waitForStableEditTarget(browser);

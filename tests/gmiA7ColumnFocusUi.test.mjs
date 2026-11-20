@@ -25,6 +25,8 @@ test('A7 production: column priority reports the visible order, including unavai
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
       await browser.evaluate(`document.querySelector('[data-gmi-edit-action]').click()`);
+      // The Rettinger workspace and its table chrome mount asynchronously; wait for the actual geometry tabs.
+      await browser.waitFor('document.querySelector("[data-table-geometry]")');
       await click('Punkter');
       await browser.waitFor(`${grid}?.querySelector('[data-table-row="0"] input')`);
       await browser.evaluate(`${grid}.querySelector('[data-table-row="0"] input').click()`);

@@ -46,6 +46,20 @@ export function prepareValidatorCorrection(session, run, ruleIds) {
 }
 
 export const VALIDATOR_CORRECTION_STALE = 'Kildegrunnlaget for Validator-utvalget er endret. Gå tilbake til Validator og lag et nytt utvalg.';
+export const VALIDATOR_CORRECTION_BASIS_CHANGED = 'Validator-grunnlaget endret seg mens Rettinger ble åpnet. Kontroller resultatet og velg «Lag retting…» på nytt.';
+
+/**
+ * «Lag retting…» awaits the session open. The Validator basis is stale only when the selected layer's source data, the
+ * result or the reference date changed meanwhile, or the layer was removed. Map-only layer updates (terrain, visibility,
+ * highlight) replace the layer object but keep `data`, and are not a source change. Session/source identity is checked
+ * again afterwards by validatorCorrectionSelection.
+ */
+export function validatorCorrectionBasisCurrent(started, live) {
+  const data = started?.layer?.data;
+  return Boolean(data && live?.layer?.data === data && live.storeLayer?.data === data
+    && started.result && live.result === started.result
+    && live.referenceDate === started.referenceDate && live.storeReferenceDate === started.referenceDate);
+}
 
 /** Navigation only: checked source identities, without a field or editing permission. */
 export function validatorSelectionHandoff(handoff, view, layer) {

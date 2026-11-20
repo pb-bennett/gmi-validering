@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useId, useRef, useState } from 'react';
-import { ArrowsOutCardinalIcon, CaretDownIcon, ExportIcon, InfoIcon, ListChecksIcon, MapPinAreaIcon, PlusIcon, TrashIcon, WrenchIcon } from '@phosphor-icons/react';
+import { ArrowsOutCardinalIcon, CaretDownIcon, ExportIcon, InfoIcon, LinkIcon, ListChecksIcon, MapPinAreaIcon, PlusIcon, TrashIcon, WrenchIcon } from '@phosphor-icons/react';
 import { usePhotoIconTooltip } from './PhotoIconButton';
 
 // Workspace- and layer-level tools only. Photo-specific actions (Rediger opptaksdata…) stay in the inspector.
@@ -14,6 +14,7 @@ export const PHOTO_WORKSPACE_TOOLS = Object.freeze([
   { group: 'Posisjoner og kilder', items: [
     { key: 'sources', label: 'Koble og posisjoner bilder…', icon: MapPinAreaIcon, needsPhotos: true },
     { key: 'info', label: 'Kilder og koblinger', icon: InfoIcon },
+    { key: 'hyperlink-review', label: 'Gjennomgå bildelenker på LOK/TOP…', icon: LinkIcon },
   ] },
   { group: 'Eksport', items: [
     { key: 'complete', label: 'Fullfør opplysninger…', icon: ListChecksIcon, needsPhotos: true },

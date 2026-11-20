@@ -5,7 +5,7 @@ import { createGmiSourceDocument, createGmiEditSession, createGmiObjectCorrectio
   discardAllGmiEdits, discardGmiChangeSet, revalidateGmiEditSession, getGmiProposedState, getGmiDocumentDataset, getGmiSourceBytes,
   evaluateGmiBatchEligibility, createGmiBatchCorrection, createGmiProposedCache, compileGmiEffectiveEdits } from '../src/lib/gmi-edit/index.mjs';
 import { CORRECTABLE_RULES, prepareValidatorCorrection, compareGmiValidationRuns, buildGmiValidationComparison,
-  isCurrentGmiComparison, validatorInspectionLayer, validatorCorrectionSelection } from '../src/lib/gmiValidatorEditing.mjs';
+  isCurrentGmiComparison, validatorInspectionLayer, validatorCorrectionSelection, validatorCorrectionBasisCurrent } from '../src/lib/gmiValidatorEditing.mjs';
 const date = '2026-11-09';
 const fresh = (options) => createGmiEditSession(createGmiSourceDocument(gmiEditBatchFixture(options)), { layerId: 'layer-one' });
 const stage = (session, index, values) => {
@@ -162,4 +162,26 @@ test('R5 accepts only exact prepared targets, field, layer, live session and imm
   const changed = { ...layer, data: { ...layer.data, lines: layer.data.lines.map((o) => ({ ...o, guid: 'replaced' })) } };
   assert.equal(validatorCorrectionSelection(correction, view, changed).ok, false);
   assert.equal(validatorCorrectionSelection(correction, null, layer).ok, false);
+});
+
+test('«Lag retting…» session-open race: map-only layer updates keep the basis; source, result and date changes are stale', () => {
+  const data = { points: [], lines: [{ id: 1 }] }, result = { layerId: 'layer-one' }, referenceDate = date;
+  const layer = { id: 'layer-one', data, visible: true, terrain: { data: {}, fetchQueue: [0] } };
+  const started = { layer, result, referenceDate };
+  const live = (changes = {}) => ({ layer, storeLayer: layer, result, referenceDate, storeReferenceDate: referenceDate, ...changes });
+  assert.equal(validatorCorrectionBasisCurrent(started, live()), true);
+  // The reproduced race: terrain (or visibility/highlight) lands during the await and replaces the layer object only.
+  for (const replaced of [{ ...layer, terrain: { data: { 0: { status: 'done', points: [] } }, fetchQueue: [] } }, { ...layer, visible: false }]) {
+    assert.equal(validatorCorrectionBasisCurrent(started, live({ layer: replaced, storeLayer: replaced })), true);
+  }
+  // Genuine staleness still fails closed.
+  const reloaded = { ...layer, data: { ...data } };
+  for (const changes of [
+    { storeLayer: reloaded }, { layer: reloaded, storeLayer: reloaded }, { storeLayer: undefined },
+    { layer: { id: 'layer-two', data: { points: [], lines: [] } } },
+    { result: { layerId: 'layer-one' } }, { result: null },
+    { referenceDate: '2025-01-02' }, { storeReferenceDate: '2025-01-02' },
+  ]) assert.equal(validatorCorrectionBasisCurrent(started, live(changes)), false, JSON.stringify(Object.keys(changes)));
+  assert.equal(validatorCorrectionBasisCurrent({ layer: { id: 'layer-one' }, result, referenceDate }, live()), false, 'no source data');
+  assert.equal(validatorCorrectionBasisCurrent({ layer, result: null, referenceDate }, live({ result: null })), false, 'no result');
 });

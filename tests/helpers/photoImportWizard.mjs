@@ -20,6 +20,8 @@ export async function waitForThumbnails(browser) {
 }
 export async function chooseImportPlacement(browser, kind) {
  if(await browser.evaluate(`${importDialog}?.querySelector('[aria-current="step"]')?.textContent.includes('Bilder')`)) await clickImport(browser,'Neste');
+ // EXIF is read separately from thumbnails; the exif placement is (correctly) disabled until the dialog reports it done.
+ if(kind==='exif') await browser.waitFor(`${importDialog}?.dataset.exifPending === '0'`,60000);
  await browser.evaluate(`(() => {const input=${importDialog}.querySelector('input[name="import-placement"][value="${kind}"]'); if(!input||input.disabled)throw new Error('Unavailable placement ${kind}');input.click();})()`);
 }
 export async function createLayerWithoutPlacement(browser) {

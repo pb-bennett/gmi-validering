@@ -264,6 +264,8 @@ const useStore = create(
         // request from the Data Table. View state only; never GMI data, and
         // not persisted (partialize keeps settings, ui and lastActive).
         gmiValidatorFocus: null,
+        // Ephemeral navigation request, excluded from persistence. Review choices live in the dialog only.
+        gmiPhotoReviewRequest: null,
         // `by` records whether the dataset is the user's explicit choice (H4); navigation defaults are automatic.
         openGmiValidator: (layerId, dataset = 'original', ruleId = null, geometryScope = null, { by = GMI_VALIDATOR_DATASET_BY.AUTO } = {}) => set((state) => ({
           gmiEditWorkspace: null,

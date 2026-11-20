@@ -9,7 +9,7 @@ import { gpsPng, noGpsPng } from './helpers/photoGpsFixtures.mjs';
 import { gmiText } from './helpers/gmiPhotoFixtures.mjs';
 import { applyPhotoSourcePositions, clickSourceControl, setPhotoColourMode, setPhotoFiles, stagePhotoSource, savePhotoSource, closePhotoSources } from './helpers/photoSourceWorkflow.mjs';
 import { PHOTO_POSITION_SOURCES } from '../src/lib/photos/photoMarkerPresentation.mjs';
-import { KEYS, arrowOf, commandBar, discardEdits, dragSelectedMarker, editArrow, editTarget, enterEditMode, pressKey, saveEdits } from './helpers/photoWorkspace.mjs';
+import { KEYS, arrowOf, commandBar, discardEdits, dragSelectedMarker, editArrow, editTarget, enterEditMode, pressKey, saveEdits, waitForStableMap } from './helpers/photoWorkspace.mjs';
 import { confirmSessionReset } from './helpers/sessionReset.mjs';
 
 const app = process.env.PHOTO_UI_URL;
@@ -298,7 +298,9 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
           size:e.getBoundingClientRect().width, border:getComputedStyle(e.querySelector('.photo-thumb')).borderTopColor,
           dot:getComputedStyle(e.querySelector('.photo-thumb-source')).backgroundColor, glyphs:e.querySelectorAll('.photo-source-glyph').length,
           corner:(() => {const a=e.querySelector('.photo-thumb-source').getBoundingClientRect(), b=e.querySelector('.photo-thumb').getBoundingClientRect(); return a.width<=8 && a.height<=8 && Math.abs(a.left-b.left)<=2 && Math.abs(a.bottom-b.bottom)<=2;})() })).sort((a,b)=>a.kind.localeCompare(b.kind))`);
+        // Mid-pan marker rects sit at fractional positions and can lose a float ulp: read the exact 44px geometry at rest.
         await browser.waitFor('document.querySelectorAll(".photo-thumb-source").length === 5');
+        await waitForStableMap(browser);
         const baseline = await badges();
         assert.deepEqual(baseline.map(e=>e.kind), ['exif','gmi','gmi','gml','manual']);
         assert(baseline.every(e=>e.size===44 && e.corner && e.dot===e.border && e.glyphs===0), JSON.stringify(baseline));
@@ -310,6 +312,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         assert(await browser.evaluate(`Boolean(${arrowOf('document.querySelector(".photo-marker-selected")')})`));
         await screenshot('pass1c-four-source-thumbnails-workspace');
         await click('Lukk FOTO'); await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
+        await waitForStableMap(browser);
         // Slice 2: the main map always colours by delivery choice. Same thumbnails, sources kept as data, delivery fills.
         const main = await badges();
         assert.deepEqual(main.map(({ kind, size, corner, glyphs }) => ({ kind, size, corner, glyphs })),
