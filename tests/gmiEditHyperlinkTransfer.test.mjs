@@ -541,9 +541,13 @@ test('the transfer planner is not runtime-wired and imports no session, store or
   }
   const verifier = await read('../src/lib/gmi-edit/hyperlinkTransferVerify.mjs');
   assert(!/hyperlinkTransfer\.mjs|hyperlinkRemoval\.mjs/.test(verifier), 'the verifier shares no planner code');
-  // No application module outside the pure gmi-edit library calls the planner or builds a proposal.
+  // No application module outside the pure gmi-edit library calls the planner or builds a proposal. Batch 1B.2A adds
+  // one internal consumer, the FOTO transfer transaction, which reaches the planner only through
+  // gmi-edit/hyperlinkTransferCommit.mjs; that nothing in the application calls the transaction is the 1B.2A
+  // contract in photoHyperlinkTransferTransaction.test.mjs.
   const root = fileURLToPath(new URL('../src/', import.meta.url));
-  const files = (await readdir(root, { recursive: true })).filter((name) => /\.(m?js|jsx)$/.test(name) && !/^lib[\\/]gmi-edit[\\/]/.test(name));
+  const transaction = path.join('lib', 'photos', 'photoHyperlinkTransfer.mjs');
+  const files = (await readdir(root, { recursive: true })).filter((name) => /\.(m?js|jsx)$/.test(name) && !/^lib[\\/]gmi-edit[\\/]/.test(name) && name !== transaction);
   for (const name of files) {
     const text = await readFile(path.join(root, name), 'utf8');
     assert(!/planGmiHyperlinkTransfer|buildGmiHyperlinkTransferProposal|verifyGmiHyperlinkTransfer|hyperlinkTransfer(Verify)?\.mjs/.test(text), `${name} must not wire the transfer`);

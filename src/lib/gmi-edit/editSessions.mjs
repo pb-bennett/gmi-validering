@@ -32,8 +32,8 @@
 // caller reported starting the download; the browser cannot confirm the save.
 import { getGmiSourceBytes, gmiSourceIntact, isGmiSourceDocument, loadGmiSourceDocument, computeGmiSourceFingerprint } from './sourceDocument.mjs';
 import {
-  compileGmiEffectiveEdits, createGmiEditSession, discardAllGmiEdits, discardGmiChangeSet, getGmiEditCell,
-  listGmiEditCells, redoGmiEdit, stageGmiChangeSet, summarizeGmiEditSession, undoGmiEdit,
+  createGmiEditSession, discardAllGmiEdits, discardGmiChangeSet, getGmiEditCell, gmiSessionEffectiveKey, gmiSessionRevision,
+  listGmiEditCells, redoGmiEdit, stageGmiChangeSet, stageGmiHyperlinkTransferSet, summarizeGmiEditSession, undoGmiEdit,
 } from './session.mjs';
 import { defaultGmiProposedCache, getGmiDocumentDataset, getGmiProposedState, revalidateGmiEditSession } from './proposed.mjs';
 import { evaluateGmiBatchEligibility } from './eligibility.mjs';
@@ -85,6 +85,9 @@ function sameDatasetShape(document, data) {
 export function createGmiEditSessions({
   sources, getLayer, isGmiLayer = (layer) => Boolean(layer?.data), cache = defaultGmiProposedCache,
   onChange = () => {}, loadDocument = loadGmiSourceDocument,
+  // Test seam (Batch 1B.2A): called inside a transfer commit after the new session is assigned and before it is
+  // published; a throw there must roll the commit back.
+  commitFault = null,
 } = {}) {
   if (!sources || typeof sources.begin !== 'function' || typeof sources.readBytes !== 'function' || typeof sources.isLive !== 'function') {
     throw new TypeError('createGmiEditSessions needs sources with begin, readBytes and isLive');
@@ -98,7 +101,7 @@ export function createGmiEditSessions({
 
   // ------------------------------------------------------------- status
 
-  const effectiveKeyOf = (entry) => compileGmiEffectiveEdits(entry.session).effectiveKey;
+  const effectiveKeyOf = (entry) => gmiSessionEffectiveKey(entry.session);
 
   function isUnsaved(entry) {
     if (entry?.phase !== 'ready') return false;
@@ -307,6 +310,34 @@ export function createGmiEditSessions({
     return Object.freeze({ ...result, status: statusOf(entry) });
   }
 
+  /**
+   * Internal (Batch 1B.2A): commit one prepared hyperlink transfer set as a
+   * single history transition. `session` is the exact session value the set
+   * was prepared and verified against; any other current value is refused
+   * (`stale-session-state`). The new session is published once; a failure
+   * while publishing restores the previous session and republishes it, so no
+   * history entry remains.
+   */
+  function commitHyperlinkTransfer(handle, { session, transferSet } = {}) {
+    const resolved = resolve(handle);
+    if (!resolved.ok) return resolved;
+    const { entry } = resolved;
+    if (entry.session !== session) return fail('stale-session-state', { layerId: entry.layerId });
+    const staged = stageGmiHyperlinkTransferSet(entry.session, transferSet);
+    if (!staged.ok) return staged;
+    const previous = entry.session;
+    entry.session = staged.session;
+    try {
+      commitFault?.('publish');
+      publish(entry);
+    } catch {
+      entry.session = previous;
+      try { publish(entry); } catch { /* the restored session is authoritative; observers re-read it */ }
+      return fail('commit-failed', { layerId: entry.layerId });
+    }
+    return Object.freeze({ ok: true, session: entry.session, transferSetId: transferSet.id, status: statusOf(entry) });
+  }
+
   // ------------------------------------------------------------- disposal
 
   /**
@@ -434,6 +465,9 @@ export function createGmiEditSessions({
     verifySource,
     markDownloaded,
     effectiveKey: (handle) => withSession(handle, (entry) => Object.freeze({ ok: true, effectiveKey: effectiveKeyOf(entry) })),
+    /** Revision signal: history state, proposed-copy identity and the active hyperlink transfer (if any). */
+    revision: (handle) => withSession(handle, (entry) => Object.freeze({ ok: true, revision: entry.revision, ...gmiSessionRevision(entry.session) })),
+    commitHyperlinkTransfer,
     dispose,
     reconcile,
     clear,

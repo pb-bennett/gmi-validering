@@ -1,8 +1,9 @@
 // Proposed GMI state for field editing (M2).
 //
 // The proposed copy is always derived from the immutable original document:
-//   compileGmiEffectiveEdits(session)   one edit per changed cell, expected =
-//                                        the original source lexeme
+//   compileGmiProposedEdits(session)    one edit per changed cell, expected =
+//                                        the original source lexeme (field edits
+//                                        plus any active hyperlink transfer)
 //   editGmiFields(document, edits)      one M1 plan -> splice -> independent
 //                                        verification
 //   verification.outputDocument         the verified output as a new frozen
@@ -21,7 +22,8 @@ import { runGmiValidationV2 } from '../validation-v2/validationRunner.js';
 import { getDatasetRevision } from '../validation-v2/datasetRevision.js';
 import { getGmiSourceBytes, gmiSourceIntact } from './sourceDocument.mjs';
 import { editGmiFields } from './patch.mjs';
-import { compileGmiEffectiveEdits, isGmiEditSession } from './session.mjs';
+import { compileGmiProposedEdits, isGmiEditSession } from './session.mjs';
+import { verifyGmiHyperlinkTransfer } from './hyperlinkTransferVerify.mjs';
 
 const datasets = new WeakMap();   // source document -> dataset
 
@@ -100,10 +102,27 @@ function computeProposed(session, compiled) {
   if (!result.ok) {
     return Object.freeze({ ok: false, kind: 'gmi-proposed-state', effectiveKey: compiled.effectiveKey, stage: result.stage, rejections: result.rejections });
   }
+  // Batch 1B.2A: an active hyperlink transfer is checked by the independent
+  // transfer verifier on every computation (original bytes, output bytes, the
+  // recorded decisions and the authorized field edits); nothing is trusted
+  // from the stored plan.
+  let transfer = null;
+  if (compiled.transfer) {
+    const checked = verifyGmiHyperlinkTransfer(document, result.bytes, {
+      documentFingerprint: compiled.transfer.basis.documentFingerprint,
+      photoSourceId: compiled.transfer.basis.photoSourceId,
+      transfers: compiled.transfer.decisions,
+      fieldEdits: compiled.fieldEdits.map((edit) => ({ target: edit.target, lexeme: edit.lexeme })),
+    });
+    if (!checked.ok) return Object.freeze({ ok: false, kind: 'gmi-proposed-state', effectiveKey: compiled.effectiveKey, stage: 'verify-transfer', rejections: checked.failures });
+    transfer = Object.freeze({ transferSetId: compiled.transfer.id, planKey: compiled.transfer.planKey, transfers: compiled.transfer.transfers,
+      summary: checked.summary ?? null });
+  }
   const output = result.verification.outputDocument;
   return Object.freeze({
     ok: true, kind: 'gmi-proposed-state', effectiveKey: compiled.effectiveKey,
     identical: false, editCount: compiled.edits.length, edits: compiled.edits,
+    fieldEditCount: compiled.fieldEdits.length, hyperlinkTransfer: transfer,
     document: output, dataset: getGmiDocumentDataset(output),
     verification: Object.freeze({ ok: true, summary: result.verification.summary ?? null }),
   });
@@ -118,7 +137,7 @@ function computeProposed(session, compiled) {
  */
 export function getGmiProposedState(session, { cache = defaultGmiProposedCache } = {}) {
   if (!isGmiEditSession(session)) throw new TypeError('getGmiProposedState expects a GMI edit session');
-  const compiled = compileGmiEffectiveEdits(session);
+  const compiled = compileGmiProposedEdits(session);
   if (!compiled.ok) return Object.freeze({ ok: false, kind: 'gmi-proposed-state', stage: 'compile', rejections: Object.freeze([Object.freeze({ code: compiled.code })]) });
   const { document } = session;
   const cached = cache.get(document, compiled.effectiveKey);

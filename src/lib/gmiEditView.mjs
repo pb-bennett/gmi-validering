@@ -135,6 +135,7 @@ const MESSAGES = Object.freeze({
   'structural-difference': 'Kontrollen fant endringer utenfor feltverdiene. Ingen fil ble laget.',
   'state-changed': 'Rettingene ble endret mens filen ble laget. Prøv igjen.',
   'output-integrity': 'Kontrollen av den reviderte filen feilet. Ingen fil ble laget.',
+  'hyperlink-transfer-export-unsupported': 'Bildelenker flyttet til et annet punktobjekt kan ikke eksporteres ennå. Angre flyttingen før du lager filen.',
   'invalid-date': 'Tidspunktet for filnavnet er ugyldig.',
   'filename-empty': 'Filnavnet er tomt.',
   'filename-reserved': 'Filnavnet er reservert i Windows.',

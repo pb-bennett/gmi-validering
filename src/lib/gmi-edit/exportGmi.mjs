@@ -24,6 +24,7 @@
 import { computeGmiSourceFingerprint, getGmiSourceBytes, gmiSourceIntact } from './sourceDocument.mjs';
 import { getGmiDocumentDataset } from './proposed.mjs';
 import { diffGmiDatasets } from './diff.mjs';
+import { activeGmiHyperlinkTransferSet } from './session.mjs';
 import { photoExportNames, ExportFilenameError, EXPORT_FILENAME_ISSUES } from '../photos/export/photoExportNaming.mjs';
 
 // Opaque bytes: no charset, so nothing between here and disk re-encodes them.
@@ -33,6 +34,8 @@ export const GMI_EXPORT_FAILURES = Object.freeze([
   'invalid-handle', 'session-disposed', 'stale-session', 'source-identity-mismatch', 'fingerprint-mismatch',
   'source-stale', 'source-bytes-mutated', 'source-unreadable', 'source-fingerprint-mismatch', 'loaded-gmi-unreadable',
   'document-read-only', 'verification-failed', 'structural-difference', 'state-changed', 'output-integrity', 'invalid-date',
+  // Batch 1B.2A: revised GMI exports do not compose hyperlink transfers yet (Batch 1B.3); fail closed.
+  'hyperlink-transfer-export-unsupported',
   ...EXPORT_FILENAME_ISSUES,
 ]);
 
@@ -67,6 +70,7 @@ export function getGmiExportReadiness(registry, handle) {
   if (!resolved.ok) return Object.freeze({ ready: false, blocking: Object.freeze([resolved.code]), notes: Object.freeze([]), counts: null });
   const blocking = [], notes = [];
   if (!resolved.document.editable) blocking.push('document-read-only');
+  if (activeGmiHyperlinkTransferSet(resolved.session)) blocking.push('hyperlink-transfer-export-unsupported');
   const proposed = registry.proposed(handle);
   if (!proposed.ok) blocking.push('verification-failed');
   else if (proposed.identical) notes.push('no-changes');
@@ -94,6 +98,7 @@ export async function buildGmiFieldExport(registry, handle, { date = new Date(),
   if (!start.ok) return fail(start.code);
   const { session, document } = start;
   if (!document.editable) return fail('document-read-only', { documentStatus: document.status, reasons: document.reasons });
+  if (activeGmiHyperlinkTransferSet(session)) return fail('hyperlink-transfer-export-unsupported');
 
   const proposed = registry.proposed(handle);
   if (!proposed.ok) return fail(proposed.code ?? 'verification-failed', { stage: proposed.stage ?? null, rejections: proposed.rejections ?? Object.freeze([]) });

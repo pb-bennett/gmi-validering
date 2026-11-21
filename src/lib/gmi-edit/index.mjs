@@ -34,9 +34,12 @@ export {
   isGmiFieldEditReservedColumn,
 } from './changeSet.mjs';
 export {
+  GMI_HYPERLINK_TRANSFER_SET_KIND,
+  activeGmiHyperlinkTransferSet,
   canRedoGmiEdit,
   canUndoGmiEdit,
   compileGmiEffectiveEdits,
+  compileGmiProposedEdits,
   createGmiBatchCorrection,
   createGmiEditSession,
   createGmiFieldChangeSet,
@@ -44,7 +47,10 @@ export {
   discardAllGmiEdits,
   discardGmiChangeSet,
   getGmiEditCell,
+  gmiSessionEffectiveKey,
+  gmiSessionRevision,
   isGmiEditSession,
+  isGmiHyperlinkTransferSet,
   listGmiEditCells,
   redoGmiEdit,
   stageGmiChangeSet,
@@ -104,3 +110,9 @@ export {
   planGmiHyperlinkTransfer,
 } from './hyperlinkTransfer.mjs';
 export { verifyGmiHyperlinkTransfer } from './hyperlinkTransferVerify.mjs';
+
+// Batch 1B.2A (internal transfer history entry; not user-reachable): see
+// docs/agent-reports/*-hyperlink-transfer-batch1b2a-completion.md. The entry is
+// created/staged only through these preparation functions and committed only
+// through the session registry's commitHyperlinkTransfer.
+export { buildGmiHyperlinkTransferCommit, planGmiHyperlinkTransferCommit } from './hyperlinkTransferCommit.mjs';

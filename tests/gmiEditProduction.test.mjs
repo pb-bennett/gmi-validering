@@ -377,6 +377,9 @@ test('gmi-edit stays a browser-safe core: no node:, test, photo or UI imports; t
   // Batch 1B.1 (pure hyperlink transfer planner and independent verifier):
   // the same two external imports as M7, nothing else.
   const b1 = ['hyperlinkTransfer.mjs', 'hyperlinkTransferVerify.mjs'];
+  // Batch 1B.2A (internal transfer history entry preparation): gmi-edit
+  // imports only, no photo, store or UI import.
+  const b2a = ['hyperlinkTransferCommit.mjs'];
   const extraAllowed = {
       'dryRun.mjs': ['../validation-v2/findingDiff.js'],
     'exportGmi.mjs': ['../photos/export/photoExportNaming.mjs'],
@@ -384,7 +387,7 @@ test('gmi-edit stays a browser-safe core: no node:, test, photo or UI imports; t
     'hyperlinkTransfer.mjs': ['../hyperlinkFilenames.mjs', '../photos/gmiPhotoSource.mjs'],
     'hyperlinkTransferVerify.mjs': ['../hyperlinkFilenames.mjs', '../photos/gmiPhotoSource.mjs'],
   };
-    assert.deepEqual(files.sort(), [...m1, ...m2, ...m3, ...m7, ...b1, ...g3, 'index.mjs'].sort());
+    assert.deepEqual(files.sort(), [...m1, ...m2, ...m3, ...m7, ...b1, ...b2a, ...g3, 'index.mjs'].sort());
   for (const name of files) {
     const source = await readFile(path.join(directory, name), 'utf8');
     for (const [, specifier] of source.matchAll(/from\s+'([^']+)'/g)) {

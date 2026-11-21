@@ -62,6 +62,7 @@ const messages = {
   'attachment-size-mismatch': 'En originalfil kunne ikke leses i sin helhet. Last inn filen på nytt.',
   'attachment-changed': 'En originalfil er endret etter kontrollen. Gå tilbake og kontroller leveransen på nytt.',
   'stale-plan': 'Data eller valg er endret etter kontrollen. Gå tilbake til Innhold og kontroller leveransen på nytt.',
+  'hyperlink-transfer-export-unsupported': 'Bildelenker flyttet til et annet punktobjekt kan ikke eksporteres ennå. Angre flyttingen i Rettinger før du lager leveransen.',
   'blocked-plan': 'Leveransen har blokkerende feil. Rett feilene og kontroller på nytt.',
   'foreign-exclusion-source': 'En utelatt plassering gjelder en annen GMI-kilde. Avklar leveringsvalget i FOTO eller lag en egen leveranse for kilden.',
   'multi-link-wrapper': 'Bildelenken kan ikke fjernes sikkert: samme omslag inneholder flere lenker. Behold plasseringen i GMI eller avklar kildefilen.',

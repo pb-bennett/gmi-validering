@@ -1,6 +1,7 @@
 import { buildGmiFieldExport, getGmiExportBytes } from '../gmi-edit/exportGmi.mjs';
 import { planGmiHyperlinkRemoval, applyGmiHyperlinkRemoval } from '../gmi-edit/hyperlinkRemoval.mjs';
 import { gmiSourceIntact } from '../gmi-edit/sourceDocument.mjs';
+import { activeGmiHyperlinkTransferSet } from '../gmi-edit/session.mjs';
 import { getGmiDocumentDataset } from '../gmi-edit/proposed.mjs';
 import { diffGmiDatasets } from '../gmi-edit/diff.mjs';
 import { capturePhotoExportSnapshot, buildPhotoExportPlan, assertExportablePlan } from '../photos/export/photoExportPlan.mjs';
@@ -86,6 +87,25 @@ function deliveryPhotoAccounting(snapshot, removal, attachments, photoPlan, erro
   };
 }
 
+/** Batch 1B.2A: whether the delivery's GMI session, or a session bound to the
+ * photo layer's GMI source, holds an active hyperlink transfer. Every mode
+ * fails closed then: neither the revised GMI nor the GML can yet carry the
+ * transferred ownership and position (export composition is Batch 1B.3). */
+function hasActiveHyperlinkTransfer({ registry, handle, photoSession, photoLayerId }) {
+  if (!registry || typeof registry.resolve !== 'function') return false;
+  const handles = handle ? [handle] : [];
+  const layer = photoLayerId ? photoSession?.getLayer?.(photoLayerId) : null;
+  for (const source of layer?.spatialSources || []) {
+    if (source.kind !== 'gmi' || !source.loadedBinding?.layerId) continue;
+    const bound = registry.getHandle?.(source.loadedBinding.layerId);
+    if (bound) handles.push(bound);
+  }
+  return handles.some((item) => {
+    const resolved = registry.resolve(item);
+    return resolved.ok && Boolean(activeGmiHyperlinkTransferSet(resolved.session));
+  });
+}
+
 /** Capture canonical owners, without staging edits or changing FOTO intent.
  * registry/handle are the existing M3 service and its opaque handle. Split with
  * pending corrections requires includeFieldChanges:false as an explicit choice.
@@ -105,12 +125,14 @@ export function captureDeliverySnapshot({ mode = 'combined', registry, handle, p
       const current = registry.resolve(handle);
       if (!current.ok || current.session !== gmi.session || current.document !== gmi.document || !gmiSourceIntact(gmi.document)) return false;
     }
+    // A transfer committed after capture invalidates every mode, including GML-only packages.
+    if (hasActiveHyperlinkTransfer({ registry, handle, photoSession, photoLayerId })) return false;
     return (!photo || photo.isLive()) && (!deliveryChoices || photoSession.isPhotoDeliverySnapshotCurrent(deliveryChoices));
   };
   const snapshot = Object.freeze({ kind: 'delivery-snapshot', mode, photo, intent, source, deliveryChoices,
     sourceFingerprint: gmi?.document.fingerprint ?? null, includeFieldChanges: mode !== 'split', isLive });
   snapshots.set(snapshot, { registry, handle, gmi, effectiveKey: gmi ? registry.effectiveKey(handle).effectiveKey : null,
-    explicitExclusion: includeFieldChanges === false });
+    explicitExclusion: includeFieldChanges === false, transferScope: { registry, handle, photoSession, photoLayerId } });
   return snapshot;
 }
 
@@ -128,6 +150,7 @@ export async function buildDeliveryPlan(snapshot, configuration = {}, { now = ()
   catch (failure) { throw failure instanceof ExportFilenameError ? new DeliveryError(failure.code) : failure; }
   const naming = { ...names, gmiFilename: `${names.basename}.gmi` };
   try {
+    if (hasActiveHyperlinkTransfer(basis.transferScope)) throw new DeliveryError('hyperlink-transfer-export-unsupported');
     if (!snapshot.isLive()) throw new DeliveryError('stale-plan');
     const { registry, handle, gmi } = basis;
     const photoOptions = { ...configuration, profile: configuration.profile ?? 'gemini-legacy2019' };
