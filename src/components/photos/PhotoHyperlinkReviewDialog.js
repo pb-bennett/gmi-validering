@@ -11,13 +11,14 @@ import { getDatasetRevision } from '@/lib/validation-v2/datasetRevision';
 import { photoPositionDistance } from '@/lib/photos/photoPositioning.mjs';
 import { gmiObjectLabel } from '@/lib/photos/gmiPhotoSource.mjs';
 import { photoDeliveryStatusText } from '@/lib/photos/photoDeliveryChoice.mjs';
-import { detectPhotoLinkReview, emptyPhotoLinkReviewChoices, photoLinkReviewCandidates, photoLinkReviewDataset,
-  photoLinkReviewHandoffIsCurrent, photoLinkReviewProposal, PHOTO_LINK_REVIEW_STALE, PHOTO_LINK_SHAPE_LABELS,
+import { detectPhotoLinkReview, emptyPhotoLinkReviewChoices, photoLinkReviewCandidates, photoLinkReviewDataset, photoLinkReviewDecisions,
+  photoLinkReviewHandoffIsCurrent, photoLinkReviewProgress, PHOTO_LINK_OUTCOME_LABELS, PHOTO_LINK_REVIEW_STALE, PHOTO_LINK_SHAPE_LABELS,
   reducePhotoLinkReviewChoices } from '@/lib/photos/photoHyperlinkReview.mjs';
 import useGmiEditLayer from '@/components/gmi-edit/useGmiEditLayer';
 import usePhotoSession from './usePhotoSession';
 import PhotoIconButton from './PhotoIconButton';
 import PhotoImportPreview from './PhotoImportPreview';
+import './photoTheme.css';
 import './photoHyperlinkReview.css';
 
 const ReviewMap = dynamic(() => import('./PhotoHyperlinkReviewMap'), { ssr: false });
@@ -42,107 +43,208 @@ function ObjectFacts({ object, source }) {
 }
 
 function Cells({ object }) {
-  return <div className="photo-link-cells">{object.cells.length ? object.cells.map((cell) => <div key={cell.field}>
-    <strong>{cell.field}</strong><p>{PHOTO_LINK_SHAPE_LABELS[cell.shape]}{!cell.canonical && ' · Avvikende kolonnenavn'}</p><pre>{rawText(cell.raw) || '(tomt)'}</pre>
-  </div>) : <p>Lenkekolonnen mangler. Ingen kolonne opprettes.</p>}</div>;
+  return <details className="photo-link-facts"><summary className="gmi-focus-ring">Lenkefelt med rå uttrykk</summary>
+    <div className="photo-link-cells">{object.cells.length ? object.cells.map((cell) => <div key={cell.field}>
+      <strong>{cell.field}</strong><p>{PHOTO_LINK_SHAPE_LABELS[cell.shape]}{!cell.canonical && ' · Avvikende kolonnenavn'}</p><pre>{rawText(cell.raw) || '(tomt)'}</pre>
+    </div>) : <p>Lenkekolonnen mangler. Ingen kolonne opprettes.</p>}</div>
+  </details>;
 }
 
-function ReviewBody({ model }) {
+const objectName = (object) => `${object.tema || 'Uavklart Tema'} · ${object.pointName}`;
+const resolutionText = (resolution) => resolution?.status === 'confident'
+  ? `Sikkert filtreff i valgt fotolag (${resolution.method?.includes('basename') ? 'unikt filnavn' : 'sti'})`
+  : resolution?.status === 'ambiguous' ? `Tvetydig filtreff: ${resolution.photoIds.length} importerte kopier. Avklar kopiene i FOTO.`
+    : resolution?.status === 'invalid' ? 'Ikke en gyldig bildereferanse. Kontroller originalfeltet og filtypen.'
+      : resolution?.reason === 'unsafe-reference' ? 'Ekstern adresse eller utrygg sti brukes ikke. Avklar en lokal filreferanse i originalgrunnlaget.'
+        : 'Bildefilen mangler i valgt fotolag. Legg til bildene eller velg riktig fotolag.';
+const groupName = (group) => group.references[0].filename || 'Ugyldig mål';
+
+function Issues({ blocking = [], warnings = [], omit = [] }) {
+  const shown = [...blocking, ...warnings].filter((entry) => !omit.includes(entry.code));
+  return shown.length ? <ul className="photo-link-issues">{shown.map((entry) => <li key={entry.code} className="gmi-validation-accent"
+    data-validation-tone={entry.blocking ? 'error' : 'warning'}>{entry.blocking ? 'Må avklares: ' : 'Merknad: '}{entry.text}</li>)}</ul> : null;
+}
+
+function References({ group }) {
+  return <details className="photo-link-facts"><summary className="gmi-focus-ring">Rå lenkeuttrykk ({group.references.length})</summary>
+    {group.references.map((reference) => <div key={reference.id} className="photo-link-reference"><code>{reference.referenceRaw}</code>
+      <small>Uttrykk {reference.wrapperOrdinal === null ? 'bart' : reference.wrapperOrdinal + 1} · medlem {reference.memberOrdinal + 1} · {reference.id}</small>
+      {reference.identicalRawReferenceIds.length > 1 && <p>Samme rå referanse forekommer {reference.identicalRawReferenceIds.length} ganger i kilden. Dette bekrefter ikke samme bildefil.</p>}
+    </div>)}
+  </details>;
+}
+
+function PositionEvidence({ row, decision }) {
+  const target = decision?.target;
+  return <details className="photo-link-facts"><summary className="gmi-focus-ring">Posisjoner og Z-evidens</summary>
+    <p>Original {row.tema || 'LOK/TOP'}: {position(row.placement?.position)} · Z: {number(row.rawGeometry?.[0]?.z)}</p>
+    {row.relatedPhotos.map((entry) => {
+      const acceptedCandidate = entry.spatial.candidates.find((candidate) => candidate.id === entry.spatial.current?.basis?.candidateId);
+      return <div key={entry.id}><p>Akseptert nå ({entry.originalFilename} · {entry.occurrence?.object ? gmiObjectLabel(entry.occurrence.object) : 'uten GMI-plassering'}, {entry.spatial.current ? acceptanceLabel(entry.spatial.current.acceptance) : 'ingen'}): {position(entry.spatial.current?.position)}
+        {target && ` · Nå → mottaker, XY: ${distance(photoPositionDistance(entry.spatial.current?.position, target.placement?.position))}`}</p>
+        <pre>{acceptedCandidate ? rawText({ kilde: acceptedCandidate.kind, rådata: acceptedCandidate.raw }) : 'Ingen rå Z-evidens knyttet til nåværende plassering. Høyde er ikke antatt.'}</pre></div>;
+    })}
+    {!row.relatedPhotos.length && <p>Ingen sikkert tilknyttet FOTO-plassering. Ingen akseptert posisjon er antatt.</p>}
+    {target && <><p>Foreslått mottaker: {position(target.placement?.position)} · Z: {number(target.rawGeometry?.[0]?.z)}</p>
+      <p>Original → mottaker, ΔZ: {number(decision.candidate.deltaZ)}{decision.candidate.deltaZ !== null ? ' (rå differanse, uten vertikal transformasjon)' : ''}</p></>}
+    <p>Z er rå evidens. Høydereferanse og mottakerens tolkning må avklares; høyder endres ikke.</p>
+  </details>;
+}
+
+function ControlStep({ decisions, progress, headingRef, onEdit }) {
+  return <section className="photo-link-control" aria-labelledby="photo-link-control-heading">
+    <h3 id="photo-link-control-heading" ref={headingRef} tabIndex={-1}>Kontroll</h3>
+    <p>{progress.allResolved ? 'Alle valgte beslutninger er avklart.' : `${progress.unresolved} av ${progress.selected} beslutninger må avklares.`} {progress.unchangedReferences} bildereferanser er ikke valgt og forblir uendret.</p>
+    <table>
+      <thead><tr><th scope="col">Bilde og referanser</th><th scope="col">Kilde</th><th scope="col">Handling</th><th scope="col">Mottaker</th><th scope="col">XY-avstand</th><th scope="col">Status og merknader</th><th scope="col"><span className="sr-only">Endre</span></th></tr></thead>
+      <tbody>{decisions.map((entry) => <tr key={entry.key} data-decision-key={entry.key} data-resolved={entry.resolved}>
+        <td><strong>{groupName(entry.group)}</strong><References group={entry.group} /></td>
+        <td>{objectName(entry.row)}{entry.row.identifierText && <small>{entry.row.identifierText}</small>}</td>
+        <td>{PHOTO_LINK_OUTCOME_LABELS[entry.outcome]}{entry.deliveryEntry && <small>Nå: {photoDeliveryStatusText(entry.deliveryEntry)}</small>}</td>
+        <td>{entry.outcome !== 'move' ? '–' : entry.target ? objectName(entry.target) : 'Ikke valgt'}</td>
+        <td className="photo-link-number">{entry.outcome === 'move' && entry.target ? distance(entry.distanceMetres) : '–'}</td>
+        <td><span className="photo-link-state" data-resolved={entry.resolved}>{entry.resolved ? 'Avklart' : 'Uavklart'}</span><Issues blocking={entry.blocking} warnings={entry.warnings} /></td>
+        <td><button type="button" className={button} aria-label={`Endre ${groupName(entry.group)} på ${entry.row.pointName}`} onClick={() => onEdit(entry)}>Endre</button></td>
+      </tr>)}</tbody>
+    </table>
+  </section>;
+}
+
+function ReviewBody({ model, onClose }) {
   'use no memo';
   const [choices, setChoices] = useState(emptyPhotoLinkReviewChoices);
   const [focusedOnly, setFocusedOnly] = useState(model.restricted);
   const [query, setQuery] = useState('');
   const [targetQuery, setTargetQuery] = useState('');
   const [activeKey, setActiveKey] = useState(() => model.rows.find((row) => row.focused)?.objectKey || '');
+  const [activeDecisionKey, setActiveDecisionKey] = useState(null);
   const [candidatePage, setCandidatePage] = useState(0);
   const [photoId, setPhotoId] = useState(null);
-  const rows = model.rows.filter((row) => (!focusedOnly || row.focused) && `${row.label} ${row.guid || ''} ${row.tema || ''} ${row.sourceIndex}`.toLocaleLowerCase('nb-NO').includes(query.toLocaleLowerCase('nb-NO')));
+  const [step, setStep] = useState('pairing');
+  const [pendingFocus, setPendingFocus] = useState(null);
+  const controlHeading = useRef(null), bodyRef = useRef(null);
+  const rows = model.rows.filter((row) => (!focusedOnly || row.focused) && `${row.pointName} ${row.identifierText} ${row.guid || ''} ${row.tema || ''} ${row.sourceIndex}`.toLocaleLowerCase('nb-NO').includes(query.toLocaleLowerCase('nb-NO')));
   const row = rows.find((entry) => entry.objectKey === activeKey) || rows[0];
-  const candidates = row ? photoLinkReviewCandidates(model, row) : [];
-  const filteredCandidates = candidates.filter(({ target }) => `${target.label} ${target.guid || ''} ${target.sourceIndex}`.toLocaleLowerCase('nb-NO').includes(targetQuery.toLocaleLowerCase('nb-NO')));
-  const page = Math.min(candidatePage, Math.max(0, Math.ceil(filteredCandidates.length / 20) - 1));
-  const selected = candidates.find((entry) => entry.target.objectKey === choices.targets[row?.objectKey]);
+  const candidates = useMemo(() => row ? photoLinkReviewCandidates(model, row) : [], [model, row]);
+  const decisions = useMemo(() => photoLinkReviewDecisions(model, choices), [model, choices]);
+  const progress = photoLinkReviewProgress(model, decisions);
+  const decisionByKey = new Map(decisions.map((entry) => [entry.key, entry]));
+  const activeGroup = row?.groups.find((group) => group.decisionKey === activeDecisionKey && decisionByKey.has(group.decisionKey));
+  const activeDecision = activeGroup ? decisionByKey.get(activeGroup.decisionKey) : null;
+  const pairing = activeDecision?.outcome === 'move';
+  const filteredCandidates = candidates.filter(({ target }) => `${target.tema || ''} ${target.pointName} ${target.identifierText} ${target.guid || ''} ${target.sourceIndex}`.toLocaleLowerCase('nb-NO').includes(targetQuery.toLocaleLowerCase('nb-NO')));
+  const pages = Math.max(1, Math.ceil(filteredCandidates.length / 20)), page = Math.min(candidatePage, pages - 1);
+  const pageCandidates = filteredCandidates.slice(page * 20, page * 20 + 20);
+  const selected = pairing && activeDecision.target ? candidates.find((entry) => entry.target.objectKey === activeDecision.target.objectKey) : null;
   const previewPhotos = row?.groups.flatMap((group) => group.photos) || [];
   const photo = previewPhotos.find((entry) => entry.id === photoId) || previewPhotos[0];
-  const proposal = row ? photoLinkReviewProposal(model, row, choices) : null;
-  const choose = (action) => setChoices((state) => reducePhotoLinkReviewChoices(state, { objectKey: row.objectKey, ...action }, model));
+  const choose = (group, action) => setChoices((state) => reducePhotoLinkReviewChoices(state, { objectKey: row.objectKey, groupKey: group.key, ...action }, model));
+  const openRow = (entry, decisionKey = entry.groups.find((group) => choices.decisions[group.decisionKey]?.outcome === 'move')?.decisionKey || null) => {
+    setActiveKey(entry.objectKey); setActiveDecisionKey(decisionKey); setPhotoId(null); setCandidatePage(0); setTargetQuery('');
+  };
+  useEffect(() => {
+    if (step === 'kontroll') controlHeading.current?.focus();
+  }, [step]);
+  useEffect(() => {
+    if (!pendingFocus || step !== 'pairing') return;
+    bodyRef.current?.querySelector(`[data-decision-key="${CSS.escape(pendingFocus)}"] input[type=checkbox]`)?.focus();
+    setPendingFocus(null);
+  }, [pendingFocus, step]);
+  const edit = (entry) => {
+    if (!entry.row.focused) setFocusedOnly(false);
+    setQuery(''); openRow(entry.row, entry.key); setStep('pairing'); setPendingFocus(entry.key);
+  };
   const id = useId();
   return <>
-    <div className="photo-link-filter">
-      {model.restricted && <label><input type="checkbox" className="accent-gmi-interactive gmi-focus-ring" checked={focusedOnly} onChange={(event) => setFocusedOnly(event.target.checked)} /> Kun Validator-utvalget ({model.rows.filter((entry) => entry.focused).length})</label>}
-      <label htmlFor={`${id}-search`}>Søk kildeobjekt</label><input id={`${id}-search`} className="gmi-compact-field" value={query} onChange={(event) => setQuery(event.target.value)} />
-      <span>{rows.length} av {model.rows.length} tilfeller · {Object.values(choices.targets).filter(Boolean).length} foreslåtte KUM</span>
-    </div>
-    <div className="photo-link-columns">
-      <nav aria-label="LOK/TOP med bildelenker" className="photo-link-list">
-        {rows.map((entry) => <button key={entry.objectKey} type="button" className={`${button}${row === entry ? ' gmi-selected-control' : ''}`} aria-current={row === entry ? 'true' : undefined}
-          onClick={() => { setActiveKey(entry.objectKey); setPhotoId(null); setCandidatePage(0); setTargetQuery(''); }}>
-          <strong>{entry.tema || 'Uavklart Tema'} · {entry.label}</strong><span>point:{entry.sourceIndex} · {entry.references.length} referanser{choices.targets[entry.objectKey] ? ' · KUM foreslått' : ''}</span>
-        </button>)}
-        {!rows.length && <p>Ingen tilfeller i dette utvalget. Vis hele laget eller endre søket.</p>}
-      </nav>
-      <main className="photo-link-detail" aria-label="Gjennomgang av bildelenker">
-        {row && <>
-          <section><h3>Kilde: {row.tema || 'Uavklart Tema'} · {row.label}</h3><ObjectFacts object={row} source={model.source} /><Cells object={row} />
-            {row.issues.map((issue) => <p key={issue} className="gmi-validation-accent" data-validation-tone="warning">{issue}</p>)}
-          </section>
-          <section aria-label="Bildereferanser"><h3>Bilder og referanser som vurderes</h3>
-            {row.groups.map((group) => <article key={group.key} className="photo-link-group">
-              <label><input type="checkbox" className="accent-gmi-interactive gmi-focus-ring" checked={choices.groups[JSON.stringify([row.objectKey, group.key])] === true}
-                onChange={(event) => choose({ type: 'group', groupKey: group.key, selected: event.target.checked })} />
-                {group.references[0].filename || 'Ugyldig mål'} · {group.references.length} referanse(r)</label>
-              {group.references.map((reference) => <div key={reference.id}><code>{reference.referenceRaw}</code>
-                <p>{reference.resolution.status === 'confident' ? `Sikkert filtreff i valgt fotolag (${reference.resolution.method?.includes('basename') ? 'unikt filnavn' : 'sti'})`
-                  : reference.resolution.status === 'ambiguous' ? `Tvetydig filtreff: ${reference.resolution.photoIds.length} importerte kopier. Avklar kopiene i FOTO.`
-                    : reference.resolution.status === 'invalid' ? 'Ikke en gyldig bildereferanse. Kontroller originalfeltet og filtypen.'
-                      : reference.resolution.reason === 'unsafe-reference' ? 'Ekstern adresse eller utrygg sti brukes ikke. Avklar en lokal filreferanse i originalgrunnlaget.'
-                      : 'Bildefilen mangler i valgt fotolag. Legg til bildene eller velg riktig fotolag.'}</p>
-                <small>Uttrykk {reference.wrapperOrdinal === null ? 'bart' : reference.wrapperOrdinal + 1} · medlem {reference.memberOrdinal + 1}</small>
-                {reference.identicalRawReferenceIds.length > 1 && <p>Samme rå referanse forekommer {reference.identicalRawReferenceIds.length} ganger i kilden. Dette bekrefter ikke samme bildefil.</p>}
-              </div>)}
-              {group.references.length > 1 && <p>Gjentatte referanser vises samlet for samme filtreff. Ingen duplikater fjernes.</p>}
-              {group.sharedObjectKeys.length > 1 && <p>Bildet deles av {group.sharedObjectKeys.length} objekter: {group.sharedObjectKeys.join(', ')}. Hver eier beholdes separat.</p>}
-              {group.photos.map((entry, index) => <div key={entry.id} className="photo-link-photo-row"><button type="button" className={`${button}${photo?.id === entry.id ? ' gmi-selected-control' : ''}`} aria-pressed={photo?.id === entry.id} onClick={() => setPhotoId(entry.id)}>{group.assetId ? 'Vis' : `Mulig fil ${index + 1}:`} {entry.sourceRelativePath || entry.originalFilename}</button>
-                <span>{entry.occurrence?.object ? gmiObjectLabel(entry.occurrence.object) : 'Uten GMI-plassering'} · {photoDeliveryStatusText(model.delivery?.byPhotoId?.[entry.id]) || 'Leveringsvalg mangler'}</span></div>)}
-            </article>)}
-          </section>
-          <section aria-label="KUM-kandidater"><h3>KUM i samme kilde ({candidates.length})</h3>
-            <p>Avstand sorterer listen. Nærmeste objekt og like identifikatorer bekrefter ingen relasjon. Ingen søkeradius er fastsatt.</p>
-            {candidates.length > 1 && <p>Flere mulige KUM. Mottaker må avklares faglig; ingen er valgt automatisk.</p>}
-            <label htmlFor={`${id}-targets`}>Søk KUM</label><input id={`${id}-targets`} className="gmi-compact-field" value={targetQuery} onChange={(event) => { setTargetQuery(event.target.value); setCandidatePage(0); }} />
-            <label className="photo-link-target"><input type="radio" className="accent-gmi-interactive gmi-focus-ring" name={`${id}-target`} checked={!selected} onChange={() => choose({ type: 'target', targetKey: null })} /> Ingen foreslått mottaker</label>
-            {!candidates.length && <p>Ingen entydig Tema KUM finnes i kilden. Kontroller Tema i Validator eller avklar mottaker i originalgrunnlaget.</p>}
-            {filteredCandidates.slice(page * 20, page * 20 + 20).map((candidate) => <label className="photo-link-target" key={candidate.target.objectKey}>
-              <input type="radio" className="accent-gmi-interactive gmi-focus-ring" name={`${id}-target`} checked={selected?.target.objectKey === candidate.target.objectKey}
-                onChange={() => choose({ type: 'target', targetKey: candidate.target.objectKey })} />
-              <span><strong>{candidate.target.label}</strong><span>point:{candidate.target.sourceIndex} · XY: {distance(candidate.distanceMetres)} · ΔZ: {number(candidate.deltaZ)}{candidate.deltaZ !== null ? ' (rå differanse)' : ''}</span>
-                {candidate.sameIdentifiers.length > 0 && <span>Like felt: {candidate.sameIdentifiers.join(', ')} – ikke bekreftet forelderrelasjon</span>}
-                {candidate.reusedAssets.length > 0 && <span>Finnes allerede på KUM: {candidate.reusedAssets.length} filtreff. Gjenbruk er ikke avklart.</span>}
-                {candidate.target.references.length > 0 && <span>KUM har {candidate.target.references.length} eksisterende referanser</span>}</span>
-            </label>)}
-            {filteredCandidates.length > 20 && <div className="photo-link-pagination"><button type="button" className={button} disabled={page === 0} onClick={() => setCandidatePage(page - 1)}>Forrige KUM</button>
-              <span>{page + 1} / {Math.ceil(filteredCandidates.length / 20)}</span><button type="button" className={button} disabled={(page + 1) * 20 >= filteredCandidates.length} onClick={() => setCandidatePage(page + 1)}>Neste KUM</button></div>}
-          </section>
-          <section aria-label="Foreslått mottaker"><h3>Foreslått mottaker og plassering</h3>
-            {selected ? <><p><strong>{selected.target.label}</strong> · {proposal.referenceIds.length} valgte referanser</p><ObjectFacts object={selected.target} source={model.source} /><Cells object={selected.target} />
-              <p>Original → KUM, XY: {distance(selected.distanceMetres)} · ΔZ: {number(selected.deltaZ)} (uten vertikal transformasjon)</p>
-              {selected.conflicts.map((issue) => <p key={issue} className="gmi-validation-accent" data-validation-tone="warning">{issue}</p>)}</> : <p>Velg en KUM eksplisitt for å se et posisjonsforslag.</p>}
-            <p>Original LOK/TOP: {position(row.placement?.position)} · Z: {number(row.rawGeometry?.[0]?.z)}</p>
-            {row.relatedPhotos.map((entry) => {
-              const acceptedCandidate = entry.spatial.candidates.find((candidate) => candidate.id === entry.spatial.current?.basis?.candidateId);
-              return <div key={entry.id}><p>Akseptert nå ({entry.originalFilename} · {entry.occurrence?.object ? gmiObjectLabel(entry.occurrence.object) : 'uten GMI-plassering'}, {entry.spatial.current ? acceptanceLabel(entry.spatial.current.acceptance) : 'ingen'}): {position(entry.spatial.current?.position)}
-                {selected && ` · Nå → KUM, XY: ${distance(photoPositionDistance(entry.spatial.current?.position, selected.target.placement?.position))}`}</p>
-                <details><summary className="gmi-focus-ring">Akseptert kilde og rå Z-evidens</summary><pre>{acceptedCandidate ? rawText({ kilde: acceptedCandidate.kind, rådata: acceptedCandidate.raw }) : 'Ingen rå Z-evidens knyttet til nåværende plassering. Høyde er ikke antatt.'}</pre></details></div>;
-            })}
-            {!row.relatedPhotos.length && <p>Ingen sikkert tilknyttet FOTO-plassering. Ingen akseptert posisjon er antatt.</p>}
-            {selected && <p>Foreslått KUM: {position(selected.target.placement?.position)} · Z: {number(selected.target.rawGeometry?.[0]?.z)}</p>}
-            <p>Z er rå evidens. Høydereferanse, vertikalnivå og mottakerens tolkning må avklares; høyder endres ikke.</p>
-            <ReviewMap row={row} candidates={candidates} selected={selected} />
-          </section>
-        </>}
-      </main>
-      <aside className="photo-link-preview" aria-label="Fotoforhåndsvisning">{photo ? <PhotoImportPreview key={photo.assetId} photo={photo} enableLargeView={false} /> : <p>Ingen bildefil å vise for dette objektet.</p>}</aside>
-    </div>
+    {step === 'kontroll' ? <div className="photo-link-control-body" ref={bodyRef}><ControlStep decisions={decisions} progress={progress} headingRef={controlHeading} onEdit={edit} /></div> : <>
+      <div className="photo-link-filter">
+        {model.restricted && <label><input type="checkbox" className="accent-gmi-interactive gmi-focus-ring" checked={focusedOnly} onChange={(event) => setFocusedOnly(event.target.checked)} /> Kun Validator-utvalget ({model.rows.filter((entry) => entry.focused).length})</label>}
+        <div className="photo-link-search-field"><label htmlFor={`${id}-search`}>Søk kildeobjekt</label><input id={`${id}-search`} className="gmi-compact-field" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
+        <span>{rows.length} av {model.rows.length} tilfeller</span>
+      </div>
+      <div className="photo-link-columns" ref={bodyRef}>
+        <nav aria-label="LOK/TOP med bildelenker" className="photo-link-list">
+          {rows.map((entry) => {
+            const chosen = entry.groups.filter((group) => decisionByKey.has(group.decisionKey)).length;
+            return <button key={entry.objectKey} type="button" className={`${button}${row === entry ? ' gmi-selected-control' : ''}`} aria-current={row === entry ? 'true' : undefined}
+              onClick={() => openRow(entry)}>
+              <strong>{objectName(entry)}</strong><span>{entry.identifierText && `${entry.identifierText} · `}point:{entry.sourceIndex} · {entry.references.length} referanser{chosen ? ` · ${chosen} valgt` : ''}</span>
+            </button>;
+          })}
+          {!rows.length && <p>Ingen tilfeller i dette utvalget. Vis hele laget eller endre søket.</p>}
+        </nav>
+        <main className="photo-link-detail" aria-label="Gjennomgang av bildelenker">
+          {row && <>
+            <section aria-label="Kildeobjekt"><h3>Kilde: {objectName(row)}{row.identifierText && ` · ${row.identifierText}`}</h3>
+              <Issues blocking={row.issues.filter((entry) => entry.blocking)} warnings={row.issues.filter((entry) => !entry.blocking)} />
+              <ObjectFacts object={row} source={model.source} /><Cells object={row} />
+            </section>
+            <section aria-label="Bilder"><h3>Bilder</h3>
+              {!row.groups.length && <p>Ingen bildereferanser å vurdere.</p>}
+              {row.groups.map((group) => {
+                const decision = decisionByKey.get(group.decisionKey), active = activeGroup === group;
+                return <article key={group.key} className="photo-link-group" data-decision-key={group.decisionKey} data-active={active || undefined}>
+                  <label className="photo-link-group-select"><input type="checkbox" className="accent-gmi-interactive gmi-focus-ring" checked={Boolean(decision)}
+                    onChange={(event) => { choose(group, { type: 'select', selected: event.target.checked }); setActiveDecisionKey(event.target.checked ? group.decisionKey : null); }} />
+                    <span><strong>{groupName(group)}</strong> · {group.references.length} referanse(r)</span></label>
+                  <p>{resolutionText(group.references[0].resolution)}</p>
+                  {group.photos.map((entry, index) => <div key={entry.id} className="photo-link-photo-row"><button type="button" className={`${button}${photo?.id === entry.id ? ' gmi-selected-control' : ''}`} aria-pressed={photo?.id === entry.id} onClick={() => setPhotoId(entry.id)}>{group.assetId ? 'Vis' : `Mulig fil ${index + 1}:`} {entry.sourceRelativePath || entry.originalFilename}</button>
+                    <span>{entry.occurrence?.object ? gmiObjectLabel(entry.occurrence.object) : 'Uten GMI-plassering'} · {photoDeliveryStatusText(model.delivery?.byPhotoId?.[entry.id]) || 'Leveringsvalg mangler'}</span></div>)}
+                  {group.sharedObjectKeys.length > 1 && <p>Bildet deles av {group.sharedObjectKeys.length} objekter. Hver forekomst beholdes separat.</p>}
+                  {decision && <fieldset className="photo-link-outcomes"><legend className="sr-only">Handling for {groupName(group)}</legend>
+                    {Object.entries(PHOTO_LINK_OUTCOME_LABELS).map(([outcome, label]) => <label key={outcome}><input type="radio" className="accent-gmi-interactive gmi-focus-ring"
+                      name={`${id}-outcome-${group.decisionKey}`} checked={decision.outcome === outcome}
+                      onChange={() => { choose(group, { type: 'outcome', outcome }); setActiveDecisionKey(group.decisionKey); }} /> {label}</label>)}
+                  </fieldset>}
+                  {decision?.outcome === 'move' && <div className="photo-link-recipient-line">
+                    <span>Mottaker: <strong>{decision.target ? objectName(decision.target) : 'Ikke valgt'}</strong>{decision.target && ` · ${distance(decision.distanceMetres)}`}</span>
+                    <button type="button" className={`${button}${active ? ' gmi-selected-control' : ''}`} aria-pressed={active}
+                      aria-label={`Velg mottaker for ${groupName(group)}`} onClick={() => setActiveDecisionKey(group.decisionKey)}>{decision.target ? 'Endre mottaker' : 'Velg mottaker'}</button>
+                  </div>}
+                  {decision && <Issues blocking={decision.blocking} warnings={decision.warnings} omit={['recipient-missing', 'target-existing-links', 'asset-missing', 'asset-ambiguous', 'asset-invalid', 'asset-unsafe', ...row.issues.map((entry) => entry.code)]} />}
+                  <References group={group} />
+                </article>;
+              })}
+            </section>
+            <section aria-label="Punktobjekter i samme kilde"><h3>Punktobjekter i samme kilde ({candidates.length})</h3>
+              <p>Sortert etter XY-avstand. Nærmeste objekt og like identifikatorer bekrefter ingen relasjon. Ingen søkeradius er fastsatt.</p>
+              <div className="photo-link-search-field"><label htmlFor={`${id}-targets`}>Søk punktobjekt</label>
+                <input id={`${id}-targets`} className="gmi-compact-field" value={targetQuery} onChange={(event) => { setTargetQuery(event.target.value); setCandidatePage(0); }} /></div>
+              {!pairing && <p>Velg «Flytt til punktobjekt» for et bilde for å foreslå mottaker.</p>}
+              {pairing && <label className="photo-link-target"><input type="radio" className="accent-gmi-interactive gmi-focus-ring" name={`${id}-target`} checked={!selected}
+                onChange={() => choose(activeGroup, { type: 'target', targetKey: null })} /> Ingen mottaker valgt</label>}
+              {!candidates.length && <p>Kilden har ingen andre punktobjekter.</p>}
+              {pageCandidates.map((candidate) => <label className="photo-link-target" key={candidate.target.objectKey}>
+                <input type="radio" className="accent-gmi-interactive gmi-focus-ring" name={`${id}-target`} disabled={!pairing} checked={selected?.target.objectKey === candidate.target.objectKey}
+                  onChange={() => choose(activeGroup, { type: 'target', targetKey: candidate.target.objectKey })} />
+                <span><strong>{objectName(candidate.target)}</strong>{candidate.target.identifierText && ` · ${candidate.target.identifierText}`}
+                  <span className="photo-link-number">XY: {distance(candidate.distanceMetres)} · {candidate.target.photoReferenceCount ? `${candidate.target.photoReferenceCount} bildereferanser` : 'Ingen bildereferanser'}</span>
+                  {candidate.sameIdentifiers.length > 0 && <span>Like felt: {candidate.sameIdentifiers.join(', ')} – ikke bekreftet relasjon</span>}
+                  <Issues blocking={candidate.conflicts.filter((entry) => entry.blocking)} warnings={candidate.conflicts.filter((entry) => !entry.blocking)} omit={['target-existing-links']} /></span>
+              </label>)}
+              {filteredCandidates.length > 20 && <div className="photo-link-pagination"><button type="button" className={button} aria-label="Forrige side med punktobjekter" disabled={page === 0} onClick={() => setCandidatePage(page - 1)}>Forrige</button>
+                <span>{page + 1} / {pages}</span><button type="button" className={button} aria-label="Neste side med punktobjekter" disabled={page + 1 >= pages} onClick={() => setCandidatePage(page + 1)}>Neste</button></div>}
+            </section>
+            <section aria-label="Foreslått mottaker"><h3>Foreslått mottaker</h3>
+              {selected ? <><p><strong>{objectName(selected.target)}</strong>{selected.target.identifierText && ` · ${selected.target.identifierText}`} · XY: {distance(selected.distanceMetres)} · {groupName(activeGroup)}, {activeGroup.references.length} referanse(r)</p>
+                <ObjectFacts object={selected.target} source={model.source} /><Cells object={selected.target} /></>
+                : <p>{pairing ? `Velg et punktobjekt for ${groupName(activeGroup)}.` : 'Ingen mottaker er valgt for et aktivt bilde.'}</p>}
+              <PositionEvidence row={row} decision={selected ? activeDecision : null} />
+              <ReviewMap row={row} candidates={selected && !pageCandidates.includes(selected) ? [...pageCandidates, selected] : pageCandidates} selected={selected} />
+            </section>
+          </>}
+        </main>
+        <aside className="photo-link-preview" aria-label="Fotoforhåndsvisning">{photo ? <PhotoImportPreview key={photo.assetId} photo={photo} enableLargeView={false} /> : <p>Ingen bildefil å vise for dette objektet.</p>}</aside>
+      </div>
+    </>}
+    <footer>
+      <span className="photo-link-progress">Valgt: {progress.selected} · Avklart: {progress.resolved} · Uavklart: {progress.unresolved}</span>
+      <div className="photo-link-footer-actions">
+        <button type="button" className={button} onClick={onClose}>Avslutt gjennomgang</button>
+        {step === 'kontroll' ? <button type="button" className={button} onClick={() => setStep('pairing')}>Tilbake til paring</button>
+          : <button type="button" className="gmi-primary-control gmi-compact-button gmi-focus-ring px-2 py-1 text-xs" disabled={!progress.selected} onClick={() => setStep('kontroll')}>Kontroll</button>}
+      </div>
+    </footer>
   </>;
 }
 
@@ -200,13 +302,13 @@ export default function PhotoHyperlinkReviewDialog({ request, onClose, openerRef
     if (current?.source && datasetKind === 'proposed' && !proposed?.ok) return { error: 'Foreslått grunnlag kan ikke verifiseres. Velg Original eller kontroller Rettinger før du åpner gjennomgangen på nytt.' };
     if (!current?.source || !dataset) return { error: current?.error || null };
     try { return { model: detectPhotoLinkReview({ source: current.source, dataset, layerId: option?.layerId || current.source.id,
-      photos, delivery, focusRefs: restricted ? request.refs : null }) }; }
+      photos, delivery, focusRefs: restricted ? request.refs : null, liveSource: Boolean(current.binding && loadedGmiSources.isLive(current.binding)) }) }; }
     catch (error) { return { error: error.message }; }
   }, [current, dataset, photos, delivery, restricted, request, layers, referenceDate, view, option, photoLayer, datasetKind, proposed]);
   const model = result.model;
   return <dialog ref={dialogRef} className="photo-link-review" aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); onClose(); }}>
-    <header><h2 id={titleId}>FOTO · Gjennomgå bildelenker på LOK/TOP</h2><PhotoIconButton icon={XIcon} size={20} label="Lukk gjennomgang av bildelenker" onClick={onClose} /></header>
-    <p className="photo-link-boundary">Kun gjennomgang. KUM- og lenkevalg er midlertidige og forkastes ved lukking. Ingen data lagres eller flyttes. KUM-flytting er en egen operasjon, adskilt fra GMI → GML.</p>
+    <header><h2 id={titleId}>FOTO · Gjennomgå bildelenker</h2><PhotoIconButton icon={XIcon} size={20} label="Lukk gjennomgang av bildelenker" onClick={onClose} /></header>
+    <p className="photo-link-boundary">Kun gjennomgang. Valgene er midlertidige og forkastes ved lukking. Ingen data lagres eller flyttes. Flytting til et punktobjekt er en egen operasjon, adskilt fra levering GMI → GML.</p>
     <div className="photo-link-source-controls">
       <label>GMI-kilde<select className="gmi-compact-field" value={option?.id || ''} disabled={restricted} onChange={(event) => setSourceId(event.target.value)}>
         {!options.length && <option value="">Ingen GMI-kilde</option>}{options.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label>
@@ -218,7 +320,7 @@ export default function PhotoHyperlinkReviewDialog({ request, onClose, openerRef
     {option && !current && <p className="photo-link-message" role="status">Leser kildegrunnlag …</p>}
     {result.error && <p className="photo-link-message" role="alert">{result.error}</p>}
     {model && <ReviewBody key={JSON.stringify([option.id, getDatasetRevision(dataset), photoLayer?.id, delivery?.stateKey,
-      photos.map((photo) => [photo.id, photo.spatial.current])])} model={model} />}
-    <footer><span>Ingen utførings- eller lagringsfunksjon i denne gjennomgangen.</span><button type="button" className={button} onClick={onClose}>Avslutt gjennomgang</button></footer>
+      photos.map((photo) => [photo.id, photo.spatial.current])])} model={model} onClose={onClose} />}
+    {!model && <footer><span /><button type="button" className={button} onClick={onClose}>Avslutt gjennomgang</button></footer>}
   </dialog>;
 }
