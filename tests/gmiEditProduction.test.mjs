@@ -374,12 +374,17 @@ test('gmi-edit stays a browser-safe core: no node:, test, photo or UI imports; t
   // M7 (hyperlink removal): reuses the production hyperlink extractor and the
   // FOTO GMI evidence factory (createGmiPhotoSource); no other photo import.
   const m7 = ['hyperlinkRemoval.mjs'];
+  // Batch 1B.1 (pure hyperlink transfer planner and independent verifier):
+  // the same two external imports as M7, nothing else.
+  const b1 = ['hyperlinkTransfer.mjs', 'hyperlinkTransferVerify.mjs'];
   const extraAllowed = {
       'dryRun.mjs': ['../validation-v2/findingDiff.js'],
     'exportGmi.mjs': ['../photos/export/photoExportNaming.mjs'],
     'hyperlinkRemoval.mjs': ['../hyperlinkFilenames.mjs', '../photos/gmiPhotoSource.mjs'],
+    'hyperlinkTransfer.mjs': ['../hyperlinkFilenames.mjs', '../photos/gmiPhotoSource.mjs'],
+    'hyperlinkTransferVerify.mjs': ['../hyperlinkFilenames.mjs', '../photos/gmiPhotoSource.mjs'],
   };
-    assert.deepEqual(files.sort(), [...m1, ...m2, ...m3, ...m7, ...g3, 'index.mjs'].sort());
+    assert.deepEqual(files.sort(), [...m1, ...m2, ...m3, ...m7, ...b1, ...g3, 'index.mjs'].sort());
   for (const name of files) {
     const source = await readFile(path.join(directory, name), 'utf8');
     for (const [, specifier] of source.matchAll(/from\s+'([^']+)'/g)) {

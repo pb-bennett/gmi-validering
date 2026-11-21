@@ -91,3 +91,16 @@ export {
   planGmiHyperlinkRemoval,
   verifyGmiHyperlinkRemoval,
 } from './hyperlinkRemoval.mjs';
+
+// Batch 1B.1 (pure S_HYPERLINK transfer planner and independent verifier;
+// not runtime-wired): see docs/agent-reports/*-hyperlink-transfer-batch1b1-completion.md.
+export {
+  GMI_HYPERLINK_TRANSFER_DELIVERY_STATUS,
+  GMI_HYPERLINK_TRANSFER_STATUS,
+  buildGmiHyperlinkTransferProposal,
+  gmiHyperlinkCellLayout,
+  gmiHyperlinkTransferKey,
+  isGmiHyperlinkTransferPlan,
+  planGmiHyperlinkTransfer,
+} from './hyperlinkTransfer.mjs';
+export { verifyGmiHyperlinkTransfer } from './hyperlinkTransferVerify.mjs';
