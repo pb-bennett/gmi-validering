@@ -13,6 +13,7 @@ import { photoPositionDistance } from '@/lib/photos/photoPositioning.mjs';
 import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
 import { gmiPhotoAssociations } from '@/lib/photos/gmiPhotoSource.mjs';
 import { isPhotoPosition } from '@/lib/photos/photoSpatial.mjs';
+import { PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT, photoTransferObjectLabel } from '@/lib/photos/photoHyperlinkTransferScope.mjs';
 import { formatPhotoCaptureTime, formatPhotoCoordinates, formatPhotoMoveDistance, photoCaptureTimeStatus, photoDirectionEvidenceText, photoDirectionSourceLabel, photoMetadataConflict,
   photoMetadataSourceLabel, photoPlacementBasisLabel, photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import PhotoIconButton from './PhotoIconButton';
@@ -94,6 +95,26 @@ function CollapsibleSection({ id, title, count = null, scope, defaultOpen = fals
   </section>;
 }
 
+// Batch 1B.2B: Original and Foreslått of a photograph moved by an active Rettinger transfer, and why it is locked.
+// The proposed owner and position come from the verified proposed view; the accepted FOTO record is unchanged.
+function HyperlinkTransferSection({ transfer }) {
+  if (!transfer) return null;
+  const proposed = transfer.status === 'proposed';
+  const original = transfer.original;
+  return <section className="photo-inspector-section photo-inspector-transfer" aria-label="Flyttet bildelenke" data-hyperlink-transfer={transfer.status}>
+    <h3>{transfer.moved ? 'Flyttet bildelenke' : 'Samme bilde er flyttet'}<span className="photo-inspector-scope">Rettinger · Foreslått</span></h3>
+    {proposed && <dl className="photo-inspector-facts">
+      <Fact term="Foreslått eier">{transfer.recipientLabel}</Fact>
+      <Fact term="Foreslått posisjon">{formatPhotoCoordinates(transfer.proposedPosition)} · mottakerens GMI-posisjon</Fact>
+      <Fact term="Original eier">{original?.occurrence?.object ? photoTransferObjectLabel(original.occurrence.object) : 'Ukjent objekt'}</Fact>
+      <Fact term="Original posisjon">{isPhotoPosition(original?.current?.position) ? formatPhotoCoordinates(original.current.position) : 'Ikke plassert'}</Fact>
+      <Fact term="Godkjent">{transfer.provenance?.approvedAt ? `Brukergodkjent flytting · ${formatTimestamp(transfer.provenance.approvedAt)}` : 'Brukergodkjent flytting'}</Fact>
+    </dl>}
+    {transfer.text && <p className="photo-inspector-warning" role="note">{transfer.text}</p>}
+    <p className="photo-inspector-note">{PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT}</p>
+  </section>;
+}
+
 function Section({ title, scope, children, className = '' }) {
   return <section className={`photo-inspector-section ${className}`} aria-label={title}>
     <h3>{title}{scope && <span className="photo-inspector-scope">{scope}</span>}</h3>
@@ -105,7 +126,7 @@ function Section({ title, scope, children, className = '' }) {
 // contextual action that opens the focused metadata dialog. Nothing is edited inside the inspector itself.
 // Photo first: the default view is the photo, its status chips, coordinates and concise capture data.
 // Provenance, evidence, associations, file details and raw diagnostics are kept, one click away.
-export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], editing = false, delivery = null, onSelect, onLocate, onEditMetadata, onOpenViewer, onDeliveryResult }) {
+export default function PhotoWorkspaceInspector({ photo, layer, linkLayer = layer, siblings = [], editing = false, delivery = null, onSelect, onLocate, onEditMetadata, onOpenViewer, onDeliveryResult }) {
   if (!photo) return <section className="photo-collection-inspector photo-workspace-inspector-body" aria-label="Bilde som vises">
     <h2 className="truncate text-sm font-semibold text-gmi-navy">Velg et bilde</h2>
     <Preview photo={null} />
@@ -113,14 +134,15 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
   const current = photo.spatial.current, placed = isPhotoPosition(current?.position);
   // Provenance, like the list and «Plasseringskilde» on the map: a moved GMI point reads «GMI · justert», never «Manuell».
   const source = photoPositionSourcePresentation(photoPositionProvenanceKind(photo));
-  const sourceLabel = `${source.label}${photoPositionAdjusted(photo) ? ' · justert' : ''}`;
+  const transfer = photo.hyperlinkTransfer || null;
+  const sourceLabel = `${source.label}${photoPositionAdjusted(photo) ? ' · justert' : ''}${transfer?.status === 'proposed' ? ' · foreslått' : ''}`;
   const basis = photo.spatial.candidates.find((candidate) => candidate.id === current?.basis?.candidateId);
   const direction = photo.direction?.current || null;
   const capture = photo.captureMetadata || {};
   const staged = photo.staged || null;
   const saved = photo.saved || null;
   const others = photo.spatial.candidates.filter((candidate) => candidate.status === 'viable' && candidate.id !== basis?.id);
-  const links = gmiPhotoAssociations(layer, photo.id);
+  const links = gmiPhotoAssociations(linkLayer || layer, photo.id);
   const filename = photo.originalFilename;
   const occurrenceObjectKey = photo.occurrence?.objectKey;
   const thisLink = links.find(({ association }) => association.objectKey === occurrenceObjectKey);
@@ -152,12 +174,14 @@ export default function PhotoWorkspaceInspector({ photo, layer, siblings = [], e
         {editing && staged && <li className="photo-inspector-chip-staged">Endret – ikke lagret</li>}
       </ul>
       <PhotoIconButton icon={CrosshairIcon} label={`Zoom til ${filename} på kartet`} tooltip={placed ? 'Zoom til bildet' : 'Zoom til bildet – bildet er ikke plassert'}
-        unavailable={!placed} className="photo-inspector-locate" onClick={() => onLocate?.({ layerId: layer.id, photoId: photo.id, ...(staged?.position ? { position: current.position } : {}) })} />
+        unavailable={!placed} className="photo-inspector-locate" onClick={() => onLocate?.({ layerId: layer.id, photoId: photo.id, ...(staged?.position || transfer?.status === 'proposed' ? { position: current.position } : {}) })} />
     </div>
+
+    <HyperlinkTransferSection transfer={transfer} />
 
     <PhotoDeliveryControls photo={photo} layerId={layer.id} entry={delivery?.byPhotoId[photo.id]} assetDelivery={delivery?.assets[photo.assetId]} onResult={(result) => onDeliveryResult?.(photo.id, result)} />
 
-    {siblings.length > 1 && !editing && <PhotoExclusionActions key={photo.id} inspector layerId={layer.id} selectedIds={[photo.id]} visibleIds={[photo.id]} delivery={delivery} />}
+    {siblings.length > 1 && !editing && !transfer?.locked && <PhotoExclusionActions key={photo.id} inspector layerId={layer.id} selectedIds={[photo.id]} visibleIds={[photo.id]} delivery={delivery} />}
 
     <Section title="Opptak" scope="gjelder bildet (alle plasseringer)" className="photo-inspector-capture">
       <dl className="photo-inspector-facts">

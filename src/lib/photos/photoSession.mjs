@@ -18,6 +18,8 @@ import { equivalentGmiPhotoEvidence, gmiPhotoAssociations, gmiPointPosition, par
 import { photoSourceEvidenceSignature, planPhotoSourcePositions, selectedPhotoSourcePositions } from './photoPositioning.mjs';
 import { PHOTO_DELIVERY_INTENTS, buildPhotoDeliverySnapshot, photoDeliveryEntry, photoLayerDelivery } from './photoDeliveryIntent.mjs';
 import { photoPositionDeliveryEffect, planPhotoExclusion } from './photoDeliveryChoice.mjs';
+import { PHOTO_HYPERLINK_TRANSFER_ACTIVE, PHOTO_HYPERLINK_TRANSFER_LAYER_LOCK_TEXT, PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT,
+  PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT } from './photoHyperlinkTransferLock.mjs';
 
 export const EMPTY_PHOTO_SNAPSHOT = Object.freeze({
   photos: Object.freeze([]), selectedId: null, batchSelectedIds: Object.freeze([]),
@@ -68,6 +70,9 @@ export function createPhotoSession({
   today = () => localCalendarDate(),
   // Test seam (B2a): called after each write of an atomic commit; a throw there must roll every write back.
   commitFault = null,
+  // Batch 1B.2B: (layerId) => scope | null of the active Rettinger hyperlink transfers protecting this FOTO layer
+  // (photoHyperlinkTransferScope). The app binds it to the registry; see setHyperlinkTransferGuard.
+  hyperlinkTransferGuard = null,
 } = {}) {
   // Originals and browser resources deliberately live outside Zustand/React snapshots.
   let records = new Map();
@@ -151,6 +156,59 @@ export function createPhotoSession({
     ids: Object.freeze({ ...effects }) });
   const failed = (error) => ({ ok: false, error });
 
+  // Batch 1B.2B: owner-level guard of active hyperlink transfers. A transfer recorded in the Rettinger history moved
+  // a photograph's GMI link to another point object; its FOTO record holds the original occurrence, accepted position,
+  // delivery state and GMI source it was verified against. Writes that would change any of these for a protected
+  // photograph (every occurrence of a moved asset) or source are refused here, whoever calls them; everything else
+  // in the layer stays available. Undo/discard in Rettinger lifts the lock. A failing guard fails closed.
+  let transferGuard = hyperlinkTransferGuard;
+  const FAILED_GUARD = Object.freeze({ active: true, failed: true, assetIds: Object.freeze([]), sourceIds: Object.freeze([]) });
+  function transferLock(layerId) {
+    if (!transferGuard) return null;
+    try {
+      const scope = transferGuard(layerId);
+      return scope?.active ? scope : null;
+    } catch { return FAILED_GUARD; }
+  }
+  // Occurrences among `ids` whose photograph an active transfer protects.
+  function transferLockedIds(layerId, ids) {
+    const scope = transferLock(layerId);
+    if (!scope) return [];
+    if (scope.failed) return [...ids];
+    const assetIds = new Set(scope.assetIds);
+    return ids.filter((id) => assetIds.has(records.get(id)?.assetId));
+  }
+  const transferLockedSource = (layerId, sourceId) => {
+    const scope = transferLock(layerId);
+    return Boolean(scope && (scope.failed || scope.sourceIds.includes(sourceId)));
+  };
+  const transferRefused = (extra = {}, message = PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT) => ({ ok: false, error: PHOTO_HYPERLINK_TRANSFER_ACTIVE, message, ...extra });
+  // What a transfer was verified against, by identity: the protected sources and, per protected occurrence, its
+  // occurrence, accepted position and delivery decision (metadata such as capture time is not part of it).
+  function transferLockKey(layerId, scope) {
+    const layer = layers.get(layerId);
+    if (!layer) return [null];
+    const assetIds = new Set(scope.assetIds);
+    const sources = layer.spatialSources.filter((source) => scope.sourceIds.includes(source.id));
+    return [sources.length, ...sources, ...layer.photoIds.filter((id) => assetIds.has(records.get(id)?.assetId)).flatMap((id) => {
+      const record = records.get(id);
+      return [id, record.occurrence, record.spatial.current, deliveryDecisions.get(id) ?? null];
+    })];
+  }
+  // A draft (copy-on-write state) that would change what an active transfer protects, in any layer, or null.
+  function draftBreaksTransfer(state) {
+    if (!transferGuard) return null;
+    const layerIds = new Set([...layers.keys(), ...state.layers.keys()]);
+    for (const layerId of layerIds) {
+      const scope = transferLock(layerId);
+      if (!scope) continue;
+      if (scope.failed) return transferRefused();
+      const before = transferLockKey(layerId, scope), after = readDraft(state, () => transferLockKey(layerId, scope));
+      if (before.length !== after.length || before.some((item, index) => item !== after[index])) return transferRefused();
+    }
+    return null;
+  }
+
   // Runs fn against copies of the accepted data (seeded from `seed`, the live maps by default). Synchronous by
   // contract: every closure reads these bindings, and the live maps are restored before anything else can run.
   function inDraft(fn, seed = null) {
@@ -168,6 +226,8 @@ export function createPhotoSession({
   }
 
   function commitDraftMaps(state, base = state, before = null) {
+    const broken = draftBreaksTransfer(state);
+    if (broken) return broken;
     const maps = { layers, records, assets, deliveryDecisions };
     const writes = ACCEPTED_MAPS.flatMap((name) => [...new Set([...base[name].touched, ...state[name].touched])].map((key) => {
       const map = maps[name];
@@ -813,6 +873,8 @@ export function createPhotoSession({
       || (draftTargetLayerId && (!target || target.photoIds !== guard.members || target.spatialSources !== guard.sources)))
       return { ok: false, error: 'review-changed' };
     if (!target && !review.includedIds.length) return { ok: false, error: 'empty-import' };
+    // Re-associating a transferred photograph's GMI source would re-derive the occurrences the transfer was verified on.
+    if (target && transferLockedSource(target.id, review.source.id)) return transferRefused({}, PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT);
     let name = 'Bilder', suffix = 1;
     while ([...layers.values()].some((layer) => layer.name === name)) name = `Bilder (${++suffix})`;
     const ids = Object.freeze([...(target?.photoIds || []), ...review.includedIds]);
@@ -878,6 +940,20 @@ export function createPhotoSession({
 
   return {
     getSnapshot: () => snapshot,
+    // Batch 1B.2B: bind (or clear) the owner-level hyperlink transfer guard. Returns the previous provider.
+    setHyperlinkTransferGuard(provider) {
+      const previous = transferGuard;
+      transferGuard = typeof provider === 'function' ? provider : null;
+      return previous;
+    },
+    /** Read-only: the protected occurrence ids among `photoIds` (default: the whole layer), the protected sources and texts. */
+    getHyperlinkTransferLock(layerId, photoIds = null) {
+      const scope = transferLock(layerId);
+      if (!scope) return null;
+      return Object.freeze({ photoIds: Object.freeze(transferLockedIds(layerId, photoIds || layers.get(layerId)?.photoIds || [])),
+        sourceIds: Object.freeze([...(scope.sourceIds || [])]), failed: Boolean(scope.failed),
+        text: PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT, sourceText: PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT, layerText: PHOTO_HYPERLINK_TRANSFER_LAYER_LOCK_TEXT });
+    },
     async beginLoadedGmiImport(args, targetLayerId = null) {
       if (!args.isLive(args.binding) || !this.beginImport(targetLayerId)) return false;
       return this.setDraftGmiSource(args);
@@ -1105,6 +1181,7 @@ export function createPhotoSession({
       if (!review || review.state !== 'ready' || review.source !== expectedReview?.source
         || review.recheck !== expectedReview.recheck || review.loadedInput !== expectedReview.loadedInput) return failed('source-changed');
       if (!['gml', 'gmi'].includes(review.source.kind)) return failed('unsupported-source');
+      if (transferLockedSource(ticket.layerId, review.source.id)) return transferRefused({}, PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT);
       const draft = draftOf(ticket);
       if (draft.ops.some((op) => op.sourceId === review.source.id || (op.kind !== 'remove-gmi' && op.fingerprint === review.source.fingerprint)))
         return failed('source-staged');
@@ -1130,8 +1207,11 @@ export function createPhotoSession({
       }
       op = Object.freeze({ ...op, id: `op-${++draftOpSerial}`, sourceId: review.source.id, fingerprint: review.source.fingerprint,
         filename: review.source.filename, sourceKind: review.source.kind });
-      const trial = inDraft(() => replayDraft(ticket.layerId, [...draft.ops, op])).result;
+      const trialRun = inDraft(() => replayDraft(ticket.layerId, [...draft.ops, op])), trial = trialRun.result;
       if (!trial.ok) return failed(trial.error);
+      // A new source can add occurrences of a transferred photograph; refused when staged, not only at the save.
+      const broken = draftBreaksTransfer(trialRun.state);
+      if (broken) return broken;
       draft.ops = [...draft.ops, op]; draft.version++;
       sourceReviews.delete(ticket.layerId);
       sourceRequests.set(ticket.layerId, (sourceRequests.get(ticket.layerId) || 0) + 1);
@@ -1148,6 +1228,7 @@ export function createPhotoSession({
       if (staged?.kind === 'remove-gmi') return { ok: true, opId: staged.id };
       const source = layers.get(ticket.layerId).spatialSources.find((item) => item.id === sourceId && item.kind === 'gmi');
       if (!source) return failed('source-removed');
+      if (transferLockedSource(ticket.layerId, sourceId)) return transferRefused({}, PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT);
       const op = Object.freeze({ kind: 'remove-gmi', id: `op-${++draftOpSerial}`, sourceId, fingerprint: source.fingerprint,
         filename: source.filename, sourceKind: 'gmi' });
       const ops = [...draft.ops.filter((item) => item !== staged), op];
@@ -1204,10 +1285,14 @@ export function createPhotoSession({
       if (!sourceWorkflowIsLive(ticket) || sourceReviews.has(ticket.layerId)) return null;
       const view = draftView(ticket);
       if (!view.outcome.ok) return null;
-      const plan = readDraft(view.state, () => {
+      const planned = readDraft(view.state, () => {
         const layer = layers.get(ticket.layerId);
         return planPhotoSourcePositions(layer.photoIds.map((id) => records.get(id)), layer.spatialSources);
       });
+      // Batch 1B.2B: a transferred photograph is offered no position (its accepted position is what the transfer recorded).
+      const locked = new Set(transferLockedIds(ticket.layerId, planned.rows.map((row) => row.photoId)));
+      const plan = locked.size ? Object.freeze({ ...planned, rows: Object.freeze(planned.rows.map((row) => locked.has(row.photoId)
+        ? Object.freeze({ ...row, options: Object.freeze([]), defaultChoice: '', transferLocked: true }) : row)) }) : planned;
       // Any change to the sources the plan was made from makes it stale, as before.
       workflowReviews.set(plan, { ticket, view, sources: view.state.layers.get(ticket.layerId).spatialSources });
       return plan;
@@ -1222,6 +1307,8 @@ export function createPhotoSession({
       const reviewed = workflowReviews.get(plan);
       if ((plan || requests.length) && reviewed?.ticket !== ticket) return failed('review-changed');
       if (!draft.ops.length && !requests.length) return failed('invalid-selection');
+      const lockedRequests = transferLockedIds(ticket.layerId, requests.map((request) => request?.photoId));
+      if (lockedRequests.length) return transferRefused({ lockedIds: lockedRequests });
       const view = draftView(ticket), layerId = ticket.layerId;
       if (!view.outcome.ok) return failed(view.outcome.error);
       if (reviewed && ((draft.ops.length && reviewed.view !== view)
@@ -1329,6 +1416,9 @@ export function createPhotoSession({
         writes.push({ photoId, position: hasPosition ? change.position : null, degrees });
       }
       if (staleIds.length) return { ok: false, error: 'edit-conflict', staleIds };
+      // Position and direction of a transferred photograph stay as the transfer recorded them (the session stays open).
+      const lockedEdits = transferLockedIds(ticket.layerId, writes.map((write) => write.photoId));
+      if (lockedEdits.length) return transferRefused({ lockedIds: lockedEdits });
       // A move away from the originating GMI point turns an untouched GMI default into GML, in the same commit, and a
       // move back restores an automatic transfer (B1.1, the same rule as the positioning wizard). Rotation alone never
       // does; the occurrence (GMI object relationship) and the GMI file are left as they are.
@@ -1490,6 +1580,9 @@ export function createPhotoSession({
         ok: false, error: 'stale-plan', changedIds: [], blocked: [{ reason: 'stale-plan', text: 'Leveringsvalgene er endret. Velg handlingen på nytt.' }] };
       const plan = planPhotoExclusion(delivery, layer, photoIds, options);
       if (!plan.ok) return { ...plan, error: 'exclusion-blocked', changedIds: [] };
+      const lockedWrites = transferLockedIds(layerId, [...new Set([...(photoIds || []), ...plan.writes.map((write) => write.photoId)])]);
+      if (lockedWrites.length) return transferRefused({ changedIds: [], lockedIds: lockedWrites,
+        blocked: lockedWrites.map((photoId) => ({ photoId, reason: PHOTO_HYPERLINK_TRANSFER_ACTIVE, text: PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT })) });
       // All linked/unlinked writes have been validated together. Never call the two individual
       // actions here: each would publish separately and could leave a half-applied photograph.
       for (const { photoId, decision } of plan.writes) {
@@ -1515,6 +1608,8 @@ export function createPhotoSession({
         if (unavailable.length) return fail('association-unavailable', unavailable);
       }
       const changed = entries.filter((entry) => entry.status !== intent).map((entry) => entry.photoId);
+      const lockedIntent = transferLockedIds(layerId, changed);
+      if (lockedIntent.length) return { ...fail(PHOTO_HYPERLINK_TRANSFER_ACTIVE, lockedIntent), message: PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT };
       for (const id of changed) {
         if (intent === PHOTO_DELIVERY_INTENTS.KEEP_LINK) deliveryDecisions.delete(id);
         else deliveryDecisions.set(id, Object.freeze({ kind: 'gmi', occurrenceKey: records.get(id).occurrence.key, intent }));
@@ -1540,6 +1635,8 @@ export function createPhotoSession({
       const target = include ? 'include' : 'not-selected';
       const changed = entries.filter((entry) => (include ? entry.status !== target
         : entry.status === 'include' || (entry.status === 'review' && (deliveryDecisions.get(entry.photoId)?.kind === 'unlinked' || entry.reason === 'link-removed')))).map((entry) => entry.photoId);
+      const lockedInclusion = transferLockedIds(layerId, changed);
+      if (lockedInclusion.length) return { ...fail(PHOTO_HYPERLINK_TRANSFER_ACTIVE, lockedInclusion), message: PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT };
       for (const id of changed) {
         if (include) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true }));
         else deliveryDecisions.delete(id);
@@ -1550,7 +1647,14 @@ export function createPhotoSession({
     // Read-only: per-occurrence delivery state and counts for the workspace.
     getLayerDelivery(layerId) {
       const layer = layers.get(layerId);
-      return layer ? layerDelivery(layer) : null;
+      if (!layer) return null;
+      const delivery = layerDelivery(layer);
+      // Batch 1B.2B: protected occurrences read as unchangeable (photoDeliveryOptions); the state key is unchanged.
+      const locked = transferLockedIds(layerId, layer.photoIds).filter((id) => delivery.byPhotoId[id]);
+      if (!locked.length) return delivery;
+      const byPhotoId = { ...delivery.byPhotoId };
+      for (const id of locked) byPhotoId[id] = Object.freeze({ ...byPhotoId[id], transferLocked: true });
+      return Object.freeze({ ...delivery, byPhotoId: Object.freeze(byPhotoId) });
     },
     // Read-only, deterministic snapshot for the combined delivery planner (M9).
     getPhotoDeliverySnapshot(layerId) {
@@ -1632,6 +1736,8 @@ export function createPhotoSession({
         if (generation !== ownerGeneration || !layers.has(layerId) || sourceRequests.get(layerId) !== request) return false;
         const layer = layers.get(layerId);
         const attached = layer.spatialSources.find((item) => item.kind === source.kind && item.fingerprint === source.fingerprint);
+        if (attached && transferLockedSource(layerId, attached.id))
+          throw Object.assign(new Error(PHOTO_HYPERLINK_TRANSFER_ACTIVE), { code: PHOTO_HYPERLINK_TRANSFER_ACTIVE, attachedSourceId: attached.id });
         if (loadedInput && attached) {
           if (matchingGmiSources(layer, source.fingerprint).length !== 1)
             throw Object.assign(new Error('source-association-ambiguous'), { code: 'source-association-ambiguous' });
@@ -1656,6 +1762,11 @@ export function createPhotoSession({
       const source = layers.get(layerId)?.spatialSources.find((item) => item.id === sourceId);
       if (!source) return false;
       sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
+      // The wizard shows the refusal where the recheck would have been reviewed.
+      if (transferLockedSource(layerId, sourceId)) {
+        sourceReviews.set(layerId, Object.freeze({ state: 'error', source: null, errorCode: PHOTO_HYPERLINK_TRANSFER_ACTIVE, attachedSourceId: sourceId }));
+        publish(); return false;
+      }
       sourceReviews.set(layerId, Object.freeze({ state: 'ready', source, errorCode: null, recheck: true }));
       publish(); return true;
     },
@@ -1681,7 +1792,16 @@ export function createPhotoSession({
         || review.source.id !== sourceId || review.associationLedger !== associationLedger
         || !memberIds || memberIds.length !== layer.photoIds.length
         || memberIds.some((id, index) => id !== layer.photoIds[index])) return failed('review-changed');
-      const result = gmiAssociationsCore(layerId, review, associationLedger);
+      if (transferLockedSource(layerId, sourceId)) return transferRefused({}, PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT);
+      // A new source must not add or change occurrences of a transferred photograph: checked on copies first, only while
+      // a transfer protects the layer, with the same occurrence ids as the real write (no extra id is ever drawn).
+      const ids = new Map();
+      const occurrenceId = (_assetId, key) => { if (!ids.has(key)) ids.set(key, createId()); return ids.get(key); };
+      if (transferLock(layerId)) {
+        const trial = inDraft(() => gmiAssociationsCore(layerId, review, associationLedger, occurrenceId));
+        if (trial.result.ok) { const broken = draftBreaksTransfer(trial.state); if (broken) return broken; }
+      }
+      const result = gmiAssociationsCore(layerId, review, associationLedger, occurrenceId);
       if (!result.ok) return result;
       const photoIds = layers.get(layerId).photoIds;
       const workflow = sourceWorkflows.get(layerId);
@@ -1691,7 +1811,7 @@ export function createPhotoSession({
       publish(); return { ok: true };
     },
     removeGmiSource(layerId, sourceId, { confirmed = false } = {}) {
-      if (!confirmed || !removeGmiSourceCore(layerId, sourceId).ok) return false;
+      if (!confirmed || transferLockedSource(layerId, sourceId) || !removeGmiSourceCore(layerId, sourceId).ok) return false;
       sourceReviews.delete(layerId);
       sourceRequests.set(layerId, (sourceRequests.get(layerId) || 0) + 1);
       publish(); return true;
@@ -1719,6 +1839,8 @@ export function createPhotoSession({
           }
         } catch { return fail('invalid-source'); }
       }
+      const lockedPositions = transferLockedIds(layerId, requests.map((request) => request?.photoId));
+      if (lockedPositions.length) return transferRefused({ lockedIds: lockedPositions });
       const seen = new Set(), changes = [];
       for (const request of requests) {
         const live = records.get(request.photoId);
@@ -1753,6 +1875,8 @@ export function createPhotoSession({
       const requested = new Set(photoIds);
       const removed = layer.photoIds.filter((id) => requested.has(id));
       if (!removed.length) return [];
+      // All or nothing: a selection that includes a transferred photograph removes nothing.
+      if (transferLockedIds(layerId, removed).length) return [];
       const remaining = layer.photoIds.filter((id) => !requested.has(id));
       const remainingAssets = assetIds(remaining);
       layers.set(layerId, Object.freeze({ ...layer, photoIds: Object.freeze(remaining), photoCount: remaining.length,
@@ -1775,8 +1899,10 @@ export function createPhotoSession({
       if (!layer) return [];
       const accepted = [];
       const seen = new Set();
+      // Like the other skipped requests, a transferred photograph's position is left as it is.
+      const locked = new Set(transferLockedIds(layerId, requests.map((request) => request.photoId)));
       for (const { photoId, candidateId } of requests) {
-        if (seen.has(photoId) || !layer.photoIds.includes(photoId)) continue;
+        if (seen.has(photoId) || !layer.photoIds.includes(photoId) || locked.has(photoId)) continue;
         seen.add(photoId);
         const live = records.get(photoId);
         const spatial = acceptPhotoCandidate(live.spatial, candidateId);
@@ -1874,7 +2000,8 @@ export function createPhotoSession({
     },
     deleteLayer(id) {
       const layer = layers.get(id);
-      if (!layer) return;
+      if (!layer) return false;
+      if (transferLock(id)) return false;
       layers.delete(id);
       sourceWorkflows.delete(id);
       editSessions.delete(id);
@@ -1882,6 +2009,7 @@ export function createPhotoSession({
       release(layer.photoIds);
       if (draftTargetLayerId === id) clearImport();
       publish();
+      return true;
     },
     clear() {
       loadedImport = null;

@@ -68,13 +68,14 @@ function PhotoEditFlowRow({ progress, onSelect, onReturn }) {
 }
 
 export default function PhotoEditCommandBar({ photo, siblingCount = 1, changedCount, canUndo, canRedo, onUndo, onRedo, onSave, onDiscard, onExit,
-  onStage, onMapCenter, announcement = '', clickMove = false, onClickMove, stackCount = 1, flow = null }) {
+  onStage, onMapCenter, announcement = '', clickMove = false, onClickMove, stackCount = 1, flow = null, lockedText = null }) {
   const commandBarRef = useRef(null);
   useEffect(() => { if (!flow) commandBarRef.current?.focus({ preventScroll: true }); }, [flow]);
   const placed = Boolean(photo) && isPhotoPosition(photo.spatial?.current?.position);
   const savedPosition = photo?.saved?.current?.position;
   const moved = placed && photo?.staged?.position && savedPosition ? photoPositionDistance(savedPosition, photo.spatial.current.position) : null;
-  const hint = !photo ? 'Velg et bilde i listen eller på kartet.'
+  // Batch 1B.2B: a selected photograph that an active Rettinger transfer protects is passed as null with its explanation.
+  const hint = !photo ? lockedText || 'Velg et bilde i listen eller på kartet.'
     : clickMove ? `Klikk i kartet der ${photo.originalFilename} skal stå. Esc avbryter.`
       : placed ? 'Dra bildet for å flytte, håndtaket for å rotere.'
         : `Klikk i kartet for å plassere ${photo.originalFilename}.`;

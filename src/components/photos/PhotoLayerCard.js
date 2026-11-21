@@ -6,9 +6,14 @@ import PhotoIconButton from './PhotoIconButton';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import LayerTypeBadge from '../LayerTypeBadge';
 import GmiConfirmDialog from '../gmi-edit/GmiConfirmDialog';
+import useStore from '@/lib/store';
 
 export default function PhotoLayerCard({ layer, onOpen }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // Batch 1B.2B: a layer holding an active Rettinger hyperlink transfer cannot be removed (the session refuses it too).
+  // Re-read on every Rettinger publication.
+  useStore((state) => state.gmiEditStatus);
+  const transferLock = photoSession.getHyperlinkTransferLock(layer.id, []);
   return (
     <section className="border-b-2 border-gmi-border py-1" aria-label={`Fotokartlag ${layer.name}`}>
       <div className="flex items-center gap-2 p-2">
@@ -23,8 +28,8 @@ export default function PhotoLayerCard({ layer, onOpen }) {
         {/* Compact icon action like the other layer-card actions; the card's own label names the layer. */}
         <PhotoIconButton icon={ImageIcon} size={14} label="Åpne FOTO" tooltip="Åpne bildemodul" data-photo-layer-open={layer.id}
           className="layer-card-icon-button" onClick={(event) => onOpen(layer.id, event.currentTarget)} />
-        <PhotoIconButton icon={TrashIcon} size={14} label={`Fjern fotokartlag ${layer.name}`} tooltip="Fjern fotokartlag"
-          aria-haspopup="dialog" className="layer-card-icon-button layer-card-icon-button-destructive"
+        <PhotoIconButton icon={TrashIcon} size={14} label={`Fjern fotokartlag ${layer.name}`} tooltip={transferLock ? transferLock.layerText : 'Fjern fotokartlag'}
+          unavailable={Boolean(transferLock)} aria-haspopup={transferLock ? undefined : 'dialog'} className="layer-card-icon-button layer-card-icon-button-destructive"
           onClick={() => { if ((layer.assetCount ?? layer.photoCount) > 0) setConfirmRemove(true); else photoSession.deleteLayer(layer.id); }} />
       </div>
       {/* DD2: a FOTO layer with photographs is removed only after the application's confirmation dialog. */}

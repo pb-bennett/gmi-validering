@@ -28,7 +28,7 @@ export function photoPositionSourceKind(photo) {
   // Candidate-backed acceptance points to one exact occurrence candidate, never the available evidence as a whole.
   const kind = basis?.kind === 'candidate'
     ? photo.spatial.candidates?.find((candidate) => candidate.id === basis.candidateId)?.kind
-    : basis?.kind;
+    : basis?.kind === 'hyperlink-transfer' ? photo.spatial.current.origin || 'gmi' : basis?.kind;
   return photoPositionSourcePresentation(kind).kind;
 }
 

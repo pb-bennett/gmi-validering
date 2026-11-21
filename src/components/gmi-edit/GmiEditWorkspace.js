@@ -6,7 +6,7 @@ import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, CaretLeftIcon, Care
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
-  describeGmiEditStatus, gmiChangeSetDependents, gmiEditDownloadState, gmiEditMessage,
+  describeGmiEditStatus, gmiChangeSetCells, gmiChangeSetDependents, gmiEditDownloadState, gmiEditMessage,
   gmiObjectKey, gmiObjectFocusIntent, scopeToTableTab, summarizeGmiEditCounts, GMI_EDIT_TABLE_VIEWS,
 } from '@/lib/gmiEditView.mjs';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
@@ -254,7 +254,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     || view?.redo.find((changeSet) => changeSet.id === id)?.label || id;
   const firstObjectOf = (id) => {
     const changeSet = [...(view?.changeSets || []), ...(view?.redo || [])].find((entry) => entry.id === id);
-    const cell = changeSet?.cells[0];
+    const cell = changeSet ? gmiChangeSetCells(changeSet)[0] : null;
     return cell ? { scope: cell.scope, sourceIndex: cell.sourceIndex } : null;
   };
   const undo = ({ reveal = true } = {}) => {
@@ -273,11 +273,13 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const showProposed = (changeSet) => {
     const state = useStore.getState(), table = state.ui.layerDataTable;
     if (!table?.isOpen || table.layerId !== layerId || state.objectTableInspection) openLayerDataTable(layerId);
-    if (changeSet.cells[0]) setLayerDataTableTab(layerId, scopeToTableTab(changeSet.cells[0].scope));
+    // A hyperlink transfer has no ordinary cells; its S_HYPERLINK cells are shown the same way (Batch 1B.2B).
+    const cells = gmiChangeSetCells(changeSet);
+    if (cells[0]) setLayerDataTableTab(layerId, scopeToTableTab(cells[0].scope));
     useStore.getState().setGmiEditTableView(layerId, GMI_EDIT_TABLE_VIEWS.PROPOSED);
-    const scope = changeSet.cells[0]?.scope;
+    const scope = cells[0]?.scope;
     if (scope) useStore.getState().requestLayerTableReveal(layerId,
-      changeSet.cells.filter((cell) => cell.scope === scope), [...new Set(changeSet.cells.map((cell) => cell.field))]);
+      cells.filter((cell) => cell.scope === scope), [...new Set(cells.map((cell) => cell.field))]);
   };
   // H4: only an active ChangeSet that touches objects handed off from the Validator has rule context.
   const validatorCheck = (changeSet) => view?.changeSets.includes(changeSet) && gmiValidatorReturnTarget(layerId, handoff, { changeSet })

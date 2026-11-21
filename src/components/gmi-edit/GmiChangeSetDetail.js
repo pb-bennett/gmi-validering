@@ -3,11 +3,12 @@
 import { useEffect, useRef } from 'react';
 import { ArrowArcLeftIcon, ArrowSquareOutIcon, CheckCircleIcon, HandPointingIcon, TableIcon, TrashIcon, XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
-import { describeGmiObject, formatGmiChangeTime, gmiChangeSetCellViews, gmiSkipReasonLabel, summarizeGmiChangeSet } from '@/lib/gmiEditView.mjs';
+import { describeGmiObject, formatGmiChangeTime, gmiChangeSetCellViews, gmiHyperlinkTransferSummary, gmiSkipReasonLabel, summarizeGmiChangeSet } from '@/lib/gmiEditView.mjs';
 import { gmiBatchSkipSummary } from '@/lib/gmiBatchInspectorView.mjs';
 import { Lexeme } from './GmiObjectEditor';
+import { GmiHyperlinkTransferRows } from './GmiChangeList';
 
-const ORIGIN = Object.freeze({ 'object-editor': 'Objektretting', batch: 'Samleretting' });
+const ORIGIN = Object.freeze({ 'object-editor': 'Objektretting', batch: 'Samleretting', 'photo-hyperlink-transfer': 'Flytting av bildelenke' });
 const control = 'gmi-compact-button gmi-focus-ring inline-flex items-center gap-1 border border-gmi-border-strong px-2 py-1';
 
 /**
@@ -20,6 +21,7 @@ export default function GmiChangeSetDetail({ layerId, changeSet, number, effecti
   'use no memo';
   const summary = summarizeGmiChangeSet(changeSet);
   const cells = gmiChangeSetCellViews(changeSet, effective);
+  const transfer = gmiHyperlinkTransferSummary(changeSet);
   const multipleFields = summary.fields.length > 1;
   const focusKey = `change-set:${changeSet.id}`;
   const fieldsKey = summary.fields.join('\u0000');
@@ -54,6 +56,7 @@ export default function GmiChangeSetDetail({ layerId, changeSet, number, effecti
       <div><p><strong>{manual.length} manuelt inkludert</strong> utenfor Validatorens anbefaling</p>
         <ul>{manual.map((entry) => <li key={entry.key}>{describeGmiObject(entry.scope, entry.sourceIndex, entry.objectId)}: {gmiBatchSkipSummary(entry, entry.field || summary.fields[0])}</li>)}</ul></div>
     </div>}
+    {transfer && <GmiHyperlinkTransferRows summary={transfer} changeSetId={changeSet.id} onSelectObject={onSelectObject} />}
     <div className="gmi-change-detail-scroll">
       <table className="gmi-change-detail-table" data-gmi-change-detail-cells>
         <thead><tr><th scope="col">Objekt</th>{multipleFields && <th scope="col">Felt</th>}<th scope="col">Original</th><th scope="col">Foreslått</th></tr></thead>

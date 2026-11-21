@@ -8,6 +8,7 @@ import { extractHyperlinkOccurrences } from '../hyperlinkFilenames.mjs';
 import { gmiPointPosition, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { photoPositionDistance } from './photoPositioning.mjs';
 import { photoDeliveryOptions } from './photoDeliveryChoice.mjs';
+import { PHOTO_TRANSFER_POSITION_TEXT, photoTransferPositionConflict } from './photoHyperlinkTransferEligibility.mjs';
 
 const collections = { point: 'points', line: 'lines' };
 const identifiers = ['AnleggsID', 'S_OBJID', 'PUNKT-NAVN', 'PUNKT-KODE'];
@@ -272,9 +273,12 @@ function groupMoveIssues(model, row, group) {
   if (!group.assetId) return issues;
   const statuses = new Set(group.photos.map((photo) => model.delivery?.byPhotoId?.[photo.id]?.status).filter(Boolean));
   if ([...statuses].some((status) => status !== 'keep-link') || statuses.size > 1) issues.push(issue('delivery-conflict', 'Bildet har et annet leveringsvalg enn GMI. Avklar GMI, GML eller Ikke før flytting.'));
-  if (group.photos.some((photo) => photo.spatial?.current?.position && row.placement?.position
-    && photoPositionDistance(photo.spatial.current.position, row.placement.position) > 0.01))
-    issues.push(issue('accepted-position', 'Bildet har en annen akseptert plassering. Behold og avklar denne før eventuell flytting.'));
+  // Batch 1B.2B: the transaction's own accepted-position rule (photoHyperlinkTransferEligibility), not a distance check.
+  const position = photoTransferPositionConflict(group.photos, { sourceObjectKey: row.objectKey, sourceFingerprint: model.source.fingerprint,
+    sourcePosition: row.placement?.status === 'viable' ? row.placement.position : null });
+  if (position) issues.push(issue(position.code, PHOTO_TRANSFER_POSITION_TEXT[position.code]));
+  // The transaction moves exactly this object's FOTO occurrence; without one there is nothing to move.
+  if (!group.occurrencePhoto) issues.push(issue('photo-occurrence-missing', 'Bildet har ingen FOTO-plassering på dette punktobjektet. Bildelenken kan ikke flyttes; behold den uendret.'));
   return issues;
 }
 

@@ -32,7 +32,7 @@
 // caller reported starting the download; the browser cannot confirm the save.
 import { getGmiSourceBytes, gmiSourceIntact, isGmiSourceDocument, loadGmiSourceDocument, computeGmiSourceFingerprint } from './sourceDocument.mjs';
 import {
-  createGmiEditSession, discardAllGmiEdits, discardGmiChangeSet, getGmiEditCell, gmiSessionEffectiveKey, gmiSessionRevision,
+  activeGmiHyperlinkTransferSet, createGmiEditSession, discardAllGmiEdits, discardGmiChangeSet, getGmiEditCell, gmiSessionEffectiveKey, gmiSessionRevision,
   listGmiEditCells, redoGmiEdit, stageGmiChangeSet, stageGmiHyperlinkTransferSet, summarizeGmiEditSession, undoGmiEdit,
 } from './session.mjs';
 import { defaultGmiProposedCache, getGmiDocumentDataset, getGmiProposedState, revalidateGmiEditSession } from './proposed.mjs';
@@ -338,6 +338,22 @@ export function createGmiEditSessions({
     return Object.freeze({ ok: true, session: entry.session, transferSetId: transferSet.id, status: statusOf(entry) });
   }
 
+  /**
+   * Batch 1B.2B: the active hyperlink transfer of every opened, live session, as
+   * [{ layerId, handle, session, transferSet }]. Read-only and free of side effects (a
+   * session whose source is no longer live is skipped, not invalidated), so FOTO
+   * guards and render-time presentation can call it.
+   */
+  function activeHyperlinkTransfers() {
+    const out = [];
+    for (const entry of entries.values()) {
+      if (entry.phase !== 'ready' || entry.disposed || !sources.isLive(entry.binding)) continue;
+      const transferSet = activeGmiHyperlinkTransferSet(entry.session);
+      if (transferSet) out.push(Object.freeze({ layerId: entry.layerId, handle: entry.handle, session: entry.session, transferSet }));
+    }
+    return Object.freeze(out);
+  }
+
   // ------------------------------------------------------------- disposal
 
   /**
@@ -468,6 +484,7 @@ export function createGmiEditSessions({
     /** Revision signal: history state, proposed-copy identity and the active hyperlink transfer (if any). */
     revision: (handle) => withSession(handle, (entry) => Object.freeze({ ok: true, revision: entry.revision, ...gmiSessionRevision(entry.session) })),
     commitHyperlinkTransfer,
+    activeHyperlinkTransfers,
     dispose,
     reconcile,
     clear,

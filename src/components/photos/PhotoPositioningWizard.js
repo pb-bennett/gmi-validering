@@ -7,6 +7,7 @@ import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoPositionDistance, PHOTO_POSITION_TOLERANCE_METRES, photoSourceEvidenceSignature, photoSourcePositionChoices, photoSourceProposalKinds, selectedPhotoSourcePositions } from '@/lib/photos/photoPositioning.mjs';
 import { photoSourceLabel } from '@/lib/photos/photoPresentation.mjs';
 import { readErrors } from '@/lib/photos/photoImportPresentation.mjs';
+import { PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT, PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT } from '@/lib/photos/photoHyperlinkTransferLock.mjs';
 import { EMPTY_GML_CAPTURE_DECISION } from '@/lib/photos/photoGmlCaptureReconciliation.mjs';
 import PhotoGmlSummary from './PhotoGmlSummary';
 import PhotoGmlCaptureTimeChoices from './PhotoGmlCaptureTimeChoices';
@@ -48,6 +49,8 @@ const draftErrors = {
   'source-removed': 'Kilden er fjernet fra fotolaget. Angre endringen som gjelder den.',
   'review-changed': 'Bildene, kildene eller posisjonene er endret. Oppdater kontrollen før du lagrer.',
   'commit-failed': 'Endringene kunne ikke lagres. Ingenting er endret.',
+  // Batch 1B.2B: positions of transferred photographs (the source case uses the read error text).
+  'hyperlink-transfer-active': PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT,
 };
 const errorText = (code) => draftErrors[code] || readErrors[code] || 'Bildene eller kilden er endret. Kontroller kilden på nytt.';
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
@@ -290,7 +293,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, draft = 
     const kindOfSource = review.source.kind;
     const result = photoSession.stageSourceWorkflowSource(ticketRef.current, review,
       kindOfSource === 'gml' ? { captureTime: { ...decision, plan: capturePlan } } : undefined);
-    if (!result.ok) { setError(errorText(result.error)); return; }
+    if (!result.ok) { setError(result.message || errorText(result.error)); return; }
     setCaptureChoice({ key: null, ...EMPTY_GML_CAPTURE_DECISION });
     setError(''); setStagedNotice(`«${review.source.filename}» er tatt med i endringene.`);
     if (kindOfSource === 'gmi') positions(review.source.id);
@@ -368,6 +371,8 @@ export default function PhotoPositioningWizard({ layer, photos, review, draft = 
               </PhotoSourceOption>
               {layer.spatialSources.map((source, index) => {
                 const op = opsBySource.get(source.id);
+                // Batch 1B.2B: the GMI source of an active Rettinger hyperlink transfer cannot be rechecked or removed.
+                const transferLocked = Boolean(photoSession.getHyperlinkTransferLock(layer.id, [])?.sourceIds.includes(source.id));
                 return <PhotoSourceOption as="section" key={source.id} sourceId={source.id} value={source.kind}
                   label={`${index + 1}. ${sourceLabels[source.kind]}`}>
                   <p className="photo-source-filename">{source.filename}{op && <span className="photo-source-staged-tag" data-staged-op={op.kind}>{opTag(op)}</span>}</p>
@@ -375,16 +380,17 @@ export default function PhotoPositioningWizard({ layer, photos, review, draft = 
                   <details><summary>Kildedetaljer</summary>{source.kind === 'gmi' ? <PhotoGmiSummary source={source} /> : <PhotoGmlSummary source={source} ledger={source.ledger} />}</details>
                   <div className="photo-import-source-actions flex flex-wrap gap-2">
                     {op ? <button type="button" className={photoSourceButton} onClick={() => undoOp(op.id)}>Angre</button> : <>
-                      <button type="button" className={photoSourceButton} disabled={Boolean(review)} onClick={() => recheck(source.id)}>Kontroller på nytt</button>
-                      {source.kind === 'gmi' && <button type="button" className={photoSourceButton} disabled={Boolean(review)} onClick={() => setRemoveSourceId(source.id)}>Fjern kilde</button>}
+                      <button type="button" className={photoSourceButton} disabled={Boolean(review) || transferLocked} onClick={() => recheck(source.id)}>Kontroller på nytt</button>
+                      {source.kind === 'gmi' && <button type="button" className={photoSourceButton} disabled={Boolean(review) || transferLocked} onClick={() => setRemoveSourceId(source.id)}>Fjern kilde</button>}
                     </>}
                   </div>
+                  {transferLocked && <p className="photo-inspector-note" data-source-transfer-lock role="note">{PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT}</p>}
                   {removeSourceId === source.id && !op && <div className="photo-source-removal"><p>Fjerne {source.filename} og GMI-koblingene fra laget når du lagrer endringene? Bilder, posisjoner og retning beholdes.</p>
                     <div className="flex flex-wrap gap-2">
                       <button type="button" className={photoSourceButton} onClick={() => setRemoveSourceId(null)}>Avbryt fjerning</button>
                       <button type="button" className={`${photoSourceButton} gmi-edit-destructive`} onClick={() => {
                         const result = photoSession.stageSourceWorkflowRemoval(ticketRef.current, source.id);
-                        if (!result.ok) setError(errorText(result.error)); else setPlan(null);
+                        if (!result.ok) setError(result.message || errorText(result.error)); else setPlan(null);
                         setRemoveSourceId(null);
                       }}>Fjern GMI-kilde</button>
                     </div></div>}
@@ -461,7 +467,7 @@ export default function PhotoPositioningWizard({ layer, photos, review, draft = 
                     {row.exifState === 'pending' && <small>Leser GPS …</small>}
                     {row.exifState === 'no-gps' && <small>Ingen GPS-data</small>}
                     {['invalid', 'error', 'unsupported-format'].includes(row.exifState) && <small>EXIF GPS: Kan ikke brukes</small>}
-                    {!row.options.length && <small>Ingen brukbar posisjon tilgjengelig</small>}
+                    {!row.options.length && <small>{row.transferLocked ? PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT : 'Ingen brukbar posisjon tilgjengelig'}</small>}
                     {row.gmiUnavailable && <small>GMI-posisjon utilgjengelig: {row.gmiUnavailable === 'missing-crs' ? 'Kilden mangler et kjent koordinatsystem.' : row.gmiUnavailable === 'unsupported-crs' ? 'Koordinatsystemet støttes ikke.' : 'Punktgeometrien kan ikke brukes.'}</small>}
                   </div>
                   <label className="photo-position-choice">Posisjon

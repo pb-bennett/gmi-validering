@@ -1,3 +1,5 @@
+import { PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT } from './photoHyperlinkTransferLock.mjs';
+
 export const readErrors = {
   'invalid-xml': 'GML-filen er ikke gyldig XML.', 'invalid-gmi': 'Filen kunne ikke leses som en gyldig GMI-fil.',
   'unsupported-gml-profile': 'Velg en GML-fil med Skråfoto i Terrain-formatet fra 2019.',
@@ -7,4 +9,6 @@ export const readErrors = {
   'source-bound-elsewhere': 'Kilden er allerede koblet til et annet lastet GMI-lag. Bruk laget som allerede er koblet til.',
   'source-evidence-mismatch': 'GMI-laget og den lagrede FOTO-kilden har ulike kildedata. Koblingen kan ikke bekreftes.',
   'source-association-ambiguous': 'Flere FOTO-kilder samsvarer med GMI-laget. Koblingen kan ikke bekreftes entydig.',
+  // Batch 1B.2B: an active Rettinger hyperlink transfer protects the source it was verified against.
+  'hyperlink-transfer-active': PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT,
 };

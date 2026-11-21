@@ -37,6 +37,8 @@ export function photoPositionOriginKind(spatial) {
   if (!current) return null;
   if (current.basis?.kind === 'candidate') return spatial.candidates?.find((item) => item.id === current.basis.candidateId)?.kind || 'unknown';
   if (current.basis?.kind === 'manual') return current.origin || 'manual';
+  // Presentation overlay of a proposed hyperlink transfer (photoHyperlinkTransferScope): the recipient's GMI position.
+  if (current.basis?.kind === 'hyperlink-transfer') return current.origin || 'gmi';
   return current.basis?.kind || 'unknown';
 }
 

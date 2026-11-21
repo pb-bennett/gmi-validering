@@ -136,6 +136,10 @@ const MESSAGES = Object.freeze({
   'state-changed': 'Rettingene ble endret mens filen ble laget. Prøv igjen.',
   'output-integrity': 'Kontrollen av den reviderte filen feilet. Ingen fil ble laget.',
   'hyperlink-transfer-export-unsupported': 'Bildelenker flyttet til et annet punktobjekt kan ikke eksporteres ennå. Angre flyttingen før du lager filen.',
+  // Batch 1B.2B: photograph hyperlink transfers in the Rettinger history.
+  'transfer-set-has-later-transfers': 'En senere flytting av bildelenker bygger på denne. Angre eller forkast den senere flyttingen først.',
+  'stale-transfer-basis': 'Flyttingen av bildelenker bygger på en annen historikk. Ingenting ble endret.',
+  'hyperlink-transfer-active': 'Bildelenker er flyttet i denne økten. Denne handlingen kan ikke brukes før flyttingen er angret.',
   'invalid-date': 'Tidspunktet for filnavnet er ugyldig.',
   'filename-empty': 'Filnavnet er tomt.',
   'filename-reserved': 'Filnavnet er reservert i Windows.',
@@ -396,7 +400,47 @@ export function gmiObjectCorrectionLabel(fields, scope, sourceIndex, objectId) {
 
 // ---------------------------------------------------------- change list
 
-const objectsOf = (changeSet) => new Set([...changeSet.cells, ...changeSet.skipped].filter((cell) => Number.isInteger(cell.sourceIndex))
+/** Batch 1B.2B: whether a history entry is a photograph hyperlink transfer (`gmi-hyperlink-transfer-set`). */
+export const isGmiHyperlinkTransferEntry = (changeSet) => changeSet?.kind === 'gmi-hyperlink-transfer-set';
+
+/**
+ * The cells one history entry changes, in the shape of ordinary ChangeSet cells (field, original, previous, next).
+ * A hyperlink transfer has no ordinary field cells (`cells: []`); its S_HYPERLINK cells are `hyperlinkCells`.
+ * The transfer is cumulative against the original, so `previous` is the original lexeme.
+ */
+export function gmiChangeSetCells(changeSet) {
+  if (!isGmiHyperlinkTransferEntry(changeSet)) return changeSet?.cells || [];
+  return (changeSet.hyperlinkCells || []).map((cell) => Object.freeze({ ...cell, previous: cell.original, next: cell.proposed, overwritesPopulated: false }));
+}
+
+/**
+ * Readable content of a hyperlink transfer entry: one row per moved photograph reference group (source object →
+ * recipient, filename, reference count), the moved reference total, and how many groups this entry added to the
+ * earlier transfer it builds on (entries are cumulative). Null for ordinary corrections.
+ */
+export function gmiHyperlinkTransferSummary(changeSet) {
+  if (!isGmiHyperlinkTransferEntry(changeSet)) return null;
+  const cells = changeSet.hyperlinkCells || [];
+  const byObject = new Map(cells.map((cell) => [cell.objectKey, cell]));
+  const objectOf = (objectKey) => {
+    const cell = byObject.get(objectKey);
+    return cell ? Object.freeze({ scope: cell.scope, sourceIndex: cell.sourceIndex, label: describeGmiObject(cell.scope, cell.sourceIndex, cell.objectId) })
+      : Object.freeze({ scope: null, sourceIndex: null, label: 'Ukjent objekt' });
+  };
+  const rows = (changeSet.transfers || []).map((transfer) => {
+    const added = cells.flatMap((cell) => cell.addedReferences || []).filter((reference) => reference.transferKey === transfer.transferKey);
+    return Object.freeze({ key: transfer.transferKey, from: objectOf(transfer.fromObjectKey), to: objectOf(transfer.toObjectKey),
+      filenames: Object.freeze([...new Set(added.map((reference) => reference.filename).filter(Boolean))]),
+      references: transfer.referenceIds?.length || added.length });
+  });
+  const references = rows.reduce((sum, row) => sum + row.references, 0);
+  const newTransfers = changeSet.counts?.newTransfers ?? rows.length;
+  return Object.freeze({ rows: Object.freeze(rows), transfers: rows.length, references, newTransfers, earlierTransfers: rows.length - newTransfers,
+    referencesLabel: `${references} ${references === 1 ? 'bildereferanse' : 'bildereferanser'} flyttet`,
+    objectsLabel: gmiObjectCountLabel(new Set(cells.map((cell) => gmiObjectKey(cell.scope, cell.sourceIndex))).size, 'point') });
+}
+
+const objectsOf = (changeSet) => new Set([...gmiChangeSetCells(changeSet), ...changeSet.skipped].filter((cell) => Number.isInteger(cell.sourceIndex))
   .map((cell) => gmiObjectKey(cell.scope, cell.sourceIndex)));
 
 /**
@@ -429,7 +473,7 @@ export function gmiChangeSetDependents(changeSets, changeSetId) {
  * (a later set may have replaced it).
  */
 export function gmiChangeSetCellViews(changeSet, effectiveByKey) {
-  return Object.freeze(changeSet.cells.map((cell) => {
+  return Object.freeze(gmiChangeSetCells(changeSet).map((cell) => {
     const effective = effectiveByKey?.get(cell.key);
     return Object.freeze({
       ...cell,
@@ -450,7 +494,7 @@ export function gmiObjectCountLabel(count, scope = null) {
  * correction, otherwise its history label. Read only from the ChangeSet itself.
  */
 export function summarizeGmiChangeSet(changeSet) {
-  const cells = changeSet?.cells || [];
+  const cells = gmiChangeSetCells(changeSet);
   const scopes = new Set(cells.map((cell) => cell.scope));
   const objects = new Set(cells.map((cell) => gmiObjectKey(cell.scope, cell.sourceIndex))).size;
   const fields = [...new Set(cells.map((cell) => cell.field))];

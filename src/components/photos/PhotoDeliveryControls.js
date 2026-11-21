@@ -24,7 +24,8 @@ export default function PhotoDeliveryControls({ photo, layerId, entry, assetDeli
   const notesId = useId();
   if (!entry) return null;
   const missing = ['transfer', 'include'].includes(entry.status) ? photoDeliveryReadiness(photo) : [];
-  const reason = photoDeliveryOptions(entry).find((item) => item.reason)?.reason;
+  // A transfer lock is explained once, in the inspector's «Flyttet bildelenke» section.
+  const reason = entry.transferLocked ? null : photoDeliveryOptions(entry).find((item) => item.reason)?.reason;
   const exclusionNote = ['exclude', 'not-selected'].includes(entry.status)
     ? assetDelivery?.status === 'partial' ? 'Bare denne plasseringen er ikke med. Bildefilen er fortsatt med via andre plasseringer eller GMI-lenker.'
       : 'Plasseringen er ikke med i leveransen. Bildet beholdes i FOTO-arbeidsområdet.' : null;

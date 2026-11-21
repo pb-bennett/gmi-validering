@@ -373,6 +373,11 @@
 .gmi-change-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .gmi-edit-change-summary { margin: 0; font-size: 11.5px; color: var(--gmi-text); }
 .gmi-edit-change-summary > span:first-child { font-weight: 600; }
+/* Batch 1B.2B: a photograph hyperlink transfer in the history (source → recipient per moved reference group). */
+.gmi-edit-transfer { display: grid; gap: 2px; }
+.gmi-edit-transfer-summary { margin: 0; font-size: 11.5px; color: var(--gmi-text); }
+.gmi-edit-transfer-rows { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 11px; color: var(--gmi-text); }
+.gmi-edit-transfer-file { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
 .gmi-edit-change-detail-link { justify-self: start; display: inline-flex; align-items: center; gap: 2px; padding: 1px 0; color: var(--gmi-interactive); font-size: 11px; font-weight: 500; }
 .gmi-edit-change-detail-link:hover { text-decoration: underline; text-underline-offset: 2px; }
 .gmi-edit-change-detail-link[aria-pressed=true] { font-weight: 600; }

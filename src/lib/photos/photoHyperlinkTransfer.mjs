@@ -32,13 +32,12 @@
 import { buildGmiHyperlinkTransferCommit, planGmiHyperlinkTransferCommit } from '../gmi-edit/hyperlinkTransferCommit.mjs';
 import { activeGmiHyperlinkTransferSet } from '../gmi-edit/session.mjs';
 import { createGmiPhotoSource, gmiPointPosition, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
-import { photoPositionDistance } from './photoPositioning.mjs';
+import { photoTransferPositionConflict } from './photoHyperlinkTransferEligibility.mjs';
 
 /** Provenance kind of a recipient placement produced by an approved hyperlink transfer. */
 export const PHOTO_HYPERLINK_TRANSFER_PROVENANCE = 'hyperlink-transfer';
 /** The only delivery status a transferred photograph has, before and after the transfer. */
 const KEEP_LINK = 'keep-link';
-const SAME_POSITION_METRES = 0.01;
 
 const fail = (stage, code, detail = {}) => Object.freeze({ ok: false, stage, code, ...detail });
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -113,14 +112,6 @@ export function photoHyperlinkTransferDecision(decision, source) {
 const assetsOf = (photos) => [...new Map(photos.map((photo) => [photo.assetId, { id: photo.assetId, assetId: photo.assetId,
   originalFilename: photo.originalFilename, sourceRelativePath: photo.sourceRelativePath ?? null }])).values()];
 
-/** An accepted position other than the source object's own GMI position (manual, EXIF, GML, elsewhere). */
-function acceptedAlternative(photo, sourcePosition) {
-  const current = photo.spatial?.current;
-  if (!current) return false;
-  if (current.basis?.kind !== 'candidate' || !sourcePosition) return true;
-  const distance = photoPositionDistance(current.position, sourcePosition);
-  return distance === null || distance > SAME_POSITION_METRES;
-}
 
 /** Planner FOTO facts from the single existing owners: FOTO occurrences, accepted positions and the delivery state. */
 function photoStateFor(context, decisions) {
@@ -133,7 +124,9 @@ function photoStateFor(context, decisions) {
     const previous = byAssetId[decision.assetId];
     byAssetId[decision.assetId] = {
       deliveryStatuses: occurrences.map((photo) => context.delivery.byPhotoId[photo.id]?.status ?? 'missing'),
-      acceptedAlternativePosition: Boolean(previous?.acceptedAlternativePosition) || occurrences.some((photo) => acceptedAlternative(photo, sourcePosition)),
+      // The same rule the read-only review applies (Batch 1B.2B): only the source object's own GMI position may be replaced.
+      acceptedAlternativePosition: Boolean(previous?.acceptedAlternativePosition) || Boolean(photoTransferPositionConflict(occurrences,
+        { sourceObjectKey: decision.sourceObjectKey, sourceFingerprint: context.source.fingerprint, sourcePosition })),
       occurrenceObjectKeys: occurrences.filter((photo) => photo.occurrence?.sourceId === context.source.id).map((photo) => photo.occurrence.objectKey),
     };
   }

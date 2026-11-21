@@ -1,12 +1,29 @@
 'use client';
 
 import { CaretRightIcon, TrashIcon } from '@phosphor-icons/react';
-import { formatGmiChangeTime, gmiChangeSetCellViews, gmiSkipReasonLabel, describeGmiObject, summarizeGmiChangeSet } from '@/lib/gmiEditView.mjs';
+import { formatGmiChangeTime, gmiChangeSetCellViews, gmiHyperlinkTransferSummary, gmiSkipReasonLabel, describeGmiObject, summarizeGmiChangeSet } from '@/lib/gmiEditView.mjs';
 import { Lexeme } from './GmiObjectEditor';
 
-const ORIGIN = Object.freeze({ 'object-editor': 'Objektretting', batch: 'Samleretting' });
+const ORIGIN = Object.freeze({ 'object-editor': 'Objektretting', batch: 'Samleretting', 'photo-hyperlink-transfer': 'Flytting av bildelenke' });
 
 const OBJECT_PREVIEW = 6;
+
+/** Batch 1B.2B: a photograph hyperlink transfer entry, read from its own record (not an ordinary field correction). */
+export function GmiHyperlinkTransferRows({ summary, onSelectObject, changeSetId }) {
+  return <div className="gmi-edit-transfer" data-gmi-hyperlink-transfer>
+    <p className="gmi-edit-transfer-summary">{summary.referencesLabel} · {summary.objectsLabel}
+      {summary.earlierTransfers > 0 && <span className="gmi-edit-muted"> · bygger på {summary.earlierTransfers} tidligere {summary.earlierTransfers === 1 ? 'flytting' : 'flyttinger'}</span>}</p>
+    <ul className="gmi-edit-transfer-rows" aria-label="Flyttede bildelenker">{summary.rows.map((row) => <li key={row.key}>
+      <span className="gmi-edit-transfer-file">{row.filenames.join(', ') || 'Bilde'}</span>{row.references > 1 && <span className="gmi-edit-muted"> ({row.references} referanser)</span>}
+      {': '}
+      <button type="button" className="gmi-edit-link gmi-focus-ring" disabled={row.from.scope === null}
+        onClick={() => onSelectObject({ scope: row.from.scope, sourceIndex: row.from.sourceIndex }, changeSetId)}>{row.from.label}</button>
+      {' → '}
+      <button type="button" className="gmi-edit-link gmi-focus-ring" disabled={row.to.scope === null}
+        onClick={() => onSelectObject({ scope: row.to.scope, sourceIndex: row.to.sourceIndex }, changeSetId)}>{row.to.label}</button>
+    </li>)}</ul>
+  </div>;
+}
 
 const undoneCount = (count) => `${count} angret ${count === 1 ? 'retting' : 'rettinger'} kan gjøres om`;
 
@@ -44,7 +61,8 @@ export default function GmiChangeList({ changeSets, redoCount, redoLabel, onRedo
         const cells = gmiChangeSetCellViews(changeSet, effective);
         const objects = [...new Map(cells.map((cell) => [`${cell.scope}:${cell.sourceIndex}`, cell])).values()];
         const summary = summarizeGmiChangeSet(changeSet);
-        const compact = objects.length > 1;
+        const transfer = gmiHyperlinkTransferSummary(changeSet);
+        const compact = objects.length > 1 && !transfer;
         return <li key={changeSet.id} data-change-set={changeSet.id} data-detail-open={detailChangeSetId === changeSet.id || undefined}
           className={activeChangeSetId === changeSet.id || detailChangeSetId === changeSet.id ? 'gmi-edit-change-active' : undefined}>
           <div className="gmi-edit-change-head">
@@ -57,14 +75,15 @@ export default function GmiChangeList({ changeSets, redoCount, redoLabel, onRedo
               <TrashIcon size={14} aria-hidden="true" /> Forkast
             </button>}
           </div>
+          {transfer && <GmiHyperlinkTransferRows summary={transfer} changeSetId={changeSet.id} onSelectObject={onSelectObject} />}
           {compact && <p className="gmi-edit-change-summary">{summary.uniform
             ? <><span>{summary.fields[0]}</span> → <Lexeme value={summary.value} /></>
             : <>{summary.fields.join(', ')} · {summary.objectsLabel}</>}</p>}
-          <div className="gmi-edit-change-objects">
+          {!transfer && <div className="gmi-edit-change-objects">
             {(compact ? objects.slice(0, OBJECT_PREVIEW) : objects).map((cell) => <button key={`${cell.scope}:${cell.sourceIndex}`} type="button" className="gmi-edit-link"
               onClick={() => onSelectObject({ scope: cell.scope, sourceIndex: cell.sourceIndex }, changeSet.id)}>{cell.object}</button>)}
             {compact && objects.length > OBJECT_PREVIEW && <span className="gmi-edit-muted">+{objects.length - OBJECT_PREVIEW} til</span>}
-          </div>
+          </div>}
           {changeSet.eligibility?.manualOverrides?.length > 0 && <details className="gmi-edit-manual-history">
             <summary>Manuelt overstyrt anvendelighet ({changeSet.eligibility.manualOverrides.length})</summary>
             <ul>{changeSet.eligibility.manualOverrides.map((entry) => <li key={entry.key}>
@@ -73,7 +92,7 @@ export default function GmiChangeList({ changeSets, redoCount, redoLabel, onRedo
               {!changeSet.cells.some((cell) => cell.key === entry.key) && ' · Ingen verdi endret'}
             </li>)}</ul>
           </details>}
-          {!compact && <table className="gmi-edit-change-cells">
+          {!compact && !transfer && <table className="gmi-edit-change-cells">
             <thead><tr><th scope="col">Felt</th><th scope="col">Original</th><th scope="col">Foreslått</th></tr></thead>
             <tbody>{cells.map((cell) => <tr key={cell.key} data-superseded={cell.superseded || undefined}>
               <th scope="row">{cell.field}</th>
@@ -85,7 +104,7 @@ export default function GmiChangeList({ changeSets, redoCount, redoLabel, onRedo
             </tr>)}</tbody>
           </table>}
           {onShowDetail && <button type="button" className="gmi-edit-change-detail-link gmi-focus-ring" aria-pressed={detailChangeSetId === changeSet.id}
-            onClick={() => onShowDetail(changeSet.id)}>{compact ? `Vis detaljer for ${summary.objectsLabel}` : 'Vis detaljer'} <CaretRightIcon size={12} weight="regular" aria-hidden="true" /></button>}
+            onClick={() => onShowDetail(changeSet.id)}>{compact || transfer ? `Vis detaljer for ${summary.objectsLabel}` : 'Vis detaljer'} <CaretRightIcon size={12} weight="regular" aria-hidden="true" /></button>}
           {compact && changeSet.skipped.length > 0 && <p className="gmi-edit-skipped">{changeSet.skipped.length} hoppet over – se detaljer.</p>}
           {!compact && changeSet.skipped.length > 0 && <p className="gmi-edit-skipped">
             Hoppet over: {changeSet.skipped.map((cell) => `${cell.field} på ${describeGmiObject(cell.scope, cell.sourceIndex, cell.objectId ?? null)} (${gmiSkipReasonLabel(cell.reason).toLowerCase()})`).join('; ')}

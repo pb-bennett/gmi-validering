@@ -7,6 +7,7 @@ import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { normalizePhotoDirection, photoDirectionLabel } from '@/lib/photos/photoDirection.mjs';
 import { photoPositionAdjusted, photoPositionProvenanceKind, photoPositionSourcePresentation } from '@/lib/photos/photoMarkerPresentation.mjs';
 import { gmiObjectContext } from '@/lib/photos/photoImportOutcome.mjs';
+import { PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT } from '@/lib/photos/photoHyperlinkTransferLock.mjs';
 import { PHOTO_PLACEMENT_FILTERS, PHOTO_SORT_MODES, photoIsPlaced, photoSortLabel } from '@/lib/photos/photoWorkspaceView.mjs';
 import { PHOTO_DELIVERY_FILTERS, PHOTO_DELIVERY_STATUS_LABELS } from '@/lib/photos/photoDeliveryIntent.mjs';
 import { PHOTO_DELIVERY_COLOURS } from '@/lib/photos/photoMarkerPresentation.mjs';
@@ -25,6 +26,7 @@ export function photoRowLabel(photo, changed, deliveryStatus = null) {
   const repeat = photo.repeatGroup?.occurrenceCount > 1 ? `, plassering ${photo.repeatGroup.occurrenceIndex} av ${photo.repeatGroup.occurrenceCount}` : '';
   return `${photo.originalFilename}, ${placed ? `plassert, ${photoPositionSourcePresentation(photoPositionProvenanceKind(photo)).label}${photoPositionAdjusted(photo) ? ', justert' : ''}` : 'uplassert'}`
     + `${degrees != null ? `, retning ${normalizePhotoDirection(degrees)} grader` : ''}${repeat}${changed ? ', endret – ikke lagret' : ''}`
+    + `${photo.hyperlinkTransfer?.status === 'proposed' ? ', bildelenke flyttet i Rettinger (foreslått)' : photo.hyperlinkTransfer?.locked ? ', låst av flyttet bildelenke i Rettinger' : ''}`
     + `${PHOTO_DELIVERY_STATUS_LABELS[deliveryStatus] ? `, levering: ${PHOTO_DELIVERY_STATUS_LABELS[deliveryStatus].toLowerCase()}` : ''}`;
 }
 
@@ -36,12 +38,16 @@ function PhotoRow({ photo, active, tabbable, changed, removal, removalSelected, 
   const adjusted = photoPositionAdjusted(photo);
   const degrees = photo.direction?.current?.degrees;
   const repeated = photo.repeatGroup?.occurrenceCount > 1;
-  const context = [photo.occurrence?.object ? gmiObjectContext(photo.occurrence.object) : null,
+  // Batch 1B.2B: a moved occurrence names its proposed owner as such; the original stays in the inspector.
+  const proposedOwner = photo.hyperlinkTransfer?.status === 'proposed';
+  const context = [photo.occurrence?.object ? `${proposedOwner ? 'Foreslått: ' : ''}${gmiObjectContext(photo.occurrence.object)}` : null,
     repeated ? `${photo.repeatGroup.occurrenceIndex}/${photo.repeatGroup.occurrenceCount}` : null].filter(Boolean).join(' · ');
   const destination = deliveryEntry ? photoDeliveryDestination(deliveryEntry) : null;
+  const transferLocked = Boolean(photo.hyperlinkTransfer?.locked);
   const label = photoRowLabel(photo, changed, deliveryEntry?.status);
   return <li data-photo-id={photo.id} className={active ? 'photo-workspace-active' : undefined} data-changed={changed || undefined}>
-    {removal && <input type="checkbox" className="accent-gmi-interactive" aria-label={`Velg ${photo.originalFilename} for fjerning`} checked={removalSelected} onChange={() => onToggleRemoval(photo.id)} />}
+    {removal && <input type="checkbox" className="accent-gmi-interactive" aria-label={`Velg ${photo.originalFilename} for fjerning${transferLocked ? ' – låst av flyttet bildelenke' : ''}`}
+      checked={removalSelected && !transferLocked} disabled={transferLocked} onChange={() => onToggleRemoval(photo.id)} />}
     {/* Navigation and delivery editing are sibling buttons, never nested controls. */}
     <button type="button" className="photo-workspace-row gmi-focus-ring" aria-label={label} aria-pressed={active}
       tabIndex={tabbable ? 0 : -1} onClick={() => onSelect(photo.id)} onKeyDown={onKeyDown}>
@@ -215,6 +221,7 @@ export default function PhotoWorkspaceCollection({ layer, photos, view, workspac
         onToggleRemoval={(id) => dispatch({ type: 'toggle-removal', photoId: id })} />)}
       {!shownRows.length && <li className="photo-workspace-empty">{photos.length ? 'Ingen bilder med dette filteret.' : 'Laget er tomt. Legg til bilder for å fortsette.'}</li>}
     </ul>
+    {removal && photos.some((photo) => photo.hyperlinkTransfer?.locked) && <p className="photo-inspector-note" data-removal-transfer-lock role="note">{PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT}</p>}
     {removal && <div className="photo-removal-actions">
       <button type="button" className="gmi-compact-button gmi-focus-ring photo-removal-primary" disabled={!removalIds.length}
         onClick={() => setConfirmRemoval([...removalIds])}>Fjern {unit(removalIds.length)} fra laget</button>

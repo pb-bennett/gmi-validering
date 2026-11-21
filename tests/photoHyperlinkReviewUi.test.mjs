@@ -154,7 +154,8 @@ test('Batch 1A/1A.2 production: complete Validator handoff, all-point pairing, K
         for (const [width, height] of [[1280, 720], [1366, 768]]) await screenshotLayout(width, height, 'foto-selected');
         await browser.evaluate(`${dialog}.querySelector('[aria-label="Foreslått mottaker"]').scrollIntoView({block:'start'})`);
         await browser.waitFor(`${dialog}.querySelector('.photo-link-map .leaflet-container')`);
-        assert(await browser.evaluate(`${dialog}.innerText.includes('annen akseptert plassering') && ${dialog}.innerText.includes('annet leveringsvalg enn GMI')`));
+        // Batch 1B.2B: the transaction's accepted-position rule and wording (an EXIF placement is not the object's GMI position).
+        assert(await browser.evaluate(`${dialog}.innerText.includes('akseptert plassering som ikke er dette punktobjektets GMI-posisjon') && ${dialog}.innerText.includes('annet leveringsvalg enn GMI')`));
         assert(await browser.evaluate(`(() => { const warning=${dialog}.querySelector('.gmi-validation-accent[data-validation-tone=warning]'), probe=document.createElement('span'); probe.style.color='var(--gmi-validation-compact-warning-text)'; ${dialog}.append(probe); const same=getComputedStyle(warning).color===getComputedStyle(probe).color; probe.remove(); return same; })()`), 'compact warnings use the approved yellow token');
         for (const [width, height] of [[1280, 720], [1366, 768]]) await screenshotLayout(width, height, 'foto-position-evidence');
         await browser.evaluate(`(() => {const detail=${dialog}.querySelector('.photo-link-detail'); detail.scrollTop=detail.scrollHeight;})()`);

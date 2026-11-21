@@ -12,6 +12,7 @@ import { moveLayerInOrder } from './map/layerOrder.mjs';
 import { photoSession } from './photos/photoSession.mjs';
 import { bindLoadedGmiSurveyStore, loadedGmiSources } from './photos/loadedGmiSource.mjs';
 import { bindGmiEditSessionStore, gmiEditRemovalBlock, gmiEditSessions } from './gmiEditSessions.mjs';
+import { bindPhotoHyperlinkTransferGuard } from './photos/photoHyperlinkTransferScope.mjs';
 import { gmiSelectionBinding, sameGmiSelectionBinding, gmiSelectionHostIsActive, GMI_RETTINGER_SELECTION_HOST, reduceGmiEditSelection } from './gmiEditSelection.mjs';
 import { GMI_EDIT_TABLE_VIEW_BY, gmiTableViewAfterStage } from './gmiEditView.mjs';
 import { bindGeminiSurveyStore, geminiSession } from './gemini-wfs/geminiSession.mjs';
@@ -3543,6 +3544,8 @@ storeApi = useStore;
 bindGeminiSurveyStore(useStore);
 bindLoadedGmiSurveyStore(useStore, photoSession);
 bindGmiEditSessionStore(useStore);
+// Batch 1B.2B: FOTO refuses writes that would invalidate an active Rettinger hyperlink transfer.
+bindPhotoHyperlinkTransferGuard(photoSession, gmiEditSessions);
 if (hydrationCompletedDuringInitialization) {
   useStore.setState({ hydrated: true }, false, 'persist/hydrated');
 }

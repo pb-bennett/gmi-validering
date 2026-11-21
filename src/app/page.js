@@ -33,6 +33,8 @@ import PhotoWorkspaceToast from '@/components/photos/PhotoWorkspaceToast';
 import PhotoEditCommandBar from '@/components/photos/PhotoEditCommandBar';
 import PhotoEditBoundaryDialog from '@/components/photos/PhotoEditBoundaryDialog';
 import usePhotoMapDisplayPreference from '@/components/photos/usePhotoMapDisplayPreference';
+import usePhotoHyperlinkTransfers from '@/components/photos/usePhotoHyperlinkTransfers';
+import { PHOTO_HYPERLINK_TRANSFER_ACTIVE, PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT, applyPhotoHyperlinkTransfer, photoHyperlinkTransferLinkLayer } from '@/lib/photos/photoHyperlinkTransferScope.mjs';
 import DataDisplayModal from '@/components/DataDisplayModal';
 import ZValidationModal from '@/components/ZValidationModal';
 import InclineAnalysisModal from '@/components/InclineAnalysisModal';
@@ -234,9 +236,15 @@ export default function Home() {
     const guard = gmiEditActive ? gmiEditGuardRef.current : null;
     if (guard) guard(action, 'objektet'); else action();
   };
+  // Batch 1B.2B: active Rettinger hyperlink transfers per FOTO layer (verified proposed view and lock), refreshed on every
+  // FOTO and Rettinger publication. The workspace shows the proposed owner and position as a presentation overlay;
+  // the session's accepted records are never changed by it.
+  const photoTransfers = usePhotoHyperlinkTransfers(photoLayers);
+  const workspaceTransfer = photoTransfers.get(photoWorkspace.layerId) || null;
   // photoLayers is a new array on every publish, so every derived photo list follows the session snapshot.
   const workspacePhotos = useMemo(() => photoLayers.some((layer) => layer.id === photoWorkspace.layerId)
-    ? photoSession.getLayerPhotos(photoWorkspace.layerId) : [], [photoLayers, photoWorkspace.layerId]);
+    ? applyPhotoHyperlinkTransfer(photoSession.getLayerPhotos(photoWorkspace.layerId), workspaceTransfer?.presentation) : [],
+  [photoLayers, photoWorkspace.layerId, workspaceTransfer]);
   const photoEditing = Boolean(workspaceLayer) && photoWorkspace.mode === 'edit' && photoEditIsActive(photoEdit);
   const effectiveWorkspacePhotos = useMemo(() => photoEditing ? workspacePhotos.map((photo) => effectivePhoto(photo, photoEdit)) : workspacePhotos,
     [photoEditing, workspacePhotos, photoEdit]);
@@ -257,8 +265,11 @@ export default function Home() {
   }, []);
   useEffect(() => { sessionLossGuard.current?.update(sessionLoss.meaningful); }, [sessionLoss.meaningful]);
   // Combined-delivery decisions (M8) are read from the session like the photos, on every publish.
-  const workspaceDelivery = useMemo(() => photoLayers.some((layer) => layer.id === photoWorkspace.layerId)
-    ? photoSession.getLayerDelivery(photoWorkspace.layerId) : null, [photoLayers, photoWorkspace.layerId]);
+  // The transfer lock is part of the entries (transferLocked), so a Rettinger undo/redo refreshes them too.
+  const workspaceDelivery = useMemo(() => {
+    void workspaceTransfer;   // refresh signal: the lock follows the Rettinger history
+    return photoLayers.some((layer) => layer.id === photoWorkspace.layerId) ? photoSession.getLayerDelivery(photoWorkspace.layerId) : null;
+  }, [photoLayers, photoWorkspace.layerId, workspaceTransfer]);
   const workspaceView = useMemo(() => photoWorkspaceView(effectiveWorkspacePhotos, photoWorkspace, { changedIds, delivery: workspaceDelivery }),
     [effectiveWorkspacePhotos, photoWorkspace, changedIds, workspaceDelivery]);
   // Unsaved moves away from the originating GMI point propose GML. Shown on pills, markers and the inspector, and
@@ -277,10 +288,13 @@ export default function Home() {
   }, [photoEditing, workspaceDelivery, effectiveWorkspacePhotos]);
   const activeWorkspacePhoto = effectiveWorkspacePhotos.find((photo) => photo.id === photoWorkspace.activePhotoId);
   const activeSiblings = activeWorkspacePhoto ? effectiveWorkspacePhotos.filter((photo) => photo.assetId === activeWorkspacePhoto.assetId) : [];
+  // Batch 1B.2B: Edit mode offers no placement or rotation handle for a photograph an active transfer protects.
+  const activeTransferLocked = Boolean(activeWorkspacePhoto?.hyperlinkTransfer?.locked);
+  const editablePhoto = activeTransferLocked ? null : activeWorkspacePhoto || null;
   // List delivery pills and the inspector toggle: every change is one occurrence's M8 decision,
   // written at once through the session. Nothing is exported or changed in the GMI or photographs here.
   const reportDeliveryChange = (photoId, result) => {
-    if (!result?.ok) { notifyPhoto(result?.reason || 'Valget kunne ikke lagres fordi utvalget er endret. Prøv igjen.', 'error'); return; }
+    if (!result?.ok) { notifyPhoto(result?.reason || result?.message || 'Valget kunne ikke lagres fordi utvalget er endret. Prøv igjen.', 'error'); return; }
     const photo = workspacePhotos.find((item) => item.id === photoId);
     const name = photo ? `${photo.originalFilename}${photo.occurrence?.object ? ` · ${gmiObjectContext(photo.occurrence.object)}` : ''}` : 'Plasseringen';
     const entry = workspaceLayer ? photoSession.getLayerDelivery(workspaceLayer.id)?.byPhotoId[photoId] : null;
@@ -370,6 +384,13 @@ export default function Home() {
       setPhotoBoundary({ variant: 'conflict', staleIds: result.staleIds, then });
       return;
     }
+    // Batch 1B.2B: nothing was written and the session stays open; the staged change on the transferred photo can be undone.
+    if (result.error === PHOTO_HYPERLINK_TRANSFER_ACTIVE) {
+      photoEditTicketRef.current = ticket;
+      setPhotoBoundary(null);
+      notifyPhoto(result.message, 'error');
+      return;
+    }
     abandonPhotoEdits(ticket);
   };
   const discardPhotoEdits = (then = null) => { endPhotoEditSession(); setPhotoBoundary(null); then?.(); };
@@ -386,7 +407,12 @@ export default function Home() {
   };
   // Every way out of Edit mode: without a handoff the return is a no-op, so ordinary editing behaves as before.
   const leavePhotoEditMode = () => requestWorkspaceAction(returnToPhotoCompletion, { keepFlow: true });
-  const stagePhotoEdit = (photoId, field, value, coalesceKey = null) => dispatchPhotoEdit({ type: 'stage', photoId, field, value, coalesceKey, at: Date.now() });
+  const stagePhotoEdit = (photoId, field, value, coalesceKey = null) => {
+    // Batch 1B.2B: a transferred photograph's position and direction stay as the Rettinger transfer recorded them.
+    const lock = workspaceLayer ? photoSession.getHyperlinkTransferLock(workspaceLayer.id, [photoId]) : null;
+    if (lock?.photoIds.length) { notifyPhoto(lock.text, 'error'); return; }
+    dispatchPhotoEdit({ type: 'stage', photoId, field, value, coalesceKey, at: Date.now() });
+  };
   const selectWorkspacePhoto = (photoId, { pan = false } = {}) => {
     dispatchPhotoWorkspace({ type: 'active', photoId });
     if (pan && workspaceLayer) setPhotoPanRequest({ layerId: workspaceLayer.id, photoId, at: Date.now() });
@@ -1071,20 +1097,20 @@ export default function Home() {
                       colourMode: photoWorkspace.colourMode, onColourModeChange: (value) => dispatchPhotoWorkspace({ type: 'map-colour', value }),
                       delivery: shownDelivery, onToggleDelivery: toggleWorkspaceDelivery,
                       onEditPlacement: () => runWorkspaceTool('edit'),
-                      zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing ? photoWorkspace.activePhotoId : null,
+                      zoom: zoomLevel, editing: photoEditing, hiddenPhotoId: photoEditing && editablePhoto ? photoWorkspace.activePhotoId : null,
                       // A8/A8.1: photos hidden with the map toolbar «Vis bilder» control; the selection and an open preview
                       // survive until shown again. Editing always shows them.
                       hidden: workspacePhotosHidden && !photoEditing } : null}
                     onSelectPhoto={(photoId) => selectWorkspacePhoto(photoId)} photoPanRequest={photoPanRequest}
                     photoFitRequest={photoFitRequest?.layerId === workspaceLayer?.id ? photoFitRequest : null} onPhotoFitHandled={onPhotoFitHandled}
-                    photoEdit={photoEditing ? { photo: activeWorkspacePhoto || null, connectors: photoEditConnectors, onStage: stagePhotoEdit,
+                    photoEdit={photoEditing ? { photo: editablePhoto, connectors: photoEditConnectors, onStage: stagePhotoEdit,
                       onAnnounce: setPhotoAnnouncement, centerRef: photoMapCenterRef, stackIds: photoEditStackIds,
                       clickMove: photoClickMove, onClickMoveEnd: () => setPhotoClickMoveId(null) } : null}
                     photoDisplay={{ mode: photoMapDisplay, onChange: setPhotoMapDisplay, zoom: zoomLevel, suppressed: workspacePhotosHidden }}
                     analysisSuspended={mainMapAnalysisSuspended}
                     photoLocateRequest={photoLocateRequest} onPhotoLocateHandled={() => setPhotoLocateRequest(null)} />
                   {photoEditing && <div className="photo-edit-command-anchor">
-                    <PhotoEditCommandBar photo={activeWorkspacePhoto || null} siblingCount={activeSiblings.length} changedCount={changedIds.size}
+                    <PhotoEditCommandBar photo={editablePhoto} lockedText={activeTransferLocked ? PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT : null} siblingCount={activeSiblings.length} changedCount={changedIds.size}
                       canUndo={canUndoPhotoEdit(photoEdit)} canRedo={canRedoPhotoEdit(photoEdit)} onUndo={() => travelPhotoEdit('undo')} onRedo={() => travelPhotoEdit('redo')}
                       onSave={() => savePhotoEdits(returnToPhotoCompletion)} onDiscard={() => setPhotoBoundary({ variant: 'discard', then: returnToPhotoCompletion })} onExit={leavePhotoEditMode}
                       onStage={stagePhotoEdit} onMapCenter={() => photoMapCenterRef.current?.()} announcement={photoAnnouncement}
@@ -1179,6 +1205,7 @@ export default function Home() {
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
             {!photoImport && <PhotoWorkspaceInspector key={activeWorkspacePhoto?.assetId || 'empty'} photo={activeWorkspacePhoto} layer={workspaceLayer}
               siblings={activeSiblings} editing={photoEditing} delivery={shownDelivery} onDeliveryResult={reportDeliveryChange}
+              linkLayer={photoHyperlinkTransferLinkLayer(workspaceLayer, workspaceTransfer?.transfers)}
               onSelect={(photoId) => selectWorkspacePhoto(photoId, { pan: true })} onLocate={locatePhoto}
               onEditMetadata={() => requestWorkspaceAction(() => setPhotoDialog('metadata'))} onOpenViewer={() => setPhotoViewerOpen(true)} />}
           </aside> : gmiEditActive ? <aside id={GMI_EDIT_INSPECTOR_ROOT_ID} key={gmiEditLayerId} ref={setGmiEditInspector} className="gmi-edit-inspector" aria-label="Objektinspektør" />

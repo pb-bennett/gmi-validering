@@ -28,6 +28,8 @@ import usePhotoSession from './photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { buildPhotoMapItems } from '@/lib/photos/photoMapFeatures.mjs';
 import PhotoMarkersLayer from './photos/PhotoMarkersLayer';
+import usePhotoHyperlinkTransfers from './photos/usePhotoHyperlinkTransfers';
+import { applyPhotoHyperlinkTransfer } from '@/lib/photos/photoHyperlinkTransferScope.mjs';
 import StreetViewControl from './StreetViewControl';
 import GeminiReferenceLayer from './gemini-wfs/GeminiReferenceLayer';
 import PhotoEditLayer from './photos/PhotoEditLayer';
@@ -1149,9 +1151,13 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
   // hover previews, so no invisible photo stays active. FOTO editing always shows its photos. FOTO always shows the layer
   // it opened, whatever that layer's own flag in the Layer Manager.
   const photosSuppressed = Boolean(photoDisplay?.suppressed) && !photoWorkspace?.editing;
-  const photoItems = useMemo(() => photosSuppressed ? [] : buildPhotoMapItems(photoLayers, photoSession.getLayerPhotos, workspaceLayerId ? {
-    photosByLayer: new Map([[workspaceLayerId, workspacePhotos]]), include: { layerId: workspaceLayerId, ids: workspaceVisibleIds, visible: true },
-  } : {}), [photosSuppressed, photoLayers, workspaceLayerId, workspacePhotos, workspaceVisibleIds]);
+  // Batch 1B.2B: layers outside the FOTO workspace show an active Rettinger transfer like the workspace does (the
+  // workspace layer's photos already carry the overlay): one marker per occurrence, on the recipient's GMI position.
+  const photoTransfers = usePhotoHyperlinkTransfers(photoLayers);
+  const photoItems = useMemo(() => photosSuppressed ? [] : buildPhotoMapItems(photoLayers,
+    (layerId) => applyPhotoHyperlinkTransfer(photoSession.getLayerPhotos(layerId), photoTransfers.get(layerId)?.presentation), workspaceLayerId ? {
+      photosByLayer: new Map([[workspaceLayerId, workspacePhotos]]), include: { layerId: workspaceLayerId, ids: workspaceVisibleIds, visible: true },
+    } : {}), [photosSuppressed, photoLayers, photoTransfers, workspaceLayerId, workspacePhotos, workspaceVisibleIds]);
   const hoverControllerRef = useRef(null);
   const data = useStore((state) => state.data);
   const multiLayerModeEnabled = useStore(

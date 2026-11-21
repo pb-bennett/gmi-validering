@@ -8,6 +8,7 @@ import { PHOTO_DELIVERY_REASON_TEXT, PHOTO_DELIVERY_STATUS_LABELS, summarizePhot
 import { PHOTO_DELIVERY_COLOURS, photoDeliveryColourState } from './photoMarkerPresentation.mjs';
 import { PHOTO_POSITION_TOLERANCE_METRES, photoPositionDistance } from './photoPositioning.mjs';
 import { isPhotoPosition } from './photoSpatial.mjs';
+import { PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT } from './photoHyperlinkTransferLock.mjs';
 
 const option = (key, apply, { active = false, disabled = false, reason = null } = {}) =>
   Object.freeze({ key, label: PHOTO_DELIVERY_COLOURS[key].short, apply, active, disabled, reason });
@@ -66,6 +67,9 @@ export function planPhotoExclusion(delivery, layer, photoIds, { scope = 'photo',
  */
 export function photoDeliveryOptions(entry) {
   if (!entry) return [];
+  // Batch 1B.2B: a photograph moved by an active Rettinger transfer keeps its delivery state (the session refuses changes).
+  if (entry.transferLocked) return photoDeliveryOptions({ ...entry, transferLocked: false }).map((item) => Object.freeze({ ...item,
+    disabled: true, reason: item.active ? null : PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT }));
   if (entry.linked) {
     return [option('gmi', { kind: 'intent', intent: 'keep-link' }, { active: entry.status === 'keep-link' }),
       option('gml', { kind: 'intent', intent: 'transfer' }, { active: entry.status === 'transfer', disabled: !entry.canTransfer,
@@ -87,6 +91,7 @@ export function photoDeliveryOptions(entry) {
  * direct clicks never clear stale evidence or skip an unavailable destination.
  */
 export function photoDeliveryToggleTarget(entry) {
+  if (entry?.transferLocked) return null;
   const available = photoDeliveryOptions(entry).filter((item) => !item.disabled && item.apply);
   if (entry?.status === 'review') return null;
   if (entry?.linked) {
@@ -100,6 +105,7 @@ export function photoDeliveryToggleTarget(entry) {
 /** Why a click cannot change this occurrence, or null. */
 export function photoDeliveryUnavailableReason(entry) {
   if (!entry || photoDeliveryToggleTarget(entry)) return null;
+  if (entry.transferLocked) return PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT;
   if (entry.status === 'review') return `${PHOTO_DELIVERY_REASON_TEXT[entry.reason] || 'Leveringsvalget krever gjennomgang.'} Avklar leveringsvalget i kontrollpanelet.`;
   return photoDeliveryOptions(entry).find((item) => item.reason)?.reason || 'Leveringsvalget kan ikke endres for denne plasseringen.';
 }

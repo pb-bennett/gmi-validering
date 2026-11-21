@@ -64,6 +64,7 @@ export function photoDirectionSourceLabel(direction) {
 export function photoPlacementBasisLabel(current) {
   if (!current) return null;
   if (current.acceptance === 'staged') return 'Endret – ikke lagret';
+  if (current.basis?.kind === 'hyperlink-transfer') return 'Foreslått: mottakerens GMI-posisjon (flyttet bildelenke)';
   if (current.acceptance === 'manual' || current.basis?.kind === 'manual') return 'Manuelt plassert';
   if (current.acceptance === 'explicit-candidate') return 'Valgt fra kildeposisjon';
   return 'Fra import';

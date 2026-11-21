@@ -292,6 +292,9 @@ test('a confidently matched unlinked asset retains its accepted alternative in r
 
 // Batch 1A.2: all point objects as recipients, exact per-reference decisions and the Kontroll progression contract.
 const occurrence = (photo, objectKey) => ({ ...photo, occurrence: { sourceFingerprint: 'synthetic-fingerprint', objectKey } });
+// Batch 1B.2B: a move needs the FOTO occurrence of exactly that source object (the transaction moves it), so fixtures that
+// expect an «Avklart» move give the photograph its occurrence on the source object (unplaced: nothing to replace).
+const occurrencesOn = (input, pairs) => pairs.map(([photo, index]) => occurrence(photo, Object.values(input.source.objectsByKey)[index].objectKey));
 const linkedEntry = (status = 'keep-link') => ({ status, linked: true, canTransfer: true, association: { state: 'confident' } });
 function decide(model, steps) {
   let state = emptyPhotoLinkReviewChoices();
@@ -336,12 +339,13 @@ test('ascending XY order is exact: ties keep source order and objects without a 
 });
 
 test('independent pairings for several source objects; a recipient never spreads to unrelated references and can be changed later', () => {
-  const model = detectPhotoLinkReview({ ...context([
+  const input = context([
     { tema: 'LOK', hyperlink: link('a.jpg') + link('b.jpg', 2), xyz: '581930 6566000 1' },
     { tema: 'TOP', hyperlink: link('c.jpg'), xyz: '581940 6566000 1' },
     { tema: 'SLU', xyz: '581930.5 6566000 1' },
     { tema: 'KUM', xyz: '581941 6566000 1' },
-  ]), photos: [asset('a', 'a.jpg'), asset('b', 'b.jpg'), asset('c', 'c.jpg')], liveSource: true });
+  ]);
+  const model = detectPhotoLinkReview({ ...input, photos: occurrencesOn(input, [[asset('a', 'a.jpg'), 0], [asset('b', 'b.jpg'), 0], [asset('c', 'c.jpg'), 1]]), liveSource: true });
   const [lok, top] = model.rows, [slu, kum] = model.targets.slice(2);
   assert.equal(lok.groups.length, 2);
   let state = decide(model, [[lok, lok.groups[0], { type: 'select', selected: true }], [lok, lok.groups[0], { type: 'target', targetKey: slu.objectKey }],
@@ -381,12 +385,13 @@ test('repeated references and shared photographs keep exact occurrence identitie
 });
 
 test('recipients that already contain hyperlinks: other links warn, the same photo or an unsupported cell blocks', () => {
-  const model = detectPhotoLinkReview({ ...context([
+  const input = context([
     { tema: 'LOK', hyperlink: link('a.jpg'), xyz: '581930 6566000 1' },
     { tema: 'KUM', hyperlink: link('other.jpg') + link('more.jpg', 2), xyz: '581931 6566000 1' },
     { tema: 'KUM', hyperlink: link('a.jpg'), xyz: '581932 6566000 1' },
     { tema: 'SLU', hyperlink: 'h:1(link:"broken.jpg"', xyz: '581933 6566000 1' },
-  ]), photos: [asset('a', 'a.jpg')], liveSource: true });
+  ]);
+  const model = detectPhotoLinkReview({ ...input, photos: occurrencesOn(input, [[asset('a', 'a.jpg'), 0]]), liveSource: true });
   const [lok] = model.rows, [, withLinks, samePhoto, malformed] = model.targets;
   const outcome = (target) => photoLinkReviewDecisions(model, decide(model, [[lok, lok.groups[0], { type: 'select', selected: true }],
     [lok, lok.groups[0], { type: 'target', targetKey: target.objectKey }]]))[0];
@@ -426,11 +431,12 @@ test('missing assets, unsupported grammar, conflicting delivery decisions and FO
 });
 
 test('a recipient that is itself a changing source is flagged; Kontroll progression never becomes save-ready while read-only', () => {
-  const model = detectPhotoLinkReview({ ...context([
+  const input = context([
     { tema: 'LOK', hyperlink: link('a.jpg'), xyz: '581930 6566000 1' },
     { tema: 'TOP', hyperlink: link('b.jpg'), xyz: '581931 6566000 1' },
     { tema: 'SLU', xyz: '581932 6566000 1' },
-  ]), photos: [asset('a', 'a.jpg'), asset('b', 'b.jpg')], liveSource: true });
+  ]);
+  const model = detectPhotoLinkReview({ ...input, photos: occurrencesOn(input, [[asset('a', 'a.jpg'), 0], [asset('b', 'b.jpg'), 1]]), liveSource: true });
   const [lok, top] = model.rows, slu = model.targets[2];
   const decisions = photoLinkReviewDecisions(model, decide(model, [[lok, lok.groups[0], { type: 'select', selected: true }],
     [lok, lok.groups[0], { type: 'target', targetKey: top.objectKey }], [top, top.groups[0], { type: 'select', selected: true }],
