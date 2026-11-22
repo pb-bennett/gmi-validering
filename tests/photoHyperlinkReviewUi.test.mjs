@@ -18,7 +18,7 @@ const pressEscape = async (browser) => {
   await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
 };
 
-test('Batch 1A/1A.2 production: complete Validator handoff, all-point pairing, Kontroll, no writes, cancellation, workspace return and laptop layout',
+test('Batch 1A/1A.2 production: complete Validator handoff, all-point pairing, Kontroll, no writes without save, cancellation, workspace return and laptop layout',
   { skip: !app || !chromePath, timeout: 240000 }, async (t) => {
     const temporaryRoot = path.resolve(tmpdir()), directory = await mkdtemp(path.join(temporaryRoot, 'gmi-link-review-'));
     const source = path.join(directory, 'Synthetic covers.gmi'), image = path.join(directory, 'a.png');
@@ -159,7 +159,9 @@ test('Batch 1A/1A.2 production: complete Validator handoff, all-point pairing, K
         assert(await browser.evaluate(`(() => { const warning=${dialog}.querySelector('.gmi-validation-accent[data-validation-tone=warning]'), probe=document.createElement('span'); probe.style.color='var(--gmi-validation-compact-warning-text)'; ${dialog}.append(probe); const same=getComputedStyle(warning).color===getComputedStyle(probe).color; probe.remove(); return same; })()`), 'compact warnings use the approved yellow token');
         for (const [width, height] of [[1280, 720], [1366, 768]]) await screenshotLayout(width, height, 'foto-position-evidence');
         await browser.evaluate(`(() => {const detail=${dialog}.querySelector('.photo-link-detail'); detail.scrollTop=detail.scrollHeight;})()`);
-        await browser.waitFor(`${dialog}.querySelectorAll('.photo-link-map svg path').length >= 5`);
+        // Batch 1B.4A (deliberate contract update): the evidence map draws the source, the selected recipient, the move and the
+        // photograph's accepted position by default; other point objects only on request.
+        await browser.waitFor(`['source','recipient','move','photo'].every(k=>${dialog}.querySelector('.photo-link-map path.photo-link-map-'+k)) && !${dialog}.querySelector('.photo-link-map path.photo-link-map-other')`);
         for (const [width, height] of [[1280, 720], [1366, 768]]) await screenshotLayout(width, height, 'foto-map-evidence');
         // A second, independent source case keeps its own decision; returning keeps the first.
         await browser.evaluate(`Array.from(${dialog}.querySelectorAll('.photo-link-list button')).find(e=>e.innerText.includes('Cover 2')).click()`);
@@ -177,7 +179,12 @@ test('Batch 1A/1A.2 production: complete Validator handoff, all-point pairing, K
         const rows = await browser.evaluate(`Array.from(${dialog}.querySelectorAll('.photo-link-control tbody tr')).map(r=>Array.from(r.cells).slice(1,6).map(c=>c.innerText.split('\\n')[0]))`);
         assert.deepEqual(rows, [['LOK · Punkt 1', 'Flytt til punktobjekt', 'KUM · Punkt 66', '5 m', 'Uavklart'], ['LOK · Punkt 3', 'Behold uendret', '–', '–', 'Avklart']]);
         assert(await browser.evaluate(`${dialog}.querySelector('.photo-link-control').innerText.includes('1 av 2 beslutninger må avklares')`));
-        assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(e=>/Lagre|Utfør|Legg til retting/.test(e.textContent))`), false, 'no save in the read-only Kontroll');
+        // Batch 1B.4A (deliberate contract update): Kontroll has «Lagre endringer», unavailable while a decision is unresolved,
+        // with the blocking reason in text. Nothing else writes («Utfør», «Legg til retting» stay absent).
+        assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(e=>/Utfør|Legg til retting/.test(e.textContent))`), false);
+        assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('footer button')).find(e=>e.textContent==='Lagre endringer')?.disabled`), true, 'no save while unresolved');
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('.photo-link-save-status').dataset.saveState`), 'blocked');
+        assert(await browser.evaluate(`${dialog}.querySelector('.photo-link-save-status').innerText.includes('Alle valgte beslutninger må være avklart før lagring')`));
         for (const [width, height] of [[1280, 720], [1366, 768]]) await screenshotLayout(width, height, 'foto-kontroll');
         await click(browser, 'Endre a.png på Punkt 1', dialog);
         await browser.waitFor(`document.activeElement?.closest('.photo-link-group')?.querySelector('strong')?.textContent==='a.png'`);

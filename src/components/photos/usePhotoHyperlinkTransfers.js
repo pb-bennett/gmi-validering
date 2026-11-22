@@ -12,6 +12,9 @@ import { photoHyperlinkTransferPresentation, photoHyperlinkTransferViews } from 
  * every Rettinger publication (`gmiEditStatus`: commit, undo, redo, discard), so all FOTO surfaces refresh together.
  */
 export default function usePhotoHyperlinkTransfers(photoLayers) {
+  // Opted out of the React Compiler (Batch 1B.4A fix): it treated `void statuses` as unused and memoised on
+  // `photoLayers` only, so a Rettinger commit, undo or redo did not refresh FOTO until the next FOTO publication.
+  'use no memo';
   const statuses = useStore((state) => state.gmiEditStatus);
   return useMemo(() => {
     void statuses;   // the Rettinger publication signal; the views are read from the registry itself

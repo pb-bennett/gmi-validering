@@ -54,7 +54,7 @@ const MIXED = () => transferFixture([
 
 test('LOK Punkt 293 -> SLU Punkt 108: every delivery mode composes the active transfer; nothing is mutated or published', async () => {
   const f = guarded(await LOK_SLU());
-  assert.equal(PHOTO_LINK_REVIEW_WRITABLE, false);
+  assert.equal(PHOTO_LINK_REVIEW_WRITABLE, true);   // Batch 1B.4A: the review is writable; the export contract is unchanged
   const before = originalBytes(f);
   assert(f.commit([f.move(293, 'SYNT_LOK_B.png', 108)]).ok);
   const fotoBefore = f.fotoState(), publications = f.publications.length, history = historyIds(f);

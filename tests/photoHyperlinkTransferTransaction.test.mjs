@@ -419,8 +419,12 @@ test('review decisions map onto the transaction through the adapter without auto
   assert.equal(result.transfers[0].decisionKey, decision.key);
 });
 
-test('no user-facing write entry point: the transaction is reachable only from tests; the review stays read-only', async () => {
-  assert.equal(PHOTO_LINK_REVIEW_WRITABLE, false);
+// Batch 1B.4A (deliberate contract update): the review is writable through exactly one route. The save module is the
+// only application module besides the owners that imports the transaction, and it imports only the commit, basis and
+// decision adapter; the review dialog is its only importer and never names the transaction itself. Every other file
+// is scanned exactly as before.
+test('one user-facing write entry point: the review saves only through photoHyperlinkReviewSave; nothing else reaches the transaction', async () => {
+  assert.equal(PHOTO_LINK_REVIEW_WRITABLE, true);
   const root = fileURLToPath(new URL('../src/', import.meta.url));
   const owners = new Set([path.join('lib', 'photos', 'photoHyperlinkTransfer.mjs'), path.join('lib', 'gmi-edit', 'hyperlinkTransferCommit.mjs'),
     path.join('lib', 'gmi-edit', 'index.mjs'), path.join('lib', 'gmi-edit', 'editSessions.mjs'), path.join('lib', 'gmi-edit', 'session.mjs')]);
@@ -431,11 +435,19 @@ test('no user-facing write entry point: the transaction is reachable only from t
   const scopeText = await readFile(path.join(root, scopeModule), 'utf8');
   assert.deepEqual([...scopeText.matchAll(/import \{([^}]*)\} from '\.\/photoHyperlinkTransfer\.mjs'/g)].map((match) => match[1].trim()), ['photoHyperlinkTransferView']);
   assert(!/commitPhotoHyperlinkTransfer|commitHyperlinkTransfer|hyperlinkTransferCommit|createGmiHyperlinkTransferSet|stageGmiHyperlinkTransferSet/.test(scopeText));
+  const saveModule = path.join('lib', 'photos', 'photoHyperlinkReviewSave.mjs');
+  const saveText = await readFile(path.join(root, saveModule), 'utf8');
+  assert.deepEqual([...saveText.matchAll(/import \{([^}]*)\} from '\.\/photoHyperlinkTransfer\.mjs'/g)].map((match) => match[1].split(',').map((name) => name.trim()).sort()),
+    [['commitPhotoHyperlinkTransfer', 'photoHyperlinkTransferBasis', 'photoHyperlinkTransferDecision']]);
+  assert(!/commitHyperlinkTransfer\(|hyperlinkTransferCommit|createGmiHyperlinkTransferSet|stageGmiHyperlinkTransferSet|setDeliveryIntent/.test(saveText), 'the save module writes only through the transaction');
+  const importers = [];
   for (const name of files) {
-    if (owners.has(name) || name === scopeModule) continue;
+    if (owners.has(name) || name === scopeModule || name === saveModule) continue;
     const text = await readFile(path.join(root, name), 'utf8');
+    if (/photoHyperlinkReviewSave(\.mjs)?['"]/.test(text)) importers.push(name);
     assert(!/photoHyperlinkTransfer(\.mjs)?['"]|hyperlinkTransferCommit|commitPhotoHyperlinkTransfer|commitHyperlinkTransfer|planGmiHyperlinkTransferCommit|buildGmiHyperlinkTransferCommit|createGmiHyperlinkTransferSet|stageGmiHyperlinkTransferSet/.test(text), `${name} must not wire the transfer`);
   }
+  assert.deepEqual(importers, [path.join('components', 'photos', 'PhotoHyperlinkReviewDialog.js')], 'only the review dialog saves');
   const dialog = await readFile(path.join(root, 'components', 'photos', 'PhotoHyperlinkReviewDialog.js'), 'utf8');
-  assert(!/Lagre endringer/.test(dialog), 'the review dialog has no save control');
+  assert.equal(dialog.match(/Lagre endringer/g)?.length, 1, 'one save control, in Kontroll');
 });

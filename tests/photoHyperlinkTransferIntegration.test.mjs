@@ -407,8 +407,10 @@ test('Validator evaluates the actual Foreslått dataset; undo and redo restore t
 });
 
 // Batch 1B.3A (deliberate contract update): the delivery path composes a verified transfer in every mode; the
-// unattested low-level field export still refuses. The no-user-reachable-save contract below is unchanged.
-test('exports compose an active transfer only through the verified delivery path; there is no user-reachable save or transfer command', async () => {
+// unattested low-level field export still refuses. Batch 1B.4A (deliberate contract update): the review dialog saves
+// through photoHyperlinkReviewSave only (scanned in photoHyperlinkTransferTransaction.test.mjs); no other FOTO or
+// Rettinger surface reaches the transaction.
+test('exports compose an active transfer only through the verified delivery path; only the review save reaches the transaction', async () => {
   const f = await guarded(LOK_SLU);
   assert(f.commit([f.move(293, 'SYNT_LOK_B.png', 108)]).ok);
   assert.equal((await buildGmiFieldExport(f.registry, f.handle, { date: DATE })).code, 'hyperlink-transfer-unverified');
@@ -420,10 +422,10 @@ test('exports compose an active transfer only through the verified delivery path
     const plan = await buildDeliveryPlan(snapshot, { profile: 'gemini-legacy2019', crs: 'EPSG:25832', context: syntheticContext }, { now: () => DATE });
     assert.deepEqual([plan.status, plan.errors.map((entry) => entry.code)], ['ready', []], mode);
   }
-  assert.equal(PHOTO_LINK_REVIEW_WRITABLE, false);
+  assert.equal(PHOTO_LINK_REVIEW_WRITABLE, true);
   const root = new URL('../src/', import.meta.url);
   const dialog = await readFile(new URL('components/photos/PhotoHyperlinkReviewDialog.js', root), 'utf8');
-  assert(!/Lagre endringer|commitPhotoHyperlinkTransfer/.test(dialog));
+  assert(!/commitPhotoHyperlinkTransfer|commitHyperlinkTransfer\(/.test(dialog), 'the dialog saves through the save module only');
   for (const file of ['app/page.js', 'components/MapInner.js', 'components/photos/usePhotoHyperlinkTransfers.js', 'components/photos/PhotoWorkspaceInspector.js',
     'components/gmi-edit/GmiChangeList.js', 'components/gmi-edit/GmiChangeSetDetail.js', 'lib/photos/photoHyperlinkTransferScope.mjs']) {
     const text = await readFile(new URL(file, root), 'utf8');

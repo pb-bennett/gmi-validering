@@ -11,9 +11,13 @@ import { getDatasetRevision } from '@/lib/validation-v2/datasetRevision';
 import { photoPositionDistance } from '@/lib/photos/photoPositioning.mjs';
 import { gmiObjectLabel } from '@/lib/photos/gmiPhotoSource.mjs';
 import { photoDeliveryStatusText } from '@/lib/photos/photoDeliveryChoice.mjs';
+import { photoCurrentSource } from '@/lib/photos/photoPresentation.mjs';
+import { photoHyperlinkTransferViews } from '@/lib/photos/photoHyperlinkTransferScope.mjs';
 import { detectPhotoLinkReview, emptyPhotoLinkReviewChoices, photoLinkReviewCandidates, photoLinkReviewDataset, photoLinkReviewDecisions,
   photoLinkReviewHandoffIsCurrent, photoLinkReviewProgress, PHOTO_LINK_OUTCOME_LABELS, PHOTO_LINK_REVIEW_STALE, PHOTO_LINK_SHAPE_LABELS,
   reducePhotoLinkReviewChoices } from '@/lib/photos/photoHyperlinkReview.mjs';
+import { capturePhotoLinkReviewBasis, photoLinkReviewSavedState, photoLinkReviewSaveMessage, photoLinkReviewSavePlan,
+  savePhotoLinkReview } from '@/lib/photos/photoHyperlinkReviewSave.mjs';
 import useGmiEditLayer from '@/components/gmi-edit/useGmiEditLayer';
 import usePhotoSession from './usePhotoSession';
 import PhotoIconButton from './PhotoIconButton';
@@ -23,6 +27,7 @@ import './photoHyperlinkReview.css';
 
 const ReviewMap = dynamic(() => import('./PhotoHyperlinkReviewMap'), { ssr: false });
 const button = 'gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-xs';
+const primary = 'gmi-primary-control gmi-compact-button gmi-focus-ring px-2 py-1 text-xs';
 const number = (value) => Number.isFinite(value) ? value.toLocaleString('nb-NO', { maximumFractionDigits: 3 }) : 'Mangler';
 const distance = (value) => value === null ? 'Kan ikke beregnes sikkert' : `${number(value)} m`;
 const rawText = (value) => typeof value === 'string' ? value : JSON.stringify(value) ?? '';
@@ -91,28 +96,75 @@ function PositionEvidence({ row, decision }) {
   </details>;
 }
 
-function ControlStep({ decisions, progress, headingRef, onEdit }) {
+// The occurrence's accepted FOTO position, named by its provenance (the transfer replaces it with the recipient's GMI position).
+const photoNow = (entry) => {
+  const photo = entry.group.occurrencePhoto;
+  return !photo ? 'Ingen FOTO-plassering på kilden' : photo.spatial?.current ? `Nå: ${photoCurrentSource(photo) || 'akseptert posisjon'}` : 'Nå: uplassert';
+};
+
+/** Transfers already saved in the active Rettinger entry, named from the review model (original associations). */
+function savedRows(model) {
+  return model.rows.flatMap((row) => row.groups.filter((group) => group.saved)
+    .map((group) => ({ row, group, target: model.targetsByKey.get(group.saved.toObjectKey) || null })));
+}
+
+function SavedTransfers({ model, status }) {
+  const rows = savedRows(model);
+  if (!rows.length) return null;
+  return <section className="photo-link-saved" aria-labelledby="photo-link-saved-heading">
+    <h4 id="photo-link-saved-heading">Allerede lagret i Rettinger ({rows.length})</h4>
+    {status !== 'current' && <p className="gmi-validation-accent" data-validation-tone="error">Den lagrede flyttingen stemmer ikke lenger med FOTO. Angre eller forkast den i Rettinger.</p>}
+    <ul>{rows.map(({ row, group, target }) => <li key={group.decisionKey}><strong>{groupName(group)}</strong>: {objectName(row)} → {target ? objectName(target) : 'ukjent mottaker'} · ligger i Foreslått, kan angres i Rettinger</li>)}</ul>
+  </section>;
+}
+
+function ControlStep({ model, decisions, progress, headingRef, onEdit, savedStatus, saveState, statusId }) {
   return <section className="photo-link-control" aria-labelledby="photo-link-control-heading">
     <h3 id="photo-link-control-heading" ref={headingRef} tabIndex={-1}>Kontroll</h3>
     <p>{progress.allResolved ? 'Alle valgte beslutninger er avklart.' : `${progress.unresolved} av ${progress.selected} beslutninger må avklares.`} {progress.unchangedReferences} bildereferanser er ikke valgt og forblir uendret.</p>
+    <SavedTransfers model={model} status={savedStatus} />
+    {decisions.length > 0 && <h4>Nye beslutninger ({decisions.length})</h4>}
     <table>
       <thead><tr><th scope="col">Bilde og referanser</th><th scope="col">Kilde</th><th scope="col">Handling</th><th scope="col">Mottaker</th><th scope="col">XY-avstand</th><th scope="col">Status og merknader</th><th scope="col"><span className="sr-only">Endre</span></th></tr></thead>
-      <tbody>{decisions.map((entry) => <tr key={entry.key} data-decision-key={entry.key} data-resolved={entry.resolved}>
-        <td><strong>{groupName(entry.group)}</strong><References group={entry.group} /></td>
-        <td>{objectName(entry.row)}{entry.row.identifierText && <small>{entry.row.identifierText}</small>}</td>
+      <tbody>{decisions.map((entry) => <tr key={entry.key} data-decision-key={entry.key} data-resolved={entry.resolved} data-outcome={entry.outcome}>
+        <td><strong>{groupName(entry.group)}</strong>{entry.outcome === 'move' && <small>{photoNow(entry)}{entry.target ? ' · Foreslått: mottakerens GMI-posisjon' : ''}</small>}<References group={entry.group} /></td>
+        <td>{objectName(entry.row)}{entry.row.identifierText && <small>{entry.row.identifierText}</small>}
+          {entry.outcome === 'move' && <small className="photo-link-coordinate">{position(entry.row.placement?.position)}</small>}</td>
         <td>{PHOTO_LINK_OUTCOME_LABELS[entry.outcome]}{entry.deliveryEntry && <small>Nå: {photoDeliveryStatusText(entry.deliveryEntry)}</small>}</td>
-        <td>{entry.outcome !== 'move' ? '–' : entry.target ? objectName(entry.target) : 'Ikke valgt'}</td>
+        <td>{entry.outcome !== 'move' ? '–' : entry.target ? <>{objectName(entry.target)}{entry.target.identifierText && <small>{entry.target.identifierText}</small>}
+          <small className="photo-link-coordinate">{position(entry.target.placement?.position)}</small>
+          <small>{entry.target.photoReferenceCount ? `${entry.target.photoReferenceCount} eksisterende bildereferanse(r) beholdes` : 'Ingen eksisterende bildereferanser'}{entry.target.savedIncoming?.length ? ` · ${entry.target.savedIncoming.length} lagret flytting(er)` : ''}</small></> : 'Ikke valgt'}</td>
         <td className="photo-link-number">{entry.outcome === 'move' && entry.target ? distance(entry.distanceMetres) : '–'}</td>
         <td><span className="photo-link-state" data-resolved={entry.resolved}>{entry.resolved ? 'Avklart' : 'Uavklart'}</span><Issues blocking={entry.blocking} warnings={entry.warnings} /></td>
         <td><button type="button" className={button} aria-label={`Endre ${groupName(entry.group)} på ${entry.row.pointName}`} onClick={() => onEdit(entry)}>Endre</button></td>
       </tr>)}</tbody>
     </table>
+    <div className="photo-link-save-status" id={statusId} data-save-state={saveState.state}>
+      {saveState.error ? <p role="alert" className="gmi-validation-accent" data-validation-tone="error">{saveState.error}</p>
+        : <p role="status" className={saveState.state === 'blocked' ? 'gmi-validation-accent' : undefined} data-validation-tone={saveState.state === 'blocked' ? 'warning' : undefined}>{saveState.text}</p>}
+    </div>
   </section>;
 }
 
-function ReviewBody({ model, onClose }) {
+function SaveReceipt({ receipt, headingRef }) {
+  return <section className="photo-link-control photo-link-receipt" aria-labelledby="photo-link-receipt-heading" data-transfer-set={receipt.transferSetId}>
+    <h3 id="photo-link-receipt-heading" ref={headingRef} tabIndex={-1}>Lagret i Rettinger</h3>
+    <p className="photo-link-number">{receipt.photographs} bilde{receipt.photographs === 1 ? '' : 'r'} flyttet · {receipt.references} bildereferanse{receipt.references === 1 ? '' : 'r'} flyttet{receipt.earlier ? ` · ${receipt.earlier} tidligere lagret flytting${receipt.earlier === 1 ? '' : 'er'} beholdt` : ''}</p>
+    <ul>{receipt.items.map((item) => <li key={item.transferKey}><strong>{item.filename}</strong>: {item.from} → {item.to}{item.references > 1 ? ` (${item.references} referanser)` : ''}</li>)}</ul>
+    <p>Endringen ligger i Foreslått i Rettinger. Originalfilen er uendret.</p>
+    <p>Du kan angre flyttingen i Rettinger med «Angre siste retting».</p>
+  </section>;
+}
+
+function ReviewBody({ model, onClose, save, onSaved }) {
   'use no memo';
   const [choices, setChoices] = useState(emptyPhotoLinkReviewChoices);
+  const [showOthers, setShowOthers] = useState(false);
+  // Save state (Batch 1B.4A): the basis is captured when Kontroll opens and handed to the transaction, which re-checks it.
+  const [basis, setBasis] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const basisTicket = useRef(0), savingRef = useRef(false), latest = useRef(null);
   const [focusedOnly, setFocusedOnly] = useState(model.restricted);
   const [query, setQuery] = useState('');
   const [targetQuery, setTargetQuery] = useState('');
@@ -150,13 +202,50 @@ function ReviewBody({ model, onClose }) {
     bodyRef.current?.querySelector(`[data-decision-key="${CSS.escape(pendingFocus)}"] input[type=checkbox]`)?.focus();
     setPendingFocus(null);
   }, [pendingFocus, step]);
+  const plan = photoLinkReviewSavePlan(model, decisions, progress, { transferStatus: save.savedState.status });
+  latest.current = { model, decisions, progress, savedState: save.savedState };
+  const leaveControl = () => { basisTicket.current += 1; setBasis(null); setSaveError(null); setStep('pairing'); };
   const edit = (entry) => {
     if (!entry.row.focused) setFocusedOnly(false);
-    setQuery(''); openRow(entry.row, entry.key); setStep('pairing'); setPendingFocus(entry.key);
+    setQuery(''); openRow(entry.row, entry.key); leaveControl(); setPendingFocus(entry.key);
   };
+  const owners = (handle) => ({ registry: gmiEditSessions, handle, photoSession, photoLayerId: save.photoLayerId });
+  const enterControl = async () => {
+    const ticket = basisTicket.current += 1;
+    setStep('kontroll'); setSaveError(null); setBasis(null);
+    let handle = save.gmiLayerId ? gmiEditSessions.getHandle(save.gmiLayerId) : null;
+    // The transaction is a Rettinger entry: open the layer's session if Rettinger has not opened it yet.
+    if (!handle && save.gmiLayerId) {
+      const opened = await gmiEditSessions.open(save.gmiLayerId);
+      handle = opened.ok ? opened.handle : null;
+      if (!opened.ok && ticket === basisTicket.current) { setBasis({ ok: false, message: photoLinkReviewSaveMessage(opened) }); return; }
+    }
+    if (ticket !== basisTicket.current) return;
+    setBasis(handle ? capturePhotoLinkReviewBasis(owners(handle)) : { ok: false, message: photoLinkReviewSaveMessage({ code: 'photo-source-not-live-bound' }) });
+  };
+  const saveChanges = async () => {
+    // One save per click sequence: a repeated click while saving, or after success, does nothing.
+    if (savingRef.current || !basis?.ok) return;
+    savingRef.current = true; setSaving(true); setSaveError(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const current = latest.current;
+    const handle = gmiEditSessions.getHandle(save.gmiLayerId);
+    const result = handle ? savePhotoLinkReview({ ...owners(handle), model: current.model, decisions: current.decisions, progress: current.progress,
+      expected: basis.basis, transferStatus: current.savedState.status }) : { ok: false, message: photoLinkReviewSaveMessage({ code: 'invalid-handle' }) };
+    if (result.ok) { onSaved(result.receipt); return; }
+    savingRef.current = false; setSaving(false); setSaveError(result.message);
+  };
+  const saveState = saving ? { state: 'saving', text: 'Lagrer endringer …' }
+    : saveError ? { state: 'error', error: saveError }
+      : !plan.ready ? { state: 'blocked', text: plan.message }
+        : !basis ? { state: 'preparing', text: 'Klargjør kontrollgrunnlaget …' }
+          : !basis.ok ? { state: 'error', error: basis.message }
+            : { state: 'ready', text: `Klar til å lagre ${plan.transfers.length} flytting${plan.transfers.length === 1 ? '' : 'er'} som én retting i Rettinger.${progress.keeps ? ` ${progress.keeps} beholdes uendret.` : ''}` };
+  const canSave = plan.ready && basis?.ok === true && !saving;
   const id = useId();
   return <>
-    {step === 'kontroll' ? <div className="photo-link-control-body" ref={bodyRef}><ControlStep decisions={decisions} progress={progress} headingRef={controlHeading} onEdit={edit} /></div> : <>
+    {step === 'kontroll' ? <div className="photo-link-control-body" ref={bodyRef}><ControlStep model={model} decisions={decisions} progress={progress} headingRef={controlHeading}
+      onEdit={edit} savedStatus={save.savedState.status} saveState={saveState} statusId={`${id}-save-status`} /></div> : <>
       <div className="photo-link-filter">
         {model.restricted && <label><input type="checkbox" className="accent-gmi-interactive gmi-focus-ring" checked={focusedOnly} onChange={(event) => setFocusedOnly(event.target.checked)} /> Kun Validator-utvalget ({model.rows.filter((entry) => entry.focused).length})</label>}
         <div className="photo-link-search-field"><label htmlFor={`${id}-search`}>Søk kildeobjekt</label><input id={`${id}-search`} className="gmi-compact-field" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
@@ -183,10 +272,12 @@ function ReviewBody({ model, onClose }) {
               {!row.groups.length && <p>Ingen bildereferanser å vurdere.</p>}
               {row.groups.map((group) => {
                 const decision = decisionByKey.get(group.decisionKey), active = activeGroup === group;
-                return <article key={group.key} className="photo-link-group" data-decision-key={group.decisionKey} data-active={active || undefined}>
-                  <label className="photo-link-group-select"><input type="checkbox" className="accent-gmi-interactive gmi-focus-ring" checked={Boolean(decision)}
+                const savedTarget = group.saved ? model.targetsByKey.get(group.saved.toObjectKey) : null;
+                return <article key={group.key} className="photo-link-group" data-decision-key={group.decisionKey} data-active={active || undefined} data-saved={group.saved ? 'true' : undefined}>
+                  <label className="photo-link-group-select"><input type="checkbox" className="accent-gmi-interactive gmi-focus-ring" checked={Boolean(decision)} disabled={Boolean(group.saved) && !decision}
                     onChange={(event) => { choose(group, { type: 'select', selected: event.target.checked }); setActiveDecisionKey(event.target.checked ? group.decisionKey : null); }} />
                     <span><strong>{groupName(group)}</strong> · {group.references.length} referanse(r)</span></label>
+                  {group.saved && <p className="photo-link-saved-note">Lagret i Rettinger: flyttet til {savedTarget ? objectName(savedTarget) : 'en annen mottaker'} i Foreslått. Originalen viser fortsatt koblingen til dette objektet. Angre i Rettinger for å endre.</p>}
                   <p>{resolutionText(group.references[0].resolution)}</p>
                   {group.photos.map((entry, index) => <div key={entry.id} className="photo-link-photo-row"><button type="button" className={`${button}${photo?.id === entry.id ? ' gmi-selected-control' : ''}`} aria-pressed={photo?.id === entry.id} onClick={() => setPhotoId(entry.id)}>{group.assetId ? 'Vis' : `Mulig fil ${index + 1}:`} {entry.sourceRelativePath || entry.originalFilename}</button>
                     <span>{entry.occurrence?.object ? gmiObjectLabel(entry.occurrence.object) : 'Uten GMI-plassering'} · {photoDeliveryStatusText(model.delivery?.byPhotoId?.[entry.id]) || 'Leveringsvalg mangler'}</span></div>)}
@@ -230,7 +321,11 @@ function ReviewBody({ model, onClose }) {
                 <ObjectFacts object={selected.target} source={model.source} /><Cells object={selected.target} /></>
                 : <p>{pairing ? `Velg et punktobjekt for ${groupName(activeGroup)}.` : 'Ingen mottaker er valgt for et aktivt bilde.'}</p>}
               <PositionEvidence row={row} decision={selected ? activeDecision : null} />
-              <ReviewMap row={row} candidates={selected && !pageCandidates.includes(selected) ? [...pageCandidates, selected] : pageCandidates} selected={selected} />
+              <div className="photo-link-map-controls">
+                {selected && <p className="photo-link-number">Kilde → mottaker: XY {distance(selected.distanceMetres)}</p>}
+                <label><input type="checkbox" className="accent-gmi-interactive gmi-focus-ring" checked={showOthers} onChange={(event) => setShowOthers(event.target.checked)} /> Vis andre punktobjekter på siden ({pageCandidates.filter((entry) => entry !== selected).length})</label>
+              </div>
+              <ReviewMap row={row} selected={selected} others={showOthers ? pageCandidates : []} />
             </section>
           </>}
         </main>
@@ -240,19 +335,25 @@ function ReviewBody({ model, onClose }) {
     <footer>
       <span className="photo-link-progress">Valgt: {progress.selected} · Avklart: {progress.resolved} · Uavklart: {progress.unresolved}</span>
       <div className="photo-link-footer-actions">
-        <button type="button" className={button} onClick={onClose}>Avslutt gjennomgang</button>
-        {step === 'kontroll' ? <button type="button" className={button} onClick={() => setStep('pairing')}>Tilbake til paring</button>
-          : <button type="button" className="gmi-primary-control gmi-compact-button gmi-focus-ring px-2 py-1 text-xs" disabled={!progress.selected} onClick={() => setStep('kontroll')}>Kontroll</button>}
+        <button type="button" className={button} onClick={onClose} disabled={saving}>Avslutt gjennomgang</button>
+        {step === 'kontroll' ? <>
+          <button type="button" className={button} onClick={leaveControl} disabled={saving}>Tilbake til paring</button>
+          <button type="button" className={primary} disabled={!canSave} aria-busy={saving || undefined} aria-describedby={`${id}-save-status`} onClick={saveChanges}>Lagre endringer</button>
+        </> : <button type="button" className={primary} disabled={!progress.selected} onClick={enterControl}>Kontroll</button>}
       </div>
     </footer>
   </>;
 }
 
-export default function PhotoHyperlinkReviewDialog({ request, onClose, openerRef }) {
+export default function PhotoHyperlinkReviewDialog({ request, onClose, openerRef, onInspectInValidator }) {
   'use no memo';
-  const dialogRef = useRef(null), titleId = useId();
+  const dialogRef = useRef(null), titleId = useId(), receiptHeading = useRef(null);
   const layers = useStore((state) => state.layers);
   const referenceDate = useStore((state) => state.gmiValidatorReferenceDate);
+  // Rettinger publications (commit, undo, redo, discard, session open) refresh the saved-transfer state and FOTO locks.
+  const gmiStatuses = useStore((state) => state.gmiEditStatus);
+  // The receipt outlives the review body: a save changes the basis, which remounts the body.
+  const [receipt, setReceipt] = useState(null);
   const snapshot = usePhotoSession();
   const restricted = request.kind === 'validator-photo-links';
   const initialPhotoLayer = request.photoLayerId || snapshot.photoLayers.find((layer) => layer.spatialSources.some((source) => source.loadedBinding?.inputId === request.binding?.inputId))?.id || '';
@@ -289,11 +390,14 @@ export default function PhotoHyperlinkReviewDialog({ request, onClose, openerRef
   const dataset = useMemo(() => datasetKind === 'proposed' ? proposed?.dataset
     : option?.layerId ? layers[option.layerId]?.data : current?.source ? photoLinkReviewDataset(current.source) : null,
   [datasetKind, proposed, option?.layerId, layers, current?.source]);
-  const { photos, delivery } = useMemo(() => {
+  const { photos, delivery, transferViews } = useMemo(() => {
     // Session publications may change accepted positions or decisions without changing layer counts/identity.
+    void gmiStatuses;   // delivery locks and transfer views also follow Rettinger publications
     const live = snapshot.photoLayers.some((layer) => layer.id === photoLayerId);
-    return { photos: live ? photoSession.getLayerPhotos(photoLayerId) : [], delivery: live ? photoSession.getLayerDelivery(photoLayerId) : null };
-  }, [snapshot, photoLayerId]);
+    return { photos: live ? photoSession.getLayerPhotos(photoLayerId) : [], delivery: live ? photoSession.getLayerDelivery(photoLayerId) : null,
+      transferViews: live ? photoHyperlinkTransferViews({ registry: gmiEditSessions, photoSession, photoLayerId }) : null };
+  }, [snapshot, photoLayerId, gmiStatuses]);
+  const savedState = useMemo(() => photoLinkReviewSavedState(transferViews, option?.layerId), [transferViews, option?.layerId]);
   const result = useMemo(() => {
     if (restricted && (!option || !current?.binding || !loadedGmiSources.isLive(current.binding) || referenceDate !== request.run.runContext.referenceDate
       || !photoLinkReviewHandoffIsCurrent(request, { layer: layers[request.layerId], binding: current.binding,
@@ -302,13 +406,32 @@ export default function PhotoHyperlinkReviewDialog({ request, onClose, openerRef
     if (current?.source && datasetKind === 'proposed' && !proposed?.ok) return { error: 'Foreslått grunnlag kan ikke verifiseres. Velg Original eller kontroller Rettinger før du åpner gjennomgangen på nytt.' };
     if (!current?.source || !dataset) return { error: current?.error || null };
     try { return { model: detectPhotoLinkReview({ source: current.source, dataset, layerId: option?.layerId || current.source.id,
-      photos, delivery, focusRefs: restricted ? request.refs : null, liveSource: Boolean(current.binding && loadedGmiSources.isLive(current.binding)) }) }; }
+      photos, delivery, focusRefs: restricted ? request.refs : null, liveSource: Boolean(current.binding && loadedGmiSources.isLive(current.binding)),
+      savedTransfers: savedState.transfers }) }; }
     catch (error) { return { error: error.message }; }
-  }, [current, dataset, photos, delivery, restricted, request, layers, referenceDate, view, option, photoLayer, datasetKind, proposed]);
+  }, [current, dataset, photos, delivery, restricted, request, layers, referenceDate, view, option, photoLayer, datasetKind, proposed, savedState]);
   const model = result.model;
+  // Saving needs the FOTO layer's own live GMI source (the transaction re-checks this); the GMI layer owns the Rettinger entry.
+  const save = useMemo(() => ({ gmiLayerId: option?.source && option.layerId ? option.layerId : null, photoLayerId: photoLayer?.id || null, savedState }),
+    [option, photoLayer?.id, savedState]);
+  useEffect(() => { if (receipt) receiptHeading.current?.focus(); }, [receipt]);
+  const inspect = () => {
+    const layerId = receipt?.gmiLayerId;
+    if (layerId && onInspectInValidator) onInspectInValidator(layerId); else onClose();
+  };
   return <dialog ref={dialogRef} className="photo-link-review" aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <header><h2 id={titleId}>FOTO · Gjennomgå bildelenker</h2><PhotoIconButton icon={XIcon} size={20} label="Lukk gjennomgang av bildelenker" onClick={onClose} /></header>
-    <p className="photo-link-boundary">Kun gjennomgang. Valgene er midlertidige og forkastes ved lukking. Ingen data lagres eller flyttes. Flytting til et punktobjekt er en egen operasjon, adskilt fra levering GMI → GML.</p>
+    <p className="photo-link-boundary">Valgene er midlertidige til du lagrer i Kontroll, og forkastes ved lukking. «Flytt til punktobjekt» lagres som én retting i Rettinger (Foreslått); originalfilen endres ikke. «Lever som GML» og «Ikke med i leveransen» er leveringsvalg i FOTO og lagres ikke her.</p>
+    {receipt ? <>
+      <div className="photo-link-control-body"><SaveReceipt receipt={receipt} headingRef={receiptHeading} /></div>
+      <footer><span />
+        <div className="photo-link-footer-actions">
+          <button type="button" className={button} onClick={onClose}>Avslutt gjennomgang</button>
+          <button type="button" className={button} onClick={() => setReceipt(null)}>Gjennomgå flere bildelenker</button>
+          <button type="button" className={primary} onClick={inspect}>Kontroller i Validator</button>
+        </div>
+      </footer>
+    </> : <>
     <div className="photo-link-source-controls">
       <label>GMI-kilde<select className="gmi-compact-field" value={option?.id || ''} disabled={restricted} onChange={(event) => setSourceId(event.target.value)}>
         {!options.length && <option value="">Ingen GMI-kilde</option>}{options.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label>
@@ -320,7 +443,9 @@ export default function PhotoHyperlinkReviewDialog({ request, onClose, openerRef
     {option && !current && <p className="photo-link-message" role="status">Leser kildegrunnlag …</p>}
     {result.error && <p className="photo-link-message" role="alert">{result.error}</p>}
     {model && <ReviewBody key={JSON.stringify([option.id, getDatasetRevision(dataset), photoLayer?.id, delivery?.stateKey,
-      photos.map((photo) => [photo.id, photo.spatial.current])])} model={model} onClose={onClose} />}
+      photos.map((photo) => [photo.id, photo.spatial.current]), savedState.transferSetId, savedState.status])} model={model} onClose={onClose}
+      save={save} onSaved={(saved) => setReceipt({ ...saved, gmiLayerId: save.gmiLayerId })} />}
     {!model && <footer><span /><button type="button" className={button} onClick={onClose}>Avslutt gjennomgang</button></footer>}
+    </>}
   </dialog>;
 }

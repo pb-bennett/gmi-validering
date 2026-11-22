@@ -1,4 +1,5 @@
-// Batch 1A: inspection only. No patch, session, position or delivery mutation API.
+// Batch 1A: inspection model. No patch, session, position or delivery mutation API lives here; the writable review
+// (Batch 1B.4A) saves «Flytt til punktobjekt» decisions only through photoHyperlinkReviewSave.mjs.
 import { bindGmiLayerSchema } from '../validation-v2/gmiLayerSchemaBinding.js';
 import { resolveGmiTemaIdentity } from '../validation-v2/temaIdentity.js';
 import { createObjectRef } from '../validation-v2/objectRef.js';
@@ -110,7 +111,10 @@ const issue = (code, text, blocking = true) => Object.freeze({ code, text, block
  * the source is bound to a live loaded GMI layer, which a future transfer requires.
  */
 export function detectPhotoLinkReview({ source, dataset = photoLinkReviewDataset(source), layerId = source.id || 'foto-review', photos = [], delivery = null,
-  focusRefs = null, liveSource = false }) {
+  focusRefs = null, liveSource = false, savedTransfers = [] }) {
+  // Batch 1B.4A: transfers already saved in Rettinger (the active transfer entry's FOTO record). The review still reads
+  // the original associations; a saved group is shown as saved and cannot be selected again.
+  const saved = Array.isArray(savedTransfers) ? savedTransfers : [];
   const datasetRevision = getDatasetRevision(dataset);
   const input = { layerId, datasetRevision, dataset, sourceFormat: 'gmi' };
   const schemaBinding = bindGmiLayerSchema(input);
@@ -157,7 +161,7 @@ export function detectPhotoLinkReview({ source, dataset = photoLinkReviewDataset
     const references = byObject.get(object.objectKey) || [];
     const linked = evidence.cells.some((cell) => typeof cell.raw !== 'string' || cell.raw.trim());
     targets.push({ ...evidence, references, photoReferenceCount: references.filter((reference) => reference.targetValid).length,
-      photos: byOccurrence.get(object.objectKey) || [] });
+      photos: byOccurrence.get(object.objectKey) || [], savedIncoming: saved.filter((entry) => entry.toObjectKey === object.objectKey) });
     if (!linked || (tema.state === 'RESOLVED' && !['LOK', 'TOP'].includes(evidence.tema))) continue;
     const issues = [];
     if (!evidence.tema) issues.push(issue('tema-unresolved', 'Tema er uavklart. Kontroller Tema og S_FCODE i Validator; objektet behandles ikke som en bekreftet LOK/TOP.'));
@@ -177,7 +181,8 @@ export function detectPhotoLinkReview({ source, dataset = photoLinkReviewDataset
           : reference.resolution?.status === 'ambiguous' ? reference.resolution.photoIds.flatMap((id) => photosByAsset.get(id) || []) : [],
         // The FOTO occurrence of exactly this object and asset: the unit of the existing GMI/GML/Ikke delivery decision.
         occurrencePhoto: assetId ? occurrences.find((photo) => (photo.assetId || photo.id) === assetId) || null : null,
-        sharedObjectKeys: assetId ? [...(byAsset.get(assetId) || [])] : [] });
+        sharedObjectKeys: assetId ? [...(byAsset.get(assetId) || [])] : [],
+        saved: assetId ? saved.find((entry) => entry.fromObjectKey === object.objectKey && entry.assetId === assetId) || null : null });
       groups.get(key).references.push(reference);
     }
     const relatedPhotos = [...new Map([...groups.values()].filter((group) => group.assetId).flatMap((group) => group.photos).map((photo) => [photo.id, photo])).values()];
@@ -186,7 +191,7 @@ export function detectPhotoLinkReview({ source, dataset = photoLinkReviewDataset
   }
   if (focus && focusRefs.some((ref) => ref.layerId !== layerId || ref.datasetRevision !== datasetRevision || !rows.some((row) => row.objectRef.key === ref.key))) throw new Error(PHOTO_LINK_REVIEW_STALE);
   return { source, layerId, datasetRevision, rows, targets, targetsByKey: new Map(targets.map((target) => [target.objectKey, target])),
-    delivery, restricted: Boolean(focus), liveSource: liveSource === true };
+    delivery, restricted: Boolean(focus), liveSource: liveSource === true, savedTransfers: Object.freeze([...saved]) };
 }
 
 /** Exact decision identity: one source object and one reference group (a confident asset, or a single unresolved reference). */
@@ -216,8 +221,12 @@ export function photoLinkReviewCandidate(model, row, target) {
   if (reusedAssets.length) conflicts.push(issue('target-reuse', `Samme bilde finnes allerede på mottakeren (${reusedAssets.length} filtreff). Gjenbruk er ikke avklart.`));
   if (row.groups.some((group) => group.assetId && target.photos.some((photo) => (photo.assetId || photo.id) === group.assetId)))
     conflicts.push(issue('target-placement-same-photo', 'Mottakeren har en egen FOTO-plassering for samme bilde. Plasseringer og beslutninger slås ikke sammen.'));
+  const incoming = target.savedIncoming || [];
+  if (row.groups.some((group) => group.assetId && incoming.some((entry) => entry.assetId === group.assetId)))
+    conflicts.push(issue('target-saved-same-photo', 'Samme bilde er allerede flyttet til denne mottakeren i Rettinger. Angre den lagrede flyttingen i Rettinger for å endre den.'));
   if (!target.tema) conflicts.push(issue('target-tema', 'Mottakerens Tema er uavklart. Kontroller Tema og S_FCODE i Validator.', false));
   if (target.photoReferenceCount) conflicts.push(issue('target-existing-links', `Mottakeren har ${target.photoReferenceCount} eksisterende bildereferanse(r). De beholdes uendret.`, false));
+  if (incoming.length) conflicts.push(issue('target-saved-transfers', `Mottakeren har allerede ${incoming.length} lagret flytting(er) av bildelenker i Foreslått. De beholdes.`, false));
   return { target, distanceMetres: xyDistance(model.source, row, target), sameIdentifiers, reusedAssets,
     deltaZ: Number.isFinite(zSource) && Number.isFinite(zTarget) ? zTarget - zSource : null, conflicts };
 }
@@ -233,8 +242,11 @@ export function photoLinkReviewCandidates(model, row) {
 
 export const PHOTO_LINK_OUTCOMES = Object.freeze({ KEEP: 'keep', MOVE: 'move', GML: 'gml', EXCLUDE: 'exclude' });
 export const PHOTO_LINK_OUTCOME_LABELS = Object.freeze({ keep: 'Behold uendret', move: 'Flytt til punktobjekt', gml: 'Lever som GML', exclude: 'Ikke med i leveransen' });
-/** Batch 1A.2 is read-only: no decision can be saved, whatever its resolution. */
-export const PHOTO_LINK_REVIEW_WRITABLE = false;
+/**
+ * Batch 1B.4A: the review is writable. Only resolved «Flytt til punktobjekt» decisions are saved, as one Rettinger
+ * transaction (photoHyperlinkReviewSave.mjs); GML/Ikke stay FOTO delivery choices and block the save while selected.
+ */
+export const PHOTO_LINK_REVIEW_WRITABLE = true;
 
 export const emptyPhotoLinkReviewChoices = () => ({ decisions: {} });
 /**
@@ -250,6 +262,8 @@ export function reducePhotoLinkReviewChoices(state, action, model) {
   const key = group.decisionKey, current = state.decisions[key];
   const write = (decision) => ({ ...state, decisions: decision ? { ...state.decisions, [key]: Object.freeze(decision) }
     : Object.fromEntries(Object.entries(state.decisions).filter(([entry]) => entry !== key)) });
+  // A group already moved by the active Rettinger transfer is not a new decision; undo in Rettinger changes it.
+  if (action.type === 'select' && action.selected === true && group.saved && !current) return state;
   if (action.type === 'select') return action.selected === true ? current ? state : write({ outcome: 'move', targetKey: null })
     : current ? write(null) : state;
   if (!current) return state;
@@ -302,6 +316,7 @@ export function photoLinkReviewDecisions(model, choices) {
     if (!decision) continue;
     const blocking = [], warnings = [];
     let candidate = null, deliveryEntry = null;
+    if (group.saved) blocking.push(issue('already-transferred', 'Bildelenken er allerede flyttet i Rettinger. Angre flyttingen i Rettinger for å endre den.'));
     if (decision.outcome === 'move') {
       if (!model.liveSource) blocking.push(issue('foto-only', 'Kilden er ikke koblet til et lastet GMI-lag. Last inn originalfilen før flytting.'));
       blocking.push(...row.issues.filter((entry) => entry.blocking), ...groupMoveIssues(model, row, group));
@@ -336,11 +351,21 @@ export function photoLinkReviewDecisions(model, choices) {
     referenceIds: Object.freeze(entry.referenceIds), resolved: entry.blocking.length === 0 })));
 }
 
-/** Progression contract: every selected decision must be resolved; nothing is save-ready while writes are disabled. */
+/**
+ * Progression contract: every selected decision must be resolved. Save-ready (Batch 1B.4A) additionally needs at least
+ * one move (a review of «Behold uendret» only changes nothing) and no GML/Ikke decision, which this transaction does not
+ * save. `saveBlocker` names the first unmet condition.
+ */
 export function photoLinkReviewProgress(model, decisions) {
   const selected = decisions.length, resolved = decisions.filter((entry) => entry.resolved).length;
   const selectedReferenceIds = new Set(decisions.flatMap((entry) => entry.referenceIds));
-  return Object.freeze({ selected, resolved, unresolved: selected - resolved,
+  const moves = decisions.filter((entry) => entry.outcome === 'move').length;
+  const deliveryOutcomes = decisions.filter((entry) => entry.outcome === 'gml' || entry.outcome === 'exclude').length;
+  const allResolved = selected > 0 && resolved === selected;
+  const saveBlocker = !PHOTO_LINK_REVIEW_WRITABLE ? 'read-only' : !selected ? 'none-selected' : !allResolved ? 'unresolved'
+    : deliveryOutcomes ? 'delivery-outcomes' : !moves ? 'no-changes' : null;
+  return Object.freeze({ selected, resolved, unresolved: selected - resolved, moves, deliveryOutcomes,
+    keeps: decisions.filter((entry) => entry.outcome === 'keep').length,
     unchangedReferences: model.rows.flatMap((row) => row.references).filter((reference) => !selectedReferenceIds.has(reference.id)).length,
-    allResolved: selected > 0 && resolved === selected, saveReady: PHOTO_LINK_REVIEW_WRITABLE && selected > 0 && resolved === selected });
+    allResolved, saveReady: saveBlocker === null, saveBlocker });
 }

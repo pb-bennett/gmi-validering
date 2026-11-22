@@ -135,7 +135,10 @@ test('temporary decisions are pure, exact per reference group, reject foreign/se
   assert.deepEqual(decision.referenceIds, group.references.map((reference) => reference.id));
   assert.equal(decision.referenceIds.length, 2, 'repeated references keep both exact identities');
   assert.equal(decision.target.objectKey, model.targets[3].objectKey);
-  assert.equal(PHOTO_LINK_REVIEW_WRITABLE, false); assert.equal(photoLinkReviewProgress(model, [decision]).saveReady, false);
+  // Batch 1B.4A (deliberate contract update): the review is writable; save-readiness follows resolution, nothing else.
+  assert.equal(PHOTO_LINK_REVIEW_WRITABLE, true);
+  const progress = photoLinkReviewProgress(model, [decision]);
+  assert.deepEqual([progress.saveReady, progress.saveBlocker], decision.resolved ? [true, null] : [false, 'unresolved']);
   const gml = act(state, { type: 'outcome', outcome: 'gml' });
   assert.equal(gml.decisions[group.decisionKey].targetKey, null, 'another outcome never keeps a hidden recipient');
   assert.strictEqual(act(gml, { type: 'target', targetKey: model.targets[3].objectKey }), gml, 'only a move takes a recipient');
@@ -430,7 +433,8 @@ test('missing assets, unsupported grammar, conflicting delivery decisions and FO
   }
 });
 
-test('a recipient that is itself a changing source is flagged; Kontroll progression never becomes save-ready while read-only', () => {
+// Batch 1B.4A (deliberate contract update): with the review writable, a resolved chain of moves is save-ready.
+test('a recipient that is itself a changing source is flagged; a resolved chain of moves is save-ready', () => {
   const input = context([
     { tema: 'LOK', hyperlink: link('a.jpg'), xyz: '581930 6566000 1' },
     { tema: 'TOP', hyperlink: link('b.jpg'), xyz: '581931 6566000 1' },
@@ -443,7 +447,7 @@ test('a recipient that is itself a changing source is flagged; Kontroll progress
     [top, top.groups[0], { type: 'target', targetKey: slu.objectKey }]]));
   assert(decisions[0].warnings.some((issue) => issue.code === 'recipient-also-changes'));
   const progress = photoLinkReviewProgress(model, decisions);
-  assert.deepEqual([progress.selected, progress.resolved, progress.allResolved, progress.saveReady], [2, 2, true, false]);
+  assert.deepEqual([progress.selected, progress.resolved, progress.allResolved, progress.saveReady, progress.moves], [2, 2, true, true, 2]);
   assert(Object.isFrozen(decisions) && Object.isFrozen(decisions[0]) && Object.isFrozen(decisions[0].blocking));
   assert.equal(photoLinkReviewProgress(model, []).allResolved, false, 'no selection is never a resolved review');
 });

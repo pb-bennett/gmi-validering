@@ -5,6 +5,8 @@ import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
 import { photoLayerMapFit, resolvePhotoLocate } from '@/lib/photos/photoMapFeatures.mjs';
+import { photoHyperlinkTransferPresentedPhotos } from '@/lib/photos/photoHyperlinkTransferScope.mjs';
+import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 
 export default function PhotoMapController({ items, fitRequest, onFitHandled, locateRequest, onLocateHandled, panRequest }) {
   const map = useMap();
@@ -12,7 +14,8 @@ export default function PhotoMapController({ items, fitRequest, onFitHandled, lo
     if (!fitRequest) return;
     map.invalidateSize({ animate: false, pan: false });
     const frame = requestAnimationFrame(() => {
-      const target = photoLayerMapFit(photoSession.getLayerPhotos(fitRequest.layerId));
+      // Fit what the map shows: a moved photograph sits at its Foreslått (recipient) position, also if it was unplaced.
+      const target = photoLayerMapFit(photoHyperlinkTransferPresentedPhotos({ registry: gmiEditSessions, photoSession, photoLayerId: fitRequest.layerId }));
       if (target) fitPhotoLayer(map, target);
       onFitHandled(fitRequest.token);
     });

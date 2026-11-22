@@ -159,3 +159,13 @@ export function photoHyperlinkTransferLinkLayer(layer, transfers) {
     ? Object.freeze({ ...source, objectsByKey: byId.get(source.id).objectsByKey, references: byId.get(source.id).references,
       associationLedger: byId.get(source.id).associationLedger }) : source)) });
 }
+
+/**
+ * Batch 1B.4A: the layer's photographs as FOTO presents them (accepted records plus the verified transfer overlay), for
+ * map fitting. Without an active transfer these are the session's own records. Read-only.
+ */
+export function photoHyperlinkTransferPresentedPhotos({ registry, photoSession, photoLayerId }) {
+  const photos = photoSession.getLayerPhotos(photoLayerId);
+  const transfers = photoHyperlinkTransferViews({ registry, photoSession, photoLayerId });
+  return transfers ? applyPhotoHyperlinkTransfer(photos, photoHyperlinkTransferPresentation(transfers, photoSession.getLayer(photoLayerId))) : photos;
+}

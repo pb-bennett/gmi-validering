@@ -42,6 +42,7 @@ import FieldValidationSidebar from '@/components/FieldValidationSidebar';
 import GmiEditWorkspace, { GMI_EDIT_INSPECTOR_ROOT_ID } from '@/components/gmi-edit/GmiEditWorkspace';
 import GmiConfirmDialog, { UnsavedGmiLayers } from '@/components/gmi-edit/GmiConfirmDialog';
 import { gmiEditRemovalBlock } from '@/lib/gmiEditSessions.mjs';
+import { GMI_VALIDATOR_DATASET_BY } from '@/lib/gmiValidatorEditing.mjs';
 import { createSessionLossGuard, sessionLossState } from '@/lib/sessionLoss.mjs';
 import MapView from '@/components/MapView';
 import Sidebar from '@/components/Sidebar';
@@ -468,7 +469,7 @@ export default function Home() {
     if (id !== photoWorkspace.layerId) requestWorkspaceAction(() => enterPhotoLayer(id, opener, photoId, options));
     else enterPhotoLayer(id, opener, photoId, options);
   });
-  const exitPhotoWorkspace = () => requestWorkspaceAction(() => {
+  const leavePhotoWorkspace = (then) => requestWorkspaceAction(() => {
     setPhotoSourceWorkflow(null);
     setPhotoFitRequest(null);
     setPhotoDialog(null);
@@ -476,7 +477,16 @@ export default function Home() {
     setPhotoNotice(null);
     setPhotoViewerOpen(false);
     dispatchPhotoWorkspace({ type: 'exit' });
-    if (photoTriggerRef.current?.isConnected) photoTriggerRef.current.focus();
+    then();
+  });
+  const exitPhotoWorkspace = () => leavePhotoWorkspace(() => { if (photoTriggerRef.current?.isConnected) photoTriggerRef.current.focus(); });
+  // Batch 1B.4A «Kontroller i Validator» after a saved hyperlink transfer: the existing Validator navigation on the
+  // actual Foreslått dataset of that GMI layer, focused on the point S_HYPERLINK (attachmentLink) rule. Validator runs
+  // on the current proposed revision; nothing is marked corrected. FOTO is left through its own workspace boundary.
+  const inspectPhotoTransferInValidator = (layerId) => guardGmiEditDraft(() => {
+    const open = () => useStore.getState().openGmiValidator(layerId, 'proposed', 'attachmentLink', 'point', { by: GMI_VALIDATOR_DATASET_BY.USER });
+    closePhotoLinkReview();
+    if (workspaceLayer) leavePhotoWorkspace(open); else open();
   });
   const addPhotosToLayer = (opener) => requestWorkspaceAction(() => {
     if (!photoSession.beginImport(workspaceLayer?.id)) return;
@@ -818,7 +828,7 @@ export default function Home() {
       <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !photoImport && !photoLinkReviewRequest && !workspaceLayer && !(gmiEditActive && gmiEditDraft)} />
       <TestModeActivation />
       {photoLinkReviewRequest && <PhotoHyperlinkReviewDialog request={photoLinkReviewRequest} onClose={closePhotoLinkReview}
-        openerRef={photoLinkReviewRequest.kind === 'foto-photo-links' ? photoToolOpenerRef : undefined} />}
+        openerRef={photoLinkReviewRequest.kind === 'foto-photo-links' ? photoToolOpenerRef : undefined} onInspectInValidator={inspectPhotoTransferInValidator} />}
       {photoImport && <PhotoImportWizard context={photoImport} onClose={closePhotos} onComplete={completePhotoImport} openerRef={photoTriggerRef}
         loadedSources={loadedGmiLayers} onLoadedSource={attachLoadedGmi} />}
       {sourceWorkflowLayer && !photoImport && <PhotoPositioningWizard layer={sourceWorkflowLayer}
