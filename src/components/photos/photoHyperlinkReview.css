@@ -61,12 +61,19 @@
 .photo-link-review .photo-link-target:has(input:disabled):hover { border-color: var(--gmi-border-strong); }
 .photo-link-review .photo-link-control-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px; border-top: 1px solid var(--gmi-border); }
 .photo-link-review .photo-link-control h3:focus { outline: none; }
-.photo-link-review .photo-link-control table { width: 100%; border-collapse: collapse; margin-top: 8px; table-layout: fixed; }
-.photo-link-review .photo-link-control :is(th, td) { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--gmi-border); overflow-wrap: anywhere; }
-.photo-link-review .photo-link-control th { position: sticky; top: -12px; background: var(--gmi-surface-soft); color: var(--gmi-navy); font-weight: 700; }
-.photo-link-review .photo-link-control th:last-child, .photo-link-review .photo-link-control td:last-child { width: 72px; }
-.photo-link-review .photo-link-control th:nth-child(6) { width: 32%; }
-.photo-link-review .photo-link-control td small { display: block; color: var(--gmi-text-muted); }
+/* Batch 1B.4B: Kontroll review cards. The fact grid has the same tracks in every card, so decisions line up. */
+.photo-link-review .photo-link-decisions { display: grid; gap: 8px; margin: 6px 0 0; padding: 0; list-style: none; }
+.photo-link-review .photo-link-decision { border: 1px solid var(--gmi-border-strong); border-radius: 12px; padding: 8px 12px; background: var(--gmi-surface); overflow-wrap: anywhere; }
+.photo-link-review .photo-link-decision[data-resolved='false'] { box-shadow: inset 3px 0 0 var(--gmi-validation-error-icon); }
+.photo-link-review .photo-link-decision-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.photo-link-review .photo-link-decision-head h5 { margin: 0; font-size: 13px; font-weight: 700; color: var(--gmi-navy); }
+.photo-link-review .photo-link-decision-head button { margin-left: auto; }
+.photo-link-review .photo-link-decision-outcome { color: var(--gmi-text); }
+.photo-link-review .photo-link-decision-facts { display: grid; grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr) minmax(0, .8fr); gap: 4px 16px; margin: 8px 0 2px; }
+.photo-link-review .photo-link-decision-facts dt { font-size: 11px; font-weight: 500; color: var(--gmi-text-muted); }
+.photo-link-review .photo-link-decision-facts dd { margin: 2px 0 0; }
+.photo-link-review .photo-link-decision-facts small { display: block; color: var(--gmi-text-muted); }
+@media (max-width: 900px) { .photo-link-review .photo-link-decision-facts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 .photo-link-review .photo-link-state { font-weight: 700; color: var(--gmi-text); }
 .photo-link-review .photo-link-state[data-resolved='false'] { color: var(--gmi-validation-error-text); }
 .photo-link-review .photo-link-footer-actions { display: flex; gap: 8px; }

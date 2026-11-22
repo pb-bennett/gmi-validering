@@ -23,7 +23,9 @@ export function isLayerTableItemHidden(item, tab, { hiddenCodes = [], hiddenType
  * exact/contextual rows, or null for the ordinary table. Their indices and metadata
  * are preserved and sidebar/view constraints are bypassed, but search still applies.
  *
- * items supplies column discovery and pre-search counts. searchedItems is the only
+ * items supplies pre-search counts. schemaItems supplies ordinary column discovery: items, except in Kun endrede,
+ * where it is the same Tema/Felt-filtered rows Foreslått shows, so filtering to changed rows never narrows the
+ * attribute schema (Batch 1B.4B). searchedItems is the only
  * input to TanStack. R3 must use table.getRowModel().rows.map(row => row.original)
  * for the final searched/sorted set (not virtual rows), retaining TanStack's sorting
  * and tie-breaking rather than maintaining another sorting/filtering implementation.
@@ -35,8 +37,9 @@ export function deriveLayerTableRows({ dataset, tab, filters = {}, view = 'origi
   const allItemsWithIndex = inspectionRows !== null || view !== 'changed'
     ? indexed : indexed.filter((item) => changedByObject?.has(`${scope}:${item.__index}`));
   const hasActiveFilters = (filters.hiddenCodes?.length || filters.hiddenTypes?.length || filters.feltHiddenValues?.length || 0) > 0;
-  const items = inspectionRows !== null || !hasActiveFilters ? allItemsWithIndex
-    : allItemsWithIndex.filter((item) => !isLayerTableItemHidden(item, tab, filters));
+  const visible = (list) => (inspectionRows !== null || !hasActiveFilters ? list : list.filter((item) => !isLayerTableItemHidden(item, tab, filters)));
+  const items = visible(allItemsWithIndex);
+  const schemaItems = allItemsWithIndex === indexed ? items : visible(indexed);
   const query = normalizeTableSearchQuery(searchQuery);
   // Optional exact object-number match (Rettinger labels), in addition to attribute search.
   const searchedItems = query && identityMatches
@@ -47,5 +50,5 @@ export function deriveLayerTableRows({ dataset, tab, filters = {}, view = 'origi
   const selected = selectionKeys === null ? null : new Set(selectionKeys);
   const displayItems = selected && inspectionRows === null
     ? indexed.filter((item) => selected.has(`${scope}:${item.__index}`)) : searchedItems;
-  return { allItemsWithIndex, items, searchedItems, displayItems };
+  return { allItemsWithIndex, items, schemaItems, searchedItems, displayItems };
 }

@@ -417,6 +417,16 @@ export function gmiChangeSetCells(changeSet) {
 }
 
 /**
+ * Batch 1B.4B: the geometry the Data Table shows on explicit navigation from one history entry to its objects.
+ * 'point' or 'line' when every changed cell (S_HYPERLINK cells of a transfer included) has that geometry; null for
+ * a mixed or empty entry, which keeps the user's current tab so neither geometry is hidden.
+ */
+export function gmiChangeSetTableScope(changeSet) {
+  const scopes = new Set(gmiChangeSetCells(changeSet).map((cell) => cell.scope));
+  return scopes.size === 1 ? [...scopes][0] : null;
+}
+
+/**
  * Readable content of a hyperlink transfer entry: one row per moved photograph reference group (source object →
  * recipient, filename, reference count), the moved reference total, and how many groups this entry added to the
  * earlier transfer it builds on (entries are cumulative). Null for ordinary corrections.

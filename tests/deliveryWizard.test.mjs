@@ -52,12 +52,12 @@ test('all four mode reviews describe the actual M9 artifact, correction choice a
   } finally { f.session.clear(); }
 });
 
-test('Gemini VA import evidence is informational and preserve remains unverified', () => {
-  const groups = deliveryDiagnostics({ errors: [], warnings: [{ code: 'gemini-va-tested-import' }, { code: 'gemini-g4-unverified' }] });
-  assert.deepEqual(groups.info.map((item) => item.code), ['gemini-va-tested-import']);
-  assert.match(groups.info[0].text, /testet oppsett 16\. november 2026/);
-  assert.deepEqual(groups.warnings.map((item) => item.code), ['gemini-g4-unverified']);
-  assert.match(groups.warnings[0].text, /uendret nummerering er ikke akseptansetestet/);
+// Batch 1B.4B (deliberate update): the import-test status notes are retired. Codes without a message keep the
+// fail-closed generic text, and no delivery message names an import test, test date or acceptance status.
+test('no delivery message reports import-test or acceptance status', () => {
+  for (const code of ['gemini-va-tested-import', 'gemini-g4-unverified', 'gemini-a5-transfer-unverified']) {
+    assert.doesNotMatch(deliveryMessage(code), /Gemini|testet|akseptanse/, code);
+  }
 });
 
 test('step transitions cannot bypass M9 blockers or retain a review after returning to content', async () => {

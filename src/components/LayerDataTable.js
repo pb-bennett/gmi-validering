@@ -375,7 +375,7 @@ export default function LayerDataTable() {
   const columnFocusEnabled = Boolean(columnFocus && columnFocusOff !== columnFocusSignature);
   const focusFields = columnFocusEnabled ? columnFocus.fields : NO_FIELDS;
 
-  const { allItemsWithIndex, items, searchedItems, displayItems } = useMemo(() => deriveLayerTableRows({
+  const { allItemsWithIndex, items, schemaItems, searchedItems, displayItems } = useMemo(() => deriveLayerTableRows({
     dataset: proposedData || layer?.data,
     tab: activeTab,
     filters: { hiddenCodes, hiddenTypes, feltHiddenValues },
@@ -395,12 +395,20 @@ export default function LayerDataTable() {
     if (tableContainerRef.current) tableContainerRef.current.scrollTop = 0;
   }, [normalizedSearchQuery, layerId, activeTab, inspection?.id]);
 
+  // Kun endrede (Batch 1B.4B): the corrected fields of the shown objects lead the ordinary columns; none is dropped.
+  const changedFields = useMemo(() => {
+    if (showSelectionOnly || tableView !== GMI_EDIT_TABLE_VIEWS.CHANGED || !changedByObject) return NO_FIELDS;
+    const changed = new Set(), changedScope = tableTabToScope(activeTab);
+    for (const item of items) changedByObject.get(gmiObjectKey(changedScope, item.__index))?.forEach((_, field) => changed.add(field));
+    return changed.size ? [...changed] : NO_FIELDS;
+  }, [showSelectionOnly, tableView, changedByObject, activeTab, items]);
+
   // Defer field calculation for large datasets
   const fields = useMemo(() => {
     const requiredFields = isContextualInspection
       ? [inspection.presentation.temaColumn, inspection.presentation.fieldColumn]
       : [];
-    const fieldItems = isContextualInspection ? contextualScopeRows : showSelectionOnly ? displayItems : items;
+    const fieldItems = isContextualInspection ? contextualScopeRows : showSelectionOnly ? displayItems : schemaItems;
     if (fieldItems.length === 0) return [...new Set(requiredFields)];
 
     const fieldSet = new Set();
@@ -447,6 +455,9 @@ export default function LayerDataTable() {
     for (const field of focusFields) {
       if (fieldSet.has(field) && !presentFields.includes(field)) presentFields.push(field);
     }
+    for (const field of changedFields) {
+      if (!presentFields.includes(field)) presentFields.push(field);
+    }
 
     const sfcodeIndex = presentFields.indexOf('S_FCODE');
     if (sfcodeIndex > -1) {
@@ -454,17 +465,8 @@ export default function LayerDataTable() {
       presentFields.unshift('S_FCODE');
     }
 
-    if (!showSelectionOnly && tableView === GMI_EDIT_TABLE_VIEWS.CHANGED && changedByObject) {
-      // Kun endrede: identity columns plus the corrected fields of the shown objects.
-      const scope = tableTabToScope(activeTab);
-      const changedFields = new Set();
-      for (const item of fieldItems) changedByObject.get(gmiObjectKey(scope, item.__index))?.forEach((_, field) => changedFields.add(field));
-      const identity = ['S_FCODE', 'Tema', 'Type'].filter((field) => fieldSet.has(field) && !changedFields.has(field));
-      return [...identity, ...[...changedFields].filter((field) => fieldSet.has(field))];
-    }
-
     return [...new Set([...presentFields, ...requiredFields])];
-  }, [items, contextualScopeRows, isContextualInspection, inspection, tableView, changedByObject, activeTab, showSelectionOnly, displayItems, focusFields]);
+  }, [schemaItems, contextualScopeRows, isContextualInspection, inspection, showSelectionOnly, displayItems, focusFields, changedFields]);
 
   const savedOrder = useMemo(() => {
     return layerId &&
@@ -475,12 +477,17 @@ export default function LayerDataTable() {
 
   const orderedFields = useMemo(() => {
     // Review focus is display-only: the saved order (persisted below) stays the user's own.
-    if (!isContextualInspection) return applyColumnFocus(normalizeColumnOrder(fields, savedOrder), focusFields, LEADING_FIELDS);
+    if (!isContextualInspection) {
+      const base = normalizeColumnOrder(fields, savedOrder);
+      // Changed fields keep the user's own relative order, after any explicit review focus.
+      const priority = changedFields.length ? [...focusFields, ...base.filter((field) => changedFields.includes(field) && !focusFields.includes(field))] : focusFields;
+      return applyColumnFocus(base, priority, LEADING_FIELDS);
+    }
     const initial = getDiagnosticColumnOrder(fields, inspection.presentation);
     return contextualColumnOrder?.inspectionId === inspection.id
       ? normalizeColumnOrder(initial, contextualColumnOrder.fields)
       : initial;
-  }, [fields, savedOrder, isContextualInspection, inspection, contextualColumnOrder, focusFields]);
+  }, [fields, savedOrder, isContextualInspection, inspection, contextualColumnOrder, focusFields, changedFields]);
 
   // A request can outlive its visible fields (geometry switch, empty search, changed-only view).
   // Report the applied order, while retaining the request and the user's explicit off choice.

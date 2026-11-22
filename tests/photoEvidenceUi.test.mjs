@@ -125,7 +125,7 @@ test('private corpus in the real app: with the GML attached, source values reach
     assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
     await browser.waitFor(`${exportDialog}.querySelector('[data-export-status]')`);
     assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-warning]'))`), false, 'every time is in place, so there is nothing to warn about');
-    assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="import"] dd').innerText`), /denne pakken er ikke testet/);
+    assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-level="import"]'))`), false, 'Batch 1B.4B: no import-test status level');
     await buildPreview(browser);
     assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-time"] summary').textContent`), /^Opptakstid i Gemini-filen/);
     const { gml, entries } = await downloadZip(browser, directory);

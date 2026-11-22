@@ -55,7 +55,7 @@ function Diagnostics({ plan, snapshot }) {
 }
 
 /** Kontroll: the one place for findings, photo readiness and technical detail. */
-function ReviewDetails({ review, hasGmi, photoReadiness }) {
+function ReviewDetails({ review, photoReadiness }) {
   const { plan } = review, photoPlan = plan.photoPlan, profile = photoPlan && PHOTO_EXPORT_PROFILE_METADATA[photoPlan.profile];
   const notNeededAssets = plan.counts.notNeededAssets;
   const note = deliveryExclusionNote(plan.mode, plan.photoDelivery.ignoredExclusions);
@@ -69,18 +69,16 @@ function ReviewDetails({ review, hasGmi, photoReadiness }) {
       <summary>Ikke med i leveransen ({placementCount(exclusions.length)})</summary>
       <ul>{exclusions.map((line, index) => <li key={index}>{line}</li>)}</ul>
     </details>}
-    {hasGmi && plan.status === 'ready' && !plan.warnings.some((item) => ['gemini-g4-unverified', 'gemini-va-tested-import'].includes(item.code))
-      && <p className="photo-export-hint" data-export-gemini-import>{deliveryMessage('gemini-va-tested-import')}</p>}
     {photoPlan && <PhotoExportStatus readiness={photoReadiness} />}
     {photoPlan && <p data-export-counts>{photoCount(new Set(photoPlan.attachments.map((item) => item.assetId)).size)} · {placementCount(plan.counts.features)} i GML-filen
       {photoPlan.excluded.length > 0 && ` · ${placementCount(photoPlan.excluded.length)} uten posisjon utelatt`}</p>}
     {photoPlan?.excluded.length > 0 && <p data-export-excluded>{photoPlan.excluded.length} plasseringer uten godkjent posisjon er utelatt fra Kun GML med bilder. GMI endres ikke.</p>}
     {(photoPlan || notNeededAssets > 0) && <details className="photo-export-disclosure" data-export-technical><summary>Tekniske detaljer</summary>
-      {photoPlan && <p data-export-format={photoPlan.profile}>{profile.title}<small className="block text-gmi-text-muted">{profile.compatibility}</small></p>}
+      {photoPlan && <p data-export-format={photoPlan.profile}>{profile.title}</p>}
       {photoPlan && <p>{photoPlan.counts.uniqueImages} unike bilder i laget · {photoPlan.counts.totalOccurrences} forekomster</p>}
       {notNeededAssets > 0 && <p>{notNeededAssets} bilder er ikke valgt og er ikke påkrevd av beholdte GMI-lenker. Disse er forskjellige fra plasseringene du har valgt Ikke med for.</p>}
     </details>}
-    <p className="photo-export-hint">Dette er eksportkontroll, ikke en ny Validator-kjøring eller full XSD-sertifisering eller Gemini-akseptanse. Originalfilen endres ikke.</p>
+    <p className="photo-export-hint">Dette er eksportkontroll, ikke en ny Validator-kjøring eller full XSD-sertifisering. Originalfilen endres ikke.</p>
   </>;
 }
 
@@ -287,7 +285,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
         {state.error && <p role="alert">{state.error}</p>}
         {state.review && status !== 'stale' && <>
           {state.review.plan.mode !== 'gmi-only' && <p data-export-zip={state.review.plan.naming.zipFilename} data-export-gml={state.review.plan.photoPlan ? state.review.plan.naming.gmlFilename : ''} />}
-          {state.step === 'review' ? <ReviewDetails review={state.review} hasGmi={hasGmi} photoReadiness={photoReadiness} />
+          {state.step === 'review' ? <ReviewDetails review={state.review} photoReadiness={photoReadiness} />
             : <PackageDetails review={state.review} status={status} recorded={state.recorded} photoReadiness={photoReadiness} />}
         </>}
         {reportError && <p role="alert">{reportError}</p>}

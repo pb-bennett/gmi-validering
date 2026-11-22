@@ -129,11 +129,13 @@ test('renumbering changes only digits; preserve keeps gaps; both are explicit', 
   assert.equal(renumber.ordinalPolicy, 'renumber');
   assert.equal(renumber.cells[0].proposed, 'h:1(link:"Attachments\\R_2.jpg") h:2(link:"Attachments\\R_4.jpg") ');
   assert.deepEqual(renumber.cells[0].ordinalChanges, [{ wrapperOrdinal: 1, from: '2', to: '1' }, { wrapperOrdinal: 3, from: '4', to: '2' }]);
-  assert.deepEqual(renumber.warnings, [{ code: 'gemini-va-tested-import', ordinalPolicy: 'renumber' }]);
+  // Batch 1B.4B (deliberate update): no import-test status warning; the ordinal policy itself is on the plan.
+  assert.deepEqual(renumber.warnings, []);
   const preserve = planGmiHyperlinkRemoval(document, { photoSource: source, selections, ordinalPolicy: 'preserve' });
   assert.equal(preserve.cells[0].proposed, 'h:2(link:"Attachments\\R_2.jpg") h:4(link:"Attachments\\R_4.jpg") ');
   assert.equal(preserve.counts.ordinalChanges, 0);
-  assert.deepEqual(preserve.warnings, [{ code: 'gemini-g4-unverified', ordinalPolicy: 'preserve' }]);
+  assert.equal(preserve.ordinalPolicy, 'preserve');
+  assert.deepEqual(preserve.warnings, []);
   for (const plan of [renumber, preserve]) {
     const result = applyGmiHyperlinkRemoval(plan, { authorization: authorize(plan) });
     assert(result.ok, JSON.stringify(result.rejections));

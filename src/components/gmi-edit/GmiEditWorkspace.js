@@ -7,7 +7,7 @@ import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
   describeGmiEditStatus, gmiChangeSetCells, gmiChangeSetDependents, gmiEditDownloadState, gmiEditMessage,
-  gmiObjectKey, gmiObjectFocusIntent, scopeToTableTab, summarizeGmiEditCounts, GMI_EDIT_TABLE_VIEWS,
+  gmiChangeSetTableScope, gmiObjectKey, gmiObjectFocusIntent, scopeToTableTab, summarizeGmiEditCounts, GMI_EDIT_TABLE_VIEWS,
 } from '@/lib/gmiEditView.mjs';
 import PhotoIconButton from '@/components/photos/PhotoIconButton';
 import useGmiEditLayer from './useGmiEditLayer';
@@ -267,7 +267,12 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   /** Open one history entry's details in the right inspector (through the draft guard). */
   const showChangeSet = (id) => {
     if (detailId === id && !batchInspector) { setDetailId(null); return; }
-    guard(() => { closeBatchInspector(); setDetailId(id); setActiveChangeSetId(id); }, batchInspector ? 'masseendringen' : 'objektet');
+    guard(() => {
+      closeBatchInspector(); setDetailId(id); setActiveChangeSetId(id);
+      // Batch 1B.4B: explicit navigation shows the entry's geometry (a transfer's points); a mixed entry keeps the tab.
+      const scope = gmiChangeSetTableScope(view?.changeSets.find((entry) => entry.id === id));
+      if (scope) syncObjectTable({ scope });
+    }, batchInspector ? 'masseendringen' : 'objektet');
   };
   /** Review a correction in the Data Table: Foreslått, its geometry, edited fields in focus. */
   const showProposed = (changeSet) => {

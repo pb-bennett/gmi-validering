@@ -75,7 +75,6 @@ const messages = {
   'transfer-replan-mismatch': 'Flyttingen av bildelenker kan ikke gjenskapes mot originalfilen. Angre flyttingen i Rettinger og gjør den på nytt.',
   'revised-gmi-association-mismatch': 'Den reviderte GMI-filen gir ikke de forventede bildekoblingene. Ingen fil ble laget.',
   'revised-gmi-attachment-mismatch': 'Bildelenkene i den reviderte GMI-filen samsvarer ikke med vedleggene i pakken. Ingen fil ble laget.',
-  'gemini-a5-transfer-unverified': 'Flyttede bildelenker (nye eller omnummererte h:N-omslag) er ikke importtestet i Gemini VA. Kontroller at bildene åpnes på riktig punktobjekt etter import.',
   'blocked-plan': 'Leveransen har blokkerende feil. Rett feilene og kontroller på nytt.',
   'foreign-exclusion-source': 'En utelatt plassering gjelder en annen GMI-kilde. Avklar leveringsvalget i FOTO eller lag en egen leveranse for kilden.',
   'multi-link-wrapper': 'Bildelenken kan ikke fjernes sikkert: samme omslag inneholder flere lenker. Behold plasseringen i GMI eller avklar kildefilen.',
@@ -94,8 +93,6 @@ const messages = {
   'shared-path-not-gml-compatible': 'Et delt bilde har ingen beholdt sti som passer GML-leveransen. Avklar bildelenken før samlet levering.',
   'retained-path-outside-attachments': 'En beholdt bildelenke ligger utenfor Attachments/. Filen legges ved på sin opprinnelige relative sti.',
   'photo-linked-elsewhere': 'Samme bilde er fortsatt lenket fra et annet objekt. Den lenken og den nødvendige originalfilen beholdes.',
-  'gemini-g4-unverified': 'Fjerning av bildelenker med uendret nummerering er ikke akseptansetestet i Gemini VA. Kontroller leveransen før videre bruk.',
-  'gemini-va-tested-import': 'Revidert GMI med feltrettinger og bilder fordelt mellom GMI og GML ble importert i Gemini VA i et testet oppsett 16. november 2026. Kontroller resultatet etter import.',
   'download-failed': 'Nedlastingen kunne ikke startes. Ingen rettinger er merket som lastet ned. Prøv igjen.',
 };
 export function deliveryMessage(item) {
@@ -106,7 +103,7 @@ export function deliveryMessage(item) {
 }
 // C1.5: accepted filename-derived, estimated and technically completed capture times are the user's decisions: Informasjon.
 const informational = new Set(['experimental-mapping', 'compatibility-import', 'compatibility-z', 'compatibility-time', 'compatibility-metadata',
-  'associations-omitted', 'shared-attachments', 'path-convention', 'retained-path-outside-attachments', 'gemini-va-tested-import',
+  'associations-omitted', 'shared-attachments', 'retained-path-outside-attachments',
   'capture-time-filename', 'capture-time-estimated', 'capture-time-technical']);
 export function deliveryDiagnostics(plan) {
   const groups = { errors: [], warnings: [], info: [] };
@@ -132,12 +129,25 @@ export function deliveryCorrectionCounts(view, status = null) {
     movedReferences: transfer ? transfer.transfers.reduce((sum, item) => sum + item.referenceIds.length, 0) : 0,
   });
 }
+/**
+ * Field corrections in the exported GMI, never the S_HYPERLINK cells of a moved photo link (Batch 1B.4B). The
+ * composition and removal paths report `fieldEditCount`; the Kun GMI export reports the transfer's own count, and
+ * otherwise only its diff, whose reserved S_HYPERLINK changes are not field corrections.
+ */
+export function deliveryFieldCorrectionCount(plan) {
+  const summary = plan?.gmiSummary;
+  if (!summary) return 0;
+  if (Number.isInteger(summary.fieldEditCount)) return summary.fieldEditCount;
+  if (Number.isInteger(summary.hyperlinkTransfer?.fieldEditCount)) return summary.hyperlinkTransfer.fieldEditCount;
+  const changes = summary.diff?.changes ?? summary.changes;
+  return Array.isArray(changes) ? changes.filter((item) => !isGmiFieldEditReservedColumn(item.field)).length : summary.changedCells ?? 0;
+}
 export function deliverySummary({ plan, fieldCount = 0 }) {
   const count = (value, one, many) => `${value} ${value === 1 ? one : many}`;
-  const fields = plan.gmiSummary?.fieldEditCount ?? plan.gmiSummary?.changedCells ?? 0;
-  const corrections = plan.mode === 'split' ? `${count(fieldCount, 'feltretting', 'feltrettinger')} utelates (uttrykkelig valgt)`
+  const fields = deliveryFieldCorrectionCount(plan);
+  const corrections = plan.mode === 'split' ? fieldCount ? `${count(fieldCount, 'feltretting', 'feltrettinger')} utelates (uttrykkelig valgt)` : 'Ingen feltrettinger'
     : plan.mode === 'photos-only' ? 'Ingen GMI-eksport; rettingene beholdes i Rettinger'
-      : `${count(fields, 'feltretting', 'feltrettinger')} tas med`;
+      : fields ? `${count(fields, 'feltretting', 'feltrettinger')} tas med` : 'Ingen feltrettinger';
   const counts = plan.counts, coordinated = ['combined', 'split'].includes(plan.mode);
   const kept = counts.retainedReferences;
   return [
@@ -212,7 +222,7 @@ export function deliveryReport(review) {
   const exclusions = deliveryExclusionLines(plan);
   return ['Leveranserapport', ...deliverySummary(review).map(([label, value]) => `${label}: ${value}`),
     `Eksportkontroll: ${plan.status === 'ready' ? 'Eksportkontroll fullført – kan genereres' : 'Blokkert'}`,
-    'Eksportkontroll er ikke en ny Validator-kjøring, full XSD-sertifisering eller Gemini-akseptanse. Originalfilen endres ikke.',
+    'Eksportkontroll er ikke en ny Validator-kjøring eller full XSD-sertifisering. Originalfilen endres ikke.',
     'Leveranserapporten lastes ned separat og er ikke med i ZIP-filen.', '', 'Innhold:', ...deliveryContents(plan), '',
     ...(note ? [note, ''] : []),
     ...Object.entries(groups).flatMap(([key, items]) => [({ errors: 'Feil', warnings: 'Advarsler', info: 'Informasjon' })[key],

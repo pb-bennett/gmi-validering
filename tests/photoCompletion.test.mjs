@@ -286,19 +286,19 @@ test('status line: never a plain "klar", and never claims more than the rules sa
   assert.equal(text(), 'Ingen opplysninger mangler for dette målet', 'a default direction is complete');
 });
 
-test('missing time: the warning is specific, and generation, schema and import are answered separately', async () => {
+test('missing time: the warning is specific, and generation and schema are answered separately', async () => {
   const { session, layerId, ids: photoIds } = await completionLayer([jpeg('a.jpg'), jpeg('b.jpg', exifTime())]);
   const { readiness } = completionView(session, layerId);
   assert.equal(readiness.levels.generation, 'possible');
-  assert.equal(photoCaptureTimeSchemaWarning(readiness), '1 bilde mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet. Gemini VA har importert bilder uten opptakstid i et testet oppsett (november 2026).');
+  // Batch 1B.4B (deliberate update): no dated import-test claim and no «Import i Gemini VA» status level.
+  assert.equal(photoCaptureTimeSchemaWarning(readiness), '1 bilde mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet.');
   assert.deepEqual(photoExportLevels(readiness).map(({ key, text }) => [key, text]), [['generation', 'Kan lages'],
-    ['schema', 'Oppfylles ikke: opptakstid mangler for 1 bilde. XSD-validering er ikke kjørt.'], ['import', 'Profilen er importert tidligere, men denne pakken er ikke testet.']]);
-  assert.doesNotMatch(photoCaptureTimeSchemaWarning(readiness), /ikke verifisert .*godtar/, 'A6: omitted capture time was imported in a tested Gemini VA setup');
+    ['schema', 'Oppfylles ikke: opptakstid mangler for 1 bilde. XSD-validering er ikke kjørt.']]);
   assert.equal(photoCaptureTimeSchemaWarning(completionView(session, layerId, LEGACY).readiness), null, 'there it blocks, so it is an error and not this warning');
   session.fillMissingPhotoValues(layerId, 'captureTime', '2026-05-12T14:33:00', [photoIds[0]]);
   const filled = completionView(session, layerId).readiness;
   assert.equal(photoCaptureTimeSchemaWarning(filled), null);
-  assert.deepEqual(photoExportLevels(filled).map(({ text }) => text).slice(1), ['Kravene er oppfylt etter regelsjekk. XSD-validering er ikke kjørt.', 'Profilen er importert tidligere, men denne pakken er ikke testet.']);
+  assert.deepEqual(photoExportLevels(filled).map(({ text }) => text).slice(1), ['Kravene er oppfylt etter regelsjekk. XSD-validering er ikke kjørt.']);
 });
 
 // Acceptance defect: Standard showed «valgfritt for Gemini VA», where a missing time blocks the export.

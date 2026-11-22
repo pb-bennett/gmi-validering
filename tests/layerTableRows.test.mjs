@@ -75,6 +75,20 @@ test('Kun endrede uses scope and original index before sidebar filters/search', 
   assert.deepEqual(derive({ view: 'changed' }).items, []);
 });
 
+test('Batch 1B.4B: Kun endrede filters rows, not the column schema: schemaItems are the rows Foreslått would show', () => {
+  const changedByObject = new Map([['line:1', new Map()]]);
+  const filters = { hiddenCodes: ['VL'] };
+  const changed = derive({ view: 'changed', changedByObject, filters });
+  assert.deepEqual(indices(changed.items), [1]);
+  assert.deepEqual(indices(changed.schemaItems), [1, 3, 5]);
+  assert.deepEqual(indices(changed.schemaItems), indices(derive({ view: 'proposed', filters }).items));
+  assert.deepEqual(indices(derive({ view: 'changed', changedByObject }).schemaItems), indices(derive({}).items), 'no filters: every row');
+  const ordinary = derive({ view: 'proposed', filters });
+  assert.equal(ordinary.schemaItems, ordinary.items, 'other views discover columns from their own rows');
+  const inspectionRows = Object.freeze([Object.freeze({ ...dataset.lines[4], __index: 4 })]);
+  assert.equal(derive({ inspectionRows, view: 'changed', changedByObject }).schemaItems, inspectionRows);
+});
+
 test('exact/contextual rows retain resolved indices, order and metadata; bypass view and sidebar, retain search', () => {
   const inspectionRows = Object.freeze([
     Object.freeze({ ...dataset.lines[4], __index: 4, __contextualResult: 'FAIL' }),

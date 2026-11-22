@@ -15,7 +15,6 @@ function FormatCard({ profile, card, config, onConfigChange }) {
   const selected = config.profile === profile;
   const title = <>{card.title}{card.badge && <span className="photo-export-badge">{card.badge}</span>}</>;
   return <PhotoSourceOption name="photo-export-format" value={profile} label={title} hint={card.destination} checked={selected} onChange={(value) => onConfigChange({ profile: value })}>
-    <p className="photo-export-compatibility">{card.compatibility}</p>
     {selected && card.tier !== 'primary' && <label className="photo-export-crs">Koordinatsystem
       <select className="gmi-focus-ring" aria-label="Eksport-CRS" value={config.crs} onChange={(event) => onConfigChange({ crs: event.target.value })}><option>EPSG:25832</option><option>EPSG:25833</option></select>
     </label>}

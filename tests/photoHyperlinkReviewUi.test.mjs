@@ -175,8 +175,10 @@ test('Batch 1A/1A.2 production: complete Validator handoff, all-point pairing, K
         await browser.evaluate(`Array.from(${dialog}.querySelectorAll('.photo-link-list button')).find(e=>e.innerText.includes('Cover 0')).click()`);
         await browser.waitFor(`${dialog}.querySelector('.photo-link-recipient-line')?.innerText.includes('KUM · Punkt 66')`);
         await click(browser, 'Kontroll', dialog);
-        await browser.waitFor(`${dialog}.querySelector('.photo-link-control tbody tr') && document.activeElement?.id==='photo-link-control-heading'`);
-        const rows = await browser.evaluate(`Array.from(${dialog}.querySelectorAll('.photo-link-control tbody tr')).map(r=>Array.from(r.cells).slice(1,6).map(c=>c.innerText.split('\\n')[0]))`);
+        await browser.waitFor(`${dialog}.querySelector('.photo-link-decision') && document.activeElement?.id==='photo-link-control-heading'`);
+        // Batch 1B.4B (deliberate update): one review card per decision instead of a table row; the same facts in the same order.
+        const rows = await browser.evaluate(`Array.from(${dialog}.querySelectorAll('.photo-link-decision')).map(r=>['source','outcome','target','distance','status']
+          .map(k=>{const e=r.querySelector('[data-fact='+k+']'); return (e.querySelector('dd')||e).innerText.split('\\n')[0];}))`);
         assert.deepEqual(rows, [['LOK · Punkt 1', 'Flytt til punktobjekt', 'KUM · Punkt 66', '5 m', 'Uavklart'], ['LOK · Punkt 3', 'Behold uendret', '–', '–', 'Avklart']]);
         assert(await browser.evaluate(`${dialog}.querySelector('.photo-link-control').innerText.includes('1 av 2 beslutninger må avklares')`));
         // Batch 1B.4A (deliberate contract update): Kontroll has «Lagre endringer», unavailable while a decision is unresolved,

@@ -494,10 +494,6 @@ export function planGmiHyperlinkRemoval(document, request = {}) {
         retainedObjectKeys: sortedUnique(others.map((id) => associationsById[id].objectKey)) });
     }
   }
-  if (cells.length) base.warnings.push({
-    code: ordinalPolicy === GMI_HYPERLINK_ORDINAL_POLICIES.PRESERVE ? 'gemini-g4-unverified' : 'gemini-va-tested-import',
-    ordinalPolicy,
-  });
   base.warnings.sort((a, b) => compareStrings(a.code, b.code) || compareStrings(a.objectKey ?? a.assetId ?? '', b.objectKey ?? b.assetId ?? ''));
   const edits = cells.map((cell) => ({
     target: { scope: cell.scope, sourceIndex: cell.sourceIndex, field: GMI_HYPERLINK_FIELD, objectId: cell.objectId, guid: cell.guid },

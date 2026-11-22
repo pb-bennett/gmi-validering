@@ -115,15 +115,14 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
       geometryId: gemini ? `id${geminiGuid()}` : `point-${guid}` });
   }
   const associationCount = new Set(all.flatMap((row) => row.associations.map((link) => JSON.stringify([row.assetId, link.sourceId, link.object.objectKey])))).size;
-  if (associationCount) warnings.push({ code: 'associations-omitted', message: `${associationCount} objektkoblinger beholdes i appen, men er ikke med i denne testeksporten.` });
+  if (associationCount) warnings.push({ code: 'associations-omitted', message: `${associationCount} objektkoblinger beholdes i appen, men er ikke med i denne eksporten.` });
   const occurrenceCounts = new Map();
   for (const row of placed) occurrenceCounts.set(row.assetId, (occurrenceCounts.get(row.assetId) || 0) + 1);
   const sharedAttachments = [...occurrenceCounts.values()].filter((count) => count > 1).length;
   if (sharedAttachments) warnings.push({ code: 'shared-attachments', message: `${sharedAttachments} originalbilder deles av flere separate forekomst-features.` });
-  warnings.push({ code: 'experimental-mapping', message: 'Eksperimentell forekomstbevarende mapping: én godtatt forekomst = én Skråfoto-feature. Ingen ny kameraposisjon utledes.' });
-  warnings.push({ code: 'direction-assumption', message: 'Eksperimentell retningsantakelse: med klokken i grader fra geografisk nord (enhet 1, referanse 1).' });
-  if (!gemini) warnings.push({ code: 'path-convention', message: 'Attachments/<filnavn> med skråstrek er appens testkonvensjon, ikke et dokumentert Gemini-krav.' });
-  if (profile === 'asbuilt52') warnings.push({ code: 'experimental-2d', message: 'Eksperimentell 2D AsBuilt-fotogeometri uten Z. Gemini-aksept er ukjent.' });
+  warnings.push({ code: 'experimental-mapping', message: 'Én godtatt forekomst blir én Skråfoto-feature. Ingen ny kameraposisjon utledes.' });
+  warnings.push({ code: 'direction-assumption', message: 'Retning angis med klokken i grader fra geografisk nord (enhet 1, referanse 1).' });
+  if (profile === 'asbuilt52') warnings.push({ code: 'experimental-2d', message: 'AsBuilt-fotogeometrien er 2D, uten Z.' });
   const missingTimestampCount = occurrences.filter((row) => !fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime)).length;
   const estimatedCount = assets.filter((asset) => asset.metadata?.captureTime?.provenance?.estimated).length;
   const filenameAdvisory = filenameCaptureTimeAdvisory(assets.map((asset) => ({ assetId: asset.assetId, captureTime: asset.metadata?.captureTime })));
@@ -136,7 +135,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
     warnings.push({ code: 'compatibility-z', message: `${occurrences.length} XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde.` });
     warnings.push({ code: 'compatibility-time', message: `${missingTimestampCount} features uten full opptakstid får ikke opptakstid i GML-filen. ${timezoneTransformCount} tidssone-suffikser fjernes, og klokkeslettet endres ikke: UTC-tid blir stående som UTC, uten tidssone. Brøkdelsekunder utelates for å matche referansen. Godtatte data endres ikke.` });
     warnings.push({ code: 'compatibility-metadata', message: `${assets.filter((asset) => asset.metadata?.photographer).length} godtatte fotografverdier utelates; bildeinformasjon eksporteres ikke.` });
-    warnings.push({ code: 'compatibility-import', message: `Pakk ut ZIP. Importer ${naming.gmlFilename} med Attachments-mappen ved siden av. XML bruker Attachments\\filnavn. Gemini-import må testes manuelt.` });
+    warnings.push({ code: 'compatibility-import', message: `Pakk ut ZIP. Importer ${naming.gmlFilename} med Attachments-mappen ved siden av. XML bruker Attachments\\filnavn.` });
   }
   if (!snapshot.isLive()) error('stale-plan', 'Fotolaget eller godtatte data er endret. Lag en ny forhåndsvisning.');
   const plan = freezeExportData({ version: 1, profile, crs, context, naming, collectionId: gemini ? `id${geminiGuid()}` : 'photo-collection', layer: snapshot.layer, assets, occurrences, attachments, excluded, warnings, errors,

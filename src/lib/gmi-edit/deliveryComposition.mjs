@@ -37,9 +37,6 @@ import { compileGmiProposedEdits, isGmiEditSession } from './session.mjs';
 import { gmiSourceIntact } from './sourceDocument.mjs';
 import { gmiCellKey } from './targets.mjs';
 
-/** Recipient acceptance of appended/renumbered wrappers is not established (recipient gate A5). */
-export const GMI_TRANSFER_RECIPIENT_PENDING = 'gemini-a5-transfer-unverified';
-
 const compositions = new WeakMap();   // composition -> { session, document, fieldEdits, removalContract, decisions }
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const sortedUnique = (values) => [...new Set(values)].sort(compare);
@@ -99,10 +96,8 @@ export function planGmiDeliveryComposition(session, { photoSource = null, photoS
     if (edit.target.field === GMI_HYPERLINK_FIELD || hyperlinkKeys.has(gmiCellKey(edit.target))) return blocked([{ code: 'field-edit-overlaps-hyperlink' }]);
   }
   const removalContract = plan.removals.map((entry) => ({ objectKey: entry.objectKey, referenceIds: [...entry.referenceIds] }));
-  // M7's Gemini note covers removals with renumbering only; appended or renumbered transfer wrappers are not
-  // recipient-tested (gate A5), so that claim is replaced, never repeated, for a composition.
-  const warnings = [...plan.warnings.filter((entry) => entry.code !== 'gemini-va-tested-import'),
-    { code: GMI_TRANSFER_RECIPIENT_PENDING, transfers: plan.transfers.length }];
+  // Batch 1B.4B: no import-test status note is added for users; recipient acceptance (gate A5) is tracked in reports.
+  const warnings = [...plan.warnings];
   const composition = deepFreeze({
     ok: true, kind: 'gmi-delivery-composition', status: 'ready',
     basis: { documentFingerprint: document.fingerprint, stateKey: session.stateKey, effectiveKey: compiled.effectiveKey,

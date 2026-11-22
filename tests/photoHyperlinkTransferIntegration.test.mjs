@@ -23,7 +23,7 @@ import {
 import { PHOTO_LINK_REVIEW_WRITABLE, detectPhotoLinkReview, emptyPhotoLinkReviewChoices, photoLinkReviewDecisions, reducePhotoLinkReviewChoices } from '../src/lib/photos/photoHyperlinkReview.mjs';
 import { buildGmiFieldExport, getGmiExportReadiness, validateGmiDataset } from '../src/lib/gmi-edit/index.mjs';
 import { captureDeliverySnapshot, buildDeliveryPlan } from '../src/lib/delivery/index.mjs';
-import { gmiChangeSetCellViews, gmiChangeSetDependents, gmiEditMessage, gmiHyperlinkTransferSummary, indexGmiChangedCells, summarizeGmiChangeSet } from '../src/lib/gmiEditView.mjs';
+import { gmiChangeSetCellViews, gmiChangeSetDependents, gmiChangeSetTableScope, gmiEditMessage, gmiHyperlinkTransferSummary, indexGmiChangedCells, summarizeGmiChangeSet } from '../src/lib/gmiEditView.mjs';
 import { saveStagedSource } from './helpers/photoSourceDraft.mjs';
 
 const REFERENCE_DATE = '2026-11-21';
@@ -181,6 +181,21 @@ test('Rettinger history presents a transfer as a photograph hyperlink transfer w
   assert(f.registry.undo(f.handle).ok);
   assert.deepEqual(f.registry.inspect(f.handle).changeSets.map((entry) => entry.id), [t1.id, field.id]);
   assert.equal(f.registry.inspect(f.handle).status.redoCount, 1);
+});
+
+test('Batch 1B.4B: «Vis detaljer» shows the geometry a history entry changed; a transfer changes points only', async () => {
+  const f = await guarded(LOK_SLU);
+  assert(f.commit([f.move(293, 'SYNT_LOK_B.png', 108)]).ok);
+  f.stageField(2, 'Syntetisk merknad');
+  const [transfer, field] = f.registry.inspect(f.handle).changeSets;
+  assert.equal(gmiHyperlinkTransferSummary(transfer).objectsLabel, '2 punkter');
+  assert.equal(gmiChangeSetTableScope(transfer), 'point', 'the two S_HYPERLINK point cells select Punkter');
+  assert.equal(gmiChangeSetTableScope(field), 'point');
+  // Ordinary entries: a line-only correction selects Ledninger; a mixed or empty entry keeps the current tab.
+  assert.equal(gmiChangeSetTableScope({ cells: [{ scope: 'line', sourceIndex: 0 }, { scope: 'line', sourceIndex: 4 }] }), 'line');
+  assert.equal(gmiChangeSetTableScope({ cells: [{ scope: 'line', sourceIndex: 0 }, { scope: 'point', sourceIndex: 1 }] }), null);
+  assert.equal(gmiChangeSetTableScope({ cells: [] }), null);
+  assert.equal(gmiChangeSetTableScope(null), null);
 });
 
 test('conflicting FOTO delivery choices are refused for transferred photographs, unrelated photographs stay available', async () => {

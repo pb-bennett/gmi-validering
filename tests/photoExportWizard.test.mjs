@@ -378,17 +378,15 @@ const components = () => Promise.all(WIZARD_COMPONENTS.map((name) => readFile(ne
 
 test('format cards: every profile has one, and the first is the only recommendation', () => {
   const cards = Object.values(PHOTO_EXPORT_PROFILE_METADATA);
-  for (const card of cards) for (const key of ['title', 'destination', 'compatibility']) assert.equal(typeof card[key], 'string');
+  for (const card of cards) for (const key of ['title', 'destination']) assert.equal(typeof card[key], 'string');
+  assert(cards.every((card) => !('compatibility' in card)), 'Batch 1B.4B: no import-test status on format cards');
   assert.deepEqual(cards.map((card) => card.badge), ['Anbefalt', null, null]);
   assert.deepEqual(cards.map((card) => card.title), ['Gemini-kompatibel Skråfoto 2019', 'Skråfoto 2019 (standard)', 'Norsk Vann AsBuilt 5.2']);
 });
 
-test('format cards: the import claim follows the evidence table and promises nothing about the next package', () => {
-  for (const [profile, card] of Object.entries(PHOTO_EXPORT_PROFILE_METADATA)) {
-    if (PHOTO_EXPORT_IMPORT_EVIDENCE[profile].profile === 'imported') {
-      assert.match(card.compatibility, /^Importert .* i testet oppsett\. Kontroller resultatet etter import\.$/);
-    } else assert.equal(card.compatibility, 'Ikke testet med import i Gemini VA.');
-  }
+// Batch 1B.4B (deliberate update): the evidence table stays as internal record only; no card shows import-test status.
+test('format cards: the internal import evidence table is unchanged and not shown on the cards', () => {
+  for (const card of Object.values(PHOTO_EXPORT_PROFILE_METADATA)) assert.doesNotMatch(JSON.stringify(card), /testet|Importert/);
   assert.equal(PHOTO_EXPORT_IMPORT_EVIDENCE['gemini-legacy2019'].missingCaptureTime, 'imported', 'A6: real Gemini VA import 2026-11-19; update only from a real import');
   assert.equal(PHOTO_EXPORT_IMPORT_EVIDENCE['gemini-legacy2019'].missingDirection, 'untested');
   assert.equal(PHOTO_EXPORT_IMPORT_EVIDENCE['gemini-legacy2019'].renamedGml, 'untested');

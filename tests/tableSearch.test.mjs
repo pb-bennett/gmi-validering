@@ -149,7 +149,8 @@ test('table UI contract: compact toolbar input, local state, clear/focus, counts
   assert.match(source, /data: tableData/);
   assert.match(source, /const tableData = useMemo\(\(\) => batchReview \? \[\.\.\.displayItems\] : displayItems/);
   assert.match(source, /const filteredCount = items.length/);
-  assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : showSelectionOnly \? displayItems : items/);
+  // Batch 1B.4B (deliberate update): ordinary columns come from pre-search schemaItems (items, or in Kun endrede the Foreslått rows).
+  assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : showSelectionOnly \? displayItems : schemaItems/);
   assert.match(source, /getRowId: \(row\) => `\$\{layerId\}:\$\{activeTab\}:\$\{row.__index\}`/);
   assert.match(source, /getSortedRowModel: getSortedRowModel\(\)/);
   assert.match(source, /row.original.__index/);

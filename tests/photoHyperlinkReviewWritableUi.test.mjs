@@ -31,6 +31,8 @@ test('Batch 1B.4A production: pairing, Kontroll, one atomic save, receipt, Valid
       { parserId: 108, tema: 'SLU', label: 'SYNT-S8', hyperlink: '', xyz: '581950.096 6566010.128 100.900' },
       { parserId: 12, tema: 'KUM', label: 'SYNT-K12', hyperlink: link('SYNT_KUM_1.png'), xyz: '581964.000 6566024.000 99.000' },
       ...Array.from({ length: 6 }, (_, index) => ({ parserId: 400 + index, tema: 'KUM', label: `SYNT-K${400 + index}`, xyz: `${581952 + index * 2}.000 ${6566012 + index}.000 99.500` })),
+      // Batch 1B.4B: a line, so Rettinger opens the Data Table on Ledninger as in the real-data observation.
+      { scope: 'line', parserId: 7, tema: 'VL', type: 'VL', label: 'SYNT-V7', guid: '00000000-0000-4000-8000-000000000777', xyz: '581940.000 6566000.000 98.000' },
     ];
     await writeFile(source, Buffer.from(gmiText(objects), 'latin1'));
     await writeFile(images[0], gpsPng({ noLocation: true, captureTime: '2026:09:23 14:38:01' }));
@@ -115,9 +117,14 @@ test('Batch 1B.4A production: pairing, Kontroll, one atomic save, receipt, Valid
       await t.test('Kontroll: complete transfer summary; repeated save clicks save once; the receipt names the change', async () => {
         await click(browser, 'Kontroll', dialog);
         await browser.waitFor(`${dialog}.querySelector('.photo-link-save-status')?.dataset.saveState === 'ready'`);
-        const row = await browser.evaluate(`${dialog}.querySelector('.photo-link-control tbody tr').innerText`);
+        const row = await browser.evaluate(`${dialog}.querySelector('.photo-link-decision').innerText`);
         for (const part of ['SYNT_TOPP_1.png', 'LOK · Punkt 293', 'SLU · Punkt 108', 'AnleggsID: SYNT-S8', '0,16 m', 'Ingen eksisterende bildereferanser', 'Avklart', 'EPSG:4326'])
           assert(row.includes(part), `Kontroll row shows ${part}: ${row}`);
+        // Batch 1B.4B: a review card with labelled facts; «Endre» in its header; no clipped or horizontally squeezed content.
+        assert.deepEqual(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('.photo-link-decision dt')).map(e=>e.innerText)`), ['Kilde', 'XY-avstand', 'Mottaker', 'Bilde']);
+        assert.equal(await browser.evaluate(`${dialog}.querySelector('.photo-link-decision h5').innerText`), 'SYNT_TOPP_1.png');
+        assert(await browser.evaluate(`Boolean(${dialog}.querySelector('.photo-link-decision-head button[aria-label="Endre SYNT_TOPP_1.png på Punkt 293"]'))`));
+        assert(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('.photo-link-decision-facts > div')).every(e=>e.scrollWidth<=e.clientWidth+1&&e.getBoundingClientRect().width>=90)`), 'facts are readable');
         assert.equal(await browser.evaluate(`${footerButton('Lagre endringer')}.disabled`), false);
         assert.equal(await browser.evaluate(`getComputedStyle(${footerButton('Lagre endringer')}).backgroundColor`), 'rgb(0, 117, 149)', 'FOTO teal primary');
         assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('footer .gmi-primary-control').length`), 1, 'one primary action');
@@ -178,6 +185,41 @@ FOTO list: ${await fotoRows()}`); });
         await browser.waitFor('!document.querySelector(".photo-workspace-shell")');
       });
 
+      await t.test('Batch 1B.4B: «Vis detaljer for 2 punkter» opens Punkter; Kun endrede keeps the ordinary columns with S_HYPERLINK first', async () => {
+        const table = 'document.querySelector("[data-table-geometry]")', grid = `${table}.querySelector('[role=grid]')`;
+        const geometry = () => browser.evaluate(`${table}.dataset.tableGeometry`);
+        const headers = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[role=columnheader]')).map(e=>e.innerText.trim()).filter(Boolean)`);
+        const detail = `document.querySelector('[data-gmi-change-detail][data-variant=history]')`;
+        await browser.evaluate('document.querySelector("[data-gmi-edit-action]").click()');
+        await browser.waitFor(`${workspace}?.querySelector('[data-gmi-edit-status]') && ${table}?.querySelector('.gmi-edit-table-modes')`);
+        assert.equal(await geometry(), 'ledninger', 'a layer with lines opens Rettinger on Ledninger');
+        await click(browser, 'Kun endrede', `${table}.querySelector('.gmi-edit-table-modes')`);
+        await browser.waitFor(`${table}.querySelector('[data-gmi-table-view=changed]')`);
+        assert.equal(await browser.evaluate(`${grid}.querySelectorAll('[data-table-row]').length`), 0, 'the transfer changed no line');
+        await browser.evaluate(`${workspace}.querySelectorAll('button[role="tab"]')[1].click()`);
+        await browser.waitFor(`Array.from(${workspace}.querySelectorAll('button')).some(e=>e.innerText.trim()==='Vis detaljer for 2 punkter')`);
+        await click(browser, 'Vis detaljer for 2 punkter', workspace);
+        await browser.waitFor(`${detail} && ${table}.dataset.tableGeometry === 'punkter'`);
+        assert.equal(await browser.evaluate(`${table}.querySelector('.gmi-edit-table-modes').dataset.gmiTableView`), 'changed', 'Kun endrede is kept');
+        await browser.waitFor(`${grid}.querySelectorAll('[data-table-row]').length === 2 && ${grid}.querySelector('[role=columnheader][data-focus-column]')`);
+        assert.equal(await browser.evaluate(`${grid}.querySelectorAll('[data-gmi-changed-cell]').length`), 2, 'the source and recipient S_HYPERLINK cells');
+        const changedColumns = await headers();
+        assert.deepEqual(changedColumns.slice(0, 3), ['Nr.', 'S_FCODE', 'S_HYPERLINK'], `S_HYPERLINK leads: ${changedColumns}`);
+        // AnleggsID is unchanged but stays; Type is empty for every synthetic point, so neither view shows it.
+        assert(changedColumns.includes('AnleggsID'), `ordinary columns stay: ${changedColumns}`);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) { await size(width, height); await shot(`table-changed-points-${width}x${height}`); }
+        await click(browser, 'Foreslått', `${table}.querySelector('.gmi-edit-table-modes')`);
+        await browser.waitFor(`${table}.querySelector('[data-gmi-table-view=proposed]')`);
+        assert.deepEqual([...await headers()].sort(), [...changedColumns].sort(), 'Foreslått and Kun endrede share the column schema');
+        // Closing the details or the user's own geometry choice never switches back.
+        await click(browser, 'Ledninger', table);
+        await browser.waitFor(`${table}.dataset.tableGeometry === 'ledninger'`);
+        await click(browser, 'Lukk detaljer', detail); await browser.waitFor(`!${detail}`);
+        assert.equal(await geometry(), 'ledninger');
+        await click(browser, 'Lukk Rettinger');
+        await browser.waitFor(`!${workspace}`);
+      });
+
       await t.test('Rettinger shows «Flytting av bildelenke» once; undo and redo drive FOTO; the delivery wizard includes the moved link', async () => {
         await browser.evaluate('document.querySelector("[data-gmi-edit-action]").click()');
         await browser.waitFor(`${workspace}?.querySelector('[data-gmi-edit-status]')`);
@@ -199,6 +241,16 @@ FOTO list: ${await fotoRows()}`); });
         assert.match(await browser.evaluate(`${wizard}.innerText`), /Flyttede bildelenker (tas med|inkluderes): 1 bilde · 1 bildereferanse/);
         await size(1280, 720); await shot('save-delivery-content-1280x720');
         await size(1366, 768); await shot('save-delivery-content-1366x768');
+        // Batch 1B.4B: Kontroll counts the two S_HYPERLINK cells of the transfer as moved links, not as field corrections.
+        await browser.evaluate(`(() => { const input=${wizard}.querySelector('input[type=text]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Rettet'); input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+        await click(browser, 'Kontroller leveransen', wizard);
+        await browser.waitFor(`${wizard}.dataset.exportPhase === 'ready' && ${wizard}.querySelector('.delivery-summary')`);
+        const summary = Object.fromEntries(await browser.evaluate(`Array.from(${wizard}.querySelectorAll('.delivery-summary > div')).map(d=>[d.querySelector('dt').innerText,d.querySelector('dd').innerText])`));
+        assert.equal(summary.Rettinger, 'Ingen feltrettinger', JSON.stringify(summary));
+        assert.match(summary['Flyttede bildelenker'], /1 bilde · 1 bildereferanse flyttet til et annet punktobjekt i GMI$/);
+        assert.doesNotMatch(await browser.evaluate(`${wizard}.innerText`), /testet oppsett|importtest|akseptansetest|Gemini-akseptanse/);
+        await size(1280, 720); await shot('save-delivery-kontroll-1280x720');
+        await size(1366, 768); await shot('save-delivery-kontroll-1366x768');
         await click(browser, 'Lukk eksport');
         assert.equal((await browser.evaluate(`${workspace}.innerText`)).match(/Flytting av bildelenke/g).length, 1, 'opening the export keeps the transfer');
         // Undo once more: FOTO returns to the original association.

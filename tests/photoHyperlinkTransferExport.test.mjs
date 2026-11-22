@@ -12,7 +12,7 @@ import { latin1Bytes } from './helpers/gmiHyperlinkRemovalFixtures.mjs';
 import { commitPhotoHyperlinkTransfer, photoHyperlinkTransferBasis } from '../src/lib/photos/photoHyperlinkTransfer.mjs';
 import { captureDeliverySnapshot, buildDeliveryPlan, getDeliveryGmiBytes, getDeliveryGml, recordDeliveryDownload, deliveryTransferredUnplaced } from '../src/lib/delivery/index.mjs';
 import { buildDeliveryPackage } from '../src/lib/delivery/deliveryPackage.mjs';
-import { deliveryCorrectionCounts, deliveryReport, deliverySummary, deliveryMessage, deliveryDiagnostics } from '../src/lib/delivery/deliveryWizard.mjs';
+import { deliveryCorrectionCounts, deliveryFieldCorrectionCount, deliveryReport, deliverySummary, deliveryMessage, deliveryDiagnostics } from '../src/lib/delivery/deliveryWizard.mjs';
 import { deriveRevisionPhotoSource, verifyRevisionAssociations } from '../src/lib/delivery/deliveryRevision.mjs';
 import {
   applyGmiDeliveryComposition, buildGmiFieldExport, createGmiSourceDocument, editGmiFields, getGmiExportReadiness, getGmiSourceBytes,
@@ -68,9 +68,10 @@ test('LOK Punkt 293 -> SLU Punkt 108: every delivery mode composes the active tr
     const bytes = getDeliveryGmiBytes(plans[mode]);
     assert.deepEqual(linksOf(bytes), expectedLinks, mode);
     const warningCodes = plans[mode].warnings.map((item) => item.code);
-    assert(warningCodes.includes('gemini-a5-transfer-unverified'), `${mode}: A5 acceptance stays pending`);
-    assert(!warningCodes.includes('gemini-va-tested-import'), `${mode}: no tested-import claim for appended wrappers`);
-    assert.equal(deliveryDiagnostics(plans[mode]).warnings.some((item) => item.code === 'gemini-a5-transfer-unverified'), true, 'shown as a warning, not information');
+    // Batch 1B.4B (deliberate update): neither the A5 «not import-tested» note nor a tested-import claim is shown.
+    assert(!warningCodes.some((code) => /^gemini-/.test(code)), `${mode}: no import-test status warning`);
+    const shown = deliveryDiagnostics(plans[mode]);
+    assert(![...shown.warnings, ...shown.info].some((item) => /importtest|testet oppsett|akseptanse/.test(item.text)), mode);
     assert.equal(plans[mode].counts.hyperlinkTransfers, 1);
     assert.equal(plans[mode].counts.movedReferences, 1);
     const mapping = plans[mode].gmiSummary.hyperlinkTransfer.occurrenceMapping;
@@ -243,7 +244,7 @@ test('stale bases: delivery choices, field edits, undo and redo after planning i
   const undone = ready(await plan(f, 'combined'));
   assert.equal(undone.counts.hyperlinkTransfers, 0);
   assert(sameBytes(getDeliveryGmiBytes(undone), originalBytes(f)), 'no transfer and no choices: byte-identical no-op');
-  assert(!undone.warnings.some((item) => item.code === 'gemini-a5-transfer-unverified'));
+  assert(!undone.warnings.some((item) => /^gemini-/.test(item.code)));
   // Redo: the transfer is composed again, byte-identical to the first plan.
   assert(f.registry.redo(f.handle).ok);
   assert.equal(undone.isLive(), false);
@@ -567,6 +568,52 @@ test('Delt levering: field corrections are left out by explicit confirmation, mo
   assert.match(report, /Rettinger: 1 feltretting utelates/);
   assert.match(report, /Flyttede bildelenker: Inkluderes: 1 bilde/);
   assert.deepEqual(split.gmiSummary.changeSets.map((item) => item.id), [activeGmiHyperlinkTransferSet(f.history()).id], 'only the transfer entry is delivered');
+});
+
+test('Batch 1B.4B: Kontroll and the TXT report count field corrections apart from moved photo links in every mode', async () => {
+  const rows = (review) => Object.fromEntries(deliverySummary(review));
+  const reviewOf = async (f, mode, extra) => {
+    const counts = deliveryCorrectionCounts({ session: f.history(), changedCells: f.registry.inspect(f.handle).cells.changed });
+    return { plan: ready(await plan(f, mode, extra), mode), fieldCount: counts.fieldCells };
+  };
+  // The observed real-data shape: Kun GMI's diff holds the two S_HYPERLINK cells of one transfer and no field edit.
+  assert.equal(deliveryFieldCorrectionCount({ gmiSummary: { changedCells: 2, changes: [{ field: 'S_HYPERLINK' }, { field: 'S_HYPERLINK' }] } }), 0);
+  assert.equal(deliveryFieldCorrectionCount({ gmiSummary: null }), 0, 'zero without a GMI export');
+
+  const transferOnly = await MIXED();
+  assert(transferOnly.commit([transferOnly.move(293, 'SYNT_LOK_B.png', 108)]).ok);
+  for (const mode of ['gmi-only', 'combined', 'split']) {
+    const review = await reviewOf(transferOnly, mode);
+    assert.equal(deliveryFieldCorrectionCount(review.plan), 0, mode);
+    assert.equal(rows(review).Rettinger, 'Ingen feltrettinger', `${mode}: two S_HYPERLINK cells are not field corrections`);
+    assert.match(rows(review)['Flyttede bildelenker'], /1 bilde · 1 bildereferanse flyttet til et annet punktobjekt i GMI$/, mode);
+    const report = deliveryReport(review);
+    assert.match(report, /\r\nRettinger: Ingen feltrettinger\r\n/, mode);
+    assert.doesNotMatch(report, /feltretting(er)? tas med/, mode);
+  }
+  assert.equal(rows(await reviewOf(transferOnly, 'photos-only', { includeTransferredUnplaced: true })).Rettinger, 'Ingen GMI-eksport; rettingene beholdes i Rettinger');
+
+  // Mixed: one field correction and the transfer, each counted once.
+  transferOnly.stageField(1, 'Rettet merknad');
+  for (const mode of ['gmi-only', 'combined']) {
+    const review = await reviewOf(transferOnly, mode);
+    assert.equal(rows(review).Rettinger, '1 feltretting tas med', mode);
+    assert.match(rows(review)['Flyttede bildelenker'], /^1 bilde · 1 bildereferanse/, mode);
+    assert.match(deliveryReport(review), /Rettinger: 1 feltretting tas med\r\n/, mode);
+  }
+  const split = await reviewOf(transferOnly, 'split', { includeFieldChanges: false });
+  assert.equal(rows(split).Rettinger, '1 feltretting utelates (uttrykkelig valgt)');
+  assert.match(rows(split)['Flyttede bildelenker'], /^Inkluderes: 1 bilde/);
+
+  // Field-only: no transfer row, the field correction counted as before.
+  const fieldOnly = await MIXED();
+  fieldOnly.stageField(1, 'Rettet merknad');
+  for (const mode of ['gmi-only', 'combined']) {
+    const review = await reviewOf(fieldOnly, mode);
+    assert.equal(rows(review).Rettinger, '1 feltretting tas med', mode);
+    assert.equal(rows(review)['Flyttede bildelenker'], undefined, mode);
+  }
+  assert.equal(rows(await reviewOf(fieldOnly, 'split', { includeFieldChanges: false })).Rettinger, '1 feltretting utelates (uttrykkelig valgt)');
 });
 
 test('hyperlink-transfer-multiple: many photographs in one transfer set are supported; active transfers in two GMI files block only Kun GML med bilder', async () => {

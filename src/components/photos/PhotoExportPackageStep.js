@@ -26,7 +26,7 @@ function Summary({ plan, readiness }) {
     <dl className="photo-export-summary">
       <div><dt>ZIP</dt><dd data-export-zip={zipFilename} data-export-gml={gmlFilename}>{zipFilename}</dd></div>
       <div><dt>GML</dt><dd>{gmlFilename}</dd></div>
-      <div><dt>Format</dt><dd data-export-format={plan.profile}>{card.title}<small>{card.compatibility}</small></dd></div>
+      <div><dt>Format</dt><dd data-export-format={plan.profile}>{card.title}</dd></div>
     </dl>
     <p className="photo-export-counts" data-export-counts>{[photoCount(contents.images), `${placementCount(contents.placements)} i GML-filen`, imageData(contents.totalBytes), contents.excluded ? `${placementCount(contents.excluded)} uten posisjon utelatt` : null].filter(Boolean).join(' · ')}</p>
     <PhotoExportStatus readiness={readiness} />

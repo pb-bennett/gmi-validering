@@ -30,11 +30,11 @@ test('single exclusion clears only the cell, omits photo/GML, composes with fiel
     assert.equal(p.counts.gmiPlacements, 0); assert.equal(p.counts.gmlPlacements, 0);
     assert.equal(p.counts.includedAssets, 0); assert.equal(p.counts.retainedReferences, 0);
     const diagnostics = deliveryDiagnostics(p);
-    assert(diagnostics.info.some((item) => item.code === 'gemini-va-tested-import'));
-    assert(!diagnostics.warnings.some((item) => item.code === 'gemini-g4-unverified'));
+    // Batch 1B.4B (deliberate update): no import-test status note is shown; the removal itself is unchanged.
+    assert(![...diagnostics.info, ...diagnostics.warnings].some((item) => /^gemini-/.test(item.code)));
     assert.deepEqual(Object.keys(await zip(p)), [p.naming.gmiFilename]);
     const report = deliveryReport({ plan: p });
-    assert.match(report, /importert i Gemini VA i et testet oppsett 16\. november 2026/);
+    assert.doesNotMatch(report, /testet oppsett|akseptansetest|importtest|Gemini-akseptanse/);
     assert.match(report, /Ikke med i leveransen:/); assert.match(report, /Punkt 101/);
     assert.match(report, /bildelenke fjernet \(1\).*bildefilen er ikke med/);
     assert(!report.includes('Punkt 1 (GUID'), 'report uses actual object number');

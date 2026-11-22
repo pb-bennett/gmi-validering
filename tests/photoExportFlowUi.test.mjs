@@ -396,7 +396,8 @@ layerTest('going to another tool leaves the handoff only after the boundary, and
   assert.equal(await selectedFormat(browser), 'gemini-legacy2019');
   await buildPreview(browser); await showReview(browser);
   assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="direction-required"]'))`), false, 'defaults satisfy the direction requirement');
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /Gemini VA har importert bilder uten opptakstid i et testet oppsett \(november 2026\)/);
+  // Batch 1B.4B (deliberate update): the schema warning ends at the schema fact; no dated import-test claim follows.
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /^\d+ bilder? mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet\.$/);
   await closeExport(browser);
   await settle();
   assert.equal(await browser.evaluate(`Boolean(${hub})`), false, 'closing export does not revive the handoff');

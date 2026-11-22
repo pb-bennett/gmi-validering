@@ -121,7 +121,6 @@ export { buildGmiHyperlinkTransferCommit, planGmiHyperlinkTransferCommit } from 
 // M7 delivery removals against the original): see
 // docs/agent-reports/*-hyperlink-transfer-batch1b3a-completion.md.
 export {
-  GMI_TRANSFER_RECIPIENT_PENDING,
   applyGmiDeliveryComposition,
   isGmiDeliveryComposition,
   planGmiDeliveryComposition,

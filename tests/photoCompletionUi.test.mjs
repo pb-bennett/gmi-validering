@@ -168,9 +168,9 @@ layerTest('capture time: source values in place, the warning, corrections, neste
   assert.equal(await browser.evaluate(`Boolean(${panel('captureTime')}.querySelector('[data-adopt]'))`), false, 'source values need no adoption step');
   assert.deepEqual([await countOf(browser, 'captureTime', 'source'), await countOf(browser, 'captureTime', 'missing')], ['3', '2']);
   assert.equal(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-export-warning="capture-time-schema"]').innerText`),
-    '2 bilder mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet. Gemini VA har importert bilder uten opptakstid i et testet oppsett (november 2026).');
+    '2 bilder mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet.');
   assert.deepEqual(await browser.evaluate(`Array.from(${panel('captureTime')}.querySelectorAll('[data-export-level]')).map((item) => item.querySelector('dd').innerText)`),
-    ['Kan lages', 'Oppfylles ikke: opptakstid mangler for 2 bilder. XSD-validering er ikke kjørt.', 'Profilen er importert tidligere, men denne pakken er ikke testet.']);
+    ['Kan lages', 'Oppfylles ikke: opptakstid mangler for 2 bilder. XSD-validering er ikke kjørt.']);
   assert.match(await browser.evaluate(`${panel('captureTime')}.querySelector('[data-recommendation="capture-time-sources-differ"]').innerText`), /1 bilde har ulik opptakstid i kildene/);
 
   // Details are folded away, but still there.

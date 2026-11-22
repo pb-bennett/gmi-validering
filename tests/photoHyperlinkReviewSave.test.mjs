@@ -253,7 +253,8 @@ test('after a saved transfer: FOTO locks the moved photograph only, fit-to-layer
     const plan = await buildDeliveryPlan(capture(mode, mode === 'photos-only' ? { includeTransferredUnplaced: true } : {}),
       { profile: 'gemini-legacy2019', crs: 'EPSG:25832', context: syntheticContext }, { now: () => DATE });
     assert.deepEqual([plan.status, plan.errors.map((entry) => entry.code)], ['ready', []], mode);
-    if (mode !== 'photos-only') assert(plan.warnings.some((entry) => entry.code === 'gemini-a5-transfer-unverified'), `${mode}: A5 stays pending`);
+    // Batch 1B.4B (deliberate update): recipient acceptance (A5) is tracked in reports, not as a user-facing warning.
+    if (mode !== 'photos-only') assert(!plan.warnings.some((entry) => /^gemini-/.test(entry.code)), `${mode}: no import-test status warning`);
   }
   // GML-only without the explicit inclusion leaves the previously unplaced moved photograph out, with a warning.
   const withheld = await buildDeliveryPlan(capture('photos-only'), { profile: 'gemini-legacy2019', crs: 'EPSG:25832', context: syntheticContext }, { now: () => DATE });

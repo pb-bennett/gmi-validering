@@ -34,6 +34,23 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
       await browser.evaluate(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').click()`);
       await browser.waitFor(`document.querySelector('.photo-workspace-list li[data-photo-id="${id}"] button').getAttribute('aria-pressed')==='true'`);
     };
+    // The hover, layout and thumbnail subtests start from one explicit view, not from what earlier subtests leave:
+    // a selection pan racing a viewport change leaves a variable centre, and the pointer rests where subtest 3
+    // clicked. Set the viewport, move the pointer off the page, let any pan in flight finish, then reset the view
+    // (Leaflet `reset`: no animation and no pan from the previous origin) to the centre of all photo placements at
+    // the zoom the earlier subtests navigate to.
+    const START_ZOOM = 14;
+    const startView = async (width, height) => {
+      await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: -1, y: -1, buttons: 0 });
+      await waitForStableMap(browser);
+      await browser.evaluate(`(() => { const map = (window.__photoTestMaps || []).find((entry) => entry.getContainer().isConnected && entry.getContainer().querySelector('.leaflet-photo-markers-pane'));
+        const placements = ${markers}.map((e) => [Number(e.dataset.lat), Number(e.dataset.lng)]);
+        if (!map || !placements.length) throw new Error('No photo map with placed photos for the start view');
+        map.invalidateSize({ animate: false, pan: false });
+        map.setView(L.latLngBounds(placements).getCenter(), ${START_ZOOM}, { reset: true }); })()`);
+      await waitForStableMap(browser);
+    };
     const editCount = 'Number(document.querySelector("[data-edit-count]")?.innerText.match(/\\d+/)?.[0] || 0)';
     // Moves are staged in Edit mode. Provenance survives a manual adjustment: the moved GMI placement stays GMI.
     const move = async (commit) => {
@@ -55,7 +72,9 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
     // Deterministic map backdrops exercise contrast without depending on external tile availability.
     const tile = (dark = false) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="${dark ? '#293f35' : '#f0eee3'}"/><path d="M0 45L256 110V210L0 145Z" fill="${dark ? '#425a38' : '#d9e1c8'}"/><path d="M0 245L256 10M-30 90L256 190" stroke="${dark ? '#8b8b78' : '#fff'}" stroke-width="14"/><path d="M0 245L256 10M-30 90L256 190" stroke="${dark ? '#565c50' : '#c9c3b3'}" stroke-width="2"/></svg>`);
     try {
+      // startView reaches the Leaflet map through Leaflet's public global and Map init hook; the app is unchanged.
       await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: `localStorage.clear(); window.confirm=()=>true;
+        let leaflet; Object.defineProperty(window,'L',{configurable:true,get(){return leaflet;},set(value){leaflet=value;value?.Map?.addInitHook?.(function(){(window.__photoTestMaps??=[]).push(this);});}});
         const imageSrc=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
         Object.defineProperty(HTMLImageElement.prototype,'src',{...imageSrc,set(value){imageSrc.set.call(this,String(value).includes('cache.kartverket.no/')?${JSON.stringify(tile())}:String(value).includes('geonorge.no/')?'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="256" height="256"/%3E':value);}});` });
       await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
@@ -215,6 +234,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
         await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
       });
       await t.test('selection, hover and accepted direction keep all four source fills', async () => {
+        await startView(1920, 1080);
         await pressKey(browser, 'Escape', KEYS.Escape);
         await browser.waitFor('!document.querySelector(".photo-workspace-preview-popup")');
         await setPhotoColourMode(browser, 'provenance'); // provenance palette checks choose Plasseringskilde explicitly
@@ -252,7 +272,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
       await t.test('both viewport layouts keep the shared-palette display card clear of map controls', async () => {
         await setPhotoColourMode(browser, 'provenance'); // provenance palette checks choose Plasseringskilde explicitly
         for (const [width, height] of [[1920, 1080], [1280, 720]]) {
-          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await startView(width, height);
           await browser.evaluate('new Promise(resolve=>setTimeout(resolve,800))');
           const layout = await browser.evaluate(`(() => {const legend=${legend}, box=legend.getBoundingClientRect(), map=document.querySelector('.leaflet-container').getBoundingClientRect();
             const overlaps=Array.from(document.querySelectorAll('.leaflet-control')).some(e=>{const b=e.getBoundingClientRect();return b.width>0 && b.height>0 && box.left<b.right && box.right>b.left && box.top<b.bottom && box.bottom>b.top});
@@ -287,7 +307,7 @@ test('synthetic FOTO provenance: accepted sources, shared occurrences, editing, 
       });
       await t.test('Pass 1D: all source dots render in workspace/main-map thumbnails, with selected ring and direction intact', async () => {
         await setPhotoColourMode(browser, 'provenance'); // provenance palette checks choose Plasseringskilde explicitly
-        await browser.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
+        await startView(1920, 1080);
         await browser.evaluate(`${legend}.querySelector('[data-mode=thumbnails]').click()`);
         for (let i = 0; i < 8 && !await browser.evaluate('Boolean(document.querySelector(".photo-thumb-marker"))'); i++) {
           await browser.evaluate('document.querySelector(".leaflet-control-zoom-in").click()');

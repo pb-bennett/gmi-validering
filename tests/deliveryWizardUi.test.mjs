@@ -34,7 +34,7 @@ const primaries = (browser) => browser.evaluate(`${dialog}.querySelectorAll('foo
 // A4: Pakke shows the package and its download only. Findings, photo readiness and technical detail stay in Kontroll.
 const assertPackageOnly = async (browser) => {
   const found = await browser.evaluate(`(() => { const body = ${dialog}.querySelector('[data-export-step="package"]');
-    return { repeated: Array.from(body.querySelectorAll('.delivery-diagnostics, .delivery-summary, [data-export-status], [data-export-format], [data-export-technical], [data-export-gemini-import], [data-export-counts], [data-diagnostic-code]')).map((item) => item.className || item.tagName),
+    return { repeated: Array.from(body.querySelectorAll('.delivery-diagnostics, .delivery-summary, [data-export-status], [data-export-format], [data-export-technical], [data-export-counts], [data-diagnostic-code]')).map((item) => item.className || item.tagName),
       status: body.querySelector('[data-review-status]')?.innerText ?? null, filename: body.querySelector('[data-export-filename]')?.innerText ?? null }; })()`);
   assert.deepEqual(found.repeated, [], 'Pakke repeats no Kontroll content');
   assert.match(found.status, /^Kontroll fullført · (ingen merknader|\d+ merknad(er)?)$/);
@@ -736,9 +736,9 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('section.delivery-diagnostics[data-tone=warnings] li').length > 0
           && ${dialog}.querySelector('section.delivery-diagnostics[data-tone=warnings]').closest('details') === null`), true, 'warnings are not folded');
         assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('details.delivery-diagnostics[data-tone=info][open]').length`), 0, 'information starts folded');
-        assert.match(await browser.evaluate(`${dialog}.querySelector('[data-tone=info] [data-diagnostic-code="gemini-va-tested-import"]').textContent`),
-          /importert i Gemini VA i et testet oppsett 16\. november 2026/);
-        assert.equal(await browser.evaluate(`Boolean(${dialog}.querySelector('[data-diagnostic-code="gemini-g4-unverified"]'))`), false);
+        // Batch 1B.4B (deliberate update): no import-test or acceptance status is shown.
+        assert.doesNotMatch(await browser.evaluate(`${dialog}.innerText`), /testet oppsett|importtest|akseptansetest|Gemini-akseptanse|[Ii]kke testet/);
+        assert.equal(await browser.evaluate(`Boolean(${dialog}.querySelector('[data-diagnostic-code^="gemini-"]'))`), false);
         assert.equal((await browser.evaluate(`${dialog}.innerText.match(/Dette er eksportkontroll/g)?.length ?? 0`)), 1, 'the disclaimer appears once');
         for (const [width, height] of [[1280, 720], [1366, 768]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
@@ -828,8 +828,8 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await choose(browser, 'gmi-only'); await pack(browser);
         await screenshot(browser, 'a4-pakke-gmi-only');
         await click(browser, 'Tilbake'); assert.equal(await currentStep(browser), '2. Kontroll');
-        assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-gemini-import]').innerText`),
-          /importert i Gemini VA i et testet oppsett 16\. november 2026\. Kontroller resultatet etter import\./);
+        // Batch 1B.4B (deliberate update): the dated import-test hint is retired.
+        assert.equal(await browser.evaluate(`Boolean(${dialog}.querySelector('[data-export-gemini-import]'))`), false);
         await screenshot(browser, 'a4-kontroll-gmi-only');
         await click(browser, 'Neste'); await assertPackageOnly(browser);
         const output = await downloaded(browser, directory, 'Last ned GMI');

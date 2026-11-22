@@ -123,22 +123,33 @@ function ControlStep({ model, decisions, progress, headingRef, onEdit, savedStat
     <h3 id="photo-link-control-heading" ref={headingRef} tabIndex={-1}>Kontroll</h3>
     <p>{progress.allResolved ? 'Alle valgte beslutninger er avklart.' : `${progress.unresolved} av ${progress.selected} beslutninger må avklares.`} {progress.unchangedReferences} bildereferanser er ikke valgt og forblir uendret.</p>
     <SavedTransfers model={model} status={savedStatus} />
-    {decisions.length > 0 && <h4>Nye beslutninger ({decisions.length})</h4>}
-    <table>
-      <thead><tr><th scope="col">Bilde og referanser</th><th scope="col">Kilde</th><th scope="col">Handling</th><th scope="col">Mottaker</th><th scope="col">XY-avstand</th><th scope="col">Status og merknader</th><th scope="col"><span className="sr-only">Endre</span></th></tr></thead>
-      <tbody>{decisions.map((entry) => <tr key={entry.key} data-decision-key={entry.key} data-resolved={entry.resolved} data-outcome={entry.outcome}>
-        <td><strong>{groupName(entry.group)}</strong>{entry.outcome === 'move' && <small>{photoNow(entry)}{entry.target ? ' · Foreslått: mottakerens GMI-posisjon' : ''}</small>}<References group={entry.group} /></td>
-        <td>{objectName(entry.row)}{entry.row.identifierText && <small>{entry.row.identifierText}</small>}
-          {entry.outcome === 'move' && <small className="photo-link-coordinate">{position(entry.row.placement?.position)}</small>}</td>
-        <td>{PHOTO_LINK_OUTCOME_LABELS[entry.outcome]}{entry.deliveryEntry && <small>Nå: {photoDeliveryStatusText(entry.deliveryEntry)}</small>}</td>
-        <td>{entry.outcome !== 'move' ? '–' : entry.target ? <>{objectName(entry.target)}{entry.target.identifierText && <small>{entry.target.identifierText}</small>}
-          <small className="photo-link-coordinate">{position(entry.target.placement?.position)}</small>
-          <small>{entry.target.photoReferenceCount ? `${entry.target.photoReferenceCount} eksisterende bildereferanse(r) beholdes` : 'Ingen eksisterende bildereferanser'}{entry.target.savedIncoming?.length ? ` · ${entry.target.savedIncoming.length} lagret flytting(er)` : ''}</small></> : 'Ikke valgt'}</td>
-        <td className="photo-link-number">{entry.outcome === 'move' && entry.target ? distance(entry.distanceMetres) : '–'}</td>
-        <td><span className="photo-link-state" data-resolved={entry.resolved}>{entry.resolved ? 'Avklart' : 'Uavklart'}</span><Issues blocking={entry.blocking} warnings={entry.warnings} /></td>
-        <td><button type="button" className={button} aria-label={`Endre ${groupName(entry.group)} på ${entry.row.pointName}`} onClick={() => onEdit(entry)}>Endre</button></td>
-      </tr>)}</tbody>
-    </table>
+    {decisions.length > 0 && <>
+      <h4 id="photo-link-decisions-heading">Nye beslutninger ({decisions.length})</h4>
+      {/* Batch 1B.4B: one review card per decision; the fact grid lines up across cards for comparison. */}
+      <ol className="photo-link-decisions" aria-labelledby="photo-link-decisions-heading">{decisions.map((entry, index) => {
+        const move = entry.outcome === 'move', headingId = `photo-link-decision-${index}`;
+        return <li key={entry.key} className="photo-link-decision" data-decision-key={entry.key} data-resolved={entry.resolved} data-outcome={entry.outcome}>
+          <div className="photo-link-decision-head">
+            <h5 id={headingId}>{groupName(entry.group)}</h5>
+            <span className="photo-link-decision-outcome" data-fact="outcome">{PHOTO_LINK_OUTCOME_LABELS[entry.outcome]}</span>
+            <span className="photo-link-state" data-fact="status" data-resolved={entry.resolved}>{entry.resolved ? 'Avklart' : 'Uavklart'}</span>
+            <button type="button" className={button} aria-label={`Endre ${groupName(entry.group)} på ${entry.row.pointName}`} onClick={() => onEdit(entry)}>Endre</button>
+          </div>
+          <dl className="photo-link-decision-facts">
+            <div data-fact="source"><dt>Kilde</dt><dd>{objectName(entry.row)}{entry.row.identifierText && <small>{entry.row.identifierText}</small>}
+              {move && <small className="photo-link-coordinate">{position(entry.row.placement?.position)}</small>}</dd></div>
+            <div data-fact="distance"><dt>XY-avstand</dt><dd className="photo-link-number">{move && entry.target ? distance(entry.distanceMetres) : '–'}</dd></div>
+            <div data-fact="target"><dt>Mottaker</dt><dd>{!move ? '–' : entry.target ? <>{objectName(entry.target)}{entry.target.identifierText && <small>{entry.target.identifierText}</small>}
+              <small className="photo-link-coordinate">{position(entry.target.placement?.position)}</small>
+              <small>{entry.target.photoReferenceCount ? `${entry.target.photoReferenceCount} eksisterende bildereferanse(r) beholdes` : 'Ingen eksisterende bildereferanser'}{entry.target.savedIncoming?.length ? ` · ${entry.target.savedIncoming.length} lagret flytting(er)` : ''}</small></> : 'Ikke valgt'}</dd></div>
+            <div data-fact="photo"><dt>Bilde</dt><dd>{move ? <>{photoNow(entry)}{entry.target && <small>Foreslått: mottakerens GMI-posisjon</small>}</>
+              : entry.deliveryEntry ? `Nå: ${photoDeliveryStatusText(entry.deliveryEntry)}` : '–'}</dd></div>
+          </dl>
+          <Issues blocking={entry.blocking} warnings={entry.warnings} />
+          <References group={entry.group} />
+        </li>;
+      })}</ol>
+    </>}
     <div className="photo-link-save-status" id={statusId} data-save-state={saveState.state}>
       {saveState.error ? <p role="alert" className="gmi-validation-accent" data-validation-tone="error">{saveState.error}</p>
         : <p role="status" className={saveState.state === 'blocked' ? 'gmi-validation-accent' : undefined} data-validation-tone={saveState.state === 'blocked' ? 'warning' : undefined}>{saveState.text}</p>}

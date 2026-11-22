@@ -227,7 +227,8 @@ test('diagnostic table keeps result in row metadata, inspected-field colour, mov
   assert.match(source, /const base = createLayerDataTableColumns\(\{/);
   assert.match(source, /if \(!batchReview\) return showObjectNumber \? \[zoom, \.\.\.numberColumn, \.\.\.attributes\] : base/);
   assert.match(source, /getDiagnosticColumnOrder\(fields, inspection\.presentation\)/);
-  assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : showSelectionOnly \? displayItems : items/);
+  // Batch 1B.4B (deliberate update): ordinary columns come from pre-search schemaItems (items, or in Kun endrede the Foreslått rows).
+  assert.match(source, /const fieldItems = isContextualInspection \? contextualScopeRows : showSelectionOnly \? displayItems : schemaItems/);
   assert.match(source, /contextualColumnOrder\?\.inspectionId === inspection\.id/);
   assert.match(source, /setContextualColumnOrder\(\{ inspectionId: inspection\.id, fields: nextOrder \}\)/);
   assert.match(source, /draggable=\{!isZoom && !isIdentity && \(!isContextualInspection \|\| !isFixed\)\}/);

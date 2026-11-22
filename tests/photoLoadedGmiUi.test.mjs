@@ -240,7 +240,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="shared-attachments"]').textContent`), /^1 originalbilder deles av flere separate forekomst-features\./);
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('3 bilder · 4 plasseringer i GML-filen')`));
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('4 plasseringer uten posisjon utelatt')`));
-        assert(await browser.evaluate(`${exportDialog}.textContent.includes('Ikke testet med import i Gemini VA.')`));
+        assert(!(await browser.evaluate(`${exportDialog}.textContent.includes('Ikke testet med import')`)), 'Batch 1B.4B: no import-test status');
         const unlabelled = await previewNames(browser);
         assert.match(unlabelled.zip, /^\d{8}-\d{4}\.zip$/);
         assert.equal(unlabelled.gml, unlabelled.zip.replace(/\.zip$/, '.gml'));
@@ -284,7 +284,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await setLabel(browser, 'AsBuilt');
         await buildPreview(browser); await showReview(browser);
         assert(await browser.evaluate(`${exportDialog}.textContent.includes('fotograf utelates i AsBuilt 5.2')`));
-        assert(await browser.evaluate(`${exportDialog}.textContent.includes('Eksperimentell 2D')`));
+        assert(await browser.evaluate(`${exportDialog}.textContent.includes('AsBuilt-fotogeometrien er 2D, uten Z.')`));
         for (const [width, height] of [[1920, 1080], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           const bounds = await browser.evaluate(`(() => {const d=${exportDialog},r=d.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,overflow:d.scrollWidth>d.clientWidth};})()`);

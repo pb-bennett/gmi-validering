@@ -192,17 +192,15 @@ export function photoCompletionStatus(readiness, reading = 0) {
   return { status, text: 'Ingen opplysninger mangler for dette målet' };
 }
 
-// Generation, schema and import are separate questions, so each gets its own answer. Only rules are checked here,
-// and nothing here can say that a package will import: that takes a real import.
+// Generation and schema are separate questions, so each gets its own answer. Only rules are checked here.
+// Batch 1B.4B: no import-test status is shown to users; the recorded import evidence stays internal (photoExportRules).
 const SCHEMA_GAPS = Object.freeze({ captureTime: (gap) => `opptakstid mangler for ${photoCount(gap.count)}`, direction: (gap) => `retning mangler for ${placementCount(gap.count)}`, context: () => 'leveranseopplysninger mangler' });
-export function photoExportLevels({ levels: { generation, schema, importEvidence } }) {
+export function photoExportLevels({ levels: { generation, schema } }) {
   const notValidated = 'XSD-validering er ikke kjørt.';
   return [
     Object.freeze({ key: 'generation', label: 'Eksportpakke', text: generation === 'possible' ? 'Kan lages' : 'Kan ikke lages ennå' }),
     Object.freeze({ key: 'schema', label: schema.name ? `${schema.name}-skjema` : 'Skjema', text: !schema.assessed ? 'Ikke vurdert ennå'
       : schema.met ? `Kravene er oppfylt etter regelsjekk. ${notValidated}` : `Oppfylles ikke: ${schema.gaps.map((gap) => SCHEMA_GAPS[gap.field](gap)).join(', ')}. ${notValidated}` }),
-    Object.freeze({ key: 'import', label: 'Import i Gemini VA', text: importEvidence.profile === 'imported' && !importEvidence.deviations.length
-      ? 'Profilen er importert tidligere, men denne pakken er ikke testet.' : 'Ikke verifisert for denne pakken. Må testes manuelt.' }),
   ];
 }
 
@@ -213,7 +211,7 @@ export const photoExportAwaitingSource = ({ recommendations }) => recommendation
 export function photoCaptureTimeSchemaWarning({ levels, tasks }) {
   const gap = levels.schema.gaps.find((item) => item.field === 'captureTime');
   if (!gap || tasks.captureTime.requirement === 'required') return null;
-  return singularCopy(`${gap.count} bilder mangler full opptakstid, så GML-filen oppfyller ikke ${levels.schema.name}-skjemaet. Gemini VA har importert bilder uten opptakstid i et testet oppsett (november 2026).`);
+  return singularCopy(`${gap.count} bilder mangler full opptakstid, så GML-filen oppfyller ikke ${levels.schema.name}-skjemaet.`);
 }
 
 const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-filename', 'capture-time-estimated', 'capture-time-technical', 'capture-time-sources-differ']);
