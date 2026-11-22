@@ -21,7 +21,9 @@
 //   (photoHyperlinkTransferView). The delivery owner is untouched: the photo
 //   stays «Beholdes i GMI», no GML decision is created and the position -> GML
 //   default is never invoked.
-// - Exports fail closed while a transfer is active (Batch 1B.3 composes them).
+// - Exports (Batch 1B.3A) compose the transfer only while this view is
+//   'current'; the view also hands the delivery planner the FOTO facts the
+//   planner checks (`planning`), derived exactly as at commit.
 //
 // Transaction: resolve live owners -> check the expected basis -> plan
 // (cumulative) -> prepare FOTO record -> build the candidate session and its
@@ -334,6 +336,8 @@ export function commitPhotoHyperlinkTransfer({ registry, handle, photoSession, p
  * - 'conflict': FOTO state changed since the commit (consumers must fail closed);
  * - 'invalid': the proposed state or its FOTO evidence does not verify;
  * - 'unavailable': the owners cannot be resolved (`code`).
+ * A 'current' view also carries `planning` (Batch 1B.3A): the live FOTO GMI source, the planner's FOTO facts for
+ * the active decisions and the layer's assets, for the export composition and revision checks.
  * Read-only; never writes FOTO or GMI state.
  */
 export function photoHyperlinkTransferView(owners) {
@@ -352,8 +356,11 @@ export function photoHyperlinkTransferView(owners) {
   const failures = crossCheck(context, set.transfers, set.photo, derived);
   if (failures.length) return Object.freeze({ status: 'invalid', code: 'transfer-photo-mismatch', revision, transferSetId: set.id, conflicts: deepFreeze(failures) });
   const conflicts = photoConflicts(context, set.photo);
+  // The live source is passed by reference (it is the session's own value and is never written here).
+  const planning = conflicts.length ? null : Object.freeze({ photoSource: context.source, photoState: deepFreeze(photoStateFor(context, set.decisions)),
+    assets: deepFreeze(assetsOf(context.photos)), photoLayerId: context.layer.id });
   return Object.freeze({
-    status: conflicts.length ? 'conflict' : 'current', revision, transferSetId: set.id, proposedSource: derived,
+    status: conflicts.length ? 'conflict' : 'current', revision, transferSetId: set.id, planKey: set.planKey, proposedSource: derived, planning,
     occurrences: deepFreeze(set.photo.transfers.map((entry) => ({ ...plain(entry), occurrenceKey: entry.toOccurrenceKey, objectKey: entry.toObjectKey }))),
     conflicts: deepFreeze(conflicts),
   });

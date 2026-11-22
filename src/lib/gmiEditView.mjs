@@ -135,7 +135,10 @@ const MESSAGES = Object.freeze({
   'structural-difference': 'Kontrollen fant endringer utenfor feltverdiene. Ingen fil ble laget.',
   'state-changed': 'Rettingene ble endret mens filen ble laget. Prøv igjen.',
   'output-integrity': 'Kontrollen av den reviderte filen feilet. Ingen fil ble laget.',
-  'hyperlink-transfer-export-unsupported': 'Bildelenker flyttet til et annet punktobjekt kan ikke eksporteres ennå. Angre flyttingen før du lager filen.',
+  // Batch 1B.3A: a transfer is exported through Eksporter leveranse, which first checks it against FOTO.
+  'hyperlink-transfer-unverified': 'Flyttede bildelenker må kontrolleres mot FOTO før filen kan lages. Bruk Eksporter leveranse.',
+  'hyperlink-transfer-verification-failed': 'Kontrollen av de flyttede bildelenkene feilet. Ingen fil ble laget.',
+  'hyperlink-transfer-included': 'Flyttede bildelenker tas med i den reviderte GMI-filen.',
   // Batch 1B.2B: photograph hyperlink transfers in the Rettinger history.
   'transfer-set-has-later-transfers': 'En senere flytting av bildelenker bygger på denne. Angre eller forkast den senere flyttingen først.',
   'stale-transfer-basis': 'Flyttingen av bildelenker bygger på en annen historikk. Ingenting ble endret.',

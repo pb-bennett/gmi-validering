@@ -3,6 +3,7 @@ import { buildDeliveryPackage } from './deliveryPackage.mjs';
 import { photoExportDiagnosticLabel } from '../photos/export/photoExportDiagnostics.mjs';
 import { describeGmiObject, gmiEditMessage } from '../gmiEditView.mjs';
 import { isGmiFieldEditReservedColumn } from '../gmi-edit/changeSet.mjs';
+import { activeGmiHyperlinkTransferSet, isGmiHyperlinkTransferSet } from '../gmi-edit/session.mjs';
 
 export const DELIVERY_CHOICES = Object.freeze([
   { mode: 'gmi-only', title: 'Kun GMI', text: 'Revidert GMI med feltrettinger fra Rettinger. Eksisterende bildelenker beholdes.' },
@@ -62,7 +63,19 @@ const messages = {
   'attachment-size-mismatch': 'En originalfil kunne ikke leses i sin helhet. Last inn filen på nytt.',
   'attachment-changed': 'En originalfil er endret etter kontrollen. Gå tilbake og kontroller leveransen på nytt.',
   'stale-plan': 'Data eller valg er endret etter kontrollen. Gå tilbake til Innhold og kontroller leveransen på nytt.',
-  'hyperlink-transfer-export-unsupported': 'Bildelenker flyttet til et annet punktobjekt kan ikke eksporteres ennå. Angre flyttingen i Rettinger før du lager leveransen.',
+  // Batch 1B.3A: active hyperlink transfers are composed into the delivery; these are its fail-closed reasons.
+  'hyperlink-transfer-photo-unverified': 'Flyttede bildelenker kan ikke bekreftes mot FOTO. Angre eller forkast flyttingen i Rettinger, eller kontroller FOTO-kilden, før du lager leveransen.',
+  // Only Kun GML med bilder can reach this: several GMI files bound to the photo layer each hold moved links. Any number of
+  // moved photographs within one GMI file is supported.
+  'hyperlink-transfer-multiple': 'Flere GMI-filer koblet til fotolaget har flyttede bildelenker. Kun GML med bilder kan bare ta med flyttinger fra én GMI-fil. Angre flyttingene i de andre GMI-filene i Rettinger.',
+  'hyperlink-transfer-unplaced-withheld': 'Bildet var uplassert før bildelenken ble flyttet, og er ikke tatt med i GML. Bekreft i Innhold at det skal plasseres på mottakerens GMI-posisjon, eller plasser det i FOTO.',
+  'hyperlink-transfer-other-gmi': 'Bildelenkene er flyttet i en annen GMI-fil enn den valgte. Velg den GMI-filen, eller angre flyttingen i Rettinger.',
+  'hyperlink-transfer-other-photo-layer': 'Bildelenkene er flyttet for et annet fotolag. Velg det fotolaget for leveransen, eller angre flyttingen i Rettinger.',
+  'removal-overlaps-transfer': 'Et leveringsvalg gjelder en bildelenke som er flyttet til et annet punktobjekt. Flyttingen beholder lenken i GMI.',
+  'transfer-replan-mismatch': 'Flyttingen av bildelenker kan ikke gjenskapes mot originalfilen. Angre flyttingen i Rettinger og gjør den på nytt.',
+  'revised-gmi-association-mismatch': 'Den reviderte GMI-filen gir ikke de forventede bildekoblingene. Ingen fil ble laget.',
+  'revised-gmi-attachment-mismatch': 'Bildelenkene i den reviderte GMI-filen samsvarer ikke med vedleggene i pakken. Ingen fil ble laget.',
+  'gemini-a5-transfer-unverified': 'Flyttede bildelenker (nye eller omnummererte h:N-omslag) er ikke importtestet i Gemini VA. Kontroller at bildene åpnes på riktig punktobjekt etter import.',
   'blocked-plan': 'Leveransen har blokkerende feil. Rett feilene og kontroller på nytt.',
   'foreign-exclusion-source': 'En utelatt plassering gjelder en annen GMI-kilde. Avklar leveringsvalget i FOTO eller lag en egen leveranse for kilden.',
   'multi-link-wrapper': 'Bildelenken kan ikke fjernes sikkert: samme omslag inneholder flere lenker. Behold plasseringen i GMI eller avklar kildefilen.',
@@ -104,6 +117,21 @@ export function deliveryDiagnostics(plan) {
 export function deliveryContents(plan) {
   return [...(plan.mode !== 'photos-only' ? [plan.naming.gmiFilename] : []), ...(plan.photoPlan ? [plan.naming.gmlFilename] : []), ...plan.attachments.map((item) => item.path)];
 }
+/**
+ * Field corrections counted apart from hyperlink transfers. A «Flytt til punktobjekt» transfer set is a history entry,
+ * and its S_HYPERLINK cells are changed cells, but it is not a field correction: Delt levering leaves out field
+ * corrections only, and always delivers the moved links. `view` is the useGmiEditLayer view; `status` the fallback.
+ */
+export function deliveryCorrectionCounts(view, status = null) {
+  if (!view?.session) return Object.freeze({ fieldChangeSets: status?.changeSetCount ?? 0, fieldCells: status?.changedCells ?? 0, movedPhotos: 0, movedReferences: 0 });
+  const transfer = activeGmiHyperlinkTransferSet(view.session);
+  return Object.freeze({
+    fieldChangeSets: view.session.changeSets.filter((entry) => !isGmiHyperlinkTransferSet(entry)).length,
+    fieldCells: view.changedCells.filter((cell) => !cell.hyperlinkTransfer).length,
+    movedPhotos: transfer ? new Set(transfer.transfers.map((item) => item.assetId)).size : 0,
+    movedReferences: transfer ? transfer.transfers.reduce((sum, item) => sum + item.referenceIds.length, 0) : 0,
+  });
+}
 export function deliverySummary({ plan, fieldCount = 0 }) {
   const count = (value, one, many) => `${value} ${value === 1 ? one : many}`;
   const fields = plan.gmiSummary?.fieldEditCount ?? plan.gmiSummary?.changedCells ?? 0;
@@ -119,6 +147,12 @@ export function deliverySummary({ plan, fieldCount = 0 }) {
         : `${kept} beholdes i GMI · ${counts.transferredReferences} overføres til GML · ${counts.excludedReferences} fjernet (ikke med)`],
     ['Bilder', plan.mode === 'gmi-only' ? 'Ingen bildefiler legges ved; eksisterende bildelenker beholdes' : count(counts.includedAssets, 'bilde i leveransen', 'bilder i leveransen')],
     ...(coordinated ? [['Plasseringer', `${counts.gmiPlacements ?? 0} i GMI · ${counts.gmlPlacements} i GML`]] : []),
+    // Batch 1B.3A: photographs (assets) and hyperlink references moved to another point object, counted apart.
+    // Delt levering leaves out field corrections but always includes the moved links; the row says so.
+    ...(counts.hyperlinkTransfers ? [['Flyttede bildelenker', plan.mode === 'photos-only'
+      ? [...(counts.hyperlinkTransferGmlAssets || !counts.hyperlinkTransferWithheldAssets ? [`${count(counts.hyperlinkTransferGmlAssets, 'bilde', 'bilder')} plassert på mottakerens GMI-posisjon i GML`] : []),
+        ...(counts.hyperlinkTransferWithheldAssets ? [`${count(counts.hyperlinkTransferWithheldAssets, 'bilde', 'bilder')} ikke tatt med (uplassert før flyttingen, ikke bekreftet)`] : [])].join(' · ')
+      : `${plan.mode === 'split' ? 'Inkluderes: ' : ''}${count(counts.hyperlinkTransferAssets, 'bilde', 'bilder')} · ${count(counts.movedReferences, 'bildereferanse', 'bildereferanser')} flyttet til et annet punktobjekt i GMI`]] : []),
     ['GML', `${count(plan.counts.features, 'post', 'poster')} i GML`], ['Vedlegg', count(plan.counts.attachments, 'fil', 'filer')],
     ...(counts.excludedOccurrences ? [['Ikke med', `${count(counts.excludedOccurrences, 'plassering', 'plasseringer')} valgt · ${count(counts.excludedEntirelyAssets, 'bilde', 'bilder')} helt ute · ${count(counts.partialAssets, 'bilde', 'bilder')} delvis med`]] : []),
     ...(counts.notNeededAssets ? [['Ikke valgt', `${count(counts.notNeededAssets, 'bilde', 'bilder')} ikke valgt og ikke påkrevd av GMI`]] : []),
@@ -186,6 +220,10 @@ export function deliveryReport(review) {
     ...(plan.photoDelivery?.transfers.length ? ['Overført til GML:', ...plan.photoDelivery.transfers.map((row) =>
       `${row.filename} · ${row.objectLabel}: ${plan.photoDelivery.applied ? `bildelenke fjernet for overføring til GML (${row.removedReferences})` : 'overføring blokkert; bildelenke ikke fjernet'}`), ''] : []),
     ...(exclusions.length ? ['Ikke med i leveransen:', ...exclusions, ''] : []),
+    ...(plan.photoDelivery?.hyperlinkTransfers?.length ? ['Flyttet til et annet punktobjekt:', ...plan.photoDelivery.hyperlinkTransfers.map((row) =>
+      `${row.filename} · ${row.fromLabel} → ${row.toLabel}: ${!plan.photoDelivery.hyperlinkTransfersApplied ? 'flytting ikke levert; leveransen er blokkert'
+        : row.withheld ? 'ikke tatt med i GML (uplassert før flyttingen, ikke bekreftet)'
+          : `${row.referenceCount} ${row.referenceCount === 1 ? 'bildereferanse' : 'bildereferanser'}${plan.mode === 'photos-only' ? ' · plassert på mottakerens GMI-posisjon i GML' : ''}`}`), ''] : []),
     'Feltendringer:', ...changes.fields,
     ...(changes.hyperlinks.length ? ['', 'Bildelenker endret:', ...changes.hyperlinks] : []),
   ].join('\r\n');

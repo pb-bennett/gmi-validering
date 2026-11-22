@@ -42,6 +42,15 @@
 //   were. An originally empty recipient takes the trailing whitespace of the
 //   first incoming reference's source cell (the source file's own convention).
 //
+// Batch 1B.3A (export composition): `request.removals` optionally adds M7
+// delivery removals (photographs delivered through GML or excluded) to the SAME
+// plan. They join the single M7 removal half, so a cell that loses moved
+// references, loses delivery-removed references and receives moved references
+// still gets exactly one edit composed from the original lexeme. A cell touched
+// only by delivery removals takes M7's proposed lexeme unchanged (the M7
+// contract applies to it as it does without a transfer). Overlapping claims
+// (a removal of a transferred occurrence or reference) block.
+//
 // Conservative FOTO boundaries (blocking, not reinterpreted): non-GMI delivery
 // decisions, accepted alternative positions, a recipient that already links or
 // places the same photograph, FOTO-only sources without a live loaded-GMI
@@ -156,6 +165,16 @@ function normalizeTransfer(input, index) {
       parserId: recipient.parserId, guid: recipient.guid ?? null } };
 }
 
+// Batch 1B.3A: one M7 delivery removal (an M8 removal selection). The M7 planner validates it in full; this only
+// records a deterministic copy for the plan and the overlap checks.
+function normalizeRemoval(input) {
+  const { sourceFingerprint = null, objectKey = null, assetId = null, sourceId = null } = input && typeof input === 'object' ? input : {};
+  const referenceIds = Array.isArray(input?.referenceIds) ? sortedUnique(input.referenceIds) : [];
+  const selectionKey = isString(sourceFingerprint) && isString(objectKey) && isString(assetId)
+    ? gmiHyperlinkSelectionKey({ sourceFingerprint, objectKey, assetId }) : null;
+  return { selectionKey, sourceFingerprint, objectKey, assetId, sourceId, referenceIds, occurrenceKey: input?.occurrenceKey ?? input?.key ?? null };
+}
+
 // Deterministic decision order, independent of input order: by transfer identity, then by full content.
 function sortDecisions(decisions) {
   const keyOf = (decision) => JSON.stringify([decision?.sourceFingerprint ?? null, decision?.sourceObjectKey ?? null, decision?.assetId ?? null]);
@@ -189,9 +208,18 @@ function finalizePlan(document, plan) {
     blockers: blockers.length,
     warnings: plan.warnings.length,
   };
+  // Batch 1B.3A: delivery removals are part of the plan identity only when supplied, so plans without them keep
+  // exactly their previous keys and counts.
+  const withRemovals = Array.isArray(plan.removals);
+  if (withRemovals) {
+    counts.deliveryRemovals = plan.removals.length;
+    counts.deliveryCells = cells.filter((cell) => cell.deliveryRemovedReferences?.length).length;
+    counts.deliveryRemovedReferences = cells.reduce((sum, cell) => sum + (cell.deliveryRemovedReferences?.length ?? 0), 0);
+  }
   const planKey = JSON.stringify([plan.basis.documentFingerprint, plan.basis.session?.effectiveKey ?? null, plan.ordinalPolicy,
     plan.decisions.map((decision) => [decision.transferKey, decision.referenceIds, decision.recipient?.objectKey ?? null]),
-    edits.map((edit) => [edit.target.scope, edit.target.sourceIndex, edit.expected, edit.lexeme]), status]);
+    edits.map((edit) => [edit.target.scope, edit.target.sourceIndex, edit.expected, edit.lexeme]), status,
+    ...(withRemovals ? [plan.removals.map((removal) => [removal.selectionKey, removal.referenceIds])] : [])]);
   const frozen = deepFreeze({
     kind: 'gmi-hyperlink-transfer-plan',
     ok: !blocked,
@@ -199,6 +227,7 @@ function finalizePlan(document, plan) {
     ordinalPolicy: plan.ordinalPolicy,
     basis: plan.basis,
     decisions: plan.decisions,
+    ...(withRemovals ? { removals: plan.removals } : {}),
     transfers,
     cells,
     edits,
@@ -241,12 +270,17 @@ const aliasColumns = (object) => Object.keys(object.attributes || {}).filter((ke
  * @param {object} [request.session] the M2 edit session whose effective field edits the proposal also carries
  * @param {{documentFingerprint?: string, photoSourceFingerprint?: string, sessionEffectiveKey?: string|null}} [request.expectedBasis]
  * @param {'renumber'} [request.ordinalPolicy='renumber'] the only supported policy
+ * @param {Array<object>} [request.removals] Batch 1B.3A: M7 delivery removal selections (GML/Ikke) composed in the
+ *   same plan: { sourceFingerprint, objectKey, assetId, referenceIds, sourceId?, key?|occurrenceKey? }
+ * @param {Iterable<string>} [request.acceptedAssetIds] passed to the M7 removal half
  * @returns frozen plan; `status` 'ready' | 'empty' | 'blocked'. A blocked plan has no cells, transfers or edits.
  */
 export function planGmiHyperlinkTransfer(document, request = {}) {
   if (!isGmiSourceDocument(document)) throw new TypeError('planGmiHyperlinkTransfer expects a GmiSourceDocument');
   const { photoSource = null, transfers: rawTransfers, session = null, photoState = null, expectedBasis = null,
-    ordinalPolicy = GMI_HYPERLINK_ORDINAL_POLICIES.RENUMBER } = request || {};
+    ordinalPolicy = GMI_HYPERLINK_ORDINAL_POLICIES.RENUMBER, removals: rawRemovals = null, acceptedAssetIds = null } = request || {};
+  const removals = Array.isArray(rawRemovals) ? rawRemovals.map(normalizeRemoval)
+    .sort((a, b) => compareStrings(a.selectionKey ?? '', b.selectionKey ?? '') || compareStrings(JSON.stringify(a.referenceIds), JSON.stringify(b.referenceIds))) : null;
   const base = {
     ordinalPolicy,
     basis: {
@@ -258,12 +292,14 @@ export function planGmiHyperlinkTransfer(document, request = {}) {
       session: null,
     },
     decisions: Array.isArray(rawTransfers) ? sortDecisions(plainCopy(rawTransfers)) : [],
+    ...(removals ? { removals: removals.map(({ selectionKey, objectKey, assetId, referenceIds }) => ({ selectionKey, objectKey, assetId, referenceIds })) } : {}),
     transfers: [], cells: [], edits: [], warnings: [], blockers: [],
   };
   const done = (extra = {}) => finalizePlan(document, { ...base, ...extra });
   const global = [];
   if (ordinalPolicy !== GMI_HYPERLINK_ORDINAL_POLICIES.RENUMBER) global.push({ code: 'ordinal-policy-unsupported', detail: String(ordinalPolicy) });
   if (!Array.isArray(rawTransfers)) global.push({ code: 'invalid-transfers' });
+  if (rawRemovals !== null && !Array.isArray(rawRemovals)) global.push({ code: 'invalid-removals' });
   if (!document.editable) global.push({ code: 'document-not-editable', detail: document.status });
   if (!isString(document.fingerprint)) global.push({ code: 'document-fingerprint-unavailable' });
   if (!gmiSourceIntact(document)) global.push({ code: 'source-bytes-mutated' });
@@ -351,17 +387,29 @@ export function planGmiHyperlinkTransfer(document, request = {}) {
     if (group.length > 1) for (const transfer of group) blockers.push({ code: 'duplicate-recipient-photo', transferKey: transfer.transferKey });
   }
 
-  // 2. Removal half: the unchanged M7 planner over every valid decision.
+  // Batch 1B.3A: a delivery removal never claims a transferred occurrence or reference (M7 refuses overlapping
+  // references too, but an overlap is reported here as what it is).
+  const transferKeys = new Set(valid.map((transfer) => transfer.transferKey));
+  const transferReferences = new Set(valid.flatMap((transfer) => transfer.referenceIds));
+  for (const removal of removals || []) {
+    if (removal.selectionKey && transferKeys.has(removal.selectionKey)) blockers.push({ code: 'removal-overlaps-transfer', selectionKey: removal.selectionKey, transferKey: removal.selectionKey });
+    else if (removal.referenceIds.some((id) => transferReferences.has(id))) blockers.push({ code: 'removal-overlaps-transfer', selectionKey: removal.selectionKey ?? undefined });
+  }
+
+  // 2. Removal half: the unchanged M7 planner over every valid decision (and, Batch 1B.3A, every delivery removal).
   const removal = planGmiHyperlinkRemoval(document, {
     photoSource, session,
     ordinalPolicy: GMI_HYPERLINK_ORDINAL_POLICIES.RENUMBER,
-    selections: valid.map((transfer) => ({ sourceFingerprint: transfer.sourceFingerprint, objectKey: transfer.sourceObjectKey,
+    ...(acceptedAssetIds !== null ? { acceptedAssetIds } : {}),
+    selections: [...valid.map((transfer) => ({ sourceFingerprint: transfer.sourceFingerprint, objectKey: transfer.sourceObjectKey,
       assetId: transfer.assetId, referenceIds: transfer.referenceIds, sourceId: transfer.sourceId })),
+    ...(rawRemovals || []).map((entry) => (entry && typeof entry === 'object' ? { ...entry } : entry))],
   });
   if (removal.status === GMI_HYPERLINK_REMOVAL_STATUS.BLOCKED) {
     for (const entry of removal.blockers) {
       const { selectionKey, ...rest } = entry;
-      blockers.push({ ...rest, code: `removal:${entry.code}`, ...(selectionKey ? { transferKey: selectionKey } : {}) });
+      const owner = !selectionKey ? {} : transferKeys.has(selectionKey) ? { transferKey: selectionKey } : { selectionKey };
+      blockers.push({ ...rest, code: `removal:${entry.code}`, ...owner });
     }
   }
   if (blockers.length) return done({ blockers });
@@ -372,7 +420,7 @@ export function planGmiHyperlinkTransfer(document, request = {}) {
   const incomingByRecipient = new Map();
   for (const transfer of eligible) {
     const source = fresh.objectsByKey[transfer.sourceObjectKey];
-    const removed = removalCells.get(transfer.sourceObjectKey).removedReferences.filter((reference) => reference.selectionKey === transfer.transferKey);
+    const removed = (removalCells.get(transfer.sourceObjectKey)?.removedReferences || []).filter((reference) => reference.selectionKey === transfer.transferKey);
     if (removed.length !== transfer.referenceIds.length) { blockers.push({ code: 'removal-reference-count-mismatch', transferKey: transfer.transferKey }); continue; }
     if (removed.length > 1) warnings.push({ code: 'repeated-references-carried', transferKey: transfer.transferKey, count: removed.length });
     const list = incomingByRecipient.get(transfer.recipient.objectKey) || [];
@@ -390,13 +438,28 @@ export function planGmiHyperlinkTransfer(document, request = {}) {
       || a.reference.wrapperOrdinal - b.reference.wrapperOrdinal || a.reference.memberOrdinal - b.reference.memberOrdinal);
     const blockCell = (code, detail = {}) => {
       const keys = sortedUnique([...(removalCell?.removedReferences || []).map((reference) => reference.selectionKey), ...incoming.map((entry) => entry.transfer.transferKey)]);
-      for (const transferKey of keys) blockers.push({ code, transferKey, objectKey, ...detail });
+      for (const key of keys) blockers.push({ code, ...(transferKeys.has(key) ? { transferKey: key } : { selectionKey: key }), objectKey, ...detail });
     };
     const resolved = resolveGmiCell(document, { scope: object.geometryScope, sourceIndex: object.sourceIndex,
       field: GMI_HYPERLINK_FIELD, objectId: object.parserId, guid: object.guid });
     if (!resolved.ok) { blockCell('hyperlink-cell-not-editable', { detail: resolved.code }); continue; }
     const { cell } = resolved;
     if (cell.lexeme !== object.hyperlinkRaw) { blockCell('hyperlink-lexeme-mismatch'); continue; }
+    // Batch 1B.3A: removed references split by purpose. A cell touched only by delivery removals is the M7 result
+    // as it stands (no transfer layout rule applies to it), composed in the same single edit list.
+    const movedOut = (removalCell?.removedReferences || []).filter((reference) => transferKeys.has(reference.selectionKey));
+    const deliveryRemoved = (removalCell?.removedReferences || []).filter((reference) => !transferKeys.has(reference.selectionKey));
+    const deliveryView = (reference) => ({ referenceId: reference.referenceId, selectionKey: reference.selectionKey, assetId: reference.assetId,
+      referenceRaw: reference.referenceRaw, rawWrapper: reference.rawWrapper, filename: reference.filename, bare: reference.bare });
+    if (!incoming.length && !movedOut.length) {
+      cells.push({
+        key: cell.key, scope: cell.scope, sourceIndex: cell.sourceIndex, objectId: cell.objectId, guid: cell.guid, objectKey,
+        field: GMI_HYPERLINK_FIELD, start: cell.start, end: cell.end, original: cell.lexeme, proposed: removalCell.proposed,
+        removedReferences: [], deliveryRemovedReferences: deliveryRemoved.map(deliveryView), addedReferences: [],
+        ordinalChanges: plainCopy(removalCell.ordinalChanges),
+      });
+      continue;
+    }
     if (proposed && gmiObjectLexemes(proposed.document, cell.scope, cell.sourceIndex)?.[GMI_HYPERLINK_FIELD] !== cell.lexeme) {
       blockCell('hyperlink-changed-by-field-edits'); continue;
     }
@@ -450,8 +513,9 @@ export function planGmiHyperlinkTransfer(document, request = {}) {
     cells.push({
       key: cell.key, scope: cell.scope, sourceIndex: cell.sourceIndex, objectId: cell.objectId, guid: cell.guid, objectKey,
       field: GMI_HYPERLINK_FIELD, start: cell.start, end: cell.end, original: cell.lexeme, proposed: lexeme,
-      removedReferences: (removalCell?.removedReferences || []).map((reference) => ({ referenceId: reference.referenceId,
+      removedReferences: movedOut.map((reference) => ({ referenceId: reference.referenceId,
         transferKey: reference.selectionKey, assetId: reference.assetId, referenceRaw: reference.referenceRaw, rawWrapper: reference.rawWrapper })),
+      ...(removals ? { deliveryRemovedReferences: deliveryRemoved.map(deliveryView) } : {}),
       addedReferences,
       ordinalChanges: removalCell ? plainCopy(removalCell.ordinalChanges) : [],
     });

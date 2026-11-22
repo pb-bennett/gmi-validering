@@ -11,10 +11,10 @@ import { DEFAULT_PHOTO_EXPORT_CONFIG } from '@/lib/photos/photoExportConfig.mjs'
 import { photosBeingRead, photoReadingNote, photoCount, placementCount, photoCaptureTimeSchemaWarning } from '@/lib/photos/photoCompletion.mjs';
 import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRules.mjs';
 import { photoExportDeliveryReadiness, photoExportDeliveryModel } from '@/lib/photos/photoExportWizard.mjs';
-import { captureDeliverySnapshot, buildDeliveryPlan } from '@/lib/delivery/index.mjs';
+import { captureDeliverySnapshot, buildDeliveryPlan, deliveryTransferredUnplaced } from '@/lib/delivery/index.mjs';
 import { DELIVERY_CHOICES, DELIVERY_STEPS, DELIVERY_WIZARD_START, deliveryWizardReducer, deliveryWizardStatus,
   deliveryDiagnostics, deliveryMessage, deliveryPackageFacts, deliveryReport, deliveryReviewStatus, deliveryReviewSummary,
-  deliveryExclusionNote, deliveryExclusionLines,
+  deliveryExclusionNote, deliveryExclusionLines, deliveryCorrectionCounts,
   deliverySurveySelection, initiateDeliveryDownload } from '@/lib/delivery/deliveryWizard.mjs';
 import DeliveryInventory from './DeliveryInventory';
 import usePhotoSession from '@/components/photos/usePhotoSession';
@@ -113,6 +113,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
   const [selectedSurvey, setSelectedSurvey] = useState(initialMode === 'gmi-only' && !initialPhotoLayerId ? initialSurveyLayerId : null);
   const [localConfig, setLocalConfig] = useState(DEFAULT_PHOTO_EXPORT_CONFIG);
   const [excluded, setExcluded] = useState(null);
+  const [transferInclusion, setTransferInclusion] = useState(null);
   const [reportError, setReportError] = useState(null);
   const [state, dispatch] = useReducer(deliveryWizardReducer, DELIVERY_WIZARD_START);
   const layers = useStore((store) => store.layers);
@@ -141,11 +142,18 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
   const filename = { descriptive: label, timestamp: filenameTimestamp, revision, revisionChecked, showRevision: hasGmi, extension,
     issueText: filenameIssue ? deliveryMessage(filenameIssue) : '',
     onUseSuggestion: sourceParts && config.labelEdited && label !== suggestedLabel ? () => changeConfig({ label: '', labelEdited: false }) : undefined };
-  const fieldCount = gmi.status?.changedCells ?? 0;
-  const needsExclusion = mode === 'split' && (gmi.status?.changeSetCount ?? 0) > 0;
+  // Field corrections only: a hyperlink transfer is a history entry with changed S_HYPERLINK cells, but split delivery
+  // always includes it, so it is neither counted as a field correction nor part of the exclusion confirmation.
+  const corrections = deliveryCorrectionCounts(gmi.view, gmi.status);
+  const fieldCount = corrections.fieldCells;
+  const needsExclusion = mode === 'split' && corrections.fieldChangeSets > 0;
   // A changed session requires renewed acknowledgement, even after an undo/redo.
   const exclusionKey = `${surveyId}:${gmi.status?.stateKey ?? ''}`;
   const waiting = hasPhoto && photosBeingRead(layerPhotos) > 0;
+  // Kun GML med bilder: moved photographs that were unplaced before the transfer need this explicit inclusion; its key
+  // follows the transfer state, so a later commit, undo or redo clears it. Optional: without it they stay out of GML.
+  const transferredUnplaced = mode === 'photos-only' && photoLayer ? deliveryTransferredUnplaced({ registry: gmiEditSessions, photoSession, photoLayerId: photoId }) : null;
+  const includeTransferredUnplaced = Boolean(transferredUnplaced) && transferInclusion === transferredUnplaced.key;
   const status = deliveryWizardStatus(state), busy = ['building', 'packaging'].includes(status);
   const readinessPhotos = mode === 'photos-only' || !state.review ? layerPhotos
     : layerPhotos.filter((photo) => state.review.plan.photoPlan?.occurrences.some((row) => row.occurrenceId === photo.id));
@@ -191,7 +199,7 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
     work.current.busy = true; setReportError(null); dispatch({ type: 'build', run }); ignoreFollowUpClick();
     try {
       const snapshot = captureDeliverySnapshot({ mode, registry: gmiEditSessions, handle: gmi.view?.handle,
-        photoSession, photoLayerId: photoId, includeFieldChanges: needsExclusion ? false : undefined });
+        photoSession, photoLayerId: photoId, includeFieldChanges: needsExclusion ? false : undefined, includeTransferredUnplaced });
       const plan = await buildDeliveryPlan(snapshot, { ...config, label, filenameTimestamp, filenameRevision: revisionChecked, revision });
       if (work.current.active && token === work.current.token) dispatch({ type: 'built', run, review: { plan, snapshot, fieldCount } });
     } catch (error) {
@@ -241,16 +249,17 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
           <h3 tabIndex={-1} data-export-heading>{waiting ? 'Leser bildedata …' : 'Velg innhold'}</h3>
           <fieldset><legend className="sr-only">Leveransemåte</legend>{DELIVERY_CHOICES.map((choice) => <PhotoSourceOption key={choice.mode}
             name={`${id}-delivery-mode`} value={choice.mode} label={choice.title} hint={choice.text} checked={mode === choice.mode}
-            onChange={(value) => { setMode(value); setExcluded(null); onConfigChange?.({ deliveryMode: value }); }} />)}</fieldset>
+            onChange={(value) => { setMode(value); setExcluded(null); setTransferInclusion(null); onConfigChange?.({ deliveryMode: value }); }} />)}</fieldset>
         </section>
         <section className="delivery-settings">
           {hasGmi && <label>GMI-kartlag<select className="gmi-focus-ring" aria-label="GMI-kartlag" value={surveyId} onChange={(event) => { setSelectedSurvey(event.target.value); setExcluded(null); onConfigChange?.({ deliverySurveyId: event.target.value }); }}>
             <option value="">Velg GMI-kartlag</option>{Object.values(layers).filter(isLoadedGmiSurveyLayer).map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
           </select></label>}
-          {hasPhoto && <label>Fotolag<select className="gmi-focus-ring" aria-label="Fotolag" value={photoId} onChange={(event) => { setPhotoId(event.target.value); setExcluded(null); }}>
+          {hasPhoto && <label>Fotolag<select className="gmi-focus-ring" aria-label="Fotolag" value={photoId} onChange={(event) => { setPhotoId(event.target.value); setExcluded(null); setTransferInclusion(null); }}>
             <option value="">Velg fotolag</option>{photos.photoLayers.map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
           </select></label>}
-          {hasGmi && <p>{fieldCount} {fieldCount === 1 ? 'endret felt' : 'endrede felt'} i {gmi.status?.changeSetCount ?? 0} {gmi.status?.changeSetCount === 1 ? 'retting' : 'rettinger'}.</p>}
+          {hasGmi && <p>{fieldCount} {fieldCount === 1 ? 'endret felt' : 'endrede felt'} i {corrections.fieldChangeSets} {corrections.fieldChangeSets === 1 ? 'retting' : 'rettinger'}.</p>}
+          {hasGmi && corrections.movedReferences > 0 && <p data-delivery-moved-links>{mode === 'split' ? 'Flyttede bildelenker inkluderes' : 'Flyttede bildelenker tas med'}: {photoCount(corrections.movedPhotos)} · {corrections.movedReferences} {corrections.movedReferences === 1 ? 'bildereferanse' : 'bildereferanser'} til et annet punktobjekt.</p>}
           {hasGmi && gmi.descriptor?.state !== 'editable' && <p role="status">{gmi.descriptor?.state === 'loading' ? 'Leser GMI-kilden …' : 'Velg et GMI-kartlag som kan rettes sikkert.'}</p>}
           {needsExclusion && <label className="delivery-exclusion"><input type="checkbox" aria-label="Utelat feltrettingene" checked={excluded === exclusionKey}
             onChange={(event) => setExcluded(event.target.checked ? exclusionKey : null)} /> Jeg bekrefter at {fieldCount} {fieldCount === 1 ? 'feltretting utelates' : 'feltrettinger utelates'} fra denne leveransen. Rettingene beholdes i Rettinger.</label>}
@@ -262,6 +271,8 @@ export default function DeliveryWizard({ initialMode = 'photos-only', initialPho
               {photoModel.blockers.length > 0 && !waiting && <PhotoExportDiagnostics groups={photoModel.blockers} />}
               {photoModel.checks.length > 0 && !waiting && <ul className="photo-completion-notes">{photoModel.checks.map((item) => <li key={item.code}>{item.text}</li>)}</ul>}
               {photoModel.excludedText && <p data-export-excluded>{photoModel.excludedText}</p>}
+              {transferredUnplaced && <label className="delivery-exclusion" data-delivery-transfer-inclusion><input type="checkbox" aria-label="Ta med flyttede bilder som var uplassert"
+                checked={includeTransferredUnplaced} onChange={(event) => setTransferInclusion(event.target.checked ? transferredUnplaced.key : null)} /> Ta med {photoCount(transferredUnplaced.assets)} som var uplassert før bildelenken ble flyttet, på mottakerens GMI-posisjon. Uten bekreftelse utelates {transferredUnplaced.assets === 1 ? 'bildet' : 'bildene'} fra GML.</label>}
               {decision?.active && <p>Kun GML med bilder tar med alle plasserte forekomster, uavhengig av valgene om samlet levering.</p>}</>
               : <p>{decision?.occurrences.transfer ?? 0} plasseringer er valgt for overføring til GML. {decision?.occurrences.include ?? 0} er valgt uten GMI-lenke.
                 {' '}{decision?.occurrences.exclude ?? 0} er valgt Ikke med i leveransen. Endre valgene under Samlet levering i FOTO.</p>}

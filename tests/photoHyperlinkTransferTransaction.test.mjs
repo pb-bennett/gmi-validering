@@ -365,21 +365,25 @@ test('FOTO changes after the commit turn the transfer view into a conflict; undo
   assert.equal(photoHyperlinkTransferView(f.owners).status, 'none');
 });
 
-test('exports fail closed while a transfer is active, invalidate earlier plans, and recover after undo', async () => {
+// Batch 1B.3A (deliberate contract update): exports no longer refuse an active transfer; they compose it after
+// verifying its FOTO state (tests/photoHyperlinkTransferExport.test.mjs). What stays: earlier plans become stale, the
+// unattested low-level field export refuses, and undo restores the untransferred export.
+test('exports invalidate earlier plans, compose an active transfer only through the verified delivery path, and recover after undo', async () => {
   const f = await LOK_SLU();
+  // The moved photograph was unplaced before the transfer, so Kun GML med bilder includes it only explicitly (verification refinement).
   const capture = (mode) => captureDeliverySnapshot({ mode, registry: f.registry, handle: mode === 'photos-only' ? undefined : f.handle,
-    photoSession: f.session, photoLayerId: mode === 'gmi-only' ? undefined : f.layerId });
+    photoSession: f.session, photoLayerId: mode === 'gmi-only' ? undefined : f.layerId, includeTransferredUnplaced: mode === 'photos-only' });
   const build = (snapshot) => buildDeliveryPlan(snapshot, { profile: 'gemini-legacy2019', crs: 'EPSG:25832', context: syntheticContext }, { now: () => DATE });
   const before = capture('gmi-only');
   assert.equal(before.isLive(), true);
   assert(f.commit([f.move(293, 'SYNT_LOK_B.png', 108)]).ok);
   assert.equal(before.isLive(), false, 'a snapshot captured before the transfer is stale');
-  assert.equal((await buildGmiFieldExport(f.registry, f.handle, { date: DATE })).code, 'hyperlink-transfer-export-unsupported');
-  assert(getGmiExportReadiness(f.registry, f.handle).blocking.includes('hyperlink-transfer-export-unsupported'));
+  assert.equal((await buildGmiFieldExport(f.registry, f.handle, { date: DATE })).code, 'hyperlink-transfer-unverified');
+  assert(getGmiExportReadiness(f.registry, f.handle).blocking.includes('hyperlink-transfer-unverified'));
   for (const mode of ['gmi-only', 'photos-only', 'split', 'combined']) {
     const plan = await build(capture(mode));
-    assert.equal(plan.status, 'blocked', mode);
-    assert.deepEqual(plan.errors.map((entry) => entry.code), ['hyperlink-transfer-export-unsupported'], mode);
+    assert.equal(plan.status, 'ready', `${mode}: ${JSON.stringify(plan.errors)}`);
+    assert.equal(plan.counts.hyperlinkTransfers, 1, mode);
   }
   assert(f.registry.undo(f.handle).ok);
   const export_ = await buildGmiFieldExport(f.registry, f.handle, { date: DATE });

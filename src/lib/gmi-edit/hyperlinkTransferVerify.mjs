@@ -33,6 +33,14 @@
 //                   authorized edit's lexeme.
 //   6. bytes        outside the authorized cell spans, original and output
 //                   bytes are identical and in order.
+// Batch 1B.3A: `contract.removals` adds M7 delivery removals (photographs
+// delivered through GML or excluded) composed in the same output. A removed
+// reference must exist on the named object in the original, be a `link:`
+// member and be claimed once (by one transfer or one removal); in the output it
+// is gone from that object and appears nowhere else. Expected per object:
+// original minus moved-out and removed references, in order, then moved-in
+// references. The removals come from the caller's delivery decisions, never
+// from a plan.
 // Failure records carry codes and object keys only, never file content.
 import { extractHyperlinkOccurrences } from '../hyperlinkFilenames.mjs';
 import { createGmiPhotoSource } from '../photos/gmiPhotoSource.mjs';
@@ -82,6 +90,7 @@ function wholeWrapperCell(raw) {
  * @param {string} [contract.documentFingerprint] when given, must equal the original's fingerprint
  * @param {Array<object>} contract.transfers the explicit decisions
  * @param {Array<{target: {scope, sourceIndex, field}, lexeme: string}>} [contract.fieldEdits]
+ * @param {Array<{objectKey: string, referenceIds: string[]}>} [contract.removals] Batch 1B.3A delivery removals
  */
 export function verifyGmiHyperlinkTransfer(document, output, contract = {}) {
   const failures = [];
@@ -137,6 +146,25 @@ export function verifyGmiHyperlinkTransfer(document, output, contract = {}) {
       movedTo.set(local, recipientKey);
     }
   }
+  // Batch 1B.3A: delivery removals, resolved against the ORIGINAL only.
+  const removed = new Set();          // original (unprefixed) reference ids removed from the delivery
+  const removalObjects = new Set();
+  const removals = contract.removals === undefined ? [] : Array.isArray(contract.removals) ? contract.removals : null;
+  if (!removals) { fail('contract-invalid'); return finish(); }
+  for (const removal of removals) {
+    const objectKey = removal?.objectKey;
+    if (!before.objectsByKey[objectKey]) { fail('contract-removal-object-unknown', { objectKey: objectKey ?? null }); continue; }
+    if (!Array.isArray(removal.referenceIds) || !removal.referenceIds.length) { fail('contract-references-invalid', { objectKey }); continue; }
+    for (const id of removal.referenceIds) {
+      const local = typeof id === 'string' && id.startsWith(prefix) ? id.slice(prefix.length) : null;
+      const reference = local && byId.get(local);
+      if (!reference || reference.objectKey !== objectKey) { fail('contract-reference-unknown', { objectKey }); continue; }
+      if (reference.key !== 'link') { fail('contract-reference-not-link', { objectKey }); continue; }
+      if (movedTo.has(local) || removed.has(local)) { fail('contract-reference-claimed-twice', { objectKey }); continue; }
+      removed.add(local);
+      removalObjects.add(objectKey);
+    }
+  }
   if (failures.length > structuralFailures) return finish();
 
   // 3. Expected reference lists per object.
@@ -155,11 +183,11 @@ export function verifyGmiHyperlinkTransfer(document, output, contract = {}) {
         || a.wrapperOrdinal - b.wrapperOrdinal || a.memberOrdinal - b.memberOrdinal;
     });
   }
-  const affected = new Set([...[...movedTo.keys()].map((id) => byId.get(id).objectKey), ...incoming.keys()]);
+  const affected = new Set([...[...movedTo.keys()].map((id) => byId.get(id).objectKey), ...incoming.keys(), ...removalObjects]);
   let moved = 0;
   for (const key of keysBefore) {
     const was = before.objectsByKey[key], now = after.objectsByKey[key];
-    const expected = [...(refsBefore.get(key) || []).filter((reference) => !movedTo.has(reference.id)), ...(incoming.get(key) || [])];
+    const expected = [...(refsBefore.get(key) || []).filter((reference) => !movedTo.has(reference.id) && !removed.has(reference.id)), ...(incoming.get(key) || [])];
     const actual = refsAfter.get(key) || [];
     if (!affected.has(key)) {
       if (was.hyperlinkRaw !== now.hyperlinkRaw) fail('unauthorized-hyperlink-change', { objectKey: key });
@@ -178,7 +206,7 @@ export function verifyGmiHyperlinkTransfer(document, output, contract = {}) {
     if (!actual.length && now.hyperlinkRaw !== '') fail('cleared-cell-not-empty', { objectKey: key });
   }
   if (moved !== movedTo.size) fail('moved-reference-count-mismatch');
-  if (before.references.length !== after.references.length) fail('reference-total-changed');
+  if (before.references.length - removed.size !== after.references.length) fail('reference-total-changed');
 
   // 5. Every other field.
   const authorized = new Map();
@@ -227,6 +255,6 @@ export function verifyGmiHyperlinkTransfer(document, output, contract = {}) {
     if (!contained) fail('bytes-changed-outside-authorized-cells');
   }
 
-  return finish({ movedReferences: movedTo.size, affectedCells: affected.size, authorizedFieldEdits: authorized.size,
+  return finish({ movedReferences: movedTo.size, removedReferences: removed.size, affectedCells: affected.size, authorizedFieldEdits: authorized.size,
     referencesBefore: before.references.length, referencesAfter: after.references.length });
 }

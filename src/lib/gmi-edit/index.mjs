@@ -116,3 +116,13 @@ export { verifyGmiHyperlinkTransfer } from './hyperlinkTransferVerify.mjs';
 // created/staged only through these preparation functions and committed only
 // through the session registry's commitHyperlinkTransfer.
 export { buildGmiHyperlinkTransferCommit, planGmiHyperlinkTransferCommit } from './hyperlinkTransferCommit.mjs';
+
+// Batch 1B.3A (one export composition of field edits, the active transfer and
+// M7 delivery removals against the original): see
+// docs/agent-reports/*-hyperlink-transfer-batch1b3a-completion.md.
+export {
+  GMI_TRANSFER_RECIPIENT_PENDING,
+  applyGmiDeliveryComposition,
+  isGmiDeliveryComposition,
+  planGmiDeliveryComposition,
+} from './deliveryComposition.mjs';

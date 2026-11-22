@@ -18,23 +18,23 @@ export const guidOf = (n) => `5ec0e000-0000-4000-8000-1b2a${String(n).padStart(8
 export const w = (n, name, sign = null) => `h:${n}(link:"Attachments\\${name}"${sign ? ` sign:"${sign}"` : ''})`;
 export const cell = (...wrappers) => wrappers.map((wrapper) => `${wrapper} `).join('');
 
-/** points: { number, fcode, hyperlink, xyz? } in EPSG:25832. */
-export function gmiText(points) {
+/** points: { number, fcode, hyperlink, xyz?, note? } in EPSG:25832. `eol`: line ending (Batch 1B.3A LF variants). */
+export function gmiText(points, { eol = '\r\n' } = {}) {
   const extent = '_EXTENT 581900 6565900 582100 6566100 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!';
   const out = ['[GMIFILE_ASCII]', '_VERSION 2', '_FILETYPE GMI', '_INDEX !!!!!!!!!!!!!!!!!!!!', extent,
     'COSYS_EPSG 25832', 'COSYSVER_EPSG 5941', 'PRODUCER Syntetisk testprodusent', '[P_]', extent, `_FIELDNAMES ${POINT_FIELDS.join(';')};`, '[+P_]'];
   points.forEach((point, index) => {
-    out.push(`:P ${point.number}`, `_FIELDVALUES ${point.fcode};Kum;SYNT-R${index + 1};${point.hyperlink ?? ''};Punkt ${index + 1};S;`,
+    out.push(`:P ${point.number}`, `_FIELDVALUES ${point.fcode};Kum;SYNT-R${index + 1};${point.hyperlink ?? ''};${point.note ?? `Punkt ${index + 1}`};S;`,
       `GUID ${guidOf(point.number)}`, '/XYZ', point.xyz ?? `${581940 + index * 7}.000 ${6566000 + index * 7}.000 ${100 + index}.250`);
   });
   out.push('[END]');
-  return `${out.join('\r\n')}\r\n`;
+  return `${out.join(eol)}${eol}`;
 }
 
 /** The real owners: FOTO session with a layer, a loaded survey layer, its Rettinger registry and the live-bound FOTO GMI source. */
-export async function transferFixture(points, { names, placeAtGmi = false } = {}) {
+export async function transferFixture(points, { names, placeAtGmi = false, eol = '\r\n', encode = latin1Bytes } = {}) {
   const f = await exportFixture({ names, unplaced: true });
-  const bytes = latin1Bytes(gmiText(points));
+  const bytes = encode(gmiText(points, { eol }));
   const file = new File([bytes], 'transfer.gmi');
   const parser = new GMIParser(decodeGmiBytes(bytes)), data = parser.toObject();
   const layers = { survey: { id: 'survey', type: 'GMI', file: { name: file.name, format: 'GMI' }, data } };

@@ -21,10 +21,20 @@
 // Reused later by the combined delivery builder (M9): the payload carries
 // the effective key, source identity and change summary that a delivery
 // snapshot needs.
+//
+// Batch 1B.3A: a session with an active hyperlink transfer is exported only
+// when the caller attests (`hyperlinkTransfer: { transferSetId, planKey }`)
+// that it verified the transfer's FOTO state for exactly the active transfer
+// set (the delivery planner does this through the FOTO view). The bytes are
+// the proposed copy (field + transfer edits, one M1 call against the
+// original), and the independent transfer verifier runs again on the exact
+// bytes being exported. Without the attestation the export still refuses
+// ('hyperlink-transfer-unverified').
 import { computeGmiSourceFingerprint, getGmiSourceBytes, gmiSourceIntact } from './sourceDocument.mjs';
 import { getGmiDocumentDataset } from './proposed.mjs';
 import { diffGmiDatasets } from './diff.mjs';
-import { activeGmiHyperlinkTransferSet } from './session.mjs';
+import { activeGmiHyperlinkTransferSet, compileGmiProposedEdits } from './session.mjs';
+import { verifyGmiHyperlinkTransfer } from './hyperlinkTransferVerify.mjs';
 import { photoExportNames, ExportFilenameError, EXPORT_FILENAME_ISSUES } from '../photos/export/photoExportNaming.mjs';
 
 // Opaque bytes: no charset, so nothing between here and disk re-encodes them.
@@ -34,8 +44,8 @@ export const GMI_EXPORT_FAILURES = Object.freeze([
   'invalid-handle', 'session-disposed', 'stale-session', 'source-identity-mismatch', 'fingerprint-mismatch',
   'source-stale', 'source-bytes-mutated', 'source-unreadable', 'source-fingerprint-mismatch', 'loaded-gmi-unreadable',
   'document-read-only', 'verification-failed', 'structural-difference', 'state-changed', 'output-integrity', 'invalid-date',
-  // Batch 1B.2A: revised GMI exports do not compose hyperlink transfers yet (Batch 1B.3); fail closed.
-  'hyperlink-transfer-export-unsupported',
+  // Batch 1B.3A: an active hyperlink transfer is exported only with the caller's FOTO verification attestation.
+  'hyperlink-transfer-unverified', 'hyperlink-transfer-verification-failed',
   ...EXPORT_FILENAME_ISSUES,
 ]);
 
@@ -61,16 +71,23 @@ function changeSetSummary(changeSet) {
   });
 }
 
+/** Whether `attestation` names exactly the session's active transfer set (Batch 1B.3A). */
+const transferAttested = (transfer, attestation) => Boolean(transfer && attestation
+  && attestation.transferSetId === transfer.id && attestation.planKey === transfer.planKey);
+
 /**
  * Readiness without producing bytes (cheap after the first proposed state).
  * `{ready, blocking: [codes], notes: [codes], counts}`.
+ * @param {{hyperlinkTransfer?: {transferSetId: string, planKey: string}}} [options] see buildGmiFieldExport
  */
-export function getGmiExportReadiness(registry, handle) {
+export function getGmiExportReadiness(registry, handle, { hyperlinkTransfer = null } = {}) {
   const resolved = registry.resolve(handle);
   if (!resolved.ok) return Object.freeze({ ready: false, blocking: Object.freeze([resolved.code]), notes: Object.freeze([]), counts: null });
   const blocking = [], notes = [];
   if (!resolved.document.editable) blocking.push('document-read-only');
-  if (activeGmiHyperlinkTransferSet(resolved.session)) blocking.push('hyperlink-transfer-export-unsupported');
+  const transfer = activeGmiHyperlinkTransferSet(resolved.session);
+  if (transfer && !transferAttested(transfer, hyperlinkTransfer)) blocking.push('hyperlink-transfer-unverified');
+  if (transfer) notes.push('hyperlink-transfer-included');
   const proposed = registry.proposed(handle);
   if (!proposed.ok) blocking.push('verification-failed');
   else if (proposed.identical) notes.push('no-changes');
@@ -87,9 +104,11 @@ export function getGmiExportReadiness(registry, handle) {
  * Build the field-only revised GMI for one editing session.
  * @param {object} registry createGmiEditSessions instance
  * @param {object} handle session handle from registry.open
- * @param {{date?: Date, label?: string, descriptive?: string, timestamp?: boolean, revision?: string}} [options]
+ * @param {{date?: Date, label?: string, descriptive?: string, timestamp?: boolean, revision?: string,
+ *   hyperlinkTransfer?: {transferSetId: string, planKey: string}}} [options] `hyperlinkTransfer`: the caller's
+ *   attestation that the active transfer's FOTO state was verified (required while a transfer is active)
  */
-export async function buildGmiFieldExport(registry, handle, { date = new Date(), label = '', descriptive, timestamp = true, revision = '' } = {}) {
+export async function buildGmiFieldExport(registry, handle, { date = new Date(), label = '', descriptive, timestamp = true, revision = '', hyperlinkTransfer = null } = {}) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return fail('invalid-date');
   let names;
   try { names = gmiExportNames({ date, label, descriptive, timestamp, revision }); }
@@ -98,7 +117,8 @@ export async function buildGmiFieldExport(registry, handle, { date = new Date(),
   if (!start.ok) return fail(start.code);
   const { session, document } = start;
   if (!document.editable) return fail('document-read-only', { documentStatus: document.status, reasons: document.reasons });
-  if (activeGmiHyperlinkTransferSet(session)) return fail('hyperlink-transfer-export-unsupported');
+  const transfer = activeGmiHyperlinkTransferSet(session);
+  if (transfer && !transferAttested(transfer, hyperlinkTransfer)) return fail('hyperlink-transfer-unverified');
 
   const proposed = registry.proposed(handle);
   if (!proposed.ok) return fail(proposed.code ?? 'verification-failed', { stage: proposed.stage ?? null, rejections: proposed.rejections ?? Object.freeze([]) });
@@ -121,6 +141,17 @@ export async function buildGmiFieldExport(registry, handle, { date = new Date(),
   const diff = diffGmiDatasets(getGmiDocumentDataset(document), proposed.dataset);
   if (diff.structural.length) return fail('structural-difference', { structural: diff.structural.map((entry) => entry.code) });
   if (diff.changes.length !== proposed.editCount) return fail('output-integrity');
+  // Batch 1B.3A: the exact exported bytes are checked again by the independent transfer verifier (not a cached result).
+  let transferSummary = null;
+  if (transfer) {
+    const compiled = compileGmiProposedEdits(session);
+    if (!compiled.ok || compiled.transfer !== transfer || proposed.hyperlinkTransfer?.transferSetId !== transfer.id) return fail('hyperlink-transfer-verification-failed');
+    const checked = verifyGmiHyperlinkTransfer(document, bytes, { documentFingerprint: document.fingerprint, photoSourceId: transfer.basis.photoSourceId,
+      transfers: transfer.decisions, fieldEdits: compiled.fieldEdits.map((edit) => ({ target: edit.target, lexeme: edit.lexeme })) });
+    if (!checked.ok) return fail('hyperlink-transfer-verification-failed', { rejections: checked.failures });
+    transferSummary = Object.freeze({ transferSetId: transfer.id, planKey: transfer.planKey, transfers: transfer.transfers.length,
+      movedReferences: checked.summary.movedReferences, cells: transfer.edits.length, fieldEditCount: compiled.fieldEdits.length });
+  }
 
   const fingerprint = await computeGmiSourceFingerprint(bytes);
   if (proposed.identical && fingerprint !== document.fingerprint) return fail('output-integrity');
@@ -149,6 +180,7 @@ export async function buildGmiFieldExport(registry, handle, { date = new Date(),
       changedCells: diff.counts.cells,
       changedObjects: diff.counts.objects,
       byField: diff.counts.byField,
+      hyperlinkTransfer: transferSummary,
       changes: Object.freeze(diff.changes.map((change) => Object.freeze({
         scope: change.scope, sourceIndex: change.sourceIndex, objectId: change.objectId ?? null, guid: change.guid ?? null,
         field: change.field, original: change.original, proposed: change.proposed,

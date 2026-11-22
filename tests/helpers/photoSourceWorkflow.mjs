@@ -30,7 +30,10 @@ export const clickSourceControl = (browser, label, scope = sourceWizard) => brow
     for(let i=0;i<30 && !document.querySelector('.photo-tools-popup');i++) await frame();
     button=Array.from(document.querySelectorAll('.photo-tools-popup [role=menuitem]')).find(item=>item.querySelector('.photo-tools-item-label').innerText.trim()===tool);
   }
-  if(!button || button.disabled || button.getAttribute('aria-disabled')==='true') throw new Error('Unavailable source control: '+label);
+  // The reason names which precondition failed, so an intermittent setup failure can be told apart afterwards.
+  if(!button || button.disabled || button.getAttribute('aria-disabled')==='true') throw new Error('Unavailable source control: '+label+' ('+(button
+    ? 'disabled'+(button.querySelector('.photo-tools-item-reason') ? ': '+button.querySelector('.photo-tools-item-reason').innerText : '')
+    : tool && root===document && document.querySelector('.photo-tools-trigger') ? (document.querySelector('.photo-tools-popup') ? 'not in tools menu' : 'tools menu did not open') : 'no such control')+')');
   button.click();
 })()`);
 

@@ -406,16 +406,19 @@ test('Validator evaluates the actual Foreslått dataset; undo and redo restore t
   assert.deepEqual(findings(redone.revised), transferred);
 });
 
-test('every export path still refuses an active transfer; there is no user-reachable save or transfer command', async () => {
+// Batch 1B.3A (deliberate contract update): the delivery path composes a verified transfer in every mode; the
+// unattested low-level field export still refuses. The no-user-reachable-save contract below is unchanged.
+test('exports compose an active transfer only through the verified delivery path; there is no user-reachable save or transfer command', async () => {
   const f = await guarded(LOK_SLU);
   assert(f.commit([f.move(293, 'SYNT_LOK_B.png', 108)]).ok);
-  assert.equal((await buildGmiFieldExport(f.registry, f.handle, { date: DATE })).code, 'hyperlink-transfer-export-unsupported');
-  assert(getGmiExportReadiness(f.registry, f.handle).blocking.includes('hyperlink-transfer-export-unsupported'));
+  assert.equal((await buildGmiFieldExport(f.registry, f.handle, { date: DATE })).code, 'hyperlink-transfer-unverified');
+  assert(getGmiExportReadiness(f.registry, f.handle).blocking.includes('hyperlink-transfer-unverified'));
   for (const mode of ['gmi-only', 'photos-only', 'split', 'combined']) {
+    // Kun GML med bilder: the previously unplaced moved photograph needs the explicit inclusion (verification refinement).
     const snapshot = captureDeliverySnapshot({ mode, registry: f.registry, handle: mode === 'photos-only' ? undefined : f.handle,
-      photoSession: f.session, photoLayerId: mode === 'gmi-only' ? undefined : f.layerId });
+      photoSession: f.session, photoLayerId: mode === 'gmi-only' ? undefined : f.layerId, includeTransferredUnplaced: mode === 'photos-only' });
     const plan = await buildDeliveryPlan(snapshot, { profile: 'gemini-legacy2019', crs: 'EPSG:25832', context: syntheticContext }, { now: () => DATE });
-    assert.deepEqual([plan.status, plan.errors.map((entry) => entry.code)], ['blocked', ['hyperlink-transfer-export-unsupported']], mode);
+    assert.deepEqual([plan.status, plan.errors.map((entry) => entry.code)], ['ready', []], mode);
   }
   assert.equal(PHOTO_LINK_REVIEW_WRITABLE, false);
   const root = new URL('../src/', import.meta.url);
