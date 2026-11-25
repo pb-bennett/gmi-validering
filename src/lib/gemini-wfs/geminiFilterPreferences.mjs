@@ -1,12 +1,16 @@
 import { AUTHORITATIVE_VALUE_TABLES } from '../../data/validation-v2/authoritative-value-tables.js';
 import { normalizeGeminiWfsUrl } from './geminiConnection.mjs';
-import { DEFAULT_GEMINI_FILTERS, GEMINI_FILTER_BASES, GEMINI_FILTER_GROUPS, GEMINI_MISSING_VALUE,
-  geminiTitleKey, isDefaultGeminiFilters } from './geminiFilters.mjs';
+import { DEFAULT_GEMINI_FILTERS, GEMINI_FILTER_BASES, GEMINI_MISSING_VALUE,
+  geminiTitleKey, isDefaultGeminiFilters, mapGeminiFilterGroups } from './geminiFilters.mjs';
 
 // Filter choices only: never credentials, account data, coordinates, IDs, counts or features.
+// The key name is fixed and the schema field is the version, so migration replaces the old content in one write.
 export const GEMINI_FILTER_STORAGE_KEY = 'gmi-gemini-wfs-filters-v1';
 export const GEMINI_FILTER_STORAGE_LIMITS = Object.freeze({ feeds: 20, overrides: 200, valueLength: 100 });
-const SCHEMA = 1;
+const SCHEMA = 2;
+// Schema 1 shared Status and Eierskap between lines and points: both sides start from that choice.
+const MIGRATIONS = new Map([[SCHEMA, (feed) => feed],
+  [1, (feed) => ({ ...feed, groups: { lines: feed.groups, points: feed.groups } })]]);
 // An owner value may name a person or organisation. Only known categories leave the session.
 const OWNER_CATEGORIES = new Set([GEMINI_MISSING_VALUE,
   ...AUTHORITATIVE_VALUE_TABLES.owner.rows.map(({ meaning }) => geminiTitleKey(meaning))]);
@@ -18,17 +22,17 @@ function storableKey(groupId, key) {
 }
 
 function cleanFilters(input) {
-  const groups = Object.fromEntries(GEMINI_FILTER_GROUPS.map(({ id }) => {
-    const group = input?.groups?.[id];
+  const groups = mapGeminiFilterGroups((side, { id }) => {
+    const group = input?.groups?.[side]?.[id];
     const overrides = group?.overrides && typeof group.overrides === 'object' ? Object.entries(group.overrides) : [];
-    return [id, Object.freeze({
+    return Object.freeze({
       base: GEMINI_FILTER_BASES.includes(group?.base) ? group.base : 'default',
       overrides: Object.freeze(Object.fromEntries(overrides
         .filter(([key, value]) => typeof value === 'boolean' && storableKey(id, key))
         .slice(-GEMINI_FILTER_STORAGE_LIMITS.overrides))),
-    })];
-  }));
-  return Object.freeze({ groups: Object.freeze(groups), statusRecognised: input?.statusRecognised === true });
+    });
+  });
+  return Object.freeze({ groups, statusRecognised: input?.statusRecognised === true });
 }
 
 // null means malformed or written by an unknown schema.
@@ -37,10 +41,11 @@ function readFeeds(storage) {
   if (text === null) return [];
   try {
     const value = JSON.parse(text);
-    if (value?.schema !== SCHEMA || !Array.isArray(value.feeds)) return null;
+    const migrate = MIGRATIONS.get(value?.schema);
+    if (!migrate || !Array.isArray(value.feeds)) return null;
     return value.feeds.filter((feed) => {
       try { return normalizeGeminiWfsUrl(feed?.url) === feed.url; } catch { return false; }
-    });
+    }).map(migrate);
   } catch { return null; }
 }
 

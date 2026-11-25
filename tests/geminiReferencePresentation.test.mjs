@@ -30,7 +30,7 @@ test('default independent visibility, no result no-op, state contains no source 
   assert.equal(presentation.getSnapshot().linesVisible, false); assert.equal(presentation.getSnapshot().pointsVisible, true);
   presentation.setVisible('points', false); assert.equal(presentation.getSnapshot().pointsVisible, false);
   assert.strictEqual(session.getSnapshot().result, pair); assert.equal(JSON.stringify(pair), before);
-  assert.deepEqual(Object.keys(presentation.getSnapshot()).sort(), ['filterSaveFailed', 'filters', 'linesVisible', 'marking', 'openFilterGroups', 'pointsVisible', 'resultVersion', 'sourceVisible', 'zoomRequest']);
+  assert.deepEqual(Object.keys(presentation.getSnapshot()).sort(), ['filterSaveFailed', 'filterTab', 'filters', 'linesVisible', 'marking', 'openFilterGroups', 'pointsVisible', 'resultVersion', 'sourceVisible', 'zoomRequest']);
   assert.doesNotMatch(JSON.stringify(presentation.getSnapshot()), /point-0|coordinates|features|records/);
   presentation.dispose();
 });

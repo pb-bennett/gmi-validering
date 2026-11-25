@@ -13,6 +13,12 @@ import { getGeminiUiError } from '@/lib/gemini-wfs/geminiWorkflowUi.mjs';
 import { readGeminiMapBbox } from '@/lib/gemini-wfs/geminiMapViewport.mjs';
 import { classifyGeminiMapExtent, GEMINI_MAP_WARNING, GEMINI_MAP_BLOCKED } from '@/lib/gemini-wfs/geminiCoveragePolicy.mjs';
 
+const STATUS_NOTICES = {
+  unrecognised: (noun) => `Statusverdiene fra tjenesten er ikke gjenkjent. Alle statuser ${noun ? `for ${noun} ` : ''}vises, også ${noun ?? 'objekter'} som kan være ute av drift.`,
+  'no-operational': (noun) => `Ingen innlastede ${noun ?? 'objekter'} har status Drift.`,
+};
+const SIDE_NOUNS = { lines: 'ledninger', points: 'punkter' };
+
 export default function GeminiReferenceCard({ onOpenConnection }) {
   const session = useGeminiSession();
   if (!session.result && session.connectionStatus !== 'connected') return null;
@@ -80,8 +86,7 @@ function GeminiReferenceContent({ session, onOpenConnection }) {
         Filter viser {filterView.visible.lines} av {counts.lines} ledn. · {filterView.visible.points} av {counts.points} punkt · {filterView.hiddenCount} skjult
       </p>}
       {filterView.statusNotice && <p role="status" data-gemini-status-notice className="px-2 pb-2 text-[10px] text-gmi-text-muted">
-        {filterView.statusNotice === 'unrecognised' ? 'Statusverdiene fra tjenesten er ikke gjenkjent. Alle statuser vises, også objekter som kan være ute av drift.'
-          : 'Ingen innlastede objekter har status Drift.'}
+        {STATUS_NOTICES[filterView.statusNotice.kind](SIDE_NOUNS[filterView.statusNotice.side])}
       </p>}
       {visibility.filterSaveFailed && <p role="status" data-gemini-filter-storage className="px-2 pb-2 text-[10px] text-gmi-text-muted">Filtervalgene gjelder nå, men kunne ikke lagres i nettleseren.</p>}
       {!session.coverages.length && <p role="status" className="px-2 pb-2 text-[10px] text-gmi-text-muted">Last inn en innmålingsfil, eller bruk Hent for kartutsnitt.</p>}
@@ -110,7 +115,7 @@ function GeminiReferenceContent({ session, onOpenConnection }) {
             </div>;
           })}
         </div>
-        {result && <GeminiFilterGroups groups={filterView.groups} openGroups={visibility.openFilterGroups}
+        {result && <GeminiFilterGroups view={filterView} tab={visibility.filterTab} openGroups={visibility.openFilterGroups}
           isDefault={isDefaultGeminiFilters(visibility.filters)} />}
         <div className="flex flex-wrap items-center gap-2 px-2 pb-2 text-[10px]">
           {connected && <button type="button" disabled={session.status === 'loading'}

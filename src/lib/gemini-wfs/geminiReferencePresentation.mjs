@@ -1,5 +1,5 @@
 import { geminiSession } from './geminiSession.mjs';
-import { DEFAULT_GEMINI_FILTERS, GEMINI_FILTER_BASES, classifyGeminiResult } from './geminiFilters.mjs';
+import { DEFAULT_GEMINI_FILTERS, GEMINI_FILTER_BASES, GEMINI_FILTER_SIDES, classifyGeminiResult } from './geminiFilters.mjs';
 import { geminiFilterPreferences } from './geminiFilterPreferences.mjs';
 import { GEMINI_WFS_HALO, getLayerHighlightStyle } from '../map/layerHighlight.mjs';
 
@@ -40,7 +40,7 @@ export function getGeminiReferenceNotice(snapshot) {
 
 export const EMPTY_GEMINI_PRESENTATION = Object.freeze({
   sourceVisible: true, linesVisible: true, pointsVisible: true, resultVersion: 0, zoomRequest: null, marking: DEFAULT_GEMINI_MARKING,
-  filters: DEFAULT_GEMINI_FILTERS, filterSaveFailed: false, openFilterGroups: Object.freeze([]),
+  filters: DEFAULT_GEMINI_FILTERS, filterSaveFailed: false, filterTab: 'lines', openFilterGroups: Object.freeze([]),
 });
 
 export function createGeminiPresentation(session, preferences = null) {
@@ -59,10 +59,11 @@ export function createGeminiPresentation(session, preferences = null) {
     const saved = !feedUrl || !preferences || preferences.save(feedUrl, filters, options);
     publish({ filters, filterSaveFailed: !saved });
   };
-  const editGroup = (id, change) => {
-    if (!Object.hasOwn(snapshot.filters.groups, id)) return;
+  const editGroup = (side, id, change) => {
+    const { groups } = snapshot.filters;
+    if (!GEMINI_FILTER_SIDES.includes(side) || !Object.hasOwn(groups[side], id)) return;
     storeFilters(Object.freeze({ ...snapshot.filters, groups: Object.freeze({
-      ...snapshot.filters.groups, [id]: Object.freeze(change(snapshot.filters.groups[id])) }) }));
+      ...groups, [side]: Object.freeze({ ...groups[side], [id]: Object.freeze(change(groups[side][id])) }) }) }));
   };
   const sync = () => {
     const { result, connection } = session.getSnapshot();
@@ -108,16 +109,20 @@ export function createGeminiPresentation(session, preferences = null) {
         highlightStyle: Object.freeze(highlightStyle) }) });
     },
     resetMarking: () => { if (currentResult) publish({ marking: Object.freeze({ ...DEFAULT_GEMINI_MARKING, highlightAll: snapshot.marking.highlightAll }) }); },
-    setFilterValue: (id, key, checked) => {
+    setFilterValue: (side, id, key, checked) => {
       if (typeof key !== 'string' || typeof checked !== 'boolean') return;
-      editGroup(id, (group) => ({ ...group, overrides: Object.freeze({ ...group.overrides, [key]: checked }) }));
+      editGroup(side, id, (group) => ({ ...group, overrides: Object.freeze({ ...group.overrides, [key]: checked }) }));
     },
-    setFilterBase: (id, base) => {
-      if (GEMINI_FILTER_BASES.includes(base)) editGroup(id, () => ({ base, overrides: Object.freeze({}) }));
+    setFilterBase: (side, id, base) => {
+      if (GEMINI_FILTER_BASES.includes(base)) editGroup(side, id, () => ({ base, overrides: Object.freeze({}) }));
     },
     resetFilters: () => storeFilters(Object.freeze({ ...DEFAULT_GEMINI_FILTERS, statusRecognised: snapshot.filters.statusRecognised })),
-    setFilterGroupOpen: (id, open) => publish({ openFilterGroups: Object.freeze([
-      ...snapshot.openFilterGroups.filter((item) => item !== id), ...(open ? [id] : [])]) }),
+    // Which filter controls are shown. Never affects map visibility.
+    setFilterTab: (side) => { if (GEMINI_FILTER_SIDES.includes(side) && side !== snapshot.filterTab) publish({ filterTab: side }); },
+    setFilterGroupOpen: (side, id, open) => {
+      const item = `${side}:${id}`;
+      publish({ openFilterGroups: Object.freeze([...snapshot.openFilterGroups.filter((other) => other !== item), ...(open ? [item] : [])]) });
+    },
     requestZoom: () => {
       if (currentResult) publish({ zoomRequest: Object.freeze({ id: ++zoomSequence, resultVersion: snapshot.resultVersion }) });
     },
