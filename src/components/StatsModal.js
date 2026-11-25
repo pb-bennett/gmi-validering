@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { CaretDownIcon, CaretUpIcon, XIcon } from '@phosphor-icons/react';
+import useModalDialog, { MODAL_OVERLAY_RESET } from './useModalDialog';
 import { retainKommuneOptions } from '@/lib/stats/kommuneFilterState.mjs';
 import {
   ANALYTICS_START_DATE,
@@ -327,19 +328,13 @@ export default function StatsModal({ isOpen, onClose }) {
     return () => document.removeEventListener('pointerdown', handler);
   }, [isOpen, kommuneSelectorOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const handler = (event) => {
-      if (event.key !== 'Escape') return;
-      if (kommuneSelectorOpen) {
-        setKommuneSelectorOpen(false);
-      } else {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, kommuneSelectorOpen, onClose]);
+  // Escape closes the open municipality selector first, then the dialog.
+  const modal = useModalDialog(isOpen, onClose, {
+    onEscape: () => {
+      if (kommuneSelectorOpen) setKommuneSelectorOpen(false);
+      return kommuneSelectorOpen;
+    },
+  });
 
   const filteredKommuner = useMemo(() => {
     const needle = selectionSearch.trim().toLocaleLowerCase('nb-NO');
@@ -441,8 +436,10 @@ export default function StatsModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[10003] flex items-center justify-center bg-gmi-ink/60 p-2 backdrop-blur-sm"
+    <dialog
+      {...modal}
+      aria-labelledby="stats-dialog-title"
+      className={`fixed inset-0 z-[10003] flex items-center justify-center bg-gmi-ink/60 p-2 backdrop-blur-sm ${MODAL_OVERLAY_RESET}`}
       onClick={onClose}
     >
       <div
@@ -452,7 +449,7 @@ export default function StatsModal({ isOpen, onClose }) {
         <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gmi-border bg-gmi-surface px-4 py-2.5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h2 className="text-base font-bold text-gmi-navy">Bruksstatistikk</h2>
+              <h2 id="stats-dialog-title" className="text-base font-bold text-gmi-navy">Bruksstatistikk</h2>
               <p className="text-[11px] text-gmi-text-subtle">
                 Statistikk fra {formatAnalyticsStartDate(analyticsStartDate)}
               </p>
@@ -792,6 +789,6 @@ export default function StatsModal({ isOpen, onClose }) {
           </main>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

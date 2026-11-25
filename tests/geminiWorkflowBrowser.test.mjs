@@ -247,7 +247,7 @@ test('M5 native form, explicit retrieval, errors, refresh and disconnect with re
       await click('Test WMS setup'); await browser.waitFor('document.querySelector("#wms-password")');
       assert.equal(await browser.evaluate('document.querySelector("#wms-password").autocomplete'), 'current-password');
       assert.equal(await browser.evaluate('document.querySelector("#wms-username").autocomplete'), 'username');
-      await click('Lukk'); await browser.waitFor('!document.querySelector("#wms-password")');
+      await click('Lukk Gemini WMS'); await browser.waitFor('!document.querySelector("#wms-password")');
       await clean(); assert.equal(await browser.evaluate('geminiWorkflow.audit.errors.length'), 0);
       assert(await browser.evaluate('geminiWorkflow.audit.calls.every(call=>call.credentialsMatch && call.safeHeaders)'));
     });

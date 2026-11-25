@@ -88,8 +88,8 @@
 /* Shared icon tooltip (hover after a delay, keyboard focus immediately); used inside and outside the FOTO workspace. */
 .photo-icon-tooltip { position: fixed; z-index: 1400; max-width: 16rem; padding: 4px 8px; border-radius: .5rem; background: var(--gmi-ink, #020618); color: var(--gmi-text-on-dark, #cbd5e1); font-size: 12px; line-height: 16px; font-weight: 400; white-space: normal; box-shadow: 0 4px 12px #02061833; pointer-events: auto; }
 .photo-icon-tooltip[data-validation-tone] { background: var(--validation-bg); color: var(--validation-text); border: 1px solid var(--validation-border); white-space: pre-line; }
-/* Analysis actions live in the sidebar's stacking layer. */
-.photo-icon-tooltip.layer-analysis-tooltip { z-index: 10000; }
+/* Every layer-card action (header and Analyse row) lives in the sidebar's stacking layer. */
+.photo-icon-tooltip.layer-card-tooltip { z-index: 10000; }
 .photo-collection-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.75rem 1rem; flex: none; }
 .photo-collection-rejections { max-height: 5rem; overflow: auto; }
 .photo-collection-body { display: grid; grid-template-columns: minmax(0, 42fr) minmax(0, 58fr); flex: 1; min-height: 0; }

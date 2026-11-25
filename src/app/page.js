@@ -4,6 +4,7 @@ import { startTransition, useCallback, useState, useEffect, useEffectEvent, useM
 import dynamic from 'next/dynamic';
 import { EnvelopeSimpleIcon, ImagesIcon, InfoIcon, GearSixIcon, PlusIcon, XIcon } from '@phosphor-icons/react';
 import FileUpload from '@/components/FileUpload';
+import useModalDialog, { MODAL_OVERLAY_RESET } from '@/components/useModalDialog';
 import GlobalFileDrop from '@/components/GlobalFileDrop';
 import PhotoImportWizard from '@/components/photos/PhotoImportWizard';
 import usePhotoSession from '@/components/photos/usePhotoSession';
@@ -221,6 +222,9 @@ export default function Home() {
   // suspended in FOTO, Validator and Rettinger. Its store state is kept, so it returns with the main map.
   const mainMapAnalysisSuspended = Boolean(workspaceLayer) || gmiEditActive || validatorActive;
   const analysisOpen = analysisStateOpen && !mainMapAnalysisSuspended;
+  const closeAddLayer = useCallback(() => setShowAddLayerModal(false), []);
+  const addLayerModal = useModalDialog(showAddLayerModal, closeAddLayer,
+    { initialFocus: '[data-file-picker]', returnFocus: '[data-add-file]' });
   const primaryViewHeight = analysisOpen
     ? 'var(--profile-map-height, 55%)'
     : '100%';
@@ -969,7 +973,7 @@ export default function Home() {
 
             {/* Error Display */}
             {parsingStatus === 'error' && parsingError && (
-              <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
+              <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
                 <div className="flex items-start gap-3">
                   <svg
                     className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5"
@@ -992,8 +996,9 @@ export default function Home() {
                       {parsingError}
                     </p>
                     <button
+                      type="button"
                       onClick={() => requestReset()}
-                      className="mt-3 text-sm font-medium text-red-600 hover:text-red-800 underline"
+                      className="gmi-focus-ring mt-3 rounded text-sm font-medium text-red-600 hover:text-red-800 underline"
                     >
                       Prøv igjen med en annen fil
                     </button>
@@ -1187,26 +1192,19 @@ export default function Home() {
                         )}
                         {customWmsConfig ? '' : 'WMS'}
                       </button>
+                      {/* In the row, so it can never cover its neighbours. Hidden while a table, analysis or workspace owns the data. */}
+                      {!workspaceLayer && !gmiEditActive && !analysisOpen && !fieldValidationOpen && surveyWorkspaceReady && (
+                        <button
+                          type="button"
+                          onClick={() => openDataInspector(null)}
+                          className="gmi-compact-button gmi-focus-ring ml-1 px-4 py-2 shadow font-medium border border-gmi-border bg-gmi-surface"
+                        >
+                          Inspiser data
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
-                  {!workspaceLayer && !gmiEditActive && !analysisOpen && !fieldValidationOpen && surveyWorkspaceReady && (
-                    <div
-                      className="absolute bottom-4 -translate-x-1/2"
-                      style={{
-                        zIndex: 1000,
-                        left: 'calc(50% - 320px)',
-                      }}
-                    >
-                      <button
-                        onClick={() => openDataInspector(null)}
-                        className="gmi-compact-button gmi-focus-ring px-4 py-2 shadow font-medium border border-gmi-border bg-gmi-surface"
-                      >
-                        Inspiser data
-                      </button>
-                    </div>
-                  )}
                 </div>
               </>
             )}
@@ -1226,6 +1224,13 @@ export default function Home() {
 
             {/* Profile analysis modal - overlays both 2D and 3D views */}
             {!mainMapAnalysisSuspended && <InclineAnalysisModal />}
+            {/* Høydekontroll stays beside the map it navigates, below its toolbar and above the «Statistikk» button. */}
+            {!workspaceLayer && (
+              <div className={`pointer-events-none absolute inset-x-0 top-0 z-[1350] flex items-start justify-end px-2 pt-14 ${layerDataTableOpen || dockedInspectorOpen || analysisOpen ? 'pb-2' : 'pb-20'}`}
+                style={{ height: primaryViewHeight }}>
+                <ZValidationModal />
+              </div>
+            )}
           </div>
                 </MapPanePresentationProvider>
           {workspaceLayer ? <aside className="photo-workspace-inspector" aria-label="Bildeinspektør">
@@ -1244,24 +1249,26 @@ export default function Home() {
 
       {/* Data Inspector Modal */}
       <DataDisplayModal />
-      <ZValidationModal />
 
       {/* Add Layer Modal */}
       {showAddLayerModal && (
-        <div
-          className="fixed inset-0 z-[10001] flex items-center justify-center bg-gmi-ink/50"
-          onClick={() => setShowAddLayerModal(false)}
+        <dialog
+          {...addLayerModal}
+          aria-labelledby="add-layer-title"
+          className={`fixed inset-0 z-[10001] flex items-center justify-center bg-gmi-ink/50 ${MODAL_OVERLAY_RESET}`}
+          onClick={closeAddLayer}
         >
           <div
-            className="mx-4 w-full max-w-xl rounded-xl border border-gmi-border bg-gmi-surface p-6 shadow-xl"
+            className="mx-4 max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto overscroll-contain rounded-xl border border-gmi-border bg-gmi-surface p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gmi-navy">
+              <h2 id="add-layer-title" className="text-xl font-bold text-gmi-navy">
                 Legg til nytt lag
               </h2>
               <button
-                onClick={() => setShowAddLayerModal(false)}
+                type="button"
+                onClick={closeAddLayer}
                 aria-label="Lukk legg til lag"
                 className="gmi-focus-ring rounded-lg p-1 text-gmi-text-subtle transition-colors hover:bg-gmi-surface-soft hover:text-gmi-navy"
               >
@@ -1277,10 +1284,10 @@ export default function Home() {
             )}
             <FileUpload
               isAddingLayer={true}
-              onComplete={() => setShowAddLayerModal(false)}
+              onComplete={closeAddLayer}
             />
           </div>
-        </div>
+        </dialog>
       )}
 
       {/* WMS Layer Modal */}

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { XIcon } from '@phosphor-icons/react';
+import useModalDialog, { MODAL_OVERLAY_RESET } from './useModalDialog';
 
 const GMI_MARK_URL = '/brand/gmi-validator-logo.svg';
 
@@ -51,6 +52,8 @@ export default function ShareQrModal({ isOpen, onClose, repoUrl }) {
     onClose();
   };
 
+  const modal = useModalDialog(isOpen, handleClose);
+
   const currentValue = useMemo(() => {
     if (activeTab === 'github') return repoUrl;
     return appUrl || '';
@@ -74,8 +77,10 @@ export default function ShareQrModal({ isOpen, onClose, repoUrl }) {
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-10003 flex items-center justify-center bg-gmi-ink/70 backdrop-blur-sm"
+    <dialog
+      {...modal}
+      aria-labelledby="share-app-title"
+      className={`fixed inset-0 z-10003 flex items-center justify-center bg-gmi-ink/70 backdrop-blur-sm ${MODAL_OVERLAY_RESET}`}
       onClick={handleClose}
     >
       <div
@@ -83,14 +88,13 @@ export default function ShareQrModal({ isOpen, onClose, repoUrl }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-gmi-border">
-          <h2 className="text-xl font-semibold text-gmi-navy">
+          <h2 id="share-app-title" className="text-xl font-semibold text-gmi-navy">
             Del app
           </h2>
           <button
             onClick={handleClose}
             className="gmi-compact-button gmi-focus-ring text-gmi-text-subtle hover:text-gmi-navy p-1.5"
-            title="Lukk"
-            aria-label="Lukk"
+            aria-label="Lukk Del app"
           >
             <XIcon size={20} weight="regular" aria-hidden="true" />
           </button>
@@ -99,6 +103,7 @@ export default function ShareQrModal({ isOpen, onClose, repoUrl }) {
         <div className="px-6 pt-4">
           <div className="grid grid-cols-2 gap-2 p-1 rounded-lg bg-gmi-surface-soft">
             <button
+              aria-pressed={activeTab === 'app'}
               onClick={() => setActiveTab('app')}
               className={`gmi-focus-ring text-sm py-2.5 rounded-lg font-medium ${
                 activeTab === 'app'
@@ -109,6 +114,7 @@ export default function ShareQrModal({ isOpen, onClose, repoUrl }) {
               App URL
             </button>
             <button
+              aria-pressed={activeTab === 'github'}
               onClick={() => setActiveTab('github')}
               className={`gmi-focus-ring text-sm py-2.5 rounded-lg font-medium ${
                 activeTab === 'github'
@@ -121,7 +127,7 @@ export default function ShareQrModal({ isOpen, onClose, repoUrl }) {
           </div>
         </div>
 
-        <div className="p-6 flex-1 flex flex-col justify-between overflow-hidden">
+        <div className="min-h-0 px-6 py-4 flex-1 flex flex-col justify-between overflow-y-auto overscroll-contain">
           <QrPanel
             value={currentValue}
             size={qrSize}
@@ -132,7 +138,7 @@ export default function ShareQrModal({ isOpen, onClose, repoUrl }) {
             }
           />
 
-          <div className="mt-6 border border-gmi-border rounded-lg p-3 bg-gmi-surface-soft">
+          <div className="mt-3 border border-gmi-border rounded-lg p-3 bg-gmi-surface-soft">
             <div className="text-xs text-gmi-text-subtle mb-1">
               {currentLabel}
             </div>
@@ -156,6 +162,6 @@ export default function ShareQrModal({ isOpen, onClose, repoUrl }) {
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

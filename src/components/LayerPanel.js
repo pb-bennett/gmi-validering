@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useLayerFilterDisclosure } from '@/lib/useLayerFilterDisclosure';
 import { LayerTemaSection, LayerFeltSection } from './LayerFilterSections';
 import useStore from '@/lib/store';
@@ -12,7 +12,7 @@ import { getLayerHighlightStyle } from '@/lib/map/layerHighlight.mjs';
 import PhotoIconButton from './photos/PhotoIconButton';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import { describeGmiEditStatus } from '@/lib/gmiEditView.mjs';
-import { UnsavedGmiLayers } from './gmi-edit/GmiConfirmDialog';
+import GmiConfirmDialog, { UnsavedGmiLayers } from './gmi-edit/GmiConfirmDialog';
 import {
   ArrowCounterClockwiseIcon,
   CameraPlusIcon,
@@ -27,6 +27,8 @@ import {
   TableIcon,
   TrashIcon,
 } from '@phosphor-icons/react';
+
+const REMOVE_LAYER_HEADING = 'Fjern lag';
 
 /**
  * Analysis button row with icon buttons and tooltips
@@ -343,6 +345,7 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
   );
 
   const isExpanded = expandedLayerId === layerId;
+  const contentId = useId();
   const data = layer?.data;
   const pointCount = data?.points?.length || 0;
   const lineCount = data?.lines?.length || 0;
@@ -415,10 +418,9 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
           <input
             type="checkbox"
             checked={layer.visible}
-            onChange={(e) => {
-              e.stopPropagation();
-              toggleLayerVisibility(layerId);
-            }}
+            onChange={() => toggleLayerVisibility(layerId)}
+            // The header toggles the card; showing or hiding the layer must not.
+            onClick={(e) => e.stopPropagation()}
             className="h-3.5 w-3.5 rounded border-gmi-border-strong accent-gmi-interactive text-gmi-interactive focus:ring-gmi-interactive"
             title={layer.visible ? 'Skjul lag' : 'Vis lag'}
           />
@@ -430,13 +432,14 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
             title={`Markeringsfarge: ${layerColor}`}
           />
 
-          {/* Layer name and stats */}
-          <div className="flex-1 min-w-0">
-            <div className="flex min-w-0 items-center gap-1.5">
+          {/* Layer name and stats: the keyboard way to the disclosure. Its click reaches the header, which toggles the card. */}
+          <button type="button" aria-expanded={isExpanded} aria-controls={isExpanded ? contentId : undefined}
+            className="gmi-focus-ring min-w-0 flex-1 rounded text-left">
+            <span className="flex min-w-0 items-center gap-1.5">
               <LayerTypeBadge layer={layer} />
               <span className="truncate text-xs font-medium text-gmi-text" title={layer.name}>{layer.name}</span>
-            </div>
-            <div className="text-[10px] text-gmi-text-subtle">
+            </span>
+            <span className="block text-[10px] text-gmi-text-subtle">
               {pointCount} punkt, {lineCount} ledn.
               {!isExpanded && ignoredOutliers > 0 && ` · ${ignoredOutliers} ${ignoredOutliers === 1 ? 'avviker' : 'avvikere'} skjult i kartet`}
               {gmiEditStatus?.changeSetCount > 0 && (
@@ -444,8 +447,8 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
                   {gmiEditStatus.changeSetCount} {gmiEditStatus.changeSetCount === 1 ? 'retting' : 'rettinger'}{gmiEditStatus.unsaved ? ' · ikke lastet ned' : gmiEditStatus.downloaded ? ' · lastet ned' : ''}
                 </span>
               )}
-            </div>
-          </div>
+            </span>
+          </button>
 
           <div className="ml-auto flex items-center gap-1">
             {/* Rettinger: individual corrections of this layer's attribute values (a revised copy; the import is never changed). */}
@@ -495,50 +498,35 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
         )}
 
         {showRemoveConfirm && (
-          <div className="fixed inset-0 z-10002 flex items-center justify-center bg-gmi-ink/50 p-4">
-            <div className="w-full max-w-sm rounded-xl border border-gmi-border bg-gmi-surface shadow-xl">
-              <div className="border-b border-gmi-border px-4 py-3">
-                <h3 className="text-sm font-semibold text-gmi-navy">
-                  Fjern lag
-                </h3>
-              </div>
-              <div className="px-4 py-3 text-sm text-gmi-text">
-                Er du sikker på at du vil fjerne lag “{layer.name}”?
+          <GmiConfirmDialog title={REMOVE_LAYER_HEADING} testId="remove-layer"
+            confirmLabel={removeWarning ? 'Forkast rettinger og fjern' : 'Fjern'}
+            onCancel={() => { setShowRemoveConfirm(false); setRemoveWarning(null); }}
+            onConfirm={() => {
+              // Discard only after the warning below was shown; otherwise the store refuses and we warn now.
+              const result = removeLayer(layerId, removeWarning ? { discardGmiEdits: true } : undefined);
+              if (result?.ok === false && result.code === 'gmi-edits-pending') { setRemoveWarning(result.layers); return; }
+              setRemoveWarning(null);
+              setShowRemoveConfirm(false);
+              // The opener went with the layer: continue from the layer manager instead of the top of the page.
+              requestAnimationFrame(() => {
+                if (document.activeElement === document.body) document.querySelector('[data-add-file], [data-file-picker]')?.focus();
+              });
+            }}>
+                <p className="break-words">Er du sikker på at du vil fjerne lag “{layer.name}”?</p>
                 {removeWarning && (
-                  <div className="mt-3 grid gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900" role="alert" data-gmi-remove-warning>
+                  <div className="grid gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900" role="alert" data-gmi-remove-warning>
                     <p className="font-semibold">Laget har rettinger som ikke er lastet ned.</p>
                     <UnsavedGmiLayers layers={removeWarning} names={{ [layerId]: layer.name }} />
                     <p>Fjerner du laget, forkastes rettingene. Velg «Avbryt» og last ned revidert GMI først for å beholde dem.</p>
                   </div>
                 )}
-              </div>
-              <div className="flex items-center justify-end gap-2 border-t border-gmi-border px-4 py-3">
-                <button
-                  onClick={() => { setShowRemoveConfirm(false); setRemoveWarning(null); }}
-                  className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-3 py-1.5 text-sm"
-                >
-                  Avbryt
-                </button>
-                <button
-                  onClick={() => {
-                    // Discard only after the warning above was shown; otherwise the store refuses and we warn now.
-                    const result = removeLayer(layerId, removeWarning ? { discardGmiEdits: true } : undefined);
-                    if (result?.ok === false && result.code === 'gmi-edits-pending') { setRemoveWarning(result.layers); return; }
-                    setRemoveWarning(null);
-                    setShowRemoveConfirm(false);
-                  }}
-                  className="px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700"
-                >
-                  {removeWarning ? 'Forkast rettinger og fjern' : 'Fjern'}
-                </button>
-              </div>
-            </div>
-          </div>
+          </GmiConfirmDialog>
         )}
 
         {/* Expanded content */}
         {isExpanded && (
           <div
+            id={contentId}
             className="border-t border-gmi-border bg-gmi-surface-soft/60"
           >
             {/* Analysis buttons row */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useId, useRef } from 'react';
 import useStore from '@/lib/store';
 import CrsChoiceDialog from './CrsChoiceDialog';
 import { getDatasetCoordinate } from '@/lib/tracking/datasetCoordinate';
@@ -390,6 +390,8 @@ export default function FileUpload({
   isAddingLayer = false,
 }) {
   const [isDragging, setIsDragging] = useState(false);
+  const inputRef = useRef(null);
+  const formatsId = useId();
   const { handleFile, crsDialog } = useFileLoader({ onComplete });
 
   const onDragOver = useCallback((e) => {
@@ -445,6 +447,7 @@ export default function FileUpload({
     >
       <div className="flex flex-col items-center justify-center gap-4">
         <svg
+          aria-hidden="true"
           className={`w-12 h-12 ${
             isDragging ? 'text-gmi-interactive' : 'text-gmi-text-subtle'
           }`}
@@ -466,17 +469,24 @@ export default function FileUpload({
 
         <div className="text-sm text-gmi-text-subtle">eller</div>
 
-        <label className="gmi-primary-control cursor-pointer px-6 py-2">
+        <button
+          type="button"
+          data-file-picker
+          aria-describedby={formatsId}
+          onClick={() => inputRef.current?.click()}
+          className="gmi-primary-control gmi-focus-ring cursor-pointer px-6 py-2"
+        >
           Velg fil
-          <input
-            type="file"
-            className="hidden"
-            accept=".gmi,.sos,.sosi,.kof,.txt"
-            onChange={onInputChange}
-          />
-        </label>
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          className="hidden"
+          accept=".gmi,.sos,.sosi,.kof,.txt"
+          onChange={onInputChange}
+        />
 
-        <p className="mt-2 text-xs text-gmi-text-subtle">
+        <p id={formatsId} className="mt-2 text-xs text-gmi-text-subtle">
           Støtter .gmi, .sos/.sosi og .kof
         </p>
       </div>

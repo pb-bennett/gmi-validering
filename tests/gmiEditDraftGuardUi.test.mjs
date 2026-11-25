@@ -167,7 +167,7 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
         await browser.waitFor(`!${workspace}`);
         // Draft-only: «Fjern lag» shows the ordinary confirmation without the staged-corrections warning (M3 semantics).
         await browser.evaluate('document.querySelector("[data-gmi-edit-action]").closest(".py-1").querySelector(\'button[aria-label="Fjern lag"]\').click()');
-        await browser.waitFor('Array.from(document.querySelectorAll("h3")).some((e) => e.innerText === "Fjern lag")');
+        await browser.waitFor('document.querySelector("dialog[open][data-gmi-confirm=remove-layer] h2")?.innerText === "Fjern lag"');
         assert.equal(await browser.evaluate('Boolean(document.querySelector("[data-gmi-remove-warning]"))'), false);
         await u.clickButton('Avbryt');
         assert.equal(await browser.evaluate('document.querySelectorAll("[data-gmi-edit-action]").length'), 1);

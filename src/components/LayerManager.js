@@ -73,6 +73,8 @@ export default function LayerManager({ onAddFile, onAddPhotos, onOpenPhotoLayer,
           Ingen filer er åpnet ennå.
         </p>
         <button
+          type="button"
+          data-add-file
           onClick={onAddFile}
           className="gmi-primary-control gmi-focus-ring px-4 py-2 text-sm font-medium"
         >
@@ -229,6 +231,7 @@ export default function LayerManager({ onAddFile, onAddPhotos, onOpenPhotoLayer,
       >
         <button
           type="button"
+          data-add-file
           onClick={onAddFile}
           className="gmi-compact-button gmi-focus-ring flex min-w-0 flex-1 items-center justify-center gap-1.5 border border-gmi-border-strong bg-gmi-surface px-2 py-2 text-xs font-medium"
         >

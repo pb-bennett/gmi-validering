@@ -56,6 +56,7 @@ export default function MapView(props) {
   const zValidationPromptOpen = useStore(
     (state) => state.ui.zValidationPromptOpen,
   );
+  const zValidationOpen = useStore((state) => state.zValidation.isOpen);
   const zValidationLayerId = useStore(
     (state) => state.ui.zValidationPromptLayerId ?? null,
   );
@@ -137,7 +138,8 @@ export default function MapView(props) {
           </div>
         )}
 
-      {!props.analysisSuspended && zValidationPromptOpen && zValidationResults && (
+      {/* Høydekontroll opens beside the map: an unanswered prompt waits instead of lying half under it. */}
+      {!props.analysisSuspended && zValidationPromptOpen && !zValidationOpen && zValidationResults && (
         <div
           className={`absolute left-1/2 transform -translate-x-1/2 z-1100 bg-white px-4 py-3 rounded-xl shadow-lg border border-amber-200 flex items-center gap-3 ${
             outlierPromptOpen ? 'top-74' : 'top-48'

@@ -1,6 +1,7 @@
 'use client';
 
 import useStore from '@/lib/store';
+import useModalDialog, { MODAL_OVERLAY_RESET } from './useModalDialog';
 import {
   Fragment,
   useEffect,
@@ -189,11 +190,13 @@ export default function DataDisplayModal() {
     };
   }, [isOpen, activeTab, target, effectiveLayerId, activeData]);
 
-  if (!isOpen || !activeData) return null;
-
   const handleClose = () => {
     closeDataInspector();
   };
+  const modal = useModalDialog(Boolean(isOpen && activeData), handleClose,
+    { initialFocus: 'button[aria-label="Lukk datautforsker"]', returnFocus: '.leaflet-container' });
+
+  if (!isOpen || !activeData) return null;
 
   const renderPointCoordinates = (coords) => {
     if (!Array.isArray(coords) || coords.length === 0) return '-';
@@ -335,11 +338,15 @@ export default function DataDisplayModal() {
   };
 
   return (
-    <div className="data-inspector-overlay fixed inset-0 z-[10060] flex items-center justify-center bg-black/50 p-1.5 sm:p-2">
+    <dialog
+      {...modal}
+      aria-labelledby="data-inspector-title"
+      className={`data-inspector-overlay fixed inset-0 z-[10060] flex items-center justify-center bg-black/50 p-1.5 sm:p-2 ${MODAL_OVERLAY_RESET}`}
+    >
       <div className="data-inspector-dialog bg-gmi-surface border border-gmi-border-strong rounded-lg shadow-xl w-full max-w-5xl h-[82%] flex flex-col overflow-hidden text-gmi-text">
         <div className="data-inspector-header flex-none p-2.5 border-b border-gmi-border flex justify-between items-center bg-gmi-surface-soft">
           <div>
-            <h2 className="text-base font-semibold text-gmi-navy">Datautforsker</h2>
+            <h2 id="data-inspector-title" className="text-base font-semibold text-gmi-navy">Datautforsker</h2>
             <p className="text-xs text-gmi-text-subtle">
               Fil: {activeFile?.name || 'Ukjent fil'}
             </p>
@@ -830,6 +837,6 @@ export default function DataDisplayModal() {
           )}
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { XIcon, CaretRightIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
+import useModalDialog, { MODAL_OVERLAY_RESET } from './useModalDialog';
 
 /**
  * WMS Layer Modal
@@ -35,7 +36,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
   const [layersError, setLayersError] = useState(null);
 
   const formRef = useRef(null);
-  const urlInputRef = useRef(null);
+  const modal = useModalDialog(isOpen, onClose, { initialFocus: '#wms-url' });
 
   // Load saved URL from localStorage on mount
   useEffect(() => {
@@ -51,14 +52,6 @@ export default function WmsLayerModal({ isOpen, onClose }) {
         if (customWmsConfig?.layers) {
           setLayers(customWmsConfig.layers);
         }
-        // Focus the URL input if empty, otherwise focus username
-        setTimeout(() => {
-          if (savedUrl && urlInputRef.current) {
-            // URL is filled, browser might autofill credentials
-          } else if (urlInputRef.current) {
-            urlInputRef.current.focus();
-          }
-        }, 100);
       } catch (e) {
         console.warn('Could not access localStorage:', e);
       }
@@ -245,18 +238,21 @@ export default function WmsLayerModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[10002] flex items-center justify-center bg-gmi-ink/60"
+    <dialog
+      {...modal}
+      aria-labelledby="wms-dialog-title"
+      className={`fixed inset-0 z-[10002] flex items-center justify-center bg-gmi-ink/60 ${MODAL_OVERLAY_RESET}`}
       onClick={onClose}
     >
       <div
-        className="gmi-elevated-surface rounded-lg max-w-md w-full mx-4"
+        className="gmi-elevated-surface rounded-lg max-w-md w-full mx-4 flex max-h-[calc(100dvh-2rem)] flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gmi-border">
+        <div className="flex flex-none items-center justify-between p-4 border-b border-gmi-border">
           <div className="flex items-center gap-2">
             <svg
+              aria-hidden="true"
               className="w-5 h-5 text-gmi-interactive"
               fill="none"
               viewBox="0 0 24 24"
@@ -269,15 +265,14 @@ export default function WmsLayerModal({ isOpen, onClose }) {
                 d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
               />
             </svg>
-            <h2 className="text-lg font-semibold text-gmi-navy">
+            <h2 id="wms-dialog-title" className="text-lg font-semibold text-gmi-navy">
               Legg til Gemini WMS
             </h2>
           </div>
           <button
             onClick={onClose}
             className="gmi-compact-button gmi-focus-ring p-1"
-            title="Lukk"
-            aria-label="Lukk"
+            aria-label="Lukk Gemini WMS"
           >
             <XIcon size={20} weight="regular" aria-hidden="true" className="text-gmi-text-subtle" />
           </button>
@@ -287,7 +282,7 @@ export default function WmsLayerModal({ isOpen, onClose }) {
         <form
           ref={formRef}
           onSubmit={handleSubmit}
-          className="p-4 space-y-4"
+          className="min-h-0 overflow-y-auto overscroll-contain p-4 space-y-4"
         >
           {/* Security notice */}
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -324,7 +319,6 @@ export default function WmsLayerModal({ isOpen, onClose }) {
               WMS URL
             </label>
             <input
-              ref={urlInputRef}
               type="url"
               id="wms-url"
               name="url"
@@ -532,6 +526,6 @@ export default function WmsLayerModal({ isOpen, onClose }) {
           </div>
         </form>
       </div>
-    </div>
+    </dialog>
   );
 }

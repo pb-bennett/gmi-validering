@@ -1,5 +1,6 @@
 import useStore from '@/lib/store';
 import { XIcon } from '@phosphor-icons/react';
+import useModalDialog, { MODAL_OVERLAY_RESET } from './useModalDialog';
 
 export default function StandardsInfoModal({ isOpen, onClose }) {
   const inclineRequirementMode = useStore(
@@ -8,20 +9,23 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
   const handleModeChange = useStore(
     (state) => state.setInclineRequirementMode,
   );
+  const modal = useModalDialog(isOpen, onClose);
 
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/50"
+    <dialog
+      {...modal}
+      aria-labelledby="standards-info-title"
+      className={`fixed inset-0 z-[2100] flex items-center justify-center bg-black/50 ${MODAL_OVERLAY_RESET}`}
       onClick={onClose}
     >
       <div
-        className="bg-gmi-surface border border-gmi-border-strong rounded-lg shadow-xl max-w-2xl w-full m-4 p-6 text-gmi-text"
+        className="bg-gmi-surface border border-gmi-border-strong rounded-lg shadow-xl max-w-2xl w-full m-4 flex max-h-[calc(100dvh-2rem)] flex-col p-6 text-gmi-text"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-start mb-4 border-b border-gmi-border pb-2">
-          <h2 className="text-xl font-bold text-gmi-navy">
+        <div className="flex flex-none justify-between items-start mb-4 border-b border-gmi-border pb-2">
+          <h2 id="standards-info-title" className="text-xl font-bold text-gmi-navy">
             Krav til selvfall (Norsk Vann)
           </h2>
           <button
@@ -34,7 +38,7 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        <div className="space-y-4 text-sm text-gmi-text">
+        <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain text-sm text-gmi-text">
           <p>
             Analysen baserer seg på Norsk Vanns standarder for
             minimumsfall på selvfallsledninger. Kravene varierer
@@ -166,7 +170,7 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex flex-none justify-end">
           <button
             onClick={onClose}
             className="gmi-primary-control gmi-focus-ring px-4 py-2"
@@ -175,6 +179,6 @@ export default function StandardsInfoModal({ isOpen, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

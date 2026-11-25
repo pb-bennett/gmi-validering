@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ProhibitIcon } from '@phosphor-icons/react';
 import { useFileLoader } from '@/components/FileUpload';
 import FileDropOverlay from '@/components/FileDropOverlay';
@@ -13,13 +14,17 @@ export default function GlobalFileDrop({ enabled = true }) {
   const { handleFile, crsDialog } = useFileLoader();
   const { active, tracker } = useFileDragTracker();
   const [accepted, setAccepted] = useState(true);
+  // An open modal dialog is in the top layer: the overlay joins it, or it would be drawn underneath.
+  const [host, setHost] = useState(null);
 
   useEffect(() => {
+    const findHost = () => setHost([...document.querySelectorAll('dialog[open]')].at(-1) ?? null);
     const onDragEnter = (e) => {
       if (!hasFileDrag(e)) return;
       e.preventDefault();
       if (!enabled) return;
       setAccepted(surveyFileDragAccepted(e.dataTransfer));
+      findHost();
       tracker.enter();
     };
 
@@ -31,6 +36,7 @@ export default function GlobalFileDrop({ enabled = true }) {
       const fileAccepted = surveyFileDragAccepted(e.dataTransfer);
       e.dataTransfer.dropEffect = fileAccepted ? 'copy' : 'none';
       setAccepted(fileAccepted);
+      findHost();
       tracker.over();
     };
 
@@ -71,7 +77,8 @@ export default function GlobalFileDrop({ enabled = true }) {
   // The CRS question belongs to a drop already accepted; parsing itself disables further drops.
   if (!enabled || !active) return crsDialog;
 
-  return accepted
+  const overlay = accepted
     ? <FileDropOverlay title="Slipp filer her for å importere" hint="Støtter .gmi, .sos/.sosi og .kof, én fil om gangen" />
     : <FileDropOverlay refused icon={ProhibitIcon} title="Denne filtypen kan ikke importeres her" hint="Støtter .gmi, .sos/.sosi og .kof. Bilder legges til med bildeimporten." />;
+  return host ? createPortal(overlay, host) : overlay;
 }

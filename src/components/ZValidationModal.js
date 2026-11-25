@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useId, useRef } from 'react';
 import useStore from '@/lib/store';
 import AnalysisErrorBoundary, { AnalysisErrorMessage } from './AnalysisErrorBoundary';
 import { XIcon } from '@phosphor-icons/react';
@@ -11,6 +12,44 @@ const formatIndices = (indices, max = 20) => {
     indices.length - max
   })`;
 };
+
+/**
+ * Docked in the map pane, on less than half its width: never under the sidebar, and the object «Vis i kart» centres stays
+ * visible. Not modal, so map and layers keep working; focus moves in on opening and returns to the opener on closing.
+ */
+function HeightControlPanel({ labelledBy, label, onClose, children }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const panel = ref.current, opener = document.activeElement;
+    panel.focus({ preventScroll: true });
+    return () => {
+      // Focus already moved elsewhere (map, another tool) stays there.
+      const lost = document.activeElement === document.body || panel.contains(document.activeElement);
+      if (!lost) return;
+      // The load prompt that opened it is gone by then; the map is what the control was used with.
+      const target = opener?.isConnected && opener !== document.body ? opener : document.querySelector('.leaflet-container');
+      target?.focus({ preventScroll: true });
+    };
+  }, []);
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-labelledby={labelledBy}
+      aria-label={label}
+      tabIndex={-1}
+      data-height-control
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        event.preventDefault();
+        onClose();
+      }}
+      className="pointer-events-auto flex max-h-full w-[clamp(17rem,calc(50%-2.5rem),26rem)] flex-col overflow-hidden rounded-lg border border-gmi-border-strong bg-gmi-surface text-gmi-text shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gmi-interactive"
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function ZValidationModal() {
   const isOpen = useStore((state) => state.zValidation.isOpen);
@@ -26,12 +65,10 @@ export default function ZValidationModal() {
       resetKey={`${isOpen}:${layerId}`}
       onRetry={() => openLayerZValidation(layerId, { rerun: true })}
       renderFallback={(retry) => isOpen && (
-        <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/50 p-3">
-          <div className="w-full max-w-md rounded-lg border border-gmi-border-strong bg-gmi-surface shadow-xl text-gmi-text">
-            <AnalysisErrorMessage kind="hoyde" title="Høydekontrollen kunne ikke vises."
-              closeLabel="Lukk høydekontroll" onRetry={retry} onClose={() => toggleZValidationModal(false)} />
-          </div>
-        </div>
+        <HeightControlPanel label="Høydekontroll" onClose={() => toggleZValidationModal(false)}>
+          <AnalysisErrorMessage kind="hoyde" title="Høydekontrollen kunne ikke vises."
+            closeLabel="Lukk høydekontroll" onRetry={retry} onClose={() => toggleZValidationModal(false)} />
+        </HeightControlPanel>
       )}
     >
       <ZValidationPanel />
@@ -57,6 +94,7 @@ function ZValidationPanel() {
     (state) => state.toggleZValidationModal,
   );
   const viewObjectInMap = useStore((state) => state.viewObjectInMap);
+  const titleId = useId();
 
   if (!isOpen || !data) return null;
 
@@ -93,32 +131,30 @@ function ZValidationPanel() {
   };
 
   return (
-    <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/50 p-2 sm:p-3">
-      <div className="bg-gmi-surface border border-gmi-border-strong rounded-lg shadow-xl w-full max-w-4xl max-h-[85%] flex flex-col overflow-hidden text-gmi-text">
-        <div className="flex-none p-3 border-b border-gmi-border flex justify-between items-center bg-gmi-surface-soft">
-          <div>
-            <h2 className="text-lg font-semibold text-gmi-navy">
+    <HeightControlPanel key={layerId} labelledBy={titleId} onClose={() => toggleZValidationModal(false)}>
+        <div className="flex-none p-3 border-b border-gmi-border flex gap-2 justify-between items-start bg-gmi-surface-soft">
+          <div className="min-w-0">
+            <h2 id={titleId} className="text-base font-semibold text-gmi-navy">
               Høydekontroll (Z)
             </h2>
             {layerName && (
               <p className="break-all text-sm font-medium text-gmi-text">{layerName}</p>
             )}
-            <p className="text-sm text-gmi-text-muted">
+            <p className="text-xs text-gmi-text-muted">
               Kontrollerer at alle objekter har gyldig Z-verdi.
             </p>
           </div>
           <button
             onClick={() => toggleZValidationModal(false)}
-            className="gmi-compact-button gmi-focus-ring p-2 text-gmi-text-muted"
-            title="Lukk"
+            className="gmi-compact-button gmi-focus-ring shrink-0 p-1.5 text-gmi-text-muted"
             aria-label="Lukk høydekontroll"
           >
-            <XIcon size={24} weight="regular" aria-hidden="true" />
+            <XIcon size={20} weight="regular" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto p-3 space-y-3">
-          <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-3 space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="rounded border border-gmi-border p-3 bg-gmi-surface-soft">
               <div className="font-medium text-gmi-navy">Punkter</div>
               <div className="text-gmi-text-muted text-xs mt-1">
@@ -173,36 +209,36 @@ function ZValidationPanel() {
                 <table className="min-w-full divide-y divide-gmi-border text-xs">
                   <thead className="bg-gmi-surface-soft sticky top-0">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
+                      <th className="px-2 py-1.5 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         #
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
+                      <th className="px-2 py-1.5 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
+                      <th className="px-2 py-1.5 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         Manglende indeks
                       </th>
-                      <th className="px-3 py-2" />
+                      <th className="px-2 py-1.5" />
                     </tr>
                   </thead>
                   <tbody className="bg-gmi-surface divide-y divide-gmi-border">
                     {missingPoints.map((point) => (
                       <tr key={`z-point-${point.index}`}>
-                        <td className="px-3 py-2 text-gmi-text-muted">
+                        <td className="px-2 py-1.5 text-gmi-text-muted">
                           {point.index + 1}
                         </td>
-                        <td className="px-3 py-2 text-gmi-text">
+                        <td className="px-2 py-1.5 text-gmi-text">
                           {point.label}
                         </td>
-                        <td className="px-3 py-2 text-gmi-text-subtle">
+                        <td className="px-2 py-1.5 text-gmi-text-subtle">
                           {formatIndices(point.missingIndices)}
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-2 py-1.5 text-right">
                           <button
                             onClick={() =>
                               handleFocusPoint(point.index)
                             }
-                            className="gmi-compact-button gmi-focus-ring px-2 py-1 border border-gmi-border bg-gmi-surface"
+                            className="gmi-compact-button gmi-focus-ring whitespace-nowrap px-2 py-1 border border-gmi-border bg-gmi-surface"
                           >
                             Vis i kart
                           </button>
@@ -224,36 +260,36 @@ function ZValidationPanel() {
                 <table className="min-w-full divide-y divide-gmi-border text-xs">
                   <thead className="bg-gmi-surface-soft sticky top-0">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
+                      <th className="px-2 py-1.5 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         #
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
+                      <th className="px-2 py-1.5 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
+                      <th className="px-2 py-1.5 text-left font-medium text-gmi-text-subtle uppercase tracking-wider">
                         Manglende indeks
                       </th>
-                      <th className="px-3 py-2" />
+                      <th className="px-2 py-1.5" />
                     </tr>
                   </thead>
                   <tbody className="bg-gmi-surface divide-y divide-gmi-border">
                     {missingLines.map((line) => (
                       <tr key={`z-line-${line.index}`}>
-                        <td className="px-3 py-2 text-gmi-text-muted">
+                        <td className="px-2 py-1.5 text-gmi-text-muted">
                           {line.index + 1}
                         </td>
-                        <td className="px-3 py-2 text-gmi-text">
+                        <td className="px-2 py-1.5 text-gmi-text">
                           {line.label}
                         </td>
-                        <td className="px-3 py-2 text-gmi-text-subtle">
+                        <td className="px-2 py-1.5 text-gmi-text-subtle">
                           {formatIndices(line.missingIndices)}
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-2 py-1.5 text-right">
                           <button
                             onClick={() =>
                               handleFocusLine(line.index)
                             }
-                            className="gmi-compact-button gmi-focus-ring px-2 py-1 border border-gmi-border bg-gmi-surface"
+                            className="gmi-compact-button gmi-focus-ring whitespace-nowrap px-2 py-1 border border-gmi-border bg-gmi-surface"
                           >
                             Vis i kart
                           </button>
@@ -266,7 +302,6 @@ function ZValidationPanel() {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </HeightControlPanel>
   );
 }
