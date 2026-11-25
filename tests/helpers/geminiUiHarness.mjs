@@ -9,7 +9,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 
 // Same local Next/SWC/Tailwind harness pattern validated by M4. This helper
 // serves only synthetic UI tests; it adds no production route or dependency.
-export async function serveGeminiWorkflowApp() {
+export async function serveGeminiWorkflowApp(entry = './tests/browser/geminiWorkflowApp.js') {
   const temporaryRoot = path.resolve(tmpdir());
   const output = await mkdtemp(path.join(temporaryRoot, 'gmi-gemini-workflow-'));
   let server;
@@ -22,7 +22,7 @@ export async function serveGeminiWorkflowApp() {
     const { webpack } = require('next/dist/compiled/webpack/webpack');
     await require('next/dist/build/swc').loadBindings();
     const compiler = webpack({ mode: 'development', devtool: false, target: 'web', context: root,
-      entry: './tests/browser/geminiWorkflowApp.js', output: { path: output, filename: 'app.js', publicPath: '/' },
+      entry, output: { path: output, filename: 'app.js', publicPath: '/' },
       resolve: { alias: { '@': path.join(root, 'src') }, extensions: ['.js', '.mjs', '.json'] },
       module: { rules: [{ test: /\.css$|\.js$/, exclude: /node_modules/, use: path.join(root, 'tests/helpers/geminiPresentationLoader.cjs') },
         { test: /\.css$/, include: /node_modules/, use: path.join(root, 'tests/helpers/geminiPresentationLoader.cjs') }] },

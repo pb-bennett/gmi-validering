@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo } from 'react';
 import { Pane, useMap } from 'react-leaflet';
 import GeminiInspectionSide from './GeminiInspectionSide';
 import { createGeminiSourceLookup } from '@/lib/gemini-wfs/geminiPopupContent.mjs';
+import { getGeminiFilterView } from '@/lib/gemini-wfs/geminiFilters.mjs';
 import useGeminiSession from './useGeminiSession';
 import useGeminiPresentation from './useGeminiPresentation';
 import { bindGeminiMapViewport } from '@/lib/gemini-wfs/geminiMapViewport.mjs';
@@ -14,11 +15,12 @@ const paneStyle = { zIndex: GEMINI_REFERENCE_Z_INDEX, pointerEvents: 'none' };
 
 export default function GeminiReferenceLayer({ inspectionEnabled = true, hoverControllerRef }) {
   const { result } = useGeminiSession();
-  const { sourceVisible, linesVisible, pointsVisible, resultVersion, zoomRequest, marking } = useGeminiPresentation();
+  const { sourceVisible, linesVisible, pointsVisible, resultVersion, zoomRequest, marking, filters } = useGeminiPresentation();
   const map = useMap();
   useEffect(() => bindGeminiMapViewport(() => map.getBounds()), [map]);
   const bounds = useMemo(() => getGeminiReferenceBounds(result), [result]);
   const lookup = useMemo(() => createGeminiSourceLookup(result), [result]);
+  const { hiddenKeys } = useMemo(() => getGeminiFilterView(result, filters), [result, filters]);
   useEffect(() => {
     if (!zoomRequest || zoomRequest.resultVersion !== resultVersion) return;
     const fit = () => {
@@ -40,9 +42,9 @@ export default function GeminiReferenceLayer({ inspectionEnabled = true, hoverCo
   return (
     <Pane name={GEMINI_REFERENCE_PANE} style={paneStyle}>
       {result && <Fragment key={resultVersion}>
-        {sourceVisible && linesVisible && <GeminiInspectionSide data={result.lines.display} marking={marking}
+        {sourceVisible && linesVisible && <GeminiInspectionSide data={result.lines.display} marking={marking} hiddenKeys={hiddenKeys}
           lookup={lookup} enabled={inspectionEnabled} hoverControllerRef={hoverControllerRef} />}
-        {sourceVisible && pointsVisible && <GeminiInspectionSide data={result.points.display} marking={marking}
+        {sourceVisible && pointsVisible && <GeminiInspectionSide data={result.points.display} marking={marking} hiddenKeys={hiddenKeys}
           lookup={lookup} enabled={inspectionEnabled} hoverControllerRef={hoverControllerRef} />}
       </Fragment>}
     </Pane>

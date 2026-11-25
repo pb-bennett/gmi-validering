@@ -14,18 +14,27 @@ import './geminiPopup.css';
 
 const interactiveOptions = { interactive: true, bubblingMouseEvents: false, pane: GEMINI_REFERENCE_PANE };
 
-export default function GeminiInspectionSide({ data, lookup, enabled, marking, hoverControllerRef }) {
+export default function GeminiInspectionSide({ data, lookup, enabled, marking, hiddenKeys, hoverControllerRef }) {
   const map = useMap();
   const markingRef = useRef(marking);
   const repaint = useRef(null);
+  const hiddenRef = useRef(hiddenKeys);
+  const applyFilter = useRef(null);
   useEffect(() => {
     markingRef.current = marking;
     repaint.current?.();
   }, [marking]);
+  // Filter changes update existing objects in place; the main effect is not rerun.
+  useEffect(() => {
+    const previous = hiddenRef.current;
+    hiddenRef.current = hiddenKeys;
+    if (previous !== hiddenKeys) applyFilter.current?.(previous);
+  }, [hiddenKeys]);
   useEffect(() => {
     const hoverController = hoverControllerRef?.current;
     let popup, selected = null, hovered = null;
     const input = (feature) => getGeminiPresentationInput(lookup(feature.properties.sourceKey, feature.properties.typeName));
+    const isHidden = (feature) => hiddenRef.current?.has(feature.properties.sourceKey) ?? false;
     const highlight = () => markingRef.current.highlightAll
       ? getLayerHighlightStyle(markingRef.current, markingRef.current.id) : null;
     const casing = L.geoJSON(data, {
@@ -59,18 +68,33 @@ export default function GeminiInspectionSide({ data, lookup, enabled, marking, h
         const halo = halos.get(feature);
         halo.setStyle(highlight() ? getLineCasingStyle(style, highlight()) : { opacity: 0 });
         halo.getElement().style.pointerEvents = enabled && highlight() ? 'auto' : 'none';
+        halo.getElement().style.display = isHidden(feature) ? 'none' : '';
       }
       const element = layer.getElement();
       if (element) {
         element.style.pointerEvents = enabled ? 'auto' : 'none';
+        element.style.display = isHidden(feature) ? 'none' : '';
         element.classList.toggle('gmi-gemini-selected', selected === feature);
       }
     };
     const paintAll = () => layers.forEach(paint);
     repaint.current = paintAll;
     const clearSelection = () => { const previous = selected; selected = null; paintFeature(previous); };
+    applyFilter.current = (previousKeys) => {
+      for (const layer of layers) {
+        const feature = layer.feature, hidden = isHidden(feature);
+        if (hidden === (previousKeys?.has(feature.properties.sourceKey) ?? false)) continue;
+        if (hidden) {
+          hoverController?.leave(layer);
+          if (halos.has(feature)) hoverController?.leave(halos.get(feature));
+          if (hovered === feature) hovered = null;
+          if (selected === feature) popup?.remove();
+        }
+        paint(layer);
+      }
+    };
     const inspect = (event) => {
-      if (!enabled) return;
+      if (!enabled || isHidden(event.target.feature)) return;
       const feature = event.target.feature;
       const record = lookup(feature.properties.sourceKey, feature.properties.typeName);
       if (!record) return;
@@ -88,7 +112,7 @@ export default function GeminiInspectionSide({ data, lookup, enabled, marking, h
       layer.options.bubblingMouseEvents = !enabled;
       layer.on('click', inspect);
       layer.on('mouseover', (event) => {
-        if (!enabled) return;
+        if (!enabled || isHidden(layer.feature)) return;
         const previous = hovered;
         hovered = layer.feature;
         paintFeature(previous); paintFeature(hovered);
@@ -107,6 +131,7 @@ export default function GeminiInspectionSide({ data, lookup, enabled, marking, h
     paintAll();
     return () => {
       repaint.current = null;
+      applyFilter.current = null;
       for (const layer of [...casing.getLayers(), ...layers]) hoverController?.leave(layer);
       popup?.remove();
       primary.remove();

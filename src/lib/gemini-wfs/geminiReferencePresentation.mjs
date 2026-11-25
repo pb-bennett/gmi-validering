@@ -1,4 +1,6 @@
 import { geminiSession } from './geminiSession.mjs';
+import { DEFAULT_GEMINI_FILTERS, GEMINI_FILTER_BASES, classifyGeminiResult } from './geminiFilters.mjs';
+import { geminiFilterPreferences } from './geminiFilterPreferences.mjs';
 import { GEMINI_WFS_HALO, getLayerHighlightStyle } from '../map/layerHighlight.mjs';
 
 export const GEMINI_REFERENCE_PANE = 'gemini-reference';
@@ -38,20 +40,44 @@ export function getGeminiReferenceNotice(snapshot) {
 
 export const EMPTY_GEMINI_PRESENTATION = Object.freeze({
   sourceVisible: true, linesVisible: true, pointsVisible: true, resultVersion: 0, zoomRequest: null, marking: DEFAULT_GEMINI_MARKING,
+  filters: DEFAULT_GEMINI_FILTERS, filterSaveFailed: false, openFilterGroups: Object.freeze([]),
 });
 
-export function createGeminiPresentation(session) {
+export function createGeminiPresentation(session, preferences = null) {
   let snapshot = EMPTY_GEMINI_PRESENTATION, currentResult = null, owner = null;
   let version = 0, zoomSequence = 0;
+  // Filters belong to the service URL: they survive account, result and visibility resets.
+  let feedUrl = null;
+  const feedFilters = new Map();
   const listeners = new Set();
   const publish = (patch) => {
     snapshot = Object.freeze({ ...snapshot, ...patch });
     for (const listener of listeners) listener();
   };
+  const storeFilters = (filters, options) => {
+    if (feedUrl) feedFilters.set(feedUrl, filters);
+    const saved = !feedUrl || !preferences || preferences.save(feedUrl, filters, options);
+    publish({ filters, filterSaveFailed: !saved });
+  };
+  const editGroup = (id, change) => {
+    if (!Object.hasOwn(snapshot.filters.groups, id)) return;
+    storeFilters(Object.freeze({ ...snapshot.filters, groups: Object.freeze({
+      ...snapshot.filters.groups, [id]: Object.freeze(change(snapshot.filters.groups[id])) }) }));
+  };
   const sync = () => {
-    const result = session.getSnapshot().result;
+    const { result, connection } = session.getSnapshot();
+    const url = connection?.url ?? null;
+    if (url !== feedUrl) {
+      feedUrl = url;
+      const filters = (url && (feedFilters.get(url) ?? preferences?.read(url))) || DEFAULT_GEMINI_FILTERS;
+      publish({ filters, filterSaveFailed: false });
+    }
     if (result === currentResult) return;
     currentResult = result;
+    // Once seen, a feed's status vocabulary stays known; a later extent cannot change the default.
+    if (!snapshot.filters.statusRecognised && classifyGeminiResult(result)?.statusKnown) {
+      storeFilters(Object.freeze({ ...snapshot.filters, statusRecognised: true }), { keepUnreadable: true });
+    }
     const provenance = result?.provenance;
     const nextOwner = result ? JSON.stringify([provenance.connectionId, provenance.accountGeneration]) : null;
     const resetVisibility = nextOwner !== owner || !result;
@@ -82,6 +108,16 @@ export function createGeminiPresentation(session) {
         highlightStyle: Object.freeze(highlightStyle) }) });
     },
     resetMarking: () => { if (currentResult) publish({ marking: Object.freeze({ ...DEFAULT_GEMINI_MARKING, highlightAll: snapshot.marking.highlightAll }) }); },
+    setFilterValue: (id, key, checked) => {
+      if (typeof key !== 'string' || typeof checked !== 'boolean') return;
+      editGroup(id, (group) => ({ ...group, overrides: Object.freeze({ ...group.overrides, [key]: checked }) }));
+    },
+    setFilterBase: (id, base) => {
+      if (GEMINI_FILTER_BASES.includes(base)) editGroup(id, () => ({ base, overrides: Object.freeze({}) }));
+    },
+    resetFilters: () => storeFilters(Object.freeze({ ...DEFAULT_GEMINI_FILTERS, statusRecognised: snapshot.filters.statusRecognised })),
+    setFilterGroupOpen: (id, open) => publish({ openFilterGroups: Object.freeze([
+      ...snapshot.openFilterGroups.filter((item) => item !== id), ...(open ? [id] : [])]) }),
     requestZoom: () => {
       if (currentResult) publish({ zoomRequest: Object.freeze({ id: ++zoomSequence, resultVersion: snapshot.resultVersion }) });
     },
@@ -90,8 +126,9 @@ export function createGeminiPresentation(session) {
   });
 }
 
-// Visibility, source marking and a small zoom intent only; no features, credentials or persistence.
-export const geminiPresentation = createGeminiPresentation(geminiSession);
+// Visibility, marking, filter choices and a small zoom intent only; no features or credentials.
+// Filter choices alone are persisted, by the injected preference owner.
+export const geminiPresentation = createGeminiPresentation(geminiSession, geminiFilterPreferences);
 
 // The shared Lagmarkering controls consume actions, not survey-store ownership.
 export const geminiMarkingActions = Object.freeze({

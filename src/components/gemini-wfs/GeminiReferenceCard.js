@@ -3,9 +3,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowClockwiseIcon, CaretDownIcon, CornersOutIcon, EyeIcon, EyeSlashIcon, PlugsIcon } from '@phosphor-icons/react';
 import LayerTypeBadge from '../LayerTypeBadge';
+import GeminiFilterGroups from './GeminiFilterGroups';
 import useGeminiSession from './useGeminiSession';
 import useGeminiPresentation from './useGeminiPresentation';
 import { geminiPresentation, getGeminiReferenceBounds, getGeminiReferenceNotice } from '@/lib/gemini-wfs/geminiReferencePresentation.mjs';
+import { getGeminiFilterView, isDefaultGeminiFilters } from '@/lib/gemini-wfs/geminiFilters.mjs';
 import { geminiSession } from '@/lib/gemini-wfs/geminiSession.mjs';
 import { getGeminiUiError } from '@/lib/gemini-wfs/geminiWorkflowUi.mjs';
 import { readGeminiMapBbox } from '@/lib/gemini-wfs/geminiMapViewport.mjs';
@@ -21,6 +23,7 @@ function GeminiReferenceContent({ session, onOpenConnection }) {
   const { result } = session;
   const visibility = useGeminiPresentation();
   const bounds = useMemo(() => getGeminiReferenceBounds(result), [result]);
+  const filterView = useMemo(() => getGeminiFilterView(result, visibility.filters), [result, visibility.filters]);
   const [mapRequest, setMapRequest] = useState(null);
   // Presentation only: collapsing never changes source/line/point visibility or any request.
   const [expanded, setExpanded] = useState(false);
@@ -73,6 +76,14 @@ function GeminiReferenceContent({ session, onOpenConnection }) {
       </div>
       {/* Status and errors stay visible while collapsed. */}
       {notice && <p role="status" className="px-2 pb-2 text-[10px] text-gmi-text-muted">{notice}</p>}
+      {filterView.hiddenCount > 0 && <p role="status" data-gemini-filter-summary className="px-2 pb-2 text-[10px] tabular-nums text-gmi-text-muted">
+        Filter viser {filterView.visible.lines} av {counts.lines} ledn. · {filterView.visible.points} av {counts.points} punkt · {filterView.hiddenCount} skjult
+      </p>}
+      {filterView.statusNotice && <p role="status" data-gemini-status-notice className="px-2 pb-2 text-[10px] text-gmi-text-muted">
+        {filterView.statusNotice === 'unrecognised' ? 'Statusverdiene fra tjenesten er ikke gjenkjent. Alle statuser vises, også objekter som kan være ute av drift.'
+          : 'Ingen innlastede objekter har status Drift.'}
+      </p>}
+      {visibility.filterSaveFailed && <p role="status" data-gemini-filter-storage className="px-2 pb-2 text-[10px] text-gmi-text-muted">Filtervalgene gjelder nå, men kunne ikke lagres i nettleseren.</p>}
       {!session.coverages.length && <p role="status" className="px-2 pb-2 text-[10px] text-gmi-text-muted">Last inn en innmålingsfil, eller bruk Hent for kartutsnitt.</p>}
       {/* Without a usable connection, providing access is the essential action: never hidden behind the chevron. */}
       {!connected && onOpenConnection && <div className="px-2 pb-2 text-[10px]">
@@ -99,6 +110,8 @@ function GeminiReferenceContent({ session, onOpenConnection }) {
             </div>;
           })}
         </div>
+        {result && <GeminiFilterGroups groups={filterView.groups} openGroups={visibility.openFilterGroups}
+          isDefault={isDefaultGeminiFilters(visibility.filters)} />}
         <div className="flex flex-wrap items-center gap-2 px-2 pb-2 text-[10px]">
           {connected && <button type="button" disabled={session.status === 'loading'}
             onClick={() => void geminiSession.refresh()} aria-label="Oppdater Gemini-referanse"
