@@ -1,7 +1,6 @@
 'use client';
 
 import useStore from '@/lib/store';
-import { analyzeIncline } from '@/lib/analysis/incline';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { XIcon } from '@phosphor-icons/react';
 
@@ -39,33 +38,21 @@ function getPointTypeLabel(fcode) {
 
 export default function Tooltip3D({ object, position, onClose }) {
   const viewObjectInMap = useStore((state) => state.viewObjectInMap);
-  const layers = useStore((state) => state.layers);
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
-  const data = useStore((state) => state.data);
-  const analysisResults = useStore((state) => state.analysis.results);
-  const setAnalysisResults = useStore(
-    (state) => state.setAnalysisResults,
-  );
-  const setLayerAnalysisResults = useStore(
-    (state) => state.setLayerAnalysisResults,
-  );
-  const setAnalysisLayerId = useStore(
-    (state) => state.setAnalysisLayerId,
-  );
-  const toggleAnalysisModal = useStore(
-    (state) => state.toggleAnalysisModal,
-  );
-  const selectAnalysisPipe = useStore(
-    (state) => state.selectAnalysisPipe,
-  );
-  const inclineRequirementMode = useStore(
-    (state) => state.settings.inclineRequirementMode,
+  const openLayerAnalysis = useStore(
+    (state) => state.openLayerAnalysis,
   );
 
   const tooltipRef = useRef(null);
   const [clampedPos, setClampedPos] = useState(position);
+  // A new anchor starts unclamped; the layout effect below keeps it on screen.
+  const [anchor, setAnchor] = useState(position);
+  if (anchor !== position) {
+    setAnchor(position);
+    setClampedPos(position);
+  }
   const margin = 12;
 
   const clamp = useMemo(
@@ -78,10 +65,8 @@ export default function Tooltip3D({ object, position, onClose }) {
     [],
   );
 
-  if (!object) return null;
-
   useLayoutEffect(() => {
-    setClampedPos(position);
+    if (!position) return undefined;
 
     const compute = () => {
       const el = tooltipRef.current;
@@ -116,6 +101,9 @@ export default function Tooltip3D({ object, position, onClose }) {
       window.removeEventListener('resize', compute);
     };
   }, [position, clamp]);
+
+  // Early return after all hooks: an object can come and go without changing their order.
+  if (!object) return null;
 
   const handleViewInMap = () => {
     // Get coordinates from object
@@ -159,28 +147,7 @@ export default function Tooltip3D({ object, position, onClose }) {
     if (object.type !== 'pipe' || object.lineIndex === undefined)
       return;
 
-    const layerData = object.layerId
-      ? layers[object.layerId]?.data
-      : data;
-    const layerResults = object.layerId
-      ? layers[object.layerId]?.analysis?.results
-      : analysisResults;
-
-    if ((!layerResults || layerResults.length === 0) && layerData) {
-      const results = analyzeIncline(layerData, {
-        minInclineMode: inclineRequirementMode,
-      });
-      if (object.layerId) {
-        setLayerAnalysisResults(object.layerId, results);
-      }
-      setAnalysisResults(results);
-    } else if (layerResults) {
-      setAnalysisResults(layerResults);
-    }
-
-    setAnalysisLayerId(object.layerId || null);
-    toggleAnalysisModal(true);
-    selectAnalysisPipe(object.lineIndex, object.layerId || null);
+    openLayerAnalysis(object.layerId || null, { pipeIndex: object.lineIndex });
     onClose();
   };
 

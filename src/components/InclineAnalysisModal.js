@@ -9,6 +9,8 @@ import {
   useLayoutEffect,
 } from 'react';
 import StandardsInfoModal from './StandardsInfoModal';
+import AnalysisErrorBoundary, { AnalysisErrorMessage } from './AnalysisErrorBoundary';
+import { selectAnalysisActiveResults } from '@/lib/analysis/profileAnalysisHover';
 import { positionProfileTooltip } from '@/lib/analysis/profileTooltipPosition.mjs';
 import {
   ArrowClockwiseIcon,
@@ -23,10 +25,44 @@ const formatNumber = (num, decimals = 2) => {
   return num.toFixed(decimals).replace('.', ',');
 };
 
+// Z is required on every vertex of a line; without it the analysis has no profile and no measured values.
+const hasProfileZ = (result) =>
+  Number.isFinite(result?.details?.startZ) &&
+  Number.isFinite(result?.details?.endZ);
+
 export default function InclineAnalysisModal() {
   const isOpen = useStore((state) => state.analysis.isOpen);
+  const layerId = useStore((state) => state.analysis.layerId);
+  const selectedPipeIndex = useStore(
+    (state) => state.analysis.selectedPipeIndex,
+  );
   const toggleModal = useStore((state) => state.toggleAnalysisModal);
-  const results = useStore((state) => state.analysis.results);
+  const openLayerAnalysis = useStore(
+    (state) => state.openLayerAnalysis,
+  );
+  return (
+    <AnalysisErrorBoundary
+      resetKey={`${isOpen}:${layerId}:${selectedPipeIndex}`}
+      onRetry={() => openLayerAnalysis(layerId, { rerun: true })}
+      renderFallback={(retry) => isOpen && (
+        <div className="profile-analysis-panel absolute bottom-0 left-0 right-0 z-2000 overflow-y-auto border-t border-gmi-border-strong bg-gmi-surface text-gmi-text">
+          <AnalysisErrorMessage kind="profil" title="Profilanalysen kunne ikke vises."
+            closeLabel="Lukk analyse" onRetry={retry} onClose={() => toggleModal(false)} />
+        </div>
+      )}
+    >
+      <InclineAnalysisPanel />
+    </AnalysisErrorBoundary>
+  );
+}
+
+function InclineAnalysisPanel() {
+  const isOpen = useStore((state) => state.analysis.isOpen);
+  const toggleModal = useStore((state) => state.toggleAnalysisModal);
+  const results = useStore(selectAnalysisActiveResults);
+  const layerName = useStore(
+    (state) => state.layers[state.analysis.layerId]?.name,
+  );
   const selectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,
   );
@@ -187,6 +223,8 @@ export default function InclineAnalysisModal() {
 
   if (!isOpen) return null;
 
+  const selectedHasZ = hasProfileZ(selectedResult);
+
   return (
     <div className="profile-analysis-panel absolute bottom-0 left-0 right-0 z-2000 bg-gmi-surface text-gmi-text shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex flex-col border-t border-gmi-border-strong">
       {/* Header */}
@@ -195,6 +233,11 @@ export default function InclineAnalysisModal() {
           <h2 className="text-base font-semibold text-gmi-navy flex items-center gap-2">
             Profilanalyse
             <span className="text-xs font-normal text-gmi-text-subtle">
+              {layerName && (
+                <span className="mr-1 inline-block max-w-60 truncate align-bottom text-gmi-text" title={layerName}>
+                  {layerName}
+                </span>
+              )}
               ({filteredResults.length} av {results.length} ledninger)
             </span>
           </h2>
@@ -400,17 +443,17 @@ export default function InclineAnalysisModal() {
                   <span className="text-gmi-text-subtle">•</span>
                   <span className="text-gmi-text">
                     Fall:{' '}
-                    {formatNumber(selectedResult.details.incline, 2)}‰
+                    {formatNumber(selectedHasZ ? selectedResult.details.incline : null, 2)}‰
                   </span>
                   <span className="text-gmi-text-subtle">•</span>
                   <span className="text-gmi-text">
                     L:{' '}
-                    {formatNumber(selectedResult.details.length, 2)} m
+                    {formatNumber(selectedHasZ ? selectedResult.details.length : null, 2)} m
                   </span>
                   <span className="text-gmi-text-subtle">•</span>
                   <span className="text-gmi-text">
                     ΔZ:{' '}
-                    {formatNumber(selectedResult.details.deltaZ, 3)} m
+                    {formatNumber(selectedHasZ ? selectedResult.details.deltaZ : null, 3)} m
                   </span>
                   {(selectedTerrainStatus === 'loading' ||
                     selectedTerrainQueued) && (
@@ -593,7 +636,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
   const minOvercover = useStore(
     (state) => state.settings.minOvercover,
   );
-  const terrainPoints = terrainData?.points || [];
+  const terrainPoints = terrainData?.points;
   const terrainStatus = terrainData?.status || 'idle';
   const isTerrainPending =
     terrainStatus === 'loading' ||
@@ -608,6 +651,9 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
     isDigitizedBackwards,
   } = result.details;
 
+  const hasProfile = hasProfileZ(result);
+
+  // The container is rendered with and without a profile, so its size is always observed.
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -624,10 +670,20 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Reset zoom when result changes
+  // Reset zoom and hover when the line or its layer changes: a removed plot sends no mouse-leave.
   useEffect(() => {
     setTransform({ x: 0, y: 0, k: 1 });
-  }, [result.lineIndex]);
+    setTooltip(null);
+    setHoveredAnalysisPoint(null);
+    setHoveredAnalysisSegment(null);
+    setHoveredTerrainPoint(null);
+  }, [
+    result.lineIndex,
+    analysisLayerId,
+    setHoveredAnalysisPoint,
+    setHoveredAnalysisSegment,
+    setHoveredTerrainPoint,
+  ]);
 
   useLayoutEffect(() => {
     if (!tooltipRef.current) return;
@@ -636,26 +692,20 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
   }, [tooltip]);
 
   // Prepare points for visualization (Always Flow Left -> Right)
-  let plotPoints = [];
-  if (profilePoints && profilePoints.length > 0) {
-    if (isDigitizedBackwards) {
-      plotPoints = profilePoints
-        .map((p, i) => ({
-          ...p,
-          originalIndex: i,
-          isVertex: p.isVertex ?? false,
-          dist: length - p.dist,
-        }))
-        .sort((a, b) => a.dist - b.dist);
-    } else {
-      plotPoints = profilePoints.map((p, i) => ({
+  const plotPoints = useMemo(() => {
+    if (!hasProfile) return [];
+    if (profilePoints && profilePoints.length > 0) {
+      const points = profilePoints.map((p, i) => ({
         ...p,
         originalIndex: i,
         isVertex: p.isVertex ?? false,
+        dist: isDigitizedBackwards ? length - p.dist : p.dist,
       }));
+      return isDigitizedBackwards
+        ? points.sort((a, b) => a.dist - b.dist)
+        : points;
     }
-  } else {
-    plotPoints = [
+    return [
       {
         dist: 0,
         z: isDigitizedBackwards ? endZ : startZ,
@@ -669,7 +719,7 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
         originalIndex: isDigitizedBackwards ? 0 : 1,
       },
     ];
-  }
+  }, [hasProfile, profilePoints, isDigitizedBackwards, length, startZ, endZ]);
 
   // Prepare terrain plot points (aligned with pipe distance axis)
   const terrainPlotPoints = useMemo(() => {
@@ -737,14 +787,6 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
     });
   }, [plotPoints, terrainPlotPoints, minOvercover]);
 
-  if (startZ === null || endZ === null) {
-    return (
-      <div className="h-full flex items-center justify-center bg-gmi-surface-soft rounded text-gmi-text-subtle">
-        Kan ikke vise profil: Mangler Z-koordinater
-      </div>
-    );
-  }
-
   // Use actual container dimensions
   const { width, height } = dimensions;
 
@@ -787,9 +829,10 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
     return closest;
   };
 
-  const vertexOvercoverWarnings = useMemo(() => {
-    if (!terrainLinePoints.length) return [];
-    return plotPoints
+  // Derived on each render, without hooks: their inputs change on each render too.
+  const vertexOvercoverWarnings = terrainLinePoints.length === 0
+    ? []
+    : plotPoints
       .filter((p) => p.isVertex)
       .map((p) => {
         const tp = getNearestTerrainPoint(p.dist);
@@ -804,25 +847,34 @@ function PipeProfileVisualization({ result, analysisLayerId }) {
         };
       })
       .filter((w) => w && w.warning);
-  }, [plotPoints, terrainLinePoints, minOvercover]);
 
-  const terrainJumpMarkers = useMemo(() => {
-    if (!terrainLinePoints.length) return [];
-    const markers = [];
-    for (let i = 1; i < terrainLinePoints.length; i++) {
-      const prev = terrainLinePoints[i - 1];
-      const curr = terrainLinePoints[i];
-      const dz = curr.z - prev.z;
-      if (Math.abs(dz) >= 2) {
-        markers.push({
-          dist: curr.dist,
-          z: curr.z,
-          dz,
-        });
-      }
+  const terrainJumpMarkers = [];
+  for (let i = 1; i < terrainLinePoints.length; i++) {
+    const prev = terrainLinePoints[i - 1];
+    const curr = terrainLinePoints[i];
+    const dz = curr.z - prev.z;
+    if (Math.abs(dz) >= 2) {
+      terrainJumpMarkers.push({
+        dist: curr.dist,
+        z: curr.z,
+        dz,
+      });
     }
-    return markers;
-  }, [terrainLinePoints]);
+  }
+
+  // Every hook has run: no return above this line may depend on the selected line.
+  if (!hasProfile) {
+    return (
+      <div ref={containerRef} className="w-full h-full">
+        <div
+          role="status"
+          className="h-full flex items-center justify-center rounded bg-gmi-surface-soft p-3 text-center text-sm text-gmi-text-muted"
+        >
+          Kan ikke vise profil: ledningen mangler Z-koordinater på ett eller flere punkter.
+        </div>
+      </div>
+    );
+  }
 
   if (width === 0 || height === 0)
     return <div ref={containerRef} className="w-full h-full" />;

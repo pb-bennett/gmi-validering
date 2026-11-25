@@ -47,8 +47,8 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
       await setPhotoFiles(browser, 'input[type=file]', [otherFile]);
       await browser.waitFor('document.querySelectorAll("[data-gmi-edit-action]").length === 2');
       await browser.evaluate(`document.querySelector('[title="Syntetisk M5C.gmi"]').click()`);
-      await browser.waitFor(`document.querySelector('button[aria-label="Feltvalidering"]')`);
-      await browser.evaluate(`document.querySelector('button[aria-label="Feltvalidering"]').click()`);
+      await browser.waitFor(`document.querySelector('button[aria-label="Validator"]')`);
+      await browser.evaluate(`document.querySelector('button[aria-label="Validator"]').click()`);
       await browser.waitFor(dataset);
       await t.test('U1 accessible header controls align at laptop sizes and date remains editable', async () => {
         for (const [width, height] of [[1280, 720], [1366, 768]]) {

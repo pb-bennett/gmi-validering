@@ -1,6 +1,7 @@
 'use client';
 
 import useStore from '@/lib/store';
+import AnalysisErrorBoundary, { AnalysisErrorMessage } from './AnalysisErrorBoundary';
 import { XIcon } from '@phosphor-icons/react';
 
 const formatIndices = (indices, max = 20) => {
@@ -12,8 +13,45 @@ const formatIndices = (indices, max = 20) => {
 };
 
 export default function ZValidationModal() {
-  const data = useStore((state) => state.data);
-  const results = useStore((state) => state.zValidation.results);
+  const isOpen = useStore((state) => state.zValidation.isOpen);
+  const layerId = useStore((state) => state.zValidation.layerId);
+  const toggleZValidationModal = useStore(
+    (state) => state.toggleZValidationModal,
+  );
+  const openLayerZValidation = useStore(
+    (state) => state.openLayerZValidation,
+  );
+  return (
+    <AnalysisErrorBoundary
+      resetKey={`${isOpen}:${layerId}`}
+      onRetry={() => openLayerZValidation(layerId, { rerun: true })}
+      renderFallback={(retry) => isOpen && (
+        <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/50 p-3">
+          <div className="w-full max-w-md rounded-lg border border-gmi-border-strong bg-gmi-surface shadow-xl text-gmi-text">
+            <AnalysisErrorMessage kind="hoyde" title="Høydekontrollen kunne ikke vises."
+              closeLabel="Lukk høydekontroll" onRetry={retry} onClose={() => toggleZValidationModal(false)} />
+          </div>
+        </div>
+      )}
+    >
+      <ZValidationPanel />
+    </AnalysisErrorBoundary>
+  );
+}
+
+function ZValidationPanel() {
+  // The layer whose control was opened owns both the results and the objects. The global slices are the legacy
+  // single-file state and are used only when no layer owns the control.
+  const layerId = useStore((state) => state.zValidation.layerId);
+  const layerName = useStore((state) => state.layers[layerId]?.name);
+  const data = useStore((state) =>
+    layerId ? state.layers[layerId]?.data : state.data,
+  );
+  const results = useStore((state) =>
+    layerId
+      ? state.layers[layerId]?.zValidation?.results
+      : state.zValidation.results,
+  );
   const isOpen = useStore((state) => state.zValidation.isOpen);
   const toggleZValidationModal = useStore(
     (state) => state.toggleZValidationModal,
@@ -29,13 +67,29 @@ export default function ZValidationModal() {
   const handleFocusPoint = (index) => {
     const coord = data?.points?.[index]?.coordinates?.[0];
     if (!coord) return;
-    viewObjectInMap(`punkter-${index}`, [coord.y, coord.x], 20);
+    if (!layerId) {
+      viewObjectInMap(`punkter-${index}`, [coord.y, coord.x], 20);
+      return;
+    }
+    viewObjectInMap(`punkter-${layerId}-${index}`, [coord.y, coord.x], 20, {
+      layerId,
+      objectType: 'point',
+      pointIndex: index,
+    });
   };
 
   const handleFocusLine = (index) => {
     const coord = data?.lines?.[index]?.coordinates?.[0];
     if (!coord) return;
-    viewObjectInMap(`ledninger-${index}`, [coord.y, coord.x], 19);
+    if (!layerId) {
+      viewObjectInMap(`ledninger-${index}`, [coord.y, coord.x], 19);
+      return;
+    }
+    viewObjectInMap(`ledninger-${layerId}-${index}`, [coord.y, coord.x], 19, {
+      layerId,
+      objectType: 'pipe',
+      lineIndex: index,
+    });
   };
 
   return (
@@ -46,6 +100,9 @@ export default function ZValidationModal() {
             <h2 className="text-lg font-semibold text-gmi-navy">
               Høydekontroll (Z)
             </h2>
+            {layerName && (
+              <p className="break-all text-sm font-medium text-gmi-text">{layerName}</p>
+            )}
             <p className="text-sm text-gmi-text-muted">
               Kontrollerer at alle objekter har gyldig Z-verdi.
             </p>

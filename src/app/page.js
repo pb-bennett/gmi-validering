@@ -109,6 +109,7 @@ export default function Home() {
   const hasSurveyData = useStore((state) => Boolean(state.data) || state.layerOrder.length > 0);
   const parsingStatus = useStore((state) => state.parsing.status);
   const parsingError = useStore((state) => state.parsing.error);
+  const restoreParsing = useStore((state) => state.restoreParsing);
   const resetAll = useStore((state) => state.resetAll);
   const updateLastActive = useStore(
     (state) => state.updateLastActive,
@@ -157,6 +158,9 @@ export default function Home() {
   const [showAppInfo, setShowAppInfo] = useState(false);
   const [photoImport, setPhotoImport] = useState(null);
   const surveyLayers = useStore((state) => state.layers);
+  // Loaded layers keep the workspace open while another file is read, also when that file fails.
+  const hasSurveyLayers = useStore((state) => state.layerOrder.length > 0);
+  const surveyWorkspaceReady = parsingStatus === 'done' || hasSurveyLayers;
   const gmiEditLayerId = useStore((state) => state.gmiEditWorkspace?.layerId ?? null);
   const gmiEditTableExpanded = useStore((state) => state.gmiEditTableExpanded);
   // A pending global reset that would discard GMI corrections: { layers } until the user confirms or cancels.
@@ -824,7 +828,7 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-gmi-surface-soft">
-      {/* A window drop starts parsing, which unmounts the workspace: refused while a Rettinger form has unsubmitted values. */}
+      {/* A window drop adds a layer, which resets table and view state: refused while a Rettinger form has unsubmitted values. */}
       <GlobalFileDrop enabled={parsingStatus !== 'parsing' && !photoImport && !photoLinkReviewRequest && !workspaceLayer && !(gmiEditActive && gmiEditDraft)} />
       <TestModeActivation />
       {photoLinkReviewRequest && <PhotoHyperlinkReviewDialog request={photoLinkReviewRequest} onClose={closePhotoLinkReview}
@@ -950,7 +954,7 @@ export default function Home() {
       />
 
       {/* Initial Upload Screen */}
-      {parsingStatus !== 'done' && !hasPhotoLayers && (
+      {parsingStatus !== 'done' && !hasPhotoLayers && !hasSurveyLayers && (
         <div className="flex-1 flex items-center justify-center overflow-y-auto py-6">
           <div className="my-auto max-w-xl w-full px-4">
             <div className="text-center mb-8">
@@ -1037,7 +1041,7 @@ export default function Home() {
       )}
 
       {/* Main App Layout (Sidebar + Map) */}
-      {(parsingStatus === 'done' || hasPhotoLayers) && (
+      {(surveyWorkspaceReady || hasPhotoLayers) && (
         <>
           {/* Background terrain fetcher - runs in background */}
           <TerrainFetcher />
@@ -1079,13 +1083,25 @@ export default function Home() {
             primary={(
               <div className={`flex h-full min-h-0 min-w-0 flex-1${workspaceLayer ? ' photo-workspace-primary' : ''}`}>
                 <MapPanePresentationProvider analysisOpen={analysisOpen} workspaceActive={Boolean(gmiEditLayerId || fieldValidationOpen)} className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                {hasPhotoLayers && parsingStatus === 'error' && parsingError && (
-                  <div role="alert" className="absolute inset-x-3 top-16 z-[1300] rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Feil ved lasting av fil: {parsingError}. Bruk «Legg til fil» for å prøve igjen.</div>
+                {(hasSurveyLayers || hasPhotoLayers) && !showAddLayerModal && parsingStatus === 'error' && parsingError && (
+                  <div role="alert" data-import-error="workspace" data-validation-tone="error"
+                    className="absolute inset-x-3 top-16 z-[2100] flex items-start gap-3 rounded-lg border border-gmi-border-strong bg-gmi-surface p-3 text-sm text-gmi-text shadow-lg">
+                    <span className="gmi-validation-dot mt-1.5 size-2 shrink-0 rounded-full" data-validation-tone="error" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 break-words">Feil ved lasting av fil: {parsingError}<span className="block text-xs text-gmi-text-muted">Lagene som er åpne, er beholdt.</span></span>
+                    {!workspaceLayer && (
+                      <button type="button" onClick={() => guardGmiEditDraft(() => setShowAddLayerModal(true))}
+                        className="gmi-compact-button gmi-focus-ring shrink-0 border border-gmi-border-strong bg-gmi-surface px-2 py-1 text-xs font-medium">Prøv igjen</button>
+                    )}
+                    <button type="button" onClick={() => restoreParsing()} aria-label="Lukk feilmelding"
+                      className="gmi-compact-button gmi-focus-ring shrink-0 p-1 text-gmi-text-muted">
+                      <XIcon size={16} weight="regular" aria-hidden="true" />
+                    </button>
+                  </div>
                 )}
                 {!workspaceLayer && <MapPaneToolbar
                   onReset={() => requestReset()}
                   onShare={() => setShowShareModal(true)}
-                  showShare={parsingStatus === 'done'}
+                  showShare={surveyWorkspaceReady}
                   photoToggle={workspacePhotoToggle}
                 />}
                 {workspaceLayer && workspacePhotoToggle && <MapPhotoToggleBar photoToggle={workspacePhotoToggle} editing={photoEditing} />}
@@ -1175,7 +1191,7 @@ export default function Home() {
                   </div>
 
                   {/* Floating Inspect Button - Only show when table is closed AND analysis is closed AND field validation is closed */}
-                  {!workspaceLayer && !gmiEditActive && !analysisOpen && !fieldValidationOpen && parsingStatus === 'done' && (
+                  {!workspaceLayer && !gmiEditActive && !analysisOpen && !fieldValidationOpen && surveyWorkspaceReady && (
                     <div
                       className="absolute bottom-4 -translate-x-1/2"
                       style={{
@@ -1252,6 +1268,13 @@ export default function Home() {
                 <XIcon size={24} weight="regular" aria-hidden="true" />
               </button>
             </div>
+            {parsingStatus === 'error' && parsingError && (
+              <div role="alert" data-import-error="dialog" data-validation-tone="error" className="gmi-validation-panel mb-4 rounded-lg border p-3 text-sm">
+                <p className="font-semibold">Feil ved lasting av fil</p>
+                <p className="break-words">{parsingError}</p>
+                <p>Lagene som er åpne, er beholdt. Velg filen på nytt eller en annen fil.</p>
+              </div>
+            )}
             <FileUpload
               isAddingLayer={true}
               onComplete={() => setShowAddLayerModal(false)}

@@ -22,7 +22,19 @@ const MapLegend = dynamic(() => import('./MapLegend'), {
 });
 
 export default function MapView(props) {
-  const outlierResults = useStore((state) => state.outliers.results);
+  // A load prompt is about the layer that raised it, also after other layers are added, analysed or removed. The global
+  // slices are the legacy single-file state and are used only when no layer owns the prompt.
+  const outlierLayerId = useStore(
+    (state) => state.ui.outlierPromptLayerId ?? null,
+  );
+  const outlierLayerName = useStore(
+    (state) => state.layers[outlierLayerId]?.name,
+  );
+  const outlierResults = useStore((state) =>
+    outlierLayerId
+      ? state.layers[outlierLayerId]?.outliers?.results
+      : state.outliers.results,
+  );
   const outlierPromptOpen = useStore(
     (state) => state.ui.outlierPromptOpen,
   );
@@ -32,18 +44,37 @@ export default function MapView(props) {
   const toggleHideOutliers = useStore(
     (state) => state.toggleHideOutliers,
   );
+  const setLayerOutliersHidden = useStore(
+    (state) => state.setLayerOutliersHidden,
+  );
+  const chooseOutliers = (hidden) => {
+    if (outlierLayerId) setLayerOutliersHidden(outlierLayerId, hidden);
+    else toggleHideOutliers(hidden);
+    setOutlierPromptOpen(false);
+  };
 
   const zValidationPromptOpen = useStore(
     (state) => state.ui.zValidationPromptOpen,
   );
-  const zValidationResults = useStore(
-    (state) => state.zValidation.results,
+  const zValidationLayerId = useStore(
+    (state) => state.ui.zValidationPromptLayerId ?? null,
+  );
+  const zValidationLayerName = useStore(
+    (state) => state.layers[zValidationLayerId]?.name,
+  );
+  const zValidationResults = useStore((state) =>
+    zValidationLayerId
+      ? state.layers[zValidationLayerId]?.zValidation?.results
+      : state.zValidation.results,
   );
   const setZValidationPromptOpen = useStore(
     (state) => state.setZValidationPromptOpen,
   );
   const toggleZValidationModal = useStore(
     (state) => state.toggleZValidationModal,
+  );
+  const openLayerZValidation = useStore(
+    (state) => state.openLayerZValidation,
   );
 
   return (
@@ -61,6 +92,9 @@ export default function MapView(props) {
         outlierResults.outliers.length > 0 && (
           <div className="absolute top-48 left-1/2 transform -translate-x-1/2 z-1100 bg-white px-4 py-3 rounded-xl shadow-lg border border-amber-200 flex items-center gap-3">
             <div className="text-sm">
+              {outlierLayerName && (
+                <div className="max-w-80 truncate text-xs text-amber-800" title={outlierLayerName}>{outlierLayerName}</div>
+              )}
               <div className="font-medium text-amber-900">
                 Fant {outlierResults.outliers.length} avvikere langt
                 unna resten av dataene
@@ -86,20 +120,14 @@ export default function MapView(props) {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => {
-                  toggleHideOutliers(true);
-                  setOutlierPromptOpen(false);
-                }}
+                onClick={() => chooseOutliers(true)}
                 className="gmi-primary-control gmi-focus-ring px-3 py-1.5 text-sm font-medium border border-gmi-navy"
                 title="Skjul avvikere"
               >
                 Ignorer
               </button>
               <button
-                onClick={() => {
-                  toggleHideOutliers(false);
-                  setOutlierPromptOpen(false);
-                }}
+                onClick={() => chooseOutliers(false)}
                 className="gmi-compact-button gmi-focus-ring px-3 py-1.5 text-sm font-medium border border-gmi-border-strong bg-gmi-surface"
                 title="Behold avvikere"
               >
@@ -116,6 +144,9 @@ export default function MapView(props) {
           }`}
         >
           <div className="text-sm">
+            {zValidationLayerName && (
+              <div className="max-w-80 truncate text-xs text-amber-800" title={zValidationLayerName}>{zValidationLayerName}</div>
+            )}
             <div className="font-medium text-amber-900">
               Fant objekter uten høyde (Z-verdi)
             </div>
@@ -129,7 +160,8 @@ export default function MapView(props) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                toggleZValidationModal(true);
+                if (zValidationLayerId) openLayerZValidation(zValidationLayerId);
+                else toggleZValidationModal(true);
                 setZValidationPromptOpen(false);
               }}
               className="gmi-primary-control gmi-focus-ring px-3 py-1.5 text-sm font-medium border border-gmi-navy"

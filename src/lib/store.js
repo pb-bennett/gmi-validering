@@ -105,7 +105,7 @@ const useStore = create(
             results: [],
             isOpen: false,
             selectedPipeIndex: null,
-            layerId: null,
+            selectedLayerId: null,
             layerId: null,
             hoveredPointIndex: null,
             hoveredSegment: null,
@@ -114,6 +114,7 @@ const useStore = create(
           zValidation: {
             results: null,
             isOpen: false,
+            layerId: null,
           },
           terrain: {
             // Per-line terrain data: { [lineIndex]: { points: [], status: 'idle'|'loading'|'done'|'error' } }
@@ -171,6 +172,7 @@ const useStore = create(
             highlightedFeltValue: null,
             highlightedFeltObjectType: null,
             outlierPromptOpen: false,
+            outlierPromptLayerId: null,
             missingHeightPromptOpen: false,
             missingHeightDetailsOpen: false,
             missingHeightLines: [],
@@ -178,6 +180,7 @@ const useStore = create(
             dataInspectorOpen: false,
             dataInspectorTarget: null,
             zValidationPromptOpen: false,
+            zValidationPromptLayerId: null,
             // Layer management UI state
             expandedLayerId: null, // Only one layer expanded at a time
             highlightedLayerId: null, // Layer being hovered in sidebar
@@ -426,7 +429,8 @@ const useStore = create(
         // ============================================
         data: null, // { header: {}, points: [], lines: [] } | null
 
-        setData: (data) =>
+        // `layerId` is the layer the same file was added as: the load prompts and the height control belong to it.
+        setData: (data, { layerId = null } = {}) =>
           set(
             (state) => {
               const isKof = data?.format === 'KOF';
@@ -524,6 +528,7 @@ const useStore = create(
                 zValidation: {
                   ...initial.zValidation,
                   results: zValidationResults,
+                  layerId,
                 },
                 // Reset terrain and populate fetch queue
                 terrain: {
@@ -537,10 +542,12 @@ const useStore = create(
                   // Keep sidebar open by default
                   sidebarOpen: true,
                   outlierPromptOpen: hasOutliers,
+                  outlierPromptLayerId: layerId,
                   missingHeightPromptOpen: false,
                   missingHeightDetailsOpen: false,
                   missingHeightLines,
                   zValidationPromptOpen: hasMissingZ,
+                  zValidationPromptLayerId: layerId,
                 },
               };
             },
@@ -559,6 +566,7 @@ const useStore = create(
               zValidation: {
                 results: null,
                 isOpen: false,
+                layerId: null,
               },
             },
             false,
@@ -629,6 +637,20 @@ const useStore = create(
             'parsing/error',
           ),
 
+        // A cancelled import, or a dismissed error, returns to what was there before it. An old error is never brought back.
+        restoreParsing: (previous = null) =>
+          set(
+            (state) => ({
+              parsing: previous?.status === 'done'
+                ? previous
+                : state.layerOrder.length > 0
+                  ? { ...state.parsing, status: 'done', progress: 100, error: null }
+                  : { ...state._initial.parsing },
+            }),
+            false,
+            'parsing/restore',
+          ),
+
         resetParsing: () =>
           set(
             {
@@ -694,6 +716,8 @@ const useStore = create(
           results: [],
           isOpen: false,
           selectedPipeIndex: null,
+          selectedLayerId: null, // Layer that selectedPipeIndex belongs to
+          layerId: null, // Layer that owns the open analysis
           hoveredPointIndex: null,
           hoveredSegment: null, // { p1: number, p2: number } | null
           hoveredTerrainPoint: null, // { dist, lineDist?, terrainZ, pipeZ } | null
@@ -702,6 +726,7 @@ const useStore = create(
         zValidation: {
           results: null,
           isOpen: false,
+          layerId: null, // Layer that owns the open height control
         },
 
         setAnalysisResults: (results) =>
@@ -730,6 +755,84 @@ const useStore = create(
             false,
             'zValidation/setResults',
           ),
+
+        /**
+         * Opens Profilanalyse for one layer. Results, owner and selection change together, so a line index from another
+         * layer is never read against this one. `rerun` recalculates from the layer's own data (retry after a failure).
+         * A null layer is the legacy single-file state. Returns false when the layer no longer exists.
+         */
+        openLayerAnalysis: (layerId, { pipeIndex = null, rerun = false } = {}) => {
+          const state = get();
+          const ownerId = layerId || null;
+          const layer = ownerId ? state.layers[ownerId] : null;
+          const data = ownerId ? layer?.data : state.data;
+          if (!data) return false;
+          const known = ownerId ? layer.analysis?.results : state.analysis.results;
+          const results = !rerun && known?.length > 0
+            ? known
+            : analyzeIncline(data, { minInclineMode: state.settings.inclineRequirementMode });
+          if (ownerId && results !== known) get().setLayerAnalysisResults(ownerId, results);
+          set(
+            (current) => ({
+              analysis: {
+                ...current.analysis,
+                results,
+                layerId: ownerId,
+                selectedLayerId: ownerId,
+                selectedPipeIndex:
+                  (current.analysis.selectedLayerId ?? null) === ownerId
+                    ? current.analysis.selectedPipeIndex
+                    : null,
+                hoveredPointIndex: null,
+                hoveredSegment: null,
+                hoveredTerrainPoint: null,
+              },
+            }),
+            false,
+            'analysis/openLayer',
+          );
+          get().toggleAnalysisModal(true);
+          if (pipeIndex !== null) get().selectAnalysisPipe(pipeIndex, ownerId);
+          return true;
+        },
+
+        /**
+         * The incline requirement is one setting for all layers. Every layer is recalculated from its own data, and the
+         * open analysis keeps showing its own layer.
+         */
+        setInclineRequirementMode: (mode) =>
+          set(
+            (state) => {
+              const calculate = (data) => analyzeIncline(data, { minInclineMode: mode });
+              const layers = Object.fromEntries(Object.entries(state.layers).map(([id, layer]) => [
+                id, layer?.data ? { ...layer, analysis: { ...layer.analysis, results: calculate(layer.data) } } : layer,
+              ]));
+              const ownerId = state.analysis.layerId;
+              return {
+                settings: { ...state.settings, inclineRequirementMode: mode },
+                layers,
+                analysis: {
+                  ...state.analysis,
+                  results: ownerId
+                    ? layers[ownerId]?.analysis?.results || []
+                    : state.data ? calculate(state.data) : state.analysis.results,
+                },
+              };
+            },
+            false,
+            'analysis/setRequirementMode',
+          ),
+
+        /** Opens Høydekontroll for one layer, from that layer's own results. Returns false when the layer is gone. */
+        openLayerZValidation: (layerId, { rerun = false } = {}) => {
+          const layer = get().layers[layerId];
+          if (!layer?.data) return false;
+          const known = layer.zValidation?.results;
+          const results = !rerun && known ? known : analyzeZValues(layer.data);
+          if (results !== known) get().setLayerZValidationResults(layerId, results);
+          set({ zValidation: { results, isOpen: true, layerId } }, false, 'zValidation/openLayer');
+          return true;
+        },
 
         toggleAnalysisModal: (isOpen) =>
           set(
@@ -790,6 +893,7 @@ const useStore = create(
               analysis: {
                 ...state.analysis,
                 selectedPipeIndex: index,
+                selectedLayerId: layerId,
                 layerId: layerId,
               },
               // Also highlight on map - prefix with 'ledninger-' to match MapInner ID format
@@ -1216,6 +1320,7 @@ const useStore = create(
           feltHiddenValues: [], // Array of {fieldName, value, objectType} - 'points' or 'lines'
           feltSearchText: '', // Search text for Felt filtering
           outlierPromptOpen: false, // Ask user whether to ignore outliers on load
+          outlierPromptLayerId: null, // Layer the outlier prompt is about
           missingHeightPromptOpen: false, // Warn if one or more lines are missing Z
           missingHeightDetailsOpen: false, // Details popup listing lines missing Z
           missingHeightLines: [], // Array<{index:number, fcode:string|null, type:string|null}>
@@ -1223,6 +1328,7 @@ const useStore = create(
           dataInspectorOpen: false, // Data inspector modal visibility
           dataInspectorTarget: null, // { type: 'point'|'line', index: number } | null
           zValidationPromptOpen: false, // Prompt to review missing Z values
+          zValidationPromptLayerId: null, // Layer the missing-Z prompt is about
           multiLayerModeEnabled: false,
         },
 
@@ -1504,9 +1610,26 @@ const useStore = create(
             'ui/toggleMissingReport',
           ),
 
+        // The layer card opens Validator on its own layer, whatever an earlier Rettinger or Validator visit asked for.
+        openLayerValidator: (layerId) => {
+          if (!get().layers[layerId]) return false;
+          get().toggleFieldValidation(true);
+          set(
+            (state) => ({
+              gmiValidatorFocus: { layerId, ruleId: null, geometryScope: null },
+              ui: { ...state.ui, expandedLayerId: layerId },
+            }),
+            false,
+            'validator/openLayer',
+          );
+          return true;
+        },
+
         toggleFieldValidation: (isOpen) =>
           set(
             (state) => ({
+              // A navigation request does not outlive the Validator visit it opened.
+              gmiValidatorFocus: isOpen === false ? null : state.gmiValidatorFocus,
               ui: {
                 ...state.ui,
                 fieldValidationOpen:
@@ -1585,22 +1708,29 @@ const useStore = create(
                   activeViewTab:
                     options.switchToTab || state.ui.activeViewTab,
                   highlightedFeatureId: featureId,
-                  mapCenterTarget: { coordinates, zoom, featureId },
+                  // The coordinates are in the owning layer's CRS.
+                  mapCenterTarget: {
+                    coordinates, zoom, featureId,
+                    ...(options.layerId ? { layerId: options.layerId } : {}),
+                  },
                 },
               };
 
               // If this is a pipe and profilanalyse is open, also select it in analysis. Validator and Rettinger
-              // suspend the main-map analysis (B1.2), so their table and inspector never change its selected pipe.
+              // suspend the main-map analysis (B1.2), so their table and inspector never change its selected pipe. An open
+              // analysis keeps its layer: an object in another layer is shown without rebinding the results.
               if (
                 options.objectType === 'pipe' &&
                 options.lineIndex !== undefined &&
                 state.analysis.isOpen &&
+                (state.analysis.layerId || null) === (options.layerId || null) &&
                 !state.ui.fieldValidationOpen &&
                 !state.gmiEditWorkspace
               ) {
                 newState.analysis = {
                   ...state.analysis,
                   selectedPipeIndex: options.lineIndex,
+                  selectedLayerId: options.layerId || null,
                   layerId: options.layerId || null,
                 };
               }
@@ -2264,7 +2394,21 @@ const useStore = create(
               const { [layerId]: removedValidatorDatasetBy, ...remainingValidatorDatasetsBy } = state.gmiValidatorDatasetsBy || {};
               void removedValidatorDataset; void removedValidatorDatasetBy;
               void removedView;
+              // Nothing that points at the removed layer may stay actionable: open analyses, prompts, map targets.
+              const ownsAnalysis = state.analysis.layerId === layerId;
+              const ownsSelection = state.analysis.selectedLayerId === layerId;
+              const ownsZValidation = state.zValidation.layerId === layerId;
+              const ownsOutlierPrompt = state.ui.outlierPromptLayerId === layerId;
+              const ownsZPrompt = state.ui.zValidationPromptLayerId === layerId;
+              const ownsInspector = state.ui.dataInspectorTarget?.layerId === layerId;
+              const ownsFeature = (featureId) => typeof featureId === 'string' && featureId.includes(`-${layerId}-`);
               const baseState = {
+                analysis: ownsAnalysis
+                  ? { ...state._initial.analysis }
+                  : ownsSelection
+                    ? { ...state.analysis, selectedPipeIndex: null, selectedLayerId: null }
+                    : state.analysis,
+                zValidation: ownsZValidation ? { ...state._initial.zValidation } : state.zValidation,
                 layerFilterDisclosure: Object.fromEntries(Object.entries(state.layerFilterDisclosure).filter(([id]) => id !== layerId)),
                 layers: remainingLayers,
                 layerOrder: nextLayerOrder,
@@ -2296,6 +2440,13 @@ const useStore = create(
                     state.ui.highlightedLayerId === layerId
                       ? null
                       : state.ui.highlightedLayerId,
+                  ...(ownsOutlierPrompt ? { outlierPromptOpen: false, outlierPromptLayerId: null } : {}),
+                  ...(ownsZPrompt ? { zValidationPromptOpen: false, zValidationPromptLayerId: null } : {}),
+                  ...(ownsInspector ? { dataInspectorOpen: false, dataInspectorTarget: null } : {}),
+                  ...(ownsFeature(state.ui.highlightedFeatureId) ? { highlightedFeatureId: null } : {}),
+                  ...(state.ui.mapCenterTarget?.layerId === layerId || ownsFeature(state.ui.mapCenterTarget?.featureId)
+                    ? { mapCenterTarget: null } : {}),
+                  ...(state.ui.selectedObject3D?.layerId === layerId ? { selectedObject3D: null } : {}),
                   multiLayerModeEnabled: true,
                 },
               };
@@ -2306,15 +2457,8 @@ const useStore = create(
                 ...baseState,
                 file: null,
                 data: null,
-                analysis: {
-                  results: [],
-                  isOpen: false,
-                  selectedPipeIndex: null,
-                },
-                zValidation: {
-                  results: null,
-                  isOpen: false,
-                },
+                analysis: { ...state._initial.analysis },
+                zValidation: { ...state._initial.zValidation },
                 outliers: {
                   results: null,
                   hideOutliers: false,
@@ -2327,10 +2471,12 @@ const useStore = create(
                 ui: {
                   ...baseState.ui,
                   outlierPromptOpen: false,
+                  outlierPromptLayerId: null,
                   missingHeightPromptOpen: false,
                   missingHeightDetailsOpen: false,
                   missingHeightLines: [],
                   zValidationPromptOpen: false,
+                  zValidationPromptLayerId: null,
                 },
               };
             },
@@ -2719,6 +2865,29 @@ const useStore = create(
             },
             false,
             'layers/resetFilters',
+          ),
+
+        /**
+         * Hides or shows one layer's outliers in the 2D map. Display only: data, Validator, Rettinger and exports never
+         * read it, and the choice lives and dies with its layer.
+         */
+        setLayerOutliersHidden: (layerId, hidden) =>
+          set(
+            (state) => {
+              const layer = state.layers[layerId];
+              if (!layer) return state;
+              return {
+                layers: {
+                  ...state.layers,
+                  [layerId]: {
+                    ...layer,
+                    outliers: { ...layer.outliers, hideOutliers: Boolean(hidden) },
+                  },
+                },
+              };
+            },
+            false,
+            'layers/setOutliersHidden',
           ),
 
         /**
@@ -3223,6 +3392,7 @@ const useStore = create(
                 parsing: { ...initial.parsing },
                 validation: { ...initial.validation },
                 analysis: { ...initial.analysis },
+                zValidation: { ...initial.zValidation },
                 terrain: { ...initial.terrain },
                 outliers: { ...initial.outliers },
                 ui: {

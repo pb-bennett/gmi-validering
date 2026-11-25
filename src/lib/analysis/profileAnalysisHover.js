@@ -7,6 +7,16 @@ export const selectAnalysisActiveData = (state) => {
     : state.data;
 };
 
+const NO_RESULTS = Object.freeze([]);
+
+// The owning layer is the authority for its results; the global list is the legacy single-file state.
+export const selectAnalysisActiveResults = (state) => {
+  const layerId = state.analysis.layerId;
+  return layerId
+    ? state.layers[layerId]?.analysis?.results ?? NO_RESULTS
+    : state.analysis.results;
+};
+
 export const getHoveredTerrainLatLng = (
   hoveredTerrainPoint,
   lineCoords,

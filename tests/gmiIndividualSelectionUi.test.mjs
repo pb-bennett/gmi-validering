@@ -47,8 +47,8 @@ test('B3 production: Validator five points, source order, draft cancellation, in
       await setPhotoFiles(browser, 'input[type=file]', [file]);
       await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
       await browser.evaluate(`document.querySelector('[title="Synthetic B3.gmi"]').click()`);
-      await browser.waitFor('document.querySelector("button[aria-label=Feltvalidering]")');
-      await browser.evaluate('document.querySelector("button[aria-label=Feltvalidering]").click()');
+      await browser.waitFor('document.querySelector("button[aria-label=Validator]")');
+      await browser.evaluate('document.querySelector("button[aria-label=Validator]").click()');
       await browser.waitFor('document.querySelector(\'[role=tablist][aria-label=Geometri]\')');
       await browser.evaluate(`Array.from(document.querySelector('[role=tablist][aria-label=Geometri]').querySelectorAll('button')).find(e=>e.innerText.startsWith('Punkter')).click()`);
       const field = `document.querySelector('button[aria-label^="Innvendig/utvendig:"]')`;

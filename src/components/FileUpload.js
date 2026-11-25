@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import useStore from '@/lib/store';
+import CrsChoiceDialog from './CrsChoiceDialog';
 import { getDatasetCoordinate } from '@/lib/tracking/datasetCoordinate';
 import { GMIParser } from '@/lib/parsing/gmiParser';
 import { SOSIParser } from '@/lib/parsing/sosiParser';
@@ -27,7 +28,32 @@ export function useFileLoader({ onComplete } = {}) {
   const setData = useStore((state) => state.setData);
   const clearData = useStore((state) => state.clearData);
   const addLayer = useStore((state) => state.addLayer);
+  const removeLayer = useStore((state) => state.removeLayer);
+  const restoreParsing = useStore((state) => state.restoreParsing);
   const hydrated = useStore((state) => state.hydrated === true);
+
+  // The explicit CRS choice for a file without one. Resolves to an EPSG code, or null when the import is cancelled.
+  const [crsRequest, setCrsRequest] = useState(null);
+  const pendingCrsRef = useRef(null);
+  const requestCrs = useCallback(
+    (fileName, invalid) =>
+      new Promise((resolve) => {
+        const request = { fileName, invalid, resolve };
+        pendingCrsRef.current = request;
+        setCrsRequest(request);
+      }),
+    [],
+  );
+  const settleCrs = (epsg) => {
+    pendingCrsRef.current?.resolve(epsg);
+    pendingCrsRef.current = null;
+    setCrsRequest(null);
+  };
+  // An unmounted importer never leaves an import half done.
+  useEffect(() => () => {
+    pendingCrsRef.current?.resolve(null);
+    pendingCrsRef.current = null;
+  }, []);
 
   const trackUploadSuccess = async (datasetCoord) => {
     try {
@@ -98,6 +124,16 @@ export function useFileLoader({ onComplete } = {}) {
       const ext = (file.name || '').toLowerCase().split('.').pop();
       const preferArrayBuffer = ext !== 'kof';
 
+      // What a cancelled or failed import returns to: an added file never costs the workspace it was added to.
+      const {
+        parsing: previousParsing,
+        file: previousFile,
+        data: previousData,
+        layerOrder: previousLayerOrder,
+      } = useStore.getState();
+      const addingToWorkspace = previousLayerOrder.length > 0;
+      let addedLayerId = null;
+
       // Update file metadata in store
       setFile({
         name: file.name,
@@ -110,7 +146,7 @@ export function useFileLoader({ onComplete } = {}) {
       startParsing();
 
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const content = e.target.result;
 
@@ -181,11 +217,15 @@ export function useFileLoader({ onComplete } = {}) {
             sourceCrs: parsedData?.crsContext || null,
           });
           if (crs.crsStatus === 'missing' || crs.crsStatus === 'invalid') {
-            const useZone32 = window.confirm(
-              'Filen mangler koordinatsystem (CRS).\n\nTrykk OK for å bruke UTM sone 32 (EPSG:25832).\nTrykk Avbryt for å bruke UTM sone 33 (EPSG:25833).',
+            const selectedEpsg = await requestCrs(
+              file.name,
+              crs.crsStatus === 'invalid',
             );
-
-            const selectedEpsg = useZone32 ? 25832 : 25833;
+            if (selectedEpsg === null) {
+              setFile(previousFile);
+              restoreParsing(previousParsing);
+              return;
+            }
             crs = classifyCrs({
               header: parsedData?.header || {},
               sourceFormat: format,
@@ -197,7 +237,7 @@ export function useFileLoader({ onComplete } = {}) {
               header: {
                 ...(parsedData.header || {}),
                 COSYS_EPSG: selectedEpsg,
-                COSYS: `UTM ${useZone32 ? '32' : '33'}`,
+                COSYS: `UTM ${selectedEpsg === 25832 ? '32' : '33'}`,
               },
               crsContext: crs,
             };
@@ -217,12 +257,12 @@ export function useFileLoader({ onComplete } = {}) {
           };
 
           // Always use layer system - add file as a new layer
-          addLayer({ file: fileMeta, data: parsedDataForApp,
+          addedLayerId = addLayer({ file: fileMeta, data: parsedDataForApp,
             sourceInput: gmiPhotoEvidence ? { file, evidence: gmiPhotoEvidence } : null });
 
           // Also set legacy data/file state for backward compatibility
           setFile(fileMeta);
-          setData(parsedDataForApp);
+          setData(parsedDataForApp, { layerId: addedLayerId });
           setParsingDone();
 
           const datasetCoord = getDatasetCoordinate(parsedDataForApp);
@@ -246,6 +286,16 @@ export function useFileLoader({ onComplete } = {}) {
         } catch (error) {
           console.error('Parsing failed');
 
+          // Best effort: a file that failed leaves nothing of itself behind in the workspace.
+          try {
+            if (addedLayerId) removeLayer(addedLayerId);
+          } catch {}
+          if (addingToWorkspace) {
+            try {
+              useStore.setState({ file: previousFile, data: previousData });
+            } catch {}
+          }
+
           // Exceptionally large files can cause Zustand persist/localStorage to exceed quota.
           // In that case, avoid getting stuck in a loop of failing writes and show a simple message.
           if (isQuotaExceededError(error)) {
@@ -254,7 +304,7 @@ export function useFileLoader({ onComplete } = {}) {
 
             // Best effort: clear oversized data from state before setting the error.
             try {
-              clearData();
+              if (!addingToWorkspace) clearData();
             } catch {}
 
             // Best effort: clear persisted key (may already be too large).
@@ -293,6 +343,7 @@ export function useFileLoader({ onComplete } = {}) {
         }
       };
       reader.onerror = () => {
+        if (addingToWorkspace) setFile(previousFile);
         setParsingError(
           'Kunne ikke lese filen. Kontroller at filen er tilgjengelig og prøv igjen.',
         );
@@ -313,12 +364,25 @@ export function useFileLoader({ onComplete } = {}) {
       setParsingError,
       clearData,
       addLayer,
+      removeLayer,
+      restoreParsing,
+      requestCrs,
       onComplete,
       hydrated,
     ],
   );
 
-  return { handleFile };
+  // Every caller renders this: it is the only place a pending CRS choice can be answered.
+  const crsDialog = crsRequest && (
+    <CrsChoiceDialog
+      fileName={crsRequest.fileName}
+      invalid={crsRequest.invalid}
+      onCancel={() => settleCrs(null)}
+      onConfirm={settleCrs}
+    />
+  );
+
+  return { handleFile, crsDialog };
 }
 
 export default function FileUpload({
@@ -326,7 +390,7 @@ export default function FileUpload({
   isAddingLayer = false,
 }) {
   const [isDragging, setIsDragging] = useState(false);
-  const { handleFile } = useFileLoader({ onComplete });
+  const { handleFile, crsDialog } = useFileLoader({ onComplete });
 
   const onDragOver = useCallback((e) => {
     e.preventDefault();
@@ -354,13 +418,18 @@ export default function FileUpload({
   const onInputChange = useCallback(
     (e) => {
       if (e.target.files && e.target.files.length > 0) {
-        handleFile(e.target.files[0]);
+        const file = e.target.files[0];
+        // The same file can be chosen again after a cancelled or failed import.
+        e.target.value = '';
+        handleFile(file);
       }
     },
     [handleFile],
   );
 
   return (
+    <>
+    {crsDialog}
     <div
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -412,5 +481,6 @@ export default function FileUpload({
         </p>
       </div>
     </div>
+    </>
   );
 }

@@ -77,8 +77,8 @@ test('Batch 1A/1A.2 production: complete Validator handoff, all-point pairing, K
       await setPhotoFiles(browser, 'input[type=file]', [source]);
       await browser.waitFor('document.querySelector(\'[title="Synthetic covers.gmi"]\')');
       await browser.evaluate('document.querySelector(\'[title="Synthetic covers.gmi"]\').click()');
-      await browser.waitFor('document.querySelector("button[aria-label=Feltvalidering]")');
-      await browser.evaluate('document.querySelector("button[aria-label=Feltvalidering]").click()');
+      await browser.waitFor('document.querySelector("button[aria-label=Validator]")');
+      await browser.evaluate('document.querySelector("button[aria-label=Validator]").click()');
       const rule = `document.querySelector('button[aria-label^="S_HYPERLINK:"]')`;
       await browser.waitFor(rule);
       await browser.evaluate(`${rule}.click()`);

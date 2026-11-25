@@ -44,7 +44,7 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
     };
     const openValidator = async (name) => {
       const title = `document.querySelector(${JSON.stringify(`[title="${name}.gmi"]`)})`;
-      const action = `${title}.closest('.py-1').querySelector('button[aria-label=Feltvalidering]')`;
+      const action = `${title}.closest('.py-1').querySelector('button[aria-label=Validator]')`;
       if (!await browser.evaluate(`Boolean(${action})`)) await browser.evaluate(`${title}.click()`);
       await browser.waitFor(action);
       await browser.evaluate(`${action}.click()`);

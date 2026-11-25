@@ -425,6 +425,11 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     } catch (failure) { setCorrectionError(failure.message); }
   };
 
+  // A request for a layer only is fulfilled once that layer is selected; it must not steer a later visit.
+  useEffect(() => {
+    if (focus && !focus.ruleId && focus.layerId === selectedLayerId) useStore.setState({ gmiValidatorFocus: null });
+  }, [focus, selectedLayerId]);
+
   useEffect(() => {
     if (!result || focus?.layerId !== selectedLayerId || !focus.ruleId) return;
     // A requested geometry is searched first: the same field can have rules for points and lines (H4 return).

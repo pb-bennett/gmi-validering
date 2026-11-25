@@ -93,7 +93,7 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.match(statsTrigger, /gap: parsingStatus === 'done' \? '6px' : '8px'/);
   assert.match(statsTrigger, /h-\[15px\] w-\[15px\]/);
   assert.doesNotMatch(read('src/app/globals.css'), /statistics-button--cue|statistics-button-entrance|statistics-button-ripple/);
-  assert.ok(statsTriggerStart < page.indexOf("{(parsingStatus === 'done' || hasPhotoLayers) &&"));
+  assert.ok(statsTriggerStart < page.indexOf('{(surveyWorkspaceReady || hasPhotoLayers) &&'));
   assert.equal((page.match(/aria-label="Vis bruksstatistikk"/g) || []).length, 1);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);
   assert.match(validationSidebar, /<FieldDetailModal[\s\S]*?isOpen=\{!!selectedField\}/);

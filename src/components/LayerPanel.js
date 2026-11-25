@@ -6,10 +6,8 @@ import { LayerTemaSection, LayerFeltSection } from './LayerFilterSections';
 import useStore from '@/lib/store';
 import LayerTypeBadge from './LayerTypeBadge';
 import { isLoadedGmiSurveyLayer, loadedGmiSources } from '@/lib/photos/loadedGmiSource.mjs';
-import { analyzeIncline } from '@/lib/analysis/incline';
-import { analyzeZValues } from '@/lib/analysis/zValidation';
 import { analyzeTopplok } from '@/lib/analysis/topplok';
-import { detectOutliers } from '@/lib/analysis/outliers';
+import AnalysisErrorBoundary, { AnalysisErrorMessage } from './AnalysisErrorBoundary';
 import { getLayerHighlightStyle } from '@/lib/map/layerHighlight.mjs';
 import PhotoIconButton from './photos/PhotoIconButton';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
@@ -41,41 +39,17 @@ function LayerAnalysisButtons({
   hasTopplokResults,
   topplokOpen,
 }) {
-  const setLayerAnalysisResults = useStore(
-    (state) => state.setLayerAnalysisResults,
+  const openLayerAnalysis = useStore(
+    (state) => state.openLayerAnalysis,
   );
-  const toggleLayerAnalysisModal = useStore(
-    (state) => state.toggleLayerAnalysisModal,
+  const openLayerZValidation = useStore(
+    (state) => state.openLayerZValidation,
   );
-  const setAnalysisResults = useStore(
-    (state) => state.setAnalysisResults,
-  );
-  const setAnalysisLayerId = useStore(
-    (state) => state.setAnalysisLayerId,
-  );
-  const toggleAnalysisModal = useStore(
-    (state) => state.toggleAnalysisModal,
-  );
-  const setLayerZValidationResults = useStore(
-    (state) => state.setLayerZValidationResults,
-  );
-  const toggleLayerZValidationModal = useStore(
-    (state) => state.toggleLayerZValidationModal,
-  );
-  const setZValidationResults = useStore(
-    (state) => state.setZValidationResults,
-  );
-  const toggleZValidationModal = useStore(
-    (state) => state.toggleZValidationModal,
-  );
-  const toggleFieldValidation = useStore(
-    (state) => state.toggleFieldValidation,
+  const openLayerValidator = useStore(
+    (state) => state.openLayerValidator,
   );
   const toggleLayerHighlightAll = useStore(
     (state) => state.toggleLayerHighlightAll,
-  );
-  const inclineRequirementMode = useStore(
-    (state) => state.settings.inclineRequirementMode,
   );
 
   const data = layer?.data;
@@ -83,27 +57,6 @@ function LayerAnalysisButtons({
   const analysisResults = layer?.analysis?.results || [];
   const zValidationResults = layer?.zValidation?.results;
   const highlightAll = Boolean(layer?.highlightAll);
-
-  const runInclineAnalysis = () => {
-    if (!data) return;
-    const results = analyzeIncline(data, {
-      minInclineMode: inclineRequirementMode,
-    });
-    setLayerAnalysisResults(layerId, results);
-    setAnalysisResults(results);
-    setAnalysisLayerId(layerId);
-    toggleAnalysisModal(true);
-    toggleLayerAnalysisModal(layerId, true);
-  };
-
-  const runZValidation = () => {
-    if (!data) return;
-    const results = analyzeZValues(data);
-    setLayerZValidationResults(layerId, results);
-    toggleLayerZValidationModal(layerId, true);
-    setZValidationResults(results);
-    toggleZValidationModal(true);
-  };
 
   const zMissing =
     (zValidationResults?.summary?.missingPointObjects || 0) +
@@ -131,16 +84,7 @@ function LayerAnalysisButtons({
         tooltip={isKof ? 'Ikke tilgjengelig for KOF' : analysisResults.length > 0 ? 'Åpne profilanalyse' : 'Kjør profilanalyse'}
         unavailable={isKof}
         className="layer-card-icon-button"
-        onClick={
-          analysisResults.length > 0
-            ? () => {
-                setAnalysisResults(analysisResults);
-                setAnalysisLayerId(layerId);
-                toggleAnalysisModal(true);
-                toggleLayerAnalysisModal(layerId, true);
-              }
-            : runInclineAnalysis
-        }
+        onClick={() => openLayerAnalysis(layerId)}
       />
 
       {/* Høydekontroll */}
@@ -150,30 +94,22 @@ function LayerAnalysisButtons({
         label="Høydekontroll"
         tooltip={zMissing > 0 ? `${zAction} · ${zMissing} ${zMissing === 1 ? 'objekt' : 'objekter'} mangler Z` : zAction}
         className="layer-card-icon-button"
-        onClick={
-          zValidationResults
-            ? () => {
-                setZValidationResults(zValidationResults);
-                toggleZValidationModal(true);
-                toggleLayerZValidationModal(layerId, true);
-              }
-            : runZValidation
-        }
+        onClick={() => openLayerZValidation(layerId)}
       >
         {zMissing > 0 && (
           <span aria-hidden="true" className="gmi-validation-dot absolute -top-1 -right-1 size-2 rounded-full" data-validation-tone="error" />
         )}
       </PhotoIconButton>
 
-      {/* Feltvalidering */}
+      {/* Validator */}
       <PhotoIconButton
         icon={ClipboardTextIcon}
         size={16}
-        label="Feltvalidering"
-        tooltip={isKof ? 'Ikke tilgjengelig for KOF' : 'Feltvalidering'}
+        label="Validator"
+        tooltip={isKof ? 'Ikke tilgjengelig for KOF' : 'Validator'}
         unavailable={isKof}
         className="layer-card-icon-button"
-        onClick={() => toggleFieldValidation(true)}
+        onClick={() => openLayerValidator(layerId)}
       />
 
       {/* Topplok kontroll */}
@@ -212,7 +148,8 @@ function LayerTopplokSection({
   const isKof = data?.format === 'KOF';
 
   const highlightPoint = (pointIndex) => {
-    const featureId = `punkter-${pointIndex}`;
+    // Point indices repeat across files; only the layer-qualified ID names this object.
+    const featureId = `punkter-${layerId}-${pointIndex}`;
     const coord = data?.points?.[pointIndex]?.coordinates?.[0];
 
     if (
@@ -220,7 +157,11 @@ function LayerTopplokSection({
       Number.isFinite(coord.x) &&
       Number.isFinite(coord.y)
     ) {
-      viewObjectInMap(featureId, [coord.y, coord.x], 21);
+      viewObjectInMap(featureId, [coord.y, coord.x], 21, {
+        layerId,
+        objectType: 'point',
+        pointIndex,
+      });
       return;
     }
 
@@ -337,6 +278,33 @@ function LayerTopplokSection({
 }
 
 /**
+ * The layer's outliers: hiding them in the map is display only and is always undone here, on the owning layer.
+ */
+function LayerOutlierRow({ layerId, layer }) {
+  const setLayerOutliersHidden = useStore(
+    (state) => state.setLayerOutliersHidden,
+  );
+  const count = layer.outliers?.results?.outliers?.length || 0;
+  if (count === 0) return null;
+  const hidden = Boolean(layer.outliers.hideOutliers);
+  const noun = count === 1 ? 'avviker' : 'avvikere';
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-gmi-border px-3 py-2" data-layer-outliers={hidden ? 'hidden' : 'shown'}>
+      <span className="text-[10px] text-gmi-text-muted" role="status">
+        {count} {noun} {hidden ? 'skjult i kartet' : 'vist i kartet'}
+      </span>
+      <button
+        type="button"
+        onClick={() => setLayerOutliersHidden(layerId, !hidden)}
+        className="gmi-compact-button gmi-focus-ring shrink-0 border border-gmi-border-strong bg-gmi-surface px-2 py-0.5 text-[10px] font-medium"
+      >
+        {hidden ? 'Vis avvikere' : 'Ignorer avvikere'}
+      </button>
+    </div>
+  );
+}
+
+/**
  * LayerPanel - Expandable panel for a single layer
  *
  * Shows layer name, visibility toggle, and
@@ -429,6 +397,9 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
   };
 
   const layerColor = getLayerHighlightStyle(layer, layerId).color;
+  const ignoredOutliers = layer.outliers?.hideOutliers
+    ? layer.outliers.results?.outliers?.length || 0
+    : 0;
 
   return (
     <div className="py-1">
@@ -467,6 +438,7 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
             </div>
             <div className="text-[10px] text-gmi-text-subtle">
               {pointCount} punkt, {lineCount} ledn.
+              {!isExpanded && ignoredOutliers > 0 && ` · ${ignoredOutliers} ${ignoredOutliers === 1 ? 'avviker' : 'avvikere'} skjult i kartet`}
               {gmiEditStatus?.changeSetCount > 0 && (
                 <span className="gmi-edit-layer-pill" data-downloaded={gmiEditStatus.downloaded || undefined} data-gmi-layer-pill>
                   {gmiEditStatus.changeSetCount} {gmiEditStatus.changeSetCount === 1 ? 'retting' : 'rettinger'}{gmiEditStatus.unsaved ? ' · ikke lastet ned' : gmiEditStatus.downloaded ? ' · lastet ned' : ''}
@@ -591,14 +563,25 @@ export default function LayerPanel({ layerId, codeLookups, onAddGmiPhotos }) {
               </div>
             </div>
 
-            <LayerTopplokSection
-              layerId={layerId}
-              layer={layer}
-              results={topplokResults}
-              showResults={topplokOpen}
-              setShowResults={setTopplokOpen}
-              setResults={setTopplokResults}
-            />
+            <LayerOutlierRow layerId={layerId} layer={layer} />
+
+            <AnalysisErrorBoundary
+              resetKey={`${layerId}:${topplokOpen}`}
+              onRetry={() => setTopplokResults(analyzeTopplok(layer.data))}
+              renderFallback={(retry) => topplokOpen && (
+                <AnalysisErrorMessage compact kind="topplok" title="Topplok-resultatet kunne ikke vises."
+                  closeLabel="Lukk topplok" onRetry={retry} onClose={() => setTopplokOpen(false)} />
+              )}
+            >
+              <LayerTopplokSection
+                layerId={layerId}
+                layer={layer}
+                results={topplokResults}
+                showResults={topplokOpen}
+                setShowResults={setTopplokOpen}
+                setResults={setTopplokResults}
+              />
+            </AnalysisErrorBoundary>
 
             {/* Tema section */}
             <LayerTemaSection

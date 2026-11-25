@@ -36,7 +36,8 @@ import PhotoEditLayer from './photos/PhotoEditLayer';
 import PhotoMapController from './photos/PhotoMapController';
 import MapLifecycleGuard from './MapLifecycleGuard';
 import { useShallow } from 'zustand/react/shallow';
-import { analyzeIncline } from '@/lib/analysis/incline';
+import AnalysisErrorBoundary from './AnalysisErrorBoundary';
+import { getLayerOutlierFeatureIds } from '@/lib/analysis/outliers';
 import {
   getHoveredTerrainLatLng,
   selectAnalysisActiveData,
@@ -397,17 +398,20 @@ function BoundsController({
             const props = feature?.properties || {};
             const geometryType = feature?.geometry?.type;
 
+            // Local IDs repeat across layers, so only the layer-qualified ID may exclude an object.
+            const localId = props._layerId
+              ? `${props._layerId}-${props.id}`
+              : props.id;
             const featureId =
-              props.featureId ||
-              (props.id !== undefined &&
+              props.id !== undefined &&
               (geometryType === 'Point' ||
                 geometryType === 'MultiPoint')
-                ? `punkter-${props.id}`
+                ? `punkter-${localId}`
                 : props.id !== undefined &&
                     (geometryType === 'LineString' ||
                       geometryType === 'MultiLineString')
-                  ? `ledninger-${props.id}`
-                  : null);
+                  ? `ledninger-${localId}`
+                  : null;
 
             if (!featureId) return true;
             return !ignoredFeatureIds.has(featureId);
@@ -1039,13 +1043,19 @@ function FieldValidationZoomHandler({ geoJsonData }) {
 
 function MapCenterHandler() {
   const map = useMap();
-  const data = useStore((state) => state.data);
+  // The target's coordinates are in its own layer's CRS, which is not always the CRS of the last loaded file.
+  const data = useStore((state) => {
+    const targetLayerId = state.ui.mapCenterTarget?.layerId;
+    return targetLayerId ? state.layers[targetLayerId]?.data : state.data;
+  });
   const mapCenterTarget = useStore(
     (state) => state.ui.mapCenterTarget,
   );
 
   useEffect(() => {
     if (!mapCenterTarget || !map) return;
+    // A target in a layer that is gone must not be read in another layer's CRS.
+    if (mapCenterTarget.layerId && !data) return;
 
     const { coordinates, zoom } = mapCenterTarget;
 
@@ -1295,24 +1305,8 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
   const openDataInspector = useStore(
     (state) => state.openDataInspector,
   );
-  const analysisResults = useStore((state) => state.analysis.results);
-  const setAnalysisResults = useStore(
-    (state) => state.setAnalysisResults,
-  );
-  const setLayerAnalysisResults = useStore(
-    (state) => state.setLayerAnalysisResults,
-  );
-  const setAnalysisLayerId = useStore(
-    (state) => state.setAnalysisLayerId,
-  );
-  const toggleAnalysisModal = useStore(
-    (state) => state.toggleAnalysisModal,
-  );
-  const selectAnalysisPipe = useStore(
-    (state) => state.selectAnalysisPipe,
-  );
-  const inclineRequirementMode = useStore(
-    (state) => state.settings.inclineRequirementMode,
+  const openLayerAnalysis = useStore(
+    (state) => state.openLayerAnalysis,
   );
 
   // Custom WMS layer configuration (credentials only in memory)
@@ -1380,60 +1374,39 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
 
         if (featureType !== 'Line' || Number.isNaN(index)) return;
 
-        const layerData = layerId ? layers[layerId]?.data : data;
-        const layerResults = layerId
-          ? layers[layerId]?.analysis?.results
-          : analysisResults;
-
-        if (
-          (!layerResults || layerResults.length === 0) &&
-          layerData
-        ) {
-          const results = analyzeIncline(layerData, {
-            minInclineMode: inclineRequirementMode,
-          });
-          if (layerId) {
-            setLayerAnalysisResults(layerId, results);
-          }
-          setAnalysisResults(results);
-        } else if (layerResults) {
-          setAnalysisResults(layerResults);
-        }
-
-        setAnalysisLayerId(layerId || null);
-        toggleAnalysisModal(true);
-        selectAnalysisPipe(index, layerId || null);
+        openLayerAnalysis(layerId, { pipeIndex: index });
       }
     };
 
     document.addEventListener('click', handleShowProfile);
     return () =>
       document.removeEventListener('click', handleShowProfile);
-  }, [
-    analysisResults,
-    data,
-    layers,
-    inclineRequirementMode,
-    setAnalysisResults,
-    setLayerAnalysisResults,
-    setAnalysisLayerId,
-    toggleAnalysisModal,
-    selectAnalysisPipe,
-  ]);
+  }, [openLayerAnalysis]);
 
-  // Build set of outlier feature IDs for filtering
+  // Ignored outliers, per layer and layer-qualified. A layer's results never change after import, so the IDs of the layers
+  // are enough; subscribing to them keeps terrain updates from restyling the map. No layers = legacy single-file state.
+  const ignoredOutlierLayerIds = useStore(
+    useShallow((state) =>
+      state.layerOrder.filter((id) => state.layers[id]?.outliers?.hideOutliers),
+    ),
+  );
   const outlierFeatureIds = useMemo(() => {
+    if (layerOrder.length > 0) {
+      return ignoredOutlierLayerIds.length > 0
+        ? getLayerOutlierFeatureIds(useStore.getState().layers, ignoredOutlierLayerIds)
+        : null;
+    }
     if (!outlierResults || !hideOutliers) return null;
     return new Set(outlierResults.outliers.map((o) => o.featureId));
-  }, [outlierResults, hideOutliers]);
+  }, [layerOrder, ignoredOutlierLayerIds, outlierResults, hideOutliers]);
 
   // Build set of outlier feature IDs for bounds (always ignore for fitBounds)
   const outlierFeatureIdsForBounds = useMemo(() => {
-    if (!outlierResults || !Array.isArray(outlierResults.outliers))
-      return null;
-    if (outlierResults.outliers.length === 0) return null;
-    return new Set(outlierResults.outliers.map((o) => o.featureId));
-  }, [outlierResults]);
+    const ids = layerOrder.length > 0
+      ? getLayerOutlierFeatureIds(useStore.getState().layers, layerOrder)
+      : new Set((outlierResults?.outliers || []).map((o) => o.featureId));
+    return ids.size > 0 ? ids : null;
+  }, [layerOrder, outlierResults]);
 
   const projectedLayerFeaturesRef = useRef(new Map());
   const geoJsonData = useMemo(() => {
@@ -1646,7 +1619,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       highlightedFeatureIdsKey,
       analysisIsOpen ? `open-${analysisSelectedPipeIndex}` : 'closed',
       filteredFeatureIds ? filteredFeatureIds.size : 0,
-      outlierFeatureIds ? outlierFeatureIds.size : 0,
+      outlierFeatureIds ? `${ignoredOutlierLayerIds.join(',')}:${outlierFeatureIds.size}` : 0,
       feltFilterActive ? 1 : 0,
       feltHiddenValues.length,
       highlightedFeltField || '',
@@ -1673,6 +1646,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
     analysisSelectedPipeIndex,
     filteredFeatureIds,
     outlierFeatureIds,
+    ignoredOutlierLayerIds,
     feltFilterActive,
     feltHiddenValues.length,
     highlightedFeltField,
@@ -1766,15 +1740,15 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       layerId && id !== undefined
         ? `${prefix}-${layerId}-${id}`
         : baseId;
-    return { id, layerId, baseId, layeredId };
+    return { id, layerId, layeredId };
   }, []);
 
-  const setHasFeatureId = useCallback((set, layeredId, baseId) => {
-    if (!set || !set.has) return false;
-    if (layeredId && set.has(layeredId)) return true;
-    if (baseId && set.has(baseId)) return true;
-    return false;
-  }, []);
+  // Objects match on the layer-qualified ID only (the bare ID exists only without layers): a bare ID would match the same
+  // index in every layer.
+  const setHasFeatureId = useCallback(
+    (set, featureId) => Boolean(featureId && set?.has?.(featureId)),
+    [],
+  );
 
   // Resolve the final semantic style once; the casing derives from this exact result.
   const lineStyle = useCallback(
@@ -1782,10 +1756,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       const fcode = normalizeFcode(feature.properties?.S_FCODE);
       const fcodeForFilter = fcode || MISSING_TEMA_VALUE;
       const typeVal = feature.properties?.Type || '(Mangler Type)';
-      const { baseId, layeredId } = getFeatureIds(
-        feature,
-        'lines',
-      );
+      const { layeredId } = getFeatureIds(feature, 'lines');
       const featureId = layeredId;
       const layerHiddenCodes =
         feature.properties?._layerHiddenCodes || [];
@@ -1831,13 +1802,12 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
           highlightedTypeContext === fcodeForFilter);
       const isHighlightedByFeature =
         featureId &&
-        (highlightedFeatureId === featureId ||
-          highlightedFeatureId === baseId);
+        highlightedFeatureId === featureId;
       const isHighlightedByFeatures =
         featureId &&
         highlightedFeatureIds &&
         highlightedFeatureIds.has &&
-        setHasFeatureId(highlightedFeatureIds, featureId, baseId);
+        setHasFeatureId(highlightedFeatureIds, featureId);
       // Felt (field value) highlighting on hover
       const isHighlightedByFelt = isHighlightedByFeltHover(
         feature,
@@ -1856,14 +1826,14 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
         filteredFeatureIds &&
         featureId &&
         filteredFeatureIds.has &&
-        !setHasFeatureId(filteredFeatureIds, featureId, baseId);
+        !setHasFeatureId(filteredFeatureIds, featureId);
 
       // Outlier filtering
       const isOutlier =
         !fieldValidationFilterActive &&
         outlierFeatureIds &&
         featureId &&
-        setHasFeatureId(outlierFeatureIds, featureId, baseId);
+        setHasFeatureId(outlierFeatureIds, featureId);
 
       if (isHidden || isFilteredOut || isOutlier) {
         return {
@@ -1967,7 +1937,7 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       const fcode = normalizeFcode(feature.properties?.S_FCODE);
       const fcodeForFilter = fcode || MISSING_TEMA_VALUE;
       const typeVal = feature.properties?.Type || '(Mangler Type)';
-      const { baseId, layeredId, layerId } = getFeatureIds(
+      const { layeredId, layerId } = getFeatureIds(
         feature,
         'points',
       );
@@ -2022,13 +1992,12 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
           highlightedTypeContext === fcodeForFilter);
       const isHighlightedByFeature =
         featureId &&
-        (highlightedFeatureId === featureId ||
-          highlightedFeatureId === baseId);
+        highlightedFeatureId === featureId;
       const isHighlightedByFeatures =
         featureId &&
         highlightedFeatureIds &&
         highlightedFeatureIds.has &&
-        setHasFeatureId(highlightedFeatureIds, featureId, baseId);
+        setHasFeatureId(highlightedFeatureIds, featureId);
       // Felt (field value) highlighting on hover
       const isHighlightedByFelt = isHighlightedByFeltHover(
         feature,
@@ -2047,14 +2016,14 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
         filteredFeatureIds &&
         featureId &&
         filteredFeatureIds.has &&
-        !setHasFeatureId(filteredFeatureIds, featureId, baseId);
+        !setHasFeatureId(filteredFeatureIds, featureId);
 
       // Outlier filtering
       const isOutlier =
         !fieldValidationFilterActive &&
         outlierFeatureIds &&
         featureId &&
-        setHasFeatureId(outlierFeatureIds, featureId, baseId);
+        setHasFeatureId(outlierFeatureIds, featureId);
 
       if (isHidden || isFilteredOut || isOutlier) {
         // Return a dummy marker that is invisible
@@ -2380,12 +2349,25 @@ export default function MapInner({ onZoomChange, onOpenPhoto, photoLocateRequest
       {/* Batch F: every map-based workspace shares this map, so Street View is available in all of them. */}
       <StreetViewControl />
       {!analysisSuspended && <AnalysisPointsLayer />}
-      <AnalysisZoomHandler />
+      <AnalysisErrorBoundary resetKey={`${analysisStateOpen}:${analysisLayerId}:${analysisSelectedPipeIndex}`}>
+        <AnalysisZoomHandler />
+      </AnalysisErrorBoundary>
     </MapContainer>
   );
 }
 
+// An analysis overlay that cannot be drawn is left out; the map and its layers stay.
 function AnalysisPointsLayer() {
+  const resetKey = useStore((state) =>
+    `${state.analysis.isOpen}:${state.analysis.layerId}:${state.analysis.selectedPipeIndex}`);
+  return (
+    <AnalysisErrorBoundary resetKey={resetKey}>
+      <AnalysisPoints />
+    </AnalysisErrorBoundary>
+  );
+}
+
+function AnalysisPoints() {
   const analysisIsOpen = useStore((state) => state.analysis.isOpen);
   const analysisSelectedPipeIndex = useStore(
     (state) => state.analysis.selectedPipeIndex,

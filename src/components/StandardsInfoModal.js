@@ -1,26 +1,13 @@
 import useStore from '@/lib/store';
-import { analyzeIncline } from '@/lib/analysis/incline';
 import { XIcon } from '@phosphor-icons/react';
 
 export default function StandardsInfoModal({ isOpen, onClose }) {
-  const data = useStore((state) => state.data);
-  const setAnalysisResults = useStore(
-    (state) => state.setAnalysisResults,
-  );
   const inclineRequirementMode = useStore(
     (state) => state.settings.inclineRequirementMode,
   );
-  const updateSettings = useStore((state) => state.updateSettings);
-
-  const handleModeChange = (mode) => {
-    updateSettings({ inclineRequirementMode: mode });
-    if (data) {
-      const results = analyzeIncline(data, {
-        minInclineMode: mode,
-      });
-      setAnalysisResults(results);
-    }
-  };
+  const handleModeChange = useStore(
+    (state) => state.setInclineRequirementMode,
+  );
 
   if (!isOpen) return null;
 

@@ -10,7 +10,7 @@ import { hasFileDrag, surveyFileDragAccepted, surveyFileDropAccepted } from '@/l
 // The app's only window-level file drop. While disabled (FOTO workspace, import wizard, parsing) there is no
 // drop region: file drags stay refused here, so a stray drop cannot navigate away from the in-memory session.
 export default function GlobalFileDrop({ enabled = true }) {
-  const { handleFile } = useFileLoader();
+  const { handleFile, crsDialog } = useFileLoader();
   const { active, tracker } = useFileDragTracker();
   const [accepted, setAccepted] = useState(true);
 
@@ -68,7 +68,8 @@ export default function GlobalFileDrop({ enabled = true }) {
     };
   }, [enabled, handleFile, tracker]);
 
-  if (!enabled || !active) return null;
+  // The CRS question belongs to a drop already accepted; parsing itself disables further drops.
+  if (!enabled || !active) return crsDialog;
 
   return accepted
     ? <FileDropOverlay title="Slipp filer her for å importere" hint="Støtter .gmi, .sos/.sosi og .kof, én fil om gangen" />

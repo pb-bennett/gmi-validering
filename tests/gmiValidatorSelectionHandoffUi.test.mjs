@@ -35,8 +35,8 @@ test('H3 production: exact Validator selections enter object/batch editing, pres
     const selected = () => browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row][aria-selected=true]')).map(e=>Number(e.dataset.tableRow)).sort((a,b)=>a-b)`);
     const openInspection = async (geometry, field, datasetKind = 'original') => {
       if (await browser.evaluate('Boolean(document.querySelector(".gmi-edit-workspace"))')) await click('Lukk Rettinger');
-      await browser.waitFor('document.querySelector("button[aria-label=Feltvalidering]")');
-      await browser.evaluate('document.querySelector("button[aria-label=Feltvalidering]").click()');
+      await browser.waitFor('document.querySelector("button[aria-label=Validator]")');
+      await browser.evaluate('document.querySelector("button[aria-label=Validator]").click()');
       await browser.waitFor(`document.querySelector('[aria-label="Datasett i Validator"]')`);
       await choose(`document.querySelector('[aria-label="Datasett i Validator"]')`, datasetKind);
       await browser.evaluate(`Array.from(document.querySelector('[role=tablist][aria-label=Geometri]').querySelectorAll('button')).find(e=>e.innerText.startsWith(${JSON.stringify(geometry)})).click()`);

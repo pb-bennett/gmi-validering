@@ -158,6 +158,23 @@ export function detectOutliers(data, threshold = 3) {
 }
 
 /**
+ * Layer-qualified map feature IDs of the outliers in the given layers. The local ID in `featureId` repeats across files.
+ * @param {Object} layers - Loaded layers by ID
+ * @param {Array<string>} layerIds - Layers to include
+ * @returns {Set<string>}
+ */
+export function getLayerOutlierFeatureIds(layers, layerIds) {
+  return new Set(
+    layerIds.flatMap((layerId) =>
+      (layers[layerId]?.outliers?.results?.outliers || []).map(
+        (outlier) =>
+          `${outlier.type === 'point' ? 'punkter' : 'ledninger'}-${layerId}-${outlier.index}`,
+      ),
+    ),
+  );
+}
+
+/**
  * Get IDs of outlier features for filtering
  * @param {Array} outliers - Array of outlier objects
  * @returns {Set<string>}
