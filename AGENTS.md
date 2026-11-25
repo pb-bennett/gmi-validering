@@ -90,8 +90,13 @@ These rules apply to every module: shell, Validator, Rettinger, FOTO, Data Table
 ## Verification
 
 - Keep verification proportional to the change. For code changes, run focused behavior/regression tests with `node --test <test-files>` and lint affected JS/MJS files with `npx --no-install eslint <files>`. Require broader regression tests and `npm run build` for consequential application changes, especially shared editing, validation and source-safety logic, and when the task's acceptance gates require them. Use appropriately scoped checks for small or documentation-only changes; the full serial command is `node --test --test-concurrency=1 "tests/*.test.mjs"`.
+- **Risk-based regression levels.** Choose the level from the change's actual risk, not its size, and always verify the directly affected critical behaviour.
+  1. **Focused:** documentation, styling-only changes and small isolated fixes. Run the relevant targeted checks; do not run full regression suites unnecessarily.
+  2. **Expanded:** changes to shared UI components, application state or integrated workflows. Run the affected tests together with the relevant integration tests.
+  3. **Full regression:** broad architectural changes, high-risk shared behaviour and pre-release verification. Run the complete relevant suites; do not automatically require both the full Node and full browser suites when the risk affects only one domain.
+- Never weaken assertions, remove tests or skip necessary safety checks merely to reduce execution time. Escalate to a higher level when targeted tests reveal regressions or the implementation scope expands.
 - For UI changes, scope browser and visual checks to the affected behavior. For consequential workflow or layout changes, use the existing browser harness and inspect screenshots at relevant sizes, including 1280×720 and 1366×768. Use a fresh production build for production-workflow tests; configure required harness variables and run shared-server browser tests serially. Use a free port and stop only processes you started.
-- Report passed, failed and skipped checks separately. Establish evidence before calling a failure pre-existing; historical counts are not an exemption. Do not equate skipped/private-corpus tests or synthetic automation with real-file/manual acceptance. Record blocked checks and remaining acceptance work.
+- Report passed, failed and skipped checks separately. Establish evidence before calling a failure pre-existing; historical counts are not an exemption. Do not equate skipped/private-corpus tests or synthetic automation with real-file/manual acceptance. Record blocked checks and remaining acceptance work. In substantive implementation completion reports, state the selected testing level, commands executed, results, suites deliberately omitted and residual risks.
 - Run `git diff --check`. Documentation-only work needs relevant content/link checks, not application builds.
 
 ## Completion and Git
