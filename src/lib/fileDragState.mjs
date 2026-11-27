@@ -1,3 +1,5 @@
+import { isSupportedSurveyFileName } from './parsing/surveyFileType.mjs';
+
 // Browsers report only MIME types while a file drag is in progress, never file names. The survey formats have
 // no registered type (empty string on Windows), so only types that can never be a survey file are refused early.
 const NOT_SURVEY_FILE = /^(image|video|audio)\/|^application\/pdf$/;
@@ -14,7 +16,7 @@ export function surveyFileDragAccepted(dataTransfer) {
 // before the loader changes file/parsing state. Do not scan ahead for another survey file in a mixed selection.
 export function surveyFileDropAccepted(dataTransfer) {
   const first = dataTransfer?.files?.[0];
-  return Boolean(first && /\.(gmi|sos|sosi|kof|txt)$/i.test(first.name || ''));
+  return Boolean(first && isSupportedSurveyFileName(first.name || ''));
 }
 
 // dragover repeats about every 350 ms while a drag is over the page, even with a still pointer.

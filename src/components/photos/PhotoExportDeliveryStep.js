@@ -3,7 +3,8 @@
 import { useId, useState } from 'react';
 import { WarningIcon } from '@phosphor-icons/react';
 import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRules.mjs';
-import { exportFilenamePreview, sanitizeExportDescriptive, EXPORT_FILENAME_NOTICE_LENGTH, EXPORT_FILENAME_ADVISORY_LENGTH } from '@/lib/photos/export/photoExportNaming.mjs';
+import { describeExportNameCharacter, exportFilenamePreview, exportNameCompatibilitySuggestion, exportNameUncommonCharacters, sanitizeExportDescriptive,
+  EXPORT_FILENAME_NOTICE_LENGTH, EXPORT_FILENAME_ADVISORY_LENGTH } from '@/lib/photos/export/photoExportNaming.mjs';
 import PhotoExportStatus, { PhotoExportDiagnostics, PhotoExportTone } from './PhotoExportStatus';
 import PhotoSourceOption, { photoSourceButton } from './PhotoSourceOption';
 
@@ -35,8 +36,12 @@ export function ExportFilenameEditor({ filename, onConfigChange }) {
   const countTone = threshold === EXPORT_FILENAME_ADVISORY_LENGTH ? 'error' : threshold ? 'warning' : undefined;
   // A timestamp-only name is valid; recommend a description without blocking (A3). A blocking issue states its own error.
   const recommendDescription = !preview.issue && timestamp && !sanitizeExportDescriptive(descriptive);
+  // Batch 2C: characters not every program handles in a file or folder name. Advisory: nothing is renamed by itself.
+  const uncommon = preview.issue ? [] : exportNameUncommonCharacters(sanitizeExportDescriptive(descriptive));
+  const suggestion = uncommon.length ? exportNameCompatibilitySuggestion(descriptive) : '';
   const describedBy = [preview.prefix && `${id}-prefix`, `${id}-suffix`, `${id}-count`,
-    threshold && `${id}-advisory`, preview.issue && `${id}-message`, recommendDescription && `${id}-recommendation`].filter(Boolean).join(' ');
+    threshold && `${id}-advisory`, preview.issue && `${id}-message`, recommendDescription && `${id}-recommendation`,
+    uncommon.length && `${id}-compatibility`].filter(Boolean).join(' ');
   return <div className="delivery-filename-field" data-export-filename-editor>
     <label htmlFor={`${id}-input`} className="delivery-filename-control">
       <span className="delivery-filename-heading">
@@ -68,6 +73,16 @@ export function ExportFilenameEditor({ filename, onConfigChange }) {
     {preview.issue && <p id={`${id}-message`} className="delivery-filename-message" data-export-filename-message={preview.issue}>{issueText}</p>}
     {recommendDescription && <p id={`${id}-recommendation`} className="delivery-filename-recommendation" data-export-filename-recommendation>
       Filnavnet har ingen beskrivende del. Vi anbefaler et navn som beskriver leveransen.</p>}
+    {uncommon.length > 0 && <div className="delivery-filename-compatibility" data-export-filename-compatibility>
+      <p id={`${id}-compatibility`} className="delivery-filename-recommendation">
+        <WarningIcon size={12} weight="regular" aria-hidden="true" />{' '}
+        Navnet har tegn som ikke alle programmer håndterer i fil- og mappenavn: {uncommon.map(describeExportNameCharacter).join(', ')}.
+        {' '}Gemini VA kan for eksempel ha problemer med dem{extension === '.zip' ? ', også i mappen ZIP-filen pakkes ut i' : ''}.
+        {suggestion && <> Forslag: <span className="font-mono" data-export-filename-suggestion>{suggestion}</span>.</>}
+      </p>
+      {suggestion && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive px-2 py-1"
+        onClick={() => onConfigChange({ label: suggestion })}>Bruk foreslått navn</button>}
+    </div>}
   </div>;
 }
 

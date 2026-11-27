@@ -222,7 +222,12 @@ export default function Home() {
   // suspended in FOTO, Validator and Rettinger. Its store state is kept, so it returns with the main map.
   const mainMapAnalysisSuspended = Boolean(workspaceLayer) || gmiEditActive || validatorActive;
   const analysisOpen = analysisStateOpen && !mainMapAnalysisSuspended;
-  const closeAddLayer = useCallback(() => setShowAddLayerModal(false), []);
+  // Batch 2C: an import error the dialog has stated is dismissed with the dialog, rather than repeated as a workspace
+  // notice. An error that arrives while the dialog is closed (a window drop) still gets the notice.
+  const closeAddLayer = useCallback(() => {
+    setShowAddLayerModal(false);
+    if (useStore.getState().parsing.status === 'error') restoreParsing();
+  }, [restoreParsing]);
   const addLayerModal = useModalDialog(showAddLayerModal, closeAddLayer,
     { initialFocus: '[data-file-picker]', returnFocus: '[data-add-file]' });
   const primaryViewHeight = analysisOpen
@@ -284,12 +289,14 @@ export default function Home() {
   // Unsaved moves away from the originating GMI point propose GML. Shown on pills, markers and the inspector, and
   // committed only by Save together with the position (the session re-derives it); filters use saved choices.
   // B1.1: a move back to the GMI object proposes the GMI default again for an automatic GML transfer.
+  // Batch 2C: an unsaved rotation proposes GML like a move away, because a GMI hyperlink cannot carry the direction.
   const shownDelivery = useMemo(() => {
     if (!photoEditing || !workspaceDelivery) return workspaceDelivery;
     const proposed = new Set(), restored = new Set();
     for (const photo of effectiveWorkspacePhotos) {
-      if (!photo.staged?.position) continue;
-      const effect = photoPositionDeliveryEffect(photo, workspaceDelivery.byPhotoId[photo.id], photo.spatial.current?.position);
+      if (!photo.staged?.position && !photo.staged?.direction) continue;
+      const effect = photoPositionDeliveryEffect(photo, workspaceDelivery.byPhotoId[photo.id],
+        photo.staged.position ? photo.spatial.current?.position : null, { rotated: photo.staged.direction });
       if (effect === 'transfer') proposed.add(photo.id);
       else if (effect === 'restore') restored.add(photo.id);
     }

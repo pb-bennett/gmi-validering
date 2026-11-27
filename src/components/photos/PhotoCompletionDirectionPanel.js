@@ -16,7 +16,10 @@ function SameDirectionForm({ rows, layerId, onStatus }) {
     const result = photoSession.fillMissingPhotoValues(layerId, 'direction', degrees, rows.map((row) => row.photoId));
     if (!result.ok) { setError('Oppgi et tall fra 0 til 360 grader.'); return; }
     setError(null); setValue('');
-    onStatus(`Manuell retning er godtatt for ${placementCount(result.counts.adopted)}.`);
+    // Batch 2C follow-up: GMI defaults that received a direction are delivered in GML from now on; say so once.
+    const transferred = result.transferIds?.length || 0;
+    onStatus(`Manuell retning er godtatt for ${placementCount(result.counts.adopted)}.${transferred
+      ? ` ${placementCount(transferred)} overføres til GML, fordi retningen ikke kan leveres i GMI.` : ''}`);
   };
   return <details className="photo-completion-manual" data-manual-fill="direction">
     <summary>Samme retning for valgte plasseringer</summary>

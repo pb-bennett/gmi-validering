@@ -15,6 +15,13 @@ export function photoDeliveryReadiness(photo) {
     photoMissingCaptureTime(photo) && 'opptakstid'].filter(Boolean);
 }
 
+// Why an unsaved edit proposes GML (Batch 2C: a rotation does too, because a GMI hyperlink cannot carry a direction).
+const proposedNote = (photo) => photo.staged?.direction && !photo.staged?.position
+  ? 'Foreslått GML fordi retningen er endret. Retningen kan bare leveres i GML. Lagres sammen med retningen; GMI-objektet beholdes som opphav.'
+  : photo.staged?.direction
+    ? 'Foreslått GML fordi plasseringen og retningen er endret. Lagres sammen med endringene; GMI-objektet beholdes som opphav.'
+    : 'Foreslått GML fordi plasseringen er flyttet fra GMI-punktet. Lagres sammen med plasseringen; GMI-objektet beholdes som opphav.';
+
 export const photoPlacementName = (photo) => photo.occurrence?.object ? gmiObjectContext(photo.occurrence.object) : 'uten GMI-objekt';
 
 // Per-occurrence delivery choice in the inspector: one compact GMI/GML toggle for the selected placement. Siblings of a
@@ -38,7 +45,7 @@ export default function PhotoDeliveryControls({ photo, layerId, entry, assetDeli
     </div>
     {notes && <div id={notesId} className="photo-delivery-notes">
       {exclusionNote && <p className="photo-inspector-note">{exclusionNote}</p>}
-      {entry.proposed && <p className="photo-inspector-note" data-delivery-proposed>Foreslått GML fordi plasseringen er flyttet fra GMI-punktet. Lagres sammen med plasseringen; GMI-objektet beholdes som opphav.</p>}
+      {entry.proposed && <p className="photo-inspector-note" data-delivery-proposed>{proposedNote(photo)}</p>}
       {entry.status === 'review' && <p className="photo-delivery-review" role="note"><WarningIcon size={14} weight="regular" aria-hidden="true" />
         <span><strong>Krever gjennomgang.</strong> {PHOTO_DELIVERY_REASON_TEXT[entry.reason] || 'Valget kan ikke brukes slik det er.'}</span></p>}
       {reason && entry.status !== 'review' && <p className="photo-inspector-note">{reason}</p>}

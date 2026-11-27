@@ -387,18 +387,11 @@ test('future roadmap stays separate from released versions and has no date', () 
   const roadmapSource = futureSource.slice(futureSource.indexOf('<section>'));
   const headings = [...roadmapSource.matchAll(/<h4[^>]*>([^<]+)<\/h4>/g)]
     .map(([, heading]) => heading);
+  // Batch 2C: photo support (FOTO) and field-value editing (Rettinger) are in the build and are no longer plans.
   assert.deepEqual(headings, [
-    'Full støtte for bilder',
-    'Redigering av feltverdier i GMI-filer',
     'Bedre tilbakemeldinger',
   ]);
-
-  assert.match(roadmapSource, /Videre arbeid vil gi bedre støtte for bilder gjennom hele arbeidsflyten/);
-  assert.match(roadmapSource, /bildeintegrasjon både mot GMI- og GML-filer/);
-  assert.match(roadmapSource, /Det vurderes også støtte for å gjøre enkle endringer i feltverdier/);
-  assert.match(roadmapSource, /uten å endre geometrien/);
-  assert.match(roadmapSource, /tydelig skille mellom originaldata og redigerte verdier/);
-  assert.match(roadmapSource, />Planlagt<\/span>/);
+  assert.doesNotMatch(roadmapSource, /Full støtte for bilder|Redigering av feltverdier/);
   assert.match(roadmapSource, /Bedre tilbakemeldinger/);
   assert.match(roadmapSource, /Mulig støtte for å legge ved skjermbilder i Kontakt-skjemaet/);
   assert.match(futureSource, />Mulig<\/span>/);

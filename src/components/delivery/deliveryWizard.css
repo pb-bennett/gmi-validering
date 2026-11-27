@@ -32,6 +32,11 @@
 /* Empty descriptive part: the placeholder is not part of the name; muted text keeps ≥4.5:1 on the cyan field. */
 .delivery-wizard .delivery-filename-description > input::placeholder { color: var(--gmi-text-muted); opacity: 1; }
 .delivery-wizard .delivery-filename-recommendation { font-size: 12px; color: var(--gmi-validation-compact-warning-text); }
+/* Batch 2C: advisory name compatibility; the suggestion is applied only by its own button. */
+.delivery-wizard .delivery-filename-compatibility { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 4px 12px; }
+.delivery-wizard .delivery-filename-compatibility > p { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
+.delivery-wizard .delivery-filename-compatibility > p > svg { display: inline; vertical-align: -1px; }
+.delivery-wizard .delivery-filename-compatibility > button { flex: none; font-size: 13px; }
 .delivery-summary.photo-export-summary > div { grid-template-columns: 7rem minmax(0, 1fr); }
 .delivery-diagnostics { padding: 10px 12px; border: 1px solid var(--gmi-border); border-radius: 6px; overflow-wrap: anywhere; }
 .delivery-diagnostics h4, .delivery-inventory h4 { font-weight: 600; }

@@ -228,16 +228,32 @@ suite('F-08: «Legg til fil» works by keyboard; a failed import keeps the layer
   assert.equal(await ui.evaluate(`${addDialog}.contains(document.activeElement)`), true, 'focus stays in the dialog for the retry');
   await ui.focus(picker);
   assert.equal(await ui.opensChooser(ui.space), true, 'retry by keyboard');
-  // Cancel: the workspace states the failure and offers a retry of its own.
+  // Cancel: Batch 2C — the dialog stated the failure, so closing it dismisses the failure (no stale workspace notice).
   await ui.escape();
-  await ui.waitFor(`!${addDialog} && ${notice}`);
+  await ui.waitFor(`!${addDialog}`);
+  await ui.pause(300);
+  assert.equal(await ui.evaluate(`Boolean(${notice})`), false, 'no stale notice after the dialog is closed');
   assert.equal(await ui.focused(opener), true);
+  // A failure that arrives while the dialog is closed (a window drop) is stated in the workspace with its own retry.
+  await ui.evaluate(`(() => { const transfer = new DataTransfer();
+    transfer.items.add(new File([${JSON.stringify(INVALID)}], 'Ugyldig.gmi'));
+    document.body.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+    document.body.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true })); })()`);
+  await ui.waitFor(notice);
   await ui.focus(button('Prøv igjen', notice));
   await ui.enter();
   await ui.waitFor(addDialog);
   await ui.escape();
   await ui.waitFor(`!${addDialog}`);
   assert.equal(await ui.focused(opener), true, 'the notice was replaced, so focus goes to «Legg til fil»');
+  await ui.pause(300);
+  assert.equal(await ui.evaluate(`Boolean(${notice})`), false, 'the retry dialog stated the error; closing it dismissed it');
+  // «Lukk feilmelding» by keyboard, on a new workspace notice.
+  await ui.evaluate(`(() => { const transfer = new DataTransfer();
+    transfer.items.add(new File([${JSON.stringify(INVALID)}], 'Ugyldig.gmi'));
+    document.body.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+    document.body.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true })); })()`);
+  await ui.waitFor(notice);
   await ui.focus(button('Lukk feilmelding'));
   await ui.enter();
   await ui.waitFor(`!${notice}`);

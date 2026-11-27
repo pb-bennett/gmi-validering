@@ -45,7 +45,49 @@ export function sanitizeExportDescriptive(text) {
   return /[\p{L}\p{N}]/u.test(safe) ? safe : '';
 }
 
-const GENERATED_PREFIX = /^\d{4}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])-(?:[01]\d|2[0-3])[0-5]\d(?:[0-5]\d)?(?:-|$)/;
+// Batch 2C: advisory compatibility only, never applied to a name by itself. Some Windows programs open files through
+// legacy code-page paths and can fail on characters outside it. A Gemini VA import failed with an en dash in the
+// extracted folder name and worked with '_' instead; that shows a risk, not an exact list of refused characters. So
+// everything outside printable ASCII and the Latin-1 letters (which include æøå) is reported, and the suggestion only
+// replaces what it has to. The export itself stays valid and is never blocked by this.
+const UNCOMMON_NAME_CHARACTER = /[^ -~À-ÖØ-öø-ÿ]/gu;
+const NAME_SUGGESTIONS = [
+  [/[‐-―−­]/gu, '-'],
+  [/\s/gu, ' '],
+  [/[​-‍⁠﻿]/gu, ''],
+  [/[‘’‚‛“”„‟«»‹›]/gu, ''],
+];
+const NAMED_CHARACTERS = Object.freeze({ '–': 'tankestrek', '—': 'lang tankestrek', '−': 'minustegn', '­': 'myk bindestrek',
+  ' ': 'hardt mellomrom', '‘': 'typografisk apostrof', '’': 'typografisk apostrof', '“': 'typografisk anførselstegn',
+  '”': 'typografisk anførselstegn', '«': 'anførselstegn', '»': 'anførselstegn' });
+
+/** The distinct characters in `text` that not every program handles in a file or folder name, in order of appearance. */
+export function exportNameUncommonCharacters(text) {
+  return [...new Set(String(text ?? '').normalize('NFC').match(UNCOMMON_NAME_CHARACTER) || [])];
+}
+
+/** A Norwegian description of one such character, for example «tankestrek (–)» or «U+2192 (→)». */
+export function describeExportNameCharacter(char) {
+  const code = `U+${char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
+  const shown = /\s/u.test(char) || char === '­' ? code : `${code}, ${char}`;
+  return NAMED_CHARACTERS[char] ? `${NAMED_CHARACTERS[char]} (${shown})` : shown;
+}
+
+/** The descriptive text with those characters replaced (dashes become '-', typographic quotes go, the rest '_'). */
+export function exportNameCompatibilitySuggestion(descriptive) {
+  let text = String(descriptive ?? '').normalize('NFC');
+  for (const [pattern, replacement] of NAME_SUGGESTIONS) text = text.replace(pattern, replacement);
+  return sanitizeExportDescriptive(text.replace(UNCOMMON_NAME_CHARACTER, '_'));
+}
+
+/**
+ * Advisory length of the longest path inside an extracted package, counted from the folder it is extracted into
+ * (`<basename>\Attachments\<name>`). Where that folder lies is unknown to the application; this leaves room for an
+ * ordinary location within the classic Windows path length. It is a prompt to check, not a known limit.
+ */
+export const EXPORT_PACKAGE_PATH_NOTICE_LENGTH = 150;
+
+const GENERATED_PREFIX =/^\d{4}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])-(?:[01]\d|2[0-3])[0-5]\d(?:[0-5]\d)?(?:-|$)/;
 const REVISION = /(?:^|[\s._-]+)rev[\s._-]?(\d{1,4})$/i;
 
 /**

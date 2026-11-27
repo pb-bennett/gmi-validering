@@ -110,12 +110,19 @@ test('FOTO delivery defaults: GML round trip, move away from GMI point, immediat
     await browser.evaluate('document.querySelector("button[aria-label^=\'Filtrer bilder\']").click()');
     await browser.waitFor('!document.querySelector(".photo-filter-panel")');
 
-    // Move Kum 2 away from its GMI point: GML is proposed while editing, undo and discard restore GMI.
+    // Batch 2C: rotating Kum 2 proposes GML like a move (a GMI hyperlink cannot carry a direction); discard restores GMI.
     await select('Kum 2');
     await enterEditMode(browser);
     await rotateSelected(browser, 90);
     await browser.waitFor(`${rowOf('Kum 2')}.dataset.changed === 'true'`);
-    assert.equal(await pill('Kum 2'), 'GMI', 'rotation alone keeps GMI');
+    await browser.waitFor(`${rowOf('Kum 2')}.querySelector('.photo-delivery-pill')?.innerText === 'GML'`);
+    assert.match(await browser.evaluate(`${section}.querySelector('[data-delivery-proposed]')?.innerText || ''`), /retningen er endret/, 'rotation proposal explained in the inspector');
+    await screenshot(browser, 'defaults-rotation-proposed-1366x768');
+    await discardEdits(browser);
+    assert.equal(await pill('Kum 2'), 'GMI', 'discarding the rotation restores GMI');
+
+    // Move Kum 2 away from its GMI point: GML is proposed while editing, undo and discard restore GMI.
+    await enterEditMode(browser);
     await dragSelectedMarker(browser, 90, 45);
     await browser.waitFor(`${rowOf('Kum 2')}.querySelector('.photo-delivery-pill')?.innerText === 'GML'`);
     assert(await browser.evaluate(`Boolean(${section}.querySelector('[data-delivery-proposed]'))`), 'proposal explained in the inspector');
@@ -134,22 +141,54 @@ test('FOTO delivery defaults: GML round trip, move away from GMI point, immediat
     await discardEdits(browser);
     assert.equal(await pill('Kum 2'), 'GMI', 'discard restores GMI');
 
-    // Saving the move commits position and GML together; Kum 3 (rotated only) stays GMI.
+    // Saving commits position or direction and GML together: Kum 2 (moved) and, since Batch 2C, Kum 3 (rotated only).
     await enterEditMode(browser);
     await dragSelectedMarker(browser, 90, 45);
     await browser.waitFor(`${rowOf('Kum 2')}.querySelector('.photo-delivery-pill')?.innerText === 'GML'`);
     await select('Kum 3');
     await rotateSelected(browser, 45);
+    await browser.waitFor(`${rowOf('Kum 3')}.querySelector('.photo-delivery-pill')?.innerText === 'GML'`);
     await saveEdits(browser);
-    await browser.waitFor('document.querySelector(".photo-workspace-toast")?.innerText.includes("overføres til GML")');
+    await browser.waitFor('document.querySelector(".photo-workspace-toast")?.innerText.includes("2 plasseringer overføres til GML")');
     assert.equal(await pill('Kum 2'), 'GML');
-    assert.equal(await pill('Kum 3'), 'GMI');
+    assert.equal(await pill('Kum 3'), 'GML');
     assert.equal(await browser.evaluate('Boolean(document.querySelector(".photo-delivery-summary"))'), false);
-      assert.match(await browser.evaluate('document.querySelector(".photo-delivery-counts").innerText'), /GML 10\b/);
+      assert.match(await browser.evaluate('document.querySelector(".photo-delivery-counts").innerText'), /GML 11\b/);
     await select('Kum 2');
     assert.equal(await browser.evaluate(`Boolean(${section}.querySelector('[data-delivery-proposed]'))`), false, 'a committed choice, no longer a proposal');
     assert.match(await browser.evaluate(`${inspector}.innerText`), /Kum 2/, 'GMI object relationship kept');
     await screenshot(browser, 'defaults-move-saved-1366x768');
+
+    // Batch 2C follow-up: «Fyll inn manglende» with a direction for two untouched GMI defaults (Kum 4, Kum 5, standard
+    // 0°) transfers them to GML in the same write and says so; Kum 1 (not selected) stays GMI.
+    const hub = 'document.querySelector(".photo-completion-dialog[open]")';
+    const panel = `${hub}.querySelector('[data-completion-panel="direction"]')`;
+    const form = `${panel}.querySelector('[data-manual-fill="direction"]')`;
+    const hubRow = (name) => `Array.from(${hub}.querySelectorAll('[data-completion-row]')).find((item) => item.querySelector('.photo-completion-filename')?.innerText.includes(${JSON.stringify(name)}))`;
+    assert.deepEqual([await pill('Kum 1'), await pill('Kum 4'), await pill('Kum 5')], ['GMI', 'GMI', 'GMI']);
+    await click(browser, 'Fullfør opplysninger…', 'document');
+    await browser.waitFor(hub);
+    await browser.evaluate(`${hub}.querySelector('[data-task="direction"]').click()`);
+    await browser.waitFor(panel);
+    await browser.evaluate(`${panel}.querySelectorAll('[data-group] details, details[data-group]').forEach((item) => { item.open = true; })`);
+    for (const name of ['foto-04.png', 'foto-05.png']) await browser.evaluate(`${hubRow(name)}.querySelector('input[type=checkbox]').click()`);
+    await browser.evaluate(`${form}.open = true`);
+    await browser.evaluate(`(() => { const input = ${form}.querySelector('input[type=number]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '45'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await browser.waitFor(`${form}.querySelector('button[type=submit]')?.innerText === 'Bruk på 2 valgte plasseringer'`);
+    await browser.evaluate(`${form}.querySelector('button[type=submit]').click()`);
+    const status = `${hub}.querySelector('.photo-import-footer [role=status]')?.innerText || ''`;
+    await browser.waitFor(`(${status}).includes('godtatt for')`);
+    assert.equal(await browser.evaluate(status), 'Manuell retning er godtatt for 2 plasseringer. 2 plasseringer overføres til GML, fordi retningen ikke kan leveres i GMI.');
+    await screenshot(browser, 'defaults-bulk-direction-1366x768');
+    await browser.evaluate(`${hub}.querySelector('.photo-import-footer .gmi-primary-control').click()`);
+    await browser.waitFor(`!${hub}`);
+    await browser.waitFor(`${rowOf('Kum 5')}.querySelector('.photo-delivery-pill')?.innerText === 'GML'`);
+    assert.deepEqual([await pill('Kum 1'), await pill('Kum 4'), await pill('Kum 5')], ['GMI', 'GML', 'GML']);
+    assert.match(await browser.evaluate('document.querySelector(".photo-delivery-counts").innerText'), /GML 13\b/);
+    await select('Kum 4');
+    assert.match(await browser.evaluate(`${inspector}.innerText`), /Retning 45° NØ/);
+    assert.equal(await browser.evaluate(`Boolean(${section}.querySelector('[data-delivery-proposed]'))`), false, 'committed, not a proposal');
   } finally {
     await browser.close();
     if (path.dirname(path.resolve(directory)) !== path.resolve(tmpdir()) || !path.basename(directory).startsWith('photo-delivery-defaults-ui-')) throw new Error('Unsafe temporary fixture directory');

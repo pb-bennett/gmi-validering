@@ -148,6 +148,20 @@ test('filename editor: live sources, checkboxes, manual choices, reset, limits a
       assert.equal((await parts()).tone, '');
       assert((await description()).includes('Filnavnet er over 80 tegn.'));
       assert.equal(await advance(), false, 'the advisory length never blocks');
+      // Batch 2C: the en dash is reported with a suggestion. Nothing is renamed by itself and nothing is blocked;
+      // the suggestion applies only by its own button, and «Bruk forslag» returns to the source name.
+      const compatibility = `${editor}.querySelector('[data-export-filename-compatibility]')`;
+      await browser.waitFor(compatibility);
+      assert.match(await browser.evaluate(`${compatibility}.innerText`), /tankestrek \(U\+2013, –\)[\s\S]*Gemini VA kan for eksempel ha problemer med dem/);
+      assert.equal(await browser.evaluate(`${compatibility}.querySelector('[data-export-filename-suggestion]').textContent`), long.replace('–', '-'));
+      assert.equal(await value(), long, 'the name is not changed by itself');
+      assert((await description()).some((text) => text.includes('tankestrek')), 'the advisory describes the field');
+      assert.equal(await browser.evaluate(`${field}.hasAttribute('aria-invalid')`), false);
+      await screenshot(browser, 'a4-2c-filename-compatibility');
+      await click(browser, 'Bruk foreslått navn');
+      await browser.waitFor(`${field}.value === ${JSON.stringify(long.replace('–', '-'))} && !${compatibility}`);
+      await click(browser, 'Bruk forslag');
+      await browser.waitFor(`${field}.value === ${JSON.stringify(long)} && Boolean(${compatibility})`);
       await review(browser); assert.equal(await status(browser), 'ready'); await click(browser, 'Neste');
       assert.match(await browser.evaluate(`${dialog}.querySelector('[data-export-filename]').textContent`), new RegExp(`^\\d{8}-\\d{4}-${long.replace(/[()&]/g, '\\$&')}_rev02\\.gmi$`));
       await back(browser);

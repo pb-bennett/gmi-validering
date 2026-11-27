@@ -60,6 +60,9 @@ test('BUILD_INFO reads the inlined values; the dialog header shows it without a 
   assert.doesNotMatch(moduleSource + modalSource, /\bfetch\(|[0-9a-f]{7,40}(?![\w-])/i);
   const header = modalSource.slice(modalSource.indexOf('<header'), modalSource.indexOf('</header>'));
   assert.match(header, /v\{CURRENT_APP_VERSION\}<\/span>\s*<BuildIdentity \/>/);
-  assert.match(modalSource, /<dt>Versjon:<\/dt>[\s\S]*?\{build\.shortSha\}/);
+  // Batch 2C: the commit is labelled as a commit, apart from the application version pill.
+  assert.match(modalSource, /<dt>Commit:<\/dt>[\s\S]*?\{build\.shortSha\}/);
+  assert.doesNotMatch(modalSource, /<dt>Versjon:<\/dt>/);
+  assert.match(modalSource, /build\.environment !== 'production' && \([\s\S]*?Kan inneholde endringer som ikke er utgitt etter v\{version\}/);
   assert.match(modalSource, /<dt>Miljø:<\/dt>[\s\S]*?\{build\.environmentLabel\}/);
 });

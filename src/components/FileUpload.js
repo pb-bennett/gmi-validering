@@ -10,6 +10,7 @@ import { KOFParser } from '@/lib/parsing/kofParser';
 import { decodeGmiBytes } from '@/lib/parsing/gmiDecoding';
 import { createGmiPhotoSource } from '@/lib/photos/gmiPhotoSource.mjs';
 import { hasFileDrag, surveyFileDragAccepted, surveyFileDropAccepted } from '@/lib/fileDragState.mjs';
+import { isSupportedSurveyFileName, surveyFileExtension, unsupportedSurveyFileMessage, UNRECOGNISED_TEXT_FILE_MESSAGE } from '@/lib/parsing/surveyFileType.mjs';
 import {
   classifyCrs,
 } from '@/lib/telemetry/classifiers.mjs';
@@ -100,8 +101,9 @@ export function useFileLoader({ onComplete } = {}) {
     }
   };
 
+  // Only names that passed isSupportedSurveyFileName reach this. A .txt is sniffed; unrecognised content is null.
   const detectFormat = (fileName, content) => {
-    const ext = (fileName || '').toLowerCase().split('.').pop();
+    const ext = surveyFileExtension(fileName);
     if (ext === 'gmi') return 'GMI';
     if (ext === 'sos' || ext === 'sosi') return 'SOSI';
     if (ext === 'kof') return 'KOF';
@@ -114,14 +116,21 @@ export function useFileLoader({ onComplete } = {}) {
     if (head.includes('HODE') || head.includes('.HODE'))
       return 'SOSI';
 
-    return 'GMI';
+    return null;
   };
 
   const handleFile = useCallback(
     (file) => {
       if (!file) return;
 
-      const ext = (file.name || '').toLowerCase().split('.').pop();
+      // Batch 2C: an unsupported file type is refused before anything is read, with its own message. File and layer
+      // state are untouched; only the import error is set (dismissed or replaced like any other import error).
+      if (!isSupportedSurveyFileName(file.name)) {
+        setParsingError(unsupportedSurveyFileMessage(file.name));
+        return;
+      }
+
+      const ext = surveyFileExtension(file.name);
       const preferArrayBuffer = ext !== 'kof';
 
       // What a cancelled or failed import returns to: an added file never costs the workspace it was added to.
@@ -162,6 +171,7 @@ export function useFileLoader({ onComplete } = {}) {
           }
 
           const format = detectFormat(file.name, content);
+          if (!format) throw new Error(UNRECOGNISED_TEXT_FILE_MESSAGE);
 
           // Update file metadata with detected format (shown in Oversikt)
           setFile({
@@ -336,6 +346,7 @@ export function useFileLoader({ onComplete } = {}) {
             error.message.startsWith('Ugyldig') ||
             error.message.startsWith('Feil') ||
             error.message.startsWith('Ingen') ||
+            error.message.startsWith('Innholdet') ||
             error.message.startsWith('Filen')
               ? error.message
               : `Kunne ikke lese filen: ${error.message}`;

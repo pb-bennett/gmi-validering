@@ -120,3 +120,15 @@ test('Lagmarkering trigger aligns with the left edge below zoom and ruler', () =
   assert.doesNotMatch(constrainedDesktopStyles, /right-4 top-14|right:\s*1rem/);
   assert.match(panel, /absolute right-4 top-26 z-\[1250\]/); // Existing useful panel position stays put.
 });
+
+// Batch 2C: the two entry points are not the same function, so they keep their own icons. «Marker alt i laget» is a
+// per-layer toggle (aria-pressed); the map toolbar «Lagmarkering» opens the settings panel for every layer
+// (aria-expanded). They share one enabled state, and the toggle's terminology follows the panel's.
+test('«Marker alt i laget» and «Lagmarkering» share the enabled state but stay a toggle and a panel', async () => {
+  const store = await read('../src/lib/store.js');
+  assert.match(store, /toggleLayerHighlightAll: \(layerId\) => \{[\s\S]*?get\(\)\.setLayerHighlightEnabled\(layerId, !layer\.highlightAll\)/);
+  assert.match(panel, /onChange=\{\(event\) => setEnabled\(layerId, event\.currentTarget\.checked\)\}/);
+  assert.match(layerPanel, /label="Marker alt i laget"\s+tooltip=\{highlightAll \? 'Skru av lagmarkering' : 'Marker alt i laget'\}\s+pressed=\{highlightAll\}/);
+  assert.doesNotMatch(layerPanel, /laghighlight/i);
+  assert.match(panel, /aria-label="Lagmarkering"\s+aria-controls="layer-highlight-panel"\s+aria-expanded=\{open\}/);
+});

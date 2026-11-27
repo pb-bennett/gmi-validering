@@ -1,6 +1,7 @@
 import { assertDeliveryPlan, recordDeliveryDownload } from './deliveryPlan.mjs';
 import { buildDeliveryPackage } from './deliveryPackage.mjs';
 import { photoExportDiagnosticLabel } from '../photos/export/photoExportDiagnostics.mjs';
+import { describeExportNameCharacter, exportNameUncommonCharacters, EXPORT_PACKAGE_PATH_NOTICE_LENGTH } from '../photos/export/photoExportNaming.mjs';
 import { describeGmiObject, gmiEditMessage } from '../gmiEditView.mjs';
 import { isGmiFieldEditReservedColumn } from '../gmi-edit/changeSet.mjs';
 import { activeGmiHyperlinkTransferSet, isGmiHyperlinkTransferSet } from '../gmi-edit/session.mjs';
@@ -109,7 +110,35 @@ export function deliveryDiagnostics(plan) {
   const groups = { errors: [], warnings: [], info: [] };
   for (const item of plan.errors) groups.errors.push({ ...item, text: deliveryMessage(item) });
   for (const item of plan.warnings) groups[informational.has(item.code) ? 'info' : 'warnings'].push({ ...item, text: deliveryMessage(item) });
+  groups.warnings.push(...deliveryNameCompatibility(plan));
   return groups;
+}
+/**
+ * Batch 2C: advisory checks of the package's names, derived from the plan. They never change the plan, a name, an
+ * identifier or a byte, and never block. The descriptive filename is checked where it is typed (the filename editor);
+ * here: attachment names, which come from the photographs (and GMI links) and are kept as they are, and the longest
+ * path after extraction. Where the package is extracted is unknown to the application.
+ */
+export function deliveryNameCompatibility(plan) {
+  const items = [];
+  if (!plan?.naming) return items;
+  const attachments = (plan.attachments || []).filter((item) => exportNameUncommonCharacters(item.path).length);
+  if (attachments.length) {
+    const characters = [...new Set(attachments.flatMap((item) => exportNameUncommonCharacters(item.path)))];
+    const examples = attachments.slice(0, 3).map((item) => item.filename || item.path.split('/').at(-1));
+    items.push({ code: 'package-name-characters', text: `${attachments.length} bildenavn i leveransen har tegn som ikke alle programmer håndterer i filnavn: `
+      + `${characters.map(describeExportNameCharacter).join(', ')} (${examples.join(', ')}${attachments.length > examples.length ? ' …' : ''}). `
+      + 'Navnene kommer fra bildefilene og eventuelle GMI-lenker og endres ikke. Kontroller at mottakerens program kan åpne dem.' });
+  }
+  const zip = plan.mode !== 'gmi-only';
+  const paths = deliveryContents(plan).map((path) => zip ? `${plan.naming.basename}/${path}` : path);
+  const longest = Math.max(0, ...paths.map((path) => [...path].length));
+  if (longest > EXPORT_PACKAGE_PATH_NOTICE_LENGTH) {
+    items.push({ code: 'package-path-length', text: `Den lengste stien i leveransen er ${longest} tegn${zip ? ', regnet fra mappen ZIP-filen pakkes ut i' : ''}. `
+      + 'Hvor filene pakkes ut, vet ikke appen, og den plasseringen kommer i tillegg. Enkelte Windows-programmer kan ikke åpne filer med svært lange stier: '
+      + 'pakk ut nær roten av disken, eller bruk et kortere filnavn.' });
+  }
+  return items;
 }
 export function deliveryContents(plan) {
   return [...(plan.mode !== 'photos-only' ? [plan.naming.gmiFilename] : []), ...(plan.photoPlan ? [plan.naming.gmlFilename] : []), ...plan.attachments.map((item) => item.path)];

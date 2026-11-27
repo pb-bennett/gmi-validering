@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPhotoSession } from '../src/lib/photos/photoSession.mjs';
 import { photoSourcePositionChoices, selectedPhotoSourcePositions } from '../src/lib/photos/photoPositioning.mjs';
-import { photoDeliveryWithProposals, photoMoveProposesTransfer, photoOriginGmiPosition, photoPositionDeliveryEffect, togglePhotoDelivery } from '../src/lib/photos/photoDeliveryChoice.mjs';
+import { photoDeliveryWithProposals, photoDirectionChangeIsMeaningful, photoHasManualDirection, photoMoveProposesTransfer, photoOriginGmiPosition, photoPositionDeliveryEffect, photoRotationProposesTransfer, togglePhotoDelivery } from '../src/lib/photos/photoDeliveryChoice.mjs';
 import { photoWorkspaceView } from '../src/lib/photos/photoWorkspaceView.mjs';
 import { DEFAULT_PHOTO_FILTER } from '../src/lib/photos/photoWorkspaceState.mjs';
 import { createPhotoEditState, effectivePhoto, photoEditReducer } from '../src/lib/photos/photoEditSession.mjs';
 import { serializePhotoExport } from '../src/lib/photos/export/photoExportXml.mjs';
+import { buildPhotoExportPlan, capturePhotoExportSnapshot } from '../src/lib/photos/export/photoExportPlan.mjs';
 import { exportFixture } from './helpers/photoExportFixtures.mjs';
 import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
 import { gpsPng, noGpsPng } from './helpers/photoGpsFixtures.mjs';
@@ -210,7 +211,9 @@ test('GML positioning respects deliberate choices; cancellation and a refused ba
   assert.equal(status(keptGmi), 'keep-link');
 });
 
-test('a saved move away from the originating GMI point proposes and commits GML; rotation or a return does not', async () => {
+// Batch 2C changed one rule here: a saved rotation of an untouched GMI default now commits GML like a move away
+// (a GMI hyperlink cannot carry a direction). A return to the GMI point without rotation still keeps GMI.
+test('a saved move away from the originating GMI point, or a rotation, proposes and commits GML; a return does not', async () => {
   const context = await setup({ shared: true });
   const { session, layer, status, byObject, delivery } = context;
   const kum2 = byObject(guid(1)), kum3 = byObject(guid(2)), kum4 = byObject(guid(3));
@@ -233,13 +236,13 @@ test('a saved move away from the originating GMI point proposes and commits GML;
   const result = session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [
     { photoId: kum2.id, position: far },
     { photoId: kum3.id, degrees: 90 },
-    { photoId: kum4.id, position: photoOriginGmiPosition(kum4), degrees: 45 },
+    { photoId: kum4.id, position: photoOriginGmiPosition(kum4) },
     { photoId: shared.id, position: { ...photoOriginGmiPosition(shared), latitude: photoOriginGmiPosition(shared).latitude + 0.0005 } },
   ]);
   assert(result.ok);
-  assert.deepEqual([...result.transferIds].sort(), [kum2.id, shared.id].sort());
+  assert.deepEqual([...result.transferIds].sort(), [kum2.id, kum3.id, shared.id].sort());
   assert.equal(status(kum2), 'transfer');
-  assert.equal(status(kum3), 'keep-link', 'rotation alone keeps GMI');
+  assert.equal(status(kum3), 'transfer', 'rotation alone commits GML (Batch 2C)');
   assert.equal(status(kum4), 'keep-link', 'back at the GMI point keeps GMI');
   assert.equal(status(shared), 'transfer');
   assert.equal(status(sibling), 'keep-link', 'the other placement of the shared photograph is untouched');
@@ -247,8 +250,8 @@ test('a saved move away from the originating GMI point proposes and commits GML;
   assert.equal(moved.occurrence.key, kum2.occurrence.key, 'GMI object relationship kept as provenance');
   assert.deepEqual(moved.spatial.current.position, far);
   const snapshot = session.getPhotoDeliverySnapshot(layer.id);
-  assert.deepEqual(snapshot.transfers.map((item) => item.photoId).sort(), [kum2.id, shared.id].sort());
-  assert.equal(snapshot.counts.retainedOccurrences, 4);
+  assert.deepEqual(snapshot.transfers.map((item) => item.photoId).sort(), [kum2.id, kum3.id, shared.id].sort());
+  assert.equal(snapshot.counts.retainedOccurrences, 3);
   assert(snapshot.assets.transferredAndRetained.includes(shared.assetId));
 });
 
@@ -268,10 +271,12 @@ test('moves never override GML/Ikke decisions or an explicit GMI choice; a confl
   // A stale edit session (superseded and changed by another save) commits nothing, including delivery.
   const ticket = session.beginPhotoEdits(layer.id);
   assert(session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: k4.id, degrees: 10 }]).ok);
-  const keyBefore = session.getPhotoDeliverySnapshot(layer.id).stateKey;
+  // Batch 2C: the rotation itself committed GML; the conflicting save must change nothing after it.
+  const statusBefore = status(k4), keyBefore = session.getPhotoDeliverySnapshot(layer.id).stateKey;
+  assert.equal(statusBefore, 'transfer');
   const conflicted = session.applyPhotoEdits(ticket, [{ photoId: k4.id, position: away(k4) }]);
   assert.equal(conflicted.ok, false);
-  assert.equal(status(k4), 'keep-link');
+  assert.equal(status(k4), statusBefore);
   assert.equal(session.getPhotoDeliverySnapshot(layer.id).stateKey, keyBefore);
 });
 
@@ -380,7 +385,7 @@ test('B1.1: a cancelled wizard and a refused commit change no delivery decision'
   assert.equal(session.previewSourceWorkflowDelivery(ticket, { plan, requests }), null, 'no preview for an ended workflow');
 });
 
-test('B1.1: only distance counts — a new source at a compatible position, or a rotation, changes no delivery', () => {
+test('B1.1: only distance counts for a move — a new source at a compatible position changes no delivery', () => {
   const origin = { crs: 'EPSG:4326', latitude: 59.9, longitude: 10.7 };
   const photo = { occurrence: { key: 'k', sourceId: 's' }, spatial: { candidates: [{ kind: 'gmi', sourceId: 's', provenance: { key: 'k' }, position: origin }] } };
   const entry = (patch = {}) => ({ linked: true, status: 'keep-link', explicit: false, userChosen: false, canTransfer: true, automatic: false, ...patch });
@@ -395,4 +400,194 @@ test('B1.1: only distance counts — a new source at a compatible position, or a
   const unlinked = { linked: false, status: 'not-selected', explicit: false, userChosen: false, canInclude: true };
   assert.equal(photoPositionDeliveryEffect({}, unlinked, origin, { includeUnlinked: true }), 'include');
   assert.equal(photoPositionDeliveryEffect({}, unlinked, origin), null, 'manual placement of an unlinked photo keeps Ikke valgt, as before');
+});
+
+// Batch 2C: a confirmed rotation of an untouched GMI default makes the same GMI → GML transition as a move away,
+// because a GMI hyperlink cannot carry a direction. Synthetic data only.
+test('Batch 2C: rotation-only, move-only and combined edits commit GML; no-op, cancel and explicit GMI keep it; GML carries the direction', async () => {
+  const context = await setup();
+  const { session, layer, status, byObject, photos, delivery } = context;
+  const [k1, k2, k3, k4, k5] = [0, 1, 2, 3, 4].map((index) => byObject(guid(index)));
+  const away = (photo) => ({ ...photoOriginGmiPosition(photo), longitude: photoOriginGmiPosition(photo).longitude + 0.001 });
+  const keyBefore = session.getPhotoDeliverySnapshot(layer.id).stateKey;
+
+  // Opening and cancelling, and confirming nothing, change no delivery. (The same value as a real saved direction is
+  // no rotation: covered by the pure helper test below. Every photo here only has the default placeholder.)
+  session.endPhotoEdits(session.beginPhotoEdits(layer.id));
+  assert(session.applyPhotoEdits(session.beginPhotoEdits(layer.id), []).ok);
+  assert.equal(session.getPhoto(k5.id).direction.current.basis.kind, 'default');
+  assert.equal(session.getPhotoDeliverySnapshot(layer.id).stateKey, keyBefore);
+  assert.deepEqual([k1, k2, k3, k4, k5].map(status), Array(5).fill('keep-link'));
+
+  // Unsaved proposal: a staged rotation proposes GML; staging the saved value back, or undo, removes it.
+  const ticket = session.beginPhotoEdits(layer.id);
+  let state = createPhotoEditState(ticket);
+  const proposed = () => photos().map((photo) => effectivePhoto(photo, state)).filter((photo) => photo.staged?.direction
+    && photoPositionDeliveryEffect(photo, delivery().byPhotoId[photo.id], null, { rotated: true }) === 'transfer').map((photo) => photo.id);
+  const k1Degrees = session.getPhoto(k1.id).direction.current.degrees;
+  state = photoEditReducer(state, { type: 'stage', photoId: k1.id, field: 'direction', value: (k1Degrees + 123) % 360 });
+  assert.deepEqual(proposed(), [k1.id]);
+  assert.equal(status(k1), 'keep-link', 'nothing is committed before Save');
+  state = photoEditReducer(state, { type: 'stage', photoId: k1.id, field: 'direction', value: k1Degrees });
+  assert.deepEqual(proposed(), [], 'rotating back to the saved direction proposes nothing');
+  state = photoEditReducer(state, { type: 'undo' });
+  state = photoEditReducer(state, { type: 'undo' });
+  assert.deepEqual(proposed(), [], 'undo back to the start proposes nothing');
+  session.endPhotoEdits(ticket);
+  assert.equal(session.getPhotoDeliverySnapshot(layer.id).stateKey, keyBefore, 'a discarded rotation changes nothing');
+
+  // An explicit GMI choice is kept when the photo is rotated.
+  assert(session.setDeliveryIntent(layer.id, [k4.id], 'keep-link').ok);
+  const result = session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [
+    { photoId: k1.id, degrees: 123 },
+    { photoId: k2.id, position: away(k2) },
+    { photoId: k3.id, position: photoOriginGmiPosition(k3), degrees: 200 },
+    { photoId: k4.id, degrees: 30 },
+  ]);
+  assert(result.ok);
+  assert.deepEqual([...result.transferIds].sort(), [k1.id, k2.id, k3.id].sort());
+  assert.deepEqual([k1, k2, k3, k4, k5].map(status), ['transfer', 'transfer', 'transfer', 'keep-link', 'keep-link']);
+  const rotated = session.getPhoto(k1.id);
+  assert.equal(rotated.direction.current.degrees, 123);
+  assert.equal(rotated.direction.current.basis.kind, 'manual');
+  assert.equal(rotated.occurrence.key, k1.occurrence.key, 'the GMI object relationship is kept as provenance');
+  assert.equal(rotated.spatial.current, k1.spatial.current, 'a rotation keeps the GMI-sourced position record itself');
+  assert.equal(session.getPhoto(k4.id).direction.current.degrees, 30, 'the explicit GMI photo was still rotated');
+  // Follow-up rule: 0° given explicitly where only the default placeholder was is a direction (north), so it is GML.
+  const zero = session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: k5.id, degrees: 0 }]);
+  assert.deepEqual(zero.transferIds, [k5.id]);
+  // The same value again, now a real saved direction, is no rotation and changes nothing.
+  const keyAfterZero = session.getPhotoDeliverySnapshot(layer.id).stateKey;
+  assert.deepEqual(session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: k4.id, degrees: 30 }]).transferIds, []);
+  assert.equal(session.getPhotoDeliverySnapshot(layer.id).stateKey, keyAfterZero);
+
+  // A return to the GMI point does not restore GMI for a photo whose direction the user set, so the direction is
+  // not silently dropped from the delivery; a moved photo without a set direction is restored as before.
+  const back = session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [
+    { photoId: k1.id, position: photoOriginGmiPosition(k1) },
+    { photoId: k2.id, position: photoOriginGmiPosition(k2) },
+  ]);
+  assert(back.ok);
+  assert.deepEqual(back.restoredIds, [k2.id]);
+  assert.deepEqual([status(k1), status(k2)], ['transfer', 'keep-link']);
+
+  // The GML export of the transferred occurrences carries the adjusted directions.
+  assert(session.fillMissingPhotoValues(layer.id, 'captureTime', '2026-08-01T10:00:00').ok);
+  assert(session.fillMissingPhotoValues(layer.id, 'photographer', 'Feltmåler').ok);
+  const transfers = session.getPhotoDeliverySnapshot(layer.id).transfers.map((item) => item.photoId).sort();
+  assert.deepEqual(transfers, [k1.id, k3.id, k5.id].sort());
+  const plan = await buildPhotoExportPlan(capturePhotoExportSnapshot(session, layer.id), { profile: 'legacy2019', crs: 'EPSG:25832' },
+    { now: () => new Date('2026-11-27T12:00:00Z'), occurrenceIds: transfers });
+  assert.deepEqual(plan.errors, []);
+  const xml = serializePhotoExport(plan);
+  const directions = [...xml.matchAll(/<app:retningsverdi>([^<]+)<\/app:retningsverdi>/g)].map((match) => Number(match[1])).sort((a, b) => a - b);
+  assert.deepEqual(directions, [0, 123, 200]);
+});
+
+test('Batch 2C: the pure rotation effect follows the move rules for explicit, stored and automatic choices', () => {
+  const origin = { crs: 'EPSG:4326', latitude: 59.9, longitude: 10.7 };
+  const photo = { occurrence: { key: 'k', sourceId: 's' }, spatial: { candidates: [{ kind: 'gmi', sourceId: 's', provenance: { key: 'k' }, position: origin }] } };
+  const rotatedPhoto = { ...photo, direction: { current: { degrees: 90, basis: { kind: 'manual' } } } };
+  const entry = (patch = {}) => ({ linked: true, status: 'keep-link', explicit: false, userChosen: false, canTransfer: true, automatic: false, ...patch });
+  const automatic = entry({ status: 'transfer', explicit: true, automatic: true });
+  assert.equal(photoRotationProposesTransfer(entry()), true);
+  assert.equal(photoPositionDeliveryEffect(photo, entry(), null, { rotated: true }), 'transfer', 'rotation only');
+  assert.equal(photoPositionDeliveryEffect(photo, entry(), origin, { rotated: true }), 'transfer', 'rotation at the GMI point');
+  assert.equal(photoPositionDeliveryEffect(photo, entry(), { ...origin, longitude: origin.longitude + 0.001 }, { rotated: true }), 'transfer');
+  assert.equal(photoPositionDeliveryEffect(photo, entry(), null), null, 'no position and no rotation');
+  assert.equal(photoPositionDeliveryEffect(photo, entry({ userChosen: true }), null, { rotated: true }), null, 'an explicit GMI choice stays');
+  assert.equal(photoPositionDeliveryEffect(photo, entry({ canTransfer: false }), null, { rotated: true }), null);
+  assert.equal(photoPositionDeliveryEffect(photo, entry({ status: 'exclude', explicit: true }), null, { rotated: true }), null, 'Ikke stays Ikke');
+  assert.equal(photoPositionDeliveryEffect({}, { linked: false, status: 'not-selected', canInclude: true }, null, { rotated: true }), null, 'unlinked photos are unchanged');
+  assert.equal(photoPositionDeliveryEffect(photo, automatic, origin), 'restore', 'unchanged: a move back restores');
+  assert.equal(photoPositionDeliveryEffect(photo, automatic, origin, { rotated: true }), null, 'a rotated move back keeps GML');
+  assert.equal(photoPositionDeliveryEffect(rotatedPhoto, automatic, origin), null, 'a set direction keeps GML');
+  assert.equal(photoHasManualDirection(rotatedPhoto), true);
+  assert.equal(photoHasManualDirection(photo), false);
+  // Shared meaningfulness rule (Edit mode and «Fyll inn manglende»).
+  const at = (degrees, kind) => ({ degrees, basis: { kind } });
+  assert.equal(photoDirectionChangeIsMeaningful(null, 0), true, 'a missing direction: any value, also 0°');
+  assert.equal(photoDirectionChangeIsMeaningful(at(0, 'default'), 0), true, 'the default placeholder is no direction');
+  assert.equal(photoDirectionChangeIsMeaningful(at(90, 'manual'), 90), false, 'the same real direction again');
+  assert.equal(photoDirectionChangeIsMeaningful(at(90, 'exif'), 90), false);
+  assert.equal(photoDirectionChangeIsMeaningful(at(90, 'manual'), 91), true);
+  assert.equal(photoDirectionChangeIsMeaningful(at(45.5, 'manual'), 46), true, 'an exact bulk value differs from its rounding');
+  for (const invalid of [null, undefined, Number.NaN, Infinity]) assert.equal(photoDirectionChangeIsMeaningful(null, invalid), false);
+});
+
+// Batch 2C follow-up: «Fyll inn manglende» with a direction uses the same delivery rule as an Edit-mode rotation.
+test('bulk direction: untouched GMI defaults become GML in the same write; explicit, stored GML and unlinked stay; GML carries it', async () => {
+  const context = await setup();
+  const { session, layer, status, byObject, byName, delivery } = context;
+  const [k1, k2, k3, k4, k5] = [0, 1, 2, 3, 4].map((index) => byObject(guid(index)));
+  const unlinked = byName(GML_NAMES[0])[0];
+  assert(session.setDeliveryIntent(layer.id, [k3.id], 'keep-link').ok, 'explicit GMI');
+  assert(session.setDeliveryIntent(layer.id, [k4.id], 'transfer').ok, 'explicit GML');
+  const unlinkedBefore = status(unlinked);
+  const keyBefore = session.getPhotoDeliverySnapshot(layer.id).stateKey;
+  assert.deepEqual([k1, k2, k5].map((photo) => session.getPhoto(photo.id).direction.current.basis.kind), ['default', 'default', 'default']);
+
+  // Failure and no-op: an invalid value, an empty selection and a non-direction field change no delivery.
+  for (const input of [400, -1, 'nord', null]) {
+    const refused = session.fillMissingPhotoValues(layer.id, 'direction', input, [k1.id, k2.id]);
+    assert.equal(refused.ok, false, String(input));
+    assert.equal(refused.transferIds, undefined);
+  }
+  assert.deepEqual(session.fillMissingPhotoValues(layer.id, 'direction', 45, []).transferIds, []);
+  for (const [field, value] of [['photographer', 'Feltmåler'], ['captureTime', '2026-08-01T10:00:00']]) {
+    const other = session.fillMissingPhotoValues(layer.id, field, value, [k5.id]);
+    assert(other.ok && other.counts.adopted === 1, field);
+    assert.equal(other.transferIds, undefined, `${field} has no delivery effect`);
+  }
+  assert.equal(session.getPhotoDeliverySnapshot(layer.id).stateKey, keyBefore);
+  assert.equal(session.getPhoto(k1.id).direction.current.basis.kind, 'default', 'nothing was written by the refused fills');
+
+  // One operation, several qualifying photos, a mixed selection.
+  const filled = session.fillMissingPhotoValues(layer.id, 'direction', 45, [k1.id, k2.id, k3.id, k4.id, unlinked.id]);
+  assert(filled.ok);
+  assert.equal(filled.counts.adopted, 5);
+  assert.deepEqual([...filled.transferIds].sort(), [k1.id, k2.id].sort());
+  assert.equal(filled.delivery.gml, 2);
+  assert.deepEqual([status(k1), status(k2), status(k3), status(k4), status(k5)], ['transfer', 'transfer', 'keep-link', 'transfer', 'keep-link']);
+  assert.equal(status(unlinked), unlinkedBefore, 'an unlinked photo keeps its delivery state');
+  assert.equal(delivery().byPhotoId[k3.id].userChosen || delivery().byPhotoId[k3.id].explicit, true, 'the explicit GMI choice is kept');
+  for (const photo of [k1, k2, k3, k4, unlinked]) assert.equal(session.getPhoto(photo.id).direction.current.degrees, 45);
+  const filledPhoto = session.getPhoto(k1.id);
+  assert.equal(filledPhoto.direction.current.basis.kind, 'manual');
+  assert.equal(filledPhoto.occurrence.key, k1.occurrence.key, 'the GMI object relationship is kept as provenance');
+  assert.equal(filledPhoto.spatial.current, k1.spatial.current, 'the GMI-sourced position record itself is kept');
+  const snapshot = session.getPhotoDeliverySnapshot(layer.id);
+  assert.deepEqual(snapshot.transfers.map((item) => item.photoId).sort(), [k1.id, k2.id, k4.id].sort());
+
+  // Repeating the fill finds nothing missing: no new transfer and no state change.
+  const keyAfter = snapshot.stateKey;
+  const again = session.fillMissingPhotoValues(layer.id, 'direction', 90, [k1.id, k2.id, k3.id, k4.id, unlinked.id]);
+  assert(again.ok);
+  assert.equal(again.counts.adopted, 0);
+  assert.deepEqual(again.transferIds, []);
+  assert.equal(session.getPhotoDeliverySnapshot(layer.id).stateKey, keyAfter);
+  assert.equal(session.getPhoto(k1.id).direction.current.degrees, 45);
+
+  // A bulk-filled direction is the user's: a move back to the GMI point does not restore GMI (and drop it);
+  // a move away of the untouched k5 still transfers, and its plain return still restores.
+  const origin = (photo) => photoOriginGmiPosition(photo);
+  const back = session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: k1.id, position: origin(k1) },
+    { photoId: k5.id, position: { ...origin(k5), longitude: origin(k5).longitude + 0.001 } }]);
+  assert(back.ok);
+  assert.deepEqual(back.restoredIds, []);
+  assert.deepEqual(back.transferIds, [k5.id]);
+  assert.equal(status(k1), 'transfer');
+  const returned = session.applyPhotoEdits(session.beginPhotoEdits(layer.id), [{ photoId: k5.id, position: origin(k5) }]);
+  assert.deepEqual(returned.restoredIds, [k5.id], 'the move rule is unchanged for a photo without a set direction');
+
+  // The gemini-legacy2019 GML of the transferred occurrences carries the filled direction.
+  assert(session.fillMissingPhotoValues(layer.id, 'captureTime', '2026-08-01T10:00:00').ok);
+  assert(session.fillMissingPhotoValues(layer.id, 'photographer', 'Feltmåler').ok);
+  const transfers = session.getPhotoDeliverySnapshot(layer.id).transfers.map((item) => item.photoId).sort();
+  assert.deepEqual(transfers, [k1.id, k2.id, k4.id].sort());
+  const plan = await buildPhotoExportPlan(capturePhotoExportSnapshot(session, layer.id), { profile: 'gemini-legacy2019' },
+    { now: () => new Date('2026-11-27T12:00:00Z'), occurrenceIds: transfers });
+  assert.deepEqual(plan.errors, []);
+  const xml = serializePhotoExport(plan);
+  assert.deepEqual([...xml.matchAll(/<app:retningsverdi>([^<]+)<\/app:retningsverdi>/g)].map((match) => Number(match[1])), [45, 45, 45]);
 });

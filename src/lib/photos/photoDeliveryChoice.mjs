@@ -8,6 +8,7 @@ import { PHOTO_DELIVERY_REASON_TEXT, PHOTO_DELIVERY_STATUS_LABELS, summarizePhot
 import { PHOTO_DELIVERY_COLOURS, photoDeliveryColourState } from './photoMarkerPresentation.mjs';
 import { PHOTO_POSITION_TOLERANCE_METRES, photoPositionDistance } from './photoPositioning.mjs';
 import { isPhotoPosition } from './photoSpatial.mjs';
+import { isDefaultPhotoDirection } from './photoDirection.mjs';
 import { PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT } from './photoHyperlinkTransferLock.mjs';
 
 const option = (key, apply, { active = false, disabled = false, reason = null } = {}) =>
@@ -167,12 +168,37 @@ export function photoOriginGmiPosition(photo) {
   return isPhotoPosition(candidate?.position) ? candidate.position : null;
 }
 
+// A GMI-linked occurrence in its untouched GMI default that can still be transferred to GML.
+const isUntouchedGmiDefault = (entry) => Boolean(entry?.linked) && entry.status === 'keep-link' && !entry.explicit && !entry.userChosen
+  && Boolean(entry.canTransfer);
+
+/** A direction the user set. A GMI hyperlink cannot carry a direction, so only GML delivers it. */
+export const photoHasManualDirection = (photo) => photo?.direction?.current?.basis?.kind === 'manual';
+
+/**
+ * Whether accepting `degrees` as the user's direction changes the photo's direction, and so counts as a rotation for
+ * delivery. A missing direction or the default placeholder counts as no direction: any value replacing it is a change
+ * (also 0°, which then means north). The same value as a real saved direction is not. Shared by the session's
+ * Edit-mode save and its «Fyll inn manglende» write, so the two cannot develop separate rules.
+ */
+export function photoDirectionChangeIsMeaningful(current, degrees) {
+  if (!Number.isFinite(degrees)) return false;
+  if (!current || isDefaultPhotoDirection(current)) return true;
+  return degrees !== current.degrees;
+}
+
+/**
+ * Batch 2C: whether accepting a changed direction (rotation) for this occurrence proposes GMI → GML, with the same
+ * «untouched GMI default only» rule as a move. An explicit choice, a stored decision or an unlinked photo is unchanged.
+ */
+export const photoRotationProposesTransfer = (entry) => isUntouchedGmiDefault(entry);
+
 /**
  * Whether moving a default GMI occurrence to `position` proposes GMI → GML: only when the new position is further from
  * the originating GMI point than the shared positioning tolerance. Returning to the GMI point proposes nothing.
  */
 export function photoMoveProposesTransfer(photo, entry, position) {
-  if (!entry?.linked || entry.status !== 'keep-link' || entry.explicit || entry.userChosen || !entry.canTransfer) return false;
+  if (!isUntouchedGmiDefault(entry)) return false;
   const origin = photoOriginGmiPosition(photo);
   const distance = origin && isPhotoPosition(position) ? photoPositionDistance(origin, position) : null;
   return distance !== null && distance > PHOTO_POSITION_TOLERANCE_METRES;
@@ -189,15 +215,25 @@ export function photoMoveProposesTransfer(photo, entry, position) {
  * - 'kept-explicit': the user chose GMI explicitly; the choice is kept, but the photo is moved away (review).
  * - 'kept-unavailable': moved away, but the GMI link cannot be transferred now (review).
  * - null: nothing to change.
+ *
+ * Batch 2C: `rotated` means the same commit accepts a changed direction. A rotation of an untouched GMI default is a
+ * 'transfer' like a move (the direction can only be delivered in GML), with or without a position; `position` may then
+ * be null. A return to the GMI point never restores GMI for a photo whose direction the user set (now or before),
+ * because the GMI delivery would drop that direction.
  */
-export function photoPositionDeliveryEffect(photo, entry, position, { includeUnlinked = false } = {}) {
-  if (!entry || !isPhotoPosition(position)) return null;
+export function photoPositionDeliveryEffect(photo, entry, position, { includeUnlinked = false, rotated = false } = {}) {
+  if (!entry) return null;
+  const rotation = rotated && photoRotationProposesTransfer(entry) ? 'transfer' : null;
+  if (!isPhotoPosition(position)) return rotation;
   if (!entry.linked) return includeUnlinked && photoPositionDefaultsToGml(entry) ? 'include' : null;
   const origin = photoOriginGmiPosition(photo);
   const distance = origin ? photoPositionDistance(origin, position) : null;
-  if (distance === null) return null;
+  if (distance === null) return rotation;
   const away = distance > PHOTO_POSITION_TOLERANCE_METRES;
-  if (!away) return entry.status === 'transfer' && entry.automatic && !entry.userChosen ? 'restore' : null;
+  if (!away) {
+    if (rotation) return rotation;
+    return entry.status === 'transfer' && entry.automatic && !entry.userChosen && !rotated && !photoHasManualDirection(photo) ? 'restore' : null;
+  }
   if (photoMoveProposesTransfer(photo, entry, position)) return 'transfer';
   if (entry.status !== 'keep-link') return null;
   return entry.userChosen || entry.explicit ? 'kept-explicit' : !entry.canTransfer ? 'kept-unavailable' : null;

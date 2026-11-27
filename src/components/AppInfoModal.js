@@ -88,12 +88,14 @@ function SourceCodeLink() {
 }
 
 // The running build, so two deployments can be told apart. Values are inlined at build time (buildInfo.mjs).
-function BuildIdentity({ build = BUILD_INFO }) {
+// The application version (the pill before it) is the latest release in appReleases.mjs; the commit identifies the
+// build. A Preview or local build can contain changes made after that release, and says so.
+function BuildIdentity({ build = BUILD_INFO, version = CURRENT_APP_VERSION }) {
   return (
     <dl className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-4 text-gmi-text-subtle" data-app-build={build.environment}>
       {build.shortSha && (
         <div className="flex gap-1">
-          <dt>Versjon:</dt>
+          <dt>Commit:</dt>
           <dd><code className="font-mono text-gmi-text-muted" title={build.commitSha}>{build.shortSha}</code></dd>
         </div>
       )}
@@ -101,6 +103,12 @@ function BuildIdentity({ build = BUILD_INFO }) {
         <dt>Miljø:</dt>
         <dd>{build.environmentLabel}</dd>
       </div>
+      {build.environment !== 'production' && (
+        <div className="flex gap-1" data-app-build-unreleased>
+          <dt className="sr-only">Status:</dt>
+          <dd>Kan inneholde endringer som ikke er utgitt etter v{version}</dd>
+        </div>
+      )}
     </dl>
   );
 }
@@ -246,30 +254,14 @@ function AboutContent() {
   );
 }
 
+// Batch 2C: photo support (FOTO) and field-value editing (Rettinger) are in this build, so they are no longer listed
+// as plans. They belong in the release notes of the version that ships them.
 function FutureContent() {
   return (
     <div className={APP_INFO_TAB_CONTENT_CLASS}>
       <AppInfoHero title="Fremtiden – videre utvikling" />
       <section>
         <div className="space-y-4">
-          <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Planlagt</span>
-            </div>
-            <h4 className="mt-3 text-base font-bold text-gmi-navy">Full støtte for bilder</h4>
-            <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
-              Videre arbeid vil gi bedre støtte for bilder gjennom hele arbeidsflyten, fra import og kontroll av bildefiler til plassering, kobling mot VA-objekter og eksport. Målet er å støtte bildeintegrasjon både mot GMI- og GML-filer, slik at bilder og tilhørende objekter kan kontrolleres og håndteres samlet i GMI Validator.
-            </p>
-          </div>
-          <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Mulig</span>
-            </div>
-            <h4 className="mt-3 text-base font-bold text-gmi-navy">Redigering av feltverdier i GMI-filer</h4>
-            <p className="mt-1.5 text-[15px] leading-[1.6] text-gmi-text-muted">
-              Det vurderes også støtte for å gjøre enkle endringer i feltverdier direkte i åpnede GMI-filer. Målet er å kunne korrigere eller supplere egenskaper uten å endre geometrien, med tydelig skille mellom originaldata og redigerte verdier før filen lastes ned på nytt.
-            </p>
-          </div>
           <div className="rounded-xl border border-gmi-border bg-gmi-surface-soft px-4 py-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gmi-interactive">Mulig</span>

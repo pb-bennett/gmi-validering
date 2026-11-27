@@ -374,6 +374,12 @@ suite('F-05: a failed additional import keeps the workspace and can be retried o
   await browser.waitFor(importFailed);
   assert.equal(await browser.evaluate('Boolean(document.querySelector(".leaflet-container"))'), false);
   await browser.waitFor(ui.button('Prøv igjen med en annen fil'));
+  assert.match(await browser.evaluate('document.body.innerText'), /Ugyldig GMI-fil/, 'a malformed .gmi keeps its GMI error');
+  // Batch 2C: an unsupported type on the upload screen gets its own message; the picker stays usable.
+  await ui.feed(await ui.file('Tegning.dwg', 'AC1032'));
+  await browser.waitFor('/Filtypen \\.dwg støttes ikke/.test(document.body.innerText)');
+  assert.doesNotMatch(await browser.evaluate('document.body.innerText'), /Ugyldig GMI-fil/);
+  await ui.shots('2c-unsupported-upload');
   await ui.load(alfa);
   await browser.evaluate(`window.__kept = ${MAP}; true`);
   await ui.openAdd();
@@ -392,14 +398,45 @@ suite('F-05: a failed additional import keeps the workspace and can be retried o
   await ui.openAdd(); await ui.feed(bad);
   await browser.waitFor(importFailed);
   await ui.click('Lukk legg til lag');
+  // Batch 2C: the dialog stated the error, so closing it dismisses the error instead of repeating it in the workspace.
+  await browser.waitFor(`!${addDialog}`);
+  await ui.pause(300);
+  assert.equal(await browser.evaluate(`Boolean(${notice})`), false, 'no stale workspace notice after the dialog is closed');
+  assert.equal(await browser.evaluate(importFailed), false);
+  // Batch 2C: an unsupported type and unrecognised .txt content get their own messages, not «Ugyldig GMI-fil».
+  const dialogError = '(document.querySelector("[data-import-error=dialog]")?.innerText || "")';
+  for (const [name, content, message] of [['Liste.xlsx', 'PK', /Filtypen \.xlsx støttes ikke/], ['Notat.txt', INVALID, /Innholdet i tekstfilen ble ikke gjenkjent som GMI eller SOSI/]]) {
+    const target = await ui.file(name, content);
+    await ui.openAdd(); await ui.feed(target);
+    await browser.waitFor(`new RegExp(${JSON.stringify(message.source)}).test(${dialogError})`);
+    assert.doesNotMatch(await browser.evaluate(dialogError), /Ugyldig GMI-fil/);
+    assert.equal(await ui.has(alfa) && await ui.has(bravo), true, `${name}: layers kept`);
+    await ui.shots(`2c-${path.extname(name).slice(1)}-dialog`);
+    await ui.click('Lukk legg til lag');
+    await browser.waitFor(`!${addDialog}`);
+  }
+  assert.equal(await browser.evaluate(`Boolean(${notice})`), false);
+  // An error that arrives while the dialog is closed (a window drop) is stated in the workspace, with retry and dismissal.
+  const drop = () => browser.evaluate(`(() => { const transfer = new DataTransfer();
+    transfer.items.add(new File([${JSON.stringify(INVALID)}], 'Ugyldig.gmi'));
+    document.body.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+    document.body.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true })); })()`);
+  await drop();
   await browser.waitFor(notice);
   assert.equal(await browser.evaluate(`${notice}.getAttribute('role')`), 'alert');
+  assert.match(await browser.evaluate(`${notice}.innerText`), /Ugyldig GMI-fil/, 'a malformed GMI keeps its GMI-specific message');
   await ui.shots('f05-notice');
-  await ui.click('Prøv igjen', notice);
-  await browser.waitFor(addDialog);
-  await ui.click('Lukk legg til lag');
   await ui.click('Lukk feilmelding', notice);
   await browser.waitFor(`!${notice}`);
+  await drop();
+  await browser.waitFor(notice);
+  await ui.click('Prøv igjen', notice);
+  await browser.waitFor(addDialog);
+  assert.equal(await browser.evaluate('Boolean(document.querySelector("[data-import-error=dialog][role=alert]"))'), true, 'the retry dialog states the error');
+  await ui.click('Lukk legg til lag');
+  await browser.waitFor(`!${addDialog}`);
+  await ui.pause(300);
+  assert.equal(await browser.evaluate(`Boolean(${notice})`), false, 'closing the retry dialog dismisses the error');
   assert.equal(await ui.alive(), true);
   assert.equal(await ui.has(alfa) && await ui.has(bravo), true);
   await ui.act(alfa, 'Profilanalyse');
@@ -468,7 +505,8 @@ suite('F-05: a failed additional import keeps corrections, FOTO layers and an op
     assert.equal(await browser.evaluate('Boolean(document.querySelector(\'section[aria-label^="Fotokartlag"]\'))'), foto);
     // The session-loss guard still protects the kept work.
     assert.equal(await browser.evaluate('(() => { const e = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; })()'), true);
-    await ui.click('Lukk feilmelding', notice);
+    // Batch 2C: the dialog stated the error; closing it left no workspace notice.
+    assert.equal(await browser.evaluate(`Boolean(${notice})`), false);
   }
   await open();
   assert.equal(await browser.evaluate(staged), true);

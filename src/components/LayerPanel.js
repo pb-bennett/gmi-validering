@@ -72,7 +72,7 @@ function LayerAnalysisButtons({
         icon={HighlighterIcon}
         size={16}
         label="Marker alt i laget"
-        tooltip={highlightAll ? 'Skru av laghighlight' : 'Marker alt i laget'}
+        tooltip={highlightAll ? 'Skru av lagmarkering' : 'Marker alt i laget'}
         pressed={highlightAll}
         className={`layer-card-icon-button${highlightAll ? ' gmi-selected-control' : ''}`}
         onClick={() => toggleLayerHighlightAll(layerId)}

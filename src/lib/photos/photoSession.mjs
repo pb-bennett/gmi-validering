@@ -17,7 +17,7 @@ import { duplicatePhotoNames, photoAppendPolicy, prunePhotoSource, reviewPhotoSo
 import { equivalentGmiPhotoEvidence, gmiPhotoAssociations, gmiPointPosition, parseGmiPhotoSource, pruneGmiPhotoSource, reviewGmiPhotoSource } from './gmiPhotoSource.mjs';
 import { photoSourceEvidenceSignature, planPhotoSourcePositions, selectedPhotoSourcePositions } from './photoPositioning.mjs';
 import { PHOTO_DELIVERY_INTENTS, buildPhotoDeliverySnapshot, photoDeliveryEntry, photoLayerDelivery } from './photoDeliveryIntent.mjs';
-import { photoPositionDeliveryEffect, planPhotoExclusion } from './photoDeliveryChoice.mjs';
+import { photoDirectionChangeIsMeaningful, photoPositionDeliveryEffect, planPhotoExclusion } from './photoDeliveryChoice.mjs';
 import { PHOTO_HYPERLINK_TRANSFER_ACTIVE, PHOTO_HYPERLINK_TRANSFER_LAYER_LOCK_TEXT, PHOTO_HYPERLINK_TRANSFER_LOCK_TEXT,
   PHOTO_HYPERLINK_TRANSFER_SOURCE_LOCK_TEXT } from './photoHyperlinkTransferLock.mjs';
 
@@ -133,13 +133,13 @@ export function createPhotoSession({
   const layerDelivery = (layer) => photoLayerDelivery(layer, records, deliveryDecisions, deliveryChoiceIds);
   const includeAsGml = (ids) => { for (const id of ids) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true })); };
   // B1.1: the automatic delivery consequences of accepted positions, planned from the state before the writes.
-  // `changes`: [{ photoId, position, includeUnlinked }]. Explicit choices are kept and reported for review.
+  // `changes`: [{ photoId, position, includeUnlinked, rotated }]. Explicit choices are kept and reported for review.
   const positionDeliveryEffects = (layer, changes) => {
     const delivery = layerDelivery(layer);
     const effects = { transfer: [], restore: [], include: [], keptExplicit: [], keptUnavailable: [] };
     const keys = { transfer: 'transfer', restore: 'restore', include: 'include', 'kept-explicit': 'keptExplicit', 'kept-unavailable': 'keptUnavailable' };
-    for (const { photoId, position, includeUnlinked = false } of changes) {
-      const effect = photoPositionDeliveryEffect(records.get(photoId), delivery.byPhotoId[photoId], position, { includeUnlinked });
+    for (const { photoId, position, includeUnlinked = false, rotated = false } of changes) {
+      const effect = photoPositionDeliveryEffect(records.get(photoId), delivery.byPhotoId[photoId], position, { includeUnlinked, rotated });
       if (effect) effects[keys[effect]].push(photoId);
     }
     return effects;
@@ -1420,10 +1420,13 @@ export function createPhotoSession({
       const lockedEdits = transferLockedIds(ticket.layerId, writes.map((write) => write.photoId));
       if (lockedEdits.length) return transferRefused({ lockedIds: lockedEdits });
       // A move away from the originating GMI point turns an untouched GMI default into GML, in the same commit, and a
-      // move back restores an automatic transfer (B1.1, the same rule as the positioning wizard). Rotation alone never
-      // does; the occurrence (GMI object relationship) and the GMI file are left as they are.
-      const effects = positionDeliveryEffects(layer, writes.filter((write) => write.position)
-        .map(({ photoId, position }) => ({ photoId, position })));
+      // move back restores an automatic transfer (B1.1, the same rule as the positioning wizard). Batch 2C: a changed
+      // direction counts as a move away, because a GMI hyperlink cannot carry it, and keeps an automatic transfer from
+      // being restored. Whether a direction is a change is the shared rule (photoDirectionChangeIsMeaningful), also used
+      // by «Fyll inn manglende». The occurrence (GMI object relationship) and the GMI file are left as they are.
+      const effects = positionDeliveryEffects(layer, writes.map(({ photoId, position, degrees }) => ({ photoId, position,
+        rotated: degrees !== null && photoDirectionChangeIsMeaningful(records.get(photoId).direction.current, degrees) }))
+        .filter((write) => write.position || write.rotated));
       const acceptedAt = Date.now();
       for (const { photoId, position, degrees } of writes) updateRecord(photoId, (live) => ({
         ...(position ? { spatial: acceptManualPhotoPosition(live.spatial, position, acceptedAt) } : {}),
@@ -1480,6 +1483,15 @@ export function createPhotoSession({
       const plan = planManualPhotoFill(photos, field, (photoIds ?? members).filter((id) => !estimateTargets || estimateTargets.has(id)));
       const value = estimated ? estimatedCaptureTime(input) : normalizeManualPhotoFill(field, input);
       if (value === null) return { ok: false, error: 'invalid-value', ...plan, counts: { ...plan.counts, adopted: 0, invalidInput: 1 } };
+      // Batch 2C follow-up: a filled direction is a rotation for delivery, with the same planner and rules as Edit
+      // mode: an untouched GMI default becomes an automatic GML transfer in this same write, because a GMI hyperlink
+      // cannot carry the direction. Explicit choices, stored decisions, unlinked and non-transferable occurrences are
+      // unchanged. A photograph an active hyperlink transfer protects keeps its delivery state. Planned before any write.
+      const layer = layers.get(layerId);
+      const lockedIds = field === 'direction' && layer ? new Set(transferLockedIds(layerId, plan.targets.map((target) => target.photoId))) : new Set();
+      const effects = field === 'direction' && layer ? positionDeliveryEffects(layer, plan.targets
+        .filter((target) => !lockedIds.has(target.photoId) && photoDirectionChangeIsMeaningful(records.get(target.photoId).direction.current, value))
+        .map((target) => ({ photoId: target.photoId, position: null, rotated: true }))) : null;
       const acceptedAt = Date.now();
       const undoEntries = [];
       for (const target of plan.targets) {
@@ -1495,10 +1507,13 @@ export function createPhotoSession({
           if (estimated) undoEntries.push({ assetId: target.assetId, before, after: assets.get(target.assetId).captureMetadata.captureTime });
         }
       }
+      if (effects) applyPositionDeliveryEffects(effects);
       const undoToken = undoEntries.length ? Object.freeze({}) : null;
       if (undoToken) captureTimeUndos.set(undoToken, { layerId, generation, entries: undoEntries });
       if (plan.targets.length) publish();
-      return { ok: true, ...plan, ...(estimated ? { undoToken } : {}), counts: { ...plan.counts, adopted: plan.targets.length, invalidInput: 0 } };
+      return { ok: true, ...plan, ...(estimated ? { undoToken } : {}),
+        ...(effects ? { transferIds: effects.transfer, delivery: deliveryEffectSummary(effects) } : {}),
+        counts: { ...plan.counts, adopted: plan.targets.length, invalidInput: 0 } };
     },
     // M5 (C-2): one explicit batch step of the Opptakstid task. The rows are re-planned from the live layer and must be
     // exactly the reviewed ones; every value is prepared before the first write, written in one pass and published
