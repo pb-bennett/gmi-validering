@@ -3,9 +3,10 @@ import test from 'node:test';
 import { gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
 import { createGmiSourceDocument, createGmiEditSession, createGmiObjectCorrection, stageGmiChangeSet, undoGmiEdit, redoGmiEdit,
   discardAllGmiEdits, discardGmiChangeSet, revalidateGmiEditSession, getGmiProposedState, getGmiDocumentDataset, getGmiSourceBytes,
-  evaluateGmiBatchEligibility, createGmiBatchCorrection, createGmiProposedCache, compileGmiEffectiveEdits } from '../src/lib/gmi-edit/index.mjs';
-import { CORRECTABLE_RULES, prepareValidatorCorrection, compareGmiValidationRuns, buildGmiValidationComparison,
-  isCurrentGmiComparison, validatorInspectionLayer, validatorCorrectionSelection, validatorCorrectionBasisCurrent } from '../src/lib/gmiValidatorEditing.mjs';
+  createGmiProposedCache, compileGmiEffectiveEdits, loadGmiSourceDocument } from '../src/lib/gmi-edit/index.mjs';
+import { compareGmiValidationRuns, buildGmiValidationComparison, isCurrentGmiComparison, validatorInspectionLayer,
+  validatorSelectionHandoff, VALIDATOR_CORRECTION_STALE } from '../src/lib/gmiValidatorEditing.mjs';
+import * as validatorEditing from '../src/lib/gmiValidatorEditing.mjs';
 const date = '2026-11-09';
 const fresh = (options) => createGmiEditSession(createGmiSourceDocument(gmiEditBatchFixture(options)), { layerId: 'layer-one' });
 const stage = (session, index, values) => {
@@ -66,39 +67,13 @@ test('full comparison includes dataset/schema findings and refuses mismatched da
   assert.equal(buildGmiValidationComparison(fresh(), { ok: false }, date).ok, false);
 });
 
-test('allow-list maps exactly the three existing applicability contracts; handoff is exact and chooses/applies no value', () => {
-  const session = fresh(), run = revalidateGmiEditSession(session, { referenceDate: date }).original;
-  assert.deepEqual(Object.values(CORRECTABLE_RULES).sort(), ['pressureClass', 'ringStiffness', 'sdr']);
-  for (const ruleId of Object.keys(CORRECTABLE_RULES)) assert.equal(prepareValidatorCorrection(session, run, [ruleId]).ok, true, ruleId);
-  const request = prepareValidatorCorrection(session, run, ['innmaling.line.sdr.valid']);
-  assert.equal(request.ok, true); assert.equal(request.layerId, session.layerId); assert.equal(request.session, session);
-  assert.deepEqual(request.targets, [0, 6, 7].map((sourceIndex) => ({ scope: 'line', sourceIndex })));
-  assert.equal('lexeme' in request, false); assert.equal(session.changeSets.length, 0);
-  assert.equal(prepareValidatorCorrection(session, run, ['innmaling.line.sdr-ring-stiffness.exclusive']).ok, false);
-  assert.equal(prepareValidatorCorrection(session, { ...run, layerId: 'other' }, ['innmaling.line.sdr.valid']).ok, false);
-  // Resolve an old Original finding against CURRENT eligibility; never silently include a staged fill.
-  assert.deepEqual(prepareValidatorCorrection(stage(session, 0, { SDR: '11' }), run, ['innmaling.line.sdr.valid']).targets.map((t) => t.sourceIndex), [6, 7]);
-});
-
-test('finding scope stays narrow through M5B preview eligibility and one reversible ChangeSet', () => {
-  const session = fresh(), run = revalidateGmiEditSession(session, { referenceDate: date }).original;
-  const filtered = { ...run, ruleResults: run.ruleResults.map((rule) => ({ ...rule, findings: rule.findings.filter((f) => f.objectRef.sourceIndex === 6) })) };
-  const request = prepareValidatorCorrection(session, filtered, ['innmaling.line.sdr.valid']);
-  const eligibility = evaluateGmiBatchEligibility(session, { canonicalFieldId: request.canonicalFieldId, targets: request.targets });
-  assert.equal(eligibility.eligible.length, 1);
-  const correction = createGmiBatchCorrection(session, { eligibility, lexeme: '11' });
-  assert.equal(correction.ok, true); assert.equal(correction.changeSet.cells.length, 1);
-  assert.equal(correction.changeSet.cells[0].sourceIndex, 6);
-});
-
-test('missing columns, irregular source objects and populated values cannot seed an editable shortcut', () => {
-  for (const options of [{ fields: ['Tema', 'Material'], rows: [['VL', 'PE']] }, { rows: [['VL', 'PE', '11', '', '']] }]) {
-    const session = fresh(options), run = revalidateGmiEditSession(session, { referenceDate: date }).original;
-    assert.equal(prepareValidatorCorrection(session, run, ['innmaling.line.sdr.valid']).ok, false);
-  }
-  const original = fresh(), cleared = stage(original, 1, { SDR: '' });
-  const run = revalidateGmiEditSession(cleared, { referenceDate: date }).revised;
-  assert(!prepareValidatorCorrection(cleared, run, ['innmaling.line.sdr.valid']).targets.some((t) => t.sourceIndex === 1));
+// L2a: «Lag retting…» and its R5 helpers are retired. The integrated route (Vis → Åpne i Rettinger) is the only way
+// from a Validator finding to Rettinger; its exact-scope and refusal contracts are in gmiValidatorSelectionHandoff.
+test('L2a: the retired «Lag retting…» helpers are no longer exported; the H3 handoff and comparison helpers remain', () => {
+  for (const name of ['CORRECTABLE_RULES', 'isCorrectableMissingFinding', 'prepareValidatorCorrection', 'validatorCorrectionSelection',
+    'validatorCorrectionBasisCurrent', 'VALIDATOR_CORRECTION_BASIS_CHANGED']) assert.equal(name in validatorEditing, false, name);
+  for (const name of ['validatorSelectionHandoff', 'VALIDATOR_CORRECTION_STALE', 'gmiValidatorReturnTarget', 'gmiValidatorDefaultDataset',
+    'buildGmiValidationComparison', 'isCurrentGmiComparison', 'validatorInspectionLayer', 'compareGmiValidationRuns']) assert.equal(name in validatorEditing, true, name);
 });
 
 test('proposed object inspection resolves only the exact live layer/session and fails closed', () => {
@@ -130,58 +105,31 @@ test('actual M2 proposed verification failure has no original/revised results an
   assert.equal(buildGmiValidationComparison(session, validation, date).ok, false);
 });
 
-test('read-only sources remain inspectable with verified identical proposed state but no editable correction targets', () => {
+test('read-only sources remain inspectable with verified identical proposed state', () => {
   const bytes = Buffer.from(gmiEditBatchFixture());
   const mixed = Buffer.from(bytes.toString('latin1').replace('\r\n', '\n'), 'latin1');
   const session = createGmiEditSession(createGmiSourceDocument(mixed), { layerId: 'read-only' });
   assert.equal(session.document.editable, false);
   const validation = revalidateGmiEditSession(session, { referenceDate: date });
   assert.equal(validation.ok, true); assert.equal(validation.proposed.identical, true);
-  assert.equal(prepareValidatorCorrection(session, validation.original, ['innmaling.line.sdr.valid']).code, 'document-not-editable');
 });
 
-
-test('R5 accepts only exact prepared targets, field, layer, live session and immutable source identities', () => {
-  const session = fresh(), run = revalidateGmiEditSession(session, { referenceDate: date }).original;
-  const prepared = prepareValidatorCorrection(session, run, ['innmaling.line.pressure-class.valid']);
-  assert.equal(prepared.ok, true);
-  const correction = { ...prepared, sessionId: 'lineage' };
-  const layer = { id: session.layerId, data: getGmiDocumentDataset(session.document) };
-  const view = { session, document: session.document, handle: { sessionId: 'lineage', fingerprint: session.document.fingerprint } };
-  const result = validatorCorrectionSelection(correction, view, layer);
-  assert.equal(result.ok, true);
-  assert.deepEqual(result.selection.keys, correction.targets.map((t) => `${t.scope}:${t.sourceIndex}`));
-  assert.equal(result.selection.scope, 'line'); assert.equal(result.selection.showOnly, true);
-  assert.equal(result.selection.origin.canonicalFieldId, 'pressureClass');
+test('L2a: the integrated Validator handoff refuses a read-only source; the same request on the editable source is accepted', async () => {
+  // Replaces the retired R5 «document-not-editable» shortcut refusal with the same refusal on the integrated route.
+  // Fingerprinted documents (as the session registry loads them), so only `editable` differs between the two cases.
+  const bytes = Buffer.from(gmiEditBatchFixture());
+  const readOnly = await loadGmiSourceDocument(Buffer.from(bytes.toString('latin1').replace('\r\n', '\n'), 'latin1'));
+  const session = createGmiEditSession(readOnly, { layerId: 'read-only' });
+  assert.equal(readOnly.editable, false); assert.equal(typeof readOnly.fingerprint, 'string');
+  const handoff = (current) => {
+    const handle = { layerId: current.layerId, sessionId: 'live-session', fingerprint: current.document.fingerprint };
+    const layer = { id: current.layerId, data: getGmiDocumentDataset(current.document) };
+    const request = { kind: 'validator-selection', scope: 'line', keys: ['line:0', 'line:6'], session: current, document: current.document,
+      binding: { layerId: layer.id, sessionId: handle.sessionId, fingerprint: handle.fingerprint }, sessionId: handle.sessionId,
+      provenance: { canonicalFieldId: 'sdr', fieldLabel: 'SDR', ruleIds: ['innmaling.line.sdr.valid'], datasetKind: 'original' } };
+    return validatorSelectionHandoff(request, { session: current, document: current.document, handle }, layer);
+  };
+  assert.equal(handoff(createGmiEditSession(await loadGmiSourceDocument(bytes), { layerId: 'read-only' })).ok, true, 'control: the same request on the editable source');
+  assert.deepEqual(handoff(session), { ok: false, code: 'stale-session', message: VALIDATOR_CORRECTION_STALE });
   assert.equal(session.changeSets.length, 0);
-  for (const patch of [{ layerId: 'other' }, { sessionId: 'old' }, { fingerprint: 'old' },
-    { session: stage(session, 0, { SDR: '11' }) }, { targets: [{ scope: 'point', sourceIndex: 0 }] },
-    { targets: [{ scope: 'line', sourceIndex: 999 }] }, { targets: [] }]) {
-    assert.equal(validatorCorrectionSelection({ ...correction, ...patch }, view, layer).ok, false);
-  }
-  const changed = { ...layer, data: { ...layer.data, lines: layer.data.lines.map((o) => ({ ...o, guid: 'replaced' })) } };
-  assert.equal(validatorCorrectionSelection(correction, view, changed).ok, false);
-  assert.equal(validatorCorrectionSelection(correction, null, layer).ok, false);
-});
-
-test('«Lag retting…» session-open race: map-only layer updates keep the basis; source, result and date changes are stale', () => {
-  const data = { points: [], lines: [{ id: 1 }] }, result = { layerId: 'layer-one' }, referenceDate = date;
-  const layer = { id: 'layer-one', data, visible: true, terrain: { data: {}, fetchQueue: [0] } };
-  const started = { layer, result, referenceDate };
-  const live = (changes = {}) => ({ layer, storeLayer: layer, result, referenceDate, storeReferenceDate: referenceDate, ...changes });
-  assert.equal(validatorCorrectionBasisCurrent(started, live()), true);
-  // The reproduced race: terrain (or visibility/highlight) lands during the await and replaces the layer object only.
-  for (const replaced of [{ ...layer, terrain: { data: { 0: { status: 'done', points: [] } }, fetchQueue: [] } }, { ...layer, visible: false }]) {
-    assert.equal(validatorCorrectionBasisCurrent(started, live({ layer: replaced, storeLayer: replaced })), true);
-  }
-  // Genuine staleness still fails closed.
-  const reloaded = { ...layer, data: { ...data } };
-  for (const changes of [
-    { storeLayer: reloaded }, { layer: reloaded, storeLayer: reloaded }, { storeLayer: undefined },
-    { layer: { id: 'layer-two', data: { points: [], lines: [] } } },
-    { result: { layerId: 'layer-one' } }, { result: null },
-    { referenceDate: '2025-01-02' }, { storeReferenceDate: '2025-01-02' },
-  ]) assert.equal(validatorCorrectionBasisCurrent(started, live(changes)), false, JSON.stringify(Object.keys(changes)));
-  assert.equal(validatorCorrectionBasisCurrent({ layer: { id: 'layer-one' }, result, referenceDate }, live()), false, 'no source data');
-  assert.equal(validatorCorrectionBasisCurrent({ layer, result: null, referenceDate }, live({ result: null })), false, 'no result');
 });

@@ -26,8 +26,6 @@ export default function ValidationV2RuleList({
   expandedRuleKey,
   onToggle,
   onInfo,
-  canCorrect,
-  onCorrect,
   canReviewPhotoLinks,
   onReviewPhotoLinks,
 }) {
@@ -109,7 +107,6 @@ export default function ValidationV2RuleList({
                     <span>Vis</span>
                   </button>
                 </div>
-                {canCorrect?.(presentation) && <button type="button" className="gmi-compact-button gmi-focus-ring text-gmi-interactive text-[11px]" onClick={() => onCorrect(presentation)}>Lag retting…</button>}
                 {canReviewPhotoLinks?.(presentation) && <button type="button" className="gmi-compact-button gmi-focus-ring border border-gmi-border-strong px-2 py-1 text-gmi-interactive text-[11px]"
                   onClick={() => onReviewPhotoLinks(presentation)}>Gjennomgå i FOTO</button>}
               </section>

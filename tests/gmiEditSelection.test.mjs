@@ -81,31 +81,34 @@ test('map channel follows full selection content at equal cardinality, independe
 });
 
 
-test('R5 Validator origin is shrink-only across every shared action, even after clear; explicit conversion preserves keys', () => {
-  const ordinary = add(['line:1', 'line:3']);
-  const locked = { ...ordinary, showOnly: true, origin: { kind: 'validator', targets: [{ scope: 'line', sourceIndex: 1 }, { scope: 'line', sourceIndex: 3 }] } };
-  for (const action of [
-    { type: 'toggle', key: 'line:2' }, { type: 'add', keys: ['line:0', 'line:1'] },
-    { type: 'range', key: 'line:4', orderedKeys: ['line:1', 'line:2', 'line:3', 'line:4'] },
-    { type: 'add', keys: Array.from({ length: 80 }, (_, i) => `line:${i}`) },
-    { type: 'toggle', scope: 'point', key: 'point:0', replace: true },
-  ]) assert.equal(reduce(locked, action), locked);
-  const shrunk = reduce(locked, { type: 'toggle', key: 'line:1' });
-  assert.deepEqual(shrunk.keys, ['line:3']); assert.equal(shrunk.origin, locked.origin);
-  assert.equal(reduce(shrunk, { type: 'toggle', key: 'line:1' }), shrunk, 'removed original targets cannot implicitly widen either');
-  assert.deepEqual(reduce(locked, { type: 'range', key: 'line:1', orderedKeys: ['line:1'], checked: false }).keys, ['line:3']);
-  const empty = reduce(locked, { type: 'clear' });
-  assert.deepEqual(empty.keys, []); assert.equal(empty.origin, locked.origin);
-  assert.equal(reduce(empty, { type: 'add', keys: ['line:1'] }), empty);
-  assert.equal(reduce(empty, { type: 'toggle', scope: 'point', key: 'point:0', replace: true }), empty);
-  const converted = reduce(shrunk, { type: 'make-ordinary' });
-  assert.deepEqual(converted.keys, shrunk.keys); assert.equal(converted.showOnly, true); assert.equal(converted.origin, null);
-  assert.deepEqual(reduce(converted, { type: 'add', keys: ['line:2'] }).keys, ['line:3', 'line:2']);
+// L2a: the shrink-only R5 origin («Lag retting…») is retired. A selection handed off from Validator is an ordinary
+// Rettinger selection: provenance is kept for the return link, but membership is never restricted.
+test('L2a: a Validator-handed-off selection widens, shrinks, clears and switches geometry like any ordinary selection', () => {
+  const origin = { kind: 'validator-selection', canonicalFieldId: 'sdr', fieldLabel: 'SDR', ruleIds: ['innmaling.line.sdr.valid'], datasetKind: 'original', count: 2 };
+  const handed = { ...add(['line:1', 'line:3']), showOnly: true, origin };
+  assert.deepEqual(reduce(handed, { type: 'toggle', key: 'line:2' }).keys, ['line:1', 'line:3', 'line:2']);
+  assert.deepEqual(reduce(handed, { type: 'add', keys: ['line:0', 'line:1'] }).keys, ['line:1', 'line:3', 'line:0']);
+  assert.deepEqual(reduce(handed, { type: 'range', key: 'line:4', orderedKeys: ['line:1', 'line:2', 'line:3', 'line:4'] }).keys,
+    ['line:1', 'line:3', 'line:4'], 'without an anchor a range selects the one object');
+  assert.equal(reduce(handed, { type: 'add', keys: Array.from({ length: 80 }, (_, i) => `line:${i}`) }).keys.length, 80);
+  for (const next of [reduce(handed, { type: 'toggle', key: 'line:2' }), reduce(handed, { type: 'toggle', key: 'line:1' })]) {
+    assert.equal(next.origin, origin, 'provenance survives membership changes'); assert.equal(next.showOnly, true);
+  }
+  assert.deepEqual(reduce(handed, { type: 'toggle', key: 'line:1' }).keys, ['line:3']);
+  assert.equal(reduce(handed, { type: 'clear' }), null, 'clear empties the selection');
+  assert.equal(reduce(handed, { type: 'remove', keys: ['line:1', 'line:3'] }), null);
+  const points = reduce(handed, { type: 'toggle', scope: 'point', key: 'point:0', replace: true });
+  assert.deepEqual(points.keys, ['point:0']); assert.equal(points.origin, undefined, 'a new geometry starts a fresh selection');
+  assert.equal(reduce(handed, { type: 'make-ordinary' }), handed, 'the retired conversion action is no longer recognised');
+  // The former R5 origin kind has no special meaning any more.
+  const former = { ...handed, origin: { kind: 'validator', targets: [] } };
+  assert.deepEqual(reduce(former, { type: 'toggle', key: 'line:2' }).keys, ['line:1', 'line:3', 'line:2']);
+  assert.equal(reduce(former, { type: 'clear' }), null);
 });
 
 test('H1 host identity defaults to Rettinger and requires a nonempty inspection key', () => {
   assert.deepEqual(add(['line:1']).host, { kind: 'rettinger' });
-  assert.equal(sameGmiSelectionHost(undefined, { kind: 'rettinger' }), true, 'legacy R5 selections belong to Rettinger');
+  assert.equal(sameGmiSelectionHost(undefined, { kind: 'rettinger' }), true, 'selections without a host belong to Rettinger');
   assert.equal(sameGmiSelectionHost({ kind: 'inspection', key: 'field' }, { kind: 'inspection', key: 'field' }), true);
   for (const host of [null, { kind: 'other' }, { kind: 'inspection' }, { kind: 'inspection', key: '' }, { kind: 'inspection', key: 1 }]) {
     assert.equal(sameGmiSelectionHost(host, host), false);
@@ -115,9 +118,9 @@ test('H1 host identity defaults to Rettinger and requires a nonempty inspection 
   assert.equal(sameGmiSelectionHost({ kind: 'inspection', key: 'a' }, { kind: 'rettinger' }), false);
 });
 
-test('H1 membership and presentation actions never reuse another host selection or its R5 lock', () => {
+test('H1 membership and presentation actions never reuse another host selection or its provenance', () => {
   const host = { kind: 'inspection', key: 'a|line|sdr' }, context = { binding, counts, host };
-  const ordinary = { ...add(['line:3']), anchor: 'line:3', showOnly: true, origin: { kind: 'validator' } };
+  const ordinary = { ...add(['line:3']), anchor: 'line:3', showOnly: true, origin: { kind: 'validator-selection', fieldLabel: 'SDR' } };
   const inspected = reduce(ordinary, { type: 'range', key: 'line:7', orderedKeys: ['line:3', 'line:4', 'line:7'] }, context);
   assert.deepEqual(inspected.keys, ['line:7'], 'range cannot use another host anchor');
   assert.equal(inspected.showOnly, false);
@@ -131,7 +134,7 @@ test('H1 membership and presentation actions never reuse another host selection 
     const nextContext = { binding, counts, host: next };
     const fresh = reduce(inspected, { type: 'toggle', scope: 'point', key: 'point:1' }, nextContext);
     assert.deepEqual(fresh.keys, ['point:1'], 'host change also resets the geometry');
-    for (const type of ['show-only', 'make-ordinary', 'clear', 'remove']) {
+    for (const type of ['show-only', 'clear', 'remove']) {
       assert.equal(reduce(inspected, { type, keys: ['line:7'], value: true }, nextContext), null, type);
     }
   }

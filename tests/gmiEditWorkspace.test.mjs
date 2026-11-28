@@ -10,8 +10,7 @@ import test from 'node:test';
 import path from 'node:path';
 import { readFile, readdir } from 'node:fs/promises';
 import { register } from 'node:module';
-import { prepareValidatorCorrection } from '../src/lib/gmiValidatorEditing.mjs';
-import { gmiEditBatchFixture } from './helpers/gmiEditBatchFixture.mjs';
+import { VALIDATOR_CORRECTION_STALE } from '../src/lib/gmiValidatorEditing.mjs';
 import { GMI_EDIT_FIXTURE_DIR } from './helpers/gmiEditFixtures.mjs';
 import { loadGmiDocument, verifyCellChanges } from './helpers/gmiEditHarness.mjs';
 import {
@@ -600,9 +599,9 @@ test('M5C store navigation retains sessions and staged edits; proposed inspectio
   useStore.getState().openGmiValidator(id, 'proposed', 'innmaling.line.sdr.valid', 'line');
   assert.equal(useStore.getState().gmiValidatorDatasets[id], 'proposed');
   assert.equal(useStore.getState().gmiValidatorDatasets[other], undefined, 'other layers still default to Original');
-  const request = { ok: true, layerId: id, session, sessionId: handle.sessionId, fingerprint: session.document.fingerprint, ruleId: 'innmaling.line.sdr.valid', canonicalFieldId: 'sdr', targets: [{ scope: 'line', sourceIndex: 1 }] };
-  useStore.getState().openGmiEditWorkspace(id, request);
-  assert.equal(useStore.getState().gmiEditWorkspace.correction, request);
+  // L2a: ordinary navigation (the retired R5 correction request no longer exists) retains the session and staged edit.
+  useStore.getState().openGmiEditWorkspace(id);
+  assert.deepEqual(useStore.getState().gmiEditWorkspace, { layerId: id });
   assert.equal(gmiEditSessions.getSession(handle).session, session);
   assert.equal(session.changeSets.length, 1);
   assert.equal(data.lines[1].attributes.SDR, null);
@@ -709,44 +708,45 @@ test('S5 wiring: object and batch staging switch the view; column focus starts a
   assert.match(await source('src/components/gmi-edit/GmiObjectEditor.js'), /ref=\{messageRef\} tabIndex=\{-1\}/);
 });
 
-test('R5 store handoff is atomic behind the draft guard and rechecks source/session before accepting', async (t) => {
+// L2a: the R5 «Lag retting…» request is retired. Its guard-atomicity and post-guard recheck contracts are carried by the
+// H3 store tests below (exact keys, no staging, automatic view, and the post-guard session/source/selection/inspection
+// matrix). This test pins what the R5 test also covered and H3 did not: a request of any other kind, and a removed layer.
+test('L2a store: only a Validator selection handoff is accepted; another request fails closed and a removed layer refuses', async (t) => {
   resetStore(); t.after(() => { useStore.setState({ gmiEditWorkspaceGuard: null }); resetStore(); });
-  const { id } = await addStoreLayer(gmiEditBatchFixture());
-  const { handle } = await gmiEditSessions.open(id);
-  const session = gmiEditSessions.getSession(handle).session;
-  const run = gmiEditSessions.revalidate(handle, { referenceDate: '2026-11-09' }).original;
-  const request = { ...prepareValidatorCorrection(session, run, ['innmaling.line.sdr.valid']), sessionId: handle.sessionId };
-  assert.equal(request.ok, true);
-  useStore.getState().openGmiEditWorkspace(id);
-  const binding = { layerId: id, sessionId: handle.sessionId, fingerprint: handle.fingerprint };
-  useStore.getState().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:1'] }, binding);
-  useStore.getState().setGmiEditTableView(id, 'proposed');
-  let continuation;
-  useStore.setState({ gmiEditWorkspaceGuard: (run) => { continuation = run; } });
-  const before = useStore.getState();
-  assert.equal(before.openGmiEditWorkspace(id, request).ok, true);
-  for (const key of ['gmiEditWorkspace', 'gmiEditSelection', 'ui', 'gmiEditTableView']) assert.equal(useStore.getState()[key], before[key], 'guard cancellation preserves ' + key);
-  // Explicit approval accepts exactly the prepared source set, with no engine mutation.
-  continuation();
-  const accepted = useStore.getState();
-  assert.deepEqual(accepted.gmiEditSelection.keys, request.targets.map(t => `${t.scope}:${t.sourceIndex}`));
-  assert.equal(accepted.gmiEditSelection.origin.kind, 'validator');
-  assert.equal(accepted.gmiEditSelection.showOnly, true);
-  assert.equal(accepted.gmiEditTableView[id], 'original');
-  // S5: the handoff's Original is automatic, so the next stage may show Foreslått.
-  assert.equal(accepted.gmiEditTableViewBy[id], 'auto', 'handoff resets an explicit view choice');
-  assert.equal(gmiEditSessions.getSession(handle).session, session);
-  const selected = accepted.gmiEditSelection;
-  accepted.changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:1'] }, binding);
-  assert.equal(useStore.getState().gmiEditSelection, selected);
-  accepted.openGmiEditWorkspace(id, request);
-  assert.equal(gmiEditSessions.stage(handle, createGmiObjectCorrection(session, { scope: 'line', sourceIndex: 0, values: { SDR: '11' } }).changeSet).ok, true);
-  continuation();
-  assert.equal(useStore.getState().gmiEditSelection, selected);
-  assert.match(useStore.getState().gmiEditHandoffError, /Kildegrunnlaget/);
-  assert.equal(useStore.getState().openGmiEditWorkspace(id, request).ok, false);
-  useStore.getState().removeLayer(id, { discardGmiEdits: true });
-  assert.equal(useStore.getState().openGmiEditWorkspace(id, request).ok, false);
+  const { id, data } = await addStoreLayer(CORE), state = () => useStore.getState();
+  const { handle } = await gmiEditSessions.open(id), { session } = gmiEditSessions.resolve(handle);
+  // The former R5 request shape (prepared targets without `kind`) and an unknown kind, with and without a mounted workspace.
+  const legacy = { ok: true, layerId: id, session, sessionId: handle.sessionId, fingerprint: session.document.fingerprint,
+    ruleId: 'innmaling.line.sdr.valid', canonicalFieldId: 'sdr', targets: [{ scope: 'line', sourceIndex: 1 }] };
+  for (const workspaceOpen of [false, true]) {
+    if (workspaceOpen) state().openGmiEditWorkspace(id);
+    for (const request of [legacy, { ...legacy, kind: 'validator' }]) {
+      useStore.setState({ gmiEditHandoffError: null });
+      const before = state();
+      const result = before.openGmiEditWorkspace(id, request);
+      assert.deepEqual(result, { ok: false, code: 'stale-session', message: VALIDATOR_CORRECTION_STALE });
+      for (const key of ['gmiEditWorkspace', 'gmiEditSelection', 'ui', 'gmiEditTableView', 'gmiEditTableViewBy'])
+        assert.equal(state()[key], before[key], `refusal changes no ${key}`);
+      assert.equal(state().gmiEditHandoffError, VALIDATOR_CORRECTION_STALE);
+    }
+  }
+  assert.equal(gmiEditSessions.resolve(handle).session, session); assert.equal(session.changeSets.length, 0);
+  // A valid H3 handoff waiting behind the draft guard is refused when its layer is removed meanwhile.
+  // The workspace is mounted first (as in the H3 guard test); the inspection can coexist with it.
+  useStore.setState({ ui: { ...state().ui, fieldValidationOpen: true } });
+  assert.equal(state().openObjectTable(storeInspectionRequest(id, data)), true);
+  const binding = gmiSelectionBinding(id, state().gmiEditStatus[id]);
+  state().changeGmiEditSelection(id, { type: 'add', scope: 'line', keys: ['line:0', 'line:1'] }, binding,
+    { kind: 'inspection', key: state().objectTableInspection.selectionContext.key });
+  let resume;
+  useStore.setState({ gmiEditWorkspaceGuard: (run) => { resume = run; }, gmiEditHandoffError: null });
+  assert.equal(state().openGmiValidatorSelection(id).ok, true);
+  assert.equal(typeof resume, 'function', 'the handoff waits for the draft guard');
+  state().removeLayer(id, { discardGmiEdits: true });
+  resume();
+  assert.equal(state().gmiEditWorkspace, null); assert.equal(state().gmiEditSelection, null);
+  assert.equal(state().gmiEditHandoffError, VALIDATOR_CORRECTION_STALE);
+  assert.equal(state().openGmiValidatorSelection(id).ok, false, 'no handoff to a removed layer');
 });
 
 test('H3 proposed handoff retains the identical proposed dataset without enabling Kun endrede or changing ordinary U4 controls', () => {

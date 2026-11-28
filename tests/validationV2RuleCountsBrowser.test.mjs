@@ -198,9 +198,11 @@ test('real rule card: compact colours, accessible counts, expand/Vis and result 
     await browser.evaluate('document.querySelector("button[title=Vis]").click()');
     await browser.waitFor('document.querySelector("output").textContent');
     assert.match(await browser.evaluate('document.querySelector("output").textContent'), /Innvendig/);
-    await browser.evaluate(`Array.from(document.querySelectorAll('[role=region] button')).find(button => button.textContent.startsWith('Lag retting')).click()`);
-    await browser.waitFor('document.querySelector("output").textContent.startsWith("Retting:")');
-    assert.match(await browser.evaluate('document.querySelector("output").textContent'), /Retting: Innvendig/);
+    // L2a: «Lag retting…» is retired; the expanded rule's remaining contextual action is «Gjennomgå i FOTO».
+    assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('[role=region] button')).some(button => button.textContent.startsWith('Lag retting'))`), false);
+    await browser.evaluate(`Array.from(document.querySelectorAll('[role=region] button')).find(button => button.textContent.trim() === 'Gjennomgå i FOTO').click()`);
+    await browser.waitFor('document.querySelector("output").textContent.startsWith("FOTO:")');
+    assert.match(await browser.evaluate('document.querySelector("output").textContent'), /FOTO: Innvendig/);
     await browser.evaluate('document.querySelector("main > button").click()');
     await browser.waitFor('document.querySelector("button[aria-expanded] .gmi-validation-rule-counts").textContent === "73"');
     assert.equal(await browser.evaluate('document.querySelector("button[aria-expanded] .gmi-validation-rule-counts [data-validation-tone]").dataset.validationTone'), 'success');

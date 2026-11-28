@@ -362,7 +362,9 @@ test('compact rule rows expose summaries without individual object metadata', as
     assert(buttonDepth >= 0 && buttonDepth <= 1, 'actions are siblings, never nested buttons');
   }
   assert.equal(buttonDepth, 0);
-  assert.match(source, /canCorrect\?\.\(presentation\)/);
+  // L2a: «Lag retting…» is retired; the remaining contextual action is «Gjennomgå i FOTO».
+  assert.match(source, /canReviewPhotoLinks\?\.\(presentation\)/);
+  assert.doesNotMatch(source, /canCorrect|onCorrect|Lag retting/);
   assert(source.indexOf('onInfo?.') > source.indexOf('<dl'));
   assert.match(source, /<button/);
   assert.doesNotMatch(source, /finding\.objectRef\.key|Objekt 1|Vis alle|FindingGroups/);

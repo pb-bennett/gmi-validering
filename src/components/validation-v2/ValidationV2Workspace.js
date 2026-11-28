@@ -10,8 +10,6 @@ import { preparePhotoLinkReviewHandoff } from '@/lib/photos/photoHyperlinkReview
 import { validateGmiDataset } from '@/lib/gmi-edit/index.mjs';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import useGmiEditLayer from '@/components/gmi-edit/useGmiEditLayer';
-import { CORRECTABLE_RULES, VALIDATOR_CORRECTION_BASIS_CHANGED, isCorrectableMissingFinding, prepareValidatorCorrection,
-  validatorCorrectionBasisCurrent } from '@/lib/gmiValidatorEditing.mjs';
 import { getDatasetRevision } from '@/lib/validation-v2/datasetRevision';
 import { createValidationV2ViewController } from '@/lib/validation-v2/validationViewController';
 import {
@@ -381,16 +379,10 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLayerId, selectedRevision, isGmi, referenceDate]);
 
-  const currentCorrectionSource = useRef(null);
-  currentCorrectionSource.current = { layer: importedLayer, result, referenceDate };
   const changeDataset = (event) => {
     closeValidatorOwnedObjectTable();
     useStore.getState().setGmiValidatorDataset(selectedLayerId, event.target.value);
   };
-  const correctable = (presentation) => Boolean(result && descriptor?.state !== 'read-only' && presentation.rules.some((rule) => CORRECTABLE_RULES[rule.ruleId]
-    && result.schemaBinding.bindings.some((binding) => binding.geometryScope === 'line' && binding.canonicalFieldId === CORRECTABLE_RULES[rule.ruleId] && binding.state === 'BOUND')
-    && result.ruleResults.find((entry) => entry.rule.ruleId === rule.ruleId)?.findings.some((finding) =>
-      isCorrectableMissingFinding(finding))));
   const photoLinkHandoff = (presentation) => {
     const ticket = loadedGmiSources.begin(selectedLayerId);
     return preparePhotoLinkReviewHandoff({ layer: importedLayer, binding: ticket?.binding,
@@ -405,26 +397,6 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
     if (!handoff.ok) { setCorrectionError(handoff.message); return; }
     useStore.setState({ gmiPhotoReviewRequest: handoff.request });
   };
-  const startCorrection = async (presentation) => {
-    setCorrectionError(null);
-    try {
-      const opened = await gmiEditSessions.open(selectedLayerId);
-      const store = useStore.getState();
-      if (!validatorCorrectionBasisCurrent({ layer: importedLayer, result, referenceDate },
-        { ...currentCorrectionSource.current, storeLayer: store.layers[selectedLayerId], storeReferenceDate: store.gmiValidatorReferenceDate })) {
-        throw new Error(VALIDATOR_CORRECTION_BASIS_CHANGED);
-      }
-      if (!opened.ok) throw new Error('Rettinger er utilgjengelig for dette kildegrunnlaget.');
-      const handle = gmiEditSessions.getHandle(selectedLayerId);
-      const resolved = gmiEditSessions.resolve(handle);
-      const correction = resolved.ok ? prepareValidatorCorrection(resolved.session, result, presentation.rules.map((rule) => rule.ruleId)) : resolved;
-      if (!correction.ok) throw new Error(correction.code === 'field-absent' ? 'Kolonnen mangler. Den kan ikke opprettes før strukturell redigering støttes.'
-        : 'Ingen aktuelle manglende verdier kan rettes sikkert. Utfylte, uavklarte og ikke-redigerbare objekter tas ikke med.');
-      const handoff = useStore.getState().openGmiEditWorkspace(selectedLayerId, { ...correction, sessionId: handle.sessionId });
-      if (!handoff.ok) throw new Error(handoff.message);
-    } catch (failure) { setCorrectionError(failure.message); }
-  };
-
   // A request for a layer only is fulfilled once that layer is selected; it must not steer a later visit.
   useEffect(() => {
     if (focus && !focus.ruleId && focus.layerId === selectedLayerId) useStore.setState({ gmiValidatorFocus: null });
@@ -632,8 +604,6 @@ export default function ValidationV2Workspace({ sidebarWidth, canDockInspector, 
                   expandedRuleKey={presentationState.expandedRuleKey}
                   onToggle={(expansionKey) => dispatchPresentation({ type: 'TOGGLE_RULE', expansionKey })}
                   onInfo={openFieldInfo}
-                  canCorrect={correctable}
-                  onCorrect={startCorrection}
                   canReviewPhotoLinks={canReviewPhotoLinks}
                   onReviewPhotoLinks={reviewPhotoLinks}
                 />

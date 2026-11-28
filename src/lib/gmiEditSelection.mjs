@@ -15,7 +15,7 @@ export function gmiCheckboxSoftFocus(before, after, target, binding) {
       && sameGmiSelectionHost(before?.host, after.host) && before.keys.includes(key));
 }
 
-// Missing hosts belong to Rettinger, including the existing R5 handoff.
+// Missing hosts belong to Rettinger.
 export const GMI_RETTINGER_SELECTION_HOST = Object.freeze({ kind: 'rettinger' });
 export function sameGmiSelectionHost(a = GMI_RETTINGER_SELECTION_HOST, b = GMI_RETTINGER_SELECTION_HOST) {
   return Boolean(a && b && a.kind === b.kind && (a.kind === 'rettinger'
@@ -50,13 +50,10 @@ export function reconcileGmiEditSelection(selection, { workspaceLayerId, inspect
 export function reduceGmiEditSelection(selection, action, { binding, counts, host = GMI_RETTINGER_SELECTION_HOST, allowedKeys }) {
   if (!binding || !sameGmiSelectionHost(host, host)) return null;
   const current = sameGmiSelectionBinding(selection?.binding, binding) && sameGmiSelectionHost(selection?.host, host) ? selection : null;
-  const restricted = current?.origin?.kind === 'validator';
-  if (action.type === 'make-ordinary') return current ? { ...current, origin: null } : null;
-  if (action.type === 'clear') return restricted ? { ...current, keys: [], anchor: null } : null;
+  if (action.type === 'clear') return null;
   if (action.type === 'show-only') return current ? { ...current, showOnly: Boolean(action.value) } : null;
   const scope = action.scope;
   if (!['point', 'line'].includes(scope)) return current;
-  if (restricted && scope !== current.scope) return current;
   if (current?.keys.length && current.scope !== scope && !action.replace) return current;
   const base = current?.scope === scope ? current : { binding, host: Object.freeze({ ...host }), scope, keys: [], anchor: null, showOnly: false };
   const clean = (keys) => [...new Set((keys || []).filter((key) => validKey(key, scope, counts, allowedKeys)))];
@@ -73,9 +70,7 @@ export function reduceGmiEditSelection(selection, action, { binding, counts, hos
   } else if (action.type === 'add' || action.type === 'remove') {
     for (const key of clean(action.keys)) { if (action.type === 'add') keys.add(key); else keys.delete(key); }
   } else return current;
-  // Every membership entry point (including replace/range/select-all) is shrink-only.
-  if (restricted && [...keys].some((key) => !base.keys.includes(key))) return current;
-  return keys.size || restricted ? { ...base, keys: [...keys], anchor } : null;
+  return keys.size ? { ...base, keys: [...keys], anchor } : null;
 }
 
 export function gmiSelectionCounts(selection, scope, visibleKeys) {

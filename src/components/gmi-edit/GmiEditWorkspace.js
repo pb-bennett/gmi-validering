@@ -53,10 +53,9 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const [softFocusNotice, setSoftFocusNotice] = useState(null);
   const noticeRef = useRef(null), focusNotice = useRef(false);
   const [formRevision, setFormRevision] = useState(0);
-  const correction = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.correction : null);
   const handoff = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.handoff : null);
   const [batchOpen, setBatchOpen] = useState(false);
-  const [batchInspector, setBatchInspector] = useState(Boolean(correction) || handoff?.mode === 'batch');
+  const [batchInspector, setBatchInspector] = useState(handoff?.mode === 'batch');
   const [batchInspected, setBatchInspected] = useState(null);
   const selection = useStore((state) => state.gmiEditSelection);
   const [individualBinding, setIndividualBinding] = useState(null);
@@ -77,7 +76,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     if (!layer || handoff) return; // H3 already committed table, geometry and reveal atomically.
     const storedTab = useStore.getState().ui.layerDataTable?.activeTabByLayer?.[layerId];
     openLayerDataTable(layerId);
-    setLayerDataTableTab(layerId, correction ? 'ledninger' : storedTab || (layer.data?.lines?.length ? 'ledninger' : 'punkter'));
+    setLayerDataTableTab(layerId, storedTab || (layer.data?.lines?.length ? 'ledninger' : 'punkter'));
   });
   useEffect(() => { enterObjectTable(); }, [layerId]);
   // Also covers temporary workspace unmounts, e.g. opening FOTO through the page guard.
@@ -121,14 +120,6 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     return () => { if (useStore.getState().gmiEditWorkspaceGuard === guard) useStore.setState({ gmiEditWorkspaceGuard: null }); };
   }, [guard]);
   // Also handles a new handoff while this workspace is already mounted.
-  const enterCorrection = useEffectEvent(() => {
-    if (!correction) return;
-    setIndividualBinding(null);
-    setBatchOpen(false); setBatchInspector(true); setBatchInspected(null); setDetailId(null);
-    openLayerDataTable(layerId); setLayerDataTableTab(layerId, 'ledninger');
-    setFormRevision((revision) => revision + 1);
-  });
-  useEffect(() => { enterCorrection(); }, [correction]);
   const enterHandoff = useEffectEvent(() => {
     if (!handoff) return;
     setIndividualBinding(null);

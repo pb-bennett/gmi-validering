@@ -272,8 +272,15 @@ test('A5: Rettinger hides FOTO markers per visit, «Vis bilder»/«Skjul bilder�
           await browser.evaluate(`Array.from(document.querySelectorAll('[aria-label=Geometri] [role=tab]')).find(e => e.innerText.startsWith('Ledninger')).click()`);
           const rule = `document.querySelector('button[aria-label^="SDR:"]')`;
           await browser.waitFor(rule);
-          await browser.evaluate(`${rule}.click()`);
-          await clickButton('Lag retting…');
+          if (await browser.evaluate(`${rule}.getAttribute('aria-expanded') !== 'true'`)) await browser.evaluate(`${rule}.click()`);
+          // L2a: the integrated handoff (Vis → object table → «Åpne i Rettinger») replaces the retired «Lag retting…».
+          await clickButton('Vis detaljer: SDR');
+          const diagnostic = `document.querySelector('button[aria-label*="objekter i tabell:"]')`;
+          await browser.waitFor(diagnostic); await browser.evaluate(`${diagnostic}.click()`);
+          const box = `document.querySelector('[role=grid] [data-table-row] input[type=checkbox]')`;
+          await browser.waitFor(box); await browser.evaluate(`${box}.click()`);
+          await browser.waitFor(`document.querySelector('[data-gmi-selection-bar]')?.innerText.includes('Åpne i Rettinger (1)')`);
+          await clickButton('Åpne i Rettinger (1)', `document.querySelector('[data-gmi-selection-bar]')`);
           await browser.waitFor(`${workspace} && !${validatorLayer} && ${markerCount} === 0 && ${toggle}?.dataset.rettingerPhotoToggle === 'hidden'`);
           await exitRettinger();
           await browser.waitFor(`${markerCount} === 2 && ${toggle}?.dataset.rettingerPhotoToggle === 'shown'`);

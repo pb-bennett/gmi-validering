@@ -106,9 +106,10 @@ test('B1 narrowing only removes, preserves host/origin, and keeps an existing pr
   assert.equal(next.origin, origin);
   assert.equal(next.binding, binding);
   assert(next.keys.every((key) => selection.keys.includes(key)));
-  // Shrink-only R5 origin also accepts the narrowing.
-  const restricted = { ...selection, origin: { kind: 'validator' } };
-  assert.deepEqual(reduceGmiEditSelection(restricted, { type: 'remove', scope: 'line', keys: [...action.keys] }, { binding, counts }).keys, keysOf([0, 1, 3]));
+  // A selection handed off from Validator accepts the same narrowing and keeps its provenance (L2a: no R5 lock remains).
+  const handed = { ...selection, origin: { kind: 'validator-selection', fieldLabel: 'SDR', datasetKind: 'original', count: selection.keys.length } };
+  const narrowedHandoff = reduceGmiEditSelection(handed, { type: 'remove', scope: 'line', keys: [...action.keys] }, { binding, counts });
+  assert.deepEqual(narrowedHandoff.keys, keysOf([0, 1, 3])); assert.equal(narrowedHandoff.origin, handed.origin);
   // A hydraulic preview stays valid for the narrowed subset and rebuilds exactly that subset.
   const exact = gmiSelectionTargets(view, selection);
   const preview = await prepareGmiBatchReview(view, { canonicalFieldId: 'sdr', mode: 'fill-missing', lexeme: '11', targets: exact.targets });

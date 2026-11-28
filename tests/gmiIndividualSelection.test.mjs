@@ -10,7 +10,7 @@ test('B3 source order, boundaries, stale membership/session and independent indi
   const document = await loadGmiSourceDocument(bytes);
   let session = createGmiEditSession(document, { layerId: 'b3' });
   const binding = { layerId: 'b3', sessionId: 'session-b3', fingerprint: document.fingerprint };
-  const selection = { binding, scope: 'point', keys: ['point:4', 'point:1', 'point:3', 'point:0', 'point:2'], host: { kind: 'rettinger' }, origin: { kind: 'validator' } };
+  const selection = { binding, scope: 'point', keys: ['point:4', 'point:1', 'point:3', 'point:0', 'point:2'], host: { kind: 'rettinger' }, origin: { kind: 'validator-selection', fieldLabel: 'Innvendig/utvendig', datasetKind: 'original', count: 5 } };
   const snapshot = structuredClone(selection);
   const view = () => ({ document, session, handle: binding });
   const itinerary = (target, selected = selection, identity = binding) => gmiIndividualSelection(view(), selected, target, identity);

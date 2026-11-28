@@ -11,8 +11,16 @@ const app = process.env.PHOTO_UI_URL;
 const workspace = 'document.querySelector(".gmi-edit-workspace")';
 const dialog = 'document.querySelector("[data-gmi-batch-inspector]")';
 const dataset = `document.querySelector('[aria-label="Datasett i Validator"]')`;
+const bar = 'document.querySelector("[data-gmi-selection-bar]")';
+const grid = 'document.querySelector("[role=grid]")';
+const editor = 'document.querySelector("[data-gmi-object]")';
+// The SJEKK diagnostic for missing SDR on lines not registered as NYTT: the exact objects «Lag retting…» used to seed.
+// Wording is «Objektene er» for several objects and «Objektet er» for one.
+const MISSING_SDR = ['mangler SDR.', 'ikke registrert som NYTT'];
 
-test('M5C production: Original, exact finding handoff, reviewed batch, full revalidation, stale protection and Foreslått',
+// L2a: «Lag retting…» is retired. This suite keeps M5C's safety contracts on the integrated route:
+// Vis → contextual object table → select → «Åpne i Rettinger (n)» → the same batch inspector.
+test('M5C production: Original, exact Validator handoff, reviewed batch, full revalidation, stale protection and Foreslått',
   { skip: !chromePath || !app, timeout: 180000 }, async (t) => {
     const directory = await mkdtemp(path.join(tmpdir(), 'gmi-m5c-ui-'));
     const file = path.join(directory, 'Syntetisk M5C.gmi'), bytes = gmiEditBatchFixture();
@@ -33,6 +41,28 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
     const openSdr = async () => {
       await browser.waitFor(`document.querySelector('button[aria-label^="SDR:"]')`);
       await browser.evaluate(`document.querySelector('button[aria-label^="SDR:"]').click()`);
+    };
+    const selected = () => browser.evaluate(`Array.from(document.querySelectorAll('[role=row][aria-selected=true]')).map(e => Number(e.dataset.tableRow))`);
+    // Validator «Vis» for SDR, then the missing-SDR diagnostic: a selectable contextual table of exactly those lines.
+    const openMissingSdr = async () => {
+      if (await browser.evaluate(`document.querySelector('button[aria-label^="SDR:"]')?.getAttribute('aria-expanded') !== 'true'`)) await openSdr();
+      // The expanded SDR rule with missing values is exactly where the retired «Lag retting…» used to appear.
+      await browser.waitFor(`document.querySelector('button[aria-label^="SDR:"]')?.getAttribute('aria-expanded') === 'true'`);
+      await legacyAbsent();
+      await click('Vis detaljer: SDR');
+      const diagnostic = `Array.from(document.querySelectorAll('button[aria-label*="objekter i tabell:"]')).find(e => ${JSON.stringify(MISSING_SDR)}.every(part => e.getAttribute('aria-label').includes(part)))`;
+      await browser.waitFor(diagnostic); await browser.evaluate(`${diagnostic}.click()`);
+      await browser.waitFor(`${grid}?.querySelector('[data-table-row] input[type=checkbox]')`);
+    };
+    const handoff = async (count) => {
+      const label = `Åpne i Rettinger (${count})`;
+      await browser.waitFor(`${bar}?.innerText.includes(${JSON.stringify(label)})`);
+      await click(label, bar);
+      await browser.waitFor(workspace);
+    };
+    const legacyAbsent = async () => {
+      assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('button')).some(e => e.innerText.trim() === 'Lag retting…' || e.innerText.trim() === 'Gjør om til vanlig utvalg')`), false);
+      assert.doesNotMatch(await browser.evaluate(`${bar}?.innerText || ''`), /Fra Validator|bare fjerning/);
     };
     try {
       await browser.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
@@ -66,53 +96,69 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await value(`document.getElementById('validation-v2-date')`, date);
       });
       const original = await browser.evaluate('document.querySelector("#validation-v2-geometry-panel")?.innerText');
-      // «Lag retting…» awaits the session open. Work done in the same task as the click always lands inside that await:
-      // a deterministic race without CPU load or readiness delays. Map-only layer updates are covered by the unit predicate.
-      const startCorrectionWith = (during) => browser.evaluate(`(() => {
-        const button = Array.from(document.querySelectorAll('button')).find(e => e.innerText.trim() === 'Lag retting…');
-        if (!button || button.disabled) throw new Error('Unavailable: Lag retting…');
-        button.click(); ${during}
-      })()`);
-      await t.test('defaults to Original; proposed unavailable without matching session; allow-list action only', async () => {
+      await t.test('defaults to Original; a changed control date drops a stale selection; the exact scope hands off to an empty batch', async () => {
         assert.equal(await browser.evaluate(`${dataset}.value`), 'original');
         assert.equal(await browser.evaluate(`${dataset}.querySelector('[value=proposed]').disabled`), true);
-        await openSdr();
-        // A genuine basis change (reference date) during the session open fails closed with an explanation.
+        await legacyAbsent();
+        // A genuine basis change (reference date) after selecting fails closed: the object table built from the old
+        // result closes with its selection, so no stale handoff can be made. Validator stays open.
+        await openMissingSdr();
+        await browser.evaluate(`${grid}.querySelector('[role=columnheader] input[type=checkbox]').click()`);
+        await browser.waitFor(`${bar}?.innerText.includes('Åpne i Rettinger (3)')`);
         const date = await browser.evaluate(`document.getElementById('validation-v2-date').value`);
-        await startCorrectionWith(`const e = document.getElementById('validation-v2-date');
-          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(e, '2025-01-02'); e.dispatchEvent(new Event('input', { bubbles: true }));`);
-        await browser.waitFor(`Array.from(document.querySelectorAll('[role=alert]')).some(e => /Validator-grunnlaget endret seg/.test(e.innerText))`);
-        assert.equal(await browser.evaluate(`Boolean(${dialog})`), false, 'no Rettinger batch inspector opens on a stale basis');
+        await value(`document.getElementById('validation-v2-date')`, '2025-01-02');
+        await browser.waitFor(`!document.querySelector('[data-table-geometry]') && !${bar}`);
+        assert.equal(await browser.evaluate(`Boolean(${workspace})`), false, 'no Rettinger opens on a stale basis');
+        assert.equal(await browser.evaluate(`Boolean(${dialog})`), false);
         assert.equal(await browser.evaluate(`Boolean(document.getElementById('validation-v2-date'))`), true, 'the Validator stays open');
         await value(`document.getElementById('validation-v2-date')`, date);
-        await openSdr();
-        await click('Lag retting…');
+        await browser.waitFor(`document.getElementById('validation-v2-date').value === ${JSON.stringify(date)}`);
+        // The current basis: the same three lines «Lag retting…» used to seed, chosen explicitly.
+        await openMissingSdr();
+        assert.deepEqual(await browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row]')).map(e => Number(e.dataset.tableRow))`), [0, 6, 7]);
+        await browser.evaluate(`${grid}.querySelector('[role=columnheader] input[type=checkbox]').click()`);
+        assert.equal(await browser.evaluate(`Array.from(${bar}.querySelectorAll('button')).find(e => e.innerText.startsWith('Velg alle 3 synlige'))?.disabled`), true, 'all visible already selected');
+        await handoff(3);
         await browser.waitFor(`${dialog}?.dataset.batchStep === '1'`);
         assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Felt for masseendring"]').value`), '');
         assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Ny verdi"]').value`), '');
         assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Felt for masseendring"]').disabled`), false);
-        assert.match(await browser.evaluate(`document.querySelector('[data-gmi-selection-bar]').innerText`), /Fra Validator: 3 objekter/);
+        assert.match(await browser.evaluate(`document.querySelector('[data-gmi-validator-provenance]').innerText`), /Tilbake til Validator · SDR · 3 objekter valgt i Validator/);
+        await legacyAbsent();
         assert.equal(await browser.evaluate(`Boolean(document.querySelector('dialog[open].gmi-batch-dialog'))`), false);
         assert.equal(await browser.evaluate(`Boolean(document.querySelector('[data-gmi-batch-counts]'))`), false);
         assert.equal(await browser.evaluate(`document.querySelector('[data-table-geometry]').dataset.tableGeometry`), 'ledninger');
         assert.equal(await browser.evaluate(`document.querySelectorAll('[role=row][aria-selected=true]').length`), 3);
-        assert.deepEqual(await browser.evaluate(`Array.from(document.querySelectorAll('[role=row][aria-selected=true]')).map(e => Number(e.dataset.tableRow))`), [0, 6, 7]);
+        assert.deepEqual(await selected(), [0, 6, 7]);
         assert.match(await browser.evaluate(`${dialog}.querySelector('[type=radio]:checked').closest('label').innerText`), /Fyll manglende verdier/);
         // A1 (deliberate update): Oppsett renders no staging action at all (previously a disabled button).
         assert.equal(await browser.evaluate(`Array.from(${dialog}.querySelectorAll('button')).some(e => e.innerText === 'Legg til endringer')`), false);
         assert.equal(await browser.evaluate(`${dialog}.dataset.batchStage`), 'setup');
         assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText || ''`), '');
-        // U4: before staging, proposed modes stay visible but disabled. They cannot alter the R5 source selection.
+        // U4: before staging, proposed modes stay visible but disabled. They cannot alter the handed-off selection.
         for (const mode of ['Foreslått', 'Kun endrede']) {
           const button = `Array.from(document.querySelector('.gmi-edit-table-modes').querySelectorAll('button')).find(e => e.innerText === ${JSON.stringify(mode)})`;
           assert.equal(await browser.evaluate(`${button}.disabled`), true);
           assert.match(await browser.evaluate(`${button}.title`), /Legg til en retting/);
           await browser.evaluate(`${button}.click()`);
           assert.equal(await browser.evaluate(`document.querySelector('.gmi-edit-table-modes').dataset.gmiTableView`), 'original');
-          assert.deepEqual(await browser.evaluate(`Array.from(document.querySelectorAll('[role=row][aria-selected=true]')).map(e => Number(e.dataset.tableRow))`), [0, 6, 7]);
+          assert.deepEqual(await selected(), [0, 6, 7]);
         }
         await click('Original', 'document.querySelector("[data-table-geometry]")');
-        assert.deepEqual(await browser.evaluate(`Array.from(document.querySelectorAll('[role=row][aria-selected=true]')).map(e => Number(e.dataset.tableRow))`), [0, 6, 7]);
+        assert.deepEqual(await selected(), [0, 6, 7]);
+      });
+      await t.test('the handed-off selection is ordinary: it can widen and narrow again before the review', async () => {
+        await click('Filtrert visning', bar);
+        await browser.waitFor(`${grid}.querySelector('[data-table-row="1"] input[type=checkbox]')`);
+        await browser.evaluate(`${grid}.querySelector('[data-table-row="1"] input[type=checkbox]').click()`);
+        await browser.waitFor(`document.querySelectorAll('[role=row][aria-selected=true]').length === 4`);
+        assert.deepEqual((await selected()).sort((a, b) => a - b), [0, 1, 6, 7], 'no shrink-only lock');
+        assert.match(await browser.evaluate(`document.querySelector('[data-gmi-validator-provenance]').innerText`), /Tilbake til Validator · SDR/, 'provenance is kept');
+        await browser.evaluate(`${grid}.querySelector('[data-table-row="1"] input[type=checkbox]').click()`);
+        await browser.waitFor(`document.querySelectorAll('[role=row][aria-selected=true]').length === 3`);
+        assert.deepEqual(await selected(), [0, 6, 7]);
+        assert.equal(await browser.evaluate(`${dialog}.dataset.batchStep`), '1');
+        assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]')?.innerText || ''`), '', 'nothing staged by selection changes');
       });
       await t.test('exact scope preserved through review, exclusion and M5B staging; no automatic value', async () => {
         await choose(`${dialog}.querySelector('[aria-label="Felt for masseendring"]')`, 'SDR');
@@ -122,22 +168,13 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         assert.equal(await browser.evaluate(`document.querySelectorAll('[role=row][aria-selected=true]').length`), 3);
         await browser.evaluate(`document.querySelectorAll('[role=row][aria-selected=true] input[type=checkbox]')[2].click()`);
         assert.match(await browser.evaluate(`${dialog}.innerText`), /2 ledninger valgt/);
-        // Filtered view exposes unrelated rows; ordinary checkbox and select-all cannot widen.
-        await click('Filtrert visning');
-        const selected = () => browser.evaluate(`Array.from(document.querySelectorAll('[role=row][aria-selected=true]')).map(e => Number(e.dataset.tableRow))`);
-        const before = await selected();
-        await browser.evaluate(`document.querySelector('[role=row][aria-selected=false] input[type=checkbox]').click()`);
-        assert.deepEqual(await selected(), before);
-        await browser.evaluate(`document.querySelector('[role=columnheader] input[type=checkbox]').click()`);
-        assert.deepEqual(await selected(), before);
-        await browser.evaluate(`Array.from(document.querySelectorAll('[data-gmi-selection-bar] button')).find(e => e.innerText.startsWith('Velg alle ')).click()`);
-        assert.deepEqual(await selected(), before);
+        assert.deepEqual(await selected(), [0, 6]);
         for (const [width, height] of [[1366, 768], [1280, 720]]) {
           await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
           assert(await browser.evaluate(`document.documentElement.scrollWidth <= ${width}`));
           const bounds = await browser.evaluate(`['[data-gmi-batch-inspector]', '[data-gmi-selection-bar]', '[role=grid]'].map(s => { const e = document.querySelector(s); const b = e.getBoundingClientRect(); return { width: b.width, right: b.right, bottom: b.bottom }; })`);
           assert(bounds.every(b => b.width > 0 && b.right <= width && b.bottom <= height));
-          await shot(`r5-inspector-${width}x${height}`);
+          await shot(`l2a-handoff-inspector-${width}x${height}`);
         }
         await shot('m5c-exact-batch-review');
         await browser.waitFor(`${dialog}.getAttribute('aria-busy') === 'false'`);
@@ -171,11 +208,11 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await value(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input')`, '17.0');
         await click('Punkter', 'document.querySelector("[data-table-geometry]")');
         await browser.waitFor('document.querySelector("[data-table-geometry]")?.dataset.tableGeometry === "punkter"');
-        await click('\u00c5pne Validator', workspace);
+        await click('Åpne Validator', workspace);
         await browser.waitFor(`document.querySelector('[data-gmi-confirm="workspace"]')`);
         await click('Avbryt', `document.querySelector('[data-gmi-confirm="workspace"]')`);
         assert.equal(await browser.evaluate(`document.querySelector('.gmi-edit-editor tr[data-field="SDR"] input').value`), '17.0');
-        await click('\u00c5pne Validator', workspace);
+        await click('Åpne Validator', workspace);
         await browser.waitFor(`document.querySelector('[data-gmi-confirm="workspace"]')`);
         await click('Forkast skjemaet', `document.querySelector('[data-gmi-confirm="workspace"]')`);
         // H4: corrections exist and no dataset was chosen explicitly, so «Åpne Validator» opens Foreslått.
@@ -187,7 +224,7 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await openSdr(); await click('Vis detaljer: SDR');
         await browser.waitFor(`document.querySelector('button[aria-label*="objekter i tabell:"]')`);
         await browser.evaluate(`Array.from(document.querySelectorAll('button[aria-label*="objekter i tabell:"]')).find(e => e.getAttribute('aria-label').includes('Ringstivhet')).click()`);
-        await browser.waitFor(`document.body.innerText.includes('Objektutvalg: Foresl\u00e5tt')`);
+        await browser.waitFor(`document.body.innerText.includes('Objektutvalg: Foreslått')`);
         await browser.waitFor(`document.querySelectorAll('.group.flex.cursor-pointer').length === 1`);
         assert.equal(await browser.evaluate('document.querySelector("[data-table-geometry]").dataset.tableGeometry'), 'ledninger', 'contextual Validator inspection pins requested line geometry');
         const storedTabs = await browser.evaluate('Object.values(JSON.parse(localStorage.getItem("gmi-validator-storage")).state.ui.layerDataTable.activeTabByLayer)');
@@ -205,17 +242,26 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         assert.equal(await browser.evaluate('document.querySelector("#validation-v2-geometry-panel").innerText'), original);
         await choose(dataset, 'proposed');
         await browser.waitFor('document.querySelector("#validation-v2-geometry-panel")?.innerText.startsWith("Foreslått")');
-        await openSdr(); await click('Lag retting…');
-        await browser.waitFor(`${dialog}?.dataset.batchStep === '1'`);
-        assert.match(await browser.evaluate(`document.querySelector('[data-gmi-selection-bar]').innerText`), /Fra Validator: 1 objekter/);
-        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Ny verdi"]').value`), '');
-        await click('Gjør om til vanlig utvalg');
-        assert.equal(await browser.evaluate(`${dialog}.querySelector('[aria-label="Felt for masseendring"]').disabled`), false);
-        assert.equal(await browser.evaluate(`document.querySelectorAll('[role=row][aria-selected=true]').length`), 1);
-        await click('Filtrert visning');
-        await browser.evaluate(`document.querySelector('[role=row][aria-selected=false] input[type=checkbox]').click()`);
-        assert.equal(await browser.evaluate(`document.querySelectorAll('[role=row][aria-selected=true]').length`), 2);
-        await browser.evaluate(`${dialog}.querySelector('[data-gmi-batch-cancel]').click()`);
+        // Foreslått still lists only the remaining exact target (line 7); the two staged lines are no longer missing.
+        await openMissingSdr();
+        assert.deepEqual(await browser.evaluate(`Array.from(${grid}.querySelectorAll('[data-table-row]')).map(e => Number(e.dataset.tableRow))`), [7]);
+        await browser.evaluate(`${grid}.querySelector('[data-table-row="7"] input[type=checkbox]').click()`);
+        await handoff(1);
+        await browser.waitFor(`${editor}?.dataset.gmiObject === 'line:7'`);
+        assert.equal(await browser.evaluate(`document.querySelector('.gmi-edit-table-modes').dataset.gmiTableView`), 'proposed', 'the handoff keeps Foreslått');
+        assert.match(await browser.evaluate(`document.querySelector('[data-gmi-validator-provenance]').innerText`), /SDR · 1 objekt valgt i Validator/);
+        // Line 7's SDR is a lone space in the fixture: the editor shows that original lexeme and proposes nothing.
+        assert.equal(await browser.evaluate(`${editor}.querySelector('tr[data-field="SDR"] input').value`), ' ', 'no automatic value');
+        assert.equal(await browser.evaluate(`Boolean(${editor}.querySelector('.gmi-edit-review, .gmi-edit-input-draft'))`), false, 'no draft or review');
+        assert.equal(await browser.evaluate(`Boolean(${dialog})`), false, 'one object opens the object editor, not a batch');
+        await legacyAbsent();
+        // Ordinary selection: another object can be added without any conversion step.
+        assert.deepEqual(await selected(), [7]);
+        const counts = await browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]').innerText`);
+        assert.match(counts, /^1 retting/, 'the earlier batch is the only ChangeSet');
+        await browser.evaluate(`${grid}.querySelector('[role=row][aria-selected=false] input[type=checkbox]').click()`);
+        await browser.waitFor(`document.querySelectorAll('[role=row][aria-selected=true]').length === 2`);
+        assert.equal(await browser.evaluate(`${workspace}.querySelector('[data-gmi-edit-counts]').innerText`), counts, 'navigation and selection stage nothing');
         await click('Åpne Validator', workspace); await browser.waitFor(`${dataset}?.value === 'proposed'`);
         await shot('m5c-validator-retained');
       });
@@ -231,13 +277,13 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await shot('m5c-introduced-findings');
         await browser.evaluate(`Array.from(document.querySelector('[data-gmi-full-comparison]').querySelectorAll('button')).find(e => e.innerText.includes('Nytt') && e.innerText.includes('FEIL')).click()`);
         await browser.waitFor(`${dataset}?.value === 'proposed'`);
-        await browser.waitFor(`document.querySelector('#validation-v2-field-info-title')?.innerText.includes('Foresl\u00e5tt')`);
-        assert.match(await browser.evaluate('document.body.innerText'), /B\u00e5de SDR og Ringstivhet er utfylt/);
+        await browser.waitFor(`document.querySelector('#validation-v2-field-info-title')?.innerText.includes('Foreslått')`);
+        assert.match(await browser.evaluate('document.body.innerText'), /Både SDR og Ringstivhet er utfylt/);
         await click('Regel');
         await shot('m5c-rule-handoff');
         await click('Lukk feltinformasjon');
       });
-      await t.test('another layer never inherits proposed state; missing column has no misleading correction shortcut', async () => {
+      await t.test('another layer never inherits proposed state, a selection or a correction shortcut', async () => {
         const selectLayer = `document.querySelector('#validation-v2-layer')`;
         const identities = await browser.evaluate(`Array.from(${selectLayer}.options).map(e => ({ value: e.value, text: e.textContent }))`);
         const first = identities.find((e) => e.text === 'Syntetisk M5C.gmi').value;
@@ -245,7 +291,8 @@ test('M5C production: Original, exact finding handoff, reviewed batch, full reva
         await choose(selectLayer, second);
         await browser.waitFor(`${dataset}.value === 'original' && ${dataset}.querySelector('[value=proposed]').disabled`);
         await openSdr();
-        assert.equal(await browser.evaluate(`Array.from(document.querySelectorAll('button')).some(e => e.innerText.trim() === 'Lag retting\u2026')`), false);
+        await legacyAbsent();
+        assert.equal(await browser.evaluate(`Boolean(${bar})`), false, 'no selection carried over from the first layer');
         await shot('m5c-other-layer-unavailable');
         await choose(selectLayer, first);
         await browser.waitFor(`${dataset}.value === 'proposed'`);
