@@ -820,7 +820,11 @@ test('M10 production wizard: modes, M9 bytes, split acknowledgement, shared inte
         await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
         await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
         const reportFilename = (await browser.evaluate(`${dialog}.querySelector('[data-export-zip]').dataset.exportZip`)).replace(/\.zip$/, '-leveranserapport.txt');
-        assert.match(strFromU8(await readDownload(reportDirectory, reportFilename)), /Leveranserapport/);
+        const report = strFromU8(await readDownload(reportDirectory, reportFilename));
+        assert.match(report, /Leveranserapport/);
+        const [warnings, information] = report.split('Advarsler\r\n')[1].split('Informasjon\r\n');
+        assert.doesNotMatch(warnings, /Retning angis med klokken/);
+        assert.match(information, /Retning angis med klokken i grader fra geografisk nord \(enhet 1, referanse 1\)\./);
         assert(await browser.evaluate(`(() => {const event=new Event('beforeunload',{cancelable:true});window.dispatchEvent(event);return event.defaultPrevented;})()`), 'report does not mark corrections downloaded');
         await browser.evaluate(`(() => {window.__m10Click=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){throw new Error('Synthetic blocked download');};})()`);
         await click(browser, 'Last ned ZIP');

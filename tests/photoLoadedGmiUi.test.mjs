@@ -179,7 +179,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         await buildPreview(browser);
         assert(await canDownload(browser));
         await showReview(browser);
-        assert(await browser.evaluate(`${exportDialog}.textContent.includes('7 unike bilder i laget · 8 forekomster')`));
+        assert(await browser.evaluate(`${exportDialog}.textContent.includes('7 unike bilder i laget · 8 plasseringer')`));
         await closeExport(browser);
         await selectRow(rows[0]);
         await browser.waitFor(`${inspectorFact('Opptak', 'Opptakstid')} === '02.01.2025 01:02:03 · tidssone ukjent'`);
@@ -237,7 +237,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         const summary = await browser.evaluate(`Object.fromEntries(Array.from(${exportDialog}.querySelectorAll('.delivery-summary > div')).map(row => [row.querySelector('dt').innerText, row.querySelector('dd').innerText]))`);
         assert.equal(summary.GML, '4 poster i GML');
         assert.equal(summary.Vedlegg, '3 filer');
-        assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="shared-attachments"]').textContent`), /^1 originalbilder deles av flere separate forekomst-features\./);
+        assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="shared-attachments"]').textContent`), /^1 originalbilde brukes i flere GML-poster\./);
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('3 bilder · 4 plasseringer i GML-filen')`));
         assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-counts]').innerText.includes('4 plasseringer uten posisjon utelatt')`));
         assert(!(await browser.evaluate(`${exportDialog}.textContent.includes('Ikke testet med import')`)), 'Batch 1B.4B: no import-test status');
@@ -259,7 +259,7 @@ test('loaded GMI full app: folder evidence, review categories, repeated occurren
         assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-filename-suffix]').textContent`), '.zip');
         assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-filename-editor] input[type=text]').value`), '  Grøft / nord  ');
         await chooseFormat(browser, 'gemini-legacy2019'); await buildPreview(browser); await showReview(browser);
-        assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-z"]').textContent`), /^4 XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde\./);
+        assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-diagnostic-code="compatibility-z"]').textContent`), /^Gemini-filen bruker EPSG:5972 og skriver høydeverdien 0 \(Z=0\).*angir ingen målt høyde\./);
         assert.equal(await browser.evaluate(`${exportDialog}.querySelectorAll('[data-diagnostic-code="capture-time-required"]').length`), 0);
         const labelled = await previewNames(browser);
         assert.match(labelled.zip, /^\d{8}-\d{4}-Grøft - nord\.zip$/);

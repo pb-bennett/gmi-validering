@@ -194,7 +194,12 @@ export function photoCompletionStatus(readiness, reading = 0) {
 
 // Generation and schema are separate questions, so each gets its own answer. Only rules are checked here.
 // Batch 1B.4B: no import-test status is shown to users; the recorded import evidence stays internal (photoExportRules).
-const SCHEMA_GAPS = Object.freeze({ captureTime: (gap) => `opptakstid mangler for ${photoCount(gap.count)}`, direction: (gap) => `retning mangler for ${placementCount(gap.count)}`, context: () => 'leveranseopplysninger mangler' });
+function captureTimeGapText({ missing, insufficientPrecision }) {
+  return [missing > 0 && `opptakstid mangler for ${photoCount(missing)}`,
+    insufficientPrecision > 0 && `${photoCount(insufficientPrecision)} har opptaksdato, men mangler fullstendig klokkeslett`].filter(Boolean).join(', og ');
+}
+
+const SCHEMA_GAPS = Object.freeze({ captureTime: captureTimeGapText, direction: (gap) => `retning mangler for ${placementCount(gap.count)}`, context: () => 'leveranseopplysninger mangler' });
 export function photoExportLevels({ levels: { generation, schema } }) {
   const notValidated = 'XSD-validering er ikke kjørt.';
   return [
@@ -211,7 +216,8 @@ export const photoExportAwaitingSource = ({ recommendations }) => recommendation
 export function photoCaptureTimeSchemaWarning({ levels, tasks }) {
   const gap = levels.schema.gaps.find((item) => item.field === 'captureTime');
   if (!gap || tasks.captureTime.requirement === 'required') return null;
-  return singularCopy(`${gap.count} bilder mangler full opptakstid, så GML-filen oppfyller ikke ${levels.schema.name}-skjemaet.`);
+  const detail = captureTimeGapText(gap);
+  return `${detail[0].toUpperCase()}${detail.slice(1)}. GML-filen utelater disse opptakstidene og oppfyller derfor ikke ${levels.schema.name}-skjemaet.`;
 }
 
 const CAPTURE_RECOMMENDATIONS = Object.freeze(['evidence-pending', 'capture-time-utc', 'capture-time-implausible', 'capture-time-bulk', 'capture-time-filename', 'capture-time-estimated', 'capture-time-technical', 'capture-time-sources-differ']);

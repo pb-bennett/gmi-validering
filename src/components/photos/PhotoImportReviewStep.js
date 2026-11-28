@@ -1,5 +1,6 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Session thumbnails. */
+import { photoPositionDeliveryLines } from '@/lib/photos/photoPositionDeliveryPresentation.mjs';
 import PhotoGmiSummary from './PhotoGmiSummary';
 import PhotoGmlSummary from './PhotoGmlSummary';
 import { readErrors } from '@/lib/photos/photoImportPresentation.mjs';
@@ -9,6 +10,7 @@ export default function PhotoImportReviewStep({ preview, review, session, contex
   const targetPicker = context.kind === 'gmi-layer' && <label>Legg bildene i <select aria-label="Velg FOTO-mållag" value={session.draftTargetLayerId || ''} onChange={(event) => onTarget(event.target.value || null)}><option value="">Nytt fotolag</option>{session.photoLayers.map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}</select></label>;
   if (review?.error) return <section className="photo-import-review">{targetPicker}<p role="alert">{readErrors[review.error]}</p></section>;
   if (!outcome) return <p role="status">Klargjør kontroll …</p>;
+  const delivery = photoPositionDeliveryLines(preview.delivery);
   const row = (item) => <li key={item.assetId} tabIndex={item.status === 'placed' ? undefined : 0} className="photo-import-result">{item.thumbnailUrl && <img src={item.thumbnailUrl} alt="" />}<div><strong>{item.filename}</strong><p>{item.status === 'placed' ? item.objects.join(' · ') : `⚠ ${item.reason || reasons[item.status]}`}</p></div></li>;
   return <section className="photo-import-review">
     <p className="photo-import-outcome">{review ? `${outcome.autoLinked} av ${outcome.total} bilder ble koblet automatisk` : `${outcome.placed} av ${outcome.total} bilder får posisjon fra ${state.placement.kind === 'exif' ? 'EXIF-data' : 'GML-filen'}`}</p>
@@ -17,6 +19,10 @@ export default function PhotoImportReviewStep({ preview, review, session, contex
     {targetPicker}
     {review?.unreferencedIds.length > 0 && <label className="block my-3"><input type="checkbox" checked={state.includeUnreferenced} onChange={(event) => onInclude(event.target.checked)} /> Ta med bilder som ikke er nevnt i GMI-filen</label>}
     {['gmi', 'gml'].includes(state.placement.kind) && preview.rows.some((row) => row.canUseExifFallback) && <label className="block my-3"><input type="checkbox" checked={state.placement.exifFallback} onChange={(event) => onFallback(event.target.checked)} /> Bruk GPS fra bildet når {state.placement.kind.toUpperCase()} mangler posisjon</label>}
+    {delivery.length > 0 && <section aria-label="Levering">
+      <h4>Levering</h4>
+      <ul>{delivery.map(({ key, text }) => <li key={key} data-import-delivery={key}>{text}</li>)}</ul>
+    </section>}
     {captureChoices}
     {outcome.attention.length > 0 && <section aria-label="Trenger kontroll"><h4>Trenger kontroll</h4><ul>{outcome.attention.map(row)}</ul></section>}
     {outcome.missingReferences.length > 0 && <details><summary>GMI-filen viser til {outcome.missingReferences.length} bilder som ikke er valgt.</summary><ul>{outcome.missingReferences.map((ref) => <li key={ref.id}>{ref.referenceRaw}</li>)}</ul><p>Gå tilbake for å legge dem til.</p></details>}

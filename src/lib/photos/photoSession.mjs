@@ -55,6 +55,10 @@ const importPlacementPlan = (plan, placement) => {
   return { requests, signature };
 };
 
+const sourcePositionChange = (photoId, candidate) => ({
+  photoId, position: candidate.position, includeUnlinked: candidate.kind === 'gml' || candidate.kind === 'exif',
+});
+
 export function createPhotoSession({
   createThumbnail = createPhotoThumbnail,
   extractGps = readExifGps,
@@ -134,12 +138,12 @@ export function createPhotoSession({
   const includeAsGml = (ids) => { for (const id of ids) deliveryDecisions.set(id, Object.freeze({ kind: 'unlinked', include: true })); };
   // B1.1: the automatic delivery consequences of accepted positions, planned from the state before the writes.
   // `changes`: [{ photoId, position, includeUnlinked, rotated }]. Explicit choices are kept and reported for review.
-  const positionDeliveryEffects = (layer, changes) => {
-    const delivery = layerDelivery(layer);
+  const positionDeliveryEffects = (layer, changes, positionRecords = records) => {
+    const delivery = photoLayerDelivery(layer, positionRecords, deliveryDecisions, deliveryChoiceIds);
     const effects = { transfer: [], restore: [], include: [], keptExplicit: [], keptUnavailable: [] };
     const keys = { transfer: 'transfer', restore: 'restore', include: 'include', 'kept-explicit': 'keptExplicit', 'kept-unavailable': 'keptUnavailable' };
     for (const { photoId, position, includeUnlinked = false, rotated = false } of changes) {
-      const effect = photoPositionDeliveryEffect(records.get(photoId), delivery.byPhotoId[photoId], position, { includeUnlinked, rotated });
+      const effect = photoPositionDeliveryEffect(positionRecords.get(photoId), delivery.byPhotoId[photoId], position, { includeUnlinked, rotated });
       if (effect) effects[keys[effect]].push(photoId);
     }
     return effects;
@@ -779,7 +783,7 @@ export function createPhotoSession({
         || (['gml', 'gmi'].includes(candidate.kind) && !layer.spatialSources.some((source) => source.kind === candidate.kind && source.id === candidate.sourceId)))
         return failed('review-changed');
       seen.add(request.photoId);
-      changes.push({ photoId: request.photoId, position: candidate.position, includeUnlinked: candidate.kind === 'gml' || candidate.kind === 'exif' });
+      changes.push(sourcePositionChange(request.photoId, candidate));
     }
     const effects = positionDeliveryEffects(layer, changes);
     const acceptedAt = Date.now();
@@ -1006,16 +1010,22 @@ export function createPhotoSession({
         sources = [...sources, source];
       }
       const plan = planPhotoSourcePositions(projected, sources);
+      const { requests, signature } = importPlacementPlan(plan, placement);
+      const previewCandidates = new Map(plan.rows.map((row) => [row.photoId, row.options]));
+      const changes = requests.map(({ photoId, candidateId }) => sourcePositionChange(photoId,
+        previewCandidates.get(photoId).find((option) => option.id === candidateId)));
+      const delivery = changes.length ? deliveryEffectSummary(positionDeliveryEffects({ ...target, photoIds, spatialSources: sources }, changes,
+        new Map(projected.map((photo) => [photo.id, photo])))) : null;
       const included = new Set(incoming);
       const skipped = new Set(appendPolicy()?.skippedIds);
       const excludedPhotos = importIds.filter((id) => !included.has(id)).map((id) => ({ ...records.get(id),
         importExclusionReason: skipped.has(id) ? 'Finnes allerede i fotolaget og hoppes over.' : 'Ikke nevnt i GMI-filen.' }));
       const rows = previewImportPlacement({ plan, placement, gmiReview: loadedReview, excludedPhotos });
       const preview = { rows, outcome: summarizeImportOutcome(rows, loadedReview), captureSuggestions: draftCaptureSuggestions(incoming),
-        gmlCaptureTimes: draftGmlCapturePlan(incoming) };
+        gmlCaptureTimes: draftGmlCapturePlan(incoming), delivery };
       importPreviews.set(preview, { draftToken, ids: [...importIds], positioning, loadedImport, loadedReview, target, eligible: [...incoming],
         records: [...(target?.photoIds || []), ...importIds].map((id) => [id, records.get(id).spatial]), placement: JSON.stringify(placement),
-        capture: captureIdentity(incoming), positions: importPlacementPlan(plan, placement).signature });
+        capture: captureIdentity(incoming), positions: signature });
       return preview;
     },
     completeImport({ loadedReview = null, placement, preview, captureSuggestions = null, gmlCaptureTime = null }) {
@@ -1061,28 +1071,26 @@ export function createPhotoSession({
           const plan = planPhotoSourcePositions(photoIds.map((photoId) => records.get(photoId)), spatialSources);
           const { requests, signature } = importPlacementPlan(plan, placement);
           if (signature !== guard.positions) return failed('placement-changed');
-          if (requests.length) {
-            const applied = acceptSourcePositionsCore(id, plan, requests);
-            if (!applied.ok) return failed('placement-changed');
-          }
+          const applied = requests.length ? acceptSourcePositionsCore(id, plan, requests) : { ok: true, delivery: null };
+          if (!applied.ok) return failed('placement-changed');
           const removed = discarded.length ? detachRecords(discarded) : null;
           autoAcceptMetadata(id);
           refreshLayerCounts(layers.get(id));
           const groups = Map.groupBy(photoIds.map((photoId) => records.get(photoId)), (photo) => photo.assetId);
           const placed = [...groups.values()].filter((group) => group.every((photo) => photo.spatial.current)).length;
-          return { ok: true, id, removed, outcome: { total: groups.size, placed, unplaced: groups.size - placed } };
+          return { ok: true, id, removed, delivery: applied.delivery, outcome: { total: groups.size, placed, unplaced: groups.size - placed } };
         });
       } catch { return commitFailed(); }
       if (!planned.result.ok) return planned.result;
       const committed = commitDraftMaps(planned.state);
       if (!committed.ok) return committed;
-      const { id, outcome, removed } = planned.result;
+      const { id, outcome, removed, delivery } = planned.result;
       // Draft files and their browser resources stay available until all accepted writes have succeeded.
       transferDraft();
       loadedPlans.delete(loadedReview);
       if (removed) releaseResources(discarded, removed);
       publish();
-      return { ok: true, append: appended, addedCount: incoming.length, layer: layers.get(id), outcome };
+      return { ok: true, append: appended, addedCount: incoming.length, layer: layers.get(id), outcome, delivery };
     },
     setLoadedGmiTarget(layerId = null) {
       if (!loadedImport || (layerId && !layers.has(layerId))) return false;

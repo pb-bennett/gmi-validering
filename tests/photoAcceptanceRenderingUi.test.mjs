@@ -112,7 +112,7 @@ browserTest('rendered M10 done screen: download initiation, filename, schema war
   await buildPreview(browser);
   // A4: the schema warning is stated on Kontroll; Pakke counts it and links back.
   await showReview(browser);
-  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), '1 bilde mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet.');
+  assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), 'Opptakstid mangler for 1 bilde. GML-filen utelater disse opptakstidene og oppfyller derfor ikke Skråfoto 2019-skjemaet.');
   await toPackage(browser);
   const first = await downloadZip(browser, directory);
   const done = `${exportDialog}.querySelector('[data-package-state="done"]')`;

@@ -75,7 +75,7 @@ function ReviewDetails({ review, photoReadiness }) {
     {photoPlan?.excluded.length > 0 && <p data-export-excluded>{photoPlan.excluded.length} plasseringer uten godkjent posisjon er utelatt fra Kun GML med bilder. GMI endres ikke.</p>}
     {(photoPlan || notNeededAssets > 0) && <details className="photo-export-disclosure" data-export-technical><summary>Tekniske detaljer</summary>
       {photoPlan && <p data-export-format={photoPlan.profile}>{profile.title}</p>}
-      {photoPlan && <p>{photoPlan.counts.uniqueImages} unike bilder i laget · {photoPlan.counts.totalOccurrences} forekomster</p>}
+      {photoPlan && <p>{photoPlan.counts.uniqueImages} unike bilder i laget · {placementCount(photoPlan.counts.totalOccurrences)}</p>}
       {notNeededAssets > 0 && <p>{notNeededAssets} bilder er ikke valgt og er ikke påkrevd av beholdte GMI-lenker. Disse er forskjellige fra plasseringene du har valgt Ikke med for.</p>}
     </details>}
     <p className="photo-export-hint">Dette er eksportkontroll, ikke en ny Validator-kjøring eller full XSD-sertifisering. Originalfilen endres ikke.</p>

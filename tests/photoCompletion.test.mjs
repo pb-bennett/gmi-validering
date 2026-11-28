@@ -291,7 +291,7 @@ test('missing time: the warning is specific, and generation and schema are answe
   const { readiness } = completionView(session, layerId);
   assert.equal(readiness.levels.generation, 'possible');
   // Batch 1B.4B (deliberate update): no dated import-test claim and no «Import i Gemini VA» status level.
-  assert.equal(photoCaptureTimeSchemaWarning(readiness), '1 bilde mangler full opptakstid, så GML-filen oppfyller ikke Skråfoto 2019-skjemaet.');
+  assert.equal(photoCaptureTimeSchemaWarning(readiness), 'Opptakstid mangler for 1 bilde. GML-filen utelater disse opptakstidene og oppfyller derfor ikke Skråfoto 2019-skjemaet.');
   assert.deepEqual(photoExportLevels(readiness).map(({ key, text }) => [key, text]), [['generation', 'Kan lages'],
     ['schema', 'Oppfylles ikke: opptakstid mangler for 1 bilde. XSD-validering er ikke kjørt.']]);
   assert.equal(photoCaptureTimeSchemaWarning(completionView(session, layerId, LEGACY).readiness), null, 'there it blocks, so it is an error and not this warning');

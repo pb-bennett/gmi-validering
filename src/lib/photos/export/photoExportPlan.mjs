@@ -95,7 +95,7 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
     if (!asset.file || typeof asset.file.arrayBuffer !== 'function' || !asset.file.size) error('missing-file', `${asset.originalFilename}: originalfil mangler eller er tom.`);
     else {
       try { asset.checksum = await digestHex(await asset.file.arrayBuffer()); }
-      catch { error('file-read-failed', `${asset.originalFilename}: originalfilen kunne ikke leses og hashes.`); }
+      catch { error('file-read-failed', `${asset.originalFilename}: originalfilen kunne ikke leses for kontroll. Se om filen kan åpnes, og legg den til på nytt.`); }
     }
     applyRules(`asset:${asset.assetId}`);
   }
@@ -115,12 +115,12 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
       geometryId: gemini ? `id${geminiGuid()}` : `point-${guid}` });
   }
   const associationCount = new Set(all.flatMap((row) => row.associations.map((link) => JSON.stringify([row.assetId, link.sourceId, link.object.objectKey])))).size;
-  if (associationCount) warnings.push({ code: 'associations-omitted', message: `${associationCount} objektkoblinger beholdes i appen, men er ikke med i denne eksporten.` });
+  if (associationCount) warnings.push({ code: 'associations-omitted', message: `${associationCount === 1 ? '1 kobling' : `${associationCount} koblinger`} mellom bilder og GMI-objekter utelates fra GML-filen.` });
   const occurrenceCounts = new Map();
   for (const row of placed) occurrenceCounts.set(row.assetId, (occurrenceCounts.get(row.assetId) || 0) + 1);
   const sharedAttachments = [...occurrenceCounts.values()].filter((count) => count > 1).length;
-  if (sharedAttachments) warnings.push({ code: 'shared-attachments', message: `${sharedAttachments} originalbilder deles av flere separate forekomst-features.` });
-  warnings.push({ code: 'experimental-mapping', message: 'Én godtatt forekomst blir én Skråfoto-feature. Ingen ny kameraposisjon utledes.' });
+  if (sharedAttachments) warnings.push({ code: 'shared-attachments', message: `${sharedAttachments === 1 ? '1 originalbilde brukes' : `${sharedAttachments} originalbilder brukes`} i flere GML-poster.` });
+  warnings.push({ code: 'experimental-mapping', message: 'Hver godkjente plassering blir en Skråfoto-post i GML. Posisjonen hentes fra FOTO.' });
   warnings.push({ code: 'direction-assumption', message: 'Retning angis med klokken i grader fra geografisk nord (enhet 1, referanse 1).' });
   if (profile === 'asbuilt52') warnings.push({ code: 'experimental-2d', message: 'AsBuilt-fotogeometrien er 2D, uten Z.' });
   const missingTimestampCount = occurrences.filter((row) => !fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime)).length;
@@ -132,10 +132,16 @@ export async function buildPhotoExportPlan(snapshot, configuration, { transform 
   if (estimatedCount) warnings.push({ code: 'capture-time-estimated', message: `${estimatedCount} bilder har anslått dato. 12:00:00 eksporteres som teknisk standard, ikke målt opptakstid. Merkingen «Anslått» beholdes i appen. Denne GML-eksporten tar ikke med selve merkingen.` });
   const timezoneTransformCount = occurrences.filter((row) => /(?:Z|[+-]\d{2}:\d{2})$/.test(fullCaptureTime(byAsset.get(row.assetId)?.metadata?.captureTime) || '')).length;
   if (gemini) {
-    warnings.push({ code: 'compatibility-z', message: `${occurrences.length} XYZ-punkter i EPSG:5972: Z=0 er kun en kompatibilitetsplassholder, ikke målt høyde.` });
-    warnings.push({ code: 'compatibility-time', message: `${missingTimestampCount} features uten full opptakstid får ikke opptakstid i GML-filen. ${timezoneTransformCount} tidssone-suffikser fjernes, og klokkeslettet endres ikke: UTC-tid blir stående som UTC, uten tidssone. Brøkdelsekunder utelates for å matche referansen. Godtatte data endres ikke.` });
+    warnings.push({ code: 'compatibility-z', message: `Gemini-filen bruker EPSG:5972 og skriver høydeverdien 0 (Z=0) for alle punkter. Verdien er en plassholder for Gemini VA og angir ingen målt høyde.` });
+    const gmlPosts = (count) => `${count} ${count === 1 ? 'GML-post' : 'GML-poster'}`;
+    const timeDetails = [
+      missingTimestampCount > 0 && `Opptakstid utelates fra ${gmlPosts(missingTimestampCount)} der opptaksdato eller fullstendig klokkeslett mangler.`,
+      timezoneTransformCount > 0 && `Tidssone utelates fra ${gmlPosts(timezoneTransformCount)}. Klokkeslettet beholdes, også for tider oppgitt i UTC.`,
+      'Gemini-formatet utelater brøkdeler av sekunder.',
+    ].filter(Boolean).join(' ');
+    warnings.push({ code: 'compatibility-time', message: timeDetails });
     warnings.push({ code: 'compatibility-metadata', message: `${assets.filter((asset) => asset.metadata?.photographer).length} godtatte fotografverdier utelates; bildeinformasjon eksporteres ikke.` });
-    warnings.push({ code: 'compatibility-import', message: `Pakk ut ZIP. Importer ${naming.gmlFilename} med Attachments-mappen ved siden av. XML bruker Attachments\\filnavn.` });
+    warnings.push({ code: 'compatibility-import', message: `Pakk ut ZIP-filen. Behold mappen Attachments ved siden av ${naming.gmlFilename} når du importerer i Gemini VA.` });
   }
   if (!snapshot.isLive()) error('stale-plan', 'Fotolaget eller godtatte data er endret. Lag en ny forhåndsvisning.');
   const plan = freezeExportData({ version: 1, profile, crs, context, naming, collectionId: gemini ? `id${geminiGuid()}` : 'photo-collection', layer: snapshot.layer, assets, occurrences, attachments, excluded, warnings, errors,

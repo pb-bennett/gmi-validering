@@ -1,4 +1,5 @@
 'use client';
+import { photoPositionDeliveryLines } from '@/lib/photos/photoPositionDeliveryPresentation.mjs';
 
 /* eslint-disable @next/next/no-img-element -- Reuses session-owned thumbnail URLs only. */
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -84,19 +85,9 @@ function DraftSummary({ draft }) {
   </>;
 }
 
-// B1.1: the delivery consequences of the selected positions. The same lines are shown in Kontroll (from the session's
-// read-only preview) and in Endringer lagret (from the commit receipt). Explicit GMI choices are kept, but listed for review.
-function deliveryLines({ gml = 0, gmi = 0, keptExplicit = 0, keptUnavailable = 0 }, saved = false) {
-  return [
-    gml && { key: 'gml', text: `${plural(gml, 'plassering', 'plasseringer')} ${saved ? 'satt til' : 'settes til'} GML i leveransen, slik at den godkjente posisjonen leveres` },
-    gmi && { key: 'gmi', text: `${plural(gmi, 'plassering', 'plasseringer')} leveres i GMI igjen fordi posisjonen er tilbake ved GMI-objektet` },
-    keptExplicit && { key: 'kept-explicit', review: true, text: `${plural(keptExplicit, 'plassering', 'plasseringer')} flyttes bort fra GMI-objektet, men beholder GMI fordi du har valgt det. Kontroller leveringsvalget i FOTO.` },
-    keptUnavailable && { key: 'kept-unavailable', review: true, text: `${plural(keptUnavailable, 'plassering', 'plasseringer')} flyttes bort fra GMI-objektet, men GMI-koblingen kan ikke overføres til GML nå. Kontroller leveringsvalget i FOTO.` },
-  ].filter(Boolean);
-}
 
 function DeliverySummary({ effects }) {
-  const lines = effects ? deliveryLines(effects) : [];
+  const lines = photoPositionDeliveryLines(effects);
   if (!lines.length) return null;
   return <section className="photo-positioning-kontroll-section" data-kontroll="delivery" aria-label="Levering">
     <h4>Levering</h4>
@@ -116,7 +107,7 @@ function receiptLines(receipt) {
     receipt.captureTimes && `Opptakstid lagret for ${plural(receipt.captureTimes, 'bilde', 'bilder')}`,
     receipt.directions && `Retning fra GML for ${plural(receipt.directions, 'bilde', 'bilder')}`,
     (receipt.placed || receipt.moved || receipt.same) && `Posisjoner: ${[receipt.placed && `${receipt.placed} plassert`, receipt.moved && `${receipt.moved} flyttet`, receipt.same && `${receipt.same} samme posisjon`].filter(Boolean).join(' · ')}`,
-    ...deliveryLines({ gml: receipt.gmlDelivery, gmi: receipt.gmiDelivery, keptExplicit: receipt.deliveryKeptExplicit,
+    ...photoPositionDeliveryLines({ gml: receipt.gmlDelivery, gmi: receipt.gmiDelivery, keptExplicit: receipt.deliveryKeptExplicit,
       keptUnavailable: receipt.deliveryKeptUnavailable }, true).map((line) => line.text),
   ].filter(Boolean);
 }

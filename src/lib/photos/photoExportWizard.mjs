@@ -28,11 +28,11 @@ export function photoExportDeliveryModel({ photos, readiness }) {
   }
   const { status: state, text: heading } = photoCompletionStatus(readiness);
   const blocked = state === 'blocked';
-  // The label states what is given up, which only holds for a gap in capture time.
-  const withoutTime = state === 'schema-gap' && readiness.levels.schema.gaps.some((gap) => gap.field === 'captureTime');
+  const captureGap = state === 'schema-gap' && readiness.levels.schema.gaps.find((gap) => gap.field === 'captureTime');
+  const label = captureGap ? (captureGap.insufficientPrecision ? 'Fortsett uten fullstendig opptakstid' : 'Fortsett uten opptakstid') : 'Neste';
   return Object.freeze({ ...shared, state, heading, blockers: Object.freeze(groupPhotoExportDiagnostics(readiness.blocking)), checks: lines(readiness.recommendations), notes: lines(readiness.notes),
     completionPrimary: blocked,
-    advance: Object.freeze({ enabled: !blocked, label: withoutTime ? 'Fortsett uten opptakstid' : 'Neste', reason: blocked ? 'Rett det som mangler for å gå videre.' : null }) });
+    advance: Object.freeze({ enabled: !blocked, label, reason: blocked ? 'Rett det som mangler for å gå videre.' : null }) });
 }
 
 const NO_PREVIEW = Object.freeze({ status: 'idle', plan: null, error: null });

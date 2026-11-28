@@ -282,6 +282,14 @@ test('A4: Kontroll summary omits the filename; Pakke gets one compact package li
     }
   } finally { f.session.clear(); }
   // Informational items are folded in Kontroll and are not counted as notes.
+  const direction = { code: 'direction-assumption', message: 'Retning angis med klokken i grader fra geografisk nord (enhet 1, referanse 1).' };
+  const diagnosticPlan = { errors: [{ code: 'direction-required' }],
+    warnings: [direction, { code: 'direction-bulk', message: 'Kontroller retningene.' }, { code: 'direction-sources-differ', message: 'Kildene har ulik retning.' }] };
+  const groups = deliveryDiagnostics(diagnosticPlan);
+  assert.deepEqual(groups.info.map(({ code }) => code), ['direction-assumption']);
+  assert.deepEqual(groups.warnings.map(({ code }) => code), ['direction-bulk', 'direction-sources-differ']);
+  assert.deepEqual(groups.errors.map(({ code }) => code), ['direction-required']);
+  assert.equal(deliveryReviewStatus({ errors: [], warnings: [direction] }), 'Kontroll fullført · ingen merknader');
   const info = { code: 'shared-attachments' }, warning = { code: 'photo-linked-elsewhere' };
   assert.equal(deliveryReviewStatus({ errors: [], warnings: [] }), 'Kontroll fullført · ingen merknader');
   assert.equal(deliveryReviewStatus({ errors: [], warnings: [info] }), 'Kontroll fullført · ingen merknader');

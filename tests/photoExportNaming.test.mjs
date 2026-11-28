@@ -234,7 +234,7 @@ test('the Gemini import guidance names the GML actually in the package', async (
   const f = await exportFixture();
   try {
     const plan = await f.plan({ profile: 'gemini-legacy2019', label: 'Torkopp PS' }, fixedClock);
-    assert.match(plan.warnings.find((warning) => warning.code === 'compatibility-import').message, /Importer 20261107-1535-Torkopp PS\.gml med Attachments-mappen/);
+    assert.match(plan.warnings.find((warning) => warning.code === 'compatibility-import').message, /Behold mappen Attachments ved siden av 20261107-1535-Torkopp PS\.gml når du importerer i Gemini VA/);
   } finally { f.session.clear(); }
 });
 

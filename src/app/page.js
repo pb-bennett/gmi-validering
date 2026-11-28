@@ -6,6 +6,7 @@ import { EnvelopeSimpleIcon, ImagesIcon, InfoIcon, GearSixIcon, PlusIcon, XIcon 
 import FileUpload from '@/components/FileUpload';
 import useModalDialog, { MODAL_OVERLAY_RESET } from '@/components/useModalDialog';
 import GlobalFileDrop from '@/components/GlobalFileDrop';
+import { photoPositionDeliveryLines } from '@/lib/photos/photoPositionDeliveryPresentation.mjs';
 import PhotoImportWizard from '@/components/photos/PhotoImportWizard';
 import usePhotoSession from '@/components/photos/usePhotoSession';
 import { photoSession } from '@/lib/photos/photoSession.mjs';
@@ -598,7 +599,9 @@ export default function Home() {
     setPhotoImport(null);
     useStore.getState().toggleFieldValidation(false);
     openPhotoLayer(result.layer.id, null, null, { fit: !append && result.outcome.placed > 0 });
-    notifyPhoto(`${append ? `${result.addedCount} bilder er lagt til.` : 'Fotolaget er opprettet.'} ${result.outcome.placed} av ${result.outcome.total} bilder er plassert.`);
+    const receipt = `${append ? `${result.addedCount} bilder er lagt til.` : 'Fotolaget er opprettet.'} ${result.outcome.placed} av ${result.outcome.total} bilder er plassert.`;
+    const delivery = photoPositionDeliveryLines(result.delivery, true).map(({ text }) => text.endsWith('.') ? text : `${text}.`);
+    notifyPhoto([receipt, ...delivery].join(' '));
   };
   const onPhotoPositionsApplied = ({ layerId, initialPlacement, acceptedIds }) => {
     if (layerId === workspaceLayer?.id && initialPlacement && acceptedIds.length) requestPhotoFit(layerId);

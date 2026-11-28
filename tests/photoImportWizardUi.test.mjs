@@ -33,7 +33,25 @@ test('unified import wizard: all entry contexts, sources, exceptions, lifecycle 
  await clickImport(browser,'Neste');await capture('general-placement');await clickImport(browser,'Avbryt');
  await open();assert.equal(await browser.evaluate(`${importDialog}.querySelectorAll('.photo-collection-card').length`),0);await add();await createLayerWithoutPlacement(browser);assert.equal(await browser.evaluate('document.querySelectorAll(".photo-camera-marker").length'),0);
  await click('Legg til bilder');await add();assert.equal(await browser.evaluate(`${importDialog}.querySelectorAll('[data-append-status=skipped]').length`),1);await browser.evaluate(`${importDialog}.querySelector('.photo-append-override').click()`);await createLayerWithoutPlacement(browser);assert.equal(await browser.evaluate('document.querySelectorAll(".photo-workspace-list li[data-photo-id]").length'),2);
- await click('Lukk FOTO');await open();await add();await chooseImportPlacement(browser,'exif');await clickImport(browser,'Neste');await capture('final-review-footer');await clickImport(browser,'Opprett fotolag');await browser.waitFor('!document.querySelector(".photo-collection-dialog")');await browser.waitFor('document.querySelectorAll(".photo-camera-marker").length===1');
+ await click('Lukk FOTO');await open();await add(2);await chooseImportPlacement(browser,'exif');await clickImport(browser,'Neste');
+ const delivery = `${importDialog}.querySelector('[data-import-delivery="gml"]')`;
+ const toast = 'document.querySelector(".photo-workspace-toast")';
+ await browser.waitFor(`${delivery}?.innerText.startsWith('2 plasseringer settes til GML')`);
+ await capture('final-review-footer');
+ await clickImport(browser,'Avbryt');
+ await browser.waitFor(`!${importDialog} && !${toast}`);
+ await open();await add(2);await chooseImportPlacement(browser,'exif');await clickImport(browser,'Neste');
+ await browser.waitFor(`${delivery}?.innerText.startsWith('2 plasseringer settes til GML')`);
+ await clickImport(browser,'Opprett fotolag');
+ await browser.waitFor(`!${importDialog} && ${toast}?.innerText.includes('2 plasseringer satt til GML')`);
+ await browser.waitFor('document.querySelectorAll(".photo-camera-marker").length===2');
+ await browser.evaluate(`${toast}.querySelector('button').focus()`);
+ for (const [width, height] of [[1280,720], [1366,768]]) {
+   await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+   await browser.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+   const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+   await writeFile(path.join(screenshotRoot, `committed-delivery-receipt-${width}x${height}.png`), Buffer.from(data, 'base64'));
+ }
  assert.equal(await browser.evaluate('document.querySelector(".photo-workspace-list .photo-delivery-pill").innerText'),'GML','accepted EXIF import positions default to GML');
  await click('Lukk FOTO');
  // File-origin GMI uses the same draft reconciliation and repeated occurrence planner.

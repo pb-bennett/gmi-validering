@@ -66,6 +66,21 @@ for (const [layer, config, state, heading, label, enabled, reason] of STATES) {
   });
 }
 
+test('Gemini distinguishes missing capture time from accepted date-only and minute precision; Standard still blocks', () => {
+  for (const captureTime of ['2026-05-12', '2026-05-12T14:33']) {
+    const photos = [photo('a', { captureTime })];
+    const readiness = photoExportDeliveryReadiness(photos, GEMINI, NOW);
+    assert.deepEqual(model(photos).advance, { enabled: true, label: 'Fortsett uten fullstendig opptakstid', reason: null });
+    assert.match(photoCaptureTimeSchemaWarning(readiness), /^1 bilde har opptaksdato, men mangler fullstendig klokkeslett/);
+    assert.match(photoExportLevels(readiness)[1].text, /har opptaksdato, men mangler fullstendig klokkeslett/);
+    assert.equal(model(photos, LEGACY).advance.enabled, false);
+    assert.deepEqual(photoExportDeliveryReadiness(photos, LEGACY, NOW).blocking.map(({ code }) => code), ['capture-time-precision']);
+  }
+  const mixed = [photo('a', { captureTime: null }), photo('b', { captureTime: '2026-05-12' })];
+  assert.match(photoCaptureTimeSchemaWarning(photoExportDeliveryReadiness(mixed, GEMINI, NOW)),
+    /^Opptakstid mangler for 1 bilde, og 1 bilde har opptaksdato, men mangler fullstendig klokkeslett/);
+});
+
 test('delivery model: the headings are the ones the hub shows, so the two cannot disagree', () => {
   for (const [layer, config, state] of STATES.filter((row) => row[2] !== 'reading')) {
     const readiness = photoExportDeliveryReadiness(LAYERS[layer], config, NOW);
@@ -311,7 +326,7 @@ test('counts: a repeated photo is one image and two placements, and time is coun
   assert.deepEqual([contents.images, contents.placements, contents.sharedAttachments], [1, 2, 1]);
   assert.equal(contents.images, readiness.counts.assets, 'the plan and readiness agree on the number of images');
   assert.equal(contents.totalBytes, session.getAssetFile(photos[0].assetId).size, 'a shared original is counted once');
-  assert.match(photoCaptureTimeSchemaWarning(readiness), /^1 bilde mangler full opptakstid/);
+  assert.match(photoCaptureTimeSchemaWarning(readiness), /^Opptakstid mangler for 1 bilde/);
   assert.equal(built.counts.missingTimestampCount, 2, 'the plan counts features, which is why it is not the number shown');
 });
 

@@ -93,7 +93,7 @@ test('F14: the Gemini time warning no longer calls a UTC clock local time, and s
   const f = await exportFixture({ time: '2026-05-12T12:33:02Z' });
   try {
     const { message } = (await f.plan({ profile: 'gemini-legacy2019' })).warnings.find((item) => item.code === 'compatibility-time');
-    assert.equal(message, '0 features uten full opptakstid får ikke opptakstid i GML-filen. 1 tidssone-suffikser fjernes, og klokkeslettet endres ikke: UTC-tid blir stående som UTC, uten tidssone. Brøkdelsekunder utelates for å matche referansen. Godtatte data endres ikke.');
+    assert.equal(message, 'Tidssone utelates fra 1 GML-post. Klokkeslettet beholdes, også for tider oppgitt i UTC. Gemini-formatet utelater brøkdeler av sekunder.');
     assert(!/lokal/i.test(message));
   } finally { f.session.clear(); }
 });

@@ -8,6 +8,8 @@ import { gpsPng } from './helpers/photoGpsFixtures.mjs';
 import { clickSourceControl, closePhotoSources, includePhotoSource, openPhotoSources, saveSourceWizardChanges, setPhotoFiles, sourceWizard, stagePhotoSource } from './helpers/photoSourceWorkflow.mjs';
 import { chooseImportPlacement, clickImport, createLayerWithoutPlacement, importDialog, waitForThumbnails } from './helpers/photoImportWizard.mjs';
 
+import { chooseFormat, exportDialog, openExport } from './helpers/photoExportWizard.mjs';
+
 // M3: GML capture time is an explicit, unchecked-by-default choice in Koblinger and in import Kontroll («Fra GML-fil»).
 const app = process.env.PHOTO_UI_URL;
 const screenshotRoot = process.env.PHOTO_SCREENSHOT_DIR || path.join(tmpdir(), 'photo-gml-capture-acceptance');
@@ -165,6 +167,25 @@ test('import wizard «Fra GML-fil»: GML and filename choices sit independently 
       const c = await inspect(browser, 'c.png');
       assert.match(c.time, /^12\.05\.2026/); assert.match(c.time, /bare dato/); assert.match(c.source, /^GML/);
       assert.equal((await inspect(browser, '20261014_143302.png')).time, null, 'the unchecked filename option wrote nothing');
+      await openExport(browser);
+      const warning = `${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]')`;
+      await browser.waitFor(`${warning}`);
+      assert.match(await browser.evaluate(`${warning}.innerText`), /Opptakstid mangler for .*1 bilde har opptaksdato, men mangler fullstendig klokkeslett/);
+      await clickSourceControl(browser, 'Kontroller leveransen', exportDialog);
+      await browser.waitFor(`${exportDialog}.querySelector('[data-export-step="review"]') && ${warning}`);
+      assert.match(await browser.evaluate(`${warning}.innerText`), /1 bilde har opptaksdato, men mangler fullstendig klokkeslett/);
+      for (const [width, height] of [[1280, 720], [1366, 768]]) {
+        await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        await browser.evaluate(`${warning}.scrollIntoView({ block: 'center' })`);
+        await browser.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+        assert(await browser.evaluate(`${exportDialog}.querySelector('footer').getBoundingClientRect().bottom <= ${height}`));
+        const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+        await writeFile(path.join(screenshotRoot, `export-capture-gap-${width}x${height}.png`), Buffer.from(data, 'base64'));
+      }
+      await clickSourceControl(browser, 'Tilbake', exportDialog);
+      await chooseFormat(browser, 'legacy2019');
+      assert(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-diagnostic-code="capture-time-precision"]'))`));
+      assert(await browser.evaluate(`${exportDialog}.querySelector('[data-export-advance]').disabled`));
       assert.deepEqual(browser.events.filter((e) => e.method === 'Runtime.exceptionThrown').map((e) => e.params.exceptionDetails.text), []);
     } catch (error) { console.error(await browser.evaluate('document.body.innerText.slice(0,6000)')); throw error; } finally { await browser.close(); }
   });

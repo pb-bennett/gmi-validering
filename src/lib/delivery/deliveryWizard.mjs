@@ -103,7 +103,7 @@ export function deliveryMessage(item) {
   return gmiEditMessage(code, 'Leveransen kunne ikke kontrolleres sikkert. Kontroller kildefilen, koblingene og fotoopplysningene, og prøv igjen.');
 }
 // C1.5: accepted filename-derived, estimated and technically completed capture times are the user's decisions: Informasjon.
-const informational = new Set(['experimental-mapping', 'compatibility-import', 'compatibility-z', 'compatibility-time', 'compatibility-metadata',
+const informational = new Set(['experimental-mapping', 'direction-assumption', 'compatibility-import', 'compatibility-z', 'compatibility-time', 'compatibility-metadata',
   'associations-omitted', 'shared-attachments', 'retained-path-outside-attachments',
   'capture-time-filename', 'capture-time-estimated', 'capture-time-technical']);
 export function deliveryDiagnostics(plan) {

@@ -103,7 +103,7 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
 
   // The schema gap is stated and does not block.
   assert.equal(await deliveryState(browser), 'schema-gap');
-  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /^1 bilde mangler full opptakstid,/);
+  assert.match(await browser.evaluate(`${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]').innerText`), /^Opptakstid mangler for 1 bilde\./);
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-level="generation"] dd').innerText`), 'Kan lages');
   assert.equal(await browser.evaluate(`${advance}.innerText`), 'Kontroller leveransen');
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-excluded]').innerText`), '1 plassering mangler posisjon og blir ikke med.', 'not behind a disclosure');
@@ -126,6 +126,10 @@ layerTest('normal path: Gemini is chosen, the screens agree, and the same packag
   assert.equal(await browser.evaluate(`${exportDialog}.querySelector('[data-export-format]').textContent`), 'Gemini-kompatibel Skråfoto 2019');
   assert.equal(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-level="import"]'))`), false);
   assert(await browser.evaluate(`Boolean(${exportDialog}.querySelector('[data-export-warning="capture-time-schema"]'))`), 'the warning is on Kontroll');
+  const direction = `${exportDialog}.querySelector('[data-diagnostic-code="direction-assumption"]')`;
+  assert.equal(await browser.evaluate(`${direction}.closest('.delivery-diagnostics').dataset.tone`), 'info');
+  assert.equal(await browser.evaluate(`${direction}.closest('details').open`), false);
+  assert.match(await browser.evaluate(`${direction}.textContent`), /fra geografisk nord/);
   await toPackage(browser);
   assert.deepEqual(await previewNames(browser), names, 'the same reviewed plan');
 

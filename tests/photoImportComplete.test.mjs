@@ -58,6 +58,8 @@ for (const kind of ['none', 'exif', 'gml', 'gmi']) test(`${kind}: preview/commit
   const result = session.completeImport({ loadedReview, placement, preview });
   assert(result.ok); assert.equal(result.outcome.placed, preview.outcome.placed); assert.equal(result.outcome.total, preview.outcome.total);
   assert.equal(result.outcome.placed, kind === 'none' ? 0 : 1);
+  assert.equal(result.delivery?.gml ?? 0, preview.delivery?.gml ?? 0);
+  assert.equal(result.delivery?.gml ?? 0, ['exif', 'gml'].includes(kind) ? 1 : 0);
   assert(session.getFile(result.layer.photoIds[0]));
   if (kind === 'gmi') assert.equal(result.layer.photoIds.length, 2);
   session.clear();
@@ -73,7 +75,9 @@ test('attach and switch draft sources preserve files; stale review, cancel and r
     if (change === 'cancel') session.cancelImport();
     if (change === 'reset') session.clear();
     if (change === 'source') await session.importPositioningGml(new File(['g'], 'p.gml'));
-    assert.equal(session.completeImport({ placement, preview }).ok, false);
+    const result = session.completeImport({ placement, preview });
+    assert.equal(result.ok, false);
+    assert.equal('delivery' in result, false);
     assert.equal(session.getSnapshot().photoLayers.length, 0); session.clear();
   }
 });
@@ -86,8 +90,33 @@ test('append preserves already placed occurrences and applies positions only to 
   const preview = session.previewImport({ placement });
   const result = session.completeImport({ placement, preview });
   assert(result.ok); assert(result.append); assert.equal(result.outcome.placed, preview.outcome.placed);
+  assert.deepEqual(result.delivery, preview.delivery);
+  assert.equal(result.delivery.gml, 1, 'only the new placement changes delivery');
   assert.equal(session.getLayerPhotos(first.layer.id)[0].spatial.current, current); session.clear();
 });
+test('import delivery counts the two linked placements of one original when both transfer', async () => {
+  const session = await setup();
+  try {
+    assert(await session.setDraftGmiSource({ file: gmiFile([{ hyperlink: 'h:1(link:"a.jpg") ' }, { hyperlink: 'h:1(link:"a.jpg") ' }]) }));
+    const placement = { kind: 'exif' };
+    const loadedReview = session.reviewLoadedGmiImport();
+    const preview = session.previewImport({ loadedReview, placement });
+    assert.equal(preview.outcome.total, 1);
+    assert.equal(preview.rows[0].occurrences, 2);
+    assert.equal(preview.delivery.gml, 2);
+    assert.equal(preview.delivery.ids.transfer.length, 2);
+    assert.equal(session.getSnapshot().photoLayers.length, 0);
+
+    const result = session.completeImport({ loadedReview, placement, preview });
+    assert(result.ok);
+    assert.deepEqual(result.outcome, { total: 1, placed: 1, unplaced: 0 });
+    assert.equal(result.delivery.gml, preview.delivery.gml);
+    assert.deepEqual(result.delivery.ids.transfer, result.layer.photoIds);
+    const delivery = session.getLayerDelivery(result.layer.id);
+    assert(result.layer.photoIds.every((id) => delivery.byPhotoId[id].status === 'transfer'));
+  } finally { session.clear(); }
+});
+
 test('GML import rolls back at every write, then publishes selected times, direction, positions and delivery together', async () => {
   let failAt = 0, reached = 0;
   const session = evidenceSession({ commitFault(index) { reached = index; if (index === failAt) throw new Error('injected fault'); } });
@@ -111,6 +140,8 @@ test('GML import rolls back at every write, then publishes selected times, direc
         assert(reached >= 5, 'layer, assets, record and delivery writes were faulted');
         assert.deepEqual(published, [session.getSnapshot()]);
         assert.deepEqual(result.outcome, { total: 2, placed: 1, unplaced: 1 });
+        assert.deepEqual(result.delivery, preview.delivery);
+        assert.equal(result.delivery.gml, 1);
         assert.equal(result.layer.spatialSources[0].kind, 'gml');
         assert.equal(result.layer.placedCount, 1);
         assert.deepEqual(session.getLayerPhotos(result.layer.id).map((photo) => photo.captureMetadata.captureTime.provenance.kind), ['gml', 'filename']);
@@ -121,6 +152,7 @@ test('GML import rolls back at every write, then publishes selected times, direc
         break;
       }
       assert.equal(result.error, 'commit-failed');
+      assert.equal('delivery' in result, false);
       assert.equal(reached, failAt);
       assert.equal(published.length, 0);
       assert.strictEqual(session.getSnapshot(), before);
@@ -181,6 +213,7 @@ test('GMI append rolls back association, occurrence and discarded file writes wi
         break;
       }
       assert.equal(result.error, 'commit-failed');
+      assert.equal('delivery' in result, false);
       assert.equal(reached, failAt);
       assert.equal(publications, 0);
       assert.strictEqual(session.getSnapshot(), before);
