@@ -173,9 +173,6 @@ const useStore = create(
             highlightedFeltObjectType: null,
             outlierPromptOpen: false,
             outlierPromptLayerId: null,
-            missingHeightPromptOpen: false,
-            missingHeightDetailsOpen: false,
-            missingHeightLines: [],
             fieldValidationFilterActive: false,
             dataInspectorOpen: false,
             dataInspectorTarget: null,
@@ -449,43 +446,6 @@ const useStore = create(
                 Array.isArray(outlierResults.outliers) &&
                 outlierResults.outliers.length > 0;
 
-              // Detect missing height (Z) for any line that has at least one coordinate without a valid z.
-              const missingHeightLines = [];
-              const lines = Array.isArray(data?.lines)
-                ? data.lines
-                : [];
-              lines.forEach((line, index) => {
-                const coords = Array.isArray(line?.coordinates)
-                  ? line.coordinates
-                  : [];
-                if (coords.length === 0) return;
-
-                const hasMissingZ = coords.some((c) => {
-                  const z = c?.z;
-                  if (z === null || z === undefined) return true;
-                  const num = typeof z === 'number' ? z : Number(z);
-                  return !Number.isFinite(num);
-                });
-
-                if (!hasMissingZ) return;
-
-                const attrs = line?.attributes || {};
-                missingHeightLines.push({
-                  index,
-                  fcode:
-                    attrs.S_FCODE ||
-                    attrs.Tema ||
-                    attrs.FCODE ||
-                    null,
-                  type:
-                    attrs.objekttypenavn ||
-                    attrs.OBJEKTTYPENAVN ||
-                    attrs.Type ||
-                    null,
-                });
-              });
-              const hasMissingHeights = missingHeightLines.length > 0;
-
               const zValidationResults = analyzeZValues(data);
               const hasMissingZ =
                 (zValidationResults?.summary?.missingPointObjects ||
@@ -542,9 +502,6 @@ const useStore = create(
                   sidebarOpen: true,
                   outlierPromptOpen: hasOutliers,
                   outlierPromptLayerId: layerId,
-                  missingHeightPromptOpen: false,
-                  missingHeightDetailsOpen: false,
-                  missingHeightLines,
                   zValidationPromptOpen: hasMissingZ,
                   zValidationPromptLayerId: layerId,
                 },
@@ -1320,9 +1277,6 @@ const useStore = create(
           feltSearchText: '', // Search text for Felt filtering
           outlierPromptOpen: false, // Ask user whether to ignore outliers on load
           outlierPromptLayerId: null, // Layer the outlier prompt is about
-          missingHeightPromptOpen: false, // Warn if one or more lines are missing Z
-          missingHeightDetailsOpen: false, // Details popup listing lines missing Z
-          missingHeightLines: [], // Array<{index:number, fcode:string|null, type:string|null}>
           fieldValidationFilterActive: false, // Whether field validation is overriding filters
           dataInspectorOpen: false, // Data inspector modal visibility
           dataInspectorTarget: null, // { type: 'point'|'line', index: number } | null
@@ -1371,36 +1325,6 @@ const useStore = create(
             }),
             false,
             'ui/setMapOverlayVisibility',
-          ),
-
-        setMissingHeightPromptOpen: (isOpen) =>
-          set(
-            (state) => ({
-              ui: {
-                ...state.ui,
-                missingHeightPromptOpen:
-                  isOpen !== undefined
-                    ? isOpen
-                    : !state.ui.missingHeightPromptOpen,
-              },
-            }),
-            false,
-            'ui/setMissingHeightPromptOpen',
-          ),
-
-        setMissingHeightDetailsOpen: (isOpen) =>
-          set(
-            (state) => ({
-              ui: {
-                ...state.ui,
-                missingHeightDetailsOpen:
-                  isOpen !== undefined
-                    ? isOpen
-                    : !state.ui.missingHeightDetailsOpen,
-              },
-            }),
-            false,
-            'ui/setMissingHeightDetailsOpen',
           ),
 
         setZValidationPromptOpen: (isOpen) =>
@@ -2053,18 +1977,6 @@ const useStore = create(
             'ui/setHighlightedFeatureIds',
           ),
 
-        setFieldValidationFilterActive: (active) =>
-          set(
-            (state) => ({
-              ui: {
-                ...state.ui,
-                fieldValidationFilterActive: active,
-              },
-            }),
-            false,
-            'ui/setFieldValidationFilterActive',
-          ),
-
         toggleDetailsPanel: () =>
           set(
             (state) => ({
@@ -2471,9 +2383,6 @@ const useStore = create(
                   ...baseState.ui,
                   outlierPromptOpen: false,
                   outlierPromptLayerId: null,
-                  missingHeightPromptOpen: false,
-                  missingHeightDetailsOpen: false,
-                  missingHeightLines: [],
                   zValidationPromptOpen: false,
                   zValidationPromptLayerId: null,
                 },
@@ -2938,40 +2847,6 @@ const useStore = create(
             },
             false,
             'layers/toggleAnalysisModal',
-          ),
-
-        /**
-         * Select a pipe in layer analysis
-         */
-        selectLayerAnalysisPipe: (layerId, pipeIndex) =>
-          set(
-            (state) => {
-              const layer = state.layers[layerId];
-              if (!layer) return state;
-              return {
-                layers: {
-                  ...state.layers,
-                  [layerId]: {
-                    ...layer,
-                    analysis: {
-                      ...layer.analysis,
-                      selectedPipeIndex: pipeIndex,
-                    },
-                  },
-                },
-                ui: {
-                  ...state.ui,
-                  highlightedFeatureId: `${layerId}-ledninger-${pipeIndex}`,
-                  selectedObject3D: {
-                    type: 'line',
-                    index: pipeIndex,
-                    layerId,
-                  },
-                },
-              };
-            },
-            false,
-            'layers/selectAnalysisPipe',
           ),
 
         /**
@@ -3531,9 +3406,6 @@ const useStore = create(
                 feltHiddenValues: [],
                 feltSearchText: '',
                 outlierPromptOpen: false,
-                missingHeightPromptOpen: false,
-                missingHeightDetailsOpen: false,
-                missingHeightLines: [],
                 highlightedFeatureIds: null,
                 fieldValidationFilterActive: false,
               };
@@ -3628,15 +3500,6 @@ const useStore = create(
               }
               if (state.ui.outlierPromptOpen === undefined) {
                 state.ui.outlierPromptOpen = false;
-              }
-              if (state.ui.missingHeightPromptOpen === undefined) {
-                state.ui.missingHeightPromptOpen = false;
-              }
-              if (state.ui.missingHeightDetailsOpen === undefined) {
-                state.ui.missingHeightDetailsOpen = false;
-              }
-              if (state.ui.missingHeightLines === undefined) {
-                state.ui.missingHeightLines = [];
               }
               if (
                 state.ui.fieldValidationFilterActive === undefined

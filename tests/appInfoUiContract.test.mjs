@@ -79,10 +79,8 @@ test('shared working header and both Kontakt actions use the one page-owned moda
   assert.match(pageSource, /openAppInfo = \(tab = 'about', opener = null\)/);
   assert.match(pageSource, /appInfoTriggerRef\.current = opener;[\s\S]*?opener\.focus\(\)/);
   assert.match(pageSource, /setAppInfoInitialTab\(tab\)/);
-  assert.match(fieldValidationSidebarSource, /<EnvelopeSimpleIcon\b/);
-  assert.match(fieldValidationSidebarSource, /onClick=\{onOpenContact\}/);
+  assert.match(fieldValidationSidebarSource, /<button type="button" onClick=\{onOpenContact\} aria-haspopup="dialog"[^>]*>Kontakt<\/button>/);
   assert.match(pageSource, /<FieldValidationSidebar[\s\S]*?onOpenContact=\{\(event\) => openAppInfo\('contact', event\.currentTarget\)\}/);
-  assert.match(fieldValidationSidebarSource, /onClick=\{onOpenContact\}/);
   assert.match(pageSource, /<EnvelopeSimpleIcon\b/);
   assert.match(pageSource, /onClick=\{\(event\) => openAppInfo\('contact', event\.currentTarget\)\}/);
 });

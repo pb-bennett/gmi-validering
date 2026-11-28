@@ -1080,7 +1080,6 @@ export default function Home() {
               />
             ) : (
               <Sidebar
-                onReset={() => requestReset()}
                 onOpenPhotoLayer={openPhotoLayer}
                 onAddGmiPhotos={openLoadedGmiPhotos}
                 onOpenGemini={() => setGeminiDialog({})}

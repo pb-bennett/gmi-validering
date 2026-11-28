@@ -10,13 +10,11 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   const map = read('src/components/stats/StatsMap.js');
   const statsRoute = read('src/lib/stats/statsRoute.mjs');
   const legacyStats = read('src/lib/stats/legacyStats.mjs');
-  const detailed = read('src/components/DetailedStatsSection.js');
   const testMode = read('src/components/TestModeControl.js');
   const tabSwitcher = read('src/components/TabSwitcher.js');
   const mapToolbar = read('src/components/MapPaneToolbar.js');
   const page = read('src/app/page.js');
   const activation = read('src/lib/testModeActivation.mjs');
-  const validationSidebar = read('src/components/FieldValidationSidebar.js');
 
   for (const label of [
     'Utvikling over tid',
@@ -45,7 +43,6 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.doesNotMatch(modal, /📤|🏘️/);
   assert.doesNotMatch(modal, /lg:grid-cols-\[15rem/);
   assert.doesNotMatch(modal, /<aside/);
-  assert.match(detailed, /Detaljert statistikk er ikke aktivert ennå/);
   assert.match(testMode, /Testmodus er aktiv/);
   assert.match(testMode, /opplastinger registreres ikke/);
   assert.match(testMode, /Utviklerverkt/);
@@ -96,7 +93,6 @@ test('statistics UI exposes the Norwegian uptake and kommune controls', () => {
   assert.ok(statsTriggerStart < page.indexOf('{(surveyWorkspaceReady || hasPhotoLayers) &&'));
   assert.equal((page.match(/aria-label="Vis bruksstatistikk"/g) || []).length, 1);
   assert.doesNotMatch(page, /DevDiagnosticsPanel/);
-  assert.match(validationSidebar, /<FieldDetailModal[\s\S]*?isOpen=\{!!selectedField\}/);
   assert.doesNotMatch(statsTrigger, /selectedField|FieldDetailModal/);
   assert.match(modal, /Opplastinger uten registrert kommune/);
   assert.match(modal, /Statistikk fra/);

@@ -94,7 +94,7 @@ node --test "tests/*.test.mjs"
 
 ### Teknologi
 
-Prosjektet bruker Next.js og React. Kartvisningen bygger på Leaflet, 3D-visningen på Three.js, og tilstand håndteres med Zustand. Aktiv GMI Validator V2 har regelregister og evaluator under `src/lib/validation-v2/`; eldre JSON-regler finnes under `src/data/rules/`.
+Prosjektet bruker Next.js og React. Kartvisningen bygger på Leaflet, 3D-visningen på Three.js, og tilstand håndteres med Zustand. Aktiv GMI Validator V2 har regelregister og evaluator under `src/lib/validation-v2/`.
 
 ## Konfigurasjon
 

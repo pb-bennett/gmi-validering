@@ -5,10 +5,8 @@ import { WarningIcon } from '@phosphor-icons/react';
 import { PHOTO_EXPORT_PROFILE_METADATA } from '@/lib/photos/export/photoExportRules.mjs';
 import { describeExportNameCharacter, exportFilenamePreview, exportNameCompatibilitySuggestion, exportNameUncommonCharacters, sanitizeExportDescriptive,
   EXPORT_FILENAME_NOTICE_LENGTH, EXPORT_FILENAME_ADVISORY_LENGTH } from '@/lib/photos/export/photoExportNaming.mjs';
-import PhotoExportStatus, { PhotoExportDiagnostics, PhotoExportTone } from './PhotoExportStatus';
-import PhotoSourceOption, { photoSourceButton } from './PhotoSourceOption';
+import PhotoSourceOption from './PhotoSourceOption';
 
-const TONES = Object.freeze({ reading: 'wait', blocked: 'stop', 'schema-gap': 'caution', recommendations: 'info', ready: 'good' });
 const FILENAME_PLACEHOLDER = 'beskrivende navn';
 const formats = (tier) => Object.entries(PHOTO_EXPORT_PROFILE_METADATA).filter(([, card]) => card.tier === tier);
 
@@ -100,22 +98,4 @@ export function PhotoExportSettings({ config, onConfigChange, filename }) {
       </details>
       {filename && <ExportFilenameEditor filename={filename} onConfigChange={onConfigChange} />}
   </>;
-}
-
-export default function PhotoExportDeliveryStep({ config, model, readiness, onConfigChange, onOpenCompletion }) {
-  return <div className="photo-export-body" data-export-step="delivery">
-    <div className="photo-export-choices"><PhotoExportSettings config={config} onConfigChange={onConfigChange} /></div>
-    <div className="photo-export-state">
-      <h3 tabIndex={-1} data-export-heading data-delivery-state={model.state}><PhotoExportTone tone={TONES[model.state]} />{model.heading}</h3>
-      <PhotoExportStatus readiness={readiness} reading={model.state === 'reading'} />
-      {model.blockers.length > 0 && <div className="photo-export-diagnostics" data-export-blockers><PhotoExportDiagnostics groups={model.blockers} /></div>}
-      {model.checks.length > 0 && <ul className="photo-completion-notes" aria-label="Bør kontrolleres">{model.checks.map((item) => <li key={item.code} data-delivery-check={item.code}>{item.text}</li>)}</ul>}
-      {model.excludedText && <p className="photo-export-excluded" data-export-excluded>{model.excludedText}</p>}
-      <div><button type="button" className={model.completionPrimary ? 'gmi-primary-control gmi-focus-ring min-h-10 px-4' : photoSourceButton} data-export-completion onClick={onOpenCompletion}>Fullfør opplysninger…</button></div>
-      {model.notes.length > 0 && <details className="photo-export-disclosure" data-delivery-notes>
-        <summary>Slik blir leveransen ({model.notes.length})</summary>
-        <ul>{model.notes.map((item) => <li key={item.code} data-readiness-note={item.code}>{item.text}</li>)}</ul>
-      </details>}
-    </div>
-  </div>;
 }

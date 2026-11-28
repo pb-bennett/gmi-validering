@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { photoImageFit, clampPhotoPan, zoomPhotoView } from '../src/lib/photos/photoImageView.mjs';
-import { newPhotoCandidateCount } from '../src/lib/photos/photoSourceReviewPresentation.mjs';
 
 test('portrait/landscape fit preserve aspect ratio, do not upscale and handle zero initial viewport', () => {
   assert.equal(photoImageFit({ width: 4000, height: 6000 }, { width: 1600, height: 800 }), 776 / 6000);
@@ -18,22 +17,4 @@ test('pan stays within scaled image; fitting clears offsets and cursor zoom pres
   assert.equal(fitted.scale, fit); assert.equal(fitted.x, 0); assert.equal(fitted.y, 0);
   assert.deepEqual(zoomPhotoView({ scale: 1, x: 0, y: 0 }, 2, { x: 200, y: 100 }, image, viewport), { mode: 'zoom', scale: 2, x: -200, y: -100 });
   assert.equal(zoomPhotoView({ scale: 1, x: 0, y: 0 }, 100, { x: 0, y: 0 }, image, viewport).scale, 8);
-});
-
-test('source review counts newly attached evidence, including invalid diagnostics, without guessing or duplicating', () => {
-  const review = { source: { id: 'source', entries: [
-    { id: 'existing', status: 'viable' }, { id: 'new', status: 'viable' },
-    { id: 'invalid', status: 'invalid' }, { id: 'ambiguous', status: 'viable' },
-  ] }, ledger: { matches: [
-    { entryId: 'existing', status: 'matched', photoId: 'a' },
-    { entryId: 'new', status: 'matched', photoId: 'b' },
-    { entryId: 'invalid', status: 'matched', photoId: 'b' },
-    { entryId: 'ambiguous', status: 'ambiguous', photoIds: ['a', 'b'] },
-  ] } };
-  const photos = [{ id: 'a', spatial: { candidates: [{ sourceId: 'source', sourceEntryId: 'existing' }] } },
-    { id: 'b', spatial: { candidates: [] } }];
-  assert.equal(newPhotoCandidateCount(null, photos), 0);
-  assert.equal(newPhotoCandidateCount(review, photos), 2);
-  assert.equal(newPhotoCandidateCount({ ...review, source: { ...review.source, id: 'changed-source' } }, photos), 3);
-  assert.equal(newPhotoCandidateCount(review, [photos[0]]), 0, 'removed assets are not counted');
 });

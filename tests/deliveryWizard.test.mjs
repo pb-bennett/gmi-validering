@@ -101,11 +101,32 @@ test('review, download failure, retry and staleness preserve meaningful state an
   try {
     const plan = await f.plan();
     let state = reduce(DELIVERY_WIZARD_START, { type: 'build', run: 1 });
-    state = reduce(state, { type: 'built', run: 1, review: { plan, snapshot: f.capture() } });
+    const review = { plan, snapshot: f.capture() };
+    assert.strictEqual(reduce(Object.freeze(state), { type: 'build', run: 1 }), state);
+    for (const type of ['built', 'build-failed']) {
+      assert.strictEqual(reduce(state, { type, run: 0, review }), state);
+    }
+    const failed = reduce(state, { type: 'build-failed', run: 1, error: 'Synthetic failure' });
+    assert.equal(deliveryWizardStatus(failed), 'failed');
+    const back = reduce(failed, { type: 'back' });
+    assert.equal(back.step, 'content');
+    assert.equal(back.review, null);
+    assert.equal(deliveryWizardStatus(reduce(back, { type: 'build', run: back.run + 1 })), 'building');
+    const blocked = reduce(state, { type: 'built', run: 1, review: { ...review, plan: { ...plan, status: 'blocked' } } });
+    assert.equal(deliveryWizardStatus(blocked), 'blocked');
+    assert.strictEqual(reduce(blocked, { type: 'package', run: 1 }), blocked);
+    state = reduce(state, { type: 'built', run: 1, review });
+    assert.strictEqual(reduce(state, { type: 'built', run: 1, review }), state);
+    assert.strictEqual(reduce(state, { type: 'download', run: 1 }), state, 'review cannot start a download');
     assert.equal(deliveryWizardStatus(state), 'ready');
     state = reduce(state, { type: 'package', run: 1 }); assert.equal(state.step, 'package');
     state = reduce(state, { type: 'download', run: 1 });
-    assert.equal(reduce(state, { type: 'back' }), state);
+    assert.strictEqual(reduce(Object.freeze(state), { type: 'back' }), state);
+    assert.strictEqual(reduce(state, { type: 'build', run: 2 }), state);
+    assert.strictEqual(reduce(state, { type: 'download', run: 1 }), state);
+    for (const type of ['downloaded', 'download-failed']) {
+      assert.strictEqual(reduce(state, { type, run: 0 }), state);
+    }
     state = reduce(state, { type: 'download-failed', run: 1, error: 'Synthetic failure' });
     assert.equal(deliveryWizardStatus(state), 'download-failed');
     state = reduce(state, { type: 'download', run: 1 });

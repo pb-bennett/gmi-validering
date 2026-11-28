@@ -7,13 +7,11 @@ import { STATUS_LABELS, getStatusLabel, formatStatusChoice } from '../src/lib/st
 register('./esmJsLoader.mjs', import.meta.url);
 const { SOSIParser } = await import('../src/lib/parsing/sosiParser.js');
 const { createAttributeColumnAccessors } = await import('../src/lib/objectTablePresentation.js');
-const sources = Object.fromEntries(await Promise.all(['Sidebar', 'LayerFilterSections', 'MapInner'].map(async (name) =>
+const sources = Object.fromEntries(await Promise.all(['LayerFilterSections', 'MapInner'].map(async (name) =>
   [name, await readFile(new URL(`../src/components/${name}.js`, import.meta.url), 'utf8')])));
 
 // Exercise the existing embedded field discovery and map predicate without a React/browser runtime.
-const sidebarAnalysis = sources.Sidebar.split('// Analyze fields separately for points and lines')[1].split('    return {')[0];
 const layerAnalysis = sources.LayerFilterSections.split('    const analysis = {')[1].split('    return analysis;')[0];
-const analyzeSidebar = new Function('data', `${sidebarAnalysis}; return fieldAnalysis;`);
 const analyzeLayer = new Function('data', `const analysis = {${layerAnalysis}; return analysis;`);
 const mapPredicate = sources.MapInner.split('const isHiddenByFeltFilter = useCallback(')[1].split('    [feltFilterActive, feltHiddenValues]')[0].trim().replace(/,$/, '');
 const hiddenByFilter = new Function('feltFilterActive', 'feltHiddenValues', `return (${mapPredicate});`);
@@ -36,24 +34,20 @@ test('status domain labels and raw unknown fallback never invent missing values'
 
 const codes = ['D', 'N', 'F', 'EF', 'EN', 'XYZ'];
 const data = {
-  points: codes.map((Status) => ({ attributes: { Status } })).concat({ attributes: {} }),
-  lines: codes.map((Status) => ({ attributes: { Status } })).concat({ attributes: {} }),
+  points: codes.map((Status) => ({ attributes: { Status } })).concat({ attributes: { Status: null } }, { attributes: {} }),
+  lines: codes.map((Status) => ({ attributes: { Status } })).concat({ attributes: { Status: null } }, { attributes: {} }),
 };
 
-test('both existing field lists discover canonical Status and keep every distinct code', () => {
-  for (const analyze of [analyzeSidebar, analyzeLayer]) {
-    const analysis = analyze(data);
-    for (const geometry of ['points', 'lines']) {
-      assert.ok(analysis[geometry].fieldOrder.includes('Status'));
-      for (const code of codes) assert.equal(analysis[geometry].fields.Status.valueCounts[code], 1);
-    }
-    assert.equal(analyze({ points: [{ attributes: {} }], lines: [] }).points.fieldOrder.includes('Status'), false);
+test('the layer field list discovers canonical Status and keeps every distinct code', () => {
+  const analysis = analyzeLayer(data);
+  for (const geometry of ['points', 'lines']) {
+    assert.ok(analysis[geometry].fieldOrder.includes('Status'));
+    for (const code of codes) assert.equal(analysis[geometry].fields.Status.valueCounts[code], 1);
+    assert.equal(analysis[geometry].fields.Status.valueCounts['(Mangler)'], 1);
   }
-  assert.equal(analyzeSidebar(data).points.fields.Status.valueCounts['(Mangler)'], 1);
-  for (const name of ['Sidebar', 'LayerFilterSections']) {
-    assert.match(sources[name], /fieldName === 'Status' \? formatStatusChoice\(value\) : value/);
-    assert.match(sources[name], /item\.value === value/);
-  }
+  assert.equal(analyzeLayer({ points: [{ attributes: {} }], lines: [] }).points.fieldOrder.includes('Status'), false);
+  assert.match(sources.LayerFilterSections, /fieldName === 'Status' \? formatStatusChoice\(value\) : value/);
+  assert.match(sources.LayerFilterSections, /item\.value === value/);
 });
 
 test('existing map filtering preserves exact codes, geometry, missing values and layer/global scope', () => {

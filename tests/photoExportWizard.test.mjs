@@ -11,8 +11,7 @@ import { buildPhotoExportPlan, capturePhotoExportSnapshot } from '../src/lib/pho
 import { PHOTO_EXPORT_IMPORT_EVIDENCE, PHOTO_EXPORT_PROFILE_METADATA, PHOTO_EXPORT_REQUIREMENTS } from '../src/lib/photos/export/photoExportRules.mjs';
 import { photoCaptureTimeSchemaWarning, photoCompletionStatus, photoExportAwaitingSource, photoExportLevels, photoReadingNote, photosBeingRead } from '../src/lib/photos/photoCompletion.mjs';
 import { DEFAULT_PHOTO_EXPORT_CONFIG, photoExportConfigFor, reconcilePhotoExportConfig, updatePhotoExportConfig } from '../src/lib/photos/photoExportConfig.mjs';
-import { PHOTO_EXPORT_WIZARD_START, photoExportDeliveryModel, photoExportDeliveryReadiness, photoExportPackageContents, photoExportPackageState,
-  photoExportWizardReducer as reduce } from '../src/lib/photos/photoExportWizard.mjs';
+import { photoExportDeliveryModel, photoExportDeliveryReadiness } from '../src/lib/photos/photoExportWizard.mjs';
 
 const GEMINI = { profile: 'gemini-legacy2019', crs: 'EPSG:25832', context: {} };
 const LEGACY = { profile: 'legacy2019', crs: 'EPSG:25832', context: {} };
@@ -36,33 +35,32 @@ const LAYERS = {
   check: [photo('a', { captureTime: '1999-05-12T14:33:02' })],
   complete: [photo('a')],
 };
-const CONTINUE = 'Fortsett uten opptakstid', FIX = 'Rett det som mangler for å gå videre.';
+const FIX = 'Rett det som mangler for å gå videre.';
 const STATES = [
-  // layer, profile, state, heading, label, enabled, reason
-  ['reading', GEMINI, 'reading', 'Leser bildedata …', 'Neste', false, '1 bilde er ikke ferdig lest. Kontrollen oppdateres av seg selv.'],
-  ['reading', LEGACY, 'reading', 'Leser bildedata …', 'Neste', false, '1 bilde er ikke ferdig lest. Kontrollen oppdateres av seg selv.'],
-  ['reading', ASBUILT, 'reading', 'Leser bildedata …', 'Neste', false, '1 bilde er ikke ferdig lest. Kontrollen oppdateres av seg selv.'],
-  ['noPlaced', GEMINI, 'blocked', '1 må rettes før eksport', 'Neste', false, FIX],
-  ['noPlaced', LEGACY, 'blocked', '1 må rettes før eksport', 'Neste', false, FIX],
-  ['noPlaced', ASBUILT, 'blocked', '1 må rettes før eksport', 'Neste', false, FIX],
-  ['noTime', GEMINI, 'schema-gap', 'Kan eksporteres, men følger ikke Skråfoto 2019-skjemaet', CONTINUE, true, null],
-  ['noTime', LEGACY, 'blocked', '1 må rettes før eksport', 'Neste', false, FIX],
-  ['noTime', ASBUILT, 'blocked', '1 må rettes før eksport', 'Neste', false, FIX],
-  ['check', GEMINI, 'recommendations', 'Kan eksporteres, men noe bør kontrolleres', 'Neste', true, null],
-  ['check', LEGACY, 'recommendations', 'Kan eksporteres, men noe bør kontrolleres', 'Neste', true, null],
-  ['check', ASBUILT, 'recommendations', 'Kan eksporteres, men noe bør kontrolleres', 'Neste', true, null],
-  ['complete', GEMINI, 'ready', 'Ingen opplysninger mangler for dette målet', 'Neste', true, null],
-  ['complete', LEGACY, 'ready', 'Ingen opplysninger mangler for dette målet', 'Neste', true, null],
-  ['complete', ASBUILT, 'ready', 'Ingen opplysninger mangler for dette målet', 'Neste', true, null],
+  // layer, profile, state, heading, enabled, reason
+  ['reading', GEMINI, 'reading', 'Leser bildedata …', false, '1 bilde er ikke ferdig lest. Kontrollen oppdateres av seg selv.'],
+  ['reading', LEGACY, 'reading', 'Leser bildedata …', false, '1 bilde er ikke ferdig lest. Kontrollen oppdateres av seg selv.'],
+  ['reading', ASBUILT, 'reading', 'Leser bildedata …', false, '1 bilde er ikke ferdig lest. Kontrollen oppdateres av seg selv.'],
+  ['noPlaced', GEMINI, 'blocked', '1 må rettes før eksport', false, FIX],
+  ['noPlaced', LEGACY, 'blocked', '1 må rettes før eksport', false, FIX],
+  ['noPlaced', ASBUILT, 'blocked', '1 må rettes før eksport', false, FIX],
+  ['noTime', GEMINI, 'schema-gap', 'Kan eksporteres, men følger ikke Skråfoto 2019-skjemaet', true, null],
+  ['noTime', LEGACY, 'blocked', '1 må rettes før eksport', false, FIX],
+  ['noTime', ASBUILT, 'blocked', '1 må rettes før eksport', false, FIX],
+  ['check', GEMINI, 'recommendations', 'Kan eksporteres, men noe bør kontrolleres', true, null],
+  ['check', LEGACY, 'recommendations', 'Kan eksporteres, men noe bør kontrolleres', true, null],
+  ['check', ASBUILT, 'recommendations', 'Kan eksporteres, men noe bør kontrolleres', true, null],
+  ['complete', GEMINI, 'ready', 'Ingen opplysninger mangler for dette målet', true, null],
+  ['complete', LEGACY, 'ready', 'Ingen opplysninger mangler for dette målet', true, null],
+  ['complete', ASBUILT, 'ready', 'Ingen opplysninger mangler for dette målet', true, null],
 ];
 
-for (const [layer, config, state, heading, label, enabled, reason] of STATES) {
+for (const [layer, config, state, heading, enabled, reason] of STATES) {
   test(`delivery model: ${layer} under ${config.profile} is ${state}`, () => {
     const result = model(LAYERS[layer], config);
     assert.equal(result.state, state);
     assert.equal(result.heading, heading);
-    assert.deepEqual(result.advance, { enabled, label, reason });
-    assert.equal(result.completionPrimary, state === 'blocked', 'the hub is the primary action only when blocked');
+    assert.deepEqual(result.advance, { enabled, reason });
   });
 }
 
@@ -70,7 +68,7 @@ test('Gemini distinguishes missing capture time from accepted date-only and minu
   for (const captureTime of ['2026-05-12', '2026-05-12T14:33']) {
     const photos = [photo('a', { captureTime })];
     const readiness = photoExportDeliveryReadiness(photos, GEMINI, NOW);
-    assert.deepEqual(model(photos).advance, { enabled: true, label: 'Fortsett uten fullstendig opptakstid', reason: null });
+    assert.deepEqual(model(photos).advance, { enabled: true, reason: null });
     assert.match(photoCaptureTimeSchemaWarning(readiness), /^1 bilde har opptaksdato, men mangler fullstendig klokkeslett/);
     assert.match(photoExportLevels(readiness)[1].text, /har opptaksdato, men mangler fullstendig klokkeslett/);
     assert.equal(model(photos, LEGACY).advance.enabled, false);
@@ -95,7 +93,6 @@ test('reading comes before blocked: the false blocker from an unfinished read is
   const result = photoExportDeliveryModel({ photos, readiness });
   assert.equal(result.state, 'reading');
   assert.deepEqual([result.blockers, result.checks, result.notes], [[], [], []]);
-  assert.equal(result.completionPrimary, false);
 });
 
 test('the shared status holds its answer while a placed photo is read, and only then', () => {
@@ -137,15 +134,7 @@ test('a real read holds the wizard, then releases it by itself, and a plan built
   assert.equal(early.isLive(), false, 'this is why Neste waits for the read');
   const settled = photoExportDeliveryModel(view());
   assert.equal(settled.state, 'schema-gap');
-  assert.deepEqual(settled.advance, { enabled: true, label: CONTINUE, reason: null });
-});
-
-test('the button names capture time only for a capture-time gap', () => {
-  const labels = STATES.filter((row) => row[4] === CONTINUE).map((row) => [row[0], row[1].profile, row[2]]);
-  assert.deepEqual(labels, [['noTime', 'gemini-legacy2019', 'schema-gap']]);
-  const readiness = photoExportDeliveryReadiness(LAYERS.noTime, GEMINI, NOW);
-  const otherGap = { ...readiness, levels: { ...readiness.levels, schema: { ...readiness.levels.schema, gaps: [{ field: 'direction', count: 1 }] } } };
-  assert.equal(photoExportDeliveryModel({ photos: LAYERS.noTime, readiness: otherGap }).advance.label, 'Neste');
+  assert.deepEqual(settled.advance, { enabled: true, reason: null });
 });
 
 test('blockers are grouped, and AsBuilt without context is blocked rather than asked for here', () => {
@@ -192,140 +181,16 @@ test('the model is read-only', () => {
   for (const item of [result, result.advance, result.checks, result.notes, result.blockers, result.checks[0]]) assert(Object.isFrozen(item));
 });
 
-// Wizard steps
-
-const plan = (overrides = {}) => ({ errors: [], isLive: () => true, ...overrides });
-const started = (state = PHOTO_EXPORT_WIZARD_START) => reduce(state, { type: 'build-start', run: state.run + 1 });
-const built = (value = plan(), state = started()) => reduce(state, { type: 'build-done', run: state.run, plan: value });
-const packaging = (state = built()) => reduce(state, { type: 'download-start', run: state.run });
-
-test('reducer: the normal path, from Leveranse to a finished download', () => {
-  assert.deepEqual(PHOTO_EXPORT_WIZARD_START, { step: 'delivery', run: 0, preview: { status: 'idle', plan: null, error: null }, download: { status: 'idle', error: null } });
-  assert.equal(photoExportPackageState(PHOTO_EXPORT_WIZARD_START), null);
-  const first = started();
-  assert.deepEqual([first.step, first.run, first.preview.status], ['package', 1, 'building']);
-  assert.equal(photoExportPackageState(first), 'building');
-  const value = plan(), ready = built(value, first);
-  assert.equal(ready.preview.plan, value);
-  assert.equal(photoExportPackageState(ready), 'ready');
-  const running = packaging(ready);
-  assert.equal(photoExportPackageState(running), 'packaging');
-  const done = reduce(running, { type: 'download-done', run: running.run });
-  assert.equal(photoExportPackageState(done), 'done');
-  assert.equal(done.preview.plan, value, 'the plan stays, so a repeat download is the same delivery');
-  assert.equal(photoExportPackageState(packaging(done)), 'packaging', 'Last ned på nytt');
-});
-
-test('reducer: an older build result is dropped, whether it succeeded or failed', () => {
-  const late = plan();
-  const backed = reduce(started(), { type: 'back' });
-  assert.deepEqual([backed.step, backed.run, backed.preview.status], ['delivery', 2, 'idle']);
-  assert.equal(reduce(backed, { type: 'build-done', run: 1, plan: late }), backed);
-  assert.equal(reduce(backed, { type: 'build-failed', run: 1, error: 'x' }), backed);
-
-  const again = started(backed);
-  assert.equal(again.run, 3);
-  assert.equal(reduce(again, { type: 'build-done', run: 1, plan: late }), again, 'Neste, Tilbake, Neste, then the first result arrives');
-  assert.equal(reduce(again, { type: 'build-failed', run: 1, error: 'x' }), again);
-
-  const rebuilt = started(built());
-  assert.equal(reduce(rebuilt, { type: 'build-done', run: 1, plan: late }), rebuilt, 'Oppdater forhåndsvisning, then the older result arrives');
-});
-
-test('reducer: a repeated start or result changes nothing', () => {
-  const first = started();
-  assert.equal(reduce(first, { type: 'build-start', run: first.run }), first, 'a second click from the same render');
-  assert.equal(reduce(first, { type: 'build-start' }), first, 'a start without a run');
-  const value = plan(), ready = built(value, first);
-  assert.equal(reduce(ready, { type: 'build-done', run: ready.run, plan: plan() }), ready, 'the first result of a run wins');
-  assert.equal(reduce(ready, { type: 'build-failed', run: ready.run, error: 'x' }), ready);
-  assert.equal(reduce(PHOTO_EXPORT_WIZARD_START, { type: 'back' }), PHOTO_EXPORT_WIZARD_START);
-  assert.equal(reduce(ready, { type: 'unknown' }), ready);
-});
-
-test('reducer: back discards the plan and everything about its download', () => {
-  const done = reduce(packaging(), { type: 'download-done', run: 1 });
-  const backed = reduce(done, { type: 'back' });
-  assert.deepEqual(backed, { ...PHOTO_EXPORT_WIZARD_START, run: 2 });
-});
-
-test('reducer: a failed build leaves Tilbake available and the wizard usable', () => {
-  const failed = reduce(started(), { type: 'build-failed', run: 1, error: 'Fotolaget finnes ikke lenger.' });
-  assert.deepEqual([failed.step, failed.preview.status, failed.preview.plan, failed.preview.error], ['package', 'failed', null, 'Fotolaget finnes ikke lenger.']);
-  assert.equal(photoExportPackageState(failed), 'build-failed');
-  assert.equal(reduce(failed, { type: 'download-start', run: failed.run }), failed, 'nothing to download');
-  const backed = reduce(failed, { type: 'back' });
-  assert.equal(backed.step, 'delivery');
-  assert.equal(backed.preview.error, null);
-  assert.equal(started(backed).preview.status, 'building');
-});
-
-test('reducer: while a ZIP is being made, nothing can replace the plan under it', () => {
-  const running = packaging();
-  assert.equal(reduce(running, { type: 'back' }), running);
-  assert.equal(reduce(running, { type: 'build-start', run: running.run + 1 }), running);
-  assert.equal(reduce(running, { type: 'download-start', run: running.run }), running);
-});
-
-test('reducer: a download needs a current plan without errors', () => {
-  const blocked = built(plan({ errors: [{ code: 'missing-file' }] }));
-  assert.equal(photoExportPackageState(blocked), 'plan-errors');
-  assert.equal(reduce(blocked, { type: 'download-start', run: blocked.run }), blocked);
-  const building = started();
-  assert.equal(reduce(building, { type: 'download-start', run: 1 }), building, 'nothing is built yet');
-  const ready = built();
-  assert.equal(reduce(ready, { type: 'download-start', run: 0 }), ready, 'a click from an older run');
-});
-
-test('reducer: a download result only counts for its own run', () => {
-  const running = packaging();
-  assert.equal(reduce(running, { type: 'download-done', run: 0 }), running);
-  assert.equal(reduce(running, { type: 'download-failed', run: 0, error: 'x' }), running);
-  const ready = built();
-  assert.equal(reduce(ready, { type: 'download-done', run: ready.run }), ready, 'no download is running');
-  const failed = reduce(running, { type: 'download-failed', run: running.run, error: 'Ikke nok minne.' });
-  assert.equal(photoExportPackageState(failed), 'packaging-failed');
-  assert.equal(failed.download.error, 'Ikke nok minne.');
-  assert.equal(photoExportPackageState(packaging(failed)), 'packaging', 'Prøv igjen');
-});
-
-test('package state: staleness is read live and is never stored', () => {
-  let live = true;
-  const ready = built(plan({ isLive: () => live }));
-  assert.equal(photoExportPackageState(ready), 'ready');
-  live = false;
-  assert.equal(photoExportPackageState(ready), 'stale');
-  live = true;
-  assert.equal(photoExportPackageState(ready), 'ready');
-});
-
-test('package state: a stale plan outranks a finished or failed download, but not a running one or plan errors', () => {
-  const stale = () => plan({ isLive: () => false });
-  const running = packaging(built(stale()));
-  assert.equal(photoExportPackageState(running), 'packaging');
-  assert.equal(photoExportPackageState(reduce(running, { type: 'download-done', run: 1 })), 'stale', 'Last ned på nytt would be refused');
-  assert.equal(photoExportPackageState(reduce(running, { type: 'download-failed', run: 1, error: 'x' })), 'stale', 'Prøv igjen would be refused');
-  assert.equal(photoExportPackageState(built(plan({ errors: [{ code: 'stale-plan' }], isLive: () => false }))), 'plan-errors');
-  const refreshed = built(plan(), started(built(stale())));
-  assert.equal(photoExportPackageState(refreshed), 'ready', 'Oppdater forhåndsvisning');
-});
-
-test('the reducer never mutates the state it is given', () => {
-  const steps = [{ type: 'build-start', run: 1 }, { type: 'build-done', run: 1, plan: plan() }, { type: 'download-start', run: 1 }, { type: 'download-done', run: 1 }, { type: 'back' }];
-  const deepFreeze = (value) => { if (value && typeof value === 'object') { Object.values(value).forEach(deepFreeze); Object.freeze(value); } return value; };
-  steps.reduce((state, action) => deepFreeze(reduce(state, action)), deepFreeze({ ...PHOTO_EXPORT_WIZARD_START }));
-});
-
 // Against real plans
 
 test('counts: a repeated photo is one image and two placements, and time is counted per image', async () => {
   const { session, layerId } = await sharedOriginalLayer(jpeg('shared.jpg'));
   const photos = session.getLayerPhotos(layerId), readiness = photoExportDeliveryReadiness(photos, GEMINI, NOW);
   const built = await buildPhotoExportPlan(capturePhotoExportSnapshot(session, layerId), GEMINI);
-  const contents = photoExportPackageContents(built);
-  assert.deepEqual([contents.images, contents.placements, contents.sharedAttachments], [1, 2, 1]);
-  assert.equal(contents.images, readiness.counts.assets, 'the plan and readiness agree on the number of images');
-  assert.equal(contents.totalBytes, session.getAssetFile(photos[0].assetId).size, 'a shared original is counted once');
+  const { attachments, features, sharedAttachments } = built.counts;
+  assert.deepEqual([attachments, features, sharedAttachments], [1, 2, 1]);
+  assert.equal(attachments, readiness.counts.assets, 'the plan and readiness agree on the number of images');
+  assert.equal(built.assets.reduce((bytes, asset) => bytes + asset.file.size, 0), session.getAssetFile(photos[0].assetId).size, 'a shared original is counted once');
   assert.match(photoCaptureTimeSchemaWarning(readiness), /^Opptakstid mangler for 1 bilde/);
   assert.equal(built.counts.missingTimestampCount, 2, 'the plan counts features, which is why it is not the number shown');
 });
@@ -334,20 +199,22 @@ test('counts: a photo left out is in neither the images nor the size', async () 
   const { session, layerId, ids } = await completionLayer([jpeg('a.jpg'), jpeg('b.jpg')], { place: false });
   placeAll(session, layerId, [ids[0]]);
   const built = await buildPhotoExportPlan(capturePhotoExportSnapshot(session, layerId), GEMINI);
-  const contents = photoExportPackageContents(built);
+  const { attachments, features, excluded } = built.counts;
   assert.equal(built.counts.uniqueImages, 2, 'the plan counts every image in the layer');
-  assert.deepEqual([contents.images, contents.placements, contents.excluded], [1, 1, 1]);
-  assert.equal(contents.totalBytes, session.getAssetFile(session.getPhoto(ids[0]).assetId).size);
+  assert.deepEqual([attachments, features, excluded], [1, 1, 1]);
+  assert.equal(built.assets.reduce((bytes, asset) => bytes + asset.file.size, 0), session.getAssetFile(session.getPhoto(ids[0]).assetId).size);
 });
 
-test('contents: renamed attachments are listed, and names that stay are not', async () => {
+test('the export plan flags renamed attachments and retains their original names', async () => {
   const fixture = await exportFixture({ names: ['grøft#1.png', 'plain.png'] });
   const built = await fixture.plan();
-  const { renamed } = photoExportPackageContents(built);
+  const renamed = built.attachments.filter((item) => item.renamed);
   assert.equal(renamed.length, 1);
-  assert.deepEqual(renamed.map(({ from }) => from), built.attachments.filter((item) => item.renamed).map((item) => built.assets.find((asset) => asset.assetId === item.assetId).originalFilename));
-  assert(!renamed.some(({ from }) => from === 'plain.png'));
-  for (const { assetId, to } of renamed) assert.equal(built.assets.find((asset) => asset.assetId === assetId).exportFilename, to);
+  const [attachment] = renamed;
+  const asset = built.assets.find(({ assetId }) => assetId === attachment.assetId);
+  assert.equal(asset.originalFilename, 'gr\u00f8ft#1.png');
+  assert.equal(asset.exportFilename, attachment.filename);
+  assert.equal(built.attachments.find(({ filename }) => filename === 'plain.png').renamed, false);
 });
 
 test('identity: each build is a new delivery, and a repeat download of one plan is the same bytes', async () => {
@@ -388,7 +255,7 @@ test('label: what the config holds reaches the name through the plan', async () 
 // Wording and boundaries
 
 const source = (path) => readFile(new URL(`../src/lib/photos/${path}`, import.meta.url), 'utf8');
-const WIZARD_COMPONENTS = ['PhotoExportWizard.js', 'PhotoExportDeliveryStep.js', 'PhotoExportPackageStep.js'];
+const WIZARD_COMPONENTS = ['PhotoExportWizard.js', 'PhotoExportDeliveryStep.js'];
 const components = () => Promise.all(WIZARD_COMPONENTS.map((name) => readFile(new URL(`../src/components/photos/${name}`, import.meta.url), 'utf8')));
 
 test('format cards: every profile has one, and the first is the only recommendation', () => {
@@ -421,6 +288,9 @@ test('wording: no wizard text claims more than a rule check or drops back to tes
   const claims = /\b(validert|godkjent|sertifisert|garantert|eksperimentell|testpakke)/i;
   assert.doesNotMatch(await source('photoExportWizard.mjs'), claims);
   for (const text of await components()) assert.doesNotMatch(text, claims);
+  const shared = await readFile(new URL('../src/components/delivery/DeliveryWizard.js', import.meta.url), 'utf8');
+  assert.match(shared, /Dette er eksportkontroll, ikke en ny Validator-kj\u00f8ring eller full XSD-sertifisering/);
+  assert.doesNotMatch(shared, /\b(?:eksperimentell|testpakke)\b/i);
   for (const card of Object.values(PHOTO_EXPORT_PROFILE_METADATA)) assert.doesNotMatch(JSON.stringify(card), claims);
   for (const [layer, config] of STATES) assert.doesNotMatch(JSON.stringify(model(LAYERS[layer], config)), claims);
 });

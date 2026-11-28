@@ -37,7 +37,6 @@ npm run build
 - `src/components/` – brukergrensesnitt, kart, analyser og 3D-visning
 - `src/lib/` – parsing, validering, analyser, tilstand, tracking og kontaktflyt
 - `src/lib/validation-v2/` – aktivt GMI Validator V2-regelregister, evaluator og diagnostikk
-- `src/data/rules/` – eldre JSON-regler for legacy-valideringsløp, ikke eier av aktive GMI V2-kontroller
 - `tests/` – automatiske Node-tester
 - `src/features/user-tracking/` – SQL/skjema og dokumentasjon for statistikkfunksjonen
 

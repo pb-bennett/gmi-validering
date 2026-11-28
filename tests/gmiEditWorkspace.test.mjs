@@ -2,7 +2,7 @@
 // Table proposed views, and the lifecycle wiring of layer removal and reset.
 //
 // Library parts run against the fabricated M0 fixtures and the real M2/M3
-// APIs. UI wiring that cannot run in node (page.js, LayerPanel, DataDisplay)
+// APIs. UI wiring that cannot run in node (page.js and LayerPanel)
 // is checked as a source contract so no caller can silently force a discard.
 // Browser behaviour is covered by tests/gmiEditWorkspaceUi.test.mjs.
 import assert from 'node:assert/strict';
@@ -567,7 +567,6 @@ test('callers: removal and reset inspect the result; discarding is only reachabl
   const panel = await source('src/components/LayerPanel.js');
   assert.match(panel, /removeLayer\(layerId, removeWarning \? \{ discardGmiEdits: true \} : undefined\)/);
   assert.match(panel, /result\.code === 'gmi-edits-pending'\) \{ setRemoveWarning\(result\.layers\); return; \}/);
-  assert.equal((await source('src/components/DataDisplay.js')).includes('discardGmiEdits'), false, 'the legacy reset never forces a discard');
 
   // No other production caller may pass discardGmiEdits.
   const files = [];

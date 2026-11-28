@@ -281,7 +281,7 @@ test('Resultat and Regel share a readable width while source tables may scroll h
   ]);
   assert.equal((content.match(/mx-auto w-full max-w-2xl px-2\.5/g) || []).length, 1);
   assert.match(content, /activeTab === TABS\.RESULT[\s\S]*DiagnosticResultPanel[\s\S]*ModernRulePanel/);
-  assert.match(content.slice(content.indexOf('function ModernRulePanel'), content.indexOf('function LegacyResultPanel')), /<div className="space-y-5">/);
+  assert.match(content.slice(content.indexOf('function ModernRulePanel'), content.indexOf('function OpenObjectsButton')), /<div className="space-y-5">/);
   assert.match(content, /overflow-x-auto overflow-y-clip/);
   assert.match(inspector, /width: VALIDATION_V2_DOCKED_FIELD_DETAIL_WIDTH/);
   assert.match(modal, /maxWidth: VALIDATION_V2_FIELD_MODAL_MAX_WIDTH/);

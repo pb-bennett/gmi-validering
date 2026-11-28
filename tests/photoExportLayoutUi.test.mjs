@@ -35,7 +35,7 @@ async function picture(browser, name) {
 // a phone by design, so only its panel is measured.
 const measure = (root) => `(() => {
   const dialog = ${root}, box = dialog.getBoundingClientRect(), frame = dialog.querySelector('.photo-collection-frame');
-  const areas = Array.from(dialog.querySelectorAll('.delivery-body, .photo-export-body, .photo-export-choices, .photo-export-state, .photo-export-package, .photo-completion-panel'));
+  const areas = Array.from(dialog.querySelectorAll('.delivery-body, .photo-completion-panel'));
   const footer = Array.from(dialog.querySelectorAll('.photo-import-footer button')).map((button) => {
     const rect = button.getBoundingClientRect(), hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
     return { label: button.innerText.trim(), left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, reachable: button === hit || button.contains(hit) };
@@ -74,7 +74,7 @@ async function assertKeyboard(browser, label, expected) {
     await pressKey(browser, 'Tab', KEYS.Tab);
     const stop = await browser.evaluate(`(() => {
       const item = document.activeElement, dialog = ${exportDialog}, rect = item.getBoundingClientRect(), style = getComputedStyle(item);
-      const area = item.closest('.delivery-body, .photo-export-choices, .photo-export-state, .photo-export-package')?.getBoundingClientRect() || { top: 0, bottom: innerHeight };
+      const area = item.closest('.delivery-body')?.getBoundingClientRect() || { top: 0, bottom: innerHeight };
       const ring = item.closest('.delivery-filename');
       const labelledBy = item.getAttribute('aria-labelledby')?.split(/\\s+/).map(id => document.getElementById(id)?.textContent.trim()).filter(Boolean).join(' ');
       return { name: item.getAttribute('aria-label') || labelledBy || (['checkbox', 'text'].includes(item.type) && item.labels?.[0]?.innerText.trim()) || item.value || item.innerText?.trim(), tag: item.tagName, inside: dialog.contains(item), visible: rect.top >= area.top - 1 && rect.bottom <= area.bottom + 1 && rect.bottom <= innerHeight,

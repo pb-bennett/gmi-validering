@@ -30,16 +30,15 @@ function makeLayer(id, format = 'GMI') {
   };
 }
 
-test('normal validator host exposes V2 only while retaining legacy implementation', async () => {
+test('normal validator host renders the V2 workspace only', async () => {
   const source = await readFile(
     new URL('../src/components/FieldValidationSidebar.js', import.meta.url),
     'utf8',
   );
 
   assert.doesNotMatch(source, /useState\('legacy'\)|Validator 1\.0|Validator 2\.0 \(beta\)/);
-  assert.match(source, /LegacyFieldValidationSidebar/);
-  assert.match(source, /ValidationV2Workspace/);
-  assert.match(source, /validateFields/);
+  assert.match(source, /<ValidationV2Workspace\b/);
+  assert.doesNotMatch(source, /LegacyFieldValidationSidebar|validateFields/);
 });
 
 test('two selected layers produce explicit, layer-qualified V2 runs only for the selected dataset', () => {
