@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, CaretLeftIcon, CaretRightIcon, DownloadSimpleIcon, TableIcon, StackIcon, XIcon } from '@phosphor-icons/react';
+import { ArrowArcLeftIcon, ArrowArcRightIcon, ArrowLeftIcon, CaretLeftIcon, CaretRightIcon, DownloadSimpleIcon, TableIcon, XIcon } from '@phosphor-icons/react';
 import useStore from '@/lib/store';
 import { gmiEditSessions } from '@/lib/gmiEditSessions.mjs';
 import {
@@ -15,7 +15,6 @@ import GmiObjectEditor from './GmiObjectEditor';
 import GmiChangeList from './GmiChangeList';
 import GmiExportDialog from './GmiExportDialog';
 import GmiConfirmDialog from './GmiConfirmDialog';
-import GmiBatchDialog from './GmiBatchDialog';
 import GmiBatchInspector from './GmiBatchInspector';
 import GmiChangeSetDetail from './GmiChangeSetDetail';
 import { gmiSelectionTargets, gmiIndividualSelection } from '@/lib/gmiBatchInspectorView.mjs';
@@ -54,7 +53,6 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const noticeRef = useRef(null), focusNotice = useRef(false);
   const [formRevision, setFormRevision] = useState(0);
   const handoff = useStore((state) => state.gmiEditWorkspace?.layerId === layerId ? state.gmiEditWorkspace.handoff : null);
-  const [batchOpen, setBatchOpen] = useState(false);
   const [batchInspector, setBatchInspector] = useState(handoff?.mode === 'batch');
   const [batchInspected, setBatchInspected] = useState(null);
   const selection = useStore((state) => state.gmiEditSelection);
@@ -102,13 +100,17 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const selectedKey = selected ? gmiObjectKey(selected.scope, selected.sourceIndex) : null;
   const selectedObject = selected ? (selected.scope === 'line' ? layer?.data?.lines : layer?.data?.points)?.[selected.sourceIndex] ?? null : null;
 
-  /** Every way away from the current object passes here: unsubmitted form values are never dropped silently. */
-  const guard = useCallback((run, what = 'objektet') => {
-    if (!dirtyRef.current) { run(); return; }
+  /** Guard unsubmitted object and batch values before running the requested action. */
+  const guard = useCallback((run) => {
+    const objectDirty = objectDirtyRef.current;
+    const batchDirty = batchDirtyRef.current;
+    if (!objectDirty && !batchDirty) { run(); return; }
+    const bothDirty = objectDirty && batchDirty;
+    const what = bothDirty ? 'objektet og masseendringen' : objectDirty ? 'objektet' : 'masseendringen';
     setPending({
-      title: 'Forkaste endringer i skjemaet?',
+      title: bothDirty ? 'Forkaste begge utkastene?' : 'Forkaste endringer i skjemaet?',
       body: <p>Du har skrevet inn verdier for {what} som ikke er lagt til som retting. Går du videre, forkastes de. Rettinger som allerede er lagt til, beholdes.</p>,
-      confirmLabel: 'Forkast skjemaet',
+      confirmLabel: bothDirty ? 'Forkast begge utkastene' : 'Forkast skjemaet',
       // The next action can be cancelled by the staged-corrections guard, leaving
       // this workspace mounted. Reset the editor's local form even in that case.
       run: () => { batchResetRef.current?.(); onDirtyChange(false); onBatchDirtyChange(false); setFormRevision((revision) => revision + 1); run(); },
@@ -123,7 +125,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const enterHandoff = useEffectEvent(() => {
     if (!handoff) return;
     setIndividualBinding(null);
-    setBatchOpen(false); setBatchInspector(handoff.mode === 'batch'); setBatchInspected(null);
+    setBatchInspector(handoff.mode === 'batch'); setBatchInspected(null);
     setSelected(handoff.focus); setActiveChangeSetId(null); setDetailId(null); setNotice(null);
     setFormRevision((revision) => revision + 1);
   });
@@ -189,8 +191,8 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
   const onBatchRequest = useEffectEvent((request) => {
     if (!request || request.layerId !== layerId) return;
     useStore.setState({ gmiBatchInspectorRequest: null });
-    if (request.mode === 'individual') { if (view && !batchOpen) editIndividually(); return; }
-    if (batchOpen || batchInspector || !view) return;
+    if (request.mode === 'individual') { if (view) editIndividually(); return; }
+    if (batchInspector || !view) return;
     guard(() => {
       // Re-read after the draft confirmation; its scope may have changed.
       const selection = useStore.getState().gmiEditSelection;
@@ -227,7 +229,7 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
     });
   };
 
-  const exit = () => guard(() => { closeWorkspace(); onExit?.(); }, 'objektet');
+  const exit = () => guard(() => { closeWorkspace(); onExit?.(); });
 
   // Page-level actions that would unmount this workspace (global reset, opening FOTO) go through the same
   // draft guard and dialog. Only the boolean "draft exists" leaves this component; the draft itself stays in the editor.
@@ -380,8 +382,6 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
           onDiscard={discard} onShowDetail={view ? showChangeSet : undefined} />}
     </div>
     <footer className="gmi-edit-footer">
-      <button type="button" className="gmi-compact-button gmi-focus-ring gmi-batch-open" disabled={!editable}
-        onClick={() => guard(() => { closeBatchInspector(); setBatchOpen(true); }, 'objektet')}><StackIcon size={16} aria-hidden="true" /> Masseendringer</button>
       <div className="gmi-edit-history">
         <PhotoIconButton icon={ArrowArcLeftIcon} label="Angre siste retting" tooltip={view?.summary.canUndo ? `Angre: ${labelOf(view.changeSets.at(-1).id)}` : 'Ingenting å angre'}
           unavailable={!editable || !view?.summary.canUndo} onClick={undo} />
@@ -389,13 +389,13 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
           unavailable={!editable || !view?.summary.canRedo} onClick={redo} />
         {editable && view.changeSets.length > 0 && <button type="button" className="gmi-edit-link" onClick={discardAll}>Forkast alle</button>}
       </div>
-      <button type="button" className="gmi-primary-control gmi-focus-ring gmi-edit-download" disabled={!editable} onClick={() => guard(() => setExportOpen(true), 'eksporten')}
+      <button type="button" className="gmi-primary-control gmi-focus-ring gmi-edit-download" disabled={!editable} onClick={() => guard(() => setExportOpen(true))}
         title={editable ? undefined : 'Filen kan ikke lastes ned som revidert GMI fordi den ikke kan rettes sikkert.'}>
         <DownloadSimpleIcon size={16} aria-hidden="true" /> Last ned revidert GMI
       </button>
     </footer>
     {inspectorRoot && createPortal(batchInspector && view ? <GmiBatchInspector key={`batch:${formRevision}`} view={view} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
-      onClose={closeBatchInspector} onRequestClose={() => guard(closeBatchInspector, 'masseendringen')} inspected={batchInspected} onInspectClose={() => setBatchInspected(null)}
+      onClose={closeBatchInspector} onRequestClose={() => guard(closeBatchInspector)} inspected={batchInspected} onInspectClose={() => setBatchInspected(null)}
       renderChangeSet={(changeSet) => renderChangeSet(changeSet, 'staged')}
       onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice(null); showStagedResult(); }} />
       : detailChangeSet && view ? <div className="gmi-edit-editor">{renderChangeSet(detailChangeSet, 'history')}</div>
@@ -413,8 +413,6 @@ export default function GmiEditWorkspace({ layerId, inspectorRoot = null, onExit
       object={selectedObject} scope={selected?.scope} sourceIndex={selected?.sourceIndex} onDirtyChange={onDirtyChange} onLocate={locate} onStaged={showStagedResult}
       validatorCheck={validatorCheck} onShowChangeSet={(id) => { setTab('changes'); setActiveChangeSetId(id); }} /></>, inspectorRoot)}
     {exportOpen && view && <GmiExportDialog layerId={layerId} view={view} status={status} onClose={() => setExportOpen(false)} />}
-    {batchOpen && view && <GmiBatchDialog view={view} onClose={() => setBatchOpen(false)} onDirtyChange={onBatchDirtyChange} registerReset={registerBatchReset}
-      onStaged={(changeSet) => { setTab('changes'); setActiveChangeSetId(changeSet.id); setNotice({ tone: 'ok', text: `Lagt til: ${changeSet.label}` }); showStagedResult(); }} />}
     {handoffError && <p role="alert">{handoffError}</p>}
     {pending && <GmiConfirmDialog title={pending.title} confirmLabel={pending.confirmLabel} testId="workspace"
       onCancel={() => setPending(null)} onConfirm={() => { const run = pending.run; setPending(null); run(); }}>{pending.body}</GmiConfirmDialog>}

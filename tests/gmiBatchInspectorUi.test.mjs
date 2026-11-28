@@ -547,16 +547,15 @@ test('R4 production: exact inspector batch, draft guard, live selection, manual 
         await browser.waitFor(`!${inspector}`);
       });
 
-      await t.test('points offer capabilities with absent fields disabled; modal remains independently available', async () => {
+      await t.test('points offer capabilities with absent fields disabled; the integrated inspector replaces the legacy footer action', async () => {
         await click('Fjern utvalg', bar); await click('Punkter', `document.querySelector('[data-table-geometry]')`);
         await browser.waitFor(box(0)); await browser.evaluate(`${box(0)}.click()`);
         await click('Rediger valgte (1)', bar); await browser.waitFor(inspector);
         assert.equal(await browser.evaluate(`${inspector}.querySelector('select').value`), '');
         assert(await browser.evaluate(`Array.from(${inspector}.querySelector('select').options).some(o => o.disabled && o.textContent.includes('Finnes ikke i filen'))`)); assert.equal(await stageDisabled(), true);
         await browser.evaluate(`${inspector}.querySelector('[data-gmi-batch-cancel]').click()`); await browser.waitFor(`!${inspector}`);
-        await click('Masseendringer', workspace); await browser.waitFor(`document.querySelector('dialog[open].gmi-batch-dialog')`);
-        assert.equal(await browser.evaluate(`Boolean(${inspector})`), false);
-        await click('Avbryt', `document.querySelector('dialog[open].gmi-batch-dialog')`);
+        assert.equal(await browser.evaluate(`Array.from(${workspace}.querySelectorAll('.gmi-edit-footer button')).some(button => button.innerText.trim() === 'Masseendringer')`), false);
+        assert.equal(await browser.evaluate(`document.querySelector('dialog.gmi-batch-dialog')`), null);
       });
 
       await t.test('expanded table shows ten rows at all required viewports and reverses without losing draft', async () => {

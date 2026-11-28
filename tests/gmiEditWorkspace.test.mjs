@@ -693,11 +693,8 @@ test('S5 wiring: object and batch staging switch the view; column focus starts a
   assert.match(table, /onClick=\{\(\) => setGmiEditTableView\(layerId, mode\.key\)\}/);
   assert.match(table, /columnFocusOff !== columnFocusSignature/);
   assert.doesNotMatch(table, /columnFocusOff !== columnFocus\.key|setColumnFocusOff\(columnFocus\.key\)/, 'off choice is not keyed on batch:/change-set:');
-  for (const file of ['GmiBatchInspector.js', 'GmiBatchDialog.js']) {
-    const batch = await source(`src/components/gmi-edit/${file}`);
-    assert.match(batch, /if \(!result\.staged\) \{ setMessage\('[^']+'\); return; \}[\s\S]*?onStaged\(changeSet\)/, 'no-op batches never publish staging success');
-  }
   const inspector = await source('src/components/gmi-edit/GmiBatchInspector.js');
+  assert.match(inspector, /if \(!result\.staged\) \{ setMessage\('[^']+'\); return; \}[\s\S]*?onStaged\(changeSet\)/, 'no-op batches never publish staging success');
   // Choosing a field alone never makes the inspector dirty.
   // A1 (deliberate update): neither a field nor a mode choice alone makes the inspector dirty.
   assert.match(inspector, /const dirty = Boolean\(lexeme \|\| match !== null \|\| review\);/);

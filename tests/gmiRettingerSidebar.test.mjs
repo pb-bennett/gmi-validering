@@ -12,7 +12,7 @@ test('R6B has only Filter/Endringer, with one geometry owner and the existing gu
   assert.doesNotMatch(workspace, /ObjectList|LIST_PAGE|changedOnly|setScope|data-object-key|Søk etter objekt|Objekttype/);
   assert.doesNotMatch(styles, /gmi-edit-object-list|gmi-edit-object-row|gmi-edit-list-controls|gmi-edit-search|gmi-edit-segmented|gmi-edit-changed-pill/);
   assert.match(workspace, /storedTab \|\| \(layer.data\?\.lines\?\.length/);
-  for (const component of ['GmiLayerFilters', 'GmiChangeList', 'GmiBatchInspector', 'GmiBatchDialog', 'GmiConfirmDialog', 'GmiFullValidation', 'GmiExportDialog']) {
+  for (const component of ['GmiLayerFilters', 'GmiChangeList', 'GmiBatchInspector', 'GmiConfirmDialog', 'GmiFullValidation', 'GmiExportDialog']) {
     assert(workspace.includes(`<${component}`), `${component} is preserved`);
   }
   assert.match(workspace, /clearGmiEditObjectRequest\(request\)/);

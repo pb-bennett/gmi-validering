@@ -249,7 +249,7 @@ export default function Home() {
   // Runs `action` now, or after the Rettinger draft dialog when unsubmitted form values exist. Cancel = nothing happens.
   const guardGmiEditDraft = (action) => {
     const guard = gmiEditActive ? gmiEditGuardRef.current : null;
-    if (guard) guard(action, 'objektet'); else action();
+    if (guard) guard(action); else action();
   };
   // Batch 1B.2B: active Rettinger hyperlink transfers per FOTO layer (verified proposed view and lock), refreshed on every
   // FOTO and Rettinger publication. The workspace shows the proposed owner and position as a presentation overlay;

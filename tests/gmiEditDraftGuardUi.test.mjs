@@ -10,7 +10,7 @@ import { clickGmiTableObject } from './helpers/gmiTableNavigation.mjs';
 // only the draft, and staged corrections keep M3's own confirmation.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromePath, openTestChrome } from './helpers/chromeHarness.mjs';
@@ -24,6 +24,9 @@ const workspace = 'document.querySelector(".gmi-edit-workspace")';
 const editor = 'document.querySelector(".gmi-edit-inspector .gmi-edit-editor")';
 const draftDialog = 'document.querySelector(\'dialog[open][data-gmi-confirm="workspace"]\')';
 const resetDialog = 'document.querySelector(\'dialog[open][data-gmi-confirm="reset"]\')';
+const batchInspector = 'document.querySelector("[data-gmi-batch-inspector]")';
+const batchValue = `${batchInspector}.querySelector('[aria-label="Ny verdi"]')`;
+const exportDialog = 'document.querySelector("dialog[open].delivery-wizard")';
 const marker = 'document.querySelector("[data-display-mode][data-photo-id]")';
 const row = (field) => `${editor}.querySelector('tr[data-field="${field}"]')`;
 
@@ -44,7 +47,12 @@ function ui(browser) {
     await browser.evaluate('document.querySelector("[data-gmi-edit-action]").click()');
     await browser.waitFor(`${workspace}?.querySelector('[data-gmi-edit-status]')?.innerText === 'Redigerbar'`);
   };
-  const reset = () => browser.evaluate('document.querySelector(\'button[aria-label="Nullstill og åpne ny fil"]\').click()');
+  const reset = async () => {
+    const button = `document.querySelector('button[aria-label="Nullstill og åpne ny fil"]')`;
+    if (!await browser.evaluate(`Boolean(${button})`)) await clickButton('Flere kartverktøy');
+    await browser.waitFor(button);
+    await browser.evaluate(`${button}.click()`);
+  };
   // Everything a user could see change in Rettinger, plus the surrounding app state.
   const snapshot = () => browser.evaluate(`JSON.stringify((() => {
     const ws = ${workspace}, ed = ${editor}, modes = document.querySelector('.gmi-edit-table-modes');
@@ -112,10 +120,21 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
         await u.reset();
         await browser.waitFor(draftDialog);
         assert.equal(await browser.evaluate(`Boolean(${resetDialog})`), false, 'no staged edits: only the draft question');
-        assert.match(await browser.evaluate(`${draftDialog}.innerText`), /ikke er lagt til som retting/);
+        assert.match(await browser.evaluate(`${draftDialog}.innerText`), /verdier for objektet som ikke er lagt til som retting/);
         await u.clickButton('Avbryt', draftDialog);
         await browser.waitFor(`!${draftDialog}`);
         assert.deepEqual(await u.snapshot(), before, 'cancelled reset leaves the workspace, draft, table and FOTO unchanged');
+      });
+
+      await t.test('export with an object draft names the object and cancel keeps the draft', async () => {
+        const before = await u.snapshot();
+        await u.clickButton('Last ned revidert GMI', workspace);
+        await browser.waitFor(draftDialog);
+        assert.match(await browser.evaluate(`${draftDialog}.innerText`), /verdier for objektet som ikke er lagt til som retting/);
+        assert.equal(await browser.evaluate(`Boolean(${exportDialog})`), false);
+        await u.clickButton('Avbryt', draftDialog);
+        await browser.waitFor(`!${draftDialog}`);
+        assert.deepEqual(await u.snapshot(), before);
       });
 
       await t.test('opening FOTO from a map photo: cancel keeps the draft; confirm discards only the draft', async () => {
@@ -158,6 +177,7 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
         assert.equal(await browser.evaluate('document.querySelectorAll(\'button[aria-label="Fjern lag"]\').length'), 0, 'layer cards are not reachable inside Rettinger');
         await u.clickButton('Lukk Rettinger', workspace);
         await browser.waitFor(draftDialog);
+        assert.match(await browser.evaluate(`${draftDialog}.innerText`), /verdier for objektet som ikke er lagt til som retting/);
         await u.clickButton('Avbryt', draftDialog);
         await browser.waitFor(`!${draftDialog}`);
         assert.deepEqual(await u.snapshot(), before);
@@ -247,6 +267,81 @@ test('Rettinger draft guard: reset, FOTO switch, leaving for layer removal and f
         await browser.waitFor('document.querySelector("input[type=file]") && !document.querySelector(".gmi-edit-workspace")');
         assert.equal(await u.unloadBlocked(), false);
         assert.equal(await browser.evaluate('document.querySelectorAll("dialog[open]").length'), 0);
+      });
+      await t.test('integrated batch draft is named for export, workspace exit and page reset', async () => {
+        await setPhotoFiles(browser, 'input[type=file]', [gmi]);
+        await browser.waitFor('document.querySelector("[data-gmi-edit-action]")');
+        await u.openRettinger();
+        const checkbox = `document.querySelector('[data-table-row="1"] input[type=checkbox]')`;
+        const bar = 'document.querySelector("[data-gmi-selection-bar]")';
+        const footer = `${workspace}.querySelector('.gmi-edit-footer')`;
+        await browser.waitFor(checkbox);
+        await browser.evaluate(`${checkbox}.click()`);
+        await browser.waitFor(`${bar}?.innerText.includes('Rediger valgte (1)')`);
+        for (const [width, height] of [[1280, 720], [1366, 768]]) {
+          await browser.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await browser.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+          const layout = await browser.evaluate(`(() => {
+            const footer = ${footer};
+            const bounds = footer.getBoundingClientRect().toJSON();
+            const buttons = [...footer.querySelectorAll('button')].map(button => ({
+              label: button.getAttribute('aria-label') || button.innerText.trim(),
+              rect: button.getBoundingClientRect().toJSON(),
+            }));
+            return { bounds, buttons };
+          })()`);
+          assert.deepEqual(layout.buttons.map(({ label }) => label), ['Angre siste retting', 'Gjør om retting', 'Last ned revidert GMI']);
+          assert(layout.bounds.top >= 0 && layout.bounds.bottom <= height);
+          for (const { rect } of layout.buttons) {
+            assert(rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= width);
+            assert(rect.top >= layout.bounds.top && rect.bottom <= layout.bounds.bottom);
+          }
+          const screenshots = process.env.GMI_EDIT_SCREENSHOT_DIR;
+          if (screenshots) {
+            await mkdir(screenshots, { recursive: true });
+            const { data } = await browser.send('Page.captureScreenshot', { format: 'png' });
+            await writeFile(path.join(screenshots, `l2b-footer-${width}x${height}.png`), Buffer.from(data, 'base64'));
+          }
+        }
+        await u.clickButton('Rediger valgte (1)', bar);
+        await browser.waitFor(batchInspector);
+        await browser.evaluate(`(() => {
+          const field = ${batchInspector}.querySelector('select');
+          field.value = 'SDR';
+          field.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`);
+        await browser.waitFor(batchValue);
+        await browser.evaluate(`(() => {
+          const input = ${batchValue};
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '11.0');
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        })()`);
+
+        const exportGmi = () => u.clickButton('Last ned revidert GMI', workspace);
+        const exit = () => u.clickButton('Lukk Rettinger', workspace);
+        for (const action of [exportGmi, exit, u.reset]) {
+          await action();
+          await browser.waitFor(draftDialog);
+          assert.match(await browser.evaluate(`${draftDialog}.innerText`), /verdier for masseendringen som ikke er lagt til som retting/);
+          assert.equal(await browser.evaluate(`Boolean(${resetDialog} || ${exportDialog})`), false);
+          await u.clickButton('Avbryt', draftDialog);
+          await browser.waitFor(`!${draftDialog}`);
+          assert.equal(await browser.evaluate(`${batchValue}.value`), '11.0', 'cancelling preserves the batch draft');
+        }
+
+        await exportGmi();
+        await browser.waitFor(draftDialog);
+        await u.clickButton('Forkast skjemaet', draftDialog);
+        await browser.waitFor(exportDialog);
+        await u.clickButton('Lukk eksport', exportDialog);
+        await browser.waitFor(`!${exportDialog} && !${batchInspector}`);
+        await u.clickButton('Rediger valgte (1)', bar);
+        await browser.waitFor(`${batchInspector}?.querySelector('select')?.value === ''`);
+        assert.equal(await browser.evaluate(`Boolean(${workspace}.querySelector('[data-change-set]'))`), false);
+        await u.reset();
+        await browser.waitFor(resetDialog);
+        assert.equal(await browser.evaluate(`Boolean(${draftDialog})`), false, 'discarded batch draft does not prompt again');
+        await u.clickButton('Avbryt', resetDialog);
       });
     } finally {
       await browser.close();

@@ -8,7 +8,7 @@ import { gmiFile } from './helpers/gmiPhotoFixtures.mjs';
 // The permanent wizard rule (AGENTS.md, «Source and data safety»; DB5): a wizard is one transaction. Intermediate
 // steps stage choices in a draft; only the final confirmation writes accepted data, atomically, published once; then
 // the wizard shows what was saved. Cancel/close discards the draft. Every wizard is listed here; add new ones.
-// Classification (B-4): wizards — «Koble og posisjoner bilder», «Legg til bilder», Masseendringer, the export/delivery
+// Classification (B-4): wizards — «Koble og posisjoner bilder», «Legg til bilder», the integrated batch inspector, the export/delivery
 // wizards (downloads only; remembered settings are exempt preferences). Task hub — «Fullfør opplysninger» (immediate
 // edits, stated in the hub). Single-step dialogs with their own save — photo metadata, Rettinger object editor.
 const point = (longitude = 10) => ({ crs: 'EPSG:4326', longitude, latitude: 60 });
@@ -102,16 +102,11 @@ test('Legg til bilder: the import draft writes no layer until Opprett; cancel di
   }
 });
 
-// Masseendringer stages a correction only from its final approval (the change set is built in review, never staged
-// earlier); both the dialog and the integrated inspector have exactly one stage call, behind the approval handler.
-test('Masseendringer: one stage call per surface, only in the final approval path', async () => {
-  const read = (file) => readFile(new URL(`../src/components/gmi-edit/${file}`, import.meta.url), 'utf8');
-  for (const [file, handler] of [['GmiBatchDialog.js', /const stage = \(changeSet\) => \{[\s\S]*?gmiEditSessions\.stage\(view\.handle, changeSet\)/],
-    ['GmiBatchInspector.js', /if \(!approval && reasons\.length\) \{[\s\S]*?return;\s*\}\s*const result = gmiEditSessions\.stage\(view\.handle, changeSet\)/]]) {
-    const source = await read(file);
-    assert.equal((source.match(/gmiEditSessions\.stage\(/g) || []).length, 1, file);
-    assert.match(source, handler, `${file}: staging follows the final review and risk approval`);
-  }
+test('the integrated batch inspector stages once, only in the final approval path', async () => {
+  const source = await readFile(new URL('../src/components/gmi-edit/GmiBatchInspector.js', import.meta.url), 'utf8');
+  assert.equal((source.match(/gmiEditSessions\.stage\(/g) || []).length, 1);
+  assert.match(source, /if \(!approval && reasons\.length\) \{[\s\S]*?return;\s*\}\s*const result = gmiEditSessions\.stage\(view\.handle, changeSet\)/,
+    'staging follows the final review and risk approval');
 });
 
 test('the positioning wizard has no intermediate save and the AGENTS.md rule is recorded', async () => {
